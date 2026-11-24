@@ -26,7 +26,7 @@ const C = LC25_CAR_CONFIG;
 
 /**
  * Planning model for the LC25 Prototype's braking line, braking urgency and HUD target speed.
- * Calibrated for 2025 ground-effect downforce (~5.85 m² CL·A, ~1.38 m² CD·A closed, 53.5% rear DF share) and ~695 kW
+ * Calibrated for 2025 ground-effect downforce (~6.45 m² CL·A, ~1.35 m² CD·A closed, 53.5% rear DF share) and ~695 kW
  * wheel power (608 kW ICE + 120 kW MGU-K through 95.5% drivetrain).
  */
 export function lc25ProfileCar(airDensity = NOMINAL_AIR_DENSITY): SpeedProfileCarModel {
@@ -34,12 +34,12 @@ export function lc25ProfileCar(airDensity = NOMINAL_AIR_DENSITY): SpeedProfileCa
   const soft = C.tyreCompounds[C.compoundSlots.soft]!;
   return {
     massKg: C.chassis.totalMassKg + 35,
-    downforceCoef: 0.5 * airDensity * 5.85,
-    dragCoef: 0.5 * airDensity * 1.38,
+    downforceCoef: 0.5 * airDensity * 6.45,
+    dragCoef: 0.5 * airDensity * 1.35,
     rearDownforceShare: 0.535,
     rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-    muLat: 1.66,
-    muLong: 1.48,
+    muLat: 1.72,
+    muLong: 1.52,
     maxBrakeForceN:
       0.92 * 2 * maxTorqueNm * (front_bias / soft.front.radius + (1 - front_bias) / soft.rear.radius),
     maxDrivePowerW: 695_000,
@@ -61,8 +61,8 @@ export const LC25_SIM_PROFILE: CarSimProfile = {
   tcMinSpeedMs: 2,
   electronics: F12026_ELECTRONICS,
   assistDials: F1_ASSIST_DIALS,
-  // Three aero trims: Monza/low-drag, balanced (Spielberg), Monaco high-downforce
-  aeroPackagesDeg: { low_downforce: [-2.0, -4.0], balanced: [0, 0], high_downforce: [2.2, 3.5] },
+  // Three aero trims: Monza/low-drag (~353 km/h DRS), balanced (Spielberg ~324 km/h), Monaco high-downforce (~289 km/h)
+  aeroPackagesDeg: { low_downforce: [-3.8, -6.5], balanced: [0, 0], high_downforce: [3.2, 4.8] },
   padLateralMu: 1.78,
   steerRatio: LC25_STEERING.ratio,
   braking: { lowG: 1.75, aeroG: 3.1, refMs: 72 },

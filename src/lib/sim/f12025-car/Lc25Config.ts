@@ -6,6 +6,10 @@
  *  - [pirelli]  2025 FIA / Pirelli Event Notes (Austria `25R11SPI` & Monaco `25R08MNC`)
  *  - [openf1]   2025 OpenF1 qualifying & race telemetry (#4 Norris, Austria Q 63.971 s & Monaco Q 69.954 s)
  *  - [model]    Measured hardpoints & outline of `public/cars/lc25/model/lc25.glb`
+ *  - [mercedes] Mercedes-AMG F1's 2025 / 2026 power unit table (mercedesamgf1.com, "Facts and Stats: Power Unit
+ *               Regulation Changes"): the 2025 MGU-H's 75 kW
+ *  - [nuzzi]    Nuzzi's "All F1 Tyres for VRC Formula Alpha 2023 (Wet Physics Included)" (OverTake, used with
+ *               permission; see CREDITS.md): rain-tyre water-clearing and thermal ratios (`NUZZI_RAIN_TYRE_DESIGN`)
  *  - [est]      Engineering estimate for a 2025 ground-effect Formula 1 car
  *  - [ref]      the project's own 2025 reference set, used for the car's character where the values above were
  *               estimates (tyre load sensitivity and compound spread, inertia, the corner / heave spring split, damping,
@@ -17,6 +21,7 @@
  * for sparks only).
  */
 import type { LutPoints } from '../lut';
+import { NUZZI_RAIN_TYRE_DESIGN } from '../wet-tyres';
 import {
   deriveRainCompound,
   type AeroData,
@@ -52,7 +57,7 @@ const TRACK_REAR_M = 1.6012;
 const TYRE_FRONT = { width: 0.3050, radius: 0.3600, rimRadius: 0.2286 } as const;
 const TYRE_REAR = { width: 0.4050, radius: 0.3600, rimRadius: 0.2286 } as const;
 
-/** Static ground-effect ride heights (m): tuned so front stays in 18–25 mm working window up to 310 km/h [est] */
+/** Static ground-effect ride heights (m): holds front in 12–23 mm Venturi sweet spot to 320 km/h and ~8–10 mm under 5.8 g braking [est] */
 const STATIC_RH = { front: 0.039, rear: 0.062 } as const;
 /** CG height above ground at static ride height (m) [est] */
 const CG_HEIGHT_M = 0.298;
@@ -176,11 +181,11 @@ const ENGINE: EngineData = {
   torqueResponseS: { rise: 0.065, fall: 0.045 },
   wetPedalMap: true,
   turbo: TURBO,
-  // Open-loop F1 gear torque limiting in 1st/2nd gear (real 2025 ECU boost/torque maps match low-gear rear tyre grip;
+  // Open-loop F1 gear torque limiting in 1st/2nd gear (calibrated for the shorter real 2025 OpenF1 1st/2nd ratios;
   // full 608 kW ICE + 120 kW MGU-K unleashed from 3rd gear up)
   torqueByGear: [
-    [1, 0.70],
-    [2, 0.93],
+    [1, 0.62],
+    [2, 0.88],
     [3, 1.0],
     [8, 1.0],
   ],
@@ -209,7 +214,7 @@ const MGUK_TORQUE = mgukTorqueLut(120_000, 200);
  * 2025 FIA ERS + MGU-H architecture [fia25 Art. 5.3.2–5.3.4]:
  * - MGU-K: ±120 kW, 200 Nm max crank torque, 100 km/h standing-start deploy lockout
  * - Energy Store: 4 MJ usable window; 4 MJ/lap ES → MGU-K deploy cap; 2 MJ/lap MGU-K → ES harvest cap
- * - MGU-H: coaxial with turbo shaft (up to 125,000 rpm), unlimited exhaust harvest (~95 kW peak continuous),
+ * - MGU-H: coaxial with turbo shaft (up to 125,000 rpm), unlimited exhaust harvest (~75 kW peak continuous [mercedes]),
  *   unlimited direct MGU-H → MGU-K transfer bypassing the 4 MJ ES cap, unlimited surplus MGU-H → ES charging
  *   bypassing the 2 MJ MGU-K → ES cap, plus anti-lag compressor motoring.
  */
@@ -228,19 +233,21 @@ const ERS: ERSData = {
   liftThrottle: 0.05,
   topGearLiftHarvestW: 90_000,
   liftHarvestEveryGear: { maxAxleTorqueNm: 850 },
-  // MGU-K deploy held back in the low gears, where the rears are traction-limited, after the [ref] set's gear ramp
-  // (≈0 / 11 / 33 / 75 % in 1st–4th there; gentler here so corner exits keep their drive) [est, ref]
+  // MGU-K deploy held back in 1st/2nd where the rears are traction-limited, ramping quickly into 3rd (where downforce
+  // holds full drive cleanly at ~150 km/h, matching Norris's 2025 Austria Q exit acceleration) [openf1, est]
   deployVsGear: [
     [0, 0],
-    [1, 0.2],
-    [2, 0.45],
-    [3, 0.75],
-    [4, 0.95],
-    [5, 1],
+    [1, 0.15],
+    [2, 0.50],
+    [3, 0.90],
+    [4, 1],
     [8, 1],
   ],
   mguH: {
-    maxHarvestW: 95_000,
+    // 75 kW, the 2025 power unit's MGU-H in Mercedes' own 2025 / 2026 table [mercedes]. At 95 kW it fed the MGU-K
+    // ≈ 90 kW at high revs, so the store gave a quarter of the deployment: replaying Norris's 2025 Spielberg pole lap
+    // (OpenF1 speed, rpm, throttle, brake, gear) through these rules took 16 % of the store, 38 % at 75 kW
+    maxHarvestW: 75_000,
     harvestCurve: [
       [0, 0],
       [4500, 0.05],
@@ -289,7 +296,8 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
     0,
     { liftHarvestScale: 0.4 }
   ),
-  // Race: lap-sustainable deployment, slight taper above 300 km/h while MGU-H sustains straight-line power
+  // Race: aggressive race deployment with slight taper above 300 km/h while MGU-H sustains straight-line power;
+  // BAL below holds the store battery-neutral lap after lap on power circuits like Spielberg and RISE Motordrome
   RAC: mode(
     'RAC',
     [
@@ -302,7 +310,7 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
       [350, 0.4],
     ],
     0.12,
-    { deployFraction: 0.94, liftHarvestScale: 0.85 }
+    { deployFraction: 0.9, liftHarvestScale: 1 }
   ),
   // Balanced: conserves ES on longer straights, modest part-throttle recharge
   BAL: mode(
@@ -363,8 +371,8 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
 const WHEEL_RATE = { front: 138_000, rear: 102_000 } as const;
 /** Third (heave) springs (N/m): the rest of the vertical aero platform support [est] */
 const HEAVE_RATE = { front: 219_000, rear: 240_000 } as const;
-/** Heave packers: engage cleanly at ~150 km/h so front stays in 18–25 mm ground-effect window to 310 km/h [est] */
-const HEAVE_PACKER = { gap: { front: 0.0025, rear: 0.0045 }, rate: 1_250_000 } as const;
+/** Heave packers: 6/10 mm free travel lets the floor seat into its 18–23 mm Venturi window by 200–250 km/h while locking off bottoming past 300 km/h [est] */
+const HEAVE_PACKER = { gap: { front: 0.0060, rear: 0.0100 }, rate: { front: 2_400_000, rear: 2_000_000 } } as const;
 /**
  * Anti-roll bars (N/m at wheel, acting on the left − right travel): front-biased roll stiffness, front/rear wheel roll
  * rate (corner + 2 × bar) ≈1.85 (the [ref] set's ≈1.86, the old 1.78) for a planted rear on corner exit [est, ref]
@@ -391,7 +399,8 @@ const NO_DAMPER: DamperSettingsUnits = { slow_bump: 0, fast_bump: 0, slow_reboun
 
 /**
  * 3D wishbone + steering link pickup coordinates `[x_inboard, y_up, z_fwd]` from wheel centre (m).
- * Front: high anti-dive top wishbone geometry with ~48 mm front RC (matches modern F1 roll-axis balance).
+ * Front: high anti-dive top wishbone geometry with ~48 mm front RC, ~8.0° caster and ~36 mm mechanical ground trail
+ * (outboard balljoints set behind the axle centreline so high-speed self-aligning rack loads match real 2025 F1).
  * Rear: pullrod double wishbone with anti-squat, ~92 mm RC, ~-13°/m bump camber.
  */
 const FRONT_HARDPOINTS: ReadonlyArray<readonly [number, number, number]> = [
@@ -399,10 +408,10 @@ const FRONT_HARDPOINTS: ReadonlyArray<readonly [number, number, number]> = [
   [0.650, 0.158, -0.330],  // WBCAR_TOP_REAR
   [0.695, 0.022, 0.070],   // WBCAR_BOTTOM_FRONT
   [0.655, -0.016, -0.320], // WBCAR_BOTTOM_REAR
-  [0.126, 0.174, -0.010],  // WBTYRE_TOP
-  [0.074, -0.025, 0.018],  // WBTYRE_BOTTOM
-  [0.690, 0.220, 0.080],   // WBCAR_STEER (aligned with upper wishbone for near-zero bump steer)
-  [0.126, 0.174, 0.080],   // WBTYRE_STEER
+  [0.126, 0.174, -0.034],  // WBTYRE_TOP
+  [0.074, -0.025, -0.006], // WBTYRE_BOTTOM
+  [0.690, 0.220, 0.056],   // WBCAR_STEER (aligned with upper wishbone for near-zero bump steer)
+  [0.126, 0.174, 0.056],   // WBTYRE_STEER
 ];
 
 const REAR_HARDPOINTS: ReadonlyArray<readonly [number, number, number]> = [
@@ -454,7 +463,7 @@ const SUSPENSIONS: SuspensionsData = {
       rate: HEAVE_RATE.front,
       gap: 0,
       packerGap: HEAVE_PACKER.gap.front,
-      packerRate: HEAVE_PACKER.rate,
+      packerRate: HEAVE_PACKER.rate.front,
       progressiveRate: 25_000,
     },
     bumpStop: { range: 0.032, rate: 280_000, progression: 0 },
@@ -474,7 +483,7 @@ const SUSPENSIONS: SuspensionsData = {
       rate: HEAVE_RATE.rear,
       gap: 0,
       packerGap: HEAVE_PACKER.gap.rear,
-      packerRate: HEAVE_PACKER.rate,
+      packerRate: HEAVE_PACKER.rate.rear,
       progressiveRate: 20_000,
     },
     bumpStop: { range: 0.042, rate: 280_000, progression: 0 },
@@ -601,24 +610,27 @@ const WINGS: WingData[] = [
  *   front). The roll here is against the horizon, so banking reads as roll: kept small.
  * - Each force follows its target with a 30 ms lag (the flow under the floor takes time to build and break down).
  * Wing angle, pitch and DRS add on top. At the floor's working heights at speed (≈21 mm front, 42 mm rear) the car makes
- * ≈5.9 m² CL·A at ≈46.6 % front, as before.
+ * ≈6.45 m² CL·A at 45–47 % front.
  */
 const RH_FRONT = [0, 0.007, 0.015, 0.025, 0.035, 0.045, 0.06, 0.08];
 const RH_REAR = [0.015, 0.03, 0.045, 0.06, 0.075, 0.095];
 const FRONT_CL = [0.985, 1.0, 1.0, 0.965, 0.93, 0.895, 0.845, 0.78];
 const REAR_CL = [0.93, 0.975, 1.0, 0.985, 0.95, 0.89];
 /** Floor's front share at 21 mm front / 42 mm rear, and its slopes per mm */
-const FLOOR_BALANCE_REF = 0.377;
+const FLOOR_BALANCE_REF = 0.39;
 const floorBalance = (front: number, rear: number): number => {
   const fMm = front * 1000;
   const fromFront = fMm >= 15 ? -0.005 * (fMm - 21) : 0.03 + 0.0025 * (15 - fMm);
   return Number(Math.min(0.55, Math.max(0.2, FLOOR_BALANCE_REF + fromFront + 0.0024 * (rear * 1000 - 42))).toFixed(4));
 };
-/** Body, wheels, suspension and cooling (0.56) plus the floor and diffuser's own drag (0.21), m² */
-const BODY_FLOOR_CDA = 0.77;
+/** Body, wheels, suspension and cooling (0.545) plus the floor and diffuser's own drag (0.20), m² (offset for speed² tyre rolling drag) */
+const BODY_FLOOR_CDA = 0.745;
 
 const FLOOR_MAP: AeroRideHeightMap = {
-  clA: 3.35,
+  // 3.95 m² (was 3.35): ≈6.45 m² CL·A for the car at speed. Norris's 2025 pole laps (OpenF1) took Spielberg's and
+  // Monaco's 150–235 km/h corners at 4–22 % more lateral g than the car had (apex speed on the track's own line), the
+  // slow ones at about its grip, so the floor carries the difference; drag and the top speed are unchanged [openf1]
+  clA: 3.95,
   cdA: BODY_FLOOR_CDA,
   frontPickupY: FLOOR_OFFSET_Y,
   rearPickupY: FLOOR_OFFSET_Y,
@@ -691,6 +703,14 @@ const AERO: AeroData = {
   floorOffsetY: FLOOR_OFFSET_Y,
   // Standard stiff linear floor contact for visual sparks only (no plank wear)
   plank: { y: FLOOR_OFFSET_Y, frontZ: 1.45, rearZ: -1.95 },
+  cooling: {
+    brakeDuctFrontCdAPerStep: 0.0045,
+    brakeDuctFrontClAPerStep: -0.009,
+    brakeDuctRearCdAPerStep: 0.0030,
+    brakeDuctRearClAPerStep: -0.006,
+    radiatorCdAPerStep: 0.0075,
+    radiatorClAPerStep: -0.012,
+  },
   wakeSensitivity: {
     dragWakeMult: 1.0,
     frontLiftWakeMult: 1.15,
@@ -720,15 +740,19 @@ const PAD_MU_CURVE: LutPoints = [
 ];
 
 const BRAKES: BrakesData = {
-  // ~5.4–6.0 g peak at 300+ km/h on warm carbon discs; strictly front-limited on full stomp without under-braking the rear [openf1]
-  maxTorqueNm: 7150,
+  // ~5.6–6.0 g peak at 300+ km/h on warm carbon discs; strictly front-limited on full stomp without under-braking the rear [openf1]
+  maxTorqueNm: 7500,
   brakeByWire: true,
   front_bias: 0.58,
   ebbStep: 0.005,
   discMaterial: 'carbon-ceramic',
+  // FIA 2025 Art. 11.3 maximum carbon-carbon disc thicknesses (32 mm front / 28 mm rear) [fia25]
+  discThicknessMm: { front: 32, rear: 28 },
   padMuCurve: PAD_MU_CURVE,
   discStartTempC: 300,
-  rearDuctShare: 0.25,
+  // 2025 MGU-K is 120 kW (vs 350 kW in 2026), so rear friction discs take substantial braking work: 48% of front duct
+  // airflow holds rear discs in the ~450–520 °C peak carbon-carbon μ plateau and warms rear hot pressures to ~21.0 psi [est]
+  rearDuctShare: 0.48,
   // Forward migration past 45% pedal (+4% by full pedal, 62% front), as an F1 brake-by-wire map does: a hard stop stays
   // front-limited, while a light trail-braking pedal keeps the 58% base so the car rotates on entry. Ramping it from 0
   // put ~60% on the fronts at trail pressure and the car would not turn in on the brakes [est, ref]
@@ -775,19 +799,52 @@ const pressureSpring = (rate: number, refPsi: number): LutPoints =>
     Math.round(rate * (0.6 + (0.4 * (psi + 14.7)) / (refPsi + 14.7))),
   ]);
 
-/** 2025 Pirelli thermal curves: 70 °C blanket limit, distinct operating windows per compound [pirelli, est] */
+/** 2025 Pirelli thermal curves: 70 °C blanket limit, real 2025 C3/C4/C5 operating windows [pirelli, est] */
 const THERMAL_SOFT: LutPoints = [
-  [0, 0.84], [25, 0.88], [50, 0.93], [70, 0.985], [78, 1.0], [96, 1.0],
-  [108, 0.985], [125, 0.955], [150, 0.91], [200, 0.84], [260, 0.65],
+  [0, 0.84], [25, 0.88], [52, 0.935], [72, 0.985], [82, 1.0], [102, 1.0],
+  [114, 0.985], [130, 0.955], [155, 0.91], [205, 0.84], [265, 0.65],
 ];
 const THERMAL_MEDIUM: LutPoints = [
-  [0, 0.83], [25, 0.87], [55, 0.935], [75, 0.985], [85, 1.0], [108, 1.0],
-  [122, 0.985], [145, 0.955], [180, 0.91], [230, 0.84], [280, 0.68],
+  [0, 0.83], [25, 0.87], [56, 0.935], [78, 0.985], [88, 1.0], [110, 1.0],
+  [124, 0.985], [148, 0.955], [182, 0.91], [232, 0.84], [282, 0.68],
 ];
 const THERMAL_HARD: LutPoints = [
-  [0, 0.82], [25, 0.86], [60, 0.935], [82, 0.985], [92, 1.0], [118, 1.0],
+  [0, 0.82], [25, 0.86], [62, 0.935], [84, 0.985], [94, 1.0], [118, 1.0],
   [135, 0.985], [160, 0.96], [200, 0.92], [250, 0.85], [300, 0.72],
 ];
+
+/**
+ * 2025 Pirelli F1 tread wear profile (fraction of compound life slid → % of new grip): gradual thermal/mechanical
+ * degradation across the first ~75% of the stint, then a Pirelli cliff past ~80% [est]. Scaled per compound by
+ * `wearKm` (load-scaled at 4 kN so Soft ~17–20 laps, Medium ~28–32 laps, Hard ~45–50 laps on typical GP circuits).
+ */
+const F1_WEAR_SHAPE: ReadonlyArray<readonly [number, number]> = [
+  [0.0, 100.0],
+  [0.1, 99.6],
+  [0.25, 98.7],
+  [0.45, 97.1],
+  [0.65, 94.8],
+  [0.8, 91.2],
+  [0.9, 85.5],
+  [1.0, 76.0],
+];
+
+/**
+ * 2025 F1 18" wheel + carbon brake drum heat-shielded rim/gas model: mandatory 18" wheel covers and multi-layer carbon
+ * brake drums lower disc-to-rim radiation/convection (`discToRimEmissivity: 0.42`) so front brake heat keeps front hot
+ * pressures near Pirelli's 23.5 psi optimum without runaway over-pressurisation [fia25, est].
+ */
+const LC25_RIM_GAS = {
+  rimHeatCapacityJK: 4600,
+  rimBrakeOverlapAreaM2: 0.07,
+  discToRimEmissivity: 0.42,
+  discToRimConvectionWK: [2.2, 0.06] as readonly [number, number],
+  rimToAmbientConvectionWK: [6.5, 0.52] as readonly [number, number],
+  rimToGasConductanceWK: 16.5,
+  carcassToGasConductanceWK: 22,
+  gasHeatCapacityJK: 52,
+  carcassVolumeStretchPerPsi: 0.0018,
+} as const;
 
 interface SlickSpec {
   tyre_compound: PhysicsTyreCompound;
@@ -802,17 +859,21 @@ interface SlickSpec {
   falloffLevel: number;
   thermalCurve: LutPoints;
   optimalTempC: [number, number];
+  /** Load-scaled sliding distance (km at 4 kN) to full wear-out */
+  wearKm: number;
+  /** Relative flat-spot softness under a wheel lock-up (softer rubber flat-spots faster) */
+  flatSpotSoftness: number;
 }
 
 function makeSlick(s: SlickSpec): TyresCompoundData {
   const fz0Front = 4000;
   const fz0Rear = 4200;
-  // Steeper load sensitivity, toward the [ref] set's: lateral peak μ now falls ≈0.83× from 4 to 8 kN (was ≈0.87×,
-  // the reference ≈0.77×). More grip on light loads and at low speed, less per newton once the floor is loaded; the
-  // peak μ values below are raised to hold high-speed grip
-  const lsExpYFront = 0.82;
+  // Steeper load sensitivity than the first estimate, toward the [ref] set's: lateral peak μ falls ≈0.91× from 4 to
+  // 8 kN at the front (the first estimate's 0.895 gave ≈0.93×). The real 2025 pole laps' corner speeds placed it here:
+  // at 0.82 (≈0.88×) the loaded tyres gave too little of the floor's downforce back in 150–235 km/h corners [ref, openf1]
+  const lsExpYFront = 0.86;
   const lsExpXFront = 0.87;
-  const lsExpYRear = 0.84;
+  const lsExpYRear = 0.875;
   const lsExpXRear = 0.885;
 
   const frontModel: TyresCompoundData['modelData'] = {
@@ -824,8 +885,12 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
     dyCurve: buildLoadCurve(s.dyFront, fz0Front, lsExpYFront),
     dxCurve: buildLoadCurve(s.dxFront, fz0Front, lsExpXFront),
     curve: 'brush',
-    // Peak slip angles a touch sharper than before, toward the [ref] set's ≈6.1° F / 5.4° R
+    // Peak slip angles a touch sharper than before, toward the [ref] set's ≈6.1° F / 5.4° R, widening gently with load
+    // and softer pressure and holding a fuller combined braking/turning ellipse (p = 2.2) [est, ref]
     friction_limit_angle: 6.3,
+    peakSlipLoadGain: 0.068,
+    peakSlipPressureGain: 0.1,
+    combinedExponent: 2.2,
     speedSensitivity: 0.002,
     pKy2: 4.2,
     slip_ratio_limit: 0.10,
@@ -840,6 +905,8 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
     relaxationLengthX: 0.10,
     relaxationLengthY: 0.10,
     rollingResistance: 0.011,
+    // Radial tyre speed² rolling-resistance growth (Wong, Theory of Ground Vehicles) [est]
+    rollingResistanceSpeedSq: 4.6e-7,
     verticalDamping: 650,
     brakeDxMod: 0,
   };
@@ -854,6 +921,7 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
     dyCurve: buildLoadCurve(s.dyRear, fz0Rear, lsExpYRear),
     dxCurve: buildLoadCurve(s.dxRear, fz0Rear, lsExpXRear),
     friction_limit_angle: 5.6,
+    peakSlipLoadGain: 0.07,
     relaxationLengthX: 0.11,
     relaxationLengthY: 0.11,
     verticalDamping: 700,
@@ -863,29 +931,40 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
     name: s.name,
     shortName: s.shortName,
     tyre_compound: s.tyre_compound,
+    wear: {
+      curve: F1_WEAR_SHAPE.map(([frac, pct]) => [Number((frac * s.wearKm).toFixed(3)), pct]),
+      loadScaled: true,
+      loadRefN: fz0Front,
+    },
+    flatSpotSoftness: s.flatSpotSoftness,
     front: { ...TYRE_FRONT, verticalRateScale: 1 },
     rear: { ...TYRE_REAR, verticalRateScale: 1 },
     modelData: frontModel,
     thermalData: {
       thermalPerformanceCurve: s.thermalCurve,
       optimalTempC: s.optimalTempC,
-      tread: { grainGain: 0.125, grainGamma: 0.5, blisterGain: 0.125, blisterGamma: 0.5 },
+      tread: { grainGain: 0.125, grainGamma: 0.5, blisterGain: 0.125, blisterGamma: 0.5, wearOffWithSlip: true },
       surfaceHeatCapacity: 1550,
       coreHeatCapacity: 9800,
       slipHeatShare: 0.35,
-      hysteresis: 0.0108,
+      // Calibrated for 6.45 m² ground-effect vertical loads: settles carcasses at ~93–98 °C inside each compound's
+      // working window on race stints with zero false blistering [est]
+      hysteresis: 0.0080,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [4, 0.1],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 95,
       pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
+      rimGas: LC25_RIM_GAS,
     },
     pressureData: {
       // 2025 Pirelli hot-running optimum (~23.5 F / 21.0 R psi; Austria min start 22.5/20.0) [pirelli]
       optimalPsi: 23.5,
       pressureSpringCurve: pressureSpring(s.rateFront, 23.5),
       pressureGripSensitivity: 1.0,
+      // 0.25% grip loss per psi away from the optimum (standard 18" F1 sensitivity)
+      pressureGripLossPerPsi: 0.0025,
       // FIA 2025 slick tyre blanket temperature cap: 70 °C [fia25 Sport Regs Art. 30.5]
       coldRefC: 70,
       pressureRollingGain: 1.3,
@@ -914,7 +993,8 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
   };
 }
 
-// Compound ladder: ≈1.6 % peak μ per step, between the old 2.4 % and the [ref] set's ≈1 %
+// Compound ladder: ≈1.6 % peak μ per step, between the old 2.4 % and the [ref] set's ≈1 %.
+// 18-inch low-profile Pirelli vertical spring rates (~395–415 kN/m F, ~425–445 kN/m R) hold aero ride height cleanly.
 const SOFT = makeSlick({
   tyre_compound: 'PhysicsTyreCompound_F1_Soft',
   name: 'Soft',
@@ -923,11 +1003,13 @@ const SOFT = makeSlick({
   dxFront: 1.905,
   dyRear: 2.015,
   dxRear: 1.985,
-  rateFront: 315_000,
-  rateRear: 345_000,
+  rateFront: 395_000,
+  rateRear: 425_000,
   falloffLevel: 0.86,
   thermalCurve: THERMAL_SOFT,
-  optimalTempC: [78, 96],
+  optimalTempC: [82, 102],
+  wearKm: 3.8,
+  flatSpotSoftness: 1.25,
 });
 
 const MEDIUM = makeSlick({
@@ -938,11 +1020,13 @@ const MEDIUM = makeSlick({
   dxFront: 1.874,
   dyRear: 1.983,
   dxRear: 1.953,
-  rateFront: 325_000,
-  rateRear: 350_000,
+  rateFront: 405_000,
+  rateRear: 435_000,
   falloffLevel: 0.85,
   thermalCurve: THERMAL_MEDIUM,
-  optimalTempC: [85, 108],
+  optimalTempC: [88, 110],
+  wearKm: 6.4,
+  flatSpotSoftness: 1.0,
 });
 
 const HARD = makeSlick({
@@ -953,19 +1037,36 @@ const HARD = makeSlick({
   dxFront: 1.844,
   dyRear: 1.951,
   dxRear: 1.921,
-  rateFront: 332_000,
-  rateRear: 355_000,
+  rateFront: 415_000,
+  rateRear: 445_000,
   falloffLevel: 0.84,
   thermalCurve: THERMAL_HARD,
-  optimalTempC: [92, 118],
+  optimalTempC: [94, 118],
+  wearKm: 9.8,
+  flatSpotSoftness: 0.80,
 });
 
 const TYRE_COMPOUNDS = {
   PhysicsTyreCompound_F1_Soft: SOFT,
   PhysicsTyreCompound_F1_Medium: MEDIUM,
   PhysicsTyreCompound_F1_Hard: HARD,
-  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
-  PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
+  // Rain tyres: LC25 slick carcass + Cxjovich F1 rain thermal/wear curves + Nuzzi rain water-clearing & thermal ratios [nuzzi]
+  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(
+    MEDIUM,
+    'intermediate',
+    'PhysicsTyreCompound_F1_Intermediate',
+    'Intermediate',
+    true,
+    NUZZI_RAIN_TYRE_DESIGN.intermediate
+  ),
+  PhysicsTyreCompound_F1_Wet: deriveRainCompound(
+    MEDIUM,
+    'wet',
+    'PhysicsTyreCompound_F1_Wet',
+    'Full Wet',
+    true,
+    NUZZI_RAIN_TYRE_DESIGN.wet
+  ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
 // ---------------------------------------------------------------------------
@@ -994,8 +1095,9 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     maxRoadWheelDeg: LC25_STEERING.maxRoadWheelDeg,
     ffbMechanicalTrailM: LC25_STEERING.mechanicalTrailM,
     steerComplianceDegPerKN: 0.045,
-    // Stronger 2025 hydraulic power steering assist so high ground-effect aero loads keep crisp FFB headroom (no clipping at 220–280 km/h)
-    powerSteering: { steeringRatio: LC25_STEERING.ratio, deadbandNm: 18, rampNm: 6, maxRatio: 0.58 },
+    // Hydraulic power steering assist (~49% assist above 18 Nm column deadband): keeps crisp, unclipped FFB headroom
+    // across 90–280 km/h (0.45–0.85 norm even at 5 g ground-effect loads) [est]
+    powerSteering: { steeringRatio: LC25_STEERING.ratio, deadbandNm: 18, rampNm: 8, maxRatio: 0.95 },
     // Body plan at barrier height, measured from `public/cars/lc25/model/lc25.glb` (`scripts/measure-car-plans.ts`)
     bodyPlan: [
       [0.0, 2.92],
@@ -1010,10 +1112,11 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
   engine: ENGINE,
   ers: ERS,
   performanceModes: PERFORMANCE_MODES,
-  // 8-speed seamless gearbox derived from Norris 2025 Austria/Monaco telemetry scaled to R_rear = 0.3600 m [openf1]
-  // (~121 km/h 1st -> 307 km/h 7th -> 341 km/h 8th @ 11,850 rpm; 325 km/h @ 11,300 rpm)
+  // 8-speed seamless gearbox (FIA 2025 Art. 9.6.2 season-locked ratios), fitted directly to Norris's 2025 Austria Q &
+  // Monaco Q OpenF1 rpm/speed telemetry at loaded R_eff ≈ 0.357 m (~102 / 135 / 161 / 196 / 227 / 262 / 299 / 340 km/h
+  // at 11,950 rpm; 364 km/h @ 12,800 rpm at Monza) [openf1, fia25]
   gearbox: {
-    ratios: [2.780, 2.280, 1.920, 1.650, 1.430, 1.245, 1.100, 0.990],
+    ratios: [3.264, 2.473, 2.071, 1.705, 1.471, 1.276, 1.117, 0.983],
     reverse: 3.6,
     finalDrive: 4.78,
     // Quicker seamless shifts, toward the [ref] set's 5 ms up / 16 ms down [est, ref]
@@ -1024,8 +1127,9 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     efficiency: 0.955,
     gears: {
       redline_rpm: 13_000,
-      upshift_rpm: 11_850,
-      downshift_rpm: 7600,
+      // Shifts at 11,950 rpm land at ~10,450–10,550 rpm right at the 10,500 rpm FIA fuel-flow plateau [openf1]
+      upshift_rpm: 11_950,
+      downshift_rpm: 7800,
       brake_downshift_rpm: 10_800,
     },
   },
@@ -1033,21 +1137,28 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     maxTorqueNm: 1400,
     biteRpm: 4000,
     lockRpm: 5500,
-    // Holds auto-clutch slip near ~6,900 rpm where 1st-gear torque hooks rear slicks cleanly (~2.7 s 0–100 straight with TC off)
-    launchRpm: 6900,
+    // Holds auto-clutch slip near ~6,500 rpm where shorter 1st-gear torque hooks rear slicks cleanly (~2.7 s 0–100 TC off)
+    launchRpm: 6500,
   },
-  // Progressive ramp electronic LSD (dials scale power/coast lock cleanly without snapping mid-corner) [est]
+  // 2025 3-phase active electronic differential: Entry (3/12 on brakes), Mid (5/12 at apex), Exit / HiSpd (5/12 on
+  // power or >245 km/h), blended smoothly by pedals and steering angle [est]
   differential: {
     type: 'LSD_Ramp',
     settings: {
-      power: 0.14,
-      coast: 0.14,
-      preload: 45,
+      power: 4 / 11,
+      coast: 4 / 11,
+      preload: 25,
       friction_faces: 1,
       power_ramp_deg: 45,
       coast_ramp_deg: 45,
     },
     halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 35 },
+    coastBraking: 2 / 11,
+    threePhase: true,
+    diffEntryLevel: 3,
+    diffMidLevel: 5,
+    diffExitLevel: 5,
+    hiSpdSwitchKmh: 245,
   },
   brakes: BRAKES,
   suspensions: SUSPENSIONS,
