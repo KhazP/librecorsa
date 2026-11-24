@@ -91,30 +91,42 @@ class Section:
 
 
 def _number(text):
+    """A number as the XML writes it, or None for none; a value that isn't finite (nan, inf, 1e999) is refused"""
     if text is None:
         return None
     text = text.strip()
     try:
-        return float(text)
+        v = float(text)
     except ValueError:
         try:
-            return float(int(text, 0))
-        except ValueError:
+            v = float(int(text, 0))
+        except (ValueError, OverflowError):
             return None
+    if not math.isfinite(v):
+        raise ValueError(f'"{text}" is not a finite number')
+    return v
 
 
-def _fill(el, sec):
+def _fill(el, sec, path=''):
     for ch in el:
         if ch.tag == 'section':
             name = ch.get('name', '')
             kid = sec.kids.get(name)
             if kid is None:
                 kid = sec.kids[name] = Section(name)
-            _fill(ch, kid)
+            _fill(ch, kid, f'{path}/{name}' if path else name)
         elif ch.tag == 'attnum':
-            v = _number(ch.get('val'))
+            key = ch.get('name', '')
+            try:
+                v = _number(ch.get('val'))
+                if v is not None:
+                    v *= UNITS.get(ch.get('unit') or '', 1.0)
+                    if not math.isfinite(v):
+                        raise ValueError(f'"{ch.get("val")} {ch.get("unit")}" is not a finite number')
+            except ValueError as e:
+                raise SystemExit(f'{path} > {key}: {e}')
             if v is not None:
-                sec.nums[ch.get('name', '')] = v * UNITS.get(ch.get('unit') or '', 1.0)
+                sec.nums[key] = v
         elif ch.tag == 'attstr':
             sec.strs[ch.get('name', '')] = ch.get('val', '')
 
@@ -197,7 +209,10 @@ def read_params(path, sd_data=None, log=print):
     text = re.sub(r'<\?xml[^>]*\?>', '', text, count=1)
     # entities other than XML's own would stop the parser
     text = re.sub(r'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[\w.-]+;', '', text)
-    root = ET.fromstring(text)
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as e:
+        raise SystemExit(f'{path}: not well-formed XML ({e})')
     top = Section(root.get('name', ''))
     _fill(root, top)
     return top
@@ -215,6 +230,14 @@ def track_spline(p0, p1, t0, t1, t):
     h2 = t3 - 2 * t2 + t
     h3 = t3 - t2
     return h0 * p0 + h1 * p1 + h2 * t0 + h3 * t1
+
+
+# What a trackdef may ask for and still be built: past these, an XML is malformed (or made to make the converter hang)
+MAX_WIDTH_M = 200.0
+MAX_SIDE_M = 1000.0
+MAX_LAP_M = 100_000.0
+MAX_BANKING = math.radians(80.0)
+MAX_SEGMENT_STEPS = 10_000
 
 
 class SideState:
@@ -242,17 +265,25 @@ class Sub:
 SIDE_NAMES = ('Right', 'Left')
 
 
+def _side_width(sec, key, default, what):
+    """A border's, side's or barrier's width: 0 (none) up to MAX_SIDE_M"""
+    w = sec.num(key, default)
+    if not 0.0 <= w <= MAX_SIDE_M:
+        raise SystemExit(f'{what} > {key}: {w:g} m (0 to {MAX_SIDE_M:g} m)')
+    return w
+
+
 def _init_sides(main):
     states = []
     for name in SIDE_NAMES:
         st = SideState()
         s = main.sub(f'{name} Side') or Section('')
         st.side_surface = s.str('surface', 'grass')
-        st.ew = s.num('width', 0.0)
+        st.ew = _side_width(s, 'width', 0.0, f'{name} Side')
         st.bank = 0 if s.str('banking type', 'level') == 'level' else 1
         b = main.sub(f'{name} Border') or Section('')
         st.b_surface = b.str('surface', 'grass')
-        st.bw = b.num('width', 0.0)
+        st.bw = _side_width(b, 'width', 0.0, f'{name} Border')
         st.bh = b.num('height', 0.0)
         style = b.str('style', 'plan')
         st.b_style = style if style in ('plan', 'curb') else 'wall'
@@ -265,7 +296,7 @@ def _init_sides(main):
         if style in ('fence', 'fence1', 'fence2'):
             st.bar_style, st.bar_w = style, 0.0
         else:
-            st.bar_style, st.bar_w = 'wall', ba.num('width', 0.5)
+            st.bar_style, st.bar_w = 'wall', _side_width(ba, 'width', 0.5, f'{name} Barrier')
         states.append(st)
     return states
 
@@ -274,15 +305,16 @@ def _segment_sides(seg, states):
     """AddSides at a segment's first step: the segment's own border, side and barrier settings over the carried ones"""
     for name, st in zip(SIDE_NAMES, states):
         s = seg.sub(f'{name} Side') or Section('')
+        what = f'segment {seg.name} > {name} Side'
         if 'width' in s.nums:
-            sw = ew = s.num('width')
+            sw = ew = _side_width(s, 'width', 0.0, what)
         else:
-            sw = s.num('start width', st.ew)
-            ew = s.num('end width', sw)
+            sw = _side_width(s, 'start width', st.ew, what)
+            ew = _side_width(s, 'end width', sw, what)
         st.sw, st.ew = sw, ew
         st.side_surface = s.str('surface', st.side_surface)
         b = seg.sub(f'{name} Border') or Section('')
-        st.bw = b.num('width', st.bw)
+        st.bw = _side_width(b, 'width', st.bw, f'segment {seg.name} > {name} Border')
         st.bh = b.num('height', st.bh)
         st.b_surface = b.str('surface', st.b_surface)
         style = b.str('style', st.b_style)
@@ -296,7 +328,7 @@ def _segment_sides(seg, states):
         if style in ('fence', 'fence1', 'fence2'):
             st.bar_style, st.bar_w = style, 0.0
         elif style == 'wall':
-            st.bar_style, st.bar_w = 'wall', ba.num('width', st.bar_w)
+            st.bar_style, st.bar_w = 'wall', _side_width(ba, 'width', st.bar_w, f'segment {seg.name} > {name} Barrier')
         elif style == 'no barrier':
             st.bar_style, st.bar_w, st.bar_h = 'none', 0.0, 0.0
 
@@ -331,6 +363,10 @@ def build_track(P):
     if main is None or main.sub('Track Segments') is None:
         raise SystemExit('no Main Track > Track Segments in the XML: not a Speed Dreams trackdef')
     width = main.num('width', 15.0)
+    if not 0.5 <= width <= MAX_WIDTH_M:
+        raise SystemExit(f'Main Track > width: {width:g} m (a road is 0.5 to {MAX_WIDTH_M:g} m wide)')
+    if not main.sub('Track Segments').kids:
+        raise SystemExit('Main Track > Track Segments holds no segment')
     wi2 = width / 2.0
     global_step = main.num('profil steps length', 0.0)
     surface = main.str('surface', 'asphalt')
@@ -373,11 +409,17 @@ def build_track(P):
             radiusend = seg.num('end radius', radius)
             arc = seg.num('arc', 0.0)
             seg_type = kind
+            # a turn needs a radius at both ends and an angle: the loader divides by them
+            if radius <= 0 or radiusend <= 0 or arc <= 0:
+                raise SystemExit(f'segment {name}: a turn of radius {radius:g} m to {radiusend:g} m through '
+                                 f'{math.degrees(arc):g}° (each must be more than 0)')
             length = (radius + radiusend) / 2.0 * arc
         else:
             raise SystemExit(f'segment {name}: unknown type "{kind}"')
         if length <= 0:
             raise SystemExit(f'segment {name}: no length')
+        if tot + length > MAX_LAP_M:
+            raise SystemExit(f'the lap runs past {MAX_LAP_M / 1000:g} km at segment {name}: not a circuit this can build')
 
         zsl = seg.num('z start left', zsl)
         zsr = seg.num('z start right', zsr)
@@ -398,6 +440,9 @@ def build_track(P):
             ze = (zel + zer) / 2.0
         bankings = seg.num('banking start', math.atan2(zsl - zsr, width))
         bankinge = seg.num('banking end', math.atan2(zel - zer, width))
+        if max(abs(bankings), abs(bankinge)) > MAX_BANKING:
+            raise SystemExit(f'segment {name}: banked {math.degrees(max(abs(bankings), abs(bankinge))):g}° '
+                             f'(at most {math.degrees(MAX_BANKING):g}°)')
         dz = math.tan(bankings) * width / 2.0
         zsl, zsr = zs + dz, zs - dz
         dz = math.tan(bankinge) * width / 2.0
@@ -426,6 +471,8 @@ def build_track(P):
             stgtl = etgtl = (zel - zsl) / length
             stgtr = etgtr = (zer - zsr) / length
         steps = max(1, steps)
+        if steps > MAX_SEGMENT_STEPS:
+            raise SystemExit(f'segment {name}: {steps} profile steps (at most {MAX_SEGMENT_STEPS})')
         seg_first[name] = index
 
         t1l, t2l = stgtl * length, etgtl * length
@@ -518,6 +565,8 @@ def build_track(P):
             if seg_type != 'str':
                 radius += dradius
 
+    if not subs:
+        raise SystemExit('Main Track > Track Segments: no segment has a type (str, lft or rgt)')
     t = Track()
     t.subs, t.length, t.width = subs, tot, width
     t.offset = (lo[0], lo[1], lo[2])
@@ -587,11 +636,13 @@ def _pits(main, subs, length):
     b_start = start if b_start is None else b_start
     b_end = end if b_end is None else b_end
     pit_len = pits.num('length', 15.0)
+    if pit_len <= 0 or pits.num('width', 5.0) <= 0:
+        raise SystemExit(f'Pits: boxes {pit_len:g} m long and {pits.num("width", 5.0):g} m wide (each must be more than 0)')
     s0 = subs[b_start].lg
     s1 = subs[b_end].lg + subs[b_end].length
     span = s1 - s0 if s0 <= s1 else length - s0 + s1
     n_pits = int((span + pit_len / 2.0) / pit_len)
-    n_pits = min(n_pits, int(pits.num('max pits', n_pits)))
+    n_pits = max(0, min(n_pits, int(pits.num('max pits', n_pits))))
     return {
         'side': 0 if pits.str('side', 'right') == 'right' else 1,
         'style': style,
@@ -914,15 +965,39 @@ def _ac_tokens(line):
     return re.findall(r'"[^"]*"|\S+', line)
 
 
+def _floats(tok, n, what):
+    """`n` finite numbers from tokens"""
+    if len(tok) < n:
+        raise ValueError(f'{what} needs {n} numbers')
+    v = [float(t) for t in tok[:n]]
+    if not all(math.isfinite(x) for x in v):
+        raise ValueError(f'{what} is not finite')
+    return v
+
+
 def read_ac(path, log=print):
     """Every poly object of an AC3D model with its world-space triangles (Y up, as glTF), base texture, material and
-    whether it is two-sided"""
+    whether it is two-sided. A model cut short, with a vertex index or material outside its lists, or with numbers that
+    aren't finite is refused"""
     lines = _decode(open(path, 'rb').read()).splitlines()
     if not lines or not lines[0].startswith('AC3D'):
         raise SystemExit(f'{path}: not an AC3D model')
+    try:
+        return _read_ac(path, lines)
+    except (ValueError, IndexError, RecursionError) as e:
+        raise SystemExit(f'{path}: not a well-formed AC3D model ({e})')
+
+
+def _read_ac(path, lines):
     materials = []
     polys = []
     i = 1
+
+    def rows(i, n, what):
+        """The `n` lines from `i`, which the file must have"""
+        if n < 0 or i + n > len(lines):
+            raise ValueError(f'{what}: {n} lines from line {i + 1}, past the end of the file')
+        return lines[i:i + n]
 
     def read_object(i, parent):
         name, kind = '', 'poly'
@@ -952,13 +1027,13 @@ def read_ac(path, log=print):
                     elif texture2 is None and layer == 'tiled':
                         texture2 = re.split(r'[\\/]', tname)[-1]
             elif key == 'texrep':
-                texrep = (float(tok[1]), float(tok[2]))
+                texrep = tuple(_floats(tok[1:], 2, f'line {i}: texrep'))
             elif key == 'texoff':
-                texoff = (float(tok[1]), float(tok[2]))
+                texoff = tuple(_floats(tok[1:], 2, f'line {i}: texoff'))
             elif key == 'rot':
-                local[:3, :3] = np.array([float(v) for v in tok[1:10]]).reshape(3, 3)
+                local[:3, :3] = np.array(_floats(tok[1:], 9, f'line {i}: rot')).reshape(3, 3)
             elif key == 'loc':
-                local[:3, 3] = [float(v) for v in tok[1:4]]
+                local[:3, 3] = _floats(tok[1:], 3, f'line {i}: loc')
             elif key == 'data':
                 n = int(tok[1])
                 # the data runs over the next line(s): skip as many characters
@@ -969,18 +1044,20 @@ def read_ac(path, log=print):
             elif key == 'numvert':
                 world = parent @ local
                 nv = int(tok[1])
-                raw = [lines[i + k].split() for k in range(nv)]
+                raw = [r.split() for r in rows(i, nv, f'object {name}: numvert')]
                 i += nv
-                arr = np.array([[float(v) for v in r[:3]] for r in raw], float) if nv else np.zeros((0, 3))
+                arr = np.array([_floats(r, 3, f'object {name}: a vertex') for r in raw], float) if nv else np.zeros((0, 3))
                 verts = arr @ world[:3, :3].T + world[:3, 3] if nv else arr
                 if nv and all(len(r) >= 6 for r in raw):
-                    nn = np.array([[float(v) for v in r[3:6]] for r in raw], float) @ world[:3, :3].T
+                    nn = np.array([_floats(r[3:], 3, f'object {name}: a normal') for r in raw], float) @ world[:3, :3].T
                     ln = np.linalg.norm(nn, axis=1, keepdims=True)
                     vnorm = np.where(ln > 1e-9, nn / np.maximum(ln, 1e-9), np.array([0.0, 1.0, 0.0]))
             elif key == 'numsurf':
                 ns = int(tok[1])
                 by_mat = {}
                 for _ in range(ns):
+                    if i >= len(lines):
+                        raise ValueError(f'object {name}: {ns} surfaces, the file ends first')
                     flags = mat = 0
                     refs = []
                     while i < len(lines):
@@ -992,11 +1069,15 @@ def read_ac(path, log=print):
                             flags = int(t2[1], 0)
                         elif t2[0] == 'mat':
                             mat = int(t2[1])
+                            if mat < 0:
+                                raise ValueError(f'object {name}: material {mat}')
                         elif t2[0] == 'refs':
                             nr = int(t2[1])
-                            for k in range(nr):
-                                r = lines[i + k].split()
-                                f = [float(v) for v in r[1:5]] + [0.0] * max(0, 4 - len(r[1:5]))
+                            for line in rows(i, nr, f'object {name}: refs'):
+                                r = line.split()
+                                if not r:
+                                    raise ValueError(f'object {name}: an empty ref')
+                                f = _floats(r[1:5], len(r[1:5]), f'object {name}: a ref') + [0.0] * max(0, 4 - len(r[1:5]))
                                 refs.append((int(r[0]), f[0], f[1], f[2], f[3]))
                             i += nr
                             break
@@ -1016,8 +1097,8 @@ def read_ac(path, log=print):
                         for tri in tris:
                             for corner in tri:
                                 vi, u, v, u2, v2 = corner
-                                if vi >= len(verts):
-                                    raise SystemExit(f'{path}: object {name} refers to vertex {vi} of {len(verts)}')
+                                if not 0 <= vi < len(verts):
+                                    raise ValueError(f'object {name} refers to vertex {vi} of {len(verts)}')
                                 if corner not in corners:
                                     corners[corner] = len(pos)
                                     pos.append(verts[vi])
@@ -1039,6 +1120,8 @@ def read_ac(path, log=print):
                 for _ in range(nk):
                     while i < len(lines) and not lines[i].startswith('OBJECT'):
                         i += 1
+                    if i >= len(lines):
+                        break
                     i = read_object(i, world)
                 return i
         return i
@@ -1051,9 +1134,9 @@ def read_ac(path, log=print):
             trans = 0.0
             for k, t in enumerate(tok):
                 if t == 'rgb':
-                    rgb = tuple(float(v) for v in tok[k + 1:k + 4])
+                    rgb = tuple(_floats(tok[k + 1:], 3, f'line {i + 1}: a material\'s rgb'))
                 elif t == 'trans':
-                    trans = float(tok[k + 1])
+                    trans = _floats(tok[k + 1:], 1, f'line {i + 1}: a material\'s trans')[0]
             materials.append({'rgb': rgb, 'trans': trans})
             i += 1
         elif line.startswith('OBJECT'):

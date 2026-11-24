@@ -350,7 +350,7 @@ if (!ran) {
   check("the base data is fetched unless every include is where the trackdef says, and for a trackdef with none", inInstall && !missing && !none, JSON.stringify({ inInstall, missing, none }));
 }
 
-// --- Crafted trackdefs: includes and names that reach outside the circuit -------------------------------------------
+// --- Crafted trackdefs: includes and names that reach outside the circuit, and values that would break the build ----------
 
 if (ran) {
   /** The extractor on a circuit folder `name` holding `xml` (and `ac` as oval.ac); its result and its settings */
@@ -383,6 +383,26 @@ if (ran) {
     evil.ok ? (evil.settings?.description ?? "") : evil.out.slice(-300),
   );
   check("a 3d description reaching outside the folder loads no model from there", evil.ok && !evil.geometry?.scenery, JSON.stringify(evil.geometry?.scenery ?? null));
+
+  const segments = /<section name="Track Segments">[\s\S]*<\/section>\s*<\/section>\s*<\/params>/;
+  const bad: [string, string, string?][] = [
+    ["a length of nan", TRACK_XML.replace('<attnum name="lg" unit="m" val="200"/><attnum name="z start"', '<attnum name="lg" unit="m" val="nan"/><attnum name="z start"')],
+    ["a width of inf", TRACK_XML.replace('<attnum name="width" unit="m" val="12"/>', '<attnum name="width" unit="m" val="inf"/>')],
+    ["no segments", TRACK_XML.replace(segments, '<section name="Track Segments"></section>\n  </section>\n</params>')],
+    ["a turn of radius 0 widening to 50 m", TRACK_XML.replace('<attnum name="radius" unit="m" val="50"/>', '<attnum name="radius" unit="m" val="0"/><attnum name="end radius" unit="m" val="50"/>')],
+    ["pit boxes 0 m long", TRACK_XML.replace('<attnum name="length" unit="m" val="10"/>', '<attnum name="length" unit="m" val="0"/>')],
+    ["banking of 89°", TRACK_XML.replace('<attnum name="banking start" unit="deg" val="5"/>', '<attnum name="banking start" unit="deg" val="89"/>')],
+    ["a negative side width", TRACK_XML.replace('<section name="Right Side"><attnum name="width" unit="m" val="5"/><attstr name="surface" val="sand"/></section>\n    <section name="Left Side">', '<section name="Right Side"><attnum name="width" unit="m" val="-5"/><attstr name="surface" val="sand"/></section>\n    <section name="Left Side">')],
+    ["XML that isn't well-formed", TRACK_XML.replace("</params>", "")],
+    ["an AC3D model cut short", TRACK_XML, AC_MODEL.slice(0, AC_MODEL.indexOf("262 10 -25"))],
+    ["an AC3D model with a negative vertex index", TRACK_XML, AC_MODEL.replace("3 0 1\nkids 0", "-1 0 1\nkids 0")],
+    ["an AC3D model with a vertex of nan", TRACK_XML, AC_MODEL.replace("262 10 -13", "262 nan -13")],
+  ];
+  for (const [what, xml, ac] of bad) {
+    const r = extract(`bad-${what.replace(/\W+/g, "-")}`, xml.replace('val="oval.ac"', ac === undefined ? 'val="none.ac"' : 'val="oval.ac"'), ac);
+    const message = r.out.trim().split("\n").pop() ?? "";
+    check(`a trackdef with ${what} is refused with a message, not a crash`, !r.ok && !/Traceback/.test(r.out) && message.length > 0, message.slice(0, 120));
+  }
 }
 
 rmSync(tmp, { recursive: true, force: true });
