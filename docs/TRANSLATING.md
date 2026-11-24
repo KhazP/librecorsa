@@ -6,9 +6,9 @@ Players choose their display language under **Settings > Display > Interface > L
 
 ## What is translated
 
-Roughly `3,400` strings are managed through the message catalogs, covering the menus, Settings, first-run wizard, HUD and HUD layouts, lap boards, home page, and in-game alerts. Run `npm run i18n:status` to see coverage counts per language.
+The menus, Settings, first-run setup, the HUD and its layouts, the lap boards, the account screens, the home page and the game's own messages read their text from the message files: about 3,700 messages. `npm run i18n:status` counts them. To see what still shows in English, open the game with `?lang=en-XA` (for example `https://librecorsa.org/play?lang=en-XA`): that pseudo-language accents every message it knows and puts it in brackets, so plain English on screen is text that isn't in the files yet.
 
-To spot any hardcoded English text that still needs extraction, launch LibreCorsa with the pseudo-locale `?lang=en-XA` (for example, `https://librecorsa.org/play?lang=en-XA`). Every catalogued message appears accented and wrapped in brackets, making unlocalized strings stand out immediately.
+These stay in English on purpose: the about, privacy and press pages, the admin page, credit and licence lines, the names of cars, circuits and drivers, the car and circuit descriptions, text that goes into a bug report or wheel diagnostics, and the race-control messages the simulation worker builds.
 
 The following areas intentionally stay in English:
 
@@ -34,7 +34,7 @@ Pass the standard browser language tag (`tr`, `pt-BR`, `zh-Hant`) followed by th
    npm run i18n:missing -- tr --out tr.json
    ```
 
-   Each entry includes the English source string, an optional `note` explaining where it appears, and an empty `translation` field. Because the full ~3,400-string catalog exceeds a single model response, break it into manageable chunks with `--area hud` (one feature area) or `--max 300` (splits into `tr.1.json`, `tr.2.json`, etc.), and translate one file per prompt.
+   Each entry has the English text, a note on where it shows when there is one, and an empty `translation`. The whole game is about 3,700 messages, more than a model returns in one reply, so split it: `--area hud` writes one area, and `--max 300` cuts the output into files of at most 300 messages (`tr.1.json`, `tr.2.json`…). Translate each file in its own request.
 
 2. **Translate using the language glossary:**
 

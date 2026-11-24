@@ -46,7 +46,7 @@ const IMPORTERS_DIR = "scripts/mods/importers";
  * importer starts to run belongs here.
  */
 const TOOLS = [
-  "scripts/tracks/optimize-racing-line.ts",
+  "scripts/ai/optimize-lines.ts",
   "scripts/lib/decode-meshopt-glb.mjs",
   "scripts/tracks/compress-track-glb.mjs",
   "scripts/cars/compress-car-glb.mjs",

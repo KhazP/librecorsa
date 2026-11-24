@@ -63,7 +63,8 @@ export const metadata: Metadata = {
   authors: [{ name: "KhazP", url: "https://github.com/KhazP" }],
   creator: "KhazP",
   category: "games",
-  alternates: { canonical: "/" },
+  // The patch notes as RSS (src/app/feed.xml): pages with their own alternates leave it to the home page
+  alternates: { canonical: "/", types: { "application/rss+xml": [{ url: "/feed.xml", title: "LibreCorsa: What's new" }] } },
   robots: {
     index: true,
     follow: true,

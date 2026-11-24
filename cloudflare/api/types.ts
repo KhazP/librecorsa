@@ -123,6 +123,17 @@ export interface Env {
   ANALYTICS_ACCOUNT_ID?: string;
   ANALYTICS_D1_ID?: string;
   ANALYTICS_ZONE_ID?: string;
+  /** Player accounts (accounts/): their database, their switch, and how often one address may start a sign-in or use a
+   * link code (AUTH_LIMIT) and read or write a cloud save (SAVE_LIMIT) */
+  ACCOUNTS_DB?: D1Database;
+  ONLINE_ACCOUNTS?: string;
+  AUTH_LIMIT?: RateLimit;
+  SAVE_LIMIT?: RateLimit;
+  /** The Discord and Google OAuth clients (secrets): each sign-in is offered only once both of its values are set */
+  DISCORD_CLIENT_ID?: string;
+  DISCORD_CLIENT_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 /** `new WebSocketPair()` and friends exist only in the Workers runtime */

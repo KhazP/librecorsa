@@ -1,3 +1,4 @@
+import { accountActions, getAccountState } from "@/lib/account/account-store";
 import { defaultPlayerSettings, type PlayerSettings } from "@/lib/settings/player-settings";
 
 /**
@@ -36,10 +37,12 @@ export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
   { key: "librecorsa.f1ModPhysics", holds: "physics model of the ported cars" },
   { key: "librecorsa.raceHistory", holds: "race history" },
   { key: "librecorsa.supportPrompt", holds: "the note after a drive: when it last showed and what it named" },
+  { key: "librecorsa.signInHintShown", holds: "the lap card's sign-in note has shown" },
   { key: "librecorsa.ai-learn.v1.<circuit>.<class>.<driver>", holds: "what the AI learnt per corner" },
   { key: "librecorsa.simMode", holds: "simulation thread (URL flag)" },
   { key: "librecorsa.lc26Engine", holds: "engine model (URL flag)" },
   { key: "librecorsa.vf26Engine", holds: "older engine model key, read once" },
+  { key: "librecorsa.syncState", holds: "when each synced value last changed, and the last account sync" },
 ];
 
 /**
@@ -66,6 +69,11 @@ export function resetAllSettings(prev: PlayerSettings): PlayerSettings {
 
 /** Removes everything the game saved in this browser, then reloads the page as a first visit */
 export async function clearSavedData(): Promise<void> {
+  // Signed in: this device leaves the account first, or the next start would bring the cloud save straight back.
+  // A server out of reach doesn't hold the clear up for long
+  if (getAccountState().phase === "signed-in") {
+    await Promise.race([accountActions.signOut(), new Promise<void>((resolve) => setTimeout(resolve, 4000))]);
+  }
   // The database first (it is asynchronous); the keys go right before the reload, so nothing can save them back
   await new Promise<void>((resolve) => {
     try {

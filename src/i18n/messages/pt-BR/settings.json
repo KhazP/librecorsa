@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Piloto",
+        "account": "Conta",
         "data": "Dados"
       }
     },
@@ -537,6 +538,13 @@
       "title": "Layout",
       "resetWhat": "o layout do HUD"
     },
+    "placement": {
+      "title": "Tamanho e posição",
+      "resetWhat": "o tamanho do HUD e a posição dos painéis deste layout",
+      "edit": "Posição dos painéis",
+      "editHint": "Mova e redimensione os painéis deste layout no HUD ao vivo.",
+      "editButton": "Editar layout"
+    },
     "graphics": {
       "title": "Gráficos",
       "vr": "VR",
@@ -622,7 +630,7 @@
       "clearButton": "Limpar",
       "clearTitle": "Limpar dados salvos?",
       "clearConfirm": "Limpar tudo",
-      "clearBody": "Remove permanentemente todas as configurações, chave do piloto, voltas, ghosts e setups deste navegador e recarrega."
+      "clearBody": "Remove permanentemente todas as configurações, chave do piloto, voltas, ghosts e setups deste navegador e recarrega. Um dispositivo que entrou em uma conta sai dela antes; a conta e o save na nuvem continuam."
     }
   },
   "hudPicker": {
@@ -634,5 +642,156 @@
     "descriptionSite": "{detail}. Por {author} · {site}",
     "sourceLink": "Código-fonte de {layout}, por {author} (abre em nova aba)",
     "siteLink": "{site}, site de {author} (abre em nova aba)"
+  },
+  "account": {
+    "checking": "Verificando sua conta",
+    "unavailable": "As contas não estão disponíveis agora. Tente de novo mais tarde.",
+    "deleted": "A conta foi excluída.",
+    "deletedLaps": "A conta e as voltas dela foram excluídas.",
+    "page": {
+      "intro": "As contas são opcionais. Uma conta guarda os nomes de piloto e o save em todos os seus dispositivos, e nenhum e-mail é coletado. Entre aqui para ver o que a sua conta guarda, ou para excluí-la.",
+      "privacy": "O que uma conta guarda está na <link>página de privacidade</link>."
+    },
+    "signedOut": {
+      "titlePage": "Entrar",
+      "title": "Conta",
+      "description": "Entre para manter seus nomes de piloto e seu save em todos os dispositivos. Nenhum e-mail é coletado.",
+      "codeLabel": "Usar um código de outro dispositivo",
+      "codeHint": "Em um dispositivo que já entrou, escolha Mostrar um código e digite aqui",
+      "enterCode": "Digitar código",
+      "signInWith": "Entrar com",
+      "oauthHint": "Abre a página de login deles e depois volta para cá",
+      "passkeyHint": "Uma chave de acesso neste dispositivo, em um celular ou em uma chave de segurança",
+      "passkey": "Chave de acesso",
+      "createLabel": "Criar uma conta com uma chave de acesso",
+      "createHint": "Não precisa de outro login",
+      "create": "Criar",
+      "needsBrowserCode": "Entrar com {providers} exige um navegador. Entre em librecorsa.org/account, escolha Mostrar um código e digite aqui.",
+      "needsBrowser": "Entrar com {providers} exige um navegador."
+    },
+    "signedIn": {
+      "yourAccount": "Sua conta",
+      "signedInWith": "Você entrou com {ways}",
+      "combineLabel": "Saves para combinar",
+      "combineHint": "Este dispositivo e a conta têm um save cada",
+      "choose": "Escolher",
+      "save": "Save",
+      "syncing": "Sincronizando agora",
+      "synced": "Sincronizado {ago}",
+      "cloudWritten": "O save na nuvem foi gravado {ago}",
+      "notSynced": "Ainda não sincronizado",
+      "syncNow": "Sincronizar",
+      "signOut": "Sair",
+      "signOutHint": "Este dispositivo mantém o save. Ele volta a publicar voltas com seus nomes assim que você entrar de novo",
+      "lastWay": "A última forma de entrar não pode ser removida. Exclua a conta."
+    },
+    "names": {
+      "title": "Nomes de piloto",
+      "description": "Todo dispositivo desta conta pode publicar voltas com estes nomes. Eles continuam seus enquanto a conta existir.",
+      "lastLap": "Última volta {ago}",
+      "noLaps": "Ainda sem voltas",
+      "none": "Nenhum nome de piloto ainda. O nome com que você publicar sua primeira volta passa a fazer parte da conta.",
+      "elsewhere": "{count, plural, one {{names} está em outra conta.} other {{names} estão em outra conta.}} Para combinar as duas, adicione abaixo o login dessa conta."
+    },
+    "ways": {
+      "title": "Formas de entrar",
+      "description": "Só o ID da conta em cada um é guardado: sem e-mail, nome de usuário ou foto.",
+      "added": "Adicionado em {date}",
+      "addedUsed": "Adicionado em {date}, usado {ago}",
+      "notAdded": "Não adicionado",
+      "remove": "Remover",
+      "add": "Adicionar",
+      "passkeyName": "Chave de acesso adicionada em {date}",
+      "used": "Usada {ago}",
+      "addPasskey": "Adicionar uma chave de acesso",
+      "addPasskeyHint": "Entra com o bloqueio de tela deste dispositivo, um celular ou uma chave de segurança",
+      "combinePasskey": "Combinar com uma conta que tem uma chave de acesso",
+      "combinePasskeyHint": "Os nomes, dispositivos e o save dela passam para esta conta",
+      "usePasskey": "Usar chave de acesso",
+      "desktopOthers": "Outros logins podem ser adicionados em librecorsa.org/account, em um navegador."
+    },
+    "devices": {
+      "title": "Dispositivos",
+      "description": "Os navegadores e apps que entraram nesta conta.",
+      "thisBrowser": "Este navegador",
+      "notJoined": "Um dispositivo que ainda não entrou",
+      "thisDevice": "Este dispositivo",
+      "seen": "Entrou em {date}, visto por último {ago}",
+      "signOut": "Sair"
+    },
+    "keys": {
+      "title": "Chaves do piloto",
+      "description": "Cada dispositivo assina suas voltas com a própria chave do piloto. Toda chave listada aqui pode publicar com os nomes da conta.",
+      "fallback": "Chave do piloto {id}",
+      "added": "Adicionada em {date}",
+      "addedLap": "Adicionada em {date}, última volta {ago}",
+      "none": "Nenhuma chave do piloto ainda. Um dispositivo adiciona a chave dele quando entra na conta."
+    },
+    "remove": {
+      "identityTitle": "Remover o login com {provider}?",
+      "identityBody": "{provider} deixa de entrar nesta conta. Você pode adicioná-lo de novo depois.",
+      "passkeyTitle": "Remover esta chave de acesso?",
+      "passkeyBody": "Ela deixa de entrar nesta conta. Você também pode excluí-la do dispositivo ou do gerenciador de senhas que a guarda.",
+      "keyTitle": "Remover esta chave do piloto?",
+      "keyBody": "As voltas de {label} deixam de ser publicadas com os nomes da conta. As voltas dele que já estão nas classificações continuam.",
+      "confirm": "Remover"
+    },
+    "delete": {
+      "title": "Excluir conta",
+      "label": "Excluir esta conta",
+      "hint": "Exclui os logins e o save na nuvem. Você escolhe se suas voltas ficam",
+      "button": "Excluir",
+      "question": "Excluir esta conta?",
+      "confirm": "Excluir conta",
+      "body": "Isso exclui a conta, os logins e o save na nuvem. O que está salvo neste dispositivo continua.",
+      "lapsGo": "Seus nomes de piloto saem das classificações com as voltas, os resultados de corrida e as medalhas, e ficam livres para qualquer pessoa usar.",
+      "lapsStay": "Seus nomes de piloto e voltas continuam nas classificações. Sem conta, um nome expira após seis meses sem uma volta.",
+      "tick": "Remover também minhas voltas e resultados de corrida das classificações"
+    },
+    "join": {
+      "notNow": "Agora não",
+      "join": "Entrar",
+      "joining": "Entrando… O save deste dispositivo está sincronizando com a conta. Pode levar um instante.",
+      "body": "Os nomes de piloto e o save deste dispositivo passam a fazer parte dessa conta. Agora não faz este dispositivo sair da conta.",
+      "codeBody": "Os nomes de piloto e o save deste dispositivo passam a fazer parte dessa conta."
+    },
+    "firstSync": {
+      "title": "Combinar os dois saves?",
+      "combine": "Combinar",
+      "useCloud": "Usar o save na nuvem",
+      "keepLocal": "Manter o save deste dispositivo",
+      "notNow": "Agora não",
+      "intro": "Este dispositivo e a conta têm um save cada.",
+      "thisDevice": "Este dispositivo",
+      "cloud": "Save na nuvem",
+      "bestLaps": "{count, plural, one {<n>#</n> melhor volta} other {<n>#</n> melhores voltas}}",
+      "setups": "{count, plural, one {<n>#</n> setup salvo} other {<n>#</n> setups salvos}}",
+      "races": "{count, plural, one {<n>#</n> corrida} other {<n>#</n> corridas}}",
+      "savedAgoOn": "Salvo {ago} em {device}",
+      "savedAgo": "Salvo {ago}",
+      "savedOn": "Salvo em {device}",
+      "combineExplain": "<b>Combinar.</b> Mantém os dois. Onde os dois mudaram a mesma coisa, vale a mudança mais recente.",
+      "cloudExplain": "<b>Usar o save na nuvem.</b> Este dispositivo adota as configurações, os setups e o histórico de corridas da conta. Os dele são substituídos.",
+      "localExplain": "<b>Manter o save deste dispositivo.</b> A conta adota as configurações, os setups e o histórico de corridas deste dispositivo. Os outros dispositivos os recebem na próxima abertura.",
+      "bestLapsKept": "As melhores voltas dos dois são sempre mantidas."
+    },
+    "code": {
+      "title": "Usar um código de outro dispositivo",
+      "how": "Em um dispositivo que já entrou, abra Configurações, depois Perfil e dados, depois Conta, e escolha Mostrar um código.",
+      "label": "Código",
+      "continue": "Continuar",
+      "format": "Um código tem 8 letras e números, como ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Mostrar um código para outro dispositivo",
+      "hint": "Faz outro dispositivo entrar nesta conta, como o app para computador",
+      "hide": "Ocultar",
+      "new": "Novo código",
+      "show": "Mostrar um código",
+      "aria": "Código {code}",
+      "left": "{minutes, plural, =0 {Falta menos de um minuto. Funciona uma vez.} one {Falta # minuto. Funciona uma vez.} other {Faltam # minutos. Funciona uma vez.}}",
+      "expired": "Este código expirou. Escolha Novo código para gerar outro.",
+      "how": "No outro dispositivo, abra Configurações, depois Perfil e dados, depois Conta. Escolha Usar um código de outro dispositivo e digite este código."
+    }
   }
 }

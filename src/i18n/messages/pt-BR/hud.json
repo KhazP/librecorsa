@@ -73,6 +73,8 @@
     "driverKeyIntro": "Vincula seu nome de piloto ao ranking. Exporte para usar o mesmo nome em outro dispositivo; mantenha o arquivo em sigilo.",
     "exportKey": "Exportar chave",
     "importKey": "Importar chave",
+    "signIn": "Entrar",
+    "signInHint": "Ou entre para manter suas melhores voltas e seus nomes de piloto em todos os dispositivos, sem arquivo para mover.",
     "importGhost": "Importar arquivo de ghost",
     "exportBest": "Exportar minha melhor",
     "undo": "Desfazer",
@@ -382,6 +384,8 @@
     "queued": "Na fila",
     "close": "Fechar",
     "saveGhost": "Salvar arquivo de ghost",
+    "signInHint": "Entre para manter suas melhores voltas e seus nomes de piloto em todos os dispositivos.",
+    "signIn": "Entrar",
     "driver": "Piloto <b>{name}</b>",
     "rename": "Renomear",
     "driverName": "Nome do piloto",
@@ -844,7 +848,8 @@
     "holdPace": "Mantenha <n>{pace}</n> {unit} até a linha",
     "greenFlag": "Bandeira verde",
     "lightsOut": "Luzes apagadas",
-    "chequeredFlag": "Bandeira quadriculada"
+    "chequeredFlag": "Bandeira quadriculada",
+    "reaction": "Reação <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Motor apagou: segure {control} ou coloque em ponto morto para religar",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "HUD oculto",
     "offKey": "HUD oculto · {key} para mostrar"
+  },
+  "hudEditor": {
+    "title": "Editar layout do HUD",
+    "hint": "Arraste um painel para movê-lo. Arraste o canto dele, ou role sobre ele, para redimensionar.",
+    "parts": {
+      "top-left": "Superior esquerdo",
+      "top-center": "Superior central",
+      "top-right": "Superior direito",
+      "center-right": "Checklist de largada",
+      "center": "Radar",
+      "bottom-left": "Inferior esquerdo",
+      "bottom-center": "Inferior central",
+      "bottom-right": "Inferior direito"
+    },
+    "resetPart": "Redefinir",
+    "resize": "Arraste para redimensionar",
+    "resetAll": "Redefinir layout",
+    "cancel": "Cancelar",
+    "done": "Concluído"
   }
 }

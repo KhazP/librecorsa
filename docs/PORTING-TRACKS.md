@@ -68,9 +68,13 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
   python -P scripts/tracks/port_ac_track.py <id> --src path/to/<track folder>
 ```
 
-Pass a single `<id>`, a comma-separated list, or `all`. The pipeline writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, registers the track in `public/tracks/index.json` and `scripts/tracks/tracks.json`, runs the lap-time racing-line optimizer for F1 and GT3 cars (`scripts/tracks/optimize-racing-line.ts`, typically a few minutes per circuit), and meshopt-compresses the GLB.
+`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/ai/optimize-lines.ts`, which judges every candidate line on full physics laps: about 10 to 30 minutes per line, by the lap's length: Qiddiya's 8.2 km took 20-25) and meshopt-compresses the GLB.
 
-Useful flags:
+- One of the optimiser's starts is an optimal-control solve of a single-track car (`scripts/ai/mintime/solve.py`, CasADi + IPOPT, run through `uv`; its packages are fetched on the first run). Without `uv` on PATH it says so and works from the other starts.
+- `--no-line-opt` skips the optimiser. The circuit keeps the racing lines of its last build when the new centreline has as many samples; otherwise it gets the minimum-curvature line.
+- `--no-glb` writes only the track data. The optimiser needs the GLB, so it is skipped too and the lines are kept the same way.
+- `--no-compress` keeps the raw GLB.
+- `--extras-only` grafts just the circuit's `extraModels` and `driftingObjects` into its existing GLB (`scripts/tracks/graft-track-extras.mjs`), leaving every other byte of it and the track data as they are. For a circuit whose full rebuild would also change what it ships.
 
 - `--no-line-opt`: Skips the racing-line optimizer (reuses previously optimized lines if sample counts match, otherwise computes a minimum-curvature line).
 - `--no-glb`: Regenerates `track_data.json` only (also skips line optimization, since the optimizer requires the GLB).
@@ -203,8 +207,8 @@ For an advanced, fully scripted Blender build—complete with custom terrain, ke
 
 ## Licences
 
-- **Only convert circuits you are permitted to use.** Respect original mod licences; commercial game assets generally cannot be redistributed.
-- **Unlicensed or unauthorized mods are for local use only.** Without an open licence or explicit author permission, keep files strictly on your own machine—do not commit, host, upload, or share them.
-- **Publishing requires permission.** Before distributing a ported circuit on a fork, site, or mod package, confirm the licence permits redistribution (or obtain written consent from the author) and keep a record of it.
-- **Do not open PRs adding third-party circuits.** `public/tracks/` is gitignored except for RISE Motordrome and `index.json`.
-- **Credit creators clearly.** Follow `CREDITS.md` whenever legally sharing a circuit: title, author, link, licence, and modifications made.
+- Only port circuits you have the right to use. A mod's terms come with it, and a game's own assets usually can't be redistributed at all.
+- **Unlicensed or unauthorised mods are for local use only.** If a mod has no licence, or its author hasn't said you can use it, keep it on your own machine: don't commit it, upload it, host it or share it in any form.
+- **Releasing a ported circuit needs permission.** Before you publish one on your fork, your own site or anywhere else, get the author's permission, or check that its licence allows redistribution, and keep a record of it.
+- Keep ported content local by default. `public/tracks/` is gitignored apart from RISE Motordrome and `index.json`, so never commit a circuit's files. To get a circuit you have permission for into the game, open a pull request with its entries and a download link to the files, as [Get involved](GET-INVOLVED.md#bring-a-circuit-or-a-car) describes.
+- If you share a ported circuit anywhere, credit its author the way `CREDITS.md` does: title, author, link, licence, and what you changed.

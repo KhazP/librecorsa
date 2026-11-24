@@ -73,6 +73,8 @@
     "driverKeyIntro": "Réserve votre nom de pilote dans le classement. Exportez-la pour garder le même nom sur un autre appareil ; gardez le fichier privé.",
     "exportKey": "Exporter la clé",
     "importKey": "Importer la clé",
+    "signIn": "Se connecter",
+    "signInHint": "Ou connectez-vous pour conserver vos meilleurs tours et vos noms de pilote sur chaque appareil, sans fichier à transférer.",
     "importGhost": "Importer un fantôme",
     "exportBest": "Exporter mon meilleur",
     "undo": "Annuler",
@@ -382,6 +384,8 @@
     "queued": "En attente",
     "close": "Fermer",
     "saveGhost": "Enregistrer le fantôme",
+    "signInHint": "Connectez-vous pour conserver vos meilleurs tours et vos noms de pilote sur chaque appareil.",
+    "signIn": "Se connecter",
     "driver": "Pilote <b>{name}</b>",
     "rename": "Renommer",
     "driverName": "Nom du pilote",
@@ -844,7 +848,8 @@
     "holdPace": "Tenez <n>{pace}</n> {unit} jusqu’à la ligne",
     "greenFlag": "Drapeau vert",
     "lightsOut": "Extinction des feux",
-    "chequeredFlag": "Drapeau à damier"
+    "chequeredFlag": "Drapeau à damier",
+    "reaction": "Réaction <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Moteur calé : maintenez {control} ou passez au point mort pour redémarrer",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "HUD masqué",
     "offKey": "HUD masqué · {key} pour afficher"
+  },
+  "hudEditor": {
+    "title": "Modifier la disposition du HUD",
+    "hint": "Faites glisser un élément pour le déplacer. Faites glisser son coin, ou faites défiler dessus, pour le redimensionner.",
+    "parts": {
+      "top-left": "En haut à gauche",
+      "top-center": "En haut au centre",
+      "top-right": "En haut à droite",
+      "center-right": "Procédure de départ",
+      "center": "Radar",
+      "bottom-left": "En bas à gauche",
+      "bottom-center": "En bas au centre",
+      "bottom-right": "En bas à droite"
+    },
+    "resetPart": "Réinitialiser",
+    "resize": "Faites glisser pour redimensionner",
+    "resetAll": "Réinitialiser la disposition",
+    "cancel": "Annuler",
+    "done": "Terminé"
   }
 }

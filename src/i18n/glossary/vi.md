@@ -130,3 +130,20 @@
 | physics / physics version | vật lý / phiên bản vật lý | |
 | post / upload | đăng / tải lên | Đăng thành tích vòng lên bảng trực tuyến |
 | Lap times | Thành tích vòng | Màn hình danh sách thành tích vòng |
+
+## Accounts
+
+| English | Tiếng Việt | Ghi chú |
+|---|---|---|
+| account | tài khoản | |
+| sign in / sign out | đăng nhập / đăng xuất | |
+| passkey | khóa truy cập | Cách Google/Apple gọi; khác với *khóa tay đua* |
+| driver key | khóa tay đua | Giữ nguyên thuật ngữ cũ |
+| code / one-time code | mã / mã dùng một lần | Nút: *Hiện mã*, *Mã mới* |
+| cloud save | bản lưu đám mây | |
+| save (noun) | bản lưu | |
+| sync | đồng bộ | |
+| device | thiết bị | |
+| join an account | tham gia tài khoản | Nút: *Tham gia* |
+| combine saves / accounts | gộp bản lưu / gộp tài khoản | Nút: *Gộp* |
+| driver names | tên tay đua | |

@@ -113,6 +113,8 @@
       "addModText": "Fez um mod de carro ou pista e quer vê-lo no LibreCorsa? Escreva para mim em <mail>{email}</mail> com um link. Todo modder é creditado pelo nome no jogo.",
       "modders": "Os modders",
       "moddersText": "Os circuitos e carros são trabalho deles, usados com a permissão de cada um. Se gostar de algum, você pode agradecer direto ao autor.",
+      "contributors": "Contribuidores de código",
+      "contributorsText": "O código deles faz parte do jogo. Obrigado.",
       "links": {
         "download": "Baixar apps",
         "press": "Toda a cobertura e o kit de imprensa",
@@ -144,7 +146,7 @@
       },
       "price": {
         "label": "Preço",
-        "text": "Grátis. Sem conta e sem anúncios; gorjetas são opcionais e não liberam nada"
+        "text": "Grátis. Sem conta obrigatória e sem anúncios; gorjetas são opcionais e não liberam nada"
       }
     }
   },

@@ -1,0 +1,43 @@
+# The checks a pull request has to pass: the same typecheck and verify suites a push to main runs before it deploys
+# (deploy-pages.yml), plus the static build. A pull request from a fork gets no secrets, and none are needed: a
+# checkout has only RISE Motordrome and the 2026 car, and the suites skip what needs the hosted cars and circuits.
+name: Checks
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Verify suites
+        run: npm run verify
+
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_BASE_PATH: ""
+        run: npm run build

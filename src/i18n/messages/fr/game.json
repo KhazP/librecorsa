@@ -334,6 +334,10 @@
     "classicDetail": "Les panneaux d’angle d’origine",
     "minimal": "Minimal",
     "minimalDetail": "Vitesse, rapport et tour uniquement",
+    "touring": "GT-Like",
+    "touringDetail": "Chrono central, deux cadrans, liste des tours, pneus",
+    "formula": "F1-Like",
+    "formulaDetail": "Tableau de course, bulles de chrono, cadran d’énergie, état de la voiture",
     "irdashiesDetail": "Classement, chrono, commandes et témoins de changement de rapport",
     "racevisionDetail": "Classement, voitures proches, jauge de commandes et graphique",
     "h2hDetail": "Les voitures devant et derrière, écarts et deltas au tour",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "Drapeau jaune"
+  },
+  "account": {
+    "checking": "Vérification de votre compte",
+    "passkey": "Clé d’accès",
+    "aPasskey": "une clé d’accès",
+    "justNow": "à l’instant",
+    "join": {
+      "named": "Rejoindre le compte de {name} ({ways}) ?",
+      "namedOnly": "Rejoindre le compte de {name} ?",
+      "this": "Rejoindre ce compte ({ways}) ?",
+      "thisOnly": "Rejoindre ce compte ?"
+    },
+    "notices": {
+      "signedIn": "Vous êtes connecté.",
+      "created": "Votre compte est prêt et vous êtes connecté.",
+      "linked": "Cette méthode de connexion est maintenant liée à votre compte.",
+      "merged": "Les deux comptes n’en font plus qu’un. Leurs sauvegardes seront fusionnées à la prochaine synchronisation.",
+      "alreadyLinked": "Cette méthode de connexion était déjà liée à votre compte.",
+      "cancelled": "Connexion annulée. Rien n’a changé.",
+      "failed": "La connexion a échoué. Réessayez dans un instant.",
+      "deleted": "Votre compte est supprimé.",
+      "deletedLaps": "Votre compte est supprimé. {count, plural, one {# tour a été retiré} other {# tours ont été retirés}} des classements."
+    },
+    "errors": {
+      "notReady": "Les comptes ne sont pas encore disponibles",
+      "keyElsewhere": "La clé de pilote de cet appareil est liée à un autre compte. Connectez-vous aussi à ce compte ici pour fusionner les deux.",
+      "noPasskeys": "Ce navigateur ne prend pas en charge les clés d’accès.",
+      "passkeyNotUsed": "La clé d’accès n’a pas été utilisée.",
+      "passkeyKnown": "Cette clé d’accès est déjà liée à un compte.",
+      "passkeyFailed": "La clé d’accès n’a pas fonctionné. Réessayez.",
+      "deferred": "Synchronisé. Les modifications de vos autres appareils se chargeront au prochain lancement du jeu.",
+      "firstDeferred": "Synchronisé. La sauvegarde du compte se chargera au prochain lancement du jeu.",
+      "chooseFirst": "Choisissez d’abord ce qu’il faut garder.",
+      "noStorage": "Ce navigateur ne permet pas au jeu de conserver une sauvegarde : synchronisation impossible.",
+      "newerSave": "Votre sauvegarde cloud a été créée par une version plus récente du jeu. Rechargez la page pour la mettre à jour.",
+      "tooBig": "Votre sauvegarde est trop volumineuse pour être synchronisée.",
+      "busy": "Un autre appareil sauvegardait en même temps. Le jeu réessaie sous peu.",
+      "unreachable": "Le serveur est injoignable. Vérifiez la connexion et réessayez.",
+      "signedOut": "Vous êtes déconnecté sur cet appareil.",
+      "serverProblem": "Le serveur a rencontré un problème. Réessayez dans un instant.",
+      "tooMany": "Trop de tentatives. Attendez une minute et réessayez.",
+      "unavailable": "Les comptes ne sont pas disponibles pour le moment.",
+      "badCode": "Un code comporte 8 lettres et chiffres, comme ABCD-EFGH."
+    },
+    "server": {
+      "signInFirst": "Connectez-vous d’abord",
+      "missingKey": "Clé de pilote manquante. Rechargez le jeu et réessayez",
+      "deviceSignedOut": "Cet appareil est déjà déconnecté",
+      "keyNotHere": "Cette clé de pilote n’est pas liée à ce compte",
+      "passkeyNotHere": "Cette clé d’accès n’est pas liée à ce compte",
+      "signInNotHere": "Cette méthode de connexion n’est pas liée à ce compte",
+      "lastWayIn": "C’est la dernière façon d’accéder à votre compte. Ajoutez-en une autre d’abord, ou supprimez le compte",
+      "noCode": "Impossible de créer un code. Réessayez",
+      "wrongCode": "Ce code est incorrect ou a expiré. Affichez-en un nouveau sur l’autre appareil",
+      "codeFormat": "Un code comporte 8 lettres et chiffres, comme ABCD-EFGH",
+      "tooManyTries": "Trop de tentatives, attendez une minute",
+      "tooManySyncs": "Trop de synchronisations, attendez une minute",
+      "serverProblem": "Le serveur de comptes a rencontré un problème. Réessayez dans un instant",
+      "signOutFirst": "Déconnectez-vous avant de créer un nouveau compte",
+      "tookTooLong": "Cela a pris trop de temps. Réessayez",
+      "passkeyTaken": "Cette clé d’accès est déjà liée à un compte",
+      "passkeyUnknown": "Cette clé d’accès n’est liée à aucun compte ici. Connectez-vous autrement, ou créez un compte avec elle",
+      "passkeyUnchecked": "La clé d’accès n’a pas pu être vérifiée. Réessayez",
+      "saveTooLarge": "La sauvegarde dépasse 1 Mo",
+      "saveChanged": "La sauvegarde cloud a changé sur un autre appareil",
+      "tooManyLaps": "Le cloud conserve jusqu’à {count} meilleurs tours"
+    }
   }
 }

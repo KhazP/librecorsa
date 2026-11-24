@@ -73,6 +73,8 @@
     "driverKeyIntro": "Tur tablosundaki pilot adını sana bağlar. Aynı adı başka bir cihazda kullanmak için dışa aktar; dosyayı gizli tut.",
     "exportKey": "Anahtarı dışa aktar",
     "importKey": "Anahtarı içe aktar",
+    "signIn": "Giriş yap",
+    "signInHint": "Ya da en iyi turlarını ve pilot adlarını dosya taşımadan her cihazda tutmak için giriş yap.",
     "importGhost": "Hayalet dosyasını içe aktar",
     "exportBest": "En iyi turumu dışa aktar",
     "undo": "Geri al",
@@ -382,6 +384,8 @@
     "queued": "Sırada",
     "close": "Kapat",
     "saveGhost": "Hayalet dosyasını kaydet",
+    "signInHint": "En iyi turlarını ve pilot adlarını her cihazda tutmak için giriş yap.",
+    "signIn": "Giriş yap",
     "driver": "Pilot <b>{name}</b>",
     "rename": "Adı değiştir",
     "driverName": "Pilot adı",
@@ -844,7 +848,8 @@
     "holdPace": "Çizgiye kadar <n>{pace}</n> {unit}",
     "greenFlag": "Yeşil bayrak",
     "lightsOut": "Işıklar söndü",
-    "chequeredFlag": "Damalı bayrak"
+    "chequeredFlag": "Damalı bayrak",
+    "reaction": "Tepki <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Motor stop etti: yeniden çalıştırmak için {control} basılı tut veya boşa al",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "HUD kapalı",
     "offKey": "HUD kapalı · göstermek için {key}"
+  },
+  "hudEditor": {
+    "title": "HUD düzenini değiştir",
+    "hint": "Taşımak için bir paneli sürükle. Boyutunu değiştirmek için köşesini sürükle ya da üzerinde kaydır.",
+    "parts": {
+      "top-left": "Sol üst",
+      "top-center": "Orta üst",
+      "top-right": "Sağ üst",
+      "center-right": "Kalkış kontrol listesi",
+      "center": "Radar",
+      "bottom-left": "Sol alt",
+      "bottom-center": "Orta alt",
+      "bottom-right": "Sağ alt"
+    },
+    "resetPart": "Sıfırla",
+    "resize": "Boyutlandırmak için sürükle",
+    "resetAll": "Düzeni sıfırla",
+    "cancel": "İptal",
+    "done": "Tamam"
   }
 }

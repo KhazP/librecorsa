@@ -73,6 +73,8 @@
     "driverKeyIntro": "Mengklaim nama pembalapmu di papan peringkat. Ekspor untuk memakai nama yang sama di perangkat lain; jaga kerahasiaan file ini.",
     "exportKey": "Ekspor kunci",
     "importKey": "Impor kunci",
+    "signIn": "Masuk",
+    "signInHint": "Atau masuk agar lap terbaik dan nama pembalapmu tersimpan di semua perangkat, tanpa memindahkan file.",
     "importGhost": "Impor file ghost",
     "exportBest": "Ekspor terbaikku",
     "undo": "Urungkan",
@@ -382,6 +384,8 @@
     "queued": "Dalam antrean",
     "close": "Tutup",
     "saveGhost": "Simpan file ghost",
+    "signInHint": "Masuk agar lap terbaik dan nama pembalapmu tersimpan di semua perangkat.",
+    "signIn": "Masuk",
     "driver": "Pembalap <b>{name}</b>",
     "rename": "Ubah nama",
     "driverName": "Nama pembalap",
@@ -844,7 +848,8 @@
     "holdPace": "Tahan <n>{pace}</n> {unit} sampai garis",
     "greenFlag": "Bendera hijau",
     "lightsOut": "Lampu padam",
-    "chequeredFlag": "Bendera finis"
+    "chequeredFlag": "Bendera finis",
+    "reaction": "Reaksi <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Mesin mati: tahan {control} atau pindahkan ke netral untuk menyalakan ulang",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "HUD nonaktif",
     "offKey": "HUD nonaktif · {key} untuk menampilkan"
+  },
+  "hudEditor": {
+    "title": "Edit tata letak HUD",
+    "hint": "Seret panel untuk memindahkannya. Seret sudutnya, atau gulir di atasnya, untuk mengubah ukurannya.",
+    "parts": {
+      "top-left": "Kiri atas",
+      "top-center": "Tengah atas",
+      "top-right": "Kanan atas",
+      "center-right": "Daftar cek start",
+      "center": "Radar",
+      "bottom-left": "Kiri bawah",
+      "bottom-center": "Tengah bawah",
+      "bottom-right": "Kanan bawah"
+    },
+    "resetPart": "Reset",
+    "resize": "Seret untuk mengubah ukuran",
+    "resetAll": "Reset tata letak",
+    "cancel": "Batal",
+    "done": "Selesai"
   }
 }

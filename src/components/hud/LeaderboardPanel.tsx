@@ -64,6 +64,8 @@ export interface LeaderboardPanelProps {
   onExportDriverKey?: () => void;
   onImportDriverKey?: (file: File) => void;
   driverKeyNotice?: string | null;
+  /** Opens Settings > Profile and data > Account: given only while accounts are on and this device is signed out */
+  onSignIn?: () => void;
   /** External jump request (e.g. clicking a Fastest Lap record in Hall of Fame) */
   jumpTarget?: { trackId: string; vehicle: VehicleModelId; seq: number } | null;
 }
@@ -111,6 +113,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   onExportDriverKey,
   onImportDriverKey,
   driverKeyNotice = null,
+  onSignIn,
   jumpTarget = null,
 }) => {
   const tx = useTranslations("hud.leaderboardPanel");
@@ -330,12 +333,19 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
               <input ref={keyFileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleKeyFile} />
             </>
           ) : null}
+          {onSignIn ? (
+            <Button size="sm" variant="secondary" icon={<Icon name="profile" />} onClick={onSignIn}>
+              {tx("signIn")}
+            </Button>
+          ) : null}
           {driverKeyNotice ? (
             <span role="status" className="text-[13px] text-lc-chalk">
               {driverKeyNotice}
             </span>
           ) : null}
         </div>
+        {/* An account carries the names and best laps to every device, the job the key file does by hand */}
+        {onSignIn ? <p className="lc-hint m-0 max-w-[62ch]">{tx("signInHint")}</p> : null}
       </div>
     ) : null;
 

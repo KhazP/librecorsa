@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Piloto",
+        "account": "Cuenta",
         "data": "Datos"
       }
     },
@@ -537,6 +538,13 @@
       "title": "Diseño",
       "resetWhat": "el diseño del HUD"
     },
+    "placement": {
+      "title": "Tamaño y posición",
+      "resetWhat": "el tamaño del HUD y la posición de los paneles de este diseño",
+      "edit": "Posición de los paneles",
+      "editHint": "Mueve los paneles de este diseño y cambia su tamaño sobre el HUD en vivo.",
+      "editButton": "Editar diseño"
+    },
     "graphics": {
       "title": "Gráficos",
       "vr": "VR",
@@ -622,7 +630,7 @@
       "clearButton": "Borrar",
       "clearTitle": "¿Borrar los datos guardados?",
       "clearConfirm": "Borrar todo",
-      "clearBody": "Elimina de forma permanente todos los ajustes, la clave de piloto, las vueltas, los fantasmas y los setups de este navegador, y recarga."
+      "clearBody": "Elimina de forma permanente todos los ajustes, la clave de piloto, las vueltas, los fantasmas y los setups de este navegador, y recarga. Un dispositivo con la sesión iniciada cierra primero la sesión de su cuenta; la cuenta y sus datos en la nube se conservan."
     }
   },
   "hudPicker": {
@@ -634,5 +642,156 @@
     "descriptionSite": "{detail}. De {author} · {site}",
     "sourceLink": "Código fuente de {layout}, de {author} (se abre en una pestaña nueva)",
     "siteLink": "{site}, sitio de {author} (se abre en una pestaña nueva)"
+  },
+  "account": {
+    "checking": "Comprobando tu cuenta",
+    "unavailable": "Las cuentas no están disponibles en este momento. Inténtalo más tarde.",
+    "deleted": "La cuenta se eliminó.",
+    "deletedLaps": "La cuenta y sus vueltas se eliminaron.",
+    "page": {
+      "intro": "Las cuentas son opcionales. Una cuenta conserva tus nombres de piloto y tus datos guardados en todos tus dispositivos, y no se recoge ningún correo. Inicia sesión aquí para ver qué guarda tu cuenta o para eliminarla.",
+      "privacy": "Lo que guarda una cuenta está en la <link>página de privacidad</link>."
+    },
+    "signedOut": {
+      "titlePage": "Iniciar sesión",
+      "title": "Cuenta",
+      "description": "Inicia sesión para conservar tus nombres de piloto y tus datos guardados en todos tus dispositivos. No se recoge ningún correo.",
+      "codeLabel": "Usar un código de otro dispositivo",
+      "codeHint": "En un dispositivo con la sesión iniciada, elige Mostrar un código y escríbelo aquí",
+      "enterCode": "Introducir código",
+      "signInWith": "Iniciar sesión con",
+      "oauthHint": "Abre su página de inicio de sesión y luego vuelve aquí",
+      "passkeyHint": "Una passkey de este dispositivo, de un teléfono o de una llave de seguridad",
+      "passkey": "Passkey",
+      "createLabel": "Crear una cuenta con una passkey",
+      "createHint": "No hace falta otro método de inicio de sesión",
+      "create": "Crear",
+      "needsBrowserCode": "Iniciar sesión con {providers} requiere un navegador. Inicia sesión en librecorsa.org/account, elige Mostrar un código y escríbelo aquí.",
+      "needsBrowser": "Iniciar sesión con {providers} requiere un navegador."
+    },
+    "signedIn": {
+      "yourAccount": "Tu cuenta",
+      "signedInWith": "Sesión iniciada con {ways}",
+      "combineLabel": "Datos por combinar",
+      "combineHint": "Este dispositivo y la cuenta tienen datos guardados",
+      "choose": "Elegir",
+      "save": "Datos guardados",
+      "syncing": "Sincronizando ahora",
+      "synced": "Sincronizado {ago}",
+      "cloudWritten": "Los datos en la nube se escribieron {ago}",
+      "notSynced": "Aún sin sincronizar",
+      "syncNow": "Sincronizar ahora",
+      "signOut": "Cerrar sesión",
+      "signOutHint": "Este dispositivo conserva sus datos guardados. Vuelve a publicar vueltas con tus nombres cuando inicies sesión",
+      "lastWay": "No se puede quitar la última forma de entrar. Elimina la cuenta en su lugar."
+    },
+    "names": {
+      "title": "Nombres de piloto",
+      "description": "Todos los dispositivos de esta cuenta pueden publicar vueltas con estos nombres. Siguen siendo tuyos mientras exista la cuenta.",
+      "lastLap": "Última vuelta {ago}",
+      "noLaps": "Aún sin vueltas",
+      "none": "Aún no hay nombres de piloto. El nombre con el que publiques tu primera vuelta se une a la cuenta.",
+      "elsewhere": "{count, plural, one {{names} está en otra cuenta.} other {{names} están en otra cuenta.}} Para combinar las dos, añade abajo el método de inicio de sesión de esa cuenta."
+    },
+    "ways": {
+      "title": "Formas de iniciar sesión",
+      "description": "Solo se guarda el ID de la cuenta en cada una: ni correo, ni nombre de usuario, ni foto.",
+      "added": "Añadida el {date}",
+      "addedUsed": "Añadida el {date}, usada {ago}",
+      "notAdded": "No añadida",
+      "remove": "Quitar",
+      "add": "Añadir",
+      "passkeyName": "Passkey añadida el {date}",
+      "used": "Usada {ago}",
+      "addPasskey": "Añadir una passkey",
+      "addPasskeyHint": "Inicia sesión con el bloqueo de pantalla de este dispositivo, un teléfono o una llave de seguridad",
+      "combinePasskey": "Combinar con una cuenta que tiene una passkey",
+      "combinePasskeyHint": "Sus nombres, dispositivos y datos guardados se unen a esta cuenta",
+      "usePasskey": "Usar passkey",
+      "desktopOthers": "Otros métodos de inicio de sesión se pueden añadir en librecorsa.org/account desde un navegador."
+    },
+    "devices": {
+      "title": "Dispositivos",
+      "description": "Los navegadores y apps con la sesión iniciada en esta cuenta.",
+      "thisBrowser": "Este navegador",
+      "notJoined": "Un dispositivo que aún no se ha unido",
+      "thisDevice": "Este dispositivo",
+      "seen": "Sesión iniciada el {date}, visto por última vez {ago}",
+      "signOut": "Cerrar sesión"
+    },
+    "keys": {
+      "title": "Claves de piloto",
+      "description": "Cada dispositivo firma sus vueltas con su propia clave de piloto. Todas las claves de aquí pueden publicar con los nombres de la cuenta.",
+      "fallback": "Clave de piloto {id}",
+      "added": "Añadida el {date}",
+      "addedLap": "Añadida el {date}, última vuelta {ago}",
+      "none": "Aún no hay claves de piloto. Un dispositivo añade su clave cuando se une a la cuenta."
+    },
+    "remove": {
+      "identityTitle": "¿Quitar el inicio de sesión con {provider}?",
+      "identityBody": "{provider} ya no inicia sesión en esta cuenta. Puedes volver a añadirlo más tarde.",
+      "passkeyTitle": "¿Quitar esta passkey?",
+      "passkeyBody": "Ya no inicia sesión en esta cuenta. También puedes eliminarla del dispositivo o del gestor de contraseñas que la guarda.",
+      "keyTitle": "¿Quitar esta clave de piloto?",
+      "keyBody": "Las vueltas de {label} ya no se publican con los nombres de la cuenta. Las que ya están en las clasificaciones se quedan.",
+      "confirm": "Quitar"
+    },
+    "delete": {
+      "title": "Eliminar cuenta",
+      "label": "Eliminar esta cuenta",
+      "hint": "Elimina sus métodos de inicio de sesión y sus datos en la nube. Tú eliges si tus vueltas se quedan",
+      "button": "Eliminar",
+      "question": "¿Eliminar esta cuenta?",
+      "confirm": "Eliminar cuenta",
+      "body": "Se eliminan la cuenta, sus métodos de inicio de sesión y sus datos en la nube. Lo guardado en este dispositivo se queda.",
+      "lapsGo": "Tus nombres de piloto salen de las clasificaciones con sus vueltas, resultados de carrera e insignias, y quedan libres para que cualquiera los use.",
+      "lapsStay": "Tus nombres de piloto y tus vueltas se quedan en las clasificaciones. Sin cuenta, un nombre caduca tras seis meses sin una vuelta.",
+      "tick": "Eliminar también mis vueltas y resultados de carrera de las clasificaciones"
+    },
+    "join": {
+      "notNow": "Ahora no",
+      "join": "Unirse",
+      "joining": "Uniéndose… Los datos guardados de este dispositivo se están sincronizando con la cuenta. Puede tardar un momento.",
+      "body": "Los nombres de piloto y los datos guardados de este dispositivo pasan a formar parte de esa cuenta. Ahora no cierra la sesión de este dispositivo.",
+      "codeBody": "Los nombres de piloto y los datos guardados de este dispositivo pasan a formar parte de esa cuenta."
+    },
+    "firstSync": {
+      "title": "¿Combinar los dos conjuntos de datos?",
+      "combine": "Combinar",
+      "useCloud": "Usar los datos en la nube",
+      "keepLocal": "Conservar los datos de este dispositivo",
+      "notNow": "Ahora no",
+      "intro": "Este dispositivo y la cuenta tienen datos guardados.",
+      "thisDevice": "Este dispositivo",
+      "cloud": "Datos en la nube",
+      "bestLaps": "{count, plural, one {<n>#</n> mejor vuelta} other {<n>#</n> mejores vueltas}}",
+      "setups": "{count, plural, one {<n>#</n> setup guardado} other {<n>#</n> setups guardados}}",
+      "races": "{count, plural, one {<n>#</n> carrera} other {<n>#</n> carreras}}",
+      "savedAgoOn": "Guardado {ago} en {device}",
+      "savedAgo": "Guardado {ago}",
+      "savedOn": "Guardado en {device}",
+      "combineExplain": "<b>Combinar.</b> Conserva ambos. Donde los dos cambiaron lo mismo, gana el cambio más reciente.",
+      "cloudExplain": "<b>Usar los datos en la nube.</b> Este dispositivo toma los ajustes, setups e historial de carreras de la cuenta. Los suyos se reemplazan.",
+      "localExplain": "<b>Conservar los datos de este dispositivo.</b> La cuenta toma los ajustes, setups e historial de carreras de este dispositivo. Los otros dispositivos los reciben en su próximo inicio.",
+      "bestLapsKept": "Las mejores vueltas de ambos se conservan siempre."
+    },
+    "code": {
+      "title": "Usar un código de otro dispositivo",
+      "how": "En un dispositivo con la sesión iniciada, abre Ajustes, luego Perfil y datos, luego Cuenta, y elige Mostrar un código.",
+      "label": "Código",
+      "continue": "Continuar",
+      "format": "Un código tiene 8 letras y números, como ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Mostrar un código para otro dispositivo",
+      "hint": "Inicia sesión en esta cuenta desde otro dispositivo, como la app de escritorio",
+      "hide": "Ocultar",
+      "new": "Nuevo código",
+      "show": "Mostrar un código",
+      "aria": "Código {code}",
+      "left": "{minutes, plural, =0 {Queda menos de un minuto. Funciona una sola vez.} one {Queda # minuto. Funciona una sola vez.} other {Quedan # minutos. Funciona una sola vez.}}",
+      "expired": "Este código ha caducado. Elige Nuevo código para obtener otro.",
+      "how": "En el otro dispositivo, abre Ajustes, luego Perfil y datos, luego Cuenta. Elige Usar un código de otro dispositivo y escribe este código."
+    }
   }
 }

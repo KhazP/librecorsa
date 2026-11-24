@@ -73,6 +73,8 @@
     "driverKeyIntro": "用於在圈速榜上認證你的車手名稱。匯出後即可在其他裝置沿用同一個名稱；請妥善保管此檔案。",
     "exportKey": "匯出金鑰",
     "importKey": "匯入金鑰",
+    "signIn": "登入",
+    "signInHint": "或者登入，即可在每部裝置上保留你的最佳單圈與車手名稱，不必搬移檔案。",
     "importGhost": "匯入幽靈車檔案",
     "exportBest": "匯出我的最佳單圈",
     "undo": "復原",
@@ -382,6 +384,8 @@
     "queued": "已排入佇列",
     "close": "關閉",
     "saveGhost": "儲存幽靈車檔案",
+    "signInHint": "登入後，即可在每部裝置上保留你的最佳單圈與車手名稱。",
+    "signIn": "登入",
     "driver": "車手 <b>{name}</b>",
     "rename": "重新命名",
     "driverName": "車手名稱",
@@ -844,7 +848,8 @@
     "holdPace": "維持 <n>{pace}</n> {unit} 至起跑線",
     "greenFlag": "綠旗",
     "lightsOut": "燈滅起跑",
-    "chequeredFlag": "方格旗"
+    "chequeredFlag": "方格旗",
+    "reaction": "反應 <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "引擎熄火：按住 {control} 或排入空檔重新發動",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "HUD 已隱藏",
     "offKey": "HUD 已隱藏 · 按 {key} 顯示"
+  },
+  "hudEditor": {
+    "title": "編輯 HUD 配置",
+    "hint": "拖曳面板即可移動；拖曳面板角落或在面板上捲動即可調整大小。",
+    "parts": {
+      "top-left": "左上",
+      "top-center": "上方中央",
+      "top-right": "右上",
+      "center-right": "起跑檢查清單",
+      "center": "雷達",
+      "bottom-left": "左下",
+      "bottom-center": "下方中央",
+      "bottom-right": "右下"
+    },
+    "resetPart": "重設",
+    "resize": "拖曳以調整大小",
+    "resetAll": "重設配置",
+    "cancel": "取消",
+    "done": "完成"
   }
 }

@@ -27,9 +27,11 @@
  *
  * Driver names are claimed with a driver key: a random secret the game keeps in the browser. The first upload under
  * a name stores the key's SHA-256; later uploads under that name (ignoring case and extra spaces) must bring the same
- * key. A claim lapses after six months without an upload, and the laps under it go with it. A driver who changes their
- * name takes their laps and race results with them (`renameDriver`), so a board never shows them twice. Names that
- * fail the name filter (src/lib/net/name-filter.ts) are refused on upload and on rename.
+ * key, or a key on the same player account as the name (name-proof.ts; a name claimed by a key on an account joins
+ * it). A claim lapses after six months without an upload, and the laps under it go with it; a name on an account never
+ * lapses. A driver who changes their name takes their laps and race results with them (`renameDriver`), so a board
+ * never shows them twice. Names that fail the name filter (src/lib/net/name-filter.ts) are refused on upload and on
+ * rename.
  */
 import { ASSIST_PRESETS, boardChoices, currentBoardBase, isCurrentLapPhysics, MAX_LAP_REVISION, revisionOnBoard, type LapConditions } from "../../src/lib/sim/lap-types";
 import { SIM_REALISM_LEVELS } from "../../src/lib/sim/sim-realism";
@@ -37,6 +39,7 @@ import { isVehicleModelId, VEHICLE_MODEL_IDS, type VehicleModelId } from "../../
 import { nameProblem } from "../../src/lib/net/name-filter";
 import { checkLap, TRACK_ID_RE, type CheckedLap } from "./lap-check";
 import { invalidateAutoWeeklyAwards, invalidateAutoWeeklyAwardsForDriver, moveDriverAwards } from "./awards";
+import { accountOfKey, KEY_USE_REFRESH_MS, keyProvesName, type KeyAccount, type NameOwner } from "./name-proof";
 import type { D1Database, D1PreparedStatement, Env, R2Bucket } from "./types";
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024 + 4096;
@@ -255,25 +258,51 @@ async function overPostLimit(deps: BoardDeps, request: Request, nowMs: number): 
   return (used?.count ?? 1) > MAX_POSTS_PER_HOUR;
 }
 
-/** Puts `nameKey` under this driver key: false when another key holds it. A fresh claim starts clean: laps a lapsed owner left under the name go */
-async function claimName(deps: BoardDeps, nameKey: string, keyHash: string, nowMs: number): Promise<boolean> {
-  await deps.db.prepare("DELETE FROM drivers WHERE name_key = ? AND last_seen < ?").bind(nameKey, nowMs - CLAIM_LAPSES_MS).run();
-  const claim = await deps.db
-    .prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT (name_key) DO NOTHING")
-    .bind(nameKey, keyHash, nowMs, nowMs)
+/**
+ * Puts `nameKey` under this driver key: false when another key holds it and this key isn't on the name's account. A
+ * fresh claim starts clean (laps a lapsed owner left under the name go) and joins the key's account, if it has one.
+ * A name on an account never lapses. `account` is the key's (name-proof.ts accountOfKey): undefined on a database
+ * without accounts, where everything runs as it did before them.
+ */
+async function claimName(deps: BoardDeps, nameKey: string, keyHash: string, account: KeyAccount | null | undefined, nowMs: number): Promise<boolean> {
+  const accounts = account !== undefined;
+  const accountId = account?.accountId ?? null;
+  await deps.db
+    .prepare(`DELETE FROM drivers WHERE name_key = ? AND last_seen < ?${accounts ? " AND account_id IS NULL" : ""}`)
+    .bind(nameKey, nowMs - CLAIM_LAPSES_MS)
     .run();
-  const owner = await deps.db.prepare("SELECT key_hash FROM drivers WHERE name_key = ?").bind(nameKey).first<{ key_hash: string }>();
-  if (owner?.key_hash !== keyHash) return false;
+  const claim = accounts
+    ? await deps.db
+        .prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen, account_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT (name_key) DO NOTHING")
+        .bind(nameKey, keyHash, nowMs, nowMs, accountId)
+        .run()
+    : await deps.db
+        .prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT (name_key) DO NOTHING")
+        .bind(nameKey, keyHash, nowMs, nowMs)
+        .run();
+  const owner = await deps.db
+    .prepare(`SELECT key_hash${accounts ? ", account_id" : ""} FROM drivers WHERE name_key = ?`)
+    .bind(nameKey)
+    .first<NameOwner>();
+  if (!keyProvesName(owner, keyHash, accountId)) return false;
   if (claim.meta.changes === 1) {
     const left = await deps.db.prepare("SELECT id FROM laps WHERE name_key = ?").bind(nameKey).all<{ id: string }>();
     await deleteLaps(deps, left.results.map((r) => r.id));
+  } else if (accountId) {
+    // A name its own key still holds outside the account (claimed before the key joined) joins it now
+    await deps.db.prepare("UPDATE drivers SET last_seen = ?, account_id = COALESCE(account_id, ?) WHERE name_key = ?").bind(nowMs, accountId, nameKey).run();
   } else {
     await deps.db.prepare("UPDATE drivers SET last_seen = ? WHERE name_key = ?").bind(nowMs, nameKey).run();
+  }
+  // The account page shows when each of its keys last posted; written at most once an hour
+  if (account && (account.lastUsedAt === null || nowMs - account.lastUsedAt >= KEY_USE_REFRESH_MS)) {
+    await deps.db.prepare("UPDATE account_keys SET last_used_at = ? WHERE key_hash = ?").bind(nowMs, keyHash).run();
+    account.lastUsedAt = nowMs;
   }
   return true;
 }
 
-const NAME_TAKEN = "This name is taken. Import your driver key under Lap Times, or race under another name";
+const NAME_TAKEN = "This name is taken. Sign in to the account that holds it, import your driver key under Lap Times, or race under another name";
 /**
  * A lap driven on an older physics version, or before its circuit's boards started again (a tab left open from before
  * the update): its board is read only now
@@ -346,7 +375,8 @@ async function takeLap(deps: BoardDeps, request: Request, seen: LapSeen): Promis
   }
   const keyHash = await sha256Hex(body.driverKey);
   const nameKey = driverNameKey(rec.driverName);
-  if (!(await claimName(deps, nameKey, keyHash, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
+  const account = await accountOfKey(deps.db, keyHash);
+  if (!(await claimName(deps, nameKey, keyHash, account, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
 
   // A challenge lap also counts on the open board
   const onOpen = await storeLap(deps, rec, "", nameKey);
@@ -550,10 +580,17 @@ export async function renameDriver(deps: BoardDeps, request: Request): Promise<A
   const fromKey = from ? driverNameKey(from) : "";
   const toKey = driverNameKey(to);
 
-  // Whether this key holds the old name, read before the new one is claimed (which may be the same name in other letters)
-  const oldOwner = fromKey ? await deps.db.prepare("SELECT key_hash FROM drivers WHERE name_key = ?").bind(fromKey).first<{ key_hash: string }>() : null;
-  const ownsOld = oldOwner?.key_hash === keyHash;
-  if (!(await claimName(deps, toKey, keyHash, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
+  // Whether this key holds the old name (itself, or through the name's account), read before the new one is claimed
+  // (which may be the same name in other letters)
+  const account = await accountOfKey(deps.db, keyHash);
+  const oldOwner = fromKey
+    ? await deps.db
+        .prepare(`SELECT key_hash${account !== undefined ? ", account_id" : ""} FROM drivers WHERE name_key = ?`)
+        .bind(fromKey)
+        .first<NameOwner>()
+    : null;
+  const ownsOld = keyProvesName(oldOwner, keyHash, account?.accountId);
+  if (!(await claimName(deps, toKey, keyHash, account, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
 
   let moved = 0;
   if (ownsOld && fromKey !== toKey) {

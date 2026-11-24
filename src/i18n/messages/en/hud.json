@@ -73,6 +73,8 @@
     "driverKeyIntro": "Claims your driver name on the leaderboard. Export to use the same name on another device; keep the file private.",
     "exportKey": "Export key",
     "importKey": "Import key",
+    "signIn": "Sign in",
+    "signInHint": "Or sign in to keep your best laps and driver names on every device, with no file to move.",
     "importGhost": "Import ghost file",
     "exportBest": "Export my best",
     "undo": "Undo",
@@ -384,6 +386,8 @@
     "queued": "Queued",
     "close": "Close",
     "saveGhost": "Save ghost file",
+    "signInHint": "Sign in to keep your best laps and driver names on every device.",
+    "signIn": "Sign in",
     "driver": "Driver <b>{name}</b>",
     "rename": "Rename",
     "driverName": "Driver name",
@@ -846,7 +850,8 @@
     "holdPace": "Hold <n>{pace}</n> {unit} to line",
     "greenFlag": "Green flag",
     "lightsOut": "Lights out",
-    "chequeredFlag": "Chequered flag"
+    "chequeredFlag": "Chequered flag",
+    "reaction": "Reaction <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Engine stalled: hold {control} or shift to neutral to restart",
@@ -1074,5 +1079,24 @@
   "hiddenNote": {
     "off": "HUD off",
     "offKey": "HUD off · {key} to show"
+  },
+  "hudEditor": {
+    "title": "Edit HUD layout",
+    "hint": "Drag a panel to move it. Drag its corner, or scroll over it, to resize it.",
+    "parts": {
+      "top-left": "Top left",
+      "top-center": "Top centre",
+      "top-right": "Top right",
+      "center-right": "Start checklist",
+      "center": "Radar",
+      "bottom-left": "Bottom left",
+      "bottom-center": "Bottom centre",
+      "bottom-right": "Bottom right"
+    },
+    "resetPart": "Reset",
+    "resize": "Drag to resize",
+    "resetAll": "Reset layout",
+    "cancel": "Cancel",
+    "done": "Done"
   }
 }

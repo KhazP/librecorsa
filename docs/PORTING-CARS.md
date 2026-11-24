@@ -172,8 +172,8 @@ During deployment, car GLBs are meshopt-compressed (LibreCorsa loads both raw an
 
 ## Licences
 
-- **Only port assets you have the right to use.** Respect original model licences and mod terms; commercial game assets generally cannot be redistributed.
-- **Keep unlicensed or unauthorized mods strictly local.** If a mod lacks an open licence or explicit creator permission, keep it on your own machine—never commit, upload, host, or redistribute it.
-- **Get permission before publishing.** Before shipping a ported car in a fork, website, or mod pack, verify the licence allows redistribution (or secure written permission from the author) and keep a record of it.
-- **Do not open PRs with third-party assets.** `public/cars/` is gitignored aside from the built-in 2026 car.
-- **Credit every creator properly.** Whenever you legally share a ported car, follow `CREDITS.md` conventions: title, author, source link, licence, and a note describing what you modified.
+- Only port models and sounds you have the right to use. A model's licence and a mod's terms come with it, and a game's own assets usually can't be redistributed at all.
+- **Unlicensed or unauthorised mods are for local use only.** If a mod has no licence, or its author hasn't said you can use it, keep it on your own machine: don't commit it, upload it, host it or share it in any form.
+- **Releasing a ported car needs permission.** Before you publish one on your fork, your own site or anywhere else, get the author's permission, or check that its licence allows redistribution, and keep a record of it.
+- Keep ported content local by default. `public/cars/` is gitignored apart from the 2026 car, so never commit a car's models or sounds. To get a car you have permission for into the game, open a pull request with its code and a download link to the files, as [Get involved](GET-INVOLVED.md#bring-a-circuit-or-a-car) describes.
+- If you share a ported car anywhere, credit its author the way `CREDITS.md` does: title, author, link, licence, and what you changed.

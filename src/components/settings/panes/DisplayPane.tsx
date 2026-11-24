@@ -35,6 +35,7 @@ import {
   temperatureUnit,
   uiScale,
 } from "../defs";
+import { PHONE_HUD_PARTS, layoutMoved, withLayoutParts } from "@/lib/settings/hud-parts";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "../HudLayoutPicker";
@@ -79,12 +80,44 @@ export function GraphicsTab() {
   );
 }
 
+/** The HUD's size, and where the layout in use puts its panels: the live layout editor moves and resizes them */
+function HudPlacementCard() {
+  const env = useSettingsEnv();
+  const tx = useTranslations("settings.display.placement");
+  // The layout chosen, and the Phone HUD a phone or the touch pads draw in its place
+  const moved = layoutMoved(env.settings.hud.parts, env.settings.hud.preset) || layoutMoved(env.settings.hud.parts, PHONE_HUD_PARTS);
+  return (
+    <SettingsCard
+      title={tx("title")}
+      rows={[hudSize]}
+      extraReset={{
+        changed: moved,
+        reset: () =>
+          env.update((s) => ({
+            ...s,
+            hud: { ...s.hud, parts: withLayoutParts(withLayoutParts(s.hud.parts, s.hud.preset, {}), PHONE_HUD_PARTS, {}) },
+          })),
+      }}
+      resetWhat={tx("resetWhat")}
+    >
+      {env.onEditHudLayout ? (
+        <SettingRow label={tx("edit")} hint={tx("editHint")}>
+          <Button size="sm" variant="secondary" onClick={env.onEditHudLayout}>
+            {tx("editButton")}
+          </Button>
+        </SettingRow>
+      ) : null}
+    </SettingsCard>
+  );
+}
+
 export function HudTab() {
   const tx = useTranslations("settings.display.hud");
   return (
     <>
       <HudLayoutCard />
-      <SettingsCard title={tx("title")} rows={[hudSize, deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
+      <HudPlacementCard />
+      <SettingsCard title={tx("title")} rows={[deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
     </>
   );
 }

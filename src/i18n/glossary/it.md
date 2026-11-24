@@ -187,3 +187,19 @@
 | post | pubblica | Lap to the online board |
 | upload | carica | |
 | Lap times | Tempi sul giro | |
+
+## Accounts
+| English | Italian | Note |
+|---|---|---|
+| account | account | Kept in English, as Google/Apple/Discord do in Italian |
+| sign in | accedi / accesso | Button "Accedi"; noun "accesso" ("Accesso con Discord") |
+| sign out | esci | Button and row "Esci"; sentences use "uscire dall’account" |
+| passkey | passkey | Kept in English, lowercase in sentences, as Google and Apple Italia |
+| code / one-time code | codice | "Un codice" works once ("monouso") |
+| cloud save | salvataggio cloud | |
+| sync / synced | sincronizza / sincronizzato | |
+| device | dispositivo | |
+| join an account | unirsi all’account ("Unisciti") | |
+| combine saves | combina / unire i salvataggi | Button "Combina" |
+| driver key | chiave del pilota | Existing term, unchanged |
+| driver name | nome da pilota | |

@@ -154,3 +154,80 @@ export class JumpStartWatch {
     return "jump";
   }
 }
+
+/** Throttle travel that counts as the foot going down (0..1): the keyboard's ramp crosses it on the press's first frame */
+const REACT_THROTTLE = 0.05;
+/** Clutch travel off where it was held through the lights that counts as letting it out (0..1): the key's clutch,
+ * which eases out over 0.4 s, crosses it on its second frame, long before the bite */
+const REACT_CLUTCH = 0.1;
+/** Past this the launch did not answer the lights (s): the driver looked away, or waited on purpose */
+const REACTION_WINDOW_S = 3;
+
+/**
+ * The driver's reaction to the lights going out, as the F1 games show it: from the frame the lights go out to the
+ * first frame the driver acts, in an assisted start the throttle going down, in a manual one the clutch starting to
+ * come out (from where it was held through the lights; the bite comes later, by the clutch's own travel). There is
+ * none when the driver had already acted as the lights went out (the throttle held through them, as the assisted
+ * start's cue asks; the clutch not held in), and none past `REACTION_WINDOW_S`. The reading stands until the next
+ * start's lights.
+ */
+export class ReactionWatch {
+  private lit = false;
+  private manual = false;
+  /** The clutch as held on the last frame of the lights */
+  private heldClutch = 0;
+  /** The launch control was where it should be on the last frame of the lights */
+  private ready = false;
+  private sinceS: number | null = null;
+  private reading: number | null = null;
+
+  /** The last start's reaction (ms), or null */
+  get ms(): number | null {
+    return this.reading;
+  }
+
+  reset(): void {
+    this.lit = false;
+    this.manual = false;
+    this.heldClutch = 0;
+    this.ready = false;
+    this.sinceS = null;
+    this.reading = null;
+  }
+
+  private acting(throttle: number, clutch: number): boolean {
+    return this.manual ? clutch < this.heldClutch - REACT_CLUTCH : throttle > REACT_THROTTLE;
+  }
+
+  /**
+   * One frame: whether the start lights stand (a grid waiting for them too), whether the car is held for a manual
+   * start (read while they stand), and the throttle and clutch (0..1, clutch 1 = pressed)
+   */
+  update(dtS: number, lightsLit: boolean, manual: boolean, throttle: number, clutch: number): void {
+    if (lightsLit) {
+      this.lit = true;
+      this.manual = manual;
+      this.heldClutch = clutch;
+      this.ready = manual ? clutch >= BITE : throttle <= REACT_THROTTLE;
+      this.sinceS = null;
+      this.reading = null;
+      return;
+    }
+    if (this.lit) {
+      // The lights went out this frame: acting on it went before them
+      this.lit = false;
+      this.sinceS = this.ready && !this.acting(throttle, clutch) ? 0 : null;
+      return;
+    }
+    if (this.sinceS === null) return;
+    this.sinceS += Math.max(0, dtS);
+    if (this.sinceS > REACTION_WINDOW_S) {
+      this.sinceS = null;
+      return;
+    }
+    if (this.acting(throttle, clutch)) {
+      this.reading = Math.round(this.sinceS * 1000);
+      this.sinceS = null;
+    }
+  }
+}

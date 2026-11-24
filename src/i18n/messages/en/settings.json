@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Driver",
+        "account": "Account",
         "data": "Data"
       }
     },
@@ -537,6 +538,13 @@
       "title": "Layout",
       "resetWhat": "the HUD layout"
     },
+    "placement": {
+      "title": "Size and position",
+      "resetWhat": "the HUD size and this layout's panel positions",
+      "edit": "Panel positions",
+      "editHint": "Move and resize this layout's panels on the live HUD.",
+      "editButton": "Edit layout"
+    },
     "graphics": {
       "title": "Graphics",
       "vr": "VR",
@@ -622,7 +630,7 @@
       "clearButton": "Clear",
       "clearTitle": "Clear saved data?",
       "clearConfirm": "Clear everything",
-      "clearBody": "Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads."
+      "clearBody": "Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads. A signed-in device is signed out of its account first; the account and its cloud save stay."
     }
   },
   "hudPicker": {
@@ -634,5 +642,156 @@
     "descriptionSite": "{detail}. By {author} · {site}",
     "sourceLink": "{layout} source, by {author} (opens in a new tab)",
     "siteLink": "{site}, {author}'s site (opens in a new tab)"
+  },
+  "account": {
+    "checking": "Checking your account",
+    "unavailable": "Accounts are not available right now. Try again later.",
+    "deleted": "The account is deleted.",
+    "deletedLaps": "The account and its laps are deleted.",
+    "page": {
+      "intro": "Accounts are optional. An account keeps your driver names and save on every device, and no email is collected. Sign in here to see what your account holds, or to delete it.",
+      "privacy": "What an account stores is on the <link>privacy page</link>."
+    },
+    "signedOut": {
+      "titlePage": "Sign in",
+      "title": "Account",
+      "description": "Sign in to keep your driver names and save on every device. No email is collected.",
+      "codeLabel": "Use a code from another device",
+      "codeHint": "On a device that is signed in, choose Show a code, then type it here",
+      "enterCode": "Enter a code",
+      "signInWith": "Sign in with",
+      "oauthHint": "Opens their sign-in page, then comes back here",
+      "passkeyHint": "A passkey on this device, a phone or a security key",
+      "passkey": "Passkey",
+      "createLabel": "Create an account with a passkey",
+      "createHint": "No other sign-in needed",
+      "create": "Create",
+      "needsBrowserCode": "{providers} sign-in needs a browser. Sign in at librecorsa.org/account, choose Show a code, and type it here.",
+      "needsBrowser": "{providers} sign-in needs a browser."
+    },
+    "signedIn": {
+      "yourAccount": "Your account",
+      "signedInWith": "Signed in with {ways}",
+      "combineLabel": "Saves to combine",
+      "combineHint": "This device and the account both have a save",
+      "choose": "Choose",
+      "save": "Save",
+      "syncing": "Syncing now",
+      "synced": "Synced {ago}",
+      "cloudWritten": "The cloud save was written {ago}",
+      "notSynced": "Not synced yet",
+      "syncNow": "Sync now",
+      "signOut": "Sign out",
+      "signOutHint": "This device keeps its save. It posts laps under your names again once you sign in",
+      "lastWay": "The last way in can’t be removed. Delete the account instead."
+    },
+    "names": {
+      "title": "Driver names",
+      "description": "Every device on this account can post laps under these names. They stay yours while the account exists.",
+      "lastLap": "Last lap {ago}",
+      "noLaps": "No laps yet",
+      "none": "No driver names yet. The name you post your first lap under joins the account.",
+      "elsewhere": "{count, plural, one {{names} is on another account.} other {{names} are on another account.}} To combine the two, add that account’s sign-in below."
+    },
+    "ways": {
+      "title": "Ways to sign in",
+      "description": "Only the account’s id at each is kept: no email, user name or picture.",
+      "added": "Added {date}",
+      "addedUsed": "Added {date}, used {ago}",
+      "notAdded": "Not added",
+      "remove": "Remove",
+      "add": "Add",
+      "passkeyName": "Passkey added {date}",
+      "used": "Used {ago}",
+      "addPasskey": "Add a passkey",
+      "addPasskeyHint": "Signs in with this device’s screen lock, a phone or a security key",
+      "combinePasskey": "Combine with an account that has a passkey",
+      "combinePasskeyHint": "Its names, devices and save join this account",
+      "usePasskey": "Use passkey",
+      "desktopOthers": "Other sign-ins can be added at librecorsa.org/account in a browser."
+    },
+    "devices": {
+      "title": "Devices",
+      "description": "The browsers and apps signed in to this account.",
+      "thisBrowser": "This browser",
+      "notJoined": "A device that hasn’t joined yet",
+      "thisDevice": "This device",
+      "seen": "Signed in {date}, last seen {ago}",
+      "signOut": "Sign out"
+    },
+    "keys": {
+      "title": "Driver keys",
+      "description": "Each device signs its laps with its own driver key. Every key here may post under the account’s names.",
+      "fallback": "Driver key {id}",
+      "added": "Added {date}",
+      "addedLap": "Added {date}, last lap {ago}",
+      "none": "No driver keys yet. A device adds its key when it joins the account."
+    },
+    "remove": {
+      "identityTitle": "Remove the {provider} sign-in?",
+      "identityBody": "{provider} no longer signs in to this account. You can add it again later.",
+      "passkeyTitle": "Remove this passkey?",
+      "passkeyBody": "It no longer signs in to this account. You can also delete it from the device or password manager that keeps it.",
+      "keyTitle": "Remove this driver key?",
+      "keyBody": "Laps from {label} no longer post under the account’s names. Its laps already on the boards stay.",
+      "confirm": "Remove"
+    },
+    "delete": {
+      "title": "Delete account",
+      "label": "Delete this account",
+      "hint": "Deletes its sign-ins and cloud save. You choose whether your laps stay",
+      "button": "Delete",
+      "question": "Delete this account?",
+      "confirm": "Delete account",
+      "body": "This deletes the account, its sign-ins and its cloud save. What is saved on this device stays.",
+      "lapsGo": "Your driver names come off the boards with their laps, race results and badges, and are free for anyone to take.",
+      "lapsStay": "Your driver names and laps stay on the boards. Without an account, a name lapses after six months without a lap.",
+      "tick": "Also remove my laps and race results from the boards"
+    },
+    "join": {
+      "notNow": "Not now",
+      "join": "Join",
+      "joining": "Joining… This device’s save is syncing with the account. It can take a moment.",
+      "body": "This device’s driver names and save become part of that account. Not now signs this device out.",
+      "codeBody": "This device’s driver names and save become part of that account."
+    },
+    "firstSync": {
+      "title": "Combine the two saves?",
+      "combine": "Combine",
+      "useCloud": "Use the cloud save",
+      "keepLocal": "Keep this device’s save",
+      "notNow": "Not now",
+      "intro": "This device and the account both have a save.",
+      "thisDevice": "This device",
+      "cloud": "Cloud save",
+      "bestLaps": "{count, plural, one {<n>#</n> best lap} other {<n>#</n> best laps}}",
+      "setups": "{count, plural, one {<n>#</n> saved setup} other {<n>#</n> saved setups}}",
+      "races": "{count, plural, one {<n>#</n> race} other {<n>#</n> races}}",
+      "savedAgoOn": "Saved {ago} on {device}",
+      "savedAgo": "Saved {ago}",
+      "savedOn": "Saved on {device}",
+      "combineExplain": "<b>Combine.</b> Keeps both. Where both changed the same thing, the newer change wins.",
+      "cloudExplain": "<b>Use the cloud save.</b> This device takes the account’s settings, setups and race history. Its own are replaced.",
+      "localExplain": "<b>Keep this device’s save.</b> The account takes this device’s settings, setups and race history. Other devices get them at their next start.",
+      "bestLapsKept": "Best laps from both are always kept."
+    },
+    "code": {
+      "title": "Use a code from another device",
+      "how": "On a device that is signed in, open Settings, then Profile and data, then Account, and choose Show a code.",
+      "label": "Code",
+      "continue": "Continue",
+      "format": "A code is 8 letters and numbers, like ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Show a code for another device",
+      "hint": "Signs another device in to this account, such as the desktop app",
+      "hide": "Hide",
+      "new": "New code",
+      "show": "Show a code",
+      "aria": "Code {code}",
+      "left": "{minutes, plural, =0 {Less than a minute left. It works once.} one {# minute left. It works once.} other {# minutes left. It works once.}}",
+      "expired": "This code has run out. Choose New code for another.",
+      "how": "On the other device, open Settings, then Profile and data, then Account. Choose Use a code from another device and type this code."
+    }
   }
 }

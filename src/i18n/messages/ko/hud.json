@@ -73,6 +73,8 @@
     "driverKeyIntro": "리더보드에서 드라이버 이름 소유권을 증명합니다. 다른 기기에서 같은 이름을 쓰려면 내보내십시오. 파일은 비공개로 보관해야 합니다.",
     "exportKey": "키 내보내기",
     "importKey": "키 가져오기",
+    "signIn": "로그인",
+    "signInHint": "또는 로그인하면 파일을 옮기지 않아도 모든 기기에서 베스트 랩과 드라이버 이름을 유지할 수 있습니다.",
     "importGhost": "고스트 파일 가져오기",
     "exportBest": "내 최고 기록 내보내기",
     "undo": "실행 취소",
@@ -382,6 +384,8 @@
     "queued": "대기 중",
     "close": "닫기",
     "saveGhost": "고스트 파일 저장",
+    "signInHint": "로그인하면 모든 기기에서 베스트 랩과 드라이버 이름을 유지할 수 있습니다.",
+    "signIn": "로그인",
     "driver": "드라이버 <b>{name}</b>",
     "rename": "이름 변경",
     "driverName": "드라이버 이름",
@@ -844,7 +848,8 @@
     "holdPace": "출발선까지 <n>{pace}</n> {unit} 유지",
     "greenFlag": "녹기",
     "lightsOut": "라이트 아웃",
-    "chequeredFlag": "체커기"
+    "chequeredFlag": "체커기",
+    "reaction": "반응 <n>{ms}</n>ms"
   },
   "launchCue": {
     "stalledLabel": "엔진 시동 꺼짐: 재시동하려면 {control}을(를) 길게 누르거나 중립으로 변속하십시오",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "HUD 꺼짐",
     "offKey": "HUD 꺼짐 · 표시: {key}"
+  },
+  "hudEditor": {
+    "title": "HUD 레이아웃 편집",
+    "hint": "패널을 드래그해 옮기고, 모서리를 드래그하거나 패널 위에서 스크롤해 크기를 바꿉니다.",
+    "parts": {
+      "top-left": "왼쪽 위",
+      "top-center": "가운데 위",
+      "top-right": "오른쪽 위",
+      "center-right": "스타트 체크리스트",
+      "center": "레이더",
+      "bottom-left": "왼쪽 아래",
+      "bottom-center": "가운데 아래",
+      "bottom-right": "오른쪽 아래"
+    },
+    "resetPart": "초기화",
+    "resize": "드래그해 크기 조절",
+    "resetAll": "레이아웃 초기화",
+    "cancel": "취소",
+    "done": "완료"
   }
 }

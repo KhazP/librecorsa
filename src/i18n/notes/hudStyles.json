@@ -283,5 +283,9 @@
   "grandPrix.standingsOut": "Gap column of the session card's standings: the car has retired. Written in capitals; about 4 letters.",
   "grandPrix.lastLap": "Row of the session card in practice, beside your last lap time. Written in capitals.",
   "grandPrix.delta": "Label of the delta bar (the live time difference to your best lap). Written in capitals; about 6 letters.",
-  "grandPrix.brakeBias": "Label in the setup card: the brake bias (front/rear braking split, %). Written in capitals."
+  "grandPrix.brakeBias": "Label in the setup card: the brake bias (front/rear braking split, %). Written in capitals.",
+  "gtLike.boost": "GT-Like HUD gauge label: turbo boost pressure in bar (not the hybrid Boost button).",
+  "f1Like.ers.clipped": "ERS state: the hybrid has run out of deployable energy on a straight and power drops (not force-feedback clipping).",
+  "f1Like.ers.neutral": "ERS state: neither harvesting nor deploying (not the gearbox neutral).",
+  "f1Like.overtake": "The 2026 Overtake Mode: use the same word as the Overtake button elsewhere in the game."
 }

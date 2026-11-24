@@ -1,6 +1,6 @@
 # Racing online and lap boards
 
-LibreCorsa includes three connected online features: private peer-to-peer rooms with friends, scheduled open races every 20 minutes, and global lap boards with a weekly challenge.
+LibreCorsa has four online parts: private rooms for racing friends, open races that start every 20 minutes, lap boards with a weekly challenge, and optional accounts that keep your names and your save on all your devices. On librecorsa.org they run on the site's own server. A copy of the game without that server still has peer-to-peer rooms, paired through the public PeerJS service, and keeps your lap times in your browser.
 
 On `librecorsa.org`, these features are backed by the site's Cloudflare Worker (see [Self-hosting and the online backend](SELF-HOSTING.md) to run your own). Self-hosted copies without that backend still support peer-to-peer private rooms (via the public PeerJS broker) and save personal best laps locally in the browser.
 
@@ -123,12 +123,13 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 
 ### Driver name and identity key
 
-- Your first uploaded lap claims your driver name using a randomly generated **driver key** stored locally in your browser. Future uploads under the same name (case-insensitive, ignoring extra whitespace) must present that matching key.
-- Uploading under someone else's claimed name returns `"This name is taken. Import your driver key under Lap Times, or race under another name"`.
-- To race under your name on another device or browser, back up the key under **Settings > Profile and data > Data > Identity key > Save**, then **Load** it on the other device (also available as **Export key** and **Import key** inside **Lap times**). Treat this file like a password.
-- Running **Clear saved data**—or wiping site storage in your browser—permanently deletes your driver key. Back it up first.
-- Changing your name (in Settings or via **Rename** on the lap card) migrates your existing laps and race results to the new name and releases the old one. If you already hold times under the target name, the fastest lap in each category is kept. Ghosts retain the driver name they were recorded under.
-- Claimed names expire after **6 months** without an upload; once someone else claims an inactive name, the previous laps under it are cleared.
+- The first lap you post claims your name with your driver key, a random code kept in your browser. Later laps under that name, ignoring case and extra spaces, need the same key.
+- Without it the board answers "This name is taken. Sign in to the account that holds it, import your driver key under Lap Times, or race under another name".
+- With an account, every device that joined it posts under its names (see [Accounts](#accounts)).
+- To use your name in another browser, save the key to a file: **Settings > Profile and data > Data**, **Identity key**, **Save**. Then **Load** it in the other browser. **Lap times** has the same pair as **Export key** and **Import key**. Keep the file private.
+- **Clear saved data**, or clearing the site's data in your browser, deletes the key. Save it first.
+- Renaming (in the settings, or **Rename** on the lap card) moves your laps and race results to the new name and frees the old one. If you already had laps under the new name, the fastest of each kind stays. Ghosts keep the name they were driven under.
+- After six months without an upload, someone else can claim the name. The laps left under it are removed when they do. A name on an account doesn't lapse.
 
 ### Input icons
 
@@ -159,7 +160,36 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 - Laps only qualify for the weekly challenge if driven under that week's rules and submitted before the week closes; late uploads still post to the regular open board.
 - The **Hall of Fame** tracks **Fastest Lap record holders**, **Weekly podiums**, and **Most decorated** drivers.
 
-## Sharing car setups
+## Accounts
+
+An account is optional. Without one, the game works as it always has: each browser keeps its own driver key and its own save.
+
+### Signing in
+
+- Sign in under **Settings > Profile and data > Account**, or on the [account page](https://librecorsa.org/account), with Discord, Google, Steam or a passkey. **Create an account with a passkey** needs nothing else.
+- The game keeps the id Discord, Google or Steam gives it for you, and nothing else: no email, no user name, no picture. A passkey leaves only its public key.
+- The desktop app, and the game added to an iPhone home screen, can't open those sign-in pages. On a device that is signed in, choose **Show a code for another device**, then type the code on the other one under **Use a code from another device**. A code works once, for 10 minutes, and the game shows whose account it joins before it does.
+- Adding a second way in while signed in (Google on top of Discord, say) adds it to the account. If that sign-in already had an account of its own, the two become one account, with everything from both.
+
+### Your devices and your names
+
+- After you sign in, a device asks to join the account. Joining brings the names that device's driver key holds into the account.
+- From then on, any device on the account posts laps and races under any of its names. Names on an account don't lapse after six months.
+- If a name is on another of your accounts, sign in to that one with **Add** to bring the two together.
+- The account lists your sign-ins, passkeys and devices, each with **Remove**. A device you remove can no longer post under the account's names. The last way into the account can't be removed.
+
+### Your save
+
+- The account keeps one save for all your devices: your best laps and their ghosts, race history, setups, liveries, your last car and circuit, and the settings that are about you, such as assists, profile, sessions and music.
+- Controls, graphics, field of view, the HUD, volumes and the driver key stay on each device.
+- When this device and the account both have a save, the game asks: **Combine** (the default), **Use the cloud save** or **Keep this device's save**. Combining keeps both sets of best laps, the faster one where both have the same, and both race histories and setup lists.
+
+### Deleting your account
+
+- **Delete account** removes the account with its sign-ins, passkeys, devices and save. Your names go back to the driver keys that hold them, and lapse after six months like any other.
+- Tick **Also remove my laps and race results from the boards** to also take your laps and badges off the boards and your name off your race results.
+
+## Sharing a car setup
 
 - Open the **Garage** (see [Garage and car setups](DRIVING.md#garage-and-car-setups)) and click **Share code** to copy a portable `LC1-` setup string for your current configuration. Saved setups also have individual **Copy share code** buttons.
 - Click **Import** to open **Paste share code or JSON**, where you can paste an `LC1-` string or click **Load .json** to import a file. Click **Export setup (.json)** to download your current setup.
@@ -171,7 +201,8 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 
 See the full [privacy policy](https://librecorsa.org/privacy) for complete details. Specifically for online racing and leaderboards:
 
-- **Posted laps** publicly store your driver name, 3-letter code, lap/sector times, circuit, car, assists, realism, tyre compound, input type, setup parameters, and ghost recording. Your driver key is stored only as a one-way cryptographic hash and cannot be recovered from the database.
-- **Open races** store final race results: driver name, finishing position, total race time, and best lap.
-- **Rate limiting** keeps a salted hash of your IP address for up to 2 hours; raw IP addresses are never stored in the database.
-- **Data access and deletion:** To inspect what is stored under your driver name—or to have your name, laps, and race results deleted—email `contact@alpyalay.org` or open a GitHub issue with your driver name (you will be asked to confirm ownership).
+- A posted lap stores your driver name and code, the lap (times, circuit, car, assists, realism, tyre, and whether it was driven on a keyboard, controller, wheel or touch screen) and a recording others can race as a ghost. Names and laps on a board are public. The board also stores a scrambled form of your driver key, which can't be turned back into the key.
+- An open race stores its result: the name you raced under, your place, times and best lap.
+- To limit uploads, a scrambled form of your IP address is kept for up to two hours. The site's database stores no IP address.
+- An account keeps the id each of its sign-ins gives it, its passkeys' public keys, what each device called itself when it joined (like "Chrome on macOS"), and your save. It never has your email or user name. Delete it from the account page or in the game at any time.
+- To see what is stored under your name, or to have your name, laps and race results deleted, email me at contact@alpyalay.org or open an issue on GitHub. Tell me the driver name, and I'll ask you to confirm it's yours.

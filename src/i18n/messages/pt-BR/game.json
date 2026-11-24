@@ -334,6 +334,10 @@
     "classicDetail": "Os painéis originais nos cantos",
     "minimal": "Mínimo",
     "minimalDetail": "Só velocidade, marcha e volta",
+    "touring": "GT-Like",
+    "touringDetail": "Cronômetro central, dois mostradores, lista de voltas, pneus",
+    "formula": "F1-Like",
+    "formulaDetail": "Torre da corrida, tempos, mostrador de energia, estado do carro",
     "irdashiesDetail": "Classificação, cronômetro de volta, comandos e luzes de troca de marcha",
     "racevisionDetail": "Classificação, relativo, indicador de comandos e gráfico",
     "h2hDetail": "Os carros à frente e atrás, diferenças e deltas de volta",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "Bandeira amarela"
+  },
+  "account": {
+    "checking": "Verificando sua conta",
+    "passkey": "Chave de acesso",
+    "aPasskey": "uma chave de acesso",
+    "justNow": "agora há pouco",
+    "join": {
+      "named": "Entrar na conta de {name} ({ways})?",
+      "namedOnly": "Entrar na conta de {name}?",
+      "this": "Entrar nesta conta ({ways})?",
+      "thisOnly": "Entrar nesta conta?"
+    },
+    "notices": {
+      "signedIn": "Você entrou na conta.",
+      "created": "Sua conta está pronta e você entrou nela.",
+      "linked": "Esse login agora faz parte da sua conta.",
+      "merged": "As duas contas agora são uma só. Os saves serão combinados na próxima sincronização.",
+      "alreadyLinked": "Esse login já fazia parte da sua conta.",
+      "cancelled": "Login cancelado. Nada mudou.",
+      "failed": "Não foi possível entrar. Tente de novo em instantes.",
+      "deleted": "Sua conta foi excluída.",
+      "deletedLaps": "Sua conta foi excluída. {count, plural, one {# volta saiu} other {# voltas saíram}} das classificações."
+    },
+    "errors": {
+      "notReady": "As contas ainda não estão disponíveis",
+      "keyElsewhere": "A chave do piloto deste dispositivo está em outra conta. Entre nessa conta aqui também para combinar as duas.",
+      "noPasskeys": "Este navegador não aceita chaves de acesso.",
+      "passkeyNotUsed": "A chave de acesso não foi usada.",
+      "passkeyKnown": "Esta chave de acesso já está em uma conta.",
+      "passkeyFailed": "A chave de acesso não funcionou. Tente de novo.",
+      "deferred": "Sincronizado. As mudanças dos seus outros dispositivos carregam na próxima vez que o jogo abrir.",
+      "firstDeferred": "Sincronizado. O save da conta carrega na próxima vez que o jogo abrir.",
+      "chooseFirst": "Escolha primeiro o que manter.",
+      "noStorage": "Este navegador não deixa o jogo guardar um save, então não dá para sincronizar.",
+      "newerSave": "Seu save na nuvem foi feito por uma versão mais nova do jogo. Recarregue a página para atualizar.",
+      "tooBig": "Seu save é grande demais para sincronizar.",
+      "busy": "Outro dispositivo estava salvando ao mesmo tempo. O jogo tenta de novo em instantes.",
+      "unreachable": "Não foi possível alcançar o servidor. Verifique a conexão e tente de novo.",
+      "signedOut": "Você saiu da conta neste dispositivo.",
+      "serverProblem": "O servidor teve um problema. Tente de novo em instantes.",
+      "tooMany": "Tentativas demais. Espere um minuto e tente de novo.",
+      "unavailable": "As contas não estão disponíveis agora.",
+      "badCode": "Um código tem 8 letras e números, como ABCD-EFGH."
+    },
+    "server": {
+      "signInFirst": "Entre na conta primeiro",
+      "missingKey": "Chave do piloto ausente. Recarregue o jogo e tente de novo",
+      "deviceSignedOut": "Esse dispositivo já saiu da conta",
+      "keyNotHere": "Essa chave do piloto não está nesta conta",
+      "passkeyNotHere": "Essa chave de acesso não está nesta conta",
+      "signInNotHere": "Esse login não está nesta conta",
+      "lastWayIn": "Esta é a última forma de entrar na sua conta. Adicione outra antes, ou exclua a conta",
+      "noCode": "Não foi possível gerar um código. Tente de novo",
+      "wrongCode": "Esse código está errado ou expirou. Mostre um novo no outro dispositivo",
+      "codeFormat": "Um código tem 8 letras e números, como ABCD-EFGH",
+      "tooManyTries": "Tentativas demais, espere um minuto",
+      "tooManySyncs": "Sincronizações demais, espere um minuto",
+      "serverProblem": "O servidor de contas teve um problema. Tente de novo em instantes",
+      "signOutFirst": "Saia da conta antes de criar uma nova",
+      "tookTooLong": "Demorou demais. Tente de novo",
+      "passkeyTaken": "Esta chave de acesso já está em uma conta",
+      "passkeyUnknown": "Esta chave de acesso não está em nenhuma conta aqui. Entre de outra forma, ou crie uma conta com ela",
+      "passkeyUnchecked": "Não foi possível verificar a chave de acesso. Tente de novo",
+      "saveTooLarge": "O save tem mais de 1 MB",
+      "saveChanged": "O save na nuvem mudou em outro dispositivo",
+      "tooManyLaps": "A nuvem guarda até {count} melhores voltas"
+    }
   }
 }

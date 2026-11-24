@@ -1,15 +1,15 @@
 /**
  * A racing line from a lap you drove: turns a lap file saved from the game (`ghost-<track>-<car>-<time>.json`, the
- * lap summary's "Save ghost") into the seed line scripts/tracks/optimize-racing-line.ts takes with `--seed`.
+ * lap summary's "Save ghost") into the seed line scripts/ai/optimize-lines.ts takes with `--seed`.
  *
  *   npx tsx scripts/tracks/line-from-lap.ts --track rwanda_official --lap ~/Downloads/ghost-rwanda_official-f12026-car-1.38.412.json
- *   npx tsx scripts/tracks/optimize-racing-line.ts --track rwanda_official --seed line-seed-rwanda_official.json --lock 0:99999
+ *   npx tsx scripts/ai/optimize-lines.ts --track rwanda_official --seed line-seed-rwanda_official.json --lock 0:99999 --write
  *
- * `--lock 0:99999` keeps the whole lap as driven (smoothed by the optimiser's spline, checked by a physics lap, then
+ * `--lock 0:99999` keeps the whole lap as driven (smoothed onto the optimiser's controls, checked by physics laps, then
  * written to the circuit's track_data.json); lock only some stretches (`--lock 650:900,2100:2400`, metres along the
  * lap) to keep your line through those corners and let the optimiser find the rest.
  *
- * The seed is one lateral offset from the centreline per track sample (m, + = right), at the optimiser's 1200 samples.
+ * The seed is one lateral offset from the centreline per track sample (m, + = right), at the track's 1200 samples.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -80,4 +80,4 @@ fs.writeFileSync(outPath, JSON.stringify(offsets));
 console.log(`${trackId}: ${points.length} recorded points over ${L.toFixed(0)} m -> ${n} offsets in ${outPath}`);
 console.log(`Widest ${widest.toFixed(2)} m from the centreline; ${outside} of ${n} samples beyond the road's edge (the optimiser pulls those back in).`);
 console.log(`Furthest from the circuit's current line: ${moved.toFixed(2)} m at ${movedAt.toFixed(0)} m into the lap.`);
-console.log(`Next: npx tsx scripts/tracks/optimize-racing-line.ts --track ${trackId} --seed ${outPath} --lock 0:99999`);
+console.log(`Next: npx tsx scripts/ai/optimize-lines.ts --track ${trackId} --seed ${outPath} --lock 0:99999 --write`);

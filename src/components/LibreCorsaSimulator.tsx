@@ -87,6 +87,7 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
+import { accountActions, useAccountState } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -491,6 +492,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     clearSessionState();
     session?.car.resetToStartGrid(false);
     setPhase("title");
+    accountActions.pushSoon();
   }, [session, endMpRace, clearSessionState, setPhase]);
 
 
@@ -1065,6 +1067,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               session?.setGhost(new GhostPlayer(recording));
             }
             void refreshLeaderboard();
+            accountActions.pushSoon();
           }
           // A lap faster than this browser's lap on its online board goes up by itself, and so does the best lap of
           // this week's challenge (which an older, faster lap of the same kind doesn't stand in for), under the
@@ -1387,6 +1390,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** The Settings screen, over the title menu or the pause menu, and where it opens */
   const [settingsOpen, setSettingsOpen] = useState<{ from: "title" | "pause"; category?: SettingsCategory; tab?: string } | null>(null);
+  // Settings > Display > HUD > Edit layout: the live HUD's layout editor stands in for Settings until Done or Cancel
+  const [hudEditing, setHudEditing] = useState(false);
+  useEffect(() => {
+    if (phase !== "title" && phase !== "driving") setHudEditing(false);
+  }, [phase]);
   const openSettings = useCallback(
     (from: "title" | "pause", category?: SettingsCategory, tab?: string) => {
       // Opened from the car (the HUD's "pedals not set up"): the session pauses under it, as from the pause menu
@@ -1396,6 +1404,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session]
   );
   const closeSettings = useCallback(() => setSettingsOpen(null), []);
+  // Signed out with accounts on: the Lap times panel and the first lap on a board offer Settings > Account
+  const signedOut = useAccountState().phase === "signed-out";
   // Every way out of the pause (the touch pause button, a wheel's pause button, a race restart) closes it too
   const wasPausedRef = useRef(paused);
   useEffect(() => {
@@ -2220,6 +2230,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onExportDriverKey: handleExportDriverKey,
       onImportDriverKey: (file: File) => void handleImportDriverKey(file),
       driverKeyNotice,
+      onSignIn: signedOut ? () => openSettings(phase === "title" ? "title" : "pause", "profile", "account") : undefined,
     },
   };
 
@@ -2244,6 +2255,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         ? () => {
             setSettingsOpen(null);
             session?.openSeatPanel();
+          }
+        : undefined,
+    // The live HUD's layout editor, over the title scene or the paused race: Settings comes back on its HUD tab after
+    onEditHudLayout:
+      phase === "title" || phase === "driving"
+        ? () => {
+            setSettingsOpen((open) => (open ? { ...open, category: "display", tab: "hud" } : open));
+            setHudEditing(true);
           }
         : undefined,
     onRunSetup: runSetupAgain,
@@ -2284,10 +2303,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {phase === "driving" ? (
+      {phase === "driving" || hudEditing ? (
         <F1TelemetryHud
           {...menuProps}
           telemetrySource={telemetrySource}
+          hudEditor={hudEditing ? { onClose: () => setHudEditing(false) } : null}
           seatPanel={seatPanel}
           track={track}
           weather={weatherHud}
@@ -2361,6 +2381,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                         return null;
                       }
                     : undefined,
+                  // Settings pauses the session under it, which an online race can't do
+                  onSignIn: signedOut && raceKind !== "mp" ? () => openSettings("pause", "profile", "account") : undefined,
                 }
               : null
           }
@@ -2427,7 +2449,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {phase === "title" ? (
+      {phase === "title" && !hudEditing ? (
         <TitleMenu
           {...menuProps}
           // The note after a drive: on the main menu only, never over a room or a race entry
@@ -2510,7 +2532,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {settingsOpen ? (
+      {settingsOpen && !hudEditing ? (
         <SettingsScreen
           env={settingsEnv}
           initialCategory={settingsOpen.category}

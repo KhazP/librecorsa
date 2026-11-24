@@ -21,12 +21,11 @@ const repo = join(__dirname, "..", "..");
 const tmp = mkdtempSync(join(tmpdir(), "converter-"));
 const out = join(tmp, "converter");
 // Only PATH from this environment, as the launcher gives its converter
-const node = (args: string[]) =>
-  spawnSync(process.execPath, args, { cwd: tmp, encoding: "utf8", env: { NODE_ENV: process.env.NODE_ENV, PATH: process.env.PATH ?? "" } });
+const node = (args: string[], cwd = tmp) =>
+  spawnSync(process.execPath, args, { cwd, encoding: "utf8", env: { NODE_ENV: process.env.NODE_ENV, PATH: process.env.PATH ?? "" } });
 const files = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [relative(out, join(dir, e.name)).split("\\").join("/")]));
 
-// The simplify step needs a GLB written first (asynchronously)
 async function main(): Promise<void> {
   try {
     const built = node([join(repo, "launcher", "converter", "build.mjs"), "--out", out]);
@@ -63,10 +62,10 @@ async function main(): Promise<void> {
     const listed = node([join(out, manifest.modTool), "import"]);
     check("the bundled mod tool loads every importer", listed.status === 0 && importers.every((n) => listed.stdout.includes(n)), listed.stderr.trim());
 
-    // The optimiser reads the circuit from the converter's own public/tracks, not the repository's
-    const optimiser = node([join(out, "scripts", "tracks", "optimize-racing-line.mjs"), "--track", "no_such_circuit", "--dry-run"]);
-    const wanted = join(out, "public", "tracks", "no_such_circuit", "track_data.json");
-    check("a bundled tool finds the converter's folders, not the repository's", optimiser.stderr.includes(wanted), optimiser.stderr.split("\n").find((l) => l.includes("ENOENT")) ?? "");
+    // The racing-line optimiser runs from the converter's root, as build_track.py runs it, and reads the circuit there
+    const optimiser = node([join(out, "scripts", "ai", "optimize-lines.mjs"), "--track", "no_such_circuit"], out);
+    const missing = optimiser.stderr.split("\n").find((l) => l.includes("ENOENT")) ?? "";
+    check("the bundled optimiser runs and reads the circuit from the converter's public/tracks", missing.includes("public/tracks/no_such_circuit/track_data.json"), missing || optimiser.stderr.trim().slice(0, 160));
     const compressor = node([join(out, "scripts", "tracks", "compress-track-glb.mjs")]);
     check("the GLB compressor runs from its bundle", /usage/i.test(compressor.stdout + compressor.stderr), (compressor.stdout + compressor.stderr).trim().slice(0, 80));
 

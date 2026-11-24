@@ -113,6 +113,8 @@
       "addModText": "Bạn có bản mod xe hoặc đường đua muốn đưa vào LibreCorsa? Hãy gửi email cho tôi tại <mail>{email}</mail> kèm liên kết. Mọi tác giả mod đều được ghi tên trong game.",
       "modders": "Các tác giả mod",
       "moddersText": "Các đường đua và xe là công sức của họ, được sử dụng với sự cho phép. Nếu bạn thích mẫu nào, bạn có thể cảm ơn trực tiếp tác giả.",
+      "contributors": "Người đóng góp mã nguồn",
+      "contributorsText": "Mã của họ là một phần của trò chơi. Xin cảm ơn.",
       "links": {
         "download": "Tải ứng dụng",
         "press": "Toàn bộ bài đưa tin và bộ tài liệu báo chí",
@@ -144,7 +146,7 @@
       },
       "price": {
         "label": "Chi phí",
-        "text": "Miễn phí. Không tài khoản, không quảng cáo; ủng hộ hoàn toàn tự nguyện và không mở khóa tính năng nào"
+        "text": "Miễn phí. Không cần tài khoản, không quảng cáo; ủng hộ hoàn toàn tự nguyện và không mở khóa tính năng nào"
       }
     }
   },

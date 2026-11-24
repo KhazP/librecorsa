@@ -602,6 +602,8 @@ export interface CarTelemetry {
     clutch: StartClutchControl;
     clutchIn: number;
   };
+  /** The player's reaction to the lights going out at the last start (ms), set by the session (race-start.ts ReactionWatch) */
+  startReactionMs?: number;
   /**
    * Qualifying before an AI race (qualifying.ts), set by the session: the clock left (s), whether the lap under way is
    * the last one (the clock has run out) and still counts, and the best clean lap so far (ms)

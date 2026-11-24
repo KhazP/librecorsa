@@ -7,13 +7,14 @@
  * gear on the throttle, it goes. Let go after the lights, it waits on a held clutch and goes as the clutch comes out.
  * Every car has a launch window inside its rev range, and the jump start watch calls the car moving off its spot
  * through the lights, not a few centimetres of roll, revs on a car that stays put or a start the car is not held for.
+ * The reaction watch times the launch from the frame the lights go out, and has none for a launch that went before.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
 import { AiOpponentField, aiDriversFor } from '../../src/lib/sim/ai-opponents';
 import { TrackEnvironment } from '../../src/lib/sim/track-environment';
-import { JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway } from '../../src/lib/sim/race-start';
+import { JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway, ReactionWatch } from '../../src/lib/sim/race-start';
 import type { AiRace } from '../../src/lib/sim/ai-race';
 import { DEFAULT_RACE_SETUP, parseRaceSetup, startAiRace } from '../../src/lib/sim/race-setup';
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from '../../src/lib/sim/rev-range';
@@ -150,6 +151,43 @@ console.log('\n== Jump starts');
   check('a clean start: no call, no time', clean.out.length === 0 && clean.j.penaltyS === 0);
   check('the clutch out in gear on the throttle pulls away', pullsAway(true, 0, 0.6));
   check('the clutch in, neutral or off the throttle does not', !pullsAway(true, 1, 1) && !pullsAway(false, 0, 1) && !pullsAway(true, 0, 0.1));
+}
+
+console.log('\n== Reaction to the lights');
+{
+  // [lights lit, manual, throttle, clutch] per 1/60 s frame
+  type Frame = [boolean, boolean, number, number];
+  const many = (n: number, f: Frame): Frame[] => Array.from({ length: n }, () => f);
+  const run = (frames: Frame[]) => {
+    const w = new ReactionWatch();
+    for (const [lit, manual, throttle, clutch] of frames) w.update(1 / 60, lit, manual, throttle, clutch);
+    return w.ms;
+  };
+  const lights = (manual: boolean, throttle: number, clutch: number) => many(120, [true, manual, throttle, clutch]);
+  // Assisted: off the throttle through the lights, down 15 frames after they go out (the lights-out frame is frame 0)
+  const assisted = run([...lights(false, 0, 0), [false, false, 0, 0], ...many(14, [false, false, 0, 0]), ...many(30, [false, false, 1, 0])]);
+  check('assisted: the throttle 15 frames after lights out reads 250 ms', assisted === 250, `${assisted} ms`);
+  check('assisted: the throttle held through the lights reads nothing', run([...lights(false, 1, 0), ...many(60, [false, false, 1, 0])]) === null);
+  check('assisted: down on the lights-out frame itself reads nothing', run([...lights(false, 0, 0), ...many(60, [false, false, 1, 0])]) === null);
+  check('assisted: a press 3.5 s on reads nothing', run([...lights(false, 0, 0), ...many(210, [false, false, 0, 0]), ...many(10, [false, false, 1, 0])]) === null);
+  // Manual: clutch in through the lights (the revs up), let out 12 frames after they go out
+  const manual = run([...lights(true, 0.8, 1), [false, false, 0.8, 1], ...many(11, [false, false, 0.8, 1]), ...many(30, [false, false, 0.8, 0])]);
+  check('manual: the clutch out 12 frames after lights out reads 200 ms', manual === 200, `${manual} ms`);
+  check('manual: the clutch let out before the lights reads nothing', run([...lights(true, 0.8, 0), ...many(60, [false, false, 0.8, 0])]) === null);
+  check('manual: the revs alone after lights out read nothing', run([...lights(true, 0.8, 1), ...many(60, [false, false, 1, 1])]) === null);
+  // The key's clutch eases out over 0.4 s: timed from the first frame it is 10 % out, not from the bite
+  const ramp = (n: number): Frame[] => Array.from({ length: n }, (_, i) => [false, false, 0.8, Math.max(0, 1 - (i + 1) / 24)] as Frame);
+  const keyed = run([...lights(true, 0.8, 1), [false, false, 0.8, 1], ...many(11, [false, false, 0.8, 1]), ...ramp(30)]);
+  check('manual: a key clutch easing out is timed as it starts (233 ms)', keyed === 233, `${keyed} ms`);
+  const partial = run([...lights(true, 0.8, 0.7), [false, false, 0.8, 0.7], ...many(11, [false, false, 0.8, 0.7]), ...many(10, [false, false, 0.8, 0.55])]);
+  check('manual: a pedal held part-way in is timed off where it was held', partial === 200, `${partial} ms`);
+  const w = new ReactionWatch();
+  for (const [lit, m, th, cl] of [...lights(false, 0, 0), ...many(20, [false, false, 0, 0] as Frame), ...many(5, [false, false, 1, 0] as Frame)]) w.update(1 / 60, lit, m, th, cl);
+  const first = w.ms;
+  for (let i = 0; i < 600; i++) w.update(1 / 60, false, false, i % 2, 0);
+  check('the reading stands through the race', w.ms === first && first !== null, `${w.ms} ms`);
+  w.update(1 / 60, true, false, 0, 0);
+  check('and clears with the next start\'s lights', w.ms === null);
 }
 
 // ---- The launch rides with the race setup, so every race start (the menu, a restart, a new car) reads the same one

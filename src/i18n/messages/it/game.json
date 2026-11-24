@@ -334,6 +334,10 @@
     "classicDetail": "I pannelli originali agli angoli",
     "minimal": "Minimale",
     "minimalDetail": "Solo velocità, marcia e giro",
+    "touring": "GT-Like",
+    "touringDetail": "Cronometro centrale, due quadranti, elenco giri, gomme",
+    "formula": "F1-Like",
+    "formulaDetail": "Torre di gara, tempi, quadrante dell’energia, stato dell’auto",
     "irdashiesDetail": "Classifica, cronometro, comandi e luci di cambiata",
     "racevisionDetail": "Classifica, relativo, indicatore dei comandi e grafico",
     "h2hDetail": "Le auto davanti e dietro, distacchi e delta del giro",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "Bandiera gialla"
+  },
+  "account": {
+    "checking": "Controllo dell’account",
+    "passkey": "Passkey",
+    "aPasskey": "una passkey",
+    "justNow": "proprio ora",
+    "join": {
+      "named": "Vuoi unirti all’account di {name} ({ways})?",
+      "namedOnly": "Vuoi unirti all’account di {name}?",
+      "this": "Vuoi unirti a questo account ({ways})?",
+      "thisOnly": "Vuoi unirti a questo account?"
+    },
+    "notices": {
+      "signedIn": "Hai effettuato l’accesso.",
+      "created": "Il tuo account è pronto e hai effettuato l’accesso.",
+      "linked": "Questo accesso ora fa parte del tuo account.",
+      "merged": "I due account ora sono uno solo. I loro salvataggi vengono combinati alla prossima sincronizzazione.",
+      "alreadyLinked": "Questo accesso faceva già parte del tuo account.",
+      "cancelled": "Accesso annullato. Non è cambiato nulla.",
+      "failed": "Accesso non riuscito. Riprova tra un attimo.",
+      "deleted": "Il tuo account è stato eliminato.",
+      "deletedLaps": "Il tuo account è stato eliminato. {count, plural, one {# giro è stato rimosso} other {# giri sono stati rimossi}} dalle classifiche."
+    },
+    "errors": {
+      "notReady": "Gli account non sono ancora disponibili",
+      "keyElsewhere": "La chiave del pilota di questo dispositivo è su un altro account. Accedi anche a quell’account da qui per unire i due.",
+      "noPasskeys": "Questo browser non supporta le passkey.",
+      "passkeyNotUsed": "La passkey non è stata usata.",
+      "passkeyKnown": "Questa passkey fa già parte di un account.",
+      "passkeyFailed": "La passkey non ha funzionato. Riprova.",
+      "deferred": "Sincronizzato. Le modifiche degli altri tuoi dispositivi si caricano al prossimo avvio del gioco.",
+      "firstDeferred": "Sincronizzato. Il salvataggio dell’account si carica al prossimo avvio del gioco.",
+      "chooseFirst": "Scegli prima cosa tenere.",
+      "noStorage": "Questo browser non permette al gioco di conservare un salvataggio, quindi non può sincronizzare.",
+      "newerSave": "Il tuo salvataggio cloud è stato creato da una versione più recente del gioco. Ricarica la pagina per aggiornare.",
+      "tooBig": "Il tuo salvataggio è troppo grande per essere sincronizzato.",
+      "busy": "Un altro dispositivo stava salvando nello stesso momento. Il gioco riprova tra poco.",
+      "unreachable": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+      "signedOut": "Hai effettuato l’uscita su questo dispositivo.",
+      "serverProblem": "Il server ha avuto un problema. Riprova tra un attimo.",
+      "tooMany": "Troppi tentativi. Aspetta un minuto e riprova.",
+      "unavailable": "Gli account non sono disponibili al momento.",
+      "badCode": "Un codice ha 8 lettere e cifre, come ABCD-EFGH."
+    },
+    "server": {
+      "signInFirst": "Accedi prima",
+      "missingKey": "Chiave del pilota mancante. Ricarica il gioco e riprova",
+      "deviceSignedOut": "Quel dispositivo è già uscito dall’account",
+      "keyNotHere": "Quella chiave del pilota non fa parte di questo account",
+      "passkeyNotHere": "Quella passkey non fa parte di questo account",
+      "signInNotHere": "Quell’accesso non fa parte di questo account",
+      "lastWayIn": "Questo è l’ultimo modo per entrare nel tuo account. Aggiungine prima un altro, oppure elimina l’account",
+      "noCode": "Impossibile creare un codice. Riprova",
+      "wrongCode": "Quel codice è sbagliato o è scaduto. Mostra un nuovo codice sull’altro dispositivo",
+      "codeFormat": "Un codice ha 8 lettere e cifre, come ABCD-EFGH",
+      "tooManyTries": "Troppi tentativi, aspetta un minuto",
+      "tooManySyncs": "Troppe sincronizzazioni, aspetta un minuto",
+      "serverProblem": "Il server degli account ha avuto un problema. Riprova tra un attimo",
+      "signOutFirst": "Esci prima di creare un nuovo account",
+      "tookTooLong": "Ci ha messo troppo. Riprova",
+      "passkeyTaken": "Questa passkey fa già parte di un account",
+      "passkeyUnknown": "Questa passkey non fa parte di nessun account qui. Accedi in un altro modo, oppure crea un account con questa passkey",
+      "passkeyUnchecked": "Impossibile verificare la passkey. Riprova",
+      "saveTooLarge": "Il salvataggio supera 1 MB",
+      "saveChanged": "Il salvataggio cloud è cambiato su un altro dispositivo",
+      "tooManyLaps": "Il cloud conserva fino a {count} giri migliori"
+    }
   }
 }

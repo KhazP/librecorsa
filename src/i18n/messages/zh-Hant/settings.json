@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "車手",
+        "account": "帳號",
         "data": "資料"
       }
     },
@@ -537,6 +538,13 @@
       "title": "配置",
       "resetWhat": "HUD 配置"
     },
+    "placement": {
+      "title": "大小與位置",
+      "resetWhat": "HUD 大小與此配置的面板位置",
+      "edit": "面板位置",
+      "editHint": "直接在 HUD 上移動此配置的面板並調整大小。",
+      "editButton": "編輯配置"
+    },
     "graphics": {
       "title": "畫面",
       "vr": "VR",
@@ -622,7 +630,7 @@
       "clearButton": "清除",
       "clearTitle": "要清除所有已儲存資料嗎？",
       "clearConfirm": "全部清除",
-      "clearBody": "這會永久移除此瀏覽器中的所有設定、車手金鑰、單圈、幽靈車與調校，並重新載入頁面。"
+      "clearBody": "這會永久移除此瀏覽器中的所有設定、車手金鑰、單圈、幽靈車與調校，並重新載入頁面。已登入的裝置會先登出帳號；帳號及其雲端存檔會保留。"
     }
   },
   "hudPicker": {
@@ -634,5 +642,156 @@
     "descriptionSite": "{detail}。作者：{author} · {site}",
     "sourceLink": "{layout} 原始碼，作者：{author}（於新分頁開啟）",
     "siteLink": "{site}，{author} 的網站（於新分頁開啟）"
+  },
+  "account": {
+    "checking": "正在檢查你的帳號",
+    "unavailable": "帳號功能目前無法使用，請稍後再試。",
+    "deleted": "帳號已刪除。",
+    "deletedLaps": "帳號及其單圈已刪除。",
+    "page": {
+      "intro": "帳號為選用功能。帳號會在每部裝置上保留你的車手名稱與存檔，且不會收集電子郵件。在此登入即可查看帳號內容，或刪除帳號。",
+      "privacy": "帳號儲存的內容請見<link>隱私權頁面</link>。"
+    },
+    "signedOut": {
+      "titlePage": "登入",
+      "title": "帳號",
+      "description": "登入後，即可在每部裝置上保留你的車手名稱與存檔。不會收集電子郵件。",
+      "codeLabel": "使用另一部裝置的代碼",
+      "codeHint": "在已登入的裝置上選擇「顯示代碼」，再於此輸入",
+      "enterCode": "輸入代碼",
+      "signInWith": "登入方式",
+      "oauthHint": "會開啟對方的登入頁面，完成後返回此處",
+      "passkeyHint": "可使用此裝置、手機或安全金鑰上的通行密鑰",
+      "passkey": "通行密鑰",
+      "createLabel": "以通行密鑰建立帳號",
+      "createHint": "不需要其他登入方式",
+      "create": "建立",
+      "needsBrowserCode": "{providers} 登入需要使用瀏覽器。請前往 librecorsa.org/account 登入，選擇「顯示代碼」，再於此輸入。",
+      "needsBrowser": "{providers} 登入需要使用瀏覽器。"
+    },
+    "signedIn": {
+      "yourAccount": "你的帳號",
+      "signedInWith": "已透過 {ways} 登入",
+      "combineLabel": "待合併的存檔",
+      "combineHint": "此裝置與帳號都已有存檔",
+      "choose": "選擇",
+      "save": "存檔",
+      "syncing": "正在同步",
+      "synced": "{ago}已同步",
+      "cloudWritten": "雲端存檔於{ago}寫入",
+      "notSynced": "尚未同步",
+      "syncNow": "立即同步",
+      "signOut": "登出",
+      "signOutHint": "此裝置會保留自己的存檔。再次登入後，會繼續以你的名稱發佈單圈",
+      "lastWay": "無法移除最後一種登入方式。如要移除，請改為刪除帳號。"
+    },
+    "names": {
+      "title": "車手名稱",
+      "description": "此帳號下的每部裝置都能以這些名稱發佈單圈。只要帳號存在，名稱就一直屬於你。",
+      "lastLap": "上次單圈：{ago}",
+      "noLaps": "尚無單圈紀錄",
+      "none": "尚無車手名稱。你首次發佈單圈所用的名稱會加入此帳號。",
+      "elsewhere": "{count, plural, other {{names} 屬於另一個帳號。}}如要合併兩者，請在下方新增該帳號的登入方式。"
+    },
+    "ways": {
+      "title": "登入方式",
+      "description": "只會保存帳號在各平台的 ID，不含電子郵件、使用者名稱或頭像。",
+      "added": "新增於 {date}",
+      "addedUsed": "新增於 {date}，{ago}使用",
+      "notAdded": "未新增",
+      "remove": "移除",
+      "add": "新增",
+      "passkeyName": "通行密鑰（新增於 {date}）",
+      "used": "{ago}使用",
+      "addPasskey": "新增通行密鑰",
+      "addPasskeyHint": "以此裝置的螢幕鎖定、手機或安全金鑰登入",
+      "combinePasskey": "與已有通行密鑰的帳號合併",
+      "combinePasskeyHint": "其車手名稱、裝置與存檔會併入此帳號",
+      "usePasskey": "使用通行密鑰",
+      "desktopOthers": "其他登入方式可在瀏覽器前往 librecorsa.org/account 新增。"
+    },
+    "devices": {
+      "title": "裝置",
+      "description": "已登入此帳號的瀏覽器與應用程式。",
+      "thisBrowser": "此瀏覽器",
+      "notJoined": "尚未加入的裝置",
+      "thisDevice": "此裝置",
+      "seen": "登入於 {date}，最後上線：{ago}",
+      "signOut": "登出"
+    },
+    "keys": {
+      "title": "車手金鑰",
+      "description": "每部裝置都以自己的車手金鑰簽署單圈。此處的每把金鑰都能以帳號的名稱發佈單圈。",
+      "fallback": "車手金鑰 {id}",
+      "added": "新增於 {date}",
+      "addedLap": "新增於 {date}，上次單圈：{ago}",
+      "none": "尚無車手金鑰。裝置加入帳號時會一併加入其金鑰。"
+    },
+    "remove": {
+      "identityTitle": "要移除 {provider} 登入嗎？",
+      "identityBody": "{provider} 將無法再登入此帳號，之後可以重新新增。",
+      "passkeyTitle": "要移除此通行密鑰嗎？",
+      "passkeyBody": "它將無法再登入此帳號。你也可以從保存它的裝置或密碼管理器中刪除。",
+      "keyTitle": "要移除此車手金鑰嗎？",
+      "keyBody": "來自 {label} 的單圈將不再以帳號的名稱發佈。已在圈速榜上的單圈會保留。",
+      "confirm": "移除"
+    },
+    "delete": {
+      "title": "刪除帳號",
+      "label": "刪除此帳號",
+      "hint": "會刪除其登入方式與雲端存檔，你可選擇是否保留單圈",
+      "button": "刪除",
+      "question": "要刪除此帳號嗎？",
+      "confirm": "刪除帳號",
+      "body": "這會刪除帳號、其登入方式與雲端存檔。此裝置上儲存的內容會保留。",
+      "lapsGo": "你的車手名稱會連同單圈、賽事結果與徽章一併從圈速榜移除，任何人都可以取用。",
+      "lapsStay": "你的車手名稱與單圈會保留在圈速榜上。沒有帳號的名稱，在六個月沒有新單圈後便會釋出。",
+      "tick": "同時從圈速榜移除我的單圈與賽事結果"
+    },
+    "join": {
+      "notNow": "稍後再說",
+      "join": "加入",
+      "joining": "正在加入…此裝置的存檔正與帳號同步，可能需要一點時間。",
+      "body": "此裝置的車手名稱與存檔會成為該帳號的一部分。選擇「稍後再說」會登出此裝置。",
+      "codeBody": "此裝置的車手名稱與存檔會成為該帳號的一部分。"
+    },
+    "firstSync": {
+      "title": "要合併兩份存檔嗎？",
+      "combine": "合併",
+      "useCloud": "使用雲端存檔",
+      "keepLocal": "保留此裝置的存檔",
+      "notNow": "稍後再說",
+      "intro": "此裝置與帳號都已有存檔。",
+      "thisDevice": "此裝置",
+      "cloud": "雲端存檔",
+      "bestLaps": "{count, plural, other {<n>#</n> 筆最佳單圈}}",
+      "setups": "{count, plural, other {<n>#</n> 組已存調校}}",
+      "races": "{count, plural, other {<n>#</n> 場賽事}}",
+      "savedAgoOn": "{ago}儲存於 {device}",
+      "savedAgo": "{ago}儲存",
+      "savedOn": "儲存於 {device}",
+      "combineExplain": "<b>合併。</b>兩份都保留。同一項目兩邊都有變更時，以較新的為準。",
+      "cloudExplain": "<b>使用雲端存檔。</b>此裝置改用帳號的設定、調校與賽事紀錄，原有內容會被取代。",
+      "localExplain": "<b>保留此裝置的存檔。</b>帳號改用此裝置的設定、調校與賽事紀錄，其他裝置會在下次啟動時取得。",
+      "bestLapsKept": "兩邊的最佳單圈一律保留。"
+    },
+    "code": {
+      "title": "使用另一部裝置的代碼",
+      "how": "在已登入的裝置上，開啟「設定」，再選「個人資料與資料」，然後選「帳號」，並選擇「顯示代碼」。",
+      "label": "代碼",
+      "continue": "繼續",
+      "format": "代碼由 8 個字母和數字組成，例如 ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "為另一部裝置顯示代碼",
+      "hint": "讓另一部裝置（例如桌面版應用程式）登入此帳號",
+      "hide": "隱藏",
+      "new": "新代碼",
+      "show": "顯示代碼",
+      "aria": "代碼 {code}",
+      "left": "{minutes, plural, =0 {剩不到一分鐘，僅能使用一次。} other {剩 # 分鐘，僅能使用一次。}}",
+      "expired": "此代碼已失效。請選擇「新代碼」重新取得。",
+      "how": "在另一部裝置上，開啟「設定」，再選「個人資料與資料」，然後選「帳號」。選擇「使用另一部裝置的代碼」並輸入此代碼。"
+    }
   }
 }

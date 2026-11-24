@@ -6,7 +6,7 @@ Writes the game's track data of the official Rwanda circuit, one file per lap of
 
 Each is the built lap (data/design.npz) with the road sections of ro_addon.py spliced in: centreline samples every
 5 m with the surface heights across, corners, sectors, grid, cameras, pit lane, boundaries. The racing lines are
-filled in afterwards by scripts/tracks/optimize-racing-line.ts.
+filled in afterwards by scripts/ai/optimize-lines.ts.
 
     ~/.venvs/librecorsa-tracks/bin/python scripts/tracks/rwanda-official/export_json.py [long|short]
 """

@@ -73,6 +73,8 @@
     "driverKeyIntro": "Xác nhận quyền sở hữu tên tay đua của bạn trên bảng xếp hạng. Xuất khóa để dùng cùng tên trên thiết bị khác; hãy giữ kín tệp này.",
     "exportKey": "Xuất khóa",
     "importKey": "Nhập khóa",
+    "signIn": "Đăng nhập",
+    "signInHint": "Hoặc đăng nhập để giữ các vòng tốt nhất và tên tay đua của bạn trên mọi thiết bị, không cần chuyển tệp.",
     "importGhost": "Nhập tệp xe bóng ma",
     "exportBest": "Xuất vòng tốt nhất",
     "undo": "Hoàn tác",
@@ -382,6 +384,8 @@
     "queued": "Đang chờ gửi",
     "close": "Đóng",
     "saveGhost": "Lưu tệp xe bóng ma",
+    "signInHint": "Đăng nhập để giữ các vòng tốt nhất và tên tay đua của bạn trên mọi thiết bị.",
+    "signIn": "Đăng nhập",
     "driver": "Tay đua <b>{name}</b>",
     "rename": "Đổi tên",
     "driverName": "Tên tay đua",
@@ -844,7 +848,8 @@
     "holdPace": "Giữ <n>{pace}</n> {unit} tới vạch",
     "greenFlag": "Cờ xanh lá",
     "lightsOut": "Tắt đèn xuất phát",
-    "chequeredFlag": "Cờ ca-rô"
+    "chequeredFlag": "Cờ ca-rô",
+    "reaction": "Phản xạ <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Chết máy: giữ {control} hoặc về số N để khởi động lại",
@@ -1072,5 +1077,24 @@
   "hiddenNote": {
     "off": "Đã ẩn HUD",
     "offKey": "Đã ẩn HUD · {key} để hiện"
+  },
+  "hudEditor": {
+    "title": "Chỉnh bố cục HUD",
+    "hint": "Kéo một bảng để di chuyển. Kéo góc của bảng, hoặc cuộn trên bảng, để đổi kích thước.",
+    "parts": {
+      "top-left": "Trên bên trái",
+      "top-center": "Trên giữa",
+      "top-right": "Trên bên phải",
+      "center-right": "Quy trình xuất phát",
+      "center": "Radar",
+      "bottom-left": "Dưới bên trái",
+      "bottom-center": "Dưới giữa",
+      "bottom-right": "Dưới bên phải"
+    },
+    "resetPart": "Đặt lại",
+    "resize": "Kéo để đổi kích thước",
+    "resetAll": "Đặt lại bố cục",
+    "cancel": "Hủy",
+    "done": "Xong"
   }
 }

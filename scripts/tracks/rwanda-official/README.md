@@ -139,8 +139,8 @@ node scripts/tracks/rwanda-official/post.mjs                # rwanda_official.gl
 $PY scripts/tracks/rwanda-official/export_json.py           # both laps' track_data.json
 npx tsx scripts/tracks/rwanda-official/layout-limits.ts     # each lap's otherLayoutRoads: where the other lap's road leaves it
 for id in rwanda_official rwanda_official_short; do
-  npx tsx scripts/tracks/optimize-racing-line.ts --track $id --car f1
-  npx tsx scripts/tracks/optimize-racing-line.ts --track $id --car gt3
+  npx tsx scripts/ai/optimize-lines.ts --track $id --car f1 --write
+  npx tsx scripts/ai/optimize-lines.ts --track $id --car gt3 --write
   npx tsx scripts/ai/check-lines.ts --track $id --ceiling 1,1.04,1.08 --write
 done
 

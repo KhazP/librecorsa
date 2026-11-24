@@ -899,6 +899,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   return (
     <div
       ref={rootRef}
+      // The account's questions (src/components/account/AccountDialogs.tsx) wait for this menu or Settings to be up
+      data-title-menu=""
+      // In a room or entered in an open race: a page reload for the account's save would drop it, so it waits
+      data-in-room={props.lobby || props.races?.entry.state === "joined" ? "" : undefined}
       className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] ${
         panel
           ? "bg-linear-to-r from-lc-void/97 via-lc-void/90 via-60% to-lc-void/40 pt-[max(1.75rem,env(safe-area-inset-top))] short:pt-[max(1rem,env(safe-area-inset-top))]"

@@ -116,11 +116,14 @@ export function showsPhoneHud(preset: HudPreset, screen: { phone: boolean; touch
   return screen.phone || (screen.touchControls && !hudLayout(preset).credit);
 }
 
+/** A layout id this build has */
+export const isHudPreset = (value: unknown): value is HudPreset => HUD_PRESETS.includes(value as HudPreset);
+
 /**
  * A saved layout id as this build reads it: a known id is kept, "engineer" (renamed) moves to Telemetry, and
  * anything else (an older or newer build's layout, a hand-edited save) falls back to Broadcast
  */
 export function parseHudPreset(value: unknown): HudPreset {
   if (value === "engineer") return "telemetry";
-  return HUD_PRESETS.includes(value as HudPreset) ? (value as HudPreset) : DEFAULT_HUD_PRESET;
+  return isHudPreset(value) ? value : DEFAULT_HUD_PRESET;
 }
