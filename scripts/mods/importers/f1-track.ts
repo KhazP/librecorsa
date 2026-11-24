@@ -6,19 +6,19 @@
  *
  * Always for personal use only: an .erp carries the base game's files beside the mod's, and a mod's authors' permission
  * for one copy doesn't cover another (docs/PORTING-F1-MODS.md, "Personal use only"). The package's credit says so,
- * whatever licence the settings give. The extractor's tables (surfaces, lights, branding) are Qiddiya's: another mod
- * needs them edited, as that page explains.
+ * whatever the settings give: its licence is "unknown", with the personal-use note every importer uses
+ * (lib/licences.ts), and no licence text goes in. The extractor's tables (surfaces, lights, branding) are Qiddiya's:
+ * another mod needs them edited, as that page explains.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { packageCircuit } from "../lib/circuit-package";
+import { PERSONAL_USE_NOTE } from "../lib/licences";
 import { localIdFrom, packageCredit, type SourceCredit } from "../lib/manifest-file";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
 import { report } from "../lib/package-check";
 import { runPython } from "../lib/toolchain";
-
-export const PERSONAL_USE_NOTE = "For personal use only: the author's permission is needed to share it.";
 
 /** The extractor's options the importer passes on: `--<name> <value>` */
 const EXTRACTOR_VALUES = ["track", "mat-prefix", "max-road-tex", "max-scenery-tex", "foliage-dist", "scenery-max-dist", "tiny-scenery-min-tris"] as const;
@@ -33,17 +33,11 @@ interface Settings {
 
 /**
  * The settings the circuit is built with: the extractor's, the modder's merged over them (`credit` key by key), and
- * the credit marked for personal use. The licence is the modder's, or "unknown": the one the extractor writes for
- * Qiddiya is the game's permission, not the player's
+ * the credit marked for personal use whatever either says: licence "unknown", no link, and the note word for word
+ * (the licence the extractor writes for Qiddiya is the game's permission, not the player's)
  */
 export function f1Settings(extracted: Settings, own: Settings): Settings {
-  const credit: SourceCredit = {
-    ...(extracted.credit ?? {}),
-    license: "unknown",
-    licenseUrl: null,
-    ...(own.credit ?? {}),
-  };
-  credit.note = [PERSONAL_USE_NOTE, own.credit?.note].filter(Boolean).join(" ");
+  const credit: SourceCredit = { ...(extracted.credit ?? {}), ...(own.credit ?? {}), license: "unknown", licenseUrl: null, note: PERSONAL_USE_NOTE };
   return { ...extracted, ...own, credit };
 }
 

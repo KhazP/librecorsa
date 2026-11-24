@@ -4,14 +4,17 @@
  * circuit the game hosts has a hand-written entry, builds it into public/tracks/<working id> with --no-register, and
  * the packager puts it in a package.
  *
- * Most Assetto Corsa mods don't allow sharing. The package is always made, but unless the mod names a licence that
- * lets a converted copy be shared (or the modder's settings name one, their record of the author's permission), its
- * credit says it is for personal use only, and the import says so.
+ * Most Assetto Corsa mods don't allow sharing. The package is always made, and its licence is decided here with the one
+ * reader every importer uses (lib/licences.ts), from every text file in the mod's folder and its layout's: unless they
+ * name a licence that lets a converted copy be shared, with nothing that takes it back, or the modder's settings name
+ * one (their record of the author's permission), its credit's licence is "unknown" with the personal-use note, and the
+ * import says so. The mod's statements go in the package; the licence's text too when it may be shared.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { packageCircuit, readCircuitEntry } from "../lib/circuit-package";
+import { carriedName, creditLicence, licenceTextFiles, mergeReadings, PERSONAL_USE_NOTE, readLicenceText, statementFiles, type LicenceReading, type Statement } from "../lib/licences";
 import { localIdFrom, packageCredit, type SourceCredit } from "../lib/manifest-file";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
 import { report } from "../lib/package-check";
@@ -31,9 +34,6 @@ export interface AutoEntry {
     layouts: string[];
     uiLengthM: number | null;
     version: string | null;
-    personalUse: boolean;
-    licenceFrom: "settings" | "mod" | null;
-    terms: string[];
     /** The game's own circuit built from this layout of the mod, if it has one */
     gameCircuit?: { id: string; author: string };
   };
@@ -68,9 +68,47 @@ export const packageVersion = (v: string | null | undefined): string | undefined
 /** The circuit's id in the package: its layout's folder, or the track folder's for a mod with one layout */
 export const circuitIdFrom = (entry: Pick<AutoEntry, "folder" | "layout_dir">): string => localIdFrom(entry.layout_dir || entry.folder);
 
+/** The circuit's licence, as its package's credit gives it */
+export interface TrackLicence {
+  /** The mod's statements: every text file in its folder and its layout's (`<layout>/<file>`) */
+  statements: Statement[];
+  /** What decides it: the mod's statements, or the licence in the modder's settings */
+  reading: LicenceReading;
+  fromSettings: boolean;
+  license: string;
+  licenseUrl?: string;
+  note?: string;
+  personal: boolean;
+}
+
+/**
+ * The circuit's licence: what every text file in the mod's folder and its layout's says, read whole. A licence in the
+ * modder's settings (`{"credit": {"license": …}}`, their record of the author's permission) is read instead: one this
+ * tool carries is shared under, with its text; words that name none ("Used with permission") are kept as written,
+ * with no text; one that restricts ("All rights reserved", ND) is personal use. Personal use is always the credit's
+ * "unknown" with the one note, whatever note the settings give
+ */
+export function trackLicence(folder: string, layoutDir: string, settings: SourceCredit | undefined): TrackLicence {
+  const statements = [folder, ...(layoutDir ? [join(folder, layoutDir)] : [])].flatMap((d) =>
+    statementFiles(d, { anyText: true }).map((s) => (d === folder ? s : { ...s, file: `${layoutDir}/${s.file}` })),
+  );
+  const mod = mergeReadings(statements.map((s) => s.reading));
+  if (!mod.licences.length && !mod.problems.length) mod.problems.push("the mod states no licence");
+  const own = settings?.license?.trim();
+  if (own && own.toLowerCase() !== "unknown") {
+    const r = readLicenceText(own);
+    if (!r.licences.length && !r.problems.length) {
+      return { statements, reading: r, fromSettings: true, license: own, licenseUrl: settings?.licenseUrl ?? undefined, note: settings?.note ?? undefined, personal: false };
+    }
+    const terms = creditLicence(r);
+    return { statements, reading: r, fromSettings: true, ...terms, note: terms.note ?? settings?.note ?? undefined };
+  }
+  const terms = creditLicence(mod);
+  return { statements, reading: mod, fromSettings: false, ...terms, note: terms.note ?? settings?.note ?? undefined };
+}
+
 /** What the import tells the modder about sharing what it made */
-export function licenceNotice(entry: AutoEntry): string[] {
-  const c = entry.credit;
+export function licenceNotice(entry: AutoEntry, lic: TrackLicence): string[] {
   const lines: string[] = [];
   if (entry._auto.gameCircuit) {
     lines.push(
@@ -78,19 +116,19 @@ export function licenceNotice(entry: AutoEntry): string[] {
         "That permission is the game's: it doesn't cover your copy.",
     );
   }
-  if (entry._auto.personalUse) {
+  if (lic.personal) {
     lines.push(
-      `FOR PERSONAL USE ONLY. ${entry.name} by ${c.author ?? "an unknown author"} names no licence that lets it be shared ` +
-        `(licence: ${c.license ?? "unknown"}), and the package's credit says so.`,
+      `FOR PERSONAL USE ONLY. ${entry.name} by ${entry.credit.author ?? "an unknown author"} ${lic.fromSettings ? "has a licence in your settings that" : "names no licence that"} ` +
+        `lets a converted copy be shared, and the package's credit says "${PERSONAL_USE_NOTE}".`,
+      ...lic.reading.problems.map((p) => `  ${p}`),
       "Keep it on your own machine: don't upload, host or share it without the author's permission. With it, add the",
       'licence to your settings and import again: --settings <file> with {"credit": {"license": "Used with permission"}}.',
     );
-  } else if (entry._auto.licenceFrom === "settings") {
-    lines.push(`Licence from your settings: ${c.license}. Keep a record of the author's permission with the package.`);
+  } else if (lic.fromSettings) {
+    lines.push(`Licence from your settings: ${lic.license}. Keep a record of the author's permission with the package.`);
   } else {
-    lines.push(`Licence named by the mod: ${c.license}. Keep its terms with the package (credit it as they ask).`);
+    lines.push(`Licence named by the mod: ${lic.license}. Its statements and the licence's text are in the package: credit it as they ask.`);
   }
-  for (const t of entry._auto.terms) lines.push(`  The mod's readme: "${t}"`);
   return lines;
 }
 
@@ -116,9 +154,12 @@ ${PACKAGE_USAGE}`,
     if (!folder || !existsSync(folder)) throw new Error("name the mod's track folder (Assetto Corsa's content/tracks/<circuit>)");
     if (values.settings && !existsSync(resolve(values.settings))) throw new Error(`${values.settings}: no such settings file`);
 
-    // 1. The circuit's settings, read from the mod: what the package is called and credited
+    // 1. The circuit's settings, read from the mod: what the package is called; its licence, from the mod's statements
+    // and the modder's settings
     const entry = readAutoEntry(folder, values);
-    const credit = packageCredit(entry.credit);
+    const own = values.settings ? (JSON.parse(readFileSync(resolve(values.settings), "utf8")) as { credit?: unknown }).credit : undefined;
+    const lic = trackLicence(folder, entry.layout_dir, own && typeof own === "object" ? (own as SourceCredit) : undefined);
+    const credit = packageCredit({ ...entry.credit, license: lic.license, licenseUrl: lic.licenseUrl ?? null, note: lic.note ?? null });
     const localId = localIdFrom(values.id ?? circuitIdFrom(entry));
     const { info, packageDir } = importTarget(
       { ...values, version: values.version ?? packageVersion(entry._auto.version) },
@@ -131,7 +172,12 @@ ${PACKAGE_USAGE}`,
     const built = readCircuitEntry(join(BUILT_TRACKS_DIR, builtId), builtId);
 
     // 3. Packaged
-    const out = packageCircuit({ builtId, packageDir, info, localId, credit, removeBuild: !values["keep-build"] });
+    // The mod's statements always; the licence's text when it may be shared
+    const extraFiles = [
+      ...lic.statements.map((s) => ({ from: s.path, to: `${localId}/${carriedName("assetto-corsa", s.file)}` })),
+      ...licenceTextFiles(lic.reading).map((f) => ({ from: f.from, to: `${localId}/${f.name}` })),
+    ];
+    const out = packageCircuit({ builtId, packageDir, info, localId, credit, extraFiles, removeBuild: !values["keep-build"] });
     report(packageDir, out.checked);
     if (out.skipped.length) console.log(`      left out (the track data doesn't name them): ${out.skipped.join(", ")}`);
     const said = entry._auto.uiLengthM;
@@ -139,7 +185,7 @@ ${PACKAGE_USAGE}`,
       `      ${out.contentId} in ${packageDir}\n      ${entry.name}, ${entry.layout}: ${(built.lengthM / 1000).toFixed(3)} km` +
         `${said ? ` (the mod says ${(said / 1000).toFixed(3)} km)` : ""}, ${built.turns} turns, ${built.direction}`,
     );
-    console.log(`\n${licenceNotice(entry).join("\n")}`);
+    console.log(`\n${licenceNotice(entry, lic).join("\n")}`);
     if (!out.checked.ok) throw new Error(`${packageDir}: the package fails the game's checks (above)`);
   },
 };

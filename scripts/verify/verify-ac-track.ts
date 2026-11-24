@@ -12,8 +12,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { circuitIdFrom, licenceNotice, packageVersion, type AutoEntry } from "../mods/importers/ac-track";
-import { f1Settings, PERSONAL_USE_NOTE } from "../mods/importers/f1-track";
+import { circuitIdFrom, licenceNotice, packageVersion, trackLicence, type AutoEntry } from "../mods/importers/ac-track";
+import { f1Settings } from "../mods/importers/f1-track";
+import { PERSONAL_USE_NOTE } from "../mods/lib/licences";
 import { packageCredit, packageIdFrom } from "../mods/lib/manifest-file";
 import { REPO_ROOT } from "../mods/lib/toolchain";
 
@@ -51,20 +52,37 @@ const write = (path: string, data: string | Uint8Array) => {
 check("a mod's version as a package's", packageVersion("v1.8.5") === "1.8.5" && packageVersion("3.23") === "3.23" && packageVersion(null) === undefined);
 check("the circuit's id: its layout's folder, else the track folder", circuitIdFrom({ folder: "vir", layout_dir: "full course" }) === "full-course" && circuitIdFrom({ folder: "grobnik", layout_dir: "" }) === "grobnik");
 check("a package id from the mod's author and name", packageIdFrom("Enver Bozkaya (SRTR), ACU & OSRW", "Intercity Istanbul Park") === "enver-bozkaya-sr.intercity-istanbul-park");
-const personal = {
-  name: "Test Ring",
-  credit: { author: "J. Doe", license: "unknown", note: PERSONAL_USE_NOTE },
-  _auto: { personalUse: true, licenceFrom: null, terms: ["Do not upload it."], gameCircuit: { id: "ring", author: "J. Doe" } },
-} as unknown as AutoEntry;
-const notice = licenceNotice(personal).join("\n");
-check("a mod with no licence: the import says personal use only, with its readme's terms", /FOR PERSONAL USE ONLY/.test(notice) && /Do not upload it/.test(notice) && /hosts this circuit as "ring"/.test(notice));
-check("its package credit carries the note", packageCredit(personal.credit).note === PERSONAL_USE_NOTE);
+// The licence, decided here from the mod's statements and the modder's settings (the reader: verify-licences.ts)
+const statementsOf = (name: string, files: Record<string, string>) => {
+  const dir = join(tmp, "licence", name);
+  for (const [f, t] of Object.entries(files)) write(join(dir, f), t);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+};
+const ringMod = statementsOf("ring", { "readme.txt": "Test Ring v2.1\r\n\r\nDo not upload it.\r\n" });
+const personalLic = trackLicence(ringMod, "", undefined);
+const personal = { name: "Test Ring", credit: { author: "J. Doe" }, _auto: { gameCircuit: { id: "ring", author: "J. Doe" } } } as unknown as AutoEntry;
+const notice = licenceNotice(personal, personalLic).join("\n");
+check("a mod with no licence: the import says personal use only, with its readme's terms", /FOR PERSONAL USE ONLY/.test(notice) && /Do not upload/.test(notice) && /hosts this circuit as "ring"/.test(notice), notice.split("\n")[1]);
+check('its package credit: "unknown", the note word for word, no link', personalLic.personal && personalLic.license === "unknown" && personalLic.note === PERSONAL_USE_NOTE && !personalLic.licenseUrl);
+check("…whatever note the settings give", trackLicence(ringMod, "", { note: "Thanks to J. Doe." }).note === PERSONAL_USE_NOTE);
+check('…and with "All rights reserved" in the settings', trackLicence(ringMod, "", { license: "All rights reserved" }).personal);
+check("…or a no-derivatives licence in the settings", trackLicence(ringMod, "", { license: "CC BY-ND 4.0" }).personal);
+const permitted = trackLicence(ringMod, "", { license: "Used with permission", note: "Permission from J. Doe, 2026-11-01." });
+check("the author's permission in the settings: kept as written, with the modder's note, no licence text", !permitted.personal && permitted.fromSettings && permitted.license === "Used with permission" && permitted.note === "Permission from J. Doe, 2026-11-01.");
+const settingsCc = trackLicence(ringMod, "", { license: "CC BY 4.0" });
+check("a licence this tool carries, in the settings: shared under it", !settingsCc.personal && settingsCc.license === "CC BY 4.0" && settingsCc.licenseUrl === "https://creativecommons.org/licenses/by/4.0/");
+const parkMod = statementsOf("park", { "LICENSE.txt": "Test Park, made by A. Modder.\nThis track is licensed under CC BY-SA 4.0.\n", "gp/readme.txt": "Grand Prix layout by A. Modder." });
+const shared = trackLicence(parkMod, "gp", undefined);
+check("a licence in the mod: shared under it, no note, its statements and the layout's read", !shared.personal && shared.license === "CC BY-SA 4.0" && !shared.note && shared.statements.map((x) => x.file).join() === "LICENSE.txt,gp/readme.txt", shared.statements.map((x) => x.file).join());
+check("…and a statement in the layout's folder can take it back", trackLicence(statementsOf("park2", { "LICENSE.txt": "CC BY-SA 4.0", "gp/terms.txt": "All rights reserved." }), "gp", undefined).personal);
+check("a NoDerivatives licence in the mod: personal use only", trackLicence(statementsOf("nd", { "LICENSE.txt": "Licensed CC BY-NC-ND 4.0.\n" }), "", undefined).personal);
 const f1 = f1Settings(
   { name: "Qiddiya Speed Park", credit: { author: "Maxim555", license: "Used with permission", note: "Used with permission." } },
-  { layout: "Short", credit: { license: "CC BY-NC 4.0" } },
+  { layout: "Short", credit: { license: "CC BY-NC 4.0", note: "Thanks to Maxim555." } },
 );
 check("an F1 25 mod: the modder's settings over the extractor's", f1.name === "Qiddiya Speed Park" && f1.layout === "Short" && f1.credit?.author === "Maxim555");
-check("an F1 25 mod is always for personal use, whatever its licence", f1.credit?.note === PERSONAL_USE_NOTE && f1.credit?.license === "CC BY-NC 4.0");
+check('an F1 25 mod is always for personal use: "unknown", the note word for word, whatever the settings say', f1.credit?.note === PERSONAL_USE_NOTE && f1.credit?.license === "unknown" && !f1.credit.licenseUrl);
 check("the game's permission for Qiddiya is never the package's licence", f1Settings({ credit: { author: "A", license: "Used with permission" } }, {}).credit?.license === "unknown");
 
 // --- The entry read from made-up mods (Python) ---
@@ -156,8 +174,9 @@ IS_PITLANE=1
     check("... CARPET, a kerb by the shared names, is run-off by its own values, read first", override(r, "CARPET") === "runoff" && r.physicsOverridesFirst === true);
     check("ROAD, which the shared names know, gets no override", override(r, "ROAD") === undefined);
     check("the credit: its author, version and link", r.credit.author === "J. Doe" && r._auto.version === "v2.1" && r.credit.url === "https://example.org/ring");
-    check("no licence named: unknown, personal use only, in the credit", r.credit.license === "unknown" && r._auto.personalUse && r.credit.note === PERSONAL_USE_NOTE);
-    check("the readme's terms are kept, to print", r._auto.terms.some((t) => /do not upload/i.test(t)), JSON.stringify(r._auto.terms));
+    check("the entry's credit: unknown, personal use only, until the mod tool reads its licence", r.credit.license === "unknown" && r.credit.note === PERSONAL_USE_NOTE);
+    const lic = trackLicence(ring, "", undefined);
+    check("…which reads its readme's terms: personal use only", lic.personal && lic.reading.problems.some((p) => /do not upload/i.test(p)), lic.reading.problems.join("; "));
   }
 
   // Overrides merged over it: a licence the modder names is their record of the author's permission
@@ -165,7 +184,7 @@ IS_PITLANE=1
   write(overrides, JSON.stringify({ baseAltitudeM: 120, layout: "Grand Prix", credit: { license: "Used with permission" } }));
   const { entry: ro } = entryOf("autotest_ring", ["--src", ring, "--settings", overrides]);
   check("--settings: merged over the entry, the credit key by key", ro?.baseAltitudeM === 120 && ro.layout === "Grand Prix" && ro.credit.author === "J. Doe" && ro.credit.license === "Used with permission");
-  check("... a licence in the settings lifts the personal-use note", !!ro && !ro._auto.personalUse && !ro.credit.note && ro._auto.licenceFrom === "settings");
+  check("... a licence in the settings lifts the personal-use note", !!ro && !trackLicence(ring, "", ro.credit).personal && trackLicence(ring, "", ro.credit).fromSettings);
 
   // Several layouts, models INI files, an open licence
   const park = join(tmp, "testpark");
@@ -190,7 +209,8 @@ IS_PITLANE=1
   check("its models: the INI's, without a model it moves, a moving object or a missing file", JSON.stringify(gp?.kn5_files) === '["testpark.kn5","park_gp.kn5"]', JSON.stringify(gp?.kn5_files));
   check("... and says which it left out", !!gp && ["heli.kn5", "balloon.kn5", "missing.kn5"].every((f) => gp._auto.models.some((n) => n.startsWith(f))));
   check("its length from \"4.2km\", its country from \"UK\"", gp?._auto.uiLengthM === 4200 && gp.country === "United Kingdom");
-  check("an open licence in the mod: shared under it, no personal-use note", gp?.credit.license === "CC BY-SA 4.0" && !gp._auto.personalUse && !gp.credit.note, gp?.credit.license ?? "");
+  const gpLic = trackLicence(park, "gp", undefined);
+  check("an open licence in the mod: shared under it, no personal-use note", !!gp && gpLic.license === "CC BY-SA 4.0" && !gpLic.personal && !gpLic.note, gpLic.license);
   check("... and an author from the licence file, guessed", gp?.credit.author === "A. Modder" && guessed(gp, "credit.author"), gp?.credit.author ?? "");
   const { entry: short } = entryOf("autotest_park", ["--src", park, "--layout", "Test Park Short Course"]);
   check("--layout by its name in the game", short?.layout_dir === "short" && short.layout === "Short Course" && short.pitboxes === 20);
@@ -200,7 +220,7 @@ IS_PITLANE=1
   // NoDerivatives: a conversion is an adaptation, so it can't be shared
   write(join(park, "LICENSE.txt"), "Licensed CC BY-NC-ND 4.0.\n");
   const { entry: nd } = entryOf("autotest_park", ["--src", park, "--layout", "gp"]);
-  check("a NoDerivatives licence: personal use only", !!nd && nd._auto.personalUse && nd.credit.license === "unknown");
+  check("a NoDerivatives licence: personal use only", !!nd && trackLicence(park, "gp", undefined).personal && nd.credit.license === "unknown");
 
   // A hill climb: its start and finish gates
   const hill = join(tmp, "testhill");
