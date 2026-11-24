@@ -20,6 +20,7 @@ import type { LutPoints } from '../lut';
 import {
   deriveRainCompound,
   type AeroData,
+  type AeroRideHeightMap,
   type BrakesData,
   type CarPhysicsConfig,
   type DamperSettingsUnits,
@@ -505,13 +506,13 @@ const SUSPENSIONS: SuspensionsData = {
 };
 
 // ---------------------------------------------------------------------------
-// Ground-Effect Aerodynamics + Rear-Only DRS ([fia25] Art. 3, [openf1], [est])
+// Ground-Effect Aerodynamics + Rear-Only DRS ([fia25] Art. 3, [openf1], [est], [ref])
 // ---------------------------------------------------------------------------
 
-/** Yaw sensitivity helper: CL × max(0, 1 + gain * |yaw_rad|) */
-const yawTable = (gain: number): LutPoints =>
-  [0, 2, 5, 10, 20, 30].map((deg) => [deg, Number(Math.max(0, 1 + (gain * deg * Math.PI) / 180).toFixed(4))]);
-
+/**
+ * The front and rear wings: only their angle of attack (body pitch included) reaches the force here, the floor's ground
+ * effect, the front wing's included, lives in the ride-height map below
+ */
 const WINGS: WingData[] = [
   {
     // 2025 4-element front wing (fixed flap — no front active aero under 2025 rules)
@@ -520,7 +521,6 @@ const WINGS: WingData[] = [
     positionZ: 2.65,
     angleDeg: 7.0,
     heightRef: 'front',
-    dragY: -0.11,
     lutAOA_CL: [
       [-6, 0.50],
       [0, 0.90],
@@ -535,92 +535,8 @@ const WINGS: WingData[] = [
       [14, 0.24],
       [20, 0.36],
     ],
-    // Smooth ground-effect plateau across 14–38 mm (no premature nose stall under braking or at 310 km/h)
-    lutGH_CL_mult: [
-      [0.0, 0.68],
-      [0.008, 0.90],
-      [0.014, 1.03],
-      [0.024, 1.03],
-      [0.039, 1.0],
-      [0.065, 0.94],
-      [0.12, 0.86],
-    ],
-    lutGH_CD_mult: [
-      [0.0, 1.05],
-      [0.02, 1.0],
-      [0.06, 0.98],
-    ],
-    lutYaw_CL_mult: yawTable(-0.55),
-  },
-  {
-    // 2025 full Venturi underbody tunnels (peak ground-effect era: ~2.40 m² CL·A at working ride height)
-    name: 'VENTURI_FLOOR',
-    area: 3.05,
-    positionZ: -0.02,
-    angleDeg: 3.5,
-    heightRef: 'mean',
-    dragY: -0.24,
-    lutAOA_CL: [
-      [-10, 0.78],
-      [3.5, 0.78],
-      [15, 0.78],
-    ],
-    lutAOA_CD: [
-      [-10, 0.048],
-      [3.5, 0.048],
-      [15, 0.048],
-    ],
-    // Venturi throat peak across 24–42 mm mean ride height; stalls cleanly if grounded (< 12 mm)
-    lutGH_CL_mult: [
-      [0.0, 0.35],
-      [0.012, 0.62],
-      [0.020, 0.92],
-      [0.026, 1.03],
-      [0.038, 1.04],
-      [0.050, 0.98],
-      [0.070, 0.82],
-      [0.105, 0.56],
-    ],
-    lutGH_CD_mult: [
-      [0.0, 1.06],
-      [0.025, 1.0],
-      [0.05, 0.99],
-      [0.1, 0.97],
-    ],
-    lutYaw_CL_mult: yawTable(-0.18),
-  },
-  {
-    // Rear diffuser ramp & beam wing synergy
-    name: 'VENTURI_FLOOR',
-    area: 1.22,
-    positionZ: -1.62,
-    angleDeg: 3.5,
-    heightRef: 'rear',
-    dragY: -0.22,
-    lutAOA_CL: [
-      [-10, 0.62],
-      [3.5, 0.62],
-      [15, 0.62],
-    ],
-    lutAOA_CD: [
-      [-10, 0.055],
-      [3.5, 0.055],
-      [15, 0.055],
-    ],
-    lutGH_CL_mult: [
-      [0.0, 0.58],
-      [0.025, 0.92],
-      [0.042, 1.03],
-      [0.058, 1.0],
-      [0.085, 0.78],
-      [0.130, 0.48],
-    ],
-    lutGH_CD_mult: [
-      [0.0, 1.05],
-      [0.045, 1.0],
-      [0.09, 0.85],
-    ],
-    lutYaw_CL_mult: yawTable(-0.75),
+    lutGH_CL_mult: [[0, 1]],
+    lutGH_CD_mult: [[0, 1]],
   },
   {
     // Rear wing main plane + beam wing (fixed when DRS opens)
@@ -629,7 +545,6 @@ const WINGS: WingData[] = [
     positionZ: -2.18,
     angleDeg: 12.0,
     heightRef: 'rear',
-    dragY: 0.54,
     lutAOA_CL: [
       [0, 0.35],
       [6, 0.72],
@@ -646,17 +561,15 @@ const WINGS: WingData[] = [
     ],
     lutGH_CL_mult: [[0, 1]],
     lutGH_CD_mult: [[0, 1]],
-    lutYaw_CL_mult: yawTable(-1.35),
   },
   {
-    // Rear wing upper DRS flap (FIA 2025 Art. 3.10.10: 9.4–13 mm closed → 85 mm open slot gap, < 0.4 s transition)
-    // Open reduces total CD·A by ~0.26 m² (-19% drag → +14..+22 km/h on Spielberg straights) [openf1]
+    // Rear wing upper DRS flap (FIA 2025 Art. 3.10.10: 9.4–13 mm closed → 85 mm open slot gap, < 0.4 s transition);
+    // the open flap is `FLOOR_MAP.activeAero`
     name: 'REAR_WING',
     area: 0.46,
     positionZ: -2.26,
     angleDeg: 18.0,
     heightRef: 'rear',
-    dragY: 0.64,
     lutAOA_CL: [
       [0, 0.18],
       [10, 0.72],
@@ -671,19 +584,108 @@ const WINGS: WingData[] = [
     ],
     lutGH_CL_mult: [[0, 1]],
     lutGH_CD_mult: [[0, 1]],
-    drs: { clMult: 0.16, cdMult: 0.12 },
-    lutYaw_CL_mult: yawTable(-0.95),
   },
 ];
+
+/**
+ * Ground effect: the Venturi floor, diffuser and the front wing's ground proximity as a 2D map over the floor's
+ * clearance at the front and rear axles, the shape a 2022–2025 ground-effect car has and the [ref] set's map has,
+ * milder (about two thirds of its slopes) [est, ref]:
+ * - Front: full downforce from the plank (7 mm, the lowest the nose reaches in a 300 → 80 km/h stop) to 15 mm, then
+ *   −3.5 % per 10 mm as the nose rises (the inlets unseal). The nose dropping never costs downforce.
+ * - Rear: a bell about 45 mm, −2.5 % 15 mm either side, −7 % at 15 mm (the diffuser chokes) and −11 % at 95 mm.
+ * - Balance (front share of the floor's force) moves forward as the nose drops (−5 points per 10 mm of nose rise,
+ *   half that below 15 mm) and as the rear rises (+2.4 per 10 mm): the car rotates more as it dives on the brakes and
+ *   pushes a little as it squats on the throttle, by ≈2.5 points of the whole car's balance per 10 mm.
+ * - Roll and yaw cost floor downforce and move the balance forward (the floor's edges unseal; the body's yaw loads the
+ *   front). The roll here is against the horizon, so banking reads as roll: kept small.
+ * - Each force follows its target with a 30 ms lag (the flow under the floor takes time to build and break down).
+ * Wing angle, pitch and DRS add on top. At the floor's working heights at speed (≈21 mm front, 42 mm rear) the car makes
+ * ≈5.9 m² CL·A at ≈46.6 % front, as before.
+ */
+const RH_FRONT = [0, 0.007, 0.015, 0.025, 0.035, 0.045, 0.06, 0.08];
+const RH_REAR = [0.015, 0.03, 0.045, 0.06, 0.075, 0.095];
+const FRONT_CL = [0.985, 1.0, 1.0, 0.965, 0.93, 0.895, 0.845, 0.78];
+const REAR_CL = [0.93, 0.975, 1.0, 0.985, 0.95, 0.89];
+/** Floor's front share at 21 mm front / 42 mm rear, and its slopes per mm */
+const FLOOR_BALANCE_REF = 0.377;
+const floorBalance = (front: number, rear: number): number => {
+  const fMm = front * 1000;
+  const fromFront = fMm >= 15 ? -0.005 * (fMm - 21) : 0.03 + 0.0025 * (15 - fMm);
+  return Number(Math.min(0.55, Math.max(0.2, FLOOR_BALANCE_REF + fromFront + 0.0024 * (rear * 1000 - 42))).toFixed(4));
+};
+/** Body, wheels, suspension and cooling (0.56) plus the floor and diffuser's own drag (0.21), m² */
+const BODY_FLOOR_CDA = 0.77;
+
+const FLOOR_MAP: AeroRideHeightMap = {
+  clA: 3.35,
+  cdA: BODY_FLOOR_CDA,
+  frontPickupY: FLOOR_OFFSET_Y,
+  rearPickupY: FLOOR_OFFSET_Y,
+  rearRh: RH_REAR,
+  frontRh: RH_FRONT,
+  cl: REAR_CL.map((r) => FRONT_CL.map((f) => Number((r * f).toFixed(4)))),
+  cd: REAR_CL.map(() => FRONT_CL.map(() => 1)),
+  balance: RH_REAR.map((r) => RH_FRONT.map((f) => floorBalance(f, r))),
+  rollCl: [
+    [-5, 0.95],
+    [-2, 0.98],
+    [0, 1],
+    [2, 0.98],
+    [5, 0.95],
+  ],
+  rollCd: [
+    [-5, 1.005],
+    [0, 1],
+    [5, 1.005],
+  ],
+  rollBalance: [
+    [-5, 0.015],
+    [0, 0],
+    [5, 0.015],
+  ],
+  yawCl: [
+    [-30, 0.8],
+    [-15, 0.86],
+    [-8, 0.89],
+    [-3, 0.98],
+    [0, 1],
+    [3, 0.98],
+    [8, 0.89],
+    [15, 0.86],
+    [30, 0.8],
+  ],
+  yawCd: [
+    [-30, 1.05],
+    [-8, 1.01],
+    [0, 1],
+    [8, 1.01],
+    [30, 1.05],
+  ],
+  yawBalance: [
+    [-30, 0.04],
+    [-8, 0.03],
+    [0, 0],
+    [8, 0.03],
+    [30, 0.04],
+  ],
+  frontDelayS: 0.03,
+  rearDelayS: 0.03,
+  dragDelayS: 0.03,
+  // Rear-only DRS: the upper flap opens, −0.45 m² CL·A at the rear and −0.26 m² CD·A (-19% drag → +14..+22 km/h on
+  // Spielberg's straights) [openf1]
+  activeAero: { dClAFront: 0, dClARear: -0.45, dCdA: -0.263 },
+};
 
 const AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
-  // Bodywork, exposed 18" wheels, suspension & cooling drag area (m²) [est, openf1]
-  // Balanced total CD·A ≈ 1.38 m² DRS closed / ~1.12 m² DRS open (matching 2025 Spielberg 302–306 closed / 318–324 open)
+  // Read by the wing-element path only; with the map the body's drag is in `FLOOR_MAP.cdA`. Total CD·A ≈ 1.38 m² DRS
+  // closed / ≈1.12 m² open (2025 Spielberg 302–306 closed / 318–324 open) [est, openf1]
   drag: 0.56,
   dragCentreY: 0.14,
   wings: WINGS,
+  rhMap: FLOOR_MAP,
   front_target_height: STATIC_RH.front,
   rear_target_height: STATIC_RH.rear,
   floorOffsetY: FLOOR_OFFSET_Y,
