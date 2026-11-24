@@ -14,15 +14,15 @@
  * The geometry checks run the Python extractor through uv and are skipped without it; the real circuits are skipped when
  * the cache has none.
  *
- *   npx tsx scripts/verify-sd-track.ts
+ *   npx tsx scripts/verify/verify-sd-track.ts
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { circuitLicence, SD_CACHE, type CircuitSource } from "./mods/importers/sd-track";
-import { copyrightHolders, recogniseLicence } from "./mods/lib/licences";
-import { REPO_ROOT } from "./mods/lib/toolchain";
+import { circuitLicence, SD_CACHE, type CircuitSource } from "../mods/importers/sd-track";
+import { copyrightHolders, recogniseLicence } from "../mods/lib/licences";
+import { REPO_ROOT } from "../mods/lib/toolchain";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
