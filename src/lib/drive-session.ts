@@ -55,6 +55,7 @@ import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
+import { MirrorClock } from "@/lib/render/mirror-clock";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
 import { clampChassisToCarSheet } from "@/lib/sim/setup-sheet";
 import { buildSharedSetup, garageTunerFrom } from "@/lib/sim/setup-share";
@@ -2705,7 +2706,8 @@ export class DriveSession {
       camera.layers.enable(OVERLAY_LAYER);
     });
     this.podium = podium;
-    let frameIndex = 0;
+    // Which drawn frames render the live mirrors (every second one, every one at a low frame rate)
+    const mirrorClock = new MirrorClock();
     const deviceInput = new DeviceInputReader();
     /** Per-axle tyre slip read from the car's telemetry each frame, for the keyboard pedal help */
     const kbAxleSlip = createAxleSlipSample();
@@ -4411,20 +4413,17 @@ export class DriveSession {
           container.clientWidth >= 640 &&
           vmView &&
           (vmSetting === "always" || (vmSetting === "auto" && othersAbout));
-        // The mirrors refresh every other frame, 30 times a second at 60 fps (every 4th frame on Low); under the 30 fps cap every drawn frame
-        // does, which keeps them at 30
-        const mirrorFrame = pacer.cap > 0 ? 0 : frameIndex;
-        const vmFrame = pacer.cap > 0 ? 0 : lowQuality ? (frameIndex % 4 === 0 ? 0 : 1) : frameIndex;
-        virtualMirror.update(vmFrame, vmOn, carRig.chassisGroup, carRig.root);
+        // The mirrors render every second drawn frame (30 times a second at 60 fps), and every drawn frame once the game
+        // draws under about 45 fps (the 30 fps cap included), so they never drop below about 25 Hz. Low's every fourth
+        // frame showed a 7-10 Hz mirror on a 30-40 fps machine (#186)
+        const mirrorRefresh = mirrorClock.tick(drawIntervalMs);
+        virtualMirror.update(mirrorRefresh, vmOn, carRig.chassisGroup, carRig.root);
         if (vmOn !== virtualMirrorShown) {
           virtualMirrorShown = vmOn;
           setVirtualMirrorOn(vmOn);
         }
-        // Rear view into the mirrors' render target (cockpit only, every 2nd frame; skipped on Low graphics)
-        wingMirrors?.update(mirrorFrame, view.driverEye && !inVr && !lowQuality, carRig.chassisGroup);
-        // Counted here, not inside the optional call above: without wing mirrors it never advanced, which also
-        // disabled the virtual mirror's every-other-frame throttle
-        frameIndex++;
+        // Rear view into the mirrors' render target (cockpit only; skipped on Low graphics)
+        wingMirrors?.update(mirrorRefresh, view.driverEye && !inVr && !lowQuality, carRig.chassisGroup);
         if (inVr) {
           // The head pose is added on top of the driver's eye point (a "local" space starts at the head)
           xrRig.position.copy(camera.position);
