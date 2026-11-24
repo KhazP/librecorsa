@@ -320,6 +320,11 @@ export interface RigidBodyCollisionCar {
   halfLengthM: number;
   /** Half-width of car OBB (m) */
   halfWidthM: number;
+  /**
+   * How far the OBB's centre is ahead of (x, z) along the forward vector (m, − behind; absent 0): (x, z) is the
+   * centre of mass, which the impulse turns the car about, and a body's outline is not centred on it
+   */
+  centreAheadM?: number;
 }
 
 export interface ObbCollisionResolution {
@@ -379,9 +384,15 @@ export function resolveCarToCarObbCollision(
 ): ObbCollisionResolution {
   // Quick vertical & bounding-sphere rejection
   if (!(Math.abs(A.y - B.y) <= 1.4)) return NO_COLLISION;
-  const dx = B.x - A.x;
-  const dz = B.z - A.z;
-  const maxRad = A.halfLengthM + B.halfLengthM + 0.5;
+  // The boxes' centres; the lever arms below are from the centres of mass
+  const aOff = A.centreAheadM ?? 0;
+  const bOff = B.centreAheadM ?? 0;
+  const aX = A.x + A.fwdX * aOff;
+  const aZ = A.z + A.fwdZ * aOff;
+  const dx = B.x + B.fwdX * bOff - aX;
+  const dz = B.z + B.fwdZ * bOff - aZ;
+  // The boxes' corners are their half-diagonals from their centres: no overlap beyond the sum
+  const maxRad = Math.hypot(A.halfLengthM, A.halfWidthM) + Math.hypot(B.halfLengthM, B.halfWidthM);
   // (written so a NaN position is no contact)
   if (!(dx * dx + dz * dz <= maxRad * maxRad)) return NO_COLLISION;
 
@@ -447,8 +458,8 @@ export function resolveCarToCarObbCollision(
   const tMax = Math.min(extAt, dtCenter + extBt);
   const contactTangentA = 0.5 * (tMin + tMax);
 
-  const cx = A.x + bestNx * contactDistA + perpX * contactTangentA;
-  const cz = A.z + bestNz * contactDistA + perpZ * contactTangentA;
+  const cx = aX + bestNx * contactDistA + perpX * contactTangentA;
+  const cz = aZ + bestNz * contactDistA + perpZ * contactTangentA;
 
   const rAx = cx - A.x;
   const rAz = cz - A.z;
