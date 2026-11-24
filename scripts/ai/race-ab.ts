@@ -4,7 +4,7 @@
  *
  *   npx tsx scripts/ai/race-ab.ts [--tracks spielberg,istanbul_park] [--car lc26] [--seeds 4] [--seed0 0] [--laps 3] [--ai 7]
  *       [--profiles line,slow,early,weave,none] [--jobs 4] [--a '<racecraft json>'] [--b '<racecraft json>']
- *       [--planner on|off] [--json out.json]
+ *       [--planner on|off] [--skill 0.5] [--weather clear|light_rain|heavy_rain|...] [--json out.json]
  *
  * `--seed0 N` starts at the N-th seed: a held-out set for a final check after knobs were picked on the first ones.
  * Each arm is a set of racecraft knobs (`RacecraftParams`) over the defaults; with no `--b` only the defaults race.
@@ -41,6 +41,8 @@ for (const p of profiles) if (!(STAND_IN_PROFILES as readonly string[]).includes
 const arms: { name: string; racecraft: Record<string, number> }[] = [{ name: 'A', racecraft: JSON.parse(opt('a', '{}')) }];
 if (argv.includes('--b')) arms.push({ name: 'B', racecraft: JSON.parse(opt('b', '{}')) });
 const localPlanner = opt('planner', 'off') === 'on';
+const skill = argv.includes('--skill') ? Number(opt('skill', '0.5')) : undefined;
+const weather = argv.includes('--weather') ? (opt('weather', 'clear') as StandInRaceOptions['weather']) : undefined;
 
 function runOne(o: StandInRaceOptions): Promise<StandInRaceResult | null> {
   return new Promise((resolve) => {
@@ -154,7 +156,7 @@ async function main(): Promise<void> {
     for (const trackId of tracks)
       for (const standIn of profiles)
         for (let k = 0; k < seeds; k++)
-          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner } });
+          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner, skill, weather } });
   console.error(`${races.length} races (${arms.length} arm(s) × ${tracks.length} tracks × ${profiles.length} profiles × ${seeds} seeds), ${jobsN} at once`);
   const started = Date.now();
   const results = await pool(races.map((r) => () => runOne(r.o)), jobsN);

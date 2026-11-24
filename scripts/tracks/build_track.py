@@ -4,7 +4,7 @@ Circuit GLB (a visual model with no physics layers) → simulator track (public/
     python -P scripts/tracks/build_track.py <id> [--debug-dir DIR] [--no-glb] [--no-line-opt]
 
 After the GLB is written it replaces the minimum-curvature racing line with the lap-time lines of the F1 cars
-(`ro`) and the GT3 (`roGt3`) by running scripts/optimize-racing-line.ts (Node.js on PATH).
+(`ro`) and the GT3 (`roGt3`) by running scripts/ai/optimize-lines.ts (Node.js on PATH).
 
 Per-track settings live in scripts/tracks/tracks.json: source GLB, scale, the material indices of the
 racing surface used to trace the centreline (`trace`) and the extra paved materials that bound the road
@@ -1073,15 +1073,15 @@ def carry_lines(old_path, data):
 
 def optimise_lines(track_id, edge_m=None):
     """Replace the geometric (minimum-curvature) line with each car class's lap-time line: the F1 line (`ro`) and
-    the GT3's (`roGt3`), each confirmed with a full physics lap (scripts/optimize-racing-line.ts). `edge_m`: the car
-    centre's margin to the road's edge, when not the optimiser's own (a narrow road lined with barriers)"""
+    the GT3's (`roGt3`), each judged on full physics laps (scripts/ai/optimize-lines.ts). `edge_m`: the car centre's
+    margin to the road's edge, when not the optimiser's own (a narrow road lined with barriers)"""
     import subprocess
-    env = {**os.environ, **({'EDGE_M': str(edge_m)} if edge_m is not None else {})}
+    edge = f' --edge {edge_m}' if edge_m is not None else ''
     for car in ('f1', 'gt3'):
-        r = subprocess.run(f'npx tsx scripts/optimize-racing-line.ts --track {track_id} --car {car}', cwd=ROOT,
-                           shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
-        tail = [l for l in r.stdout.splitlines() if 'model lap' in l or 'flying lap' in l or 'Using the' in l]
-        log(f'{car} racing line:', *(tail[-3:] or [r.stderr[-400:]]))
+        r = subprocess.run(f'npx tsx scripts/ai/optimize-lines.ts --track {track_id} --car {car} --write{edge}', cwd=ROOT,
+                           shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        tail = [l for l in r.stdout.splitlines() if l.startswith(('current line:', 'Using:', 'Keeping', 'Wrote'))]
+        log(f'{car} racing line:', *(tail[-4:] or [r.stderr[-400:]]))
 
 
 def apron_runoff(out, xz, rgt, off, ds_m, zones):

@@ -38,6 +38,7 @@ export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
   { key: "librecorsa.raceHistory", holds: "race history" },
   { key: "librecorsa.career", holds: "careers" },
   { key: "librecorsa.supportPrompt", holds: "the note after a drive: when it last showed and what it named" },
+  { key: "librecorsa.signInHintShown", holds: "the lap card's sign-in note has shown" },
   { key: "librecorsa.ai-learn.v1.<circuit>.<class>.<driver>", holds: "what the AI learnt per corner" },
   { key: "librecorsa.simMode", holds: "simulation thread (URL flag)" },
   { key: "librecorsa.lc26Engine", holds: "engine model (URL flag)" },
