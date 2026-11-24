@@ -1577,6 +1577,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     savePlayerSettings(settings);
   }, [settingsHydrated, settings]);
 
+  // Track total driving playtime on the player's profile (persisted in 10 s increments)
+  useEffect(() => {
+    if (!settingsHydrated || phase !== "driving" || paused) return;
+    const id = window.setInterval(() => {
+      setSettings((prev) => ({
+        ...prev,
+        profile: {
+          ...prev.profile,
+          playtimeS: (prev.profile.playtimeS ?? 0) + 10,
+        },
+      }));
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [settingsHydrated, phase, paused]);
+
   // Units, interface size and the colour-blind palette: once at start-up (the defaults, then the save) and on change
   useEffect(() => {
     applyInterfaceSettings(settings.ui);

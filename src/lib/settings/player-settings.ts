@@ -382,6 +382,8 @@ export interface DriverProfile {
   generated: boolean;
   /** New personal bests go on the online board by themselves (once the player has a name of their own) */
   autoUpload: boolean;
+  /** Total driving playtime in seconds */
+  playtimeS?: number;
 }
 
 export const DEFAULT_PAD_TUNING: PadTuning = {
@@ -951,7 +953,17 @@ function parseProfile(v: unknown): DriverProfile {
     color: sanitizeColor(isStr(v.color) ? v.color : ""),
     generated: bool(v.generated, false),
     autoUpload: bool(v.autoUpload, true),
+    playtimeS: isNum(v.playtimeS) && v.playtimeS >= 0 ? Math.floor(v.playtimeS) : 0,
   };
+}
+
+export function formatPlaytime(totalS: number): string {
+  const s = Math.max(0, Math.floor(totalS));
+  if (s < 60) return s === 0 ? "0m" : "< 1m";
+  const mins = Math.floor(s / 60);
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return hours > 0 ? `${hours}h ${remMins}m` : `${remMins}m`;
 }
 
 /** Unique, printable ids of sane length, at most `max` of them; anything else is dropped */

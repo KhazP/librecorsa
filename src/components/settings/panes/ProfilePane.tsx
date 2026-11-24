@@ -7,7 +7,7 @@ import { CHOSEN_TILE, cx, MOTION } from "@/components/ui/styles";
 import { Icon } from "@/components/ui/icons";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { CLAIMED_TELEMETRY_PORTS, DEFAULT_TELEMETRY_PORT } from "@/lib/input/device-input";
-import { sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
+import { formatPlaytime, sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
 import { autoUpload, telemetryOut } from "../defs";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
@@ -178,6 +178,11 @@ export function DriverTab() {
         />
       </div>
       <ColourRow />
+      <SettingRow label="Total playtime">
+        <span className="lc-mono text-[13px] font-semibold text-lc-chalk">
+          {formatPlaytime(profile.playtimeS ?? 0)}
+        </span>
+      </SettingRow>
       </>
     }>
     </SettingsCard>
