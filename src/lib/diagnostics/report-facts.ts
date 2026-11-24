@@ -20,6 +20,7 @@ import {
   turnLabel,
   type DriveFacts,
   type ReportFacts,
+  type WheelSetupFacts,
 } from "./report-details";
 import { inEnglish } from "@/lib/text";
 
@@ -49,6 +50,21 @@ function devicesLine(settings: PlayerSettings): string | null {
   const ds = dualSenseHid.getStatus();
   if (ds.state === "connected" && ds.name) names.push(`${ds.name} over WebHID${ds.transport ? ` (${ds.transport})` : ""}`);
   return names.length ? [...new Set(names)].join(", ") : null;
+}
+
+/** The wheel's setup, as a wheel report words it (report-details.ts) */
+function wheelSetup(s: PlayerSettings): WheelSetupFacts {
+  const w = s.wheel;
+  return {
+    input: INPUT_NAMES[s.device],
+    steer: w.steer ? padDisplayName(w.steer.padId) : null,
+    rotationDeg: w.rotationDeg,
+    directDrive: w.type === "direct_drive",
+    ffb: !w.ffbEnabled ? "off" : w.hidFfb ? "WebHID" : "bridge",
+    gain: w.ffbGain,
+    inverted: w.ffbInvert,
+    ownStrengthCars: Object.values(w.ffbPerCar).filter(Boolean).length,
+  };
 }
 
 /** The assist presets and realism levels as the settings name them */
@@ -128,6 +144,7 @@ export function collectReportFacts(i: ReportFactsInput): ReportFacts {
     device: deviceLine(nav?.hardwareConcurrency, nav?.deviceMemory),
     input,
     devices: devicesLine(i.settings),
+    wheel: wheelSetup(i.settings),
     frames: drivingFrameSummary(),
     // The HUD's name comes from the layouts' labels, which follow the language: the report keeps them English
     settings: inEnglish(() => settingsLine(i.settings)),

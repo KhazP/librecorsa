@@ -847,6 +847,17 @@ check('auto-setup binds the wheel base, never the pedals', () => {
   assert.equal(autoConfigureWheel([pad(MOZA_PEDALS, '', [-1, -1, -1])], DEFAULT_WHEEL_SETTINGS), null, 'pedals alone are not a wheel');
   assert.equal(autoConfigureWheel([pad('Xbox Wireless Controller', 'standard', [0, 0])], DEFAULT_WHEEL_SETTINGS), null);
 });
+check('auto-setup binds a base sold with its pedals (MOZA R3 bundle, #206), not the shifter beside it', () => {
+  const R3 = 'R3 Racing Wheel and Pedals (Vendor: 346e Product: 0005)';
+  const SHIFTER = 'T500 RS Gear Shift (Vendor: 044f Product: b660)';
+  const patch = autoConfigureWheel([pad(SHIFTER, '', [0]), pad(R3, '', [0, -1, -1])], DEFAULT_WHEEL_SETTINGS);
+  assert.ok(patch, 'the R3 names its pedals but is the wheel');
+  assert.equal(patch.steer?.padId, R3);
+  assert.equal(patch.type, 'direct_drive');
+  assert.equal(patch.ffbEnabled, true);
+  assert.equal(patch.hidFfb, true);
+  assert.equal(autoConfigureWheel([pad(SHIFTER, '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'a shifter alone is not a wheel');
+});
 check('auto-setup leaves a bound wheel alone; belt wheels get their defaults', () => {
   const bound = { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'x', axis: 2, center: 0, invert: true } };
   assert.equal(autoConfigureWheel([pad(MOZA_BASE, '', [0])], bound), null);

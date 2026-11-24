@@ -21,6 +21,7 @@ import {
   turnLabel,
   whereLine,
   wheelReportRows,
+  wheelSetupLine,
   type ReportFacts,
 } from "../../src/lib/diagnostics/report-details";
 import { drivingFrameSummary, drivingInputUsed, noteDrivingFrame, noteDrivingInput, noteFrameGraphics, resetFrameStats } from "../../src/lib/render/frame-stats";
@@ -89,6 +90,7 @@ const facts: ReportFacts = {
   device: "8 cores, 8 GB memory or more",
   input: "Controller (last lap), Keyboard set up",
   devices: "Wireless Controller",
+  wheel: { input: "Wheel", steer: "R3 Racing Wheel and Pedals", rotationDeg: 1080, directDrive: true, ffb: "WebHID", gain: 1, inverted: false, ownStrengthCars: 0 },
   frames: fs,
   settings: "assists tc_abs, realism full",
   board: "reachable",
@@ -105,7 +107,22 @@ check("Without facts the input is the one set up", bugReportRows(base, null).fin
 check("Details read 'Label: value' a line", detailsText(rows).split("\n")[0] === `Where: ${whereLine(facts.drive!)}`);
 check("The system line: browser · screen · GPU", fieldText(rows, "system") === "Chrome 148 on Windows · 1366×768 @1x · GPU: Intel HD 520", fieldText(rows, "system"));
 const wheel = wheelReportRows(base, facts);
-check("A wheel report's system line carries the devices, build and app", fieldText(wheel, "system").endsWith("Devices: Wireless Controller · Build: a1b2c3d · physics 7 · App: Browser tab"), fieldText(wheel, "system"));
+check(
+  "A wheel report's system line carries the devices, wheel setup, build and app",
+  fieldText(wheel, "system").endsWith(
+    "Devices: Wireless Controller · Wheel setup: input Wheel, steering on R3 Racing Wheel and Pedals, 1080° direct drive, force feedback WebHID at 100% · Build: a1b2c3d · physics 7 · App: Browser tab"
+  ),
+  fieldText(wheel, "system")
+);
+const offSetup = wheelSetupLine({ ...facts.wheel, input: "Controller", steer: null, rotationDeg: 900, directDrive: false, ffb: "off" });
+check("Wheel setup: a controller set up, nothing bound, force feedback off", offSetup === "input Controller, steering not bound, 900° belt / gear, force feedback off", offSetup);
+const tunedSetup = wheelSetupLine({ ...facts.wheel, ffb: "bridge", gain: 0.45, inverted: true, ownStrengthCars: 2 });
+check(
+  "Wheel setup: the bridge, the strength, inverted and per-car strengths",
+  tunedSetup.endsWith("force feedback bridge at 45%, inverted, own strength on 2 cars"),
+  tunedSetup
+);
+check("The bug report leaves the wheel setup out", !bugReportRows(base, facts).some((r) => r.id === "wheel"));
 
 // --- The issue address
 const form: FeedbackForm = {

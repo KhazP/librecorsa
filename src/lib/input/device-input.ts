@@ -642,6 +642,11 @@ const BELT_GEAR_ID = /pxn|v99|g25|g27|g29|g920|g923|t150|t248|t300|t500|tmx|csl 
 const LOGITECH_ID = /logitech|\b046d\b/i;
 /** Pedal sets, shifters and handbrakes share the wheel brands' names but never steer */
 const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
+/**
+ * A wheel base that names itself a wheel, even with its pedals in the name: a base sold with pedals plugged into it
+ * shows as one device ("R3 Racing Wheel and Pedals", the MOZA R3 bundle, #206)
+ */
+const isWheelBaseId = (id: string) => !NOT_A_WHEEL_BASE.test(id) || /\bwheel\b/i.test(id);
 /** Virtual joysticks (vJoy / SimHub Control Mapper) mirror physical devices and should yield to real hardware */
 export const isVirtualPad = (padId: string): boolean => /vjoy|virtual joystick/i.test(padId);
 
@@ -653,7 +658,7 @@ export const isVirtualPad = (padId: string): boolean => /vjoy|virtual joystick/i
  */
 export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSettings): Partial<WheelSettings> | null {
   if (current.steer) return null;
-  const wheelPad = pads.find((p) => isWheelId(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
+  const wheelPad = pads.find((p) => isWheelId(p.id) && isWheelBaseId(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
   if (!wheelPad) return null;
   const type: WheelType =
     BELT_GEAR_ID.test(wheelPad.id) ||
