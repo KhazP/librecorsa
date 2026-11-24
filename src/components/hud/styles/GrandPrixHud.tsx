@@ -36,6 +36,7 @@ import {
   sessionWord,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
+import { ersButtons } from "../ers-buttons";
 import { ProximityRadar } from "../ProximityRadar";
 import { anchor, formatOnce, gearLabel, MiniMap, type HudDesignProps } from "./hud-style-parts";
 import palette from "./grand-prix.module.css";
@@ -385,8 +386,9 @@ const TyreWearCard: React.FC<{
   ers: number;
   /** The DEPLOY / ERS line is left out on a car without ERS */
   hasErs: boolean;
+  boostOn: boolean;
   overtakeOn: boolean;
-}> = ({ tireWearPct, ers, hasErs, overtakeOn }) => {
+}> = ({ tireWearPct, ers, hasErs, boostOn, overtakeOn }) => {
   const w = useGrandPrixWords();
   const corners = [
     { label: "FL", wear: Math.round(tireWearPct[0]), x: 34, y: 24 },
@@ -442,7 +444,9 @@ const TyreWearCard: React.FC<{
       </svg>
       {hasErs ? (
         <div className="flex items-center justify-between border-t border-white/10 bg-[rgb(16_20_28/0.95)] px-2.5 py-1 text-[10px] font-extrabold tracking-[0.08em]">
-          <span className={overtakeOn ? "text-[#facc15]" : "text-slate-400"}>{overtakeOn ? w.ersOvertake : w.ersDeploy}</span>
+          <span className={overtakeOn || boostOn ? "text-[#facc15]" : "text-slate-400"}>
+            {overtakeOn ? w.ersOvertake : boostOn ? w.boost : w.ersDeploy}
+          </span>
           <span className={palette.mono}>ERS {Math.round(ers)}%</span>
         </div>
       ) : null}
@@ -489,6 +493,9 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   const aero = aeroReadout(t);
 
   const hasErs = channels?.hasErs ?? t.liveTuner?.hasErs ?? false;
+  const ersCtl = ersButtons(t);
+  const boostOn = hasErs && ersCtl.boostOn;
+  const overtakeOn = hasErs && (ersCtl.overtake === "on" || ersCtl.overtake === "auto");
   const ers = Math.max(0, Math.min(100, t.ersBatteryPercent));
   const speed = formatSpeed(t.speedKmh, units);
   const speedLbl = speedUnit(units).toUpperCase();
@@ -824,7 +831,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
           rpm={t.rpm}
           maxRpm={revRange[1]}
           revFrac={revFrac}
-          overtakeActive={Boolean(t.manualOverrideActive)}
+          overtakeActive={boostOn || overtakeOn}
           aeroOpen={aero.open}
           tireTempsC={t.tireTempsC}
           units={units}
@@ -838,7 +845,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
           className="pointer-events-auto absolute flex flex-col items-end gap-2"
           style={{ bottom: EDGE, right: EDGE, ...anchor(scale, "bottom right") }}
         >
-          <TyreWearCard tireWearPct={t.tireWearPct} ers={ers} hasErs={hasErs} overtakeOn={Boolean(t.manualOverrideActive)} />
+          <TyreWearCard tireWearPct={t.tireWearPct} ers={ers} hasErs={hasErs} boostOn={boostOn} overtakeOn={overtakeOn} />
           {mfd ?? (
             <div className={`${palette.plate} ${palette.stdAidCard}`}>
               <div className={palette.stdAidRow}>

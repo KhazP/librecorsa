@@ -1924,7 +1924,7 @@ export class F12026CarSim implements SimulatorCar {
    * other cars push mode (PSH) for 8 s, on a 2026 car in a race only with Overtake Mode earned
    */
   public activateBoostOverride(): boolean {
-    if (this.config.ers.regulations === 'f1-2026') return this.profile.hasErs && this.vehicle.ersEnergyJ > 200_000;
+    if (this.config.ers.regulations === 'f1-2026') return this.profile.hasErs && this.vehicle.ersCanBoost;
     if (this.profile.hasErs && this.overtakeAvailable && this.vehicle.ersEnergyJ > 200_000 && this.boostCooldownS <= 0) {
       this.boostRemainingS = BOOST_S;
       return true;
@@ -2258,7 +2258,7 @@ export class F12026CarSim implements SimulatorCar {
       const autoOt =
         straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
         zoneNow && inputs.throttle >= 0.98;
-      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersEnergyJ > 0;
+      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersCanBoost;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;
       v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);

@@ -22,6 +22,7 @@ import {
   speedUnit,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
+import { ersButtons } from "../ers-buttons";
 import { gearLabel } from "./hud-style-parts";
 import palette from "./grand-prix.module.css";
 
@@ -286,32 +287,36 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
   const race = t.race;
   const [, revFull] = revRange;
 
-  // States. The driver's extra power: earned Overtake (a 2026 car past the detection line within a second) is armed;
-  // pressed it is Overtake, pressed without it Boost
+  // States: use the shared 2026 / legacy ERS button state so Boost and Overtake stay independent.
+  // In Practice/Quali Overtake is always on by rule (so its pill stays idle instead of blinking nonstop),
+  // and holding Space/Boost lights BOOST rather than OVERTAKE.
   const aero = aeroReadout(t);
-  const twentySix = t.overtakingRules === "straight-mode-2026";
-  const armed = hasErs && twentySix && t.overtakeAvailable === true;
-  const pressed = hasErs && t.manualOverrideActive;
-  const power: "off" | "armed" | "active" | "boost" = pressed ? (armed ? "active" : "boost") : armed ? "armed" : "off";
-  const extraOn = power === "active" || power === "boost";
+  const ersCtl = ersButtons(t);
+  const boostOn = hasErs && ersCtl.boostOn;
+  const overtakeOn = hasErs && (ersCtl.overtake === "on" || ersCtl.overtake === "auto");
+  const overtakeArmed = hasErs && ersCtl.overtake === "available";
+  const overtakeEarned = overtakeArmed || overtakeOn;
+  const extraOn = boostOn || overtakeOn;
   const vsc = race?.vsc ?? null;
   const yellow = !vsc && Boolean(race?.yellow);
   // The band's colour: a virtual safety car (and, blinking, a yellow flag) first, then the extra power, then the wing
   const accent = vsc ? HUD_CAUTION : extraOn ? HUD_GAIN : aero.open ? HUD_INFO : null;
   const edge = accent ?? CHALK;
   const edgeOpacity = accent ? 0.95 : 0.2;
-  const flash = useHaloFlash(t, aero.open, armed);
+  const flash = useHaloFlash(t, aero.open, overtakeEarned);
 
   // Energy and pedals
   const soc = Math.max(0, Math.min(1, t.ersBatteryPercent / 100));
-  const harvesting = hasErs && (t.mgukPowerKw < -5 || t.brake > 0.1);
-  const deploying = hasErs && (t.mgukPowerKw > 5 || extraOn);
+  const harvesting = hasErs && t.mgukPowerKw < -5;
+  const deploying = hasErs && t.mgukPowerKw > 5;
   const leftValue = hasErs ? soc : Math.max(0, Math.min(1, t.brake));
   const leftColor = hasErs ? HUD_INFO : HUD_BRAKE;
   const leftLit = hasErs ? harvesting : t.brake > 0.05;
   const throttle = Math.max(0, Math.min(1, t.throttle));
+  const rightValue = hasErs ? Math.max(0, Math.min(1, t.mgukPowerKw / 350)) : throttle;
+  const rightLit = hasErs ? deploying : throttle > 0.05;
   const leftOn = Math.round(leftValue * SEGMENTS);
-  const rightOn = Math.round(throttle * SEGMENTS);
+  const rightOn = Math.round(rightValue * SEGMENTS);
 
   // Speed in the player's unit, and in the other one beneath it
   const other = units.speed === "kmh" ? "mph" : "kmh";
@@ -340,7 +345,7 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
   const gear = gearLabel(t.gear);
   const gearSlot = t.gear < 0 ? 0 : Math.min(GEAR_ROW.length - 1, Math.max(0, t.gear));
   const left = stripLetters(hasErs ? w.recharge : w.brake, -1);
-  const right = stripLetters(w.deploy, 1);
+  const right = stripLetters(hasErs ? w.deploy : w.throttle, 1);
 
   return (
     <div className={palette.haloAnchor} style={scale && scale !== 1 ? { transform: `translateX(-50%) scale(${scale})` } : undefined}>
@@ -378,29 +383,29 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
         </ArcText>
         <HaloDelta deltaS={deltaS} uid={uid} corner={corner?.short ?? w.straight} />
 
-        {/* The columns round the dial: battery (or brake) on the left, throttle on the right */}
+        {/* The columns round the dial: battery (or brake) on the left, MGU-K deploy (or throttle) on the right */}
         <path d={LEFT_FRAME} fill={VOID} fillOpacity={0.55} stroke={CHALK} strokeOpacity={0.12} strokeWidth={1.5} strokeLinejoin="round" />
         <path d={RIGHT_FRAME} fill={VOID} fillOpacity={0.55} stroke={CHALK} strokeOpacity={0.12} strokeWidth={1.5} strokeLinejoin="round" />
         <path d={LEFT_STRIP} fill={leftColor} fillOpacity={leftLit ? 0.9 : 0.28} />
-        <path d={RIGHT_STRIP} fill={HUD_THROTTLE} fillOpacity={deploying || (!hasErs && throttle > 0.05) ? 0.9 : 0.28} />
+        <path d={RIGHT_STRIP} fill={HUD_THROTTLE} fillOpacity={rightLit ? 0.9 : 0.28} />
         {left.map(({ ch, x, y }, i) => (
           <text key={`l${i}`} x={x} y={y + 4.5} textAnchor="middle" className="lc-disp" fill={leftLit ? VOID : CHALK} style={{ fontSize: 14 }}>
             {ch}
           </text>
         ))}
         {right.map(({ ch, x, y }, i) => (
-          <text key={`r${i}`} x={x} y={y + 4.5} textAnchor="middle" className="lc-disp" fill={deploying ? VOID : CHALK} style={{ fontSize: 14 }}>
+          <text key={`r${i}`} x={x} y={y + 4.5} textAnchor="middle" className="lc-disp" fill={rightLit ? VOID : CHALK} style={{ fontSize: 14 }}>
             {ch}
           </text>
         ))}
         {/* A lit column glows round its filled segments */}
         {leftLit ? LEFT_GLOW.slice(0, leftOn).map((d, k) => <path key={`lg${k}`} d={d} fill={leftColor} fillOpacity={0.25} />) : null}
-        {deploying ? RIGHT_GLOW.slice(0, rightOn).map((d, k) => <path key={`rg${k}`} d={d} fill={HUD_THROTTLE} fillOpacity={0.25} />) : null}
+        {rightLit ? RIGHT_GLOW.slice(0, rightOn).map((d, k) => <path key={`rg${k}`} d={d} fill={HUD_THROTTLE} fillOpacity={0.25} />) : null}
         {LEFT_SEGMENTS.map((d, k) => (
           <path key={`ls${k}`} d={d} fill={k < leftOn ? leftColor : CHALK} fillOpacity={k < leftOn ? (leftLit ? 1 : 0.62) : 0.08} />
         ))}
         {RIGHT_SEGMENTS.map((d, k) => (
-          <path key={`rs${k}`} d={d} fill={k < rightOn ? HUD_THROTTLE : CHALK} fillOpacity={k < rightOn ? (deploying ? 1 : 0.62) : 0.08} />
+          <path key={`rs${k}`} d={d} fill={k < rightOn ? HUD_THROTTLE : CHALK} fillOpacity={k < rightOn ? (rightLit ? 1 : 0.62) : 0.08} />
         ))}
 
         {/* Brake and throttle, lit while pressed */}
@@ -430,24 +435,24 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
         </text>
         {hasErs ? (
           <>
-            {/* Boost over Overtake, as the car's own wheel shows them: lit while on, Overtake blinking once earned */}
-            <rect x={654} y={240} width={92} height={17} rx={5} fill={power === "boost" ? HUD_GAIN : CHALK} fillOpacity={power === "boost" ? 1 : 0.12} />
-            <text x={700} y={253} textAnchor="middle" className="lc-disp" fill={power === "boost" ? VOID : SLATE} style={{ fontSize: 13 }}>
+            {/* Boost over Overtake, as the car's own wheel shows them: independent pills; Overtake blinks once earned in a race */}
+            <rect x={654} y={240} width={92} height={17} rx={5} fill={boostOn ? HUD_GAIN : CHALK} fillOpacity={boostOn ? 1 : 0.12} />
+            <text x={700} y={253} textAnchor="middle" className="lc-disp" fill={boostOn ? VOID : SLATE} style={{ fontSize: 13 }}>
               {w.boost}
             </text>
-            <g className={power === "armed" ? palette.haloBlink : undefined}>
+            <g className={overtakeArmed ? palette.haloBlink : undefined}>
               <rect
                 x={634}
                 y={261}
                 width={132}
                 height={23}
                 rx={7}
-                fill={power === "active" ? HUD_GAIN : VOID}
-                stroke={power === "active" || power === "armed" ? HUD_GAIN : CHALK}
-                strokeOpacity={power === "active" || power === "armed" ? 1 : 0.25}
+                fill={overtakeOn ? HUD_GAIN : VOID}
+                stroke={overtakeOn || overtakeArmed ? HUD_GAIN : CHALK}
+                strokeOpacity={overtakeOn || overtakeArmed ? 1 : 0.25}
                 strokeWidth={1.5}
               />
-              <text x={700} y={278} textAnchor="middle" className="lc-disp" fill={power === "active" ? VOID : power === "armed" ? HUD_GAIN : SLATE} style={{ fontSize: 15 }}>
+              <text x={700} y={278} textAnchor="middle" className="lc-disp" fill={overtakeOn ? VOID : overtakeArmed ? HUD_GAIN : SLATE} style={{ fontSize: 15 }}>
                 {w.overtake}
               </text>
             </g>

@@ -12,6 +12,7 @@ import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import { disposeTree } from "@/lib/render/dispose-tree";
 import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
+import { ersButtons } from "@/components/hud/ers-buttons";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
 /**
@@ -288,7 +289,8 @@ function createLiveSteeringOled(): {
     const tRR = Math.round(t.tireTempsC?.[3] ?? 92);
     // Race position when racing, else the lap number (CarTelemetry carries no position outside a race)
     const slot = t.race ? `P${Math.max(1, t.race.position)}` : `L${Math.max(1, t.lapCount || 1)}`;
-    const key = `${t.gear}_${Math.floor(speedInt / 2)}_${socInt}_${t.activeAeroMode}_${t.manualOverrideActive}_${tFL}_${tRL}_${Math.floor(lapSec * 2)}_${slot}`;
+    const ersCtl = ersButtons(t);
+    const key = `${t.gear}_${Math.floor(speedInt / 2)}_${socInt}_${t.activeAeroMode}_${ersCtl.boostOn}_${ersCtl.overtake}_${ersCtl.lowGrip}_${tFL}_${tRL}_${Math.floor(lapSec * 2)}_${slot}`;
     if (key === lastKey) return;
     lastKey = key;
 
@@ -326,7 +328,7 @@ function createLiveSteeringOled(): {
 
     ctx.fillStyle = "#34d399";
     ctx.font = "900 23px monospace";
-    ctx.fillText(`${(socInt / 10).toFixed(1)}`, 439, 34);
+    ctx.fillText(`${socInt}`, 439, 34);
     ctx.font = "bold 18px monospace";
     ctx.fillText("SOC %", 439, 58);
 
@@ -366,20 +368,25 @@ function createLiveSteeringOled(): {
     ctx.font = "900 92px Arial, sans-serif";
     ctx.fillText(t.gear === 0 ? "N" : t.gear < 0 ? "R" : String(t.gear), 256, 158);
 
-    // Orange OVERTAKE / AERO Mode Banner (Reference Image 3 "ADELANTAR" bar)
-    ctx.fillStyle = t.manualOverrideActive ? "#9333ea" : "#f97316";
-    ctx.fillRect(6, 186, 500, 32);
-    ctx.fillStyle = "#090a0f";
-    ctx.font = "900 20px Arial, sans-serif";
-    ctx.fillText(
-      t.manualOverrideActive
-        ? "350KW BOOST OVERRIDE"
+    // Mode Banner: Boost, Overtake, Straight Mode, or Low Grip (from shared ersButtons state)
+    const banner = ersCtl.boostOn
+      ? { bg: "#9333ea", fg: "#f8fafc", text: ersCtl.lowGrip ? "BOOST HOLD" : "BOOST ACTIVE" }
+      : ersCtl.overtake === "on" || ersCtl.overtake === "auto"
+        ? { bg: "#16a34a", fg: "#090a0f", text: ersCtl.overtake === "auto" ? "OVERTAKE AUTO" : "OVERTAKE ACTIVE" }
         : t.activeAeroMode === "X_MODE"
-          ? "X-MODE LOW DRAG"
-          : "OVERTAKE READY",
-      256,
-      209
-    );
+          ? { bg: "#38bdf8", fg: "#090a0f", text: "X-MODE LOW DRAG" }
+          : ersCtl.overtake === "available"
+            ? { bg: "#f97316", fg: "#090a0f", text: "OVERTAKE READY" }
+            : ersCtl.overtake === "lowGrip"
+              ? { bg: "#eab308", fg: "#090a0f", text: "LOW GRIP" }
+              : ersCtl.overtake === "locked"
+                ? { bg: "#334155", fg: "#cbd5e1", text: "OVERTAKE LOCKED" }
+                : { bg: "#1e293b", fg: "#e2e8f0", text: "ERS DEPLOY" };
+    ctx.fillStyle = banner.bg;
+    ctx.fillRect(6, 186, 500, 32);
+    ctx.fillStyle = banner.fg;
+    ctx.font = "900 20px Arial, sans-serif";
+    ctx.fillText(banner.text, 256, 209);
 
     // Bottom Segmented ERS Battery Bar (Red left ticks | Yellow center `⚡ 100%` | Green right cap)
     ctx.fillStyle = "#450a0a";
