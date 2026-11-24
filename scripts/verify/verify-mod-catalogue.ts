@@ -417,7 +417,7 @@ async function generatorChecks(): Promise<void> {
   check("The good zip among them is still listed", failing.catalogue.packages.length === 1 && failing.catalogue.packages[0].url === "https://packs.example.org/red-again.zip");
 
   // --- The command ---
-  const tool = join(__dirname, "mods", "mod-tool.ts");
+  const tool = join(__dirname, "..", "mods", "mod-tool.ts");
   const run = (...args: string[]) => spawnSync(process.execPath, ["--disable-warning=THREE_CJS_DEPRECATED", "--import", "tsx", tool, "catalogue", ...args], { encoding: "utf8" });
   const out = join(tmp, "served", "catalogue.json");
   mkdirSync(join(tmp, "served"));
