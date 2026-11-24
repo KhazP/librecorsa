@@ -19,6 +19,7 @@ import { modSimProfile } from '../../src/lib/mods/mod-physics';
 import { turboSteadyBoost } from '../../src/lib/sim/f12026-car/F12026CarConfig';
 import type { VehicleModelId } from '../../src/types/f1';
 import { findKn5, kn5IsPlain, kunosContent, parseLooseJson, parseUiCar, readLicence } from '../cars/ac-car-info';
+import { creditLicence, isShareable, licenceTextFiles, PERSONAL_USE_NOTE } from '../mods/lib/licences';
 import { acPhysicsPatch, chooseBaseModel, driveCheck, valueAt, type AcCarFacts } from '../cars/ac-physics-patch';
 import { lutAt, modDir } from '../lib/mod-data';
 import importer from '../mods/importers/ac-car';
@@ -190,16 +191,27 @@ async function main(): Promise<void> {
       for (const [f, text] of Object.entries(files)) write(join(dir, f), text);
       return readLicence(dir, parseUiCar(ui));
     };
+    // (the reader itself: verify-licences.ts)
+    const why = (r: ReturnType<typeof licence>) => r.reading.problems.join('; ');
     const none = licence({});
-    check('no licence stated: not shareable, "All rights reserved"', !none.shareable && none.license === 'All rights reserved' && none.source === null, none.reason);
-    const cc = licence({ 'readme.txt': 'Released under CC BY-NC-SA 4.0. Have fun!' });
-    check('a Creative Commons licence lets it be shared, named as such', cc.shareable && cc.license === 'CC BY-NC-SA 4.0' && cc.licenseUrl === 'https://creativecommons.org/licenses/by-nc-sa/4.0/', `${cc.license} ${cc.licenseUrl}`);
+    const noneCredit = creditLicence(none.reading);
+    check('no licence stated: not shareable, "unknown", the personal-use note', !isShareable(none.reading) && noneCredit.license === 'unknown' && noneCredit.note === PERSONAL_USE_NOTE, why(none));
+    const nc = licence({ 'readme.txt': 'Released under CC BY-NC-SA 4.0. Have fun!' });
+    check('a non-commercial Creative Commons licence does not let it be shared', !isShareable(nc.reading), why(nc));
     const nd = licence({ 'LICENSE.txt': 'CC BY-ND 4.0' });
-    check('"ND" (no derivatives) does not: a conversion is a changed copy', !nd.shareable && nd.license === 'CC BY-ND 4.0', nd.reason);
+    check('"ND" (no derivatives) does not: a conversion is a changed copy', !isShareable(nd.reading), why(nd));
     const deny = licence({ 'readme.txt': 'Free to use. Do not reupload or convert this mod to other games.' }, '{ "license": "CC BY 4.0" }');
-    check('a line forbidding sharing wins over any licence', !deny.shareable, deny.reason);
+    check('a line forbidding sharing wins over any licence', !isShareable(deny.reading), why(deny));
     const gpl = licence({}, '{ "license": "GPL-3.0" }');
-    check('an open licence in ui_car.json lets it be shared', gpl.shareable && gpl.source === 'ui_car.json', gpl.license);
+    check('a licence in ui_car.json lets it be shared, with its text', isShareable(gpl.reading) && gpl.reading.licences.join() === 'GPL-3.0-only' && licenceTextFiles(gpl.reading).map((f) => f.name).join() === 'LICENSE-GPL-3.0-only.txt', why(gpl));
+    const cc = licence({ 'Info.txt': 'Model by J. Doe, CC BY-SA 4.0' });
+    check('a licence in any text file beside the car, and the file carried', isShareable(cc.reading) && cc.statements.map((s) => s.file).join() === 'Info.txt', why(cc));
+    const gpLegends = licence({ 'readme.txt': 'Converted from GPL. Thanks to the GPL community.' });
+    check('a bare "GPL" (Grand Prix Legends) is no licence', !isShareable(gpLegends.reading), why(gpLegends));
+    const personalOnly = licence({ 'readme.txt': 'Feel free to modify for your own personal use.' });
+    check('"feel free to modify for your own personal use" is personal use', !isShareable(personalOnly.reading), why(personalOnly));
+    const modelRestricted = licence({ 'readme.txt': 'You may redistribute skins, but the 3D model is restricted.' });
+    check('"skins may be shared, the model is restricted" is not shareable', !isShareable(modelRestricted.reading), why(modelRestricted));
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

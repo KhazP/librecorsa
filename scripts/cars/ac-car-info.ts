@@ -1,11 +1,12 @@
 /**
  * What an Assetto Corsa car folder says about itself, apart from its physics: its `ui/ui_car.json` (name, brand, class,
  * tags, year, specs, author), whether it is Kunos's own (the base game's cars, which are never converted), and what its
- * author allows (a licence in ui_car.json or in a text file beside the car). The car importer
+ * author allows (ui_car.json's licence and the text files beside the car, read by scripts/mods/lib/licences.ts). The car importer
  * (scripts/mods/importers/ac-car.ts) and the physics patch (ac-physics-patch.ts) read it.
  */
 import { existsSync, openSync, readdirSync, readFileSync, readSync, closeSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import { mergeReadings, readLicenceEntry, statementFiles, type LicenceReading, type Statement } from '../mods/lib/licences';
 
 export interface UiCar {
   name?: string;
@@ -162,69 +163,14 @@ export function kn5IsPlain(path: string): boolean {
   }
 }
 
-export interface LicenceFinding {
-  /** The author lets a converted copy be shared */
-  shareable: boolean;
-  /** The licence's name for the credit: what the mod states, else "All rights reserved" */
-  license: string;
-  licenseUrl?: string;
-  /** Where it was read (ui_car.json, a file's name), or null when the mod states nothing */
-  source: string | null;
-  /** Why it counts as shareable or not, in a few words */
-  reason: string;
-}
-
-const CC = /\b(?:creative\s*commons|cc)[\s-]*(by(?:[\s-]*(?:nc|sa|nd)){0,2})(?:[\s-]*(\d\.\d))?/i;
-const OPEN = /\bGPL(?:v?\d)?\b|GNU General Public|\bMIT License\b|public domain|\bunlicense\b|\bcc0\b/i;
-const FREE = /free (?:to|for) (?:use,? )?(?:share|distribute|redistribute)|may (?:be )?(?:freely )?(?:re)?distribut|redistribution (?:is )?(?:allowed|permitted)|feel free to (?:share|re-?upload|redistribute|modify)/i;
-const DENY = /do not (?:re-?)?(?:distribute|upload|share|publish|convert|port)|don'?t (?:re-?)?(?:distribute|upload|share|publish|convert|port)|no (?:re-?)?(?:distribution|uploads?)|not (?:be |to be )?(?:re-?)?(?:distribut|upload|shar|publish)|without (?:my|our|the author'?s?|written|prior|express) (?:written )?permission|all rights reserved|not allowed to (?:re-?)?(?:upload|distribute|share|publish)|(?:personal|private) use only|prohibited/i;
-
-/** A Creative Commons licence's name and deed URL from what a text calls it (`CC BY-NC-SA 4.0`) */
-function ccLicence(match: RegExpMatchArray): { license: string; licenseUrl: string; nd: boolean } {
-  const parts = match[1].toUpperCase().split(/[\s-]+/).filter(Boolean);
-  const version = match[2] ?? '4.0';
-  const code = parts.join('-');
-  return { license: `CC ${code} ${version}`, licenseUrl: `https://creativecommons.org/licenses/${code.toLowerCase()}/${version}/`, nd: parts.includes('ND') };
-}
-
-/** The car folder's text files a licence would be in: the licence, readme and notes files, at most 64 kB of each */
-function licenceTexts(carDir: string): { name: string; text: string }[] {
-  const out: { name: string; text: string }[] = [];
-  for (const f of readdirSync(carDir)) {
-    if (!/\.(txt|md|rtf|nfo)$|^(licen[cs]e|copying|readme)/i.test(f)) continue;
-    const p = join(carDir, f);
-    if (!statSync(p).isFile()) continue;
-    out.push({ name: f, text: readFileSync(p).subarray(0, 65536).toString('utf8') });
-  }
-  return out;
-}
-
 /**
- * What the mod's author allows: a licence in ui_car.json, else in the licence and readme files beside the car. Any
- * line that forbids sharing wins; a Creative Commons licence without "ND", an open licence (GPL, MIT, CC0, public
- * domain) or words letting the car be shared make it shareable; saying nothing makes it the author's alone
+ * What the mod's author allows (scripts/mods/lib/licences.ts): ui_car.json's `license`, read as a licence field, and
+ * every text file beside the car (readme, licence, credits, notes), each read whole. A mod that states nothing is the
+ * author's alone. Its skins' own statements are the importer's to add
  */
-export function readLicence(carDir: string, ui: UiCar): LicenceFinding {
-  const sources = [...(ui.license ? [{ name: 'ui_car.json', text: ui.license }] : []), ...licenceTexts(carDir)];
-  for (const { name, text } of sources) {
-    if (DENY.test(text)) {
-      const cc = text.match(CC);
-      return { shareable: false, license: cc ? ccLicence(cc).license : 'All rights reserved', source: name, reason: `${name} forbids sharing it` };
-    }
-  }
-  for (const { name, text } of sources) {
-    const cc = text.match(CC);
-    if (cc) {
-      const l = ccLicence(cc);
-      if (l.nd) return { shareable: false, license: l.license, licenseUrl: l.licenseUrl, source: name, reason: `${l.license} allows no changed copies, and a conversion is one` };
-      return { shareable: true, license: l.license, licenseUrl: l.licenseUrl, source: name, reason: `${name} gives it under ${l.license}` };
-    }
-    const open = text.match(OPEN);
-    if (open) return { shareable: true, license: open[0], source: name, reason: `${name} gives it under ${open[0]}` };
-    if (FREE.test(text)) return { shareable: true, license: `Free to share (${name})`, source: name, reason: `${name} lets it be shared` };
-  }
-  return { shareable: false, license: 'All rights reserved', source: null, reason: 'the mod states no licence that allows sharing' };
+export function readLicence(carDir: string, ui: UiCar): { reading: LicenceReading; statements: Statement[] } {
+  const statements = statementFiles(carDir, { anyText: true });
+  const reading = mergeReadings([...(ui.license ? [readLicenceEntry(ui.license)] : []), ...statements.map((s) => s.reading)]);
+  if (!reading.licences.length && !reading.problems.length) reading.problems.push('the mod states no licence');
+  return { reading, statements };
 }
-
-/** The credit note of a car its author hasn't let be shared */
-export const PERSONAL_USE_NOTE = "for personal use only: the author's permission is needed to share it";

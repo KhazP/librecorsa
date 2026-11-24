@@ -421,15 +421,17 @@ function readStatement(path: string, file: string): Statement {
 /**
  * Every statement file at the top of a folder, each read: readme, licence, copying, copyright, credits, authors and
  * terms files (`readme.txt`, `LICENSE`, `<folder>-readme.txt`, `Cavallo_Roxfall_readme.txt`), and the files of a folder
- * so named (`licenses/`). Every one is read; one this can't read is a problem in its own reading
+ * so named (`licenses/`). Every one is read; one this can't read is a problem in its own reading. `anyText`: every
+ * text file at the top of the folder too (an Assetto Corsa mod's terms may be in `Info.txt` or `<car>.txt`)
  */
-export function statementFiles(folder: string): Statement[] {
+export function statementFiles(folder: string, opts: { anyText?: boolean } = {}): Statement[] {
   const out: Statement[] = [];
   if (!existsSync(folder)) return out;
   for (const f of readdirSync(folder).sort()) {
     const path = join(folder, f);
     const st = statSync(path);
-    if (st.isFile() && isStatementFile(f)) out.push(readStatement(path, f));
+    const text = opts.anyText && /^\.(?:txt|md|rtf|nfo)$/i.test(extname(f));
+    if (st.isFile() && (isStatementFile(f) || text)) out.push(readStatement(path, f));
     else if (st.isDirectory() && STATEMENT_WORDS.test(f) && !f.startsWith(".")) {
       for (const g of readdirSync(path).sort()) {
         const p = join(path, g);

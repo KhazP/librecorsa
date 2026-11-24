@@ -4,7 +4,9 @@
  * has one, else an automatic one), its sound bank (scripts/audio/port_ac_bank.py, a config made from the bank's sample
  * names), and its physics as a patch on the base vehicle model its class, drivetrain, mass and power choose
  * (scripts/cars/ac-physics-patch.ts), driven headless before it is packaged. Kunos's own cars are refused. A mod whose
- * author states no licence that allows sharing is packaged for its importer alone, and its credit says so.
+ * statements (ui_car.json's licence, the text files beside the car, its skins' readmes; lib/licences.ts) don't let a
+ * converted copy be shared is packaged for its importer alone: its credit's licence is "unknown", with the personal-use
+ * note, and no licence text goes in. Its statements go in the package either way.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -14,11 +16,12 @@ import sharp from 'sharp';
 import { VEHICLE_MODELS } from '../../../src/lib/cars/vehicle-models';
 import type { ModCarClass, ModSkin } from '../../../src/lib/mods/mod-manifest';
 import type { VehicleModelId } from '../../../src/types/f1';
-import { findKn5, kn5IsPlain, kunosContent, PERSONAL_USE_NOTE, readLicence, readUiCar } from '../../cars/ac-car-info';
+import { findKn5, kn5IsPlain, kunosContent, readLicence, readUiCar } from '../../cars/ac-car-info';
 import { acCarFacts, acPhysicsPatch, BASE_MODELS, chooseBaseModel, driveCheck, type AcPhysicsPatch } from '../../cars/ac-physics-patch';
 import { ModData } from '../../lib/mod-data';
 import { packageCar, type CarSkinSource } from '../lib/car-package';
 import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from '../lib/importer';
+import { carriedName, creditLicence, licenceTextFiles, mergeReadings, statementFiles, type LicenceReading } from '../lib/licences';
 import { localIdFrom, packageCredit } from '../lib/manifest-file';
 import { report } from '../lib/package-check';
 import { runPython } from '../lib/toolchain';
@@ -111,13 +114,11 @@ ${PACKAGE_USAGE}`,
     const folder = basename(carDir);
     const name = ui.name ?? folder;
     const licence = readLicence(carDir, ui);
-    const credit = packageCredit({
-      author: ui.author,
-      url: ui.url,
-      license: licence.license,
-      licenseUrl: licence.licenseUrl,
-      note: licence.shareable ? null : PERSONAL_USE_NOTE,
-    });
+    const creditFor = (r: LicenceReading) => {
+      const terms = creditLicence(r);
+      return packageCredit({ author: ui.author, url: ui.url, license: terms.license, licenseUrl: terms.licenseUrl, note: terms.note });
+    };
+    const credit = creditFor(licence.reading);
     const localId = localIdFrom(values.id ?? name);
     const { info, packageDir } = importTarget(values, { author: credit.author, name, credit, description: ui.description?.slice(0, 1000) });
 
@@ -204,6 +205,17 @@ ${PACKAGE_USAGE}`,
         ? { id: ids[0], name: (paintEntry.number ? `#${paintEntry.number} ` : '') + (paintEntry.name || paintEntry.folder || paintEntry.id), swatch: swatchOf(paintEntry.swatch) }
         : { id: 'factory', name: 'Factory', swatch: ['#808080', '#202020'] as ModSkin['swatch'] };
 
+      // The skins' own statements (skins/<skin>/readme.txt): one that can't be shared makes the package personal too.
+      // The licences' texts go in when it may be shared; the mod's and its skins' statements always
+      const skinStatements = listing.flatMap((s) => statementFiles(join(carDir, 'skins', s.folder ?? s.id), { anyText: true }).map((st) => ({ skin: s.folder ?? s.id, st })));
+      const held = mergeReadings([licence.reading, ...skinStatements.map((x) => x.st.reading)]);
+      info.credit = creditFor(held);
+      const extraFiles = [
+        ...licenceTextFiles(held).map((f) => ({ from: f.from, to: `cars/${localId}/${f.name}` })),
+        ...licence.statements.map((s) => ({ from: s.path, to: `cars/${localId}/${carriedName('assetto-corsa', s.file)}` })),
+        ...skinStatements.map((x) => ({ from: x.st.path, to: `cars/${localId}/${carriedName(`assetto-corsa-skin-${x.skin}`, x.st.file)}` })),
+      ];
+
       const traction = DRIVE[facts.traction] ?? 'rear-wheel drive';
       const bhp = ui.specs.bhp ?? `${Math.round(facts.peakKw * 1.341)} bhp`;
       const out = packageCar({
@@ -224,12 +236,13 @@ ${PACKAGE_USAGE}`,
         paint,
         skins,
         sound,
+        extraFiles,
       });
       report(packageDir, out.checked);
       if (out.skipped.length) console.log(`      left out: ${out.skipped.join(', ')}`);
       console.log(`      ${out.contentId} in ${packageDir}: ${skins.length + 1} liveries, ${'dir' in sound ? 'its own sound' : `${sound.car}'s sound`}, ${physics ? `its physics on ${base}` : `${base}'s physics`}`);
-      console.log(`      licence: ${licence.license} (${licence.reason})`);
-      if (!licence.shareable) console.log(`      ${PERSONAL_USE_NOTE}. Keep the package to yourself unless ${credit.author} says otherwise.`);
+      console.log(`      licence: ${info.credit.license}${held.problems.length ? ` (${held.problems.join('; ')})` : ''}`);
+      if (info.credit.note) console.log(`      ${info.credit.note}. Keep the package to yourself unless ${info.credit.author} says otherwise.`);
       if (!out.checked.ok) throw new Error('the package fails the game\'s checks (above)');
     } finally {
       if (values['keep-build']) console.log(`      kept the working copy in ${work}`);
