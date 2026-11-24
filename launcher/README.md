@@ -6,8 +6,8 @@ when online and the last one seen when not, with the game's static export bundle
 `npm run build`) for what was never fetched. It serves the player's mod packages too, opens the game in a Chromium
 browser as an app window, and quits when that window closes. It converts a circuit or a car copied from another game
 into a mod package, from the game's Mods panel, with nothing for the player to install, and it updates itself from this
-repository's releases. It is written in Go with the standard library only, and is meant to replace the Electron
-wrapper in `desktop/`, which opens librecorsa.org.
+repository's releases. It is written in Go with the standard library only. It replaced an Electron app that opened
+librecorsa.org (`org.librecorsa.desktop`, retired after its last release, desktop-v0.2.3).
 
 ## Running it
 
@@ -316,7 +316,7 @@ the `LAUNCHER_UPDATE_KEY` secret. The public key is `launcher/update-key.pub`, b
 `-X main.updatePublicKeys`). The launcher (`update.go`), when online:
 
 1. fetches the manifest and its signature from `https://github.com/librecorsa/librecorsa/releases/latest/download/`
-   15 s after it starts and every 6 hours (when the latest release is the desktop app's, it looks the newest
+   15 s after it starts and every 6 hours (when the latest release isn't a launcher's, it looks the newest
    `launcher-v*` release up in GitHub's list of releases);
 2. checks the signature against its key, then the version: only a newer one goes further (never a downgrade);
 3. downloads its platform's archive, over HTTPS only and only from this repository's releases, and checks its size
@@ -404,10 +404,11 @@ In a clone: `npm run build`, `node launcher/converter/build.mjs`, then `cd launc
   Settings > Privacy & Security > Open Anyway), and may ask again for Documents after an update (an ad hoc signature
   changes with each build). Windows SmartScreen warns until the SignPath certificate has a reputation (More info >
   Run anyway).
-- `launcher-latest.json` is found at the repository's latest release: a desktop app release made after a launcher
-  release becomes the latest, and the launcher then looks the newest launcher release up in GitHub's list of releases
-  (60 calls an hour per address without a token: one every 6 hours is far within it).
-- Accounts sign in with a link code from another device (as the desktop app did). A provider's sign-in (Discord,
+- `launcher-latest.json` is found at the repository's latest release. Android releases are made with
+  `--latest=false`, so they never take it; were another release the latest, the launcher looks the newest launcher
+  release up in GitHub's list of releases (60 calls an hour per address without a token: one every 6 hours is far
+  within it).
+- Accounts sign in with a link code from another device (as the Electron app did). A provider's sign-in (Discord,
   Google, Steam) comes back to librecorsa.org rather than to the launcher, and passkeys belong to librecorsa.org, so
   neither can finish in the launcher's window.
 - The cache folder is never trimmed: a car or circuit taken off the site goes when the site answers 404 for it, and

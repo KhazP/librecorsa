@@ -60,13 +60,13 @@
 
 ## Download apps
 
-You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install the optional native wrapper from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/librecorsa/librecorsa/releases/latest)**. Every wrapper opens the live site, so game updates arrive without reinstalling.
+You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install an app from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/librecorsa/librecorsa/releases)**. The desktop app ([launcher/](launcher/README.md)) plays the live game when online and what it kept when offline, takes mods, converts circuits and cars from other games, and updates itself. The Android app opens the live site, so game updates arrive without reinstalling.
 
 | Platform | Package | Notes |
 | :-- | :-- | :-- |
-| **Windows (x64)** | `LibreCorsa-*-win-x64-Setup.exe` | Discrete GPU preference, silent WebHID for wheels & DualSense. Unsigned while SignPath setup finishes (*More info → Run anyway*) |
-| **macOS** | `LibreCorsa-*-mac-arm64.dmg` / `mac-x64.dmg` | Apple Silicon and Intel builds. Unsigned (*Privacy & Security* or `xattr -cr /Applications/LibreCorsa.app`) |
-| **Linux (x64)** | `LibreCorsa-*-linux-x86_64.AppImage` | `chmod +x` and run (needs FUSE2 / `libfuse2`) |
+| **Windows (x64)** | `LibreCorsa-*-win-x64.zip` | Unzip anywhere you can write to and run `LibreCorsa.exe`. Unsigned while SignPath setup finishes (*More info → Run anyway*) |
+| **macOS** | `LibreCorsa-*-mac-arm64.dmg` / `mac-x64.dmg` | Apple Silicon and Intel. Drag `LibreCorsa.app` to Applications; not notarised yet, so the first time *System Settings > Privacy & Security > Open Anyway* |
+| **Linux (x64)** | `LibreCorsa-*-linux-x64.tar.gz` | Unpack and run `librecorsa` in its folder, which adds LibreCorsa to the app menu |
 | **Android (7+)** | `LibreCorsa-*-android.apk` | Signed fullscreen TWA (no browser bar, sticky-immersive, Game Mode, launcher shortcuts; Chrome required) |
 
 ---
@@ -268,12 +268,12 @@ Every push to `main` runs typecheck and the verify suites, then builds `./out` a
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
-The desktop app's Windows installer is built by GitHub Actions from this repository's source (`.github/workflows/release-desktop.yml`) when I push a `desktop-v*` tag, and it's published on the [Releases](https://github.com/librecorsa/librecorsa/releases) page. Signing through SignPath Foundation is being set up; until it's in place, the installer is unsigned.
+The desktop app's Windows program, `LibreCorsa.exe`, is built by GitHub Actions from this repository's source (`.github/workflows/release-launcher.yml`) when I push a `launcher-v*` tag, and it's published on the [Releases](https://github.com/librecorsa/librecorsa/releases) page. Signing through SignPath Foundation is being set up; until it's in place, `LibreCorsa.exe` is unsigned.
 
 - **Committers and reviewers:** [KhazP](https://github.com/KhazP) (Alp Yalay). I review every pull request from anyone else before it's merged.
 - **Approvers:** [KhazP](https://github.com/KhazP). I approve every signing request by hand.
 
-**Privacy:** the desktop app opens [librecorsa.org](https://librecorsa.org/play), so the site's [privacy policy](https://librecorsa.org/privacy) applies. Apart from loading the site, the app only checks GitHub Releases for a newer version of itself.
+**Privacy:** the desktop app plays the game from [librecorsa.org](https://librecorsa.org/play) and passes the game's online features on to it, so the site's [privacy policy](https://librecorsa.org/privacy) applies. Apart from that, the app only checks GitHub Releases for a newer version of itself and, the first time you convert a circuit or car and agree to it, downloads the converter's tools (uv, Node.js, Python and its packages) from their own sites.
 
 ## License & credits
 

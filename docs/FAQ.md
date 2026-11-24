@@ -29,13 +29,15 @@ No. LibreCorsa is an independent fan project, not affiliated with Formula 1, the
 ### What can I play it on?
 
 - **In a browser** on Windows, macOS or Linux: any browser with WebGL2 and hardware acceleration turned on.
-- **Desktop apps** for Windows, macOS and Linux, and an **Android app** (Android 7 or later, with Chrome). They open the same site, so updates arrive without reinstalling. See [Checking a download](DOWNLOADS.md).
+- **The desktop app** for Windows, macOS and Linux, which plays offline too and takes mods, and an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Checking a download](DOWNLOADS.md).
 - **iPhone and iPad** in Safari. Share, then Add to Home Screen, gives you full screen.
 - **VR headsets** through WebXR (Quest Browser, or Chrome with SteamVR or OpenXR), from Settings > Display > Graphics. It's a work in progress, so expect rough edges.
 
 ### Can I play offline?
 
-Not yet, and I'd like to add it. If you clone the repository, you can run RISE Motordrome with the 2026 Prototype on your own machine without a connection. Every other circuit and car is only served from librecorsa.org, because their makers allowed LibreCorsa to host them, not for the files to be passed around.
+In the desktop app, yes. It has the game built in and keeps every car and circuit it loads, so without a connection it plays what it kept. Most circuits and cars are only served from librecorsa.org, because their makers allowed LibreCorsa to host them, not for the files to be passed around, so each needs loading once while you're online. Racing online needs a connection, of course.
+
+In a browser, not yet. If you clone the repository, you can run RISE Motordrome with the 2026 Prototype on your own machine without a connection.
 
 ### Which wheels and controllers work?
 

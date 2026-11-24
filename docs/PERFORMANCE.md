@@ -5,7 +5,7 @@ Because LibreCorsa runs directly in your browser, frame pacing and visual qualit
 ## System requirements
 
 - **WebGL2 with hardware acceleration:** Required by every browser. If disabled, the game displays `"3D graphics are off in your browser"`.
-- **No installation required:** Play directly at `librecorsa.org`, or use the optional desktop and Android wrappers (see [Verifying downloads](DOWNLOADS.md)). On dual-GPU laptops, the desktop wrapper requests the discrete GPU and avoids background throttling.
+- **No installation required:** Play directly at `librecorsa.org`, or use the optional desktop and Android apps (see [Verifying downloads](DOWNLOADS.md)). The desktop app runs the game in Chrome, Edge, Brave or Chromium, so the browser's GPU and background settings apply to it too.
 - **Chrome or Edge for WebHID:** Required for direct browser wheel force feedback, DualSense adaptive triggers/haptics/lightbar, and gyro steering. See [Controls, controllers, and wheels](CONTROLS.md).
 - **Mobile devices (phones and tablets):** Any touch-primary device defaults to **Medium** graphics with **Automatic quality** and **Sharpen** enabled, disables MSAA anti-aliasing, and loads GPU-compressed circuit textures to stay within mobile memory budgets.
 - **Installing on mobile:** Adding the site to your home screen unlocks full-screen play. On iPhone and iPad, tap **Share > Add to Home Screen** (note that iOS isolates Home Screen app storage from Safari, so it maintains separate saves). The Android app requires Android 7 or later and Chrome.

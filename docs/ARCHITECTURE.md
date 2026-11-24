@@ -27,7 +27,7 @@ A map of the repository for anyone who wants to change the code: where each part
 | `cloudflare/` | The Worker: `worker.js` serves the site, `api/` the online side; `migrations/` for D1 |
 | `scripts/` | The `verify-*.ts` suites, circuit and car converters, reports, the force-feedback bridge |
 | `docs/`, `docs-site/` | These pages, and the Astro site that publishes them |
-| `desktop/`, `android/` | The Electron app and the Android app, both opening librecorsa.org/play |
+| `launcher/`, `android/` | The desktop app (a Go program that serves the game on the player's computer, online and offline, with their mods) and the Android app (opening librecorsa.org/play) |
 
 ## From /play to the first frame
 
@@ -140,7 +140,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 - **`npm run verify`** (`scripts/verify/run-verify.mjs`) runs every `scripts/verify-*.ts` suite, several at once, longest first. Suites skip what needs the hosted cars and circuits. `npm run verify:laps` is the slow full-pace lap check.
 - **`npm run physics:report`** regenerates the physics validation page. `npm run race:headless` runs AI races.
 - **Assets**: `npm run compress-tracks` compresses circuits and checks the physics meshes stay bit-exact. `npm run upload-hosted` sends hosted files to R2.
-- **CI**: `checks.yml` runs the typecheck, the suites and the build on every pull request. `deploy-pages.yml` runs them again on `main`, then builds with the hosted content and deploys. `deploy-docs.yml` publishes these pages, and `release-desktop.yml` builds the apps from a `desktop-v*` tag.
+- **CI**: `checks.yml` runs the typecheck, the suites and the build on every pull request. `deploy-pages.yml` runs them again on `main`, then builds with the hosted content and deploys. `deploy-docs.yml` publishes these pages. `release-launcher.yml` builds the desktop app from a `launcher-v*` tag, and `release-android.yml` the Android app from an `android-v*` tag.
 
 ## Rules that keep players' data and races working
 

@@ -113,10 +113,10 @@ All wheel settings live under **Controls > Wheel**:
 
 ## Force feedback
 
-Force feedback can be driven directly by the browser (experimental), through the desktop app, or via a local DirectInput bridge on Windows.
+Force feedback can be driven directly by the browser (experimental), in the desktop app, or via a local DirectInput bridge on Windows.
 
 - **Browser (WebHID):** Requires Chrome or Edge over HTTPS (which `librecorsa.org` uses). Nothing to install.
-- **Desktop app:** Uses the same WebHID engine as the browser, but auto-grants DualSense controllers and racing wheels with no browser device picker or permission dialog. See [Verifying downloads](DOWNLOADS.md).
+- **Desktop app:** Opens the game in Chrome, Edge, Brave or Chromium, so it uses the same WebHID engine as the browser, device picker included. See [Verifying downloads](DOWNLOADS.md).
 - **Local Windows bridge:** A lightweight helper that talks DirectInput to any FFB wheel on Windows. Clone the repository with Node.js installed, run `npm install` once, and keep `npm run ffb` running in the background. When playing on `librecorsa.org`, start it with `FFB_ALLOW_ORIGIN=https://librecorsa.org` (see [UDP telemetry and the local bridge](TELEMETRY.md) for all CLI flags and PowerShell / `cmd` examples, or the [README](../README.md#wheels-and-force-feedback)).
 
 ### Setting up WebHID force feedback
@@ -165,7 +165,7 @@ Switch **Settings** to **Advanced** mode first—once a wheel is connected, the 
 
 - **Wheel or controller isn't listed:** Press any button on the hardware to wake it, then re-open **Controls > Device**.
 - **No steering or inverted/wrong pedal range:** Run **Calibrate all** under **Controls > Wheel**, making sure to depress each pedal completely to its stop.
-- **No "Connect wheel" button:** Your browser doesn't support WebHID. In Advanced mode, **Browser connection** explains `"WebHID needs Chrome or Edge on https or localhost"`. Switch to Chrome or Edge, install the desktop app, or use the Windows bridge.
+- **No "Connect wheel" button:** Your browser doesn't support WebHID. In Advanced mode, **Browser connection** explains `"WebHID needs Chrome or Edge on https or localhost"`. Switch to Chrome or Edge, or use the Windows bridge.
 - **Logitech G920 or G923 (Xbox) doesn't appear in the picker:** Switch the wheel into PC mode via Logitech G HUB first; the browser cannot see it in Xbox mode.
 - **Thrustmaster wheel is rejected:** Thrustmaster bases boot in a start-up mode that requires a system driver (such as Thrustmaster's Windows driver) to switch them over before the browser can access them.
 - **Wheel connects, but produces no force:** Verify that the centring spring is disabled in your wheel software, then click **Test**. Next, set **Damping** to `100%` and turn the rim by hand. If the wheel feels heavier, it is accepting condition effects and the issue is isolated to constant force—please file a report.
