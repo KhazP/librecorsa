@@ -198,7 +198,9 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   throttle: null,
   brake: null,
   clutch: null,
-  brakeGamma: 1,
+  // Pedal^2.4, the brake curve of Assetto Corsa's stock wheel profile: 45 % of the braking at 72 % of the travel, so the
+  // lock-up point sits deep in the pedal (load-cell pedals, which measure force, may want 1.0)
+  brakeGamma: 2.4,
   ffbEnabled: false,
   ffbGain: 1,
   ffbMinForce: 0,

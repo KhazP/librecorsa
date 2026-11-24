@@ -390,7 +390,9 @@ export const DEFAULT_PAD_TUNING: PadTuning = {
   outerDeadzone: 0.02,
   linearity: 1,
   throttleGamma: 1,
-  brakeGamma: 1,
+  // A softer first half of the trigger, so a light squeeze is light braking: the cars' brakes lock the fronts at under
+  // half pedal below 150 km/h, as a real car's do, with no pedal force to feel it by
+  brakeGamma: 1.8,
   // The triggers until the player picks the right stick (Buttons card, or the GT classic layout)
   pedalSources: DEFAULT_PAD_PEDAL_SOURCES,
   stickPedalDeadzone: 0.1,
