@@ -61,6 +61,11 @@ const isPhone = () => window.matchMedia(PHONE_QUERY).matches;
 
 const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
+const AERO_PRESET_HINT = {
+  low_downforce: "lowDownforceHint",
+  balanced: "balancedHint",
+  high_downforce: "highDownforceHint",
+} as const satisfies Record<AeroSetupPreset, string>;
 
 const FALLBACK_TUNER: Pick<
   LiveTunerState,
@@ -510,15 +515,15 @@ export const EngineersGarage: React.FC<
       );
     if (x === "aeroPackage")
       return (
-        <SettingRow key={x} label={tx("aeroPackage")} stacked>
+        <SettingRow key={x} label={tx("aeroPackage")} hint={tx(AERO_PRESET_HINT[p.aeroPreset])} stacked>
           <Segmented<AeroSetupPreset>
             fill
             value={p.aeroPreset}
             onChange={p.onChangeAeroPreset}
             options={[
-              { id: "low_downforce", label: tx("lowDownforce") },
-              { id: "balanced", label: tx("balanced") },
-              { id: "high_downforce", label: tx("highDownforce") },
+              { id: "low_downforce", label: tx("lowDownforce"), title: tx("lowDownforceHint") },
+              { id: "balanced", label: tx("balanced"), title: tx("balancedHint") },
+              { id: "high_downforce", label: tx("highDownforce"), title: tx("highDownforceHint") },
             ]}
           />
         </SettingRow>
