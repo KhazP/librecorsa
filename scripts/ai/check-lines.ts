@@ -4,11 +4,14 @@
  * where its check passed; elsewhere that car keeps its own driver.
  *
  *   npx tsx scripts/ai/check-lines.ts --track monaco [--cars lc26,f12026-car,amg-gt3,liana,...] [--grip 0.95]
- *       [--ceiling 1,1.04,1.08] [--line f1|gt3] [--own] [--json out.json] [--write]
+ *       [--ceiling 1,1.04,1.08] [--line f1|gt3|road] [--own] [--json out.json] [--write]
  *
- * Each car is driven as itself on the line the game gives it (its profile's `racingLine`: the F1 cars on the F1 line,
- * every closed-wheel car on the GT3's), with its own limits. `--line` checks every car on that line instead, and then
- * only reports: a check on a line the car does not drive would put it on plans there.
+ * Each car is driven as itself on the line the game gives it here (its profile's `racingLine`, `racingLineFor`: the F1
+ * cars on the F1 line, the closed-wheel cars on the GT3's, the road cars on the road line where it passed their check,
+ * else the GT3's), with its own limits. `--line` checks every car on that line instead. A check is written for the line
+ * it was made on: the F1 and GT3 lines' to `aiPlans` (what every build reads), the road line's to `aiPlansByLine.road`
+ * (which older builds ignore: they drive road cars on the GT3's line, with the check there). A car is only written for
+ * its profile's line, or the GT3's for a road car: a check on a line the car never drives would put it on plans there.
  *
  * With --ceiling, a car that passes is driven again at each grip in turn until one fails, held to a tighter 2.5 m off
  * the line (a race adds traffic, dirty air and worn tyres to the flying lap): the last clean one is its `maxGrip`, the
@@ -24,12 +27,12 @@
  * `--write` writes the file, then reads it back: the lines it holds must be the lines that were checked.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { getActiveTrackData, setActiveTrack, type AiPlanCheck, type RawTrackJson } from '../../src/lib/track-data';
+import { getActiveTrackData, planCheckFor, setActiveTrack, type AiPlanCheck, type RawTrackJson } from '../../src/lib/track-data';
 import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
 import { aiTrackFor } from '../../src/lib/sim/ai/ai-track';
 import type { RacingLineId } from '../../src/types/f1';
 import { loadGlbGeometry } from '../lib/glb-geometry';
-import { physicsLap, physicsLapLine, physicsLapVehicle, type PhysicsLapCar } from './lib/physics-lap';
+import { physicsLap, physicsLapLine, physicsLapProfileLine, physicsLapVehicle, type PhysicsLapCar } from './lib/physics-lap';
 import { isCleanLap } from './lib/line-judging';
 
 const argv = process.argv.slice(2);
@@ -43,7 +46,6 @@ const grip = Number(opt('grip', '0.95'));
 const ceiling = opt('ceiling', '').split(',').filter(Boolean).map(Number).filter((g) => g > grip).sort((a, b) => a - b);
 const forcedLine = opt('line', '') as RacingLineId | '';
 const write = argv.includes('--write');
-if (forcedLine && write) throw new Error('--line only reports: a check is written for the line each car drives (leave --line out)');
 const path = `public/tracks/${trackId}/track_data.json`;
 const raw = JSON.parse(readFileSync(path, 'utf8')) as RawTrackJson & { metadata: Record<string, unknown> };
 setActiveTrack(trackId, raw);
@@ -58,8 +60,19 @@ const offsetsOf = (line: RacingLineId) => {
   return o;
 };
 const lines = new Map<RacingLineId, Float64Array>();
-const checks: Record<string, AiPlanCheck> = { ...((raw.metadata.aiPlans as Record<string, AiPlanCheck>) ?? {}) };
+type PlanStore = Record<string, AiPlanCheck>;
+const legacyPlans: PlanStore = { ...((raw.metadata.aiPlans as PlanStore) ?? {}) };
+const byLine = structuredClone((raw.metadata.aiPlansByLine as Record<string, PlanStore>) ?? {});
+/** Where a check on this line is kept: `aiPlans` for the F1 and GT3 lines, `aiPlansByLine[line]` past them */
+const storeFor = (line: RacingLineId): PlanStore => (line === 'f1' || line === 'gt3' ? legacyPlans : (byLine[line] ??= {}));
+const checks: Record<string, AiPlanCheck> = {};
 const checkedOn = new Map<string, RacingLineId>();
+for (const car of cars) {
+  const own = physicsLapProfileLine(car, track);
+  const line = forcedLine || physicsLapLine(car, track);
+  if (write && !(line === own || (own === 'road' && line === 'gt3')))
+    throw new Error(`--write: ${car} never drives the ${line} line (its profile's is the ${own} line); leave it out or drop --write`);
+}
 const ownLaps: Record<string, { lapS: number; offTrackFrames: number; wallHits: number; maxErrM: number }> = {};
 for (const car of cars) {
   const line = forcedLine || physicsLapLine(car, track);
@@ -69,7 +82,7 @@ for (const car of cars) {
   const lap = physicsLap(track, root, car, offsets, grip);
   const ok = isCleanLap(lap, 3);
   const r3 = (x: number) => Math.round(x * 1000) / 1000;
-  checks[car] = {
+  checks[car] = storeFor(line)[car] = {
     ok,
     physicsLapS: r3(lap.lapS),
     planLapS: r3(lap.plan.lapS),
@@ -103,20 +116,27 @@ if (opt('json', '')) {
   writeFileSync(opt('json', ''), JSON.stringify({ track: trackId, grip, ceiling, checks: mine }, null, 1));
 }
 if (write) {
-  (raw.metadata as Record<string, unknown>).aiPlans = checks;
+  const meta = raw.metadata as Record<string, unknown>;
+  meta.aiPlans = legacyPlans;
+  if (Object.keys(byLine).length) meta.aiPlansByLine = byLine;
   const out = JSON.stringify(raw);
-  // Read back: the file as the game will parse it gives every checked car the line it was checked on
+  // Read back: the file as the game will parse it holds every line as it was checked, and the checks where the game
+  // looks for them
   setActiveTrack(trackId, JSON.parse(out) as RawTrackJson);
   const back = getActiveTrackData(1200);
-  for (const car of cars) {
-    const line = physicsLapLine(car, back);
-    const was = lines.get(checkedOn.get(car) as RacingLineId) as Float64Array;
-    let worst = line === checkedOn.get(car) ? 0 : Infinity;
-    for (let i = 0; i < t.n && worst < 1e-6; i++) worst = Math.max(worst, Math.abs(aiLineOffsetM(back.getSampleAtDistance(i * t.ds), line) - was[i]));
+  for (const [line, was] of lines) {
+    let worst = 0;
+    for (let i = 0; i < t.n; i++) worst = Math.max(worst, Math.abs(aiLineOffsetM(back.getSampleAtDistance(i * t.ds), line) - was[i]));
     if (!(worst < 1e-6)) {
-      console.error(`Not written: read back, ${car} drives the ${line} line, not the ${checkedOn.get(car)} line it was checked on`);
+      console.error(`Not written: read back, the ${line} line is ${worst.toFixed(3)} m from the one checked`);
       process.exit(1);
     }
+  }
+  for (const car of cars) {
+    const line = checkedOn.get(car) as RacingLineId;
+    if (planCheckFor(car, line) !== undefined && planCheckFor(car, line)?.physicsLapS === checks[car].physicsLapS) continue;
+    console.error(`Not written: read back, ${car}'s check on the ${line} line is not where the game reads it`);
+    process.exit(1);
   }
   writeFileSync(path, out);
   console.log(`Wrote ${path}`);

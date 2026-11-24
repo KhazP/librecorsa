@@ -62,6 +62,12 @@ export function physicsLapLine(car: PhysicsLapCar, track: BuiltTrackData): Racin
   return simFor(physicsLapVehicle(car), track, null).racingLineId ?? 'f1';
 }
 
+/** The line slot a car's profile names (`road` for the road cars, which drive the GT3's where a circuit has no road line for them) */
+export function physicsLapProfileLine(car: PhysicsLapCar, track: BuiltTrackData): RacingLineId {
+  const sim = simFor(physicsLapVehicle(car), track, null) as SimulatorCar & { profile?: { racingLine?: RacingLineId } };
+  return sim.profile?.racingLine ?? sim.racingLineId ?? 'f1';
+}
+
 /** A car of this model on the circuit, as the physics laps drive it (the rigid-body LC26, whatever the game's default) */
 export function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCar {
   switch (vehicle) {

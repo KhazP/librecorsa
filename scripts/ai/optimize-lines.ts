@@ -13,11 +13,16 @@
  *   npx tsx scripts/ai/optimize-lines.ts --all [--write] (every circuit, both lines, one process each; --strict)
  *
  * `--line` is the line slot (`--car` is its old name); `--judges` the cars that drive it on drive plans and judge every
- * candidate (default: the f12026-car and the LC26 for the F1 line, the AMG for the GT3's). The first judge's limits plan
+ * candidate (default: the f12026-car and the LC26 for the F1 line, the AMG for the GT3's, the Liana and the Scirocco for
+ * the road cars'). The first judge's limits plan
  * the line, its barrier probes and chassis (the optimal-control start) are used, and the line stays inside every
  * judge's road. A judge already unclean on the current line may stay unclean on a new one if no worse there (the LC26
  * through Monaco's barriers), except with `--strict`, where every judge must drive every candidate cleanly: a batch run
  * nobody reads the log of once wrote a line 1403 frames off the road for an excused judge.
+ *
+ * The road line (`roRoad`, `metadata.racingLineRoad`) starts from the GT3's where a circuit has none, and is written
+ * only if a candidate beats it: the road cars drive the GT3's line until then, and a road car drives the road line only
+ * where its check on it passed (check-lines.ts --line road, `aiPlansByLine.road`).
  *
  * A new circuit's lines come from here: the track converters (scripts/tracks) run it with `--write` for the F1 line
  * and the GT3's once the circuit is built, on its geometric (minimum-curvature) line.
@@ -91,7 +96,7 @@ if (argv.includes('--all')) {
 const trackId = opt('track', 'spielberg');
 const line = opt('line', opt('car', 'f1')) as RacingLineId;
 /** The cars that drive this line on plans, in the game (`racingLine` in their profiles) */
-const DEFAULT_JUDGES: Record<RacingLineId, VehicleModelId[]> = { f1: ['f12026-car', 'lc26'], gt3: ['amg-gt3'] };
+const DEFAULT_JUDGES: Record<RacingLineId, VehicleModelId[]> = { f1: ['f12026-car', 'lc26'], gt3: ['amg-gt3'], road: ['liana', 'vw-scirocco-gtx'] };
 if (!(line in DEFAULT_JUDGES)) throw new Error(`--line ${line}: one of ${Object.keys(DEFAULT_JUDGES).join(', ')}`);
 const judges: VehicleModelId[] = opt('judges', DEFAULT_JUDGES[line].join(',')).split(',').map((c) => physicsLapVehicle(c as PhysicsLapCar));
 const strict = argv.includes('--strict');
@@ -120,6 +125,7 @@ interface RawSample {
   p: number[];
   ro: number;
   roGt3?: number;
+  roRoad?: number;
   r: number[];
   w: number;
   b: number;
@@ -357,7 +363,10 @@ console.log(
 const changed = !!best && better;
 const chosen = changed && best ? best : { name: 'current line', n: current, laps: oldLaps };
 
-if (write) {
+// A circuit without a road line keeps none unless one beats the GT3's for the road cars (they drive that one)
+const noRoadLine = line === 'road' && !raw.samples.some((smp) => (smp as RawSample).roRoad !== undefined);
+if (write && noRoadLine && !changed) console.log(`No road line written: the road cars keep the GT3's.`);
+if (write && !(noRoadLine && !changed)) {
   const L = raw.samples[raw.samples.length - 1].s + (raw.samples[1].s - raw.samples[0].s);
   const scale = t.lengthM / L;
   const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -402,6 +411,7 @@ if (write) {
     if (changed) {
       const nOff = r3(sampleGrid(chosen.n, s, t.ds));
       if (line === 'gt3') smp.roGt3 = nOff;
+      else if (line === 'road') smp.roRoad = nOff;
       else {
         smp.ro = nOff;
         // World position of the line: the centreline moved along the flattened right vector, banking lifting it
@@ -438,7 +448,7 @@ if (write) {
       turn.description = turn.description?.replace(/apex \d+ km\/h in gear \d+/, `apex ${turn.apexSpeedKmh} km/h in gear ${turn.gear}`);
     }
   }
-  const key = line === 'gt3' ? 'racingLineGt3' : 'racingLine';
+  const key = line === 'gt3' ? 'racingLineGt3' : line === 'road' ? 'racingLineRoad' : 'racingLine';
   const meta = { ...((raw.metadata[key] as Record<string, unknown>) ?? {}) };
   if (changed) {
     meta.method = 'lap-time optimised on the car\'s measured limits (scripts/ai/optimize-lines.ts)';
@@ -478,7 +488,10 @@ if (write) {
     laps = drove;
   }
   const lapOf = (car: VehicleModelId) => fin(laps[judges.indexOf(car)].lapS);
-  if (line === 'gt3') {
+  if (line === 'road') {
+    meta.physicsLapS = fin(laps[0].lapS);
+    meta.judges = Object.fromEntries(judges.map((car) => [car, lapOf(car)]));
+  } else if (line === 'gt3') {
     meta.physicsLapS = fin(laps[0].lapS);
     delete meta.physicsAiLapS;
   } else {
