@@ -180,7 +180,8 @@ function acTurbos(mod: ModData): { turbo: TurboData; section: string }[] {
       const t = (k: string) => mod.num('engine.ini', s, k);
       const wastegate = t('WASTEGATE');
       const maxBoost = Math.min(t('MAX_BOOST'), Number.isFinite(wastegate) && wastegate > 0 ? wastegate : Infinity);
-      const lag = (k: string) => 1 / ((1 - t(k)) * 444);
+      // AC's lag is the share of the gap to the boost kept each step: 1 or more would never spool (a time ≤ 0 here)
+      const lag = (k: string) => 1 / ((1 - Math.min(0.9999, Math.max(0, t(k)))) * 444);
       return {
         section: s,
         turbo: {
@@ -338,6 +339,9 @@ const PROTOTYPE = /\blmp\d?\b|\blmdh\b|\blmh\b|hypercar|prototype|group ?c\b|\bg
 const MODERN_GT = /\bgt3\b|\bgt-3\b|\bgtd\b|\bgte\b|\bgtlm\b|\bgt2\b|\bgt4\b|lmgt3|\bgt300\b|\bgt500\b|super ?gt|\bdtm\b|\bgt1\b|\bjgtc\b/;
 const CLASSIC = /vintage|classic|historic|retro|group ?[245b]\b|\bdrm\b|\bimsa\b|touring|\bjtcc\b|\bbtcc\b|\bdtm\b/;
 const ROAD = /\bstreet\b|\broad\b|\bstock\b|\bhatch|\bsaloon\b|\bsedan\b|\bcoupe\b|\bdaily\b/;
+const RACE = /\brace\b|\bracing\b|\brace ?car\b|\bcup\b|\bmotorsport\b/;
+/** What makes a street car's tags a racer's: a race class (a road "hypercar" is no prototype) */
+const RACER_TAG = new RegExp([RACE, OPEN_WHEEL, MODERN_GT, PROTOTYPE].map((r) => r.source.replace('hypercar|', '')).join('|'));
 
 /** Power to weight (W/kg) */
 const ptw = (id: VehicleModelId): number => {
@@ -346,45 +350,49 @@ const ptw = (id: VehicleModelId): number => {
 };
 
 /**
- * The base model for a car, and why: open-wheelers on the 2026 F1 car; prototypes on the LMDh or the 496R, whichever's
- * power to weight is nearer; a modern GT (GT3, GTE, GT1…) on the AMG GT3, a 1990s one (JGTC, GT500 before 2000) on the
- * R33 JGTC; a four-wheel-drive car on the R32 (the one base with a centre coupling); a front-driven one on the Liana or
- * the Scirocco, by power (the bases that can drive their front wheels); classic racers on the 934 (turbo) or the M1
- * (atmospheric); road cars on the Liana or the Scirocco, by power; any other race car on the GT3, or the 496R when it
- * makes real downforce for its weight
+ * The base model for a car, and why. The drivetrain first, as no other base can carry it: a four-wheel-drive car on the
+ * R32 (the one base with a centre coupling), a front-driven one on the Liana or the Scirocco, by power (the bases that
+ * can drive their front wheels). Then a street car (AC's class "street") whose tags name no race class is a road car,
+ * whatever its name says (a McLaren F1, a 911 GT3 RS, a road "hypercar"): on the Liana or the Scirocco, by power. Then
+ * open-wheelers on the 2026 F1 car (by class or tags; by name only when they name no GT or prototype); prototypes on
+ * the LMDh or the 496R, whichever's power to weight is nearer; a modern GT (GT3, GTE, GT1…) on the AMG GT3, a 1990s
+ * one (JGTC, GT500 before 2000) on the R33 JGTC; classic racers on the 934 (turbo) or the M1 (atmospheric); road cars
+ * on the Liana or the Scirocco, by power; any other race car on the GT3, or the 496R when it makes real downforce for
+ * its weight
  */
 export function chooseBaseModel(f: AcCarFacts): { base: VehicleModelId; why: string } {
+  const classTags = [f.className, ...f.tags].join(' ').toLowerCase();
   const words = [f.className, ...f.tags, f.name].join(' ').toLowerCase();
   const nearer = (a: VehicleModelId, b: VehicleModelId) => {
     const own = (f.peakKw * 1000) / f.massKg;
     return Math.abs(ptw(a) - own) <= Math.abs(ptw(b) - own) ? a : b;
   };
+  const roadBase = (): VehicleModelId => (f.peakKw < 95 ? 'liana' : 'vw-scirocco-gtx');
   const awd = f.traction === 'AWD' || f.traction === 'AWD2';
   const classic = CLASSIC.test(words) || (f.year !== undefined && f.year < 2000);
-  if (OPEN_WHEEL.test(words)) return { base: 'f12026-car', why: 'an open-wheeler (its class, tags or name)' };
+  if (awd) return { base: 'nissan-r32-jtcc', why: `four-wheel drive (${f.traction}): the R32 is the one base with a centre coupling` };
+  // The front-driven bases are the two with the switch for it: any other drives its rear wheels
+  if (f.traction === 'FWD') return { base: roadBase(), why: `front-wheel drive, ${Math.round(f.peakKw)} kW: the front-driven bases are the Liana and the Scirocco` };
+  if (f.className === 'street' && !RACER_TAG.test(f.tags.join(' ').toLowerCase())) {
+    return { base: roadBase(), why: `a street car of ${Math.round(f.peakKw)} kW (its class), its tags naming no race class` };
+  }
+  if (OPEN_WHEEL.test(classTags) || (OPEN_WHEEL.test(words) && !MODERN_GT.test(classTags) && !PROTOTYPE.test(classTags))) {
+    return { base: 'f12026-car', why: 'an open-wheeler (its class, tags or name)' };
+  }
   if (PROTOTYPE.test(words)) {
     const base = nearer('lc-lmdh', 'mtr-496r');
     return { base, why: `a prototype (its class, tags or name), nearer the ${base === 'lc-lmdh' ? 'LMDh' : '496R'} in power to weight` };
-  }
-  if (awd) return { base: 'nissan-r32-jtcc', why: `four-wheel drive (${f.traction}): the R32 is the one base with a centre coupling` };
-  // The front-driven bases are the two with the switch for it: any other drives its rear wheels
-  if (f.traction === 'FWD') {
-    const base: VehicleModelId = f.peakKw < 95 ? 'liana' : 'vw-scirocco-gtx';
-    return { base, why: `front-wheel drive, ${Math.round(f.peakKw)} kW: the front-driven bases are the Liana and the Scirocco` };
   }
   if (MODERN_GT.test(words)) {
     if ((f.year !== undefined && f.year < 2000) || /\bjgtc\b|vintage|classic|historic/.test(words)) return { base: 'nissan-r33-jgtc', why: 'a 1990s GT racer (JGTC, GT500, GT1 before 2000)' };
     return { base: 'amg-gt3', why: 'a modern GT racer (GT3, GTE, GT2, GT4, GT500, DTM)' };
   }
-  const race = /\brace\b|\bracing\b|\brace ?car\b|\bcup\b|\bmotorsport\b/.test(words) || f.clA > 0.4;
+  const race = RACE.test(words) || f.clA > 0.4;
   if (classic && (race || !ROAD.test(words))) {
     if (f.turbo) return { base: 'porsche-934-rsr', why: 'a classic racer with a turbo' };
     return { base: 'bmw-m1-procar', why: 'an atmospheric classic racer' };
   }
-  if (!race || ROAD.test(words)) {
-    const base: VehicleModelId = f.peakKw < 95 ? 'liana' : 'vw-scirocco-gtx';
-    return { base, why: `a road car of ${Math.round(f.peakKw)} kW` };
-  }
+  if (!race || ROAD.test(words)) return { base: roadBase(), why: `a road car of ${Math.round(f.peakKw)} kW` };
   if (f.clA / Math.max(1, f.massKg) > 0.0015) return { base: 'mtr-496r', why: 'a modern race car with real downforce for its weight' };
   return { base: 'amg-gt3', why: 'a modern race car' };
 }
@@ -451,11 +459,17 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
   const baseTurbo = bc.engine.turbo;
   const torque = rising(mod.lut('power.lut').filter(([rpm]) => rpm >= 0));
   if (torque.length >= 2) {
-    m.set(
-      'config.engine.powerCurve',
-      torque.map(([rpm, nm]) => [rpm, ((nm * (1 + acBoost(turbos, rpm))) / eff) * ((rpm * Math.PI) / 30) / 1000]),
-      `power.lut (torque ÷ the base's driveline efficiency ${eff}${turbos.length ? ', × the full boost' : ''})`,
-    );
+    const curve = torque.map(([rpm, nm]) => [rpm, ((nm * (1 + acBoost(turbos, rpm))) / eff) * ((rpm * Math.PI) / 30) / 1000]);
+    m.set('config.engine.powerCurve', curve, `power.lut (torque ÷ the base's driveline efficiency ${eff}${turbos.length ? ', × the full boost' : ''})`);
+    // A cap on the power at the driven shafts is the base's class's balance of performance (the GT3's, the LMDh's), not
+    // the car's: lifted flat to twice the car's peak, so it never binds, and the same at every road speed
+    const cap = bc.engine.outputPowerCap;
+    if (cap) {
+      const over = Math.ceil(2 * Math.max(...curve.map(([, kw]) => kw)));
+      const end = Math.max(torque[torque.length - 1][0], limiter || 0, ...cap.curve.map(([rpm]) => rpm));
+      m.set('config.engine.outputPowerCap.curve', [[0, over], [end, over]], "power.lut (the base's power cap lifted over the car's peak: the base class's, not the car's)");
+      if (cap.vsSpeedKmh) m.set('config.engine.outputPowerCap.vsSpeedKmh', [[0, 1], [400, 1]], "power.lut (the base's power cap the same at every speed)");
+    }
   } else m.skip('power.lut', 'missing or empty');
   const idle = eng('ENGINE_DATA', 'MINIMUM');
   const coastRpm = eng('COAST_REF', 'RPM');
@@ -469,7 +483,8 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
   if (throttle.length >= 2 && throttle[throttle.length - 1][0] >= 99) m.set('config.engine.throttleResponseCurve', throttle.map(([x, y]) => [x / 100, y / 100]), `${throttleLutName} (pedal → throttle, %)`);
   m.set('config.engine.idleRpm', idle, 'engine.ini [ENGINE_DATA] MINIMUM');
   m.set('config.engine.inertia', eng('ENGINE_DATA', 'INERTIA') + (drv('GEARBOX', 'INERTIA') || 0), 'engine.ini [ENGINE_DATA] INERTIA + drivetrain.ini [GEARBOX] INERTIA');
-  m.set('config.engine.limiterCutS', 1 / eng('ENGINE_DATA', 'LIMITER_HZ'), 'engine.ini [ENGINE_DATA] LIMITER_HZ (one cycle)');
+  if (eng('ENGINE_DATA', 'LIMITER_HZ') > 0) m.set('config.engine.limiterCutS', 1 / eng('ENGINE_DATA', 'LIMITER_HZ'), 'engine.ini [ENGINE_DATA] LIMITER_HZ (one cycle)');
+  else m.skip('engine.ini [ENGINE_DATA] LIMITER_HZ', 'not above 0: the limiter cuts as the base\'s does');
   if (Number.isFinite(eng('ENGINE_DATA', 'ALTITUDE_SENSITIVITY'))) m.set('config.engine.airDensitySensitivity', eng('ENGINE_DATA', 'ALTITUDE_SENSITIVITY'), 'engine.ini [ENGINE_DATA] ALTITUDE_SENSITIVITY');
   if (turbos.length && baseTurbo) {
     const t = turbos[0].turbo;
@@ -563,6 +578,15 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
     m.set('config.differential.settings.coast', drv('DIFFERENTIAL', 'COAST'), 'drivetrain.ini [DIFFERENTIAL] COAST');
     m.set('config.differential.settings.preload', drv('DIFFERENTIAL', 'PRELOAD'), 'drivetrain.ini [DIFFERENTIAL] PRELOAD');
   }
+  // AC's POWER and COAST are the share of the torque a differential locks with: a ramp differential of one friction
+  // face and 45° ramps. A base built otherwise (the LMDh's six faces and 56°/33° ramps) would lock 4 to 9 times as hard
+  const plainRamps = (path: string, from: string) => {
+    const d = valueAt(base, path) as { friction_faces?: number; power_ramp_deg?: number; coast_ramp_deg?: number } | undefined;
+    if (d?.friction_faces !== undefined && d.friction_faces !== 1) m.set(`${path}.friction_faces`, 1, from);
+    for (const k of ['power_ramp_deg', 'coast_ramp_deg'] as const) if (d?.[k] !== undefined && d[k] !== 45) m.set(`${path}.${k}`, 45, from);
+  };
+  plainRamps('config.differential.settings', 'drivetrain.ini [DIFFERENTIAL] POWER, COAST (lock ratios: one face, 45° ramps)');
+  if (traction === 'AWD2' && bc.awd) plainRamps('config.awd.secondaryDiff', 'drivetrain.ini [AWD2] FRONT_DIFF_POWER, FRONT_DIFF_COAST (lock ratios: one face, 45° ramps)');
 
   // ---- brakes
   m.set('config.brakes.maxTorqueNm', brk('DATA', 'MAX_TORQUE'), 'brakes.ini [DATA] MAX_TORQUE');
@@ -711,7 +735,18 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
       if (own < lo || own > hi) m.set(key, [Math.min(lo, own), Math.max(hi, own)], `suspensions.ini [${ax}] STATIC_CAMBER (the base's range, widened to it)`);
     }
   }
-  if (base.hasErs && !mod.has('ers.ini')) m.set('hasErs', false, 'no ers.ini: no hybrid');
+  if (base.hasErs && !mod.has('ers.ini')) {
+    // `hasErs` only hides the HUD's energy: the motor's deploy, its harvests and the modes' own harvests go too, or a
+    // car with no hybrid would drive with the base's
+    const from = 'no ers.ini: no hybrid';
+    m.set('hasErs', false, from);
+    for (const k of ['ERS_MAX_DEPLOY', 'maxHarvestW', 'topGearLiftHarvestW'] as const) if (bc.ers[k] > 0) m.set(`config.ers.${k}`, 0, from);
+    if (bc.ers.liftHarvestEveryGear) m.set('config.ers.liftHarvestEveryGear.maxAxleTorqueNm', 0, from);
+    for (const [name, mode] of Object.entries(bc.performanceModes)) {
+      if (mode.topGearClipHarvestW > 0) m.set(`config.performanceModes.${name}.topGearClipHarvestW`, 0, from);
+      if (mode.partThrottleHarvestW > 0) m.set(`config.performanceModes.${name}.partThrottleHarvestW`, 0, from);
+    }
+  }
   if (base.hasDrs && !/\bDRS\b/i.test(JSON.stringify(mod.sections('aero.ini')))) m.set('hasDrs', false, 'aero.ini (no DRS)');
   mapPlanning(mod, m, base, ride);
   return m;
@@ -739,6 +774,16 @@ function compoundFor(slot: string, compounds: { suffix: string; name: string }[]
   const word = { soft: /\bsoft\b|\(s\)|^s\b|\bs$/, medium: /\bmedium\b|\bmed\b|\(m\)|\bm$/, hard: /\bhard\b|\(h\)|\bh$/ }[slot];
   const hit = word && compounds.find((c) => word.test(c.name.trim()));
   return hit ? hit.suffix : fallback;
+}
+
+/**
+ * The slip ratio of the drive force's peak, from the angle of the lateral force's (FRICTION_LIMIT_ANGLE) and the
+ * longitudinal stiffness's multiplier (CX_MULT, version 10's alone): σ / (1 − σ), σ = tan(angle) ÷ CX_MULT. σ is held
+ * to 0.005–0.5, so an angle of 45° or more, or a tiny CX_MULT, still gives a peak (≤ 1) rather than none or a negative one
+ */
+function peakSlip(angleDeg: number, cxMult: number): number {
+  const sigma = Math.min(0.5, Math.max(0.005, Math.tan((angleDeg * Math.PI) / 180) / (cxMult || 1)));
+  return sigma / (1 - sigma);
 }
 
 function mapTyres(mod: ModData, m: Mapper, base: CarSimProfile, fallback: string): void {
@@ -809,16 +854,22 @@ function mapTyres(mod: ModData, m: Mapper, base: CarSimProfile, fallback: string
       m.quiet(`${c}.modelData.use_slip_falloff`, true, label('FALLOFF_LEVEL'));
       axle('modelData.falloff_level', tf('FALLOFF_LEVEL'), tr('FALLOFF_LEVEL'), label('FALLOFF_LEVEL'));
       axle('modelData.falloff_slope', tf('FALLOFF_SPEED'), tr('FALLOFF_SPEED'), label('FALLOFF_SPEED'));
-      const peak = (t: (k: string) => number) => {
-        const sigma = Math.tan((t('FRICTION_LIMIT_ANGLE') * Math.PI) / 180) / (t('CX_MULT') || 1);
-        return sigma / (1 - sigma);
-      };
-      axle('modelData.slip_ratio_limit', peak(tf), peak(tr), label('FRICTION_LIMIT_ANGLE, CX_MULT (the drive force\'s peak slip)'));
+      axle('modelData.slip_ratio_limit', peakSlip(tf('FRICTION_LIMIT_ANGLE'), tf('CX_MULT')), peakSlip(tr('FRICTION_LIMIT_ANGLE'), tr('CX_MULT')), label('FRICTION_LIMIT_ANGLE, CX_MULT (the drive force\'s peak slip)'));
       axle('modelData.brakeDxMod', tf('BRAKE_DX_MOD') || 0, tr('BRAKE_DX_MOD') || 0, label('BRAKE_DX_MOD'));
     } else {
       axle('modelData.curveFullness', tf('XMU'), tr('XMU'), label('XMU'));
       m.quiet(`${c}.modelData.use_slip_falloff`, false, 'tyres.ini (no falloff in this data version)');
       m.skip(label('FLEX'), 'the peak angle\'s growth with load in this data version: not carried');
+      // What only version 10 states, at what an older tyre has instead (none of it), not the base's own
+      const old = (path: string, front: unknown, rear: unknown, why: string) => {
+        m.quiet(`${c}.modelData.${path}`, front, label(why));
+        m.quiet(`${c}.rearOverride.modelData.${path}`, rear, label(why));
+      };
+      old('peakSlipLoadGain', 0, 0, `(version ${version}: no FLEX_GAIN)`);
+      old('peakSlipPressureGain', 0, 0, `(version ${version}: no PRESSURE_FLEX_GAIN)`);
+      old('longStiffnessMult', 1, 1, `(version ${version}: no CX_MULT)`);
+      old('brakeDxMod', 0, 0, `(version ${version}: no BRAKE_DX_MOD)`);
+      old('slip_ratio_limit', peakSlip(tf('FRICTION_LIMIT_ANGLE'), 1), peakSlip(tr('FRICTION_LIMIT_ANGLE'), 1), 'FRICTION_LIMIT_ANGLE (the drive force\'s peak slip)');
     }
     axle('modelData.speedSensitivity', tf('SPEED_SENSITIVITY'), tr('SPEED_SENSITIVITY'), label('SPEED_SENSITIVITY'));
     axle('modelData.relaxationLengthX', tf('RELAXATION_LENGTH'), tr('RELAXATION_LENGTH'), label('RELAXATION_LENGTH'));
@@ -827,12 +878,12 @@ function mapTyres(mod: ModData, m: Mapper, base: CarSimProfile, fallback: string
     if (Number.isFinite(tf('ROLLING_RESISTANCE_1'))) axle('modelData.rollingResistanceSpeedSq', tf('ROLLING_RESISTANCE_1') / 1000, tr('ROLLING_RESISTANCE_1') / 1000, label('ROLLING_RESISTANCE_1'));
     if (Number.isFinite(tf('ROLLING_RESISTANCE_SLIP'))) axle('modelData.rollingResistanceSlipGain', tf('ROLLING_RESISTANCE_SLIP') / 1000, tr('ROLLING_RESISTANCE_SLIP') / 1000, label('ROLLING_RESISTANCE_SLIP'));
     axle('modelData.verticalDamping', tf('DAMP'), tr('DAMP'), label('DAMP'));
-    // Pressure: the radial rate at the static pressure, growing per psi
+    // Pressure: the radial rate at the static pressure, growing per psi; never under a tenth of it, however steep the gain
     const springCurve = (t: (k: string) => number): Lut => {
       const st = t('PRESSURE_STATIC');
       const ideal = t('PRESSURE_IDEAL');
       const xs = ideal > st + 0.5 ? [st - 10, st, ideal, ideal + 10] : [st - 10, st, st + 10];
-      return xs.map((psi) => [psi, t('RATE') + (t('PRESSURE_SPRING_GAIN') || 0) * (psi - st)]);
+      return xs.map((psi) => [psi, Math.max(0.1 * t('RATE'), t('RATE') + (t('PRESSURE_SPRING_GAIN') || 0) * (psi - st))]);
     };
     axle('pressureData.optimalPsi', tf('PRESSURE_IDEAL'), tr('PRESSURE_IDEAL'), label('PRESSURE_IDEAL'));
     if (m.has(`${c}.pressureData.setPsi`)) axle('pressureData.setPsi', tf('PRESSURE_STATIC'), tr('PRESSURE_STATIC'), label('PRESSURE_STATIC'));
@@ -902,7 +953,8 @@ function mapAero(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnType<
     const z = e.position[2] ?? 0;
     const want = /wing|spoiler|flap/i.test(e.name) && !/diff|floor|under|body/i.test(e.name) ? (z >= 0 ? 'FRONT_WING' : 'REAR_WING') : null;
     const i = want ? slot(want) : -1;
-    if (i < 0 || used.has(i) || !e.cl.length) {
+    // A wing slot takes a lift table the game can look up (two points or more); one of a single value is a constant
+    if (i < 0 || used.has(i) || rising(e.cl).length < 2) {
       folded.push(e);
       continue;
     }
@@ -939,9 +991,10 @@ function mapAero(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnType<
     cdA += e.cdA;
     cdAy += e.cdA * (e.position[1] ?? 0);
   }
-  const names = folded.map((e) => `[${e.section}] ${e.name}`).join(', ');
-  if (!folded.length) return;
-  const from = `aero.ini ${names} (at the static ride, its tables read once)`;
+  // No element left for the body (wings alone): the body makes no lift or drag of its own, not the base's
+  const from = folded.length
+    ? `aero.ini ${folded.map((e) => `[${e.section}] ${e.name}`).join(', ')} (at the static ride, its tables read once)`
+    : 'aero.ini (its elements are all wings: no lift or drag of the body)';
   const map = base.config.aero.rhMap;
   if (map) {
     const total = front + rear;
@@ -950,7 +1003,8 @@ function mapAero(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnType<
     const grid = (v: number) => map.rearRh.map(() => map.frontRh.map(() => v));
     m.set('config.aero.rhMap.cl', grid(1), `${from} (no ride-height map)`);
     m.set('config.aero.rhMap.cd', grid(1), `${from} (no ride-height map)`);
-    m.set('config.aero.rhMap.balance', grid(total > 1e-6 ? front / total : 0.5), `${from}: the front's share`);
+    // The front's share of the total, net lift too (the game holds it between 0 and 1); half and half when there is none
+    m.set('config.aero.rhMap.balance', grid(Math.abs(total) > 1e-6 ? Math.min(1, Math.max(0, front / total)) : 0.5), `${from}: the front's share`);
     for (const k of ['rollCl', 'rollCd', 'yawCl', 'yawCd'] as const) m.quiet(`config.aero.rhMap.${k}`, [[-30, 1], [30, 1]], `${from} (no roll or yaw tables)`);
     for (const k of ['rollBalance', 'yawBalance'] as const) m.quiet(`config.aero.rhMap.${k}`, [[-30, 0], [30, 0]], `${from} (no roll or yaw tables)`);
     m.quiet('config.aero.rhMap.activeAero', { dClAFront: 0, dClARear: 0, dCdA: 0 }, 'aero.ini (no active aero)');
@@ -979,9 +1033,10 @@ function mapPlanning(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnT
   const c = defaultCompound(mod);
   const radius = mod.num('tyres.ini', `REAR${c}`, 'RADIUS');
   const turbos = acTurbos(mod);
-  const eff = base.config.gearbox.efficiency;
+  // The peak up to the limiter, as the engine reaches it (acCarFacts' rule)
+  const limiter = mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER') || Infinity;
   let peakW = 0;
-  for (const [rpm, nm] of rising(mod.lut('power.lut'))) if (rpm > 0) peakW = Math.max(peakW, nm * (1 + acBoost(turbos, rpm)) * ((rpm * Math.PI) / 30));
+  for (const [rpm, nm] of rising(mod.lut('power.lut'))) if (rpm > 0 && rpm <= limiter) peakW = Math.max(peakW, nm * (1 + acBoost(turbos, rpm)) * ((rpm * Math.PI) / 30));
   // Top speed: the limiter in top gear, or where the power meets the drag
   const ratios = Array.from({ length: mod.num('drivetrain.ini', 'GEARS', 'COUNT') || 0 }, (_, i) => mod.num('drivetrain.ini', 'GEARS', `GEAR_${i + 1}`));
   const top = ratios.length ? ((mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER') * Math.PI) / 30 / (ratios[ratios.length - 1] * mod.num('drivetrain.ini', 'GEARS', 'FINAL'))) * radius : NaN;
@@ -1091,16 +1146,17 @@ export interface DriveCheck {
   ok: boolean;
   problems: string[];
   /**
-   * 0–100 km/h (s), top speed (km/h) in 60 s flat out, and on it the most body slip (deg), the fastest yaw (rad/s) and
-   * how far it ran off its line (m: the wheel held straight, as no driver would)
+   * 0–100 km/h (s), top speed (km/h) flat out, and on it the most body slip (deg), the fastest yaw (rad/s) and how far
+   * it ran off its line (m: the wheel held straight, as no driver would)
    */
   t100: number;
   topKmh: number;
   straightSlipDeg: number;
   straightYawRadS: number;
   straightDriftM: number;
-  /** From `brakeFromKmh` to a stop with ABS: the distance (m), mean deceleration (g) and the most body slip (deg) */
+  /** From `brakeFromKmh` to a stop with ABS: whether it stopped, the distance (m), mean deceleration (g) and the most body slip (deg) */
   brakeFromKmh: number;
+  brakeStopped: boolean;
   brakeM: number;
   brakeG: number;
   brakeSlipDeg: number;
@@ -1108,11 +1164,16 @@ export interface DriveCheck {
   lap?: { done: boolean; lapS: number; maxSlipDeg: number; beyondM: number; topKmh: number };
 }
 
+/** Body slip past which the car has spun (deg): scripts/mods/lib/car-sanity.ts's, which the other importers drive to */
+const SPIN_DEG = 20;
+
 /**
- * The profile driven headless: flat out from rest on a flat pad for 60 s with the wheel held straight, the driver easing
- * off the throttle while the driven wheels spin past 15 % (no spin: under 6 deg of body slip and 0.3 rad/s of yaw, a
- * twitch at a shift but no more; a top speed of 80–450 km/h and 0–100 km/h in 1.5–30 s), braked to a stop with ABS
- * from 200 km/h or 90 % of its top speed (0.4–4 g, under 10 deg of slip), then, with `lap`, an autopilot lap of RISE
+ * The profile driven headless, to the limits every importer's drive has (scripts/mods/lib/car-sanity.ts): flat out from
+ * rest on a flat pad with the wheel held straight until its speed stops rising (at most 4 minutes), the driver easing
+ * off the throttle while the driven wheels spin past 15 %, as a driver of a car with no traction control would (no
+ * spin: under 20 deg of body slip; a top speed of 80–450 km/h; 0–100 km/h no quicker than 1.5 s); then braked to a stop
+ * with ABS from 200 km/h or 90 % of its top speed (stopped within a minute, at 0.4 g or more on average, under 20 deg of
+ * slip); then, with `lap`, two laps of RISE on the autopilot within 15 minutes
  */
 export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean } = {}): Promise<DriveCheck> {
   const { F12026CarSim } = await import('../../src/lib/sim/f12026-car/F12026CarSim');
@@ -1131,7 +1192,9 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
   let straightSlip = 0;
   let straightYaw = 0;
   let drift = 0;
-  for (let t = 0; t < 60; t += DT) {
+  let plateauV = 0;
+  let plateauT = 0;
+  for (let t = 0; t < 240; t += DT) {
     const spin = Math.max(...run.telemetry.wheelSlipRatios);
     pedal = Math.min(1, Math.max(0.25, pedal + (spin > 0.15 ? -6 : 3) * DT));
     run.step(DT, { throttle: pedal });
@@ -1143,6 +1206,12 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
       straightYaw = Math.max(straightYaw, Math.abs(run.yawRateRadS));
     }
     drift = Math.max(drift, Math.abs(run.lateralOffsetM));
+    if (straightSlip > SPIN_DEG) break;
+    // At its top speed: no faster by half a km/h in 8 s
+    if (v > plateauV + 0.5) {
+      plateauV = v;
+      plateauT = t;
+    } else if (t - plateauT > 8) break;
   }
   const from = Math.min(200, Math.round(0.9 * top));
   const stop = new F12026CarSim(pad, null, profile);
@@ -1151,21 +1220,22 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
   const s0 = stop.sMeters;
   let tStop = 0;
   let brakeSlip = 0;
-  for (; tStop < 20 && stop.telemetry.speedKmh > 1; tStop += DT) {
+  for (; tStop < 60 && stop.telemetry.speedKmh > 1; tStop += DT) {
     stop.step(DT, { brake: 1 });
     if (stop.telemetry.speedKmh > 10) brakeSlip = Math.max(brakeSlip, slipDeg(stop));
   }
+  const brakeStopped = stop.telemetry.speedKmh <= 1;
   const brakeM = stop.sMeters - s0;
-  const brakeG = (from / 3.6) ** 2 / (2 * Math.max(0.1, brakeM)) / G;
+  const brakeG = brakeStopped ? (from / 3.6) ** 2 / (2 * Math.max(0.1, brakeM)) / G : NaN;
   const problems: string[] = [];
-  if (straightSlip > 6) problems.push(`it slides ${straightSlip.toFixed(1)} deg sideways flat out on a straight`);
-  if (straightYaw > 0.3) problems.push(`it yaws at ${straightYaw.toFixed(2)} rad/s flat out on a straight`);
+  if (straightSlip > SPIN_DEG) problems.push(`it spun under power on a straight (${straightSlip.toFixed(1)} deg of body slip)`);
   if (!(top >= 80 && top <= 450)) problems.push(`a top speed of ${top.toFixed(0)} km/h`);
-  if (!(t100 >= 1.5 && t100 <= 30)) problems.push(Number.isNaN(t100) ? 'it never reaches 100 km/h' : `0–100 km/h in ${t100.toFixed(1)} s`);
-  if (!(brakeG >= 0.4 && brakeG <= 4)) problems.push(`it brakes from ${from} km/h at ${brakeG.toFixed(2)} g`);
-  if (brakeSlip > 10) problems.push(`it slides ${brakeSlip.toFixed(1)} deg sideways under braking`);
+  if (t100 < 1.5) problems.push(`0–100 km/h in ${t100.toFixed(2)} s`);
+  if (!brakeStopped) problems.push(`it didn't stop from ${from} km/h within a minute of full braking`);
+  else if (!(brakeG >= 0.4)) problems.push(`it brakes from ${from} km/h at ${brakeG.toFixed(2)} g`);
+  if (brakeSlip > SPIN_DEG) problems.push(`it spun under braking (${brakeSlip.toFixed(1)} deg of body slip)`);
 
-  const out: DriveCheck = { ok: false, problems, t100, topKmh: top, straightSlipDeg: straightSlip, straightYawRadS: straightYaw, straightDriftM: drift, brakeFromKmh: from, brakeM, brakeG, brakeSlipDeg: brakeSlip };
+  const out: DriveCheck = { ok: false, problems, t100, topKmh: top, straightSlipDeg: straightSlip, straightYawRadS: straightYaw, straightDriftM: drift, brakeFromKmh: from, brakeStopped, brakeM, brakeG, brakeSlipDeg: brakeSlip };
   const rise = join(__dirname, '..', '..', 'public', 'tracks', 'rwanda_official', 'rwanda_official.glb');
   if (opts.lap && existsSync(rise)) {
     const { getActiveTrackData } = await import('../../src/lib/track-data');
@@ -1178,14 +1248,14 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
     const lap0 = sim.telemetry.lapCount;
     let maxSlip = 0;
     let beyond = -Infinity;
-    for (let t = 0; t < 300 && sim.telemetry.lapCount < lap0 + 2; t += 1 / 60) {
+    for (let t = 0; t < 900 && sim.telemetry.lapCount < lap0 + 2; t += 1 / 60) {
       sim.step(1 / 60, {});
       if (sim.telemetry.speedKmh > 20) maxSlip = Math.max(maxSlip, slipDeg(sim));
       beyond = Math.max(beyond, Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
     }
     const done = sim.telemetry.lapCount >= lap0 + 2;
     out.lap = { done, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, maxSlipDeg: maxSlip, beyondM: Math.max(0, beyond), topKmh: sim.telemetry.allTimeTopSpeedKmh };
-    if (!done) problems.push('the autopilot did not finish a lap of RISE');
+    if (!done) problems.push("the autopilot didn't finish its laps of RISE within 15 minutes");
     else if (maxSlip > 25) problems.push(`it slid ${maxSlip.toFixed(0)} deg sideways on its autopilot lap of RISE`);
   }
   out.ok = problems.length === 0;

@@ -9,7 +9,7 @@
  *   npx tsx scripts/verify/verify-ac-track.ts
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { circuitIdFrom, licenceNotice, packageVersion, type AutoEntry } from "../mods/importers/ac-track";
@@ -90,8 +90,8 @@ if (!hasUv) {
 } else {
   // A street circuit with one layout, a ui_track.json as mods write them, its own surface keys and a readme's terms
   const ring = join(tmp, "testring");
-  write(join(ring, "testring.kn5"), "kn5");
-  write(join(ring, "other.kn5"), "kn5");
+  write(join(ring, "testring.kn5"), "sc6969");
+  write(join(ring, "other.kn5"), "sc6969");
   write(join(ring, "ai", "fast_lane.ai"), "lane");
   write(
     join(ring, "data", "surfaces.ini"),
@@ -169,7 +169,7 @@ IS_PITLANE=1
 
   // Several layouts, models INI files, an open licence
   const park = join(tmp, "testpark");
-  for (const f of ["testpark.kn5", "park_gp.kn5", "heli.kn5", "balloon.kn5"]) write(join(park, f), "kn5");
+  for (const f of ["testpark.kn5", "park_gp.kn5", "heli.kn5", "balloon.kn5"]) write(join(park, f), "sc6969");
   write(join(park, "gp", "ai", "fast_lane.ai"), "lane");
   write(join(park, "short", "ai", "fast_lane.ai"), "lane");
   write(join(park, "nolane", "data", "surfaces.ini"), "");
@@ -197,6 +197,26 @@ IS_PITLANE=1
   const missing = entryOf("autotest_park", ["--src", park, "--layout", "reverse"]);
   check("a layout the mod hasn't got: refused, with the layouts listed", !missing.entry && /no layout "reverse"/.test(missing.error));
 
+  // A models INI naming files outside the mod (an absolute path, '..', a link out of it): never read
+  const outside = join(tmp, "outside.kn5");
+  write(outside, "sc6969");
+  const trav = join(tmp, "testtrav");
+  for (const f of ["testtrav.kn5", join("sub", "ok.kn5"), join("extension", "heli.kn5")]) write(join(trav, f), "sc6969");
+  write(join(trav, "ai", "fast_lane.ai"), "lane");
+  symlinkSync(outside, join(trav, "linked.kn5"));
+  const named = ["../outside.kn5", outside, "sub/../../outside.kn5", "linked.kn5", "testtrav.kn5", "./extension/heli.kn5", ".\\sub\\ok.kn5"];
+  write(join(trav, "models.ini"), named.map((f, i) => `[MODEL_${i}]\nFILE=${f}\n`).join("\n"));
+  const { entry: tr, error: trErr } = entryOf("autotest_trav", ["--src", trav]);
+  check("a models INI's files outside the track folder are left out, and said", JSON.stringify(tr?.kn5_files) === '["testtrav.kn5","sub/ok.kn5"]' && named.slice(0, 4).every((f) => tr?._auto.models.includes(`${f}: outside the track folder, left out`)), JSON.stringify(tr?.kn5_files) + trErr.slice(-200));
+  check("... and ./extension/ is Custom Shaders Patch's, however it is written", !!tr?._auto.models.some((n) => /^extension\/heli\.kn5: animated/.test(n)));
+  const porter = spawnSync(
+    "uv",
+    ["run", "--python", "3.14", "--no-project", "--with-requirements", "scripts/tracks/requirements.txt", "python", "-P", "-c",
+      "import json, sys; sys.path.insert(0, 'scripts/tracks'); import port_ac_track as p; print(json.dumps(p.get_kn5_list({'base_dir': sys.argv[1], 'models_ini': 'models.ini'})))", trav],
+    { cwd: REPO_ROOT, encoding: "utf8" },
+  );
+  check("a hand-written entry's models INI: the folder's own models alone", porter.stdout.trim().split("\n").at(-1) === '["testtrav.kn5", "extension/heli.kn5", "sub/ok.kn5"]', porter.stdout.trim().split("\n").at(-1) ?? porter.stderr.slice(-200));
+
   // NoDerivatives: a conversion is an adaptation, so it can't be shared
   write(join(park, "LICENSE.txt"), "Licensed CC BY-NC-ND 4.0.\n");
   const { entry: nd } = entryOf("autotest_park", ["--src", park, "--layout", "gp"]);
@@ -204,7 +224,7 @@ IS_PITLANE=1
 
   // A hill climb: its start and finish gates
   const hill = join(tmp, "testhill");
-  write(join(hill, "testhill.kn5"), "kn5");
+  write(join(hill, "testhill.kn5"), "sc6969");
   write(join(hill, "AC.kn5"), "sc6969 ... AC_AB_START_L ... AC_AB_FINISH_L ...");
   write(join(hill, "ai", "fast_lane.ai"), "lane");
   write(join(hill, "ui", "ui_track.json"), JSON.stringify({ name: "Test Hill", tags: ["A2B", "Hillclimb"], run: "Hill Climb" }));
@@ -216,6 +236,29 @@ IS_PITLANE=1
   write(join(empty, "readme.txt"), "nothing here");
   check("a folder without an AI lane: refused, saying what it needs", /fast_lane\.ai/.test(entryOf("autotest_none", ["--src", empty]).error));
   check("an id the game uses: refused", /taken|game/.test(entryOf("rwanda_official", ["--src", ring]).error));
+
+  // Kunos's own circuits, and mods made of them: refused before anything is read or built
+  const kunosMod = (folder: string, files: Record<string, string>, ui: Record<string, string> = {}) => {
+    const dir = join(tmp, "kunos", folder);
+    write(join(dir, "ai", "fast_lane.ai"), "lane");
+    write(join(dir, "ui", "ui_track.json"), JSON.stringify({ name: "A Circuit", ...ui }));
+    for (const [f, data] of Object.entries(files)) write(join(dir, f), data);
+    return entryOf("autotest_kunos", ["--src", dir]);
+  };
+  const refusedAs = (r: { entry?: Entry; error: string }, why: RegExp) => !r.entry && /refused: /.test(r.error) && why.test(r.error);
+  const ksFolder = kunosMod("ks_test_circuit", { "ks_test_circuit.kn5": "sc6969" });
+  check('a "ks_" circuit is refused', refusedAs(ksFolder, /"ks_test_circuit" is one of Kunos's own circuits/), ksFolder.error.split("\n").at(-1));
+  const baseGame = kunosMod("imola", { "imola.kn5": "sc6969" });
+  check("one of the base game's circuits is refused", refusedAs(baseGame, /base game's own circuits/), baseGame.error.split("\n").at(-1));
+  const ksModel = kunosMod("my_circuit", { "my_circuit.kn5": "sc6969", "ks_props.kn5": "sc6969" });
+  check('a renamed mod holding a "ks_" model is refused', refusedAs(ksModel, /"ks_props\.kn5" is one of Kunos's own/), ksModel.error.split("\n").at(-1));
+  const byKunos = kunosMod("my_circuit2", { "my_circuit2.kn5": "sc6969" }, { author: "Kunos Simulazioni", url: "https://www.assettocorsa.net" });
+  check("a ui_track.json naming Kunos is refused", refusedAs(byKunos, /names Kunos/), byKunos.error.split("\n").at(-1));
+  const encrypted = kunosMod("my_circuit3", { "my_circuit3.kn5": "ENCRYPTEDxxxx" });
+  check("an encrypted model is refused", refusedAs(encrypted, /"my_circuit3\.kn5" is encrypted/), encrypted.error.split("\n").at(-1));
+  const modders = kunosMod("my_circuit4", { "my_circuit4.kn5": "sc6969" }, { author: "J. Doe" });
+  check("a modder's circuit is not Kunos's", !!modders.entry, modders.error.slice(-200));
+  check("no country or city in ui_track.json: \"Unknown\", guessed, and left out of the description", modders.entry?.country === "Unknown" && modders.entry.city === "Unknown" && guessed(modders.entry, "country") && guessed(modders.entry, "city") && !/Unknown/.test(modders.entry.description ?? ""), `${modders.entry?.country}/${modders.entry?.city}: ${modders.entry?.description}`);
 
   // --- The mods on this machine, against their hand-written entries ---
   const sourcesPath = join(REPO_ROOT, "scripts", "tracks", "sources.local.json");

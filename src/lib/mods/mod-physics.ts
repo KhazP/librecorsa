@@ -69,6 +69,13 @@ const POSITIVE_KEYS: ReadonlySet<string> = new Set([
   "upshift_rpm",
   "downshift_rpm",
   "maxRoadWheelDeg",
+  // The engine's inertia (the chassis' is an object, `/\.inertia\./` below), a tyre's peak slip ratio, a turbo's spool
+  // times and the speed its boost law is referred to
+  "inertia",
+  "slip_ratio_limit",
+  "spoolUpS",
+  "spoolDownS",
+  "referenceRpm",
 ]);
 const mustStayPositive = (path: string): boolean => POSITIVE_KEYS.has(keyOf(path)) || /\.inertia\./.test(path) || /[Mm]ass(Kg)?$/.test(keyOf(path));
 

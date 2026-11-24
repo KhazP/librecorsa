@@ -11,7 +11,7 @@
  * The detection runs Python through uv, and is skipped without it.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { VEHICLE_MODELS } from '../../src/lib/cars/vehicle-models';
@@ -131,6 +131,77 @@ async function main(): Promise<void> {
     const shots = cfg?.oneshots ?? {};
     check('the shifts, the backfires, the limiter, skid and traction control by name; never the missed-gear grind', shots.gear_up?.[0]?.startsWith('shift_up_1') === true && shots.gear_down?.[0]?.startsWith('shift_down_1') === true && !JSON.stringify(shots).includes('missgear') && (shots.backfire_ext?.length ?? 0) === 2 && cfg?.limiterFallbackSample?.startsWith('limiter_loop') === true && !!cfg?.skid && cfg?.tractionControl?.startsWith('traction_control') === true, JSON.stringify(shots));
     check('the turbo loop only for a car with boost', !!cfg?.turbo && !run('0')?.turbo);
+    // Whole words of a name: a car's name holding "wind", "trans", "int" or "on" is no turbo's, gearbox's or view's
+    const names2 = ['ford_windsor_int_on_5000', 'trans_am_ext_off_4000', 'honda_integra_on_3000', 'onboard_off_7000', 'gears_on_3000', 'turbo2_on_4000'];
+    const cls = spawnSync(
+      'uv',
+      ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'scipy', '--with', 'fsb5', 'python', '-P', '-c',
+        "import json, sys; sys.path.insert(0, 'scripts/audio'); import port_ac_bank as b; print(json.dumps([b.classify_engine_sample(n) for n in json.loads(sys.argv[1])]))", JSON.stringify(names2)],
+      { encoding: 'utf8' },
+    );
+    const c = cls.status === 0 ? (JSON.parse(cls.stdout.trim().split('\n').at(-1) ?? '[]') as ({ view: string | null; layer: string; rpm?: number } | null)[]) : [];
+    const said = (i: number) => (c[i] ? `${c[i]!.view}/${c[i]!.layer}/${c[i]!.rpm}` : 'none');
+    check('"windsor" and "trans_am" are engine loops, not wind or a gearbox', said(0) === 'int/on/5000' && said(1) === 'ext/off/4000', `${said(0)} ${said(1)}`);
+    check('"integra" is no inside view; "onboard" is one, and no throttle layer', said(2) === 'null/on/3000' && said(3) === 'int/off/7000', `${said(2)} ${said(3)}`);
+    check('a plural or a numbered word still names a sound that is no engine loop', said(4) === 'none' && said(5) === 'none', `${said(4)} ${said(5)}`);
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  console.log("\n== The car browser's pictures, made in Python (the launcher's converter has no image library in Node)");
+  if (!uv) console.log('SKIP  uv is not on this machine');
+  else {
+    const pics = join(tmp, 'pics');
+    mkdirSync(pics, { recursive: true });
+    const py = (code: string, ...args: string[]) =>
+      spawnSync('uv', ['run', '--python', '3.14', '--no-project', '--with', 'pillow', 'python', '-P', ...(code.endsWith('.py') ? [code] : ['-c', code]), ...args], { encoding: 'utf8' });
+    py("import sys; from PIL import Image; Image.new('RGB', (1024, 576), (200, 30, 30)).save(sys.argv[1]); Image.new('RGBA', (200, 200), (255, 255, 255, 255)).save(sys.argv[2])", join(pics, 'preview.jpg'), join(pics, 'badge.png'));
+    write(join(pics, 'broken.jpg'), 'not a picture');
+    const jobs = [
+      { src: join(pics, 'preview.jpg'), out: join(pics, 'thumb.webp'), fit: 'cover' },
+      { src: join(pics, 'badge.png'), out: join(pics, 'badge.webp'), fit: 'contain' },
+      { src: join(pics, 'broken.jpg'), out: join(pics, 'broken.webp'), fit: 'cover' },
+    ];
+    writeFileSync(join(pics, 'jobs.json'), JSON.stringify(jobs));
+    const made = py('scripts/cars/ac_car_thumbs.py', join(pics, 'jobs.json'));
+    // Each picture's size and mode, and the badge's corner's alpha (outside the badge: transparent)
+    const sizes = py("import sys; from PIL import Image; a, b = (Image.open(f) for f in sys.argv[1:]); print([[*a.size, a.mode], [*b.size, b.mode, b.getpixel((5, 5))[3]]])", join(pics, 'thumb.webp'), join(pics, 'badge.webp')).stdout.trim();
+    check('a preview filling 480 × 270, a badge inside it on a transparent ground', made.status === 0 && sizes === "[[480, 270, 'RGB'], [480, 270, 'RGBA', 0]]", sizes || made.stderr.slice(-300));
+    check('a picture that cannot be read is left out, not a failed import', !existsSync(join(pics, 'broken.webp')) && /not made into a picture/.test(made.stdout));
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  console.log("\n== The porter on a mod's odd files: skin folders, data/, INI files, the driver's eyes");
+  if (!uv) console.log('SKIP  uv is not on this machine');
+  else {
+    const odd = join(tmp, 'odd_car');
+    for (const skin of ['Red car', 'red_car', '日本', '中国']) write(join(odd, 'skins', skin, 'paint.png'), '');
+    write(join(odd, 'data', 'car.ini'), '\xEF\xBB\xBFa line before any section\n[BASIC]\nTOTALMASS=1000\nnot a key\n[GRAPHICS]\nDRIVEREYES=0.3,0.8,-0.2\n');
+    write(join(odd, 'data', 'backup', 'car.ini'), '[BASIC]\nTOTALMASS=1\n');
+    const code = [
+      'import json, os, sys',
+      "sys.path.insert(0, 'scripts/cars')",
+      'import port_ac_car as p',
+      'from PIL import Image',
+      'odd = sys.argv[1]',
+      'data = p.read_car_data(odd)',
+      "ids = p.unique_skin_ids({}, sorted(os.listdir(os.path.join(odd, 'skins'))))",
+      "eyes = lambda d: None if p.ini_driver_eyes(d) is None else p.ini_driver_eyes(d).tolist()",
+      // A preset's livery export, of two skins of four
+      "Image.new('RGB', (8, 8), (200, 0, 0)).save(os.path.join(odd, 'skins', 'Red car', 'paint.png'))",
+      "Image.new('RGB', (8, 8), (0, 0, 200)).save(os.path.join(odd, 'skins', 'red_car', 'paint.png'))",
+      "raw = open(os.path.join(odd, 'skins', 'Red car', 'paint.png'), 'rb').read()",
+      "preset = {'skin_files': ['paint.png'], 'skin_maps': {'body': ('paint.jpg', 'plain')}}",
+      "listing = p.export_skins(odd, preset, {'paint.png': raw}, [{'name': 'body', 'maps': {'txDiffuse': 'paint.png'}}], os.path.join(odd, 'out'), 64, 64, 80, only={'Red car'})",
+      "print(json.dumps({'files': sorted(data), 'mass': p.ini(data['car.ini'])['BASIC']['TOTALMASS'], 'ids': ids, 'eyes': eyes(data), 'upper': eyes({'CAR.INI': '[GRAPHICS]\\nDRIVEREYES=0.1,0.7,-0.3'}), 'none': eyes({'car.ini': '[BASIC]\\nTOTALMASS=1'}), 'exported': [s['id'] for s in listing]}))",
+    ].join('\n');
+    const r = spawnSync('uv', ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'pillow', 'python', '-P', '-c', code, odd], { encoding: 'utf8' });
+    const got = r.status === 0 ? (JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}') as { files: string[]; mass: string; ids: Record<string, string>; eyes: number[] | null; upper: number[] | null; none: number[] | null; exported: string[] }) : null;
+    check('a folder inside data/ is no file of the car\'s data', JSON.stringify(got?.files) === '["car.ini"]', got ? JSON.stringify(got.files) : r.stderr.slice(-300));
+    check('an INI with a byte-order mark, a line before its first section and a line that is no key=value', got?.mass === '1000' && JSON.stringify(got.eyes) === '[0.3,0.8,-0.2]');
+    const ids = Object.values(got?.ids ?? {});
+    check('skin folders all in another script, or alike but for case and spaces: an id each, none empty', ids.length === 4 && new Set(ids).size === 4 && ids.every((id) => /^[a-z0-9_-]+$/.test(id)), JSON.stringify(got?.ids));
+    check("the driver's eyes from CAR.INI in capitals; none from a car.ini without them, not a crash", JSON.stringify(got?.upper) === '[0.1,0.7,-0.3]' && got?.none === null);
+    check("a preset's liveries: --skins-only's alone", JSON.stringify(got?.exported) === '["Red car"]', JSON.stringify(got?.exported));
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -168,6 +239,22 @@ async function main(): Promise<void> {
     check('one of the base game\'s cars is refused', !!kunosContent(join(tmp, 'ferrari_458'), parseUiCar('{}')));
     check('a car whose ui_car.json names Kunos is refused', !!kunosContent(join(tmp, 'my_car'), parseUiCar('{ "author": "Kunos Simulazioni" }')));
     check("a modder's car is not Kunos's", kunosContent(join(tmp, 'pfa_vw_scirocco_53b'), parseUiCar('{ "author": "Pfalzdriver" }')) === null);
+    // A mod made of a Kunos car, however its folder is named: its models, its parent, its sound
+    const renamed = (name: string, files: Record<string, string>) => {
+      const dir = join(tmp, 'renamed', name);
+      write(join(dir, 'my_car.kn5'), 'sc6969');
+      for (const [f, text] of Object.entries(files)) write(join(dir, f), text);
+      return dir;
+    };
+    const ui0 = parseUiCar('{ "author": "Someone" }');
+    check("a renamed base-game car: its model's name gives it away", /"ferrari_458\.kn5"/.test(kunosContent(renamed('a', { 'ferrari_458.kn5': 'sc6969' }), ui0) ?? ''));
+    check('... or a lower LOD of one', !!kunosContent(renamed('b', { 'ferrari_458_lod_b.kn5': 'sc6969' }), ui0));
+    check('... a "ks_" model', !!kunosContent(renamed('c', { 'ks_porsche_911_gt3_r_2016.kn5': 'sc6969' }), ui0));
+    check("... a model lods.ini names", !!kunosContent(renamed('d', {}), ui0, ['ks_mazda_mx5_cup.kn5']));
+    check('... a ui_car.json "parent" that is a Kunos car', /version of "ferrari_458"/.test(kunosContent(renamed('e', {}), parseUiCar('{ "parent": "ferrari_458" }')) ?? ''));
+    check('... a sound bank named for one', /sfx\/ks_ferrari_488_gt3\.bank/.test(kunosContent(renamed('f', { 'sfx/ks_ferrari_488_gt3.bank': 'x' }), ui0) ?? ''));
+    check("... sfx/GUIDs.txt playing a Kunos car's events", /"ks_ferrari_488_gt3"/.test(kunosContent(renamed('g', { 'sfx/my_car.bank': 'x', 'sfx/GUIDs.txt': '{0001} event:/cars/ks_ferrari_488_gt3/engine_ext\n' }), ui0) ?? ''));
+    check("a modder's own models, bank and events are not", kunosContent(renamed('h', { 'my_car_lod_b.kn5': 'sc6969', 'sfx/my_car.bank': 'x', 'sfx/GUIDs.txt': '{0001} event:/cars/my_car/engine_ext\n' }), parseUiCar('{ "parent": "my_car_base" }')) === null);
     let refused = '';
     try {
       await importer.run([kunosDir, '--out', join(tmp, 'mods')]);
@@ -184,6 +271,30 @@ async function main(): Promise<void> {
     write(join(other, 'model_main.kn5'), 'sc6969 a bigger plain model');
     write(join(other, 'model_main_lod_b.kn5'), 'sc6969');
     check('else the largest kn5 that is no LOD or collider', findKn5(other) === 'model_main.kn5' && kn5IsPlain(join(other, 'model_main.kn5')));
+
+    // lods.ini's LOD_0 FILE: a model inside the car folder, or none at all. Both readers agree on which file it is
+    const lods = join(tmp, 'lods_car');
+    write(join(lods, 'body_main.kn5'), 'sc6969 the model');
+    write(join(lods, 'sub', 'lod0.kn5'), 'sc6969');
+    write(join(lods, 'notes.txt'), 'sc6969');
+    write(join(tmp, 'outside.kn5'), 'sc6969 a much bigger model, outside the car folder');
+    symlinkSync(join(tmp, 'outside.kn5'), join(lods, 'linked.kn5'));
+    const lod0s = ['../outside.kn5', join(tmp, 'outside.kn5'), 'sub/../../outside.kn5', 'linked.kn5', 'notes.txt', 'sub\\lod0.kn5', './sub/lod0.kn5'];
+    const want = ['body_main.kn5', 'body_main.kn5', 'body_main.kn5', 'body_main.kn5', 'body_main.kn5', 'sub/lod0.kn5', 'sub/lod0.kn5'];
+    const ts = lod0s.map((l) => findKn5(lods, l));
+    check("lods.ini: a model outside the folder (an absolute path, '..', a link), or no .kn5, is never the model", JSON.stringify(ts) === JSON.stringify(want), JSON.stringify(ts));
+    if (uv) {
+      const py = spawnSync(
+        'uv',
+        ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'pillow', 'python', '-P', '-c',
+          "import json, sys; sys.path.insert(0, 'scripts/cars'); import port_ac_car as p; " +
+            "print(json.dumps([p.find_kn5(sys.argv[1], {'lods.ini': f'[LOD_0]\\nFILE={n}\\n'}) for n in json.loads(sys.argv[2])]))",
+          lods, JSON.stringify(lod0s)],
+        { encoding: 'utf8' },
+      );
+      const got = py.stdout.trim().split('\n').at(-1) ?? '';
+      check('... and port_ac_car.py reads lods.ini the same way', got === JSON.stringify(want).replace(/,/g, ', '), got || py.stderr.slice(-300));
+    }
 
     const licence = (files: Record<string, string>, ui = '{}') => {
       const dir = mkdtempSync(join(tmp, 'lic-'));
@@ -221,6 +332,13 @@ async function main(): Promise<void> {
       ['a quicker road car', { className: 'street', tags: [], peakKw: 150, massKg: 1150 }, 'vw-scirocco-gtx'],
       ['a modern race car making real downforce', { year: 2015, massKg: 900, peakKw: 300, clA: 2.5 }, 'mtr-496r'],
       ['any other modern race car', { year: 2015, massKg: 1250, peakKw: 400, clA: 0.6 }, 'amg-gt3'],
+      // Street cars whose names or tags read as a race class's, and four-wheel-drive hypercars
+      ['a McLaren F1 (a street car named "F1")', { name: 'McLaren F1', className: 'street', tags: ['supercar', 'rwd'], year: 1994, massKg: 1140, peakKw: 461 }, 'vw-scirocco-gtx'],
+      ['a 911 GT3 RS (a street car named "GT3")', { name: 'Porsche 911 GT3 RS', className: 'street', tags: ['street', 'semislicks'], year: 2016, massKg: 1420, peakKw: 368 }, 'vw-scirocco-gtx'],
+      ['a 918 Spyder (a four-wheel-drive hypercar)', { name: 'Porsche 918 Spyder', className: 'street', tags: ['hypercar', 'hybrid'], traction: 'AWD', year: 2013, massKg: 1640, peakKw: 652 }, 'nissan-r32-jtcc'],
+      ['a McLaren P1 (a road "hypercar" named "P1")', { name: 'McLaren P1', className: 'street', tags: ['hypercar', 'hybrid'], year: 2013, massKg: 1450, peakKw: 673 }, 'vw-scirocco-gtx'],
+      ['a street car tagged with a race class is a racer', { name: 'Some GT3', className: 'street', tags: ['gt3'], year: 2018 }, 'amg-gt3'],
+      ['a McLaren F1 GTR (a GT1 named "F1")', { name: 'McLaren F1 GTR', className: 'race', tags: ['gt1'], year: 1995, massKg: 1050, peakKw: 450 }, 'nissan-r33-jgtc'],
     ];
     for (const [label, f, want] of cases) {
       const got = chooseBaseModel(facts(f));
@@ -277,8 +395,79 @@ async function main(): Promise<void> {
     const r33 = acPhysicsPatch(dataDir, { base: 'nissan-r33-jgtc' });
     check("a base with a ride-height map: the body in the map's coefficients, flat grids", near(valueAt(r33.file.profile, 'config.aero.rhMap.cdA'), 1.4 * 0.32, 1e-5) && (valueAt(r33.file.profile, 'config.aero.rhMap.cl') as number[][]).every((row) => row.every((x) => x === 1)));
     check('a turbo on a base with one: its own boost law', valueAt(r33.file.profile, 'config.engine.turbo.maxBoost') === 0.8 && valueAt(r33.file.profile, 'turbo') === true);
+    // A variant of the data folder: each file's text changed by its function
+    const variant = (name: string, edits: Record<string, (text: string) => string>) => {
+      const dir = join(tmp, `synthetic-${name}`, 'data');
+      for (const [f, text] of Object.entries(INI)) write(join(dir, f), edits[f] ? edits[f](text) : text);
+      return dir;
+    };
+
+    // No ers.ini on a hybrid base: no motor, no harvest, not only no HUD
+    for (const model of ['f12026-car', 'lc-lmdh'] as const) {
+      const e = acPhysicsPatch(dataDir, { base: model }).profile;
+      const modes = Object.values(e.config.performanceModes);
+      check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
+    }
+
+    // The base's balance of performance and its differential are the base's, not the car's
+    const lmdh = acPhysicsPatch(dataDir, { base: 'lc-lmdh' });
+    const ownPeak = Math.max(...lmdh.profile.config.engine.powerCurve.map(([, kw]) => kw));
+    const cap = lmdh.profile.config.engine.outputPowerCap!;
+    check("the base's power cap lifted over the car's peak, the same at every speed", cap.curve.every(([, kw]) => kw >= 2 * ownPeak) && (cap.vsSpeedKmh ?? []).every(([, k]) => k === 1), `${JSON.stringify(cap.curve)} for ${ownPeak.toFixed(0)} kW`);
+    const gt3 = acPhysicsPatch(dataDir, { base: 'amg-gt3' }).profile.config.engine.outputPowerCap!;
+    check("... the GT3's too", gt3.curve.every(([, kw]) => kw >= 2 * ownPeak), JSON.stringify(gt3.curve));
+    const ld = lmdh.profile.config.differential.settings;
+    check("the LMDh's differential as AC's: one friction face, 45° ramps", ld.friction_faces === 1 && ld.power_ramp_deg === 45 && ld.coast_ramp_deg === 45 && ld.power === 0.4, JSON.stringify(ld));
+
+    // Aero: wings alone, net lift, a wing of one value
+    const wingsOnly = variant('wings', { 'aero.ini': (t) => t.slice(t.indexOf('[WING_1]')) });
+    const m1Wings = acPhysicsPatch(wingsOnly, { base: 'bmw-m1-procar' }).profile.config.aero;
+    check("wings alone: the body makes no lift or drag of the base's", m1Wings.front_lift === 0 && m1Wings.rear_lift === 0 && m1Wings.drag === 0 && m1Wings.wings[1].area === 0.64, `${m1Wings.front_lift} ${m1Wings.rear_lift} ${m1Wings.drag}`);
+    const r33Wings = acPhysicsPatch(wingsOnly, { base: 'nissan-r33-jgtc' }).profile.config.aero.rhMap!;
+    check('... nor the ride-height map\'s', r33Wings.clA === 0 && r33Wings.cdA === 0, `${r33Wings.clA} ${r33Wings.cdA}`);
+    const lift = variant('lift', {
+      'aero.ini': () =>
+        '[WING_0]\nNAME=NOSE\nCHORD=1\nSPAN=1\nPOSITION=0,0,1.5\nLUT_AOA_CL=(-10=-0.3|10=-0.3)\nLUT_AOA_CD=(-10=0.1|10=0.1)\nANGLE=0\n' +
+        '[WING_1]\nNAME=TAIL\nCHORD=1\nSPAN=1\nPOSITION=0,0,-1.5\nLUT_AOA_CL=(-10=-0.1|10=-0.1)\nLUT_AOA_CD=(-10=0.1|10=0.1)\nANGLE=0\n',
+    });
+    const r33Lift = acPhysicsPatch(lift, { base: 'nissan-r33-jgtc' }).profile.config.aero.rhMap!;
+    const share = r33Lift.balance[0][0];
+    check("net lift: the front's share of it, not half", r33Lift.clA < 0 && share > 0.6 && share < 1, `clA ${r33Lift.clA}, balance ${share}`);
+    const oneValue = variant('one', { 'aero.ini': (t) => t.replace('LUT_AOA_CL=(-5=0|0=0.3|10=0.8|15=0.9)', 'LUT_AOA_CL=(0=0.5)') });
+    const one = acPhysicsPatch(oneValue, { base: 'bmw-m1-procar' });
+    check("a wing of one lift value: a constant in the body, not the base's wing left in its place", one.profile.config.aero.wings[1].area === 0 && near(one.profile.config.aero.rear_lift + one.profile.config.aero.front_lift, 1.4 * 0.1 + 0.64 * 0.5, 1e-4) && !one.unmapped.some((u) => /refused/.test(u.why)), one.unmapped.filter((u) => /refused/.test(u.why)).map((u) => u.why).join('; '));
+
+    // Values the game's check passes that would break the simulation
+    const edge = variant('edge', {
+      'tyres.ini': (t) => t.replace(/FRICTION_LIMIT_ANGLE=8/g, 'FRICTION_LIMIT_ANGLE=50').replace(/PRESSURE_SPRING_GAIN=4000/g, 'PRESSURE_SPRING_GAIN=60000'),
+      'engine.ini': (t) => t.replace('LAG_UP=0.997', 'LAG_UP=1.2').replace('LAG_DN=0.99', 'LAG_DN=1').replace('INERTIA=0.15', 'INERTIA=0').replace('LIMITER_HZ=30', 'LIMITER_HZ=0'),
+      'drivetrain.ini': (t) => t.replace('INERTIA=0.02', 'INERTIA=0'),
+      'power.lut': (t) => `${t}10000|900\n`,
+    });
+    const r33Edge = acPhysicsPatch(edge, { base: 'nissan-r33-jgtc' });
+    const ec = r33Edge.profile.config;
+    const md = ec.tyreCompounds[ec.compoundSlots.soft]!.modelData;
+    const springs = ec.tyreCompounds[ec.compoundSlots.soft]!.pressureData.pressureSpringCurve;
+    check('a friction angle of 50°: a peak slip ratio of at most 1, never below 0', md.slip_ratio_limit > 0 && md.slip_ratio_limit <= 1, String(md.slip_ratio_limit));
+    check('a steep pressure gain: the radial rate never under a tenth of RATE', springs.every(([, k]) => k >= 28000), JSON.stringify(springs));
+    check('a turbo lag of 1 or more: spool times above 0', ec.engine.turbo!.spoolUpS > 0 && ec.engine.turbo!.spoolDownS > 0, `${ec.engine.turbo!.spoolUpS} ${ec.engine.turbo!.spoolDownS}`);
+    const r33Base = VEHICLE_MODELS['nissan-r33-jgtc'].simProfile!.config.engine;
+    check("an engine inertia of 0: refused by the game's check, the base's kept", ec.engine.inertia === r33Base.inertia && r33Edge.unmapped.some((u) => /INERTIA/.test(u.from) && /must stay above 0/.test(u.why)));
+    check("LIMITER_HZ 0: the base's limiter cut, said why", ec.engine.limiterCutS === r33Base.limiterCutS && r33Edge.unmapped.some((u) => /LIMITER_HZ/.test(u.from)));
+    check('the limiter cut is one of its cycles', near(p.profile.config.engine.limiterCutS, 1 / 30));
+    const plan = (dir: string) => acPhysicsPatch(dir, { base: 'nissan-r33-jgtc' }).profile.speedProfile!.maxDrivePowerW;
+    check("the plan's power stops at the limiter", near(plan(edge), plan(dataDir), 1e-9), `${plan(edge)} vs ${plan(dataDir)}`);
+    const v4 = variant('v4', { 'tyres.ini': (t) => t.replace('VERSION=10', 'VERSION=4').replace(/DY_REF=[\d.]+/g, 'DY0=1.5\nDY1=-0.05').replace(/DX_REF=[\d.]+/g, 'DX0=1.5\nDX1=-0.05') });
+    const v4md = acPhysicsPatch(v4, { base: 'nissan-r33-jgtc' }).profile.config.tyreCompounds[ec.compoundSlots.soft]!;
+    const v4Want = Math.tan((8 * Math.PI) / 180) / (1 - Math.tan((8 * Math.PI) / 180));
+    // The rear's values: its own where it has them, else the front's
+    check("an older tyre version: none of version 10's values left at the base's", [v4md.modelData, { ...v4md.modelData, ...v4md.rearOverride?.modelData }].every((x) => x.peakSlipLoadGain === 0 && x.peakSlipPressureGain === 0 && x.longStiffnessMult === 1 && x.brakeDxMod === 0 && near(x.slip_ratio_limit, v4Want, 1e-4)), String(v4md.modelData.slip_ratio_limit));
+
     const drive = await driveCheck(p.profile);
     check('it drives: no spin flat out, a plausible top speed, braking', drive.ok, `0–100 ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h, ${drive.brakeFromKmh}→0 in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g) ${drive.problems.join('; ')}`);
+    const noBrakes = variant('nobrakes', { 'brakes.ini': (t) => t.replace('MAX_TORQUE=2600', 'MAX_TORQUE=1'), 'engine.ini': (t) => t.replace('TORQUE=100', 'TORQUE=0') });
+    const coasting = await driveCheck(acPhysicsPatch(noBrakes, { base: 'bmw-m1-procar' }).profile);
+    check("a car still moving when the braking ends fails, and isn't measured as stopped", !coasting.ok && !coasting.brakeStopped && coasting.problems.some((x) => /didn't stop/.test(x)) && Number.isNaN(coasting.brakeG), coasting.problems.join('; '));
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

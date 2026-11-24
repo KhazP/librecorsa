@@ -34,6 +34,7 @@ colour texture, so the paint carries the skin's colour and the badges (alpha 1) 
 """
 import argparse
 import configparser
+import hashlib
 import io
 import json
 import math
@@ -202,7 +203,9 @@ def read_car_data(car_dir):
     """{file name: text} from the car's data folder or data.acd ({} when neither is there)"""
     data_dir = os.path.join(car_dir, 'data')
     if os.path.isdir(data_dir):
-        return {f: open(os.path.join(data_dir, f), 'rb').read().decode('latin1') for f in os.listdir(data_dir)}
+        # Its files: a folder in it (a mod's backup, CSP's extension data) is no file of the car's data
+        return {f: open(os.path.join(data_dir, f), 'rb').read().decode('latin1') for f in os.listdir(data_dir)
+                if os.path.isfile(os.path.join(data_dir, f))}
     acd = os.path.join(car_dir, 'data.acd')
     if not os.path.isfile(acd):
         return {}
@@ -227,9 +230,17 @@ def read_car_data(car_dir):
 
 
 def ini(text):
+    """An AC INI file as AC reads it: a byte-order mark (read as latin-1, or as text), lines before the first section
+    and lines that are no `key=value` are let pass"""
     cp = configparser.ConfigParser(inline_comment_prefixes=(';',), strict=False, interpolation=None)
     cp.optionxform = str
-    cp.read_string(text)
+    text = text.removeprefix('\ufeff').removeprefix('\xef\xbb\xbf')
+    head = re.search(r'^\s*\[', text, re.M)
+    try:
+        cp.read_string(text[head.start():] if head else '')
+    except configparser.ParsingError:
+        # Raised once the file is read: every line it could read is in `cp`
+        pass
     return cp
 
 
@@ -594,10 +605,26 @@ PRESET_BY_FOLDER = {'suzuki_liana': 'liana', 'mt_mtr_496r': 'mtr-496r',
 
 def skin_id(preset, folder):
     """A skin folder's name as the livery's id, which is also its folder in URLs and on the asset host: lower case, each
-    run of anything but letters, digits and '-' as one '_' (a preset's `skin_ids` names the odd one out)"""
+    run of anything but letters, digits and '-' as one '_' (a preset's `skin_ids` names the odd one out). A name with
+    none of those (all of it in another script) is `skin_` and a hash of the name, so it is never empty"""
     if folder in preset.get('skin_ids', {}):
         return preset['skin_ids'][folder]
-    return re.sub(r'[^a-z0-9-]+', '_', folder.lower()).strip('_')
+    sid = re.sub(r'[^a-z0-9-]+', '_', folder.lower()).strip('_')
+    return sid or 'skin_' + hashlib.sha1(folder.encode('utf-8')).hexdigest()[:8]
+
+
+def unique_skin_ids(preset, folders):
+    """{folder: id} for the skin folders: `skin_id`, with `_2`, `_3`… after an id an earlier folder has, so no two
+    liveries share a folder ("Red car" and "red_car")"""
+    out, used = {}, set()
+    for folder in folders:
+        sid = base = skin_id(preset, folder)
+        n = 2
+        while sid in used:
+            sid, n = f'{base}_{n}', n + 1
+        used.add(sid)
+        out[folder] = sid
+    return out
 
 
 def srgb_to_linear(c):
@@ -954,14 +981,15 @@ def paint_swatch(path):
     return ['#%02x%02x%02x' % tuple(int(v) for v in c) for c in (first, second)]
 
 
-def export_skins(car_dir, preset, textures, materials, out_dir, max_tex, small_tex, jpeg_quality):
-    """Every skin's livery files (`preset['skin_maps']`) into <out_dir>/<skin>/, and skins.json listing them"""
+def export_skins(car_dir, preset, textures, materials, out_dir, max_tex, small_tex, jpeg_quality, only=None):
+    """Every skin's livery files (`preset['skin_maps']`) into <out_dir>/<skin>/, and skins.json listing them. `only`:
+    the skin folders to export (by folder name or id), as `export_auto_skins` takes them"""
     by_name = {m['name']: m for m in materials}
     skins_dir = os.path.join(car_dir, 'skins')
     listing = []
     for skin in sorted(os.listdir(skins_dir)):
         sdir = os.path.join(skins_dir, skin)
-        if not os.path.isdir(sdir):
+        if not os.path.isdir(sdir) or (only is not None and skin not in only and skin_id(preset, skin) not in only):
             continue
         src = dict(textures)
         for f in preset['skin_files']:
@@ -1035,14 +1063,15 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
 
     base = {**textures, **skin_overrides(car_dir, default_skin, textures, names)}
     skins = sorted(d for d in os.listdir(os.path.join(car_dir, 'skins')) if os.path.isdir(os.path.join(car_dir, 'skins', d)))
+    ids = unique_skin_ids(preset, skins)
     if only is not None:
-        skins = [d for d in skins if d == default_skin or d in only or skin_id(preset, d) in only]
+        skins = [d for d in skins if d == default_skin or d in only or ids[d] in only]
     skins.sort(key=lambda d: d != default_skin)
     listing = []
     written = 0
     for skin in skins:
         src = {**textures, **skin_overrides(car_dir, skin, textures, names)}
-        sid = skin_id(preset, skin)
+        sid = ids[skin]
         os.makedirs(os.path.join(out_dir, sid), exist_ok=True)
         own = []
         for fname, key in files:
@@ -1268,9 +1297,26 @@ def read_loose_json(path):
     return {}
 
 
+def car_model_path(car_dir, name):
+    """A model the car's data names (lods.ini's FILE), as a path inside the car folder with '/' between its folders, or
+    None: not a .kn5, an absolute path, a drive, a '..' step, a link that leads out of the folder, or no such file
+    (scripts/cars/ac-car-info.ts `carModelPath` reads it the same way)"""
+    raw = name.strip()
+    parts = raw.replace('\\', '/').split('/')
+    if not raw.lower().endswith('.kn5') or parts[0] == '' or re.match(r'^[A-Za-z]:', parts[0]) or '..' in parts:
+        return None
+    parts = [p for p in parts if p not in ('', '.')]
+    root = os.path.realpath(car_dir)
+    full = os.path.join(root, *parts)
+    if not parts or not os.path.isfile(full) or not os.path.realpath(full).startswith(root + os.sep):
+        return None
+    return '/'.join(parts)
+
+
 def find_kn5(car_dir, data=None):
-    """The car's main model: <folder name>.kn5, else the file lods.ini names for LOD_0, else the largest kn5 in the folder
-    that is neither its collider nor a lower LOD"""
+    """The car's main model: <folder name>.kn5, else the file lods.ini names for LOD_0 when it is a model inside the
+    folder (`car_model_path`), else the largest kn5 in the folder that is neither its collider nor a lower LOD (nor a link
+    out of the folder)"""
     folder = os.path.basename(os.path.normpath(car_dir))
     if os.path.isfile(os.path.join(car_dir, f'{folder}.kn5')):
         return f'{folder}.kn5'
@@ -1279,11 +1325,11 @@ def find_kn5(car_dir, data=None):
     if lods:
         cp = ini(lods)
         sec = next((s for s in cp.sections() if s.upper() == 'LOD_0'), None)
-        name = cp[sec].get('FILE', '').strip() if sec else ''
-        if name and os.path.isfile(os.path.join(car_dir, name)):
+        name = car_model_path(car_dir, cp[sec].get('FILE', '')) if sec else None
+        if name:
             return name
     lower = re.compile(r'(^collider|_lod_?[b-z]|_[b-z])\.kn5$', re.I)
-    found = [f for f in os.listdir(car_dir) if f.lower().endswith('.kn5') and not lower.search(f)]
+    found = [f for f in os.listdir(car_dir) if f.lower().endswith('.kn5') and not lower.search(f) and car_model_path(car_dir, f)]
     if not found:
         raise SystemExit(f'{car_dir}: no .kn5 model in the folder')
     return max(found, key=lambda f: os.path.getsize(os.path.join(car_dir, f)))
@@ -1460,13 +1506,26 @@ def detect_windscreen(nodes, materials, eyes):
     return best if best is not None and score[best] >= 2 else None
 
 
-def driver_eyes(nodes, data):
-    """car.ini's DRIVEREYES (the kn5's frame), else 27 cm over and 47 cm behind STEER_HR; None without either"""
+def ini_driver_eyes(data):
+    """car.ini's [GRAPHICS] DRIVEREYES (the kn5's frame), whatever the file's case; None when it has none"""
     car_ini = next((v for k, v in data.items() if k.lower() == 'car.ini'), None)
     if car_ini:
         cp = ini(car_ini)
         if cp.has_section('GRAPHICS') and cp['GRAPHICS'].get('DRIVEREYES'):
-            return np.array(vec3(cp['GRAPHICS']['DRIVEREYES']))
+            try:
+                eyes = vec3(cp['GRAPHICS']['DRIVEREYES'])
+            except ValueError:
+                return None
+            if len(eyes) == 3 and all(math.isfinite(v) for v in eyes):
+                return np.array(eyes)
+    return None
+
+
+def driver_eyes(nodes, data):
+    """car.ini's DRIVEREYES (the kn5's frame), else 27 cm over and 47 cm behind STEER_HR; None without either"""
+    eyes = ini_driver_eyes(data)
+    if eyes is not None:
+        return eyes
     steer = next((n for n in nodes if n['name'] == 'STEER_HR' and n['kind'] == 1), None)
     return steer['world'][:3, 3] + [0, 0.27, -0.47] if steer is not None else None
 
@@ -1909,8 +1968,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     # Cameras. The driver's eyes from car.ini (DRIVEREYES is in the kn5's frame: 27 cm over and 47 cm behind the
     # steering wheel); the others from the geometry (car.ini's bonnet / bumper positions land inside the dash and the
     # engine bay)
-    car_ini = ini(data['car.ini']) if 'car.ini' in data else None
-    eyes = np.array(vec3(car_ini['GRAPHICS']['DRIVEREYES'])) + shift if car_ini else pivot + [0, 0.27, -0.47]
+    ini_eyes = ini_driver_eyes(data)
+    eyes = ini_eyes + shift if ini_eyes is not None else pivot + [0, 0.27, -0.47]
     solid = np.vstack([p[3] for p in body_parts if spec_of(p[2]).get('mode', 'OPAQUE') == 'OPAQUE'])
     windscreen = [p[3] for p in body_parts if p[2] in preset['windscreen']]
     glass = np.vstack(windscreen) if windscreen else np.zeros((0, 3))
@@ -2021,7 +2080,7 @@ def main():
     ap.add_argument('--skins-out', default=None,
                     help="also write every skin's livery files (the preset's skin_maps) into this folder")
     ap.add_argument('--skins-only', default=None,
-                    help="with --skins-out and an automatic preset: the skin folders to export, comma-separated")
+                    help="with --skins-out: the skin folders to export, comma-separated")
     ap.add_argument('--report', default=None,
                     help='also write what was made as JSON: the preset (and what an automatic one found), the rig '
                          'measurements and the skins')
@@ -2094,7 +2153,7 @@ def main():
                 if not preset['skin_maps']:
                     ap.error(f'{car} has no skin_maps to export')
                 listing = export_skins(a.car_dir, preset, textures, materials, a.skins_out, a.max_tex, a.small_tex,
-                                       a.jpeg_quality)
+                                       a.jpeg_quality, set(a.skins_only.split(',')) if a.skins_only else None)
     if a.report:
         def plain(v):
             return sorted(v) if isinstance(v, (set, frozenset)) else list(v) if isinstance(v, tuple) else v
