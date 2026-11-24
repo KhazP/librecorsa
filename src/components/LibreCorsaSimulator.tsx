@@ -71,7 +71,7 @@ import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { dualShock4Hid } from "@/lib/input/webhid-dualshock4";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
-import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
+import { clampFov, codeFromName, confirmDriverProfileName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, needsDriverNamePrompt, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
 import { signalBoardLap } from "@/components/hud/BoardWidget";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
@@ -1169,10 +1169,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    * laps and race results under the old name move with it. The name and code once it has taken, else why it didn't.
    * Nothing changes here until the board has said yes.
    */
+  const confirmDriverName = useCallback(() => {
+    setSettings((s) => {
+      const next = confirmDriverProfileName(s.profile);
+      return next === s.profile ? s : { ...s, profile: next };
+    });
+  }, []);
   const renameDriver = useCallback(async (raw: string): Promise<{ error: string } | { name: string; code: string }> => {
     const name = sanitizeDriverName(raw);
     const prev = settingsRef.current.profile;
-    if (name === prev.name) return { name, code: prev.code };
+    if (name === prev.name) {
+      if (prev.generated) confirmDriverName();
+      return { name, code: prev.code };
+    }
     const problem = nameProblem(name);
     if (problem) return { error: problem };
     // A code the game derived from its own made-up name follows the new name; one the player set stays
@@ -1191,7 +1200,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setBoardVersion((v) => v + 1);
     if (boardStateRef.current === "on") flushQueued({ name, code });
     return { name, code };
-  }, [flushQueued, tx]);
+  }, [confirmDriverName, flushQueued, tx]);
   const renameFromSettings = useCallback(async (raw: string) => {
     const res = await renameDriver(raw);
     return "error" in res ? res.error : null;
@@ -2432,6 +2441,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   loadBoard: loadChallengeBoard,
                   boardVersion,
                   driverName: settings.profile.name,
+                  driverNameGenerated: needsDriverNamePrompt(settings.profile),
+                  onRenameDriver: renameFromSettings,
+                  onConfirmDriverName: confirmDriverName,
                   onDrive: handleDriveChallenge,
                   hasRaces: races.on && racesAvailable,
                 }

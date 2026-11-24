@@ -562,6 +562,16 @@ export function randomDriverProfile(rand: () => number = Math.random): DriverPro
   return { ...DEFAULT_DRIVER_PROFILE, name, code: sanitizeDriverCode(noun), generated: true };
 }
 
+/** True while the player still only has an auto-generated name and hasn't chosen or explicitly kept one yet */
+export function needsDriverNamePrompt(profile: Pick<DriverProfile, "generated">): boolean {
+  return profile.generated === true;
+}
+
+/** Marks the player's current display name as explicitly confirmed so early name prompts do not repeat */
+export function confirmDriverProfileName(profile: DriverProfile): DriverProfile {
+  return profile.generated ? { ...profile, generated: false } : profile;
+}
+
 /** Code for a name the player typed: its first three letters (or the default code's to fill in) */
 export const codeFromName = (name: string) => sanitizeDriverCode(name);
 
