@@ -174,7 +174,7 @@ ${PACKAGE_USAGE}`,
     // 3. Packaged
     // The mod's statements always; the licence's text when it may be shared
     const extraFiles = [
-      ...lic.statements.map((s) => ({ from: s.path, to: `${localId}/${carriedName("assetto-corsa", s.file)}` })),
+      ...lic.statements.filter((s) => s.readable).map((s) => ({ from: s.path, to: `${localId}/${carriedName("assetto-corsa", s.file)}` })),
       ...licenceTextFiles(lic.reading).map((f) => ({ from: f.from, to: `${localId}/${f.name}` })),
     ];
     const out = packageCircuit({ builtId, packageDir, info, localId, credit, extraFiles, removeBuild: !values["keep-build"] });

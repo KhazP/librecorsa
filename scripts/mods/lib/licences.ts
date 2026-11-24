@@ -375,6 +375,8 @@ export interface Statement {
   path: string;
   text: string;
   reading: LicenceReading;
+  /** Read as text (a PDF, a file too long or not text isn't: its reading says so, and a package doesn't carry it) */
+  readable: boolean;
 }
 
 /** Words that make a file a statement: readme, licence, copying, copyright, credits, authors, terms */
@@ -408,14 +410,14 @@ export function decodeText(raw: Buffer): string {
 
 /** A statement file read, or a problem that says why it can't be */
 function readStatement(path: string, file: string): Statement {
-  const unreadable = (why: string): Statement => ({ file, path, text: "", reading: { licences: [], problems: [`${file}: ${why}, so its terms can't be checked`], holders: [] } });
+  const unreadable = (why: string): Statement => ({ file, path, text: "", readable: false, reading: { licences: [], problems: [`${file}: ${why}, so its terms can't be checked`], holders: [] } });
   if (UNREADABLE_EXT.test(extname(file))) return unreadable("a document this tool can't read");
   if (statSync(path).size > MAX_STATEMENT_BYTES) return unreadable("too long to read");
   const raw = readFileSync(path);
   const t = decodeText(raw);
   // a NUL in what decoded as UTF-8 or Windows-1252: not text
   if (t.includes("\0")) return unreadable("not text");
-  return { file, path, text: t, reading: readLicenceText(t) };
+  return { file, path, text: t, readable: true, reading: readLicenceText(t) };
 }
 
 /**

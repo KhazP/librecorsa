@@ -334,7 +334,7 @@ export function circuitLicence(folder: string, opts: { title: string; source: Ci
     : source?.from === "speed-dreams-data"
       ? `From Speed Dreams' base data (speed-dreams-data ${source.commit!.slice(0, 12)}).`
       : "From Speed Dreams.";
-  const statementCopies = statements.map((s) => ({ from: s.path, name: carriedName("speed-dreams", s.file) }));
+  const statementCopies = statements.filter((s) => s.readable).map((s) => ({ from: s.path, name: carriedName("speed-dreams", s.file) }));
   const terms = creditLicence(reading);
 
   if (shareable) {

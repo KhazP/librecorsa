@@ -470,7 +470,7 @@ ${PACKAGE_USAGE}
     // The licences' texts when it may be shared; the car's and its liveries' own statements, always
     const extraFiles = licenceTextFiles(held).map((f) => ({ from: f.from, to: `cars/${pkgCarId}/${f.name}` }));
     const statements = [...new Map([...lic.statements, ...keptLiveries.flatMap((l) => l.files)].map((s) => [s.path, s])).values()];
-    for (const s of statements) extraFiles.push({ from: s.path, to: `cars/${pkgCarId}/${carriedName("speed-dreams", s.file)}` });
+    for (const s of statements.filter((x) => x.readable)) extraFiles.push({ from: s.path, to: `cars/${pkgCarId}/${carriedName("speed-dreams", s.file)}` });
     const conversion = join(work, "CONVERSION.md");
     writeFileSync(
       conversion,

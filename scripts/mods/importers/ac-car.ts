@@ -212,8 +212,8 @@ ${PACKAGE_USAGE}`,
       info.credit = creditFor(held);
       const extraFiles = [
         ...licenceTextFiles(held).map((f) => ({ from: f.from, to: `cars/${localId}/${f.name}` })),
-        ...licence.statements.map((s) => ({ from: s.path, to: `cars/${localId}/${carriedName('assetto-corsa', s.file)}` })),
-        ...skinStatements.map((x) => ({ from: x.st.path, to: `cars/${localId}/${carriedName(`assetto-corsa-skin-${x.skin}`, x.st.file)}` })),
+        ...licence.statements.filter((s) => s.readable).map((s) => ({ from: s.path, to: `cars/${localId}/${carriedName('assetto-corsa', s.file)}` })),
+        ...skinStatements.filter((x) => x.st.readable).map((x) => ({ from: x.st.path, to: `cars/${localId}/${carriedName(`assetto-corsa-skin-${x.skin}`, x.st.file)}` })),
       ];
 
       const traction = DRIVE[facts.traction] ?? 'rear-wheel drive';
