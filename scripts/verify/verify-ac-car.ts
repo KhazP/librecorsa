@@ -134,6 +134,29 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
+  console.log("\n== The car browser's pictures, made in Python (the launcher's converter has no image library in Node)");
+  if (!uv) console.log('SKIP  uv is not on this machine');
+  else {
+    const pics = join(tmp, 'pics');
+    mkdirSync(pics, { recursive: true });
+    const py = (code: string, ...args: string[]) =>
+      spawnSync('uv', ['run', '--python', '3.14', '--no-project', '--with', 'pillow', 'python', '-P', ...(code.endsWith('.py') ? [code] : ['-c', code]), ...args], { encoding: 'utf8' });
+    py("import sys; from PIL import Image; Image.new('RGB', (1024, 576), (200, 30, 30)).save(sys.argv[1]); Image.new('RGBA', (200, 200), (255, 255, 255, 255)).save(sys.argv[2])", join(pics, 'preview.jpg'), join(pics, 'badge.png'));
+    write(join(pics, 'broken.jpg'), 'not a picture');
+    const jobs = [
+      { src: join(pics, 'preview.jpg'), out: join(pics, 'thumb.webp'), fit: 'cover' },
+      { src: join(pics, 'badge.png'), out: join(pics, 'badge.webp'), fit: 'contain' },
+      { src: join(pics, 'broken.jpg'), out: join(pics, 'broken.webp'), fit: 'cover' },
+    ];
+    writeFileSync(join(pics, 'jobs.json'), JSON.stringify(jobs));
+    const made = py('scripts/cars/ac_car_thumbs.py', join(pics, 'jobs.json'));
+    // Each picture's size and mode, and the badge's corner's alpha (outside the badge: transparent)
+    const sizes = py("import sys; from PIL import Image; a, b = (Image.open(f) for f in sys.argv[1:]); print([[*a.size, a.mode], [*b.size, b.mode, b.getpixel((5, 5))[3]]])", join(pics, 'thumb.webp'), join(pics, 'badge.webp')).stdout.trim();
+    check('a preview filling 480 × 270, a badge inside it on a transparent ground', made.status === 0 && sizes === "[[480, 270, 'RGB'], [480, 270, 'RGBA', 0]]", sizes || made.stderr.slice(-300));
+    check('a picture that cannot be read is left out, not a failed import', !existsSync(join(pics, 'broken.webp')) && /not made into a picture/.test(made.stdout));
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
   console.log('\n== ui_car.json, as mods write it');
   {
     const ui = parseUiCar(

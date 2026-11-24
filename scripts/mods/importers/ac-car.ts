@@ -7,10 +7,9 @@
  * author states no licence that allows sharing is packaged for its importer alone, and its credit says so.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
-import sharp from 'sharp';
 import { VEHICLE_MODELS } from '../../../src/lib/cars/vehicle-models';
 import type { ModCarClass, ModSkin } from '../../../src/lib/mods/mod-manifest';
 import type { VehicleModelId } from '../../../src/types/f1';
@@ -35,24 +34,33 @@ interface PortReport {
 
 const DRIVE: Record<string, string> = { RWD: 'rear-wheel drive', FWD: 'front-wheel drive', AWD: 'four-wheel drive', AWD2: 'four-wheel drive' };
 
-/** The ffmpeg the sound porter needs: on the PATH, else Homebrew's */
+/**
+ * The ffmpeg the sound porter needs: the one on the PATH if it runs (`ffmpeg -version`, on any system: Windows has no
+ * `which`), else Homebrew's
+ */
 function ffmpegPath(): string | null {
-  const which = spawnSync('which', ['ffmpeg'], { encoding: 'utf8' });
-  if (which.status === 0 && which.stdout.trim()) return which.stdout.trim();
-  return existsSync('/opt/homebrew/bin/ffmpeg') ? '/opt/homebrew/bin/ffmpeg' : null;
+  for (const cmd of ['ffmpeg', '/opt/homebrew/bin/ffmpeg']) {
+    if (spawnSync(cmd, ['-version'], { stdio: 'ignore' }).status === 0) return cmd;
+  }
+  return null;
 }
 
-/** A picture as the car browser's (480 × 270 webp): a skin's preview filling it, or a badge inside it */
-async function thumbFrom(src: string, out: string, fit: 'cover' | 'contain'): Promise<boolean> {
-  try {
-    await sharp(src)
-      .resize(480, 270, { fit, background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .webp({ quality: 82, alphaQuality: 90 })
-      .toFile(out);
-    return true;
-  } catch {
-    return false;
-  }
+/** A picture to make for the car browser (480 × 270 webp): a skin's preview filling it, or a badge inside it */
+interface ThumbJob {
+  src: string;
+  out: string;
+  fit: 'cover' | 'contain';
+}
+
+/**
+ * The pictures made, in Python (scripts/cars/ac_car_thumbs.py, with Pillow): Node has no image library in the
+ * launcher's converter. A picture that can't be read is left out
+ */
+function makeThumbs(jobs: ThumbJob[], work: string): void {
+  if (!jobs.length) return;
+  const list = join(work, 'thumbs.json');
+  writeFileSync(list, JSON.stringify(jobs));
+  runPython('scripts/cars/ac_car_thumbs.py', [list], { withPackages: ['pillow'], requirements: null });
 }
 
 /** A skin folder's preview picture (AC's `preview.jpg`), whatever its case */
@@ -186,9 +194,12 @@ ${PACKAGE_USAGE}`,
       // The livery the model is painted in first (an automatic preset's export lists it first; a preset's, by name)
       const listing = [...(port.skins ?? [])].sort((a, b) => Number((b.folder ?? b.id) === port.skin) - Number((a.folder ?? a.id) === port.skin));
       const paintEntry = listing[0];
-      const thumb = join(work, 'thumb.webp');
+      const thumbs: ThumbJob[] = [];
       const preview = previewOf(carDir, paintEntry ? (paintEntry.folder ?? paintEntry.id) : (port.skin ?? undefined));
-      const hasThumb = (preview && (await thumbFrom(preview, thumb, 'cover'))) || (existsSync(join(carDir, 'ui', 'badge.png')) && (await thumbFrom(join(carDir, 'ui', 'badge.png'), thumb, 'contain')));
+      const previewThumb = join(work, 'thumb.webp');
+      const badgeThumb = join(work, 'thumb-badge.webp');
+      if (preview) thumbs.push({ src: preview, out: previewThumb, fit: 'cover' });
+      if (existsSync(join(carDir, 'ui', 'badge.png'))) thumbs.push({ src: join(carDir, 'ui', 'badge.png'), out: badgeThumb, fit: 'contain' });
       const ids = skinIds(listing.map((s) => s.id));
       const skins: CarSkinSource[] = [];
       for (let i = 1; i < listing.length; i++) {
@@ -198,10 +209,13 @@ ${PACKAGE_USAGE}`,
         const dir = join(skinsOut, s.id);
         mkdirSync(dir, { recursive: true });
         const own = previewOf(carDir, s.folder ?? s.id);
-        if (own) await thumbFrom(own, join(dir, 'thumb.webp'), 'cover');
+        if (own) thumbs.push({ src: own, out: join(dir, 'thumb.webp'), fit: 'cover' });
         skins.push({ id: ids[i], name: (s.number ? `#${s.number} ` : '') + (s.name || s.folder || s.id), swatch: swatchOf(s.swatch), dir, ...(s.files ? { files: s.files } : {}), ...(s.variant ? { variant: s.variant } : {}) });
       }
       if (skins.length > 63) skins.length = 63;
+      makeThumbs(thumbs, work);
+      // The first livery's preview, else the badge
+      const thumb = [previewThumb, badgeThumb].find((f) => existsSync(f));
       const paint = paintEntry
         ? { id: ids[0], name: (paintEntry.number ? `#${paintEntry.number} ` : '') + (paintEntry.name || paintEntry.folder || paintEntry.id), swatch: swatchOf(paintEntry.swatch) }
         : { id: 'factory', name: 'Factory', swatch: ['#808080', '#202020'] as ModSkin['swatch'] };
@@ -222,7 +236,7 @@ ${PACKAGE_USAGE}`,
           ...(physics ? { physicsPatch: physics.file.profile } : {}),
         },
         model: glb,
-        thumb: hasThumb ? thumb : undefined,
+        thumb,
         paint,
         skins,
         sound,
