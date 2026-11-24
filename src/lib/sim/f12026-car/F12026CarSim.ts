@@ -94,7 +94,16 @@ import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
-import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
+import {
+  beyondLayoutEdge,
+  cornerLimitSide,
+  CourseCutWatch,
+  EXIT_OUTER_MARGIN_M,
+  inLapStretch,
+  INSIDE_OFF_WHEELS_CUT,
+  isCourseHop,
+  isInsideCornerSurfaceValid,
+} from '../course-limits';
 import { coneLaneRangeAt } from '../cone-lanes';
 import { keptOnGrid } from '../race-start';
 
@@ -1074,6 +1083,7 @@ const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _qInv = new THREE.Quaternion();
+const _exitProbeHit = createGroundHit();
 
 export class F12026CarSim implements SimulatorCar {
   public readonly vehicle: VehiclePhysics;
@@ -1283,8 +1293,18 @@ export class F12026CarSim implements SimulatorCar {
   private realism: SimRealismFlags = { ...FULL_REALISM };
   private coldPsi: WheelPressures = axlePressures(0, 0);
   private onColliders = false;
+  /** Fallback sample-based ground query used until track colliders attach */
+  private readonly sampleGround: TrackSampleGroundQuery;
   /** The track's road collider once the car is on it (`attachTrackRoot`) */
   private collider: GroundQuery | null = null;
+  private readonly sampleCurvatureAt = (s: number): number => {
+    const S = this.track.samples;
+    const n = S.length;
+    if (n === 0) return 0;
+    const L = this.track.totalLengthM;
+    const wrapped = ((s % L) + L) % L;
+    return S[Math.floor((wrapped / L) * n) % n].curvature;
+  };
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
   private s = 0;
@@ -1395,8 +1415,9 @@ export class F12026CarSim implements SimulatorCar {
       cornerPacker: { front: sp.front.bumpStop.packerGap ?? 0, rear: sp.rear.bumpStop.packerGap ?? 0 },
     };
     const L = track.totalLengthM;
+    this.sampleGround = new TrackSampleGroundQuery(track);
     this.vehicle = new VehiclePhysics({
-      ground: new TrackSampleGroundQuery(track),
+      ground: this.sampleGround,
       config: this.config,
       compound: this.config.compoundSlots[this.compound],
       airDensity: airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M),
@@ -3244,24 +3265,53 @@ export class F12026CarSim implements SimulatorCar {
     for (let i = 0; i < 4; i++) surfaces[i] = surfaceType(W[i].ground.surface);
     const onKerbLeft = surfaces[0] === 'kerb' || surfaces[2] === 'kerb';
     const onKerbRight = surfaces[1] === 'kerb' || surfaces[3] === 'kerb';
-    // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
-    // Judged on the wheels touching the road: an airborne wheel's ground is its last contact (the probe only reaches
-    // 0.6 m), so a jump keeps the verdict it took off with rather than reading stale surfaces
-    // Where another layout's road leaves the lap, this lap's road edge and kerbs are the limit: that road's asphalt and
-    // kerbs past it are off the track (course-limits.ts)
+    // Corner-relative track limits on grounded wheels (an airborne wheel keeps the verdict it took off with rather
+    // than reading stale surfaces; where another layout's road leaves the lap, this lap's road edge is the limit):
+    //   - Inside of a corner/chicane: white-line rule (kerbs do not keep a wheel on-track; all grounded wheels off
+    //     road/pitlane, or 3+ wheels on invalid surfaces, is an inside corner cut).
+    //   - Outside of a corner / corner exit: kerbs count as valid track plus a small outer margin (`EXIT_OUTER_MARGIN_M`)
+    //     probed inboard toward the track so marginally wide exits do not instantly delete laps, while genuine
+    //     off-track excursions are still caught.
+    //   - Neutral straights: standard all-four-wheels-off check.
     const fenced = inLapStretch(this.track.otherLayoutRoads, this.s, this.track.totalLengthM);
+    const cornerSide = cornerLimitSide(this.sampleCurvatureAt, this.s, this.lateral, this.track.totalLengthM);
+    const insideCorner = cornerSide === 'inside';
     let anyGrounded = false;
     let allOff = true;
+    let invalidGrounded = 0;
     for (let i = 0; i < 4; i++) {
       const w = W[i];
       if (!w.grounded) continue;
       anyGrounded = true;
       const kind = w.ground.surface;
-      if (!w.ground.props.validTrack) continue;
-      if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
+      const fencedOut = fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z);
+      if (!w.ground.props.validTrack || fencedOut) {
+        invalidGrounded++;
+        continue;
+      }
+      if (insideCorner && !isInsideCornerSurfaceValid(kind)) continue;
       allOff = false;
     }
-    const offTrack = anyGrounded ? allOff : this.wasOffTrack;
+    if (anyGrounded && allOff && cornerSide === 'outside') {
+      const activeGround = this.collider ?? this.sampleGround;
+      const bl = Math.hypot(sample.binormal.x, sample.binormal.z) || 1;
+      const outSign = Math.sign(this.lateral);
+      const stepX = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.x) / bl;
+      const stepZ = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.z) / bl;
+      for (let i = 0; i < 4; i++) {
+        const w = W[i];
+        if (!w.grounded) continue;
+        const px = w.hardpointWorld.x + stepX;
+        const pz = w.hardpointWorld.z + stepZ;
+        if (!activeGround.query(px, pz, Math.max(w.hardpointWorld.y, w.ground.height) + 0.5, _exitProbeHit)) continue;
+        if (!_exitProbeHit.props.validTrack) continue;
+        const pk = _exitProbeHit.surface;
+        if (fenced && (pk === 'road' || pk === 'kerb') && beyondLayoutEdge(sample, px, pz)) continue;
+        allOff = false;
+        break;
+      }
+    }
+    const offTrack = anyGrounded ? (allOff || (insideCorner && invalidGrounded >= INSIDE_OFF_WHEELS_CUT)) : this.wasOffTrack;
     this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
