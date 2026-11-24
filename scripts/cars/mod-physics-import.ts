@@ -123,7 +123,7 @@ p(`  coastCurve: [[0, 0], [${n(eng('COAST_REF', 'RPM'))}, ${n(eng('COAST_REF', '
 if (mod.has('throttle.lut')) p(`  throttleResponseCurve: ${lut(mod.lut('throttle.lut').map(([x, y]) => [x / 100, y / 100]))}, // [spec throttle.lut]`);
 p(`  idleRpm: ${n(eng('ENGINE_DATA', 'MINIMUM'))}, // [spec MINIMUM]`);
 p(`  inertia: ${n(eng('ENGINE_DATA', 'INERTIA') + (drv('GEARBOX', 'INERTIA') || 0))}, // engine + gearbox [spec INERTIA]`);
-p(`  limiterCutS: ${n(0.5 / eng('ENGINE_DATA', 'LIMITER_HZ'))}, // half a cycle of the limiter [spec LIMITER_HZ]`);
+p(`  limiterCutS: ${n(1 / eng('ENGINE_DATA', 'LIMITER_HZ'))}, // one cycle of the limiter, as verify-mod-parity checks it [spec LIMITER_HZ]`);
 p('};');
 const gears = Array.from({ length: drv('GEARS', 'COUNT') }, (_, i) => drv('GEARS', `GEAR_${i + 1}`));
 const cutS = Math.max(drv('GEARBOX', 'CHANGE_UP_TIME') || 0, drv('GEARBOX', 'AUTO_CUTOFF_TIME') || 0) / 1000;

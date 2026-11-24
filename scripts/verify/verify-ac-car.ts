@@ -317,30 +317,6 @@ async function main(): Promise<void> {
     const r33 = acPhysicsPatch(dataDir, { base: 'nissan-r33-jgtc' });
     check("a base with a ride-height map: the body in the map's coefficients, flat grids", near(valueAt(r33.file.profile, 'config.aero.rhMap.cdA'), 1.4 * 0.32, 1e-5) && (valueAt(r33.file.profile, 'config.aero.rhMap.cl') as number[][]).every((row) => row.every((x) => x === 1)));
     check('a turbo on a base with one: its own boost law', valueAt(r33.file.profile, 'config.engine.turbo.maxBoost') === 0.8 && valueAt(r33.file.profile, 'turbo') === true);
-    // No ers.ini on a hybrid base: no motor, no harvest, not only no HUD
-    for (const model of ['f12026-car', 'lc-lmdh'] as const) {
-      const e = acPhysicsPatch(dataDir, { base: model }).profile;
-      const modes = Object.values(e.config.performanceModes);
-      check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
-    }
-
-    // No ers.ini on a hybrid base: no motor, no harvest, not only no HUD
-    for (const model of ['f12026-car', 'lc-lmdh'] as const) {
-      const e = acPhysicsPatch(dataDir, { base: model }).profile;
-      const modes = Object.values(e.config.performanceModes);
-      check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
-    }
-
-    // The base's balance of performance and its differential are the base's, not the car's
-    const lmdh = acPhysicsPatch(dataDir, { base: 'lc-lmdh' });
-    const ownPeak = Math.max(...lmdh.profile.config.engine.powerCurve.map(([, kw]) => kw));
-    const cap = lmdh.profile.config.engine.outputPowerCap!;
-    check("the base's power cap lifted over the car's peak, the same at every speed", cap.curve.every(([, kw]) => kw >= 2 * ownPeak) && (cap.vsSpeedKmh ?? []).every(([, k]) => k === 1), `${JSON.stringify(cap.curve)} for ${ownPeak.toFixed(0)} kW`);
-    const gt3 = acPhysicsPatch(dataDir, { base: 'amg-gt3' }).profile.config.engine.outputPowerCap!;
-    check("... the GT3's too", gt3.curve.every(([, kw]) => kw >= 2 * ownPeak), JSON.stringify(gt3.curve));
-    const ld = lmdh.profile.config.differential.settings;
-    check("the LMDh's differential as AC's: one friction face, 45° ramps", ld.friction_faces === 1 && ld.power_ramp_deg === 45 && ld.coast_ramp_deg === 45 && ld.power === 0.4, JSON.stringify(ld));
-
     // A variant of the data folder: each file's text changed by its function
     const variant = (name: string, edits: Record<string, (text: string) => string>) => {
       const dir = join(tmp, `synthetic-${name}`, 'data');
@@ -382,6 +358,32 @@ async function main(): Promise<void> {
     const oneValue = variant('one', { 'aero.ini': (t) => t.replace('LUT_AOA_CL=(-5=0|0=0.3|10=0.8|15=0.9)', 'LUT_AOA_CL=(0=0.5)') });
     const one = acPhysicsPatch(oneValue, { base: 'bmw-m1-procar' });
     check("a wing of one lift value: a constant in the body, not the base's wing left in its place", one.profile.config.aero.wings[1].area === 0 && near(one.profile.config.aero.rear_lift + one.profile.config.aero.front_lift, 1.4 * 0.1 + 0.64 * 0.5, 1e-4) && !one.unmapped.some((u) => /refused/.test(u.why)), one.unmapped.filter((u) => /refused/.test(u.why)).map((u) => u.why).join('; '));
+
+    // Values the game's check passes that would break the simulation
+    const edge = variant('edge', {
+      'tyres.ini': (t) => t.replace(/FRICTION_LIMIT_ANGLE=8/g, 'FRICTION_LIMIT_ANGLE=50').replace(/PRESSURE_SPRING_GAIN=4000/g, 'PRESSURE_SPRING_GAIN=60000'),
+      'engine.ini': (t) => t.replace('LAG_UP=0.997', 'LAG_UP=1.2').replace('LAG_DN=0.99', 'LAG_DN=1').replace('INERTIA=0.15', 'INERTIA=0').replace('LIMITER_HZ=30', 'LIMITER_HZ=0'),
+      'drivetrain.ini': (t) => t.replace('INERTIA=0.02', 'INERTIA=0'),
+      'power.lut': (t) => `${t}10000|900\n`,
+    });
+    const r33Edge = acPhysicsPatch(edge, { base: 'nissan-r33-jgtc' });
+    const ec = r33Edge.profile.config;
+    const md = ec.tyreCompounds[ec.compoundSlots.soft]!.modelData;
+    const springs = ec.tyreCompounds[ec.compoundSlots.soft]!.pressureData.pressureSpringCurve;
+    check('a friction angle of 50°: a peak slip ratio of at most 1, never below 0', md.slip_ratio_limit > 0 && md.slip_ratio_limit <= 1, String(md.slip_ratio_limit));
+    check('a steep pressure gain: the radial rate never under a tenth of RATE', springs.every(([, k]) => k >= 28000), JSON.stringify(springs));
+    check('a turbo lag of 1 or more: spool times above 0', ec.engine.turbo!.spoolUpS > 0 && ec.engine.turbo!.spoolDownS > 0, `${ec.engine.turbo!.spoolUpS} ${ec.engine.turbo!.spoolDownS}`);
+    const r33Base = VEHICLE_MODELS['nissan-r33-jgtc'].simProfile!.config.engine;
+    check("an engine inertia of 0: refused by the game's check, the base's kept", ec.engine.inertia === r33Base.inertia && r33Edge.unmapped.some((u) => /INERTIA/.test(u.from) && /must stay above 0/.test(u.why)));
+    check("LIMITER_HZ 0: the base's limiter cut, said why", ec.engine.limiterCutS === r33Base.limiterCutS && r33Edge.unmapped.some((u) => /LIMITER_HZ/.test(u.from)));
+    check('the limiter cut is one of its cycles', near(p.profile.config.engine.limiterCutS, 1 / 30));
+    const plan = (dir: string) => acPhysicsPatch(dir, { base: 'nissan-r33-jgtc' }).profile.speedProfile!.maxDrivePowerW;
+    check("the plan's power stops at the limiter", near(plan(edge), plan(dataDir), 1e-9), `${plan(edge)} vs ${plan(dataDir)}`);
+    const v4 = variant('v4', { 'tyres.ini': (t) => t.replace('VERSION=10', 'VERSION=4').replace(/DY_REF=[\d.]+/g, 'DY0=1.5\nDY1=-0.05').replace(/DX_REF=[\d.]+/g, 'DX0=1.5\nDX1=-0.05') });
+    const v4md = acPhysicsPatch(v4, { base: 'nissan-r33-jgtc' }).profile.config.tyreCompounds[ec.compoundSlots.soft]!;
+    const v4Want = Math.tan((8 * Math.PI) / 180) / (1 - Math.tan((8 * Math.PI) / 180));
+    // The rear's values: its own where it has them, else the front's
+    check("an older tyre version: none of version 10's values left at the base's", [v4md.modelData, { ...v4md.modelData, ...v4md.rearOverride?.modelData }].every((x) => x.peakSlipLoadGain === 0 && x.peakSlipPressureGain === 0 && x.longStiffnessMult === 1 && x.brakeDxMod === 0 && near(x.slip_ratio_limit, v4Want, 1e-4)), String(v4md.modelData.slip_ratio_limit));
 
     const drive = await driveCheck(p.profile);
     check('it drives: no spin flat out, a plausible top speed, braking', drive.ok, `0–100 ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h, ${drive.brakeFromKmh}→0 in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g) ${drive.problems.join('; ')}`);

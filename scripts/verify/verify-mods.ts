@@ -396,6 +396,14 @@ function physicsChecks(): void {
   allowed({ config: { suspensions: { front: { hardpoints } } } }, "a position may cross zero (a suspension point below the axle)");
   allowed({ config: { engine: { powerCurve: [[0, 0], ...base.config.engine.powerCurve.slice(1)] } } }, "a curve may start at zero");
   refused({ config: { chassis: { wheelbase: -1 } } }, /must stay above 0/, "what the simulation divides by stays above zero (the wheelbase)");
+  refused({ config: { engine: { inertia: 0 } } }, /engine\.inertia: must stay above 0/, "... the engine's inertia");
+  const tyre = base.config.compoundSlots.soft;
+  refused({ config: { tyreCompounds: { [tyre]: { modelData: { slip_ratio_limit: -0.2 } } } } }, /slip_ratio_limit: must stay above 0/, "... a tyre's peak slip ratio");
+  const turboBase = VEHICLE_MODELS["porsche-934-rsr"].simProfile!;
+  for (const key of ["spoolUpS", "spoolDownS", "referenceRpm"]) {
+    const r = modSimProfile(turboBase, { format: 1, profile: { config: { engine: { turbo: { [key]: -1 } } } } }, "x");
+    check(`... a turbo's ${key}`, !r.ok && r.errors.some((e) => new RegExp(`${key}: must stay above 0`).test(e)), r.ok ? "accepted" : r.errors.join("; "));
+  }
   const f1 = VEHICLE_MODELS["f12026-car"].simProfile!;
   const heights = f1.config.aero.rhMap?.frontRh;
   if (heights) {

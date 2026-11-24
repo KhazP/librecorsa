@@ -180,7 +180,8 @@ function acTurbos(mod: ModData): { turbo: TurboData; section: string }[] {
       const t = (k: string) => mod.num('engine.ini', s, k);
       const wastegate = t('WASTEGATE');
       const maxBoost = Math.min(t('MAX_BOOST'), Number.isFinite(wastegate) && wastegate > 0 ? wastegate : Infinity);
-      const lag = (k: string) => 1 / ((1 - t(k)) * 444);
+      // AC's lag is the share of the gap to the boost kept each step: 1 or more would never spool (a time ≤ 0 here)
+      const lag = (k: string) => 1 / ((1 - Math.min(0.9999, Math.max(0, t(k)))) * 444);
       return {
         section: s,
         turbo: {
@@ -475,7 +476,8 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
   if (throttle.length >= 2 && throttle[throttle.length - 1][0] >= 99) m.set('config.engine.throttleResponseCurve', throttle.map(([x, y]) => [x / 100, y / 100]), `${throttleLutName} (pedal → throttle, %)`);
   m.set('config.engine.idleRpm', idle, 'engine.ini [ENGINE_DATA] MINIMUM');
   m.set('config.engine.inertia', eng('ENGINE_DATA', 'INERTIA') + (drv('GEARBOX', 'INERTIA') || 0), 'engine.ini [ENGINE_DATA] INERTIA + drivetrain.ini [GEARBOX] INERTIA');
-  m.set('config.engine.limiterCutS', 1 / eng('ENGINE_DATA', 'LIMITER_HZ'), 'engine.ini [ENGINE_DATA] LIMITER_HZ (one cycle)');
+  if (eng('ENGINE_DATA', 'LIMITER_HZ') > 0) m.set('config.engine.limiterCutS', 1 / eng('ENGINE_DATA', 'LIMITER_HZ'), 'engine.ini [ENGINE_DATA] LIMITER_HZ (one cycle)');
+  else m.skip('engine.ini [ENGINE_DATA] LIMITER_HZ', 'not above 0: the limiter cuts as the base\'s does');
   if (Number.isFinite(eng('ENGINE_DATA', 'ALTITUDE_SENSITIVITY'))) m.set('config.engine.airDensitySensitivity', eng('ENGINE_DATA', 'ALTITUDE_SENSITIVITY'), 'engine.ini [ENGINE_DATA] ALTITUDE_SENSITIVITY');
   if (turbos.length && baseTurbo) {
     const t = turbos[0].turbo;
@@ -569,8 +571,6 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
     m.set('config.differential.settings.coast', drv('DIFFERENTIAL', 'COAST'), 'drivetrain.ini [DIFFERENTIAL] COAST');
     m.set('config.differential.settings.preload', drv('DIFFERENTIAL', 'PRELOAD'), 'drivetrain.ini [DIFFERENTIAL] PRELOAD');
   }
-
-  // ---- brakes
   // AC's POWER and COAST are the share of the torque a differential locks with: a ramp differential of one friction
   // face and 45° ramps. A base built otherwise (the LMDh's six faces and 56°/33° ramps) would lock 4 to 9 times as hard
   const plainRamps = (path: string, from: string) => {
@@ -580,6 +580,8 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
   };
   plainRamps('config.differential.settings', 'drivetrain.ini [DIFFERENTIAL] POWER, COAST (lock ratios: one face, 45° ramps)');
   if (traction === 'AWD2' && bc.awd) plainRamps('config.awd.secondaryDiff', 'drivetrain.ini [AWD2] FRONT_DIFF_POWER, FRONT_DIFF_COAST (lock ratios: one face, 45° ramps)');
+
+  // ---- brakes
   m.set('config.brakes.maxTorqueNm', brk('DATA', 'MAX_TORQUE'), 'brakes.ini [DATA] MAX_TORQUE');
   m.set('config.brakes.front_bias', brk('DATA', 'FRONT_SHARE'), 'brakes.ini [DATA] FRONT_SHARE');
   if (brk('DATA', 'HANDBRAKE_TORQUE') > 0) m.set('config.brakes.handbrakeTorqueNm', brk('DATA', 'HANDBRAKE_TORQUE'), 'brakes.ini [DATA] HANDBRAKE_TORQUE');
@@ -767,6 +769,16 @@ function compoundFor(slot: string, compounds: { suffix: string; name: string }[]
   return hit ? hit.suffix : fallback;
 }
 
+/**
+ * The slip ratio of the drive force's peak, from the angle of the lateral force's (FRICTION_LIMIT_ANGLE) and the
+ * longitudinal stiffness's multiplier (CX_MULT, version 10's alone): σ / (1 − σ), σ = tan(angle) ÷ CX_MULT. σ is held
+ * to 0.005–0.5, so an angle of 45° or more, or a tiny CX_MULT, still gives a peak (≤ 1) rather than none or a negative one
+ */
+function peakSlip(angleDeg: number, cxMult: number): number {
+  const sigma = Math.min(0.5, Math.max(0.005, Math.tan((angleDeg * Math.PI) / 180) / (cxMult || 1)));
+  return sigma / (1 - sigma);
+}
+
 function mapTyres(mod: ModData, m: Mapper, base: CarSimProfile, fallback: string): void {
   const { dry, wet } = baseCompounds(base);
   const compounds = acCompounds(mod);
@@ -835,16 +847,22 @@ function mapTyres(mod: ModData, m: Mapper, base: CarSimProfile, fallback: string
       m.quiet(`${c}.modelData.use_slip_falloff`, true, label('FALLOFF_LEVEL'));
       axle('modelData.falloff_level', tf('FALLOFF_LEVEL'), tr('FALLOFF_LEVEL'), label('FALLOFF_LEVEL'));
       axle('modelData.falloff_slope', tf('FALLOFF_SPEED'), tr('FALLOFF_SPEED'), label('FALLOFF_SPEED'));
-      const peak = (t: (k: string) => number) => {
-        const sigma = Math.tan((t('FRICTION_LIMIT_ANGLE') * Math.PI) / 180) / (t('CX_MULT') || 1);
-        return sigma / (1 - sigma);
-      };
-      axle('modelData.slip_ratio_limit', peak(tf), peak(tr), label('FRICTION_LIMIT_ANGLE, CX_MULT (the drive force\'s peak slip)'));
+      axle('modelData.slip_ratio_limit', peakSlip(tf('FRICTION_LIMIT_ANGLE'), tf('CX_MULT')), peakSlip(tr('FRICTION_LIMIT_ANGLE'), tr('CX_MULT')), label('FRICTION_LIMIT_ANGLE, CX_MULT (the drive force\'s peak slip)'));
       axle('modelData.brakeDxMod', tf('BRAKE_DX_MOD') || 0, tr('BRAKE_DX_MOD') || 0, label('BRAKE_DX_MOD'));
     } else {
       axle('modelData.curveFullness', tf('XMU'), tr('XMU'), label('XMU'));
       m.quiet(`${c}.modelData.use_slip_falloff`, false, 'tyres.ini (no falloff in this data version)');
       m.skip(label('FLEX'), 'the peak angle\'s growth with load in this data version: not carried');
+      // What only version 10 states, at what an older tyre has instead (none of it), not the base's own
+      const old = (path: string, front: unknown, rear: unknown, why: string) => {
+        m.quiet(`${c}.modelData.${path}`, front, label(why));
+        m.quiet(`${c}.rearOverride.modelData.${path}`, rear, label(why));
+      };
+      old('peakSlipLoadGain', 0, 0, `(version ${version}: no FLEX_GAIN)`);
+      old('peakSlipPressureGain', 0, 0, `(version ${version}: no PRESSURE_FLEX_GAIN)`);
+      old('longStiffnessMult', 1, 1, `(version ${version}: no CX_MULT)`);
+      old('brakeDxMod', 0, 0, `(version ${version}: no BRAKE_DX_MOD)`);
+      old('slip_ratio_limit', peakSlip(tf('FRICTION_LIMIT_ANGLE'), 1), peakSlip(tr('FRICTION_LIMIT_ANGLE'), 1), 'FRICTION_LIMIT_ANGLE (the drive force\'s peak slip)');
     }
     axle('modelData.speedSensitivity', tf('SPEED_SENSITIVITY'), tr('SPEED_SENSITIVITY'), label('SPEED_SENSITIVITY'));
     axle('modelData.relaxationLengthX', tf('RELAXATION_LENGTH'), tr('RELAXATION_LENGTH'), label('RELAXATION_LENGTH'));
@@ -853,12 +871,12 @@ function mapTyres(mod: ModData, m: Mapper, base: CarSimProfile, fallback: string
     if (Number.isFinite(tf('ROLLING_RESISTANCE_1'))) axle('modelData.rollingResistanceSpeedSq', tf('ROLLING_RESISTANCE_1') / 1000, tr('ROLLING_RESISTANCE_1') / 1000, label('ROLLING_RESISTANCE_1'));
     if (Number.isFinite(tf('ROLLING_RESISTANCE_SLIP'))) axle('modelData.rollingResistanceSlipGain', tf('ROLLING_RESISTANCE_SLIP') / 1000, tr('ROLLING_RESISTANCE_SLIP') / 1000, label('ROLLING_RESISTANCE_SLIP'));
     axle('modelData.verticalDamping', tf('DAMP'), tr('DAMP'), label('DAMP'));
-    // Pressure: the radial rate at the static pressure, growing per psi
+    // Pressure: the radial rate at the static pressure, growing per psi; never under a tenth of it, however steep the gain
     const springCurve = (t: (k: string) => number): Lut => {
       const st = t('PRESSURE_STATIC');
       const ideal = t('PRESSURE_IDEAL');
       const xs = ideal > st + 0.5 ? [st - 10, st, ideal, ideal + 10] : [st - 10, st, st + 10];
-      return xs.map((psi) => [psi, t('RATE') + (t('PRESSURE_SPRING_GAIN') || 0) * (psi - st)]);
+      return xs.map((psi) => [psi, Math.max(0.1 * t('RATE'), t('RATE') + (t('PRESSURE_SPRING_GAIN') || 0) * (psi - st))]);
     };
     axle('pressureData.optimalPsi', tf('PRESSURE_IDEAL'), tr('PRESSURE_IDEAL'), label('PRESSURE_IDEAL'));
     if (m.has(`${c}.pressureData.setPsi`)) axle('pressureData.setPsi', tf('PRESSURE_STATIC'), tr('PRESSURE_STATIC'), label('PRESSURE_STATIC'));
@@ -1009,8 +1027,10 @@ function mapPlanning(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnT
   const radius = mod.num('tyres.ini', `REAR${c}`, 'RADIUS');
   const turbos = acTurbos(mod);
   const eff = base.config.gearbox.efficiency;
+  // The peak up to the limiter, as the engine reaches it (acCarFacts' rule)
+  const limiter = mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER') || Infinity;
   let peakW = 0;
-  for (const [rpm, nm] of rising(mod.lut('power.lut'))) if (rpm > 0) peakW = Math.max(peakW, nm * (1 + acBoost(turbos, rpm)) * ((rpm * Math.PI) / 30));
+  for (const [rpm, nm] of rising(mod.lut('power.lut'))) if (rpm > 0 && rpm <= limiter) peakW = Math.max(peakW, nm * (1 + acBoost(turbos, rpm)) * ((rpm * Math.PI) / 30));
   // Top speed: the limiter in top gear, or where the power meets the drag
   const ratios = Array.from({ length: mod.num('drivetrain.ini', 'GEARS', 'COUNT') || 0 }, (_, i) => mod.num('drivetrain.ini', 'GEARS', `GEAR_${i + 1}`));
   const top = ratios.length ? ((mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER') * Math.PI) / 30 / (ratios[ratios.length - 1] * mod.num('drivetrain.ini', 'GEARS', 'FINAL'))) * radius : NaN;
