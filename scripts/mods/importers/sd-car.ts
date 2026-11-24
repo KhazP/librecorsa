@@ -524,6 +524,7 @@ ${PACKAGE_USAGE}
     console.log(`      sound: ${soundNote}`);
     console.log(`      ${out.contentId} in ${packageDir}`);
     if (!out.checked.ok) throw new Error(`${packageDir}: the package fails the game's checks`);
+    return packageDir;
   },
 };
 

@@ -123,6 +123,7 @@ ${PACKAGE_USAGE}`,
           "(docs/PORTING-F1-MODS.md, \"Personal use only\"). The package's credit says so.",
       );
       if (!out.checked.ok) throw new Error(`${packageDir}: the package fails the game's checks (above)`);
+      return packageDir;
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

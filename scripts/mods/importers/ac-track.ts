@@ -187,6 +187,7 @@ ${PACKAGE_USAGE}`,
     );
     console.log(`\n${licenceNotice(entry, lic).join("\n")}`);
     if (!out.checked.ok) throw new Error(`${packageDir}: the package fails the game's checks (above)`);
+    return packageDir;
   },
 };
 

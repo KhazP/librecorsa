@@ -445,6 +445,7 @@ ${PACKAGE_USAGE}
       if (out.skipped.length) console.log(`      left out (the track data doesn't name them): ${out.skipped.join(", ")}`);
       console.log(`      ${out.contentId} in ${packageDir}${licence.personal ? ` (${PERSONAL_USE_NOTE})` : ""}`);
       if (!out.checked.ok) throw new Error("the package doesn't pass the game's checks");
+      return packageDir;
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

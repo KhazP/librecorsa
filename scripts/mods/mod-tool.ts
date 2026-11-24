@@ -10,7 +10,9 @@
  *   npm run mod -- from-circuit <built id> …   packages a circuit the converters built in public/tracks/
  *   npm run mod -- from-car <spec.json>        packages a converted car, as the spec describes it
  *
- * A package's content hash is the one online rooms compare (src/lib/mods/mod-manifest.ts `packageHash`).
+ * A package's content hash is the one online rooms compare (src/lib/mods/mod-manifest.ts `packageHash`). `--help` (or
+ * `-h`) after any command prints its usage. A package written into public/mods/ is listed there at once
+ * (`_index.json`), for the dev server.
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -19,7 +21,7 @@ import { buildCatalogue, catalogueJson } from "./lib/catalogue";
 import { pathToFileURL } from "node:url";
 import { packageCar, type CarPackageOptions } from "./lib/car-package";
 import { packageCircuit, readCircuitEntry } from "./lib/circuit-package";
-import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "./lib/importer";
+import { importTarget, PACKAGE_ONLY_USAGE, parsePackageArgs, type Importer } from "./lib/importer";
 import { localIdFrom, packageCredit } from "./lib/manifest-file";
 import { writeModsIndex } from "./lib/mods-index";
 import { checkPackage, hashFolder, report } from "./lib/package-check";
@@ -54,8 +56,37 @@ async function reindex(packageDir: string): Promise<void> {
   if (resolve(dirname(packageDir)) === resolve(DEFAULT_MODS_DIR)) await writeModsIndex(DEFAULT_MODS_DIR, true);
 }
 
+/** Each command's usage */
+const USAGE: Record<string, string> = {
+  check: "npm run mod -- check <folder>",
+  pack: "npm run mod -- pack <folder> [out.zip]",
+  index: "npm run mod -- index [mods folder, default public/mods]",
+  catalogue: `npm run mod -- catalogue <folder of zips> [--base-url <url>] [--out <file>]
+                                           (--base-url: where the zips are served, default beside the catalogue;
+                                            --out: default catalogue.json in the folder)`,
+  import: "npm run mod -- import [<name> …]          (no name: list the importers; <name> --help: one's options)",
+  "from-circuit": `npm run mod -- from-circuit <built id> [--id <circuit id>]
+${PACKAGE_ONLY_USAGE}`,
+  "from-car": "npm run mod -- from-car <spec.json>      (scripts/mods/lib/car-package.ts CarPackageOptions, paths relative to it)",
+};
+const usage = (command?: string) => `Usage:\n${(command && USAGE[command] ? [USAGE[command]] : Object.values(USAGE)).map((u) => `  ${u}`).join("\n")}`;
+
+/** Whether the arguments ask for help (`--help`, `-h`), before any `--` */
+const asksHelp = (args: string[]): boolean => {
+  const end = args.indexOf("--");
+  return (end < 0 ? args : args.slice(0, end)).some((a) => a === "--help" || a === "-h");
+};
+
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
+  if (!command || command === "--help" || command === "-h" || command === "help") {
+    console.log(usage());
+    process.exit(0);
+  }
+  if (command !== "import" && asksHelp(args)) {
+    console.log(usage(command));
+    process.exit(USAGE[command] ? 0 : 1);
+  }
 
   if (command === "check" && args[0]) {
     const folder = resolve(args[0]);
@@ -104,28 +135,25 @@ async function main(): Promise<void> {
 
   if (command === "import") {
     const [name, ...rest] = args;
-    if (!name || name === "--help") {
+    if (!name || name === "--help" || name === "-h") {
       console.log("Importers (npm run mod -- import <name> --help for one's options):\n");
       for (const n of importerNames()) console.log(`  ${n.padEnd(16)} ${(await loadImporter(n)).summary}`);
       return;
     }
     const importer = await loadImporter(name);
-    if (rest.includes("--help")) {
+    if (asksHelp(rest)) {
       console.log(`npm run mod -- import ${name} ${importer.usage}`);
       return;
     }
-    await importer.run(rest);
-    // The dev server's list of packages, so what was imported there shows up at once (the launcher lists its own
-    // mods folder as it serves it)
-    const outAt = rest.findIndex((a) => a === "--out" || a.startsWith("--out="));
-    const out = outAt < 0 ? undefined : rest[outAt].startsWith("--out=") ? rest[outAt].slice("--out=".length) : rest[outAt + 1];
-    if (!out || resolve(out) === resolve(DEFAULT_MODS_DIR)) await writeModsIndex(DEFAULT_MODS_DIR, true);
+    // The dev server's list of packages, when the package went where it serves (the launcher lists its own mods
+    // folder as it serves it)
+    await reindex(await importer.run(rest));
     return;
   }
 
   if (command === "from-circuit" && args[0] && !args[0].startsWith("-")) {
     const [builtId, ...rest] = args;
-    const { values } = parseImportArgs(rest, { id: { type: "string" } });
+    const { values } = parsePackageArgs(rest, { id: { type: "string" } });
     const entry = readCircuitEntry(join(BUILT_TRACKS_DIR, builtId), builtId);
     const credit = packageCredit(entry.credit ?? {});
     const localId = localIdFrom(values.id ?? builtId);
@@ -142,31 +170,24 @@ async function main(): Promise<void> {
     // Paths in the spec are relative to it
     const spec = JSON.parse(readFileSync(specPath, "utf8")) as CarPackageOptions;
     const at = (p: string) => resolve(dirname(specPath), p);
+    const packageDir = resolve(spec.packageDir ? at(spec.packageDir) : join(DEFAULT_MODS_DIR, spec.info.id));
     const out = packageCar({
       ...spec,
-      packageDir: resolve(spec.packageDir ? at(spec.packageDir) : join(DEFAULT_MODS_DIR, spec.info.id)),
+      packageDir,
       model: at(spec.model),
       thumb: spec.thumb && at(spec.thumb),
       skins: spec.skins?.map((s) => ({ ...s, dir: at(s.dir) })),
       sound: "dir" in spec.sound ? { ...spec.sound, dir: at(spec.sound.dir) } : spec.sound,
+      extraFiles: spec.extraFiles?.map((f) => ({ ...f, from: at(f.from) })),
     });
     report(basename(specPath), out.checked);
     if (out.skipped.length) console.log(`      left out: ${out.skipped.join(", ")}`);
+    await reindex(packageDir);
     process.exit(out.checked.ok ? 0 : 1);
   }
 
-  console.log(`Usage:
-  npm run mod -- check <folder>
-  npm run mod -- pack <folder> [out.zip]
-  npm run mod -- index [mods folder, default public/mods]
-  npm run mod -- catalogue <folder of zips> [--base-url <url>] [--out <file>]
-                                           (--base-url: where the zips are served, default beside the catalogue;
-                                            --out: default catalogue.json in the folder)
-  npm run mod -- import [<name> …]          (no name: list the importers)
-  npm run mod -- from-circuit <built id> [--id <circuit id>]
-${PACKAGE_USAGE}
-  npm run mod -- from-car <spec.json>      (scripts/mods/lib/car-package.ts CarPackageOptions, paths relative to it)`);
-  process.exit(command ? 1 : 0);
+  console.log(usage(USAGE[command] ? command : undefined));
+  process.exit(1);
 }
 
 void main().catch((err) => {

@@ -244,6 +244,7 @@ ${PACKAGE_USAGE}`,
       console.log(`      licence: ${info.credit.license}${held.problems.length ? ` (${held.problems.join('; ')})` : ''}`);
       if (info.credit.note) console.log(`      ${info.credit.note}. Keep the package to yourself unless ${info.credit.author} says otherwise.`);
       if (!out.checked.ok) throw new Error('the package fails the game\'s checks (above)');
+      return packageDir;
     } finally {
       if (values['keep-build']) console.log(`      kept the working copy in ${work}`);
       else rmSync(work, { recursive: true, force: true });

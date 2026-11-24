@@ -1,11 +1,12 @@
 /**
  * The modder's tools (scripts/mods): packaging a built circuit and a converted car, the mod.json they write, the paths
- * they refuse before writing or deleting anything, the zip `pack` writes read back by the game's importer, and every
- * importer's shape. No converter runs here (those need Python and a source mod); each importer's own checks are its
- * suite.
+ * they refuse before writing or deleting anything, the zip `pack` writes read back by the game's importer, every
+ * importer's shape, and the command line (`--help` everywhere, `from-car`'s paths). No converter runs here (those need
+ * Python and a source mod); each importer's own checks are its suite.
  *
  *   npx tsx scripts/verify/verify-mod-tools.ts
  */
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -162,6 +163,26 @@ void (async () => {
     const imp = ((await import(join(dir, f))) as { default?: Importer }).default;
     check(`importer ${f}: a summary, a usage and a run`, !!imp && typeof imp.summary === "string" && imp.summary.length > 10 && typeof imp.usage === "string" && typeof imp.run === "function");
   }
+
+  // --- The command line ---
+  const repo = join(__dirname, "..", "..");
+  const tool = (...args: string[]) => spawnSync(process.execPath, ["--disable-warning=THREE_CJS_DEPRECATED", "--import", "tsx", join(repo, "scripts", "mods", "mod-tool.ts"), ...args], { cwd: repo, encoding: "utf8" });
+  for (const args of [["--help"], ["-h"], [], ["index", "--help"], ["check", "--help"], ["pack", "-h"], ["catalogue", "--help"], ["from-circuit", "--help"], ["from-car", "--help"]]) {
+    const r = tool(...args);
+    check(`mod-tool ${args.join(" ") || "(no command)"}: its usage, exit 0`, r.status === 0 && /Usage|npm run mod/.test(r.stdout), `exit ${r.status} ${r.stderr.trim().split("\n").pop() ?? ""}`);
+  }
+  check("`index --help` writes no index in a folder named --help", !existsSync(join(repo, "--help")));
+  const help = tool("import", "blender-track", "--help");
+  check("an importer's --help lists --keep-build as it is", help.status === 0 && /--keep-build +keep the converter's working files/.test(help.stdout));
+  const fromCircuitHelp = tool("from-circuit", "--help");
+  check("from-circuit's usage has no --keep-build (it never removes a build)", !/--keep-build/.test(fromCircuitHelp.stdout));
+  check("an unknown command: the usage, exit 1", tool("no-such-command").status === 1);
+  // from-car: every path in the spec is the spec's, extra files too
+  const specDir = join(tmp, "spec");
+  write(join(specDir, "LICENSE-CC-BY-4.0.txt"), "CC BY 4.0");
+  write(join(specDir, "spec.json"), JSON.stringify({ ...carOpts, packageDir: "../spec-pkg", car: { ...carOpts.car, localId: "spec-car" }, model: "../car/gt-x.glb", extraFiles: [{ from: "LICENSE-CC-BY-4.0.txt", to: "cars/spec-car/LICENSE-CC-BY-4.0.txt" }] }));
+  const fromCar = tool("from-car", join(specDir, "spec.json"));
+  check("from-car: the spec's extra files are found beside the spec", fromCar.status === 0 && existsSync(join(tmp, "spec-pkg", "cars", "spec-car", "LICENSE-CC-BY-4.0.txt")), (fromCar.stdout + fromCar.stderr).trim().split("\n").pop());
 
   rmSync(tmp, { recursive: true, force: true });
   if (failed) {
