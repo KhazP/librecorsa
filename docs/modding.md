@@ -157,7 +157,7 @@ The patched profile runs in the exact same 500 Hz simulation worker as built-in 
 
 If a patch violates any rule, contains a typo, or uses the wrong type, that car is skipped (the rest of the package still loads) and the **Mods** panel pinpoints the failing field path. Updating `gearbox.gears.redline_rpm` automatically adjusts audio pitch scaling and the shift warning beep. Garage setup ranges, AI profiles, and HUD layouts remain inherited from the base model.
 
-All base vehicle models support physics patches except `lc26`, which uses its own separate simulation engine. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify-*.ts` suites.
+All base vehicle models support physics patches except `lc26`, which uses its own separate simulation engine. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
 
 ## Checking, packing, and importing with the CLI
 
@@ -176,10 +176,15 @@ npm run mod -- from-circuit <built-id> [--id <circuit-id>] [--package <author.na
 # Package a converted car from a CarPackageOptions JSON spec
 npm run mod -- from-car path/to/spec.json
 
-# List available direct-to-mod importers, or run one (e.g., blender-track)
+# List the importers, or run one (Speed Dreams, Assetto Corsa, F1 25, Blender)
 npm run mod -- import
-npm run mod -- import blender-track path/to/circuit.glb
+npm run mod -- import sd-track --fetch brno
+
+# Write a catalogue from a folder of packed zips
+npm run mod -- catalogue path/to/zips [--base-url <url>]
 ```
+
+Converting content from another game, in the launcher or with `npm run mod -- import`, has a guide of its own: [Importing mods from other games](importing-mods.md).
 
 `check` verifies `mod.json`, confirms every referenced file exists (models, track data, physics patches, livery textures), ensures `track_data.json` contains no external paths, validates physics patches, and rejects forbidden paths, symlinks, casing clashes, or file types. Any standard zip utility also works for packing as long as `mod.json` sits at the archive root (or inside a single top-level directory) with no duplicate filenames.
 
