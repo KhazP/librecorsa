@@ -148,7 +148,7 @@ import {
   writeOutlineEdges,
 } from './TrackColliderQuery';
 import { queryContactPatch } from './ContactPatch';
-import { Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
+import { CUT_ENERGY_MARGIN_J, DEPLOY_THROTTLE_START, Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
 import { type EnergySession, type F1EnergyCircuit, inStretch } from '../f1-energy-circuits';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 import {
@@ -1557,6 +1557,8 @@ export class VehiclePhysics {
   private readonly stall = new StallController();
   /** Throttle plate the cylinders see, after the air path's lag (`EngineData.torqueResponseS`) */
   private icePlate = 0;
+  /** Effective cylinder load including transparent 2026 ICE-to-MGU-K torque arbitration (keeps the turbo spooled) */
+  private iceArbPlate = 0;
   private lsdLockTorque = 0;
   /**
    * Rear halfshaft twist (rad, + = the diff side ahead of the hub): the mean of the two (it carries the drive torque) and
@@ -2056,10 +2058,19 @@ export class VehiclePhysics {
     return this.ers2026?.clipping ?? false;
   }
 
+  /** Whether the Boost button can actually deploy (or hold in Low Grip) energy right now */
+  public get ersCanBoost(): boolean {
+    if (!this.ers2026) return this.ersEnergyJ > 0;
+    if (this.ers2026.isStandingStart) return false;
+    if (this.ersEnergyJ <= CUT_ENERGY_MARGIN_J) return false;
+    if (this.ersLowGrip) return this.config.performanceModes[this.performanceMode].deployFraction > 0;
+    return true;
+  }
+
   /**
-   * What the lap's recharge limit leaves for superclipping (J): the limit (with Overtake's extra) less this lap's
-   * recharge and less what the braking zones still to come recovered on the last lap (before a whole lap, 60 % of the
-   * limit spread over the lap)
+   * What the lap's recharge limit leaves for non-braking harvest (part-throttle arbitration and superclipping, J): the
+   * limit (with Overtake's extra) less this lap's recharge and less what the braking zones still to come could recover
+   * on the last lap (before a whole lap, 78 % of the limit spread over the lap)
    */
   private superclipRoomJ(): number {
     const limit = this.ersRechargeLimitJ();
@@ -2071,7 +2082,7 @@ export class VehiclePhysics {
       reserve = this.lastLapBrakeHarvestJ[b] * (1 - (x - b));
       for (let k = b + 1; k < ERS_LAP_BINS; k++) reserve += this.lastLapBrakeHarvestJ[k];
     } else {
-      reserve = 0.6 * limit * (1 - p);
+      reserve = 0.78 * limit * (1 - p);
     }
     return Math.max(0, limit - this.lapHarvestJ - reserve);
   }
@@ -2345,6 +2356,7 @@ export class VehiclePhysics {
     this.clutchSlipNorm = 0;
     this.stall.reset();
     this.icePlate = 0;
+    this.iceArbPlate = 0;
     this.lsdLockTorque = 0;
     this.centreCouplingTorqueNm = 0;
     this.coupledLockTorqueNm = 0;
@@ -3014,7 +3026,7 @@ export class VehiclePhysics {
     // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
     const turbo = this.config.engine.turbo;
     if (turbo && this.turbocharged) {
-      const target = turboBoostAsked(turbo, this.rpm, this.icePlate);
+      const target = turboBoostAsked(turbo, this.rpm, Math.max(this.icePlate, this.iceArbPlate));
       const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
       this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
       this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
@@ -4099,8 +4111,9 @@ export class VehiclePhysics {
     // Combustion torque at the full spark, and what the traction cut leaves of it.
     // Under manual clutch, an engine dragged below stall speed chokes and loses torque; once stalled it produces none.
     const lugScale = this.stall.stalled ? 0 : manualClutch && rpm < stallRpm ? clamp(rpm / stallRpm, 0, 1) : 1;
-    const tCombustionFull =
-      (plate * lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
+    const tCombustionMax =
+      (lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
+    const tCombustionFull = plate * tCombustionMax;
     const tCombustion = tCombustionFull * sparkShare;
     const coastSpinScale = this.stall.stalled ? clamp(this.engineOmega / 30, 0, 1) : 1;
     const tCoast = (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale * coastSpinScale;
@@ -4175,7 +4188,7 @@ export class VehiclePhysics {
         pK = -ers.topGearLiftHarvestW * mode.liftHarvestScale;
       } else if (topGear && inp.throttle > 0.95 && mode.topGearClipHarvestW > 0) {
         pK = -mode.topGearClipHarvestW;
-      } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
+      } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0 && !(this.ers2026 && this.ersBoost && !this.ersLowGrip)) {
         pK = -mode.partThrottleHarvestW;
       } else if (this.ers2026 && inp.throttle > 0.05) {
         // The 2026 F1 rules (ers-2026.ts): the ERS-K's power against road speed, the control unit's cuts flat out at
@@ -4185,6 +4198,7 @@ export class VehiclePhysics {
         const circuit = this.ersCircuit;
         const lapS = Number.isFinite(this.trackProgress) && this.lapLengthM > 0 ? this.trackProgress * this.lapLengthM : -1;
         const bigCutW = circuit && lapS >= 0 ? this.ersBigCutW(circuit, lapS) : 0;
+        const boostDeployFrac = this.ersBoost && !this.ersLowGrip ? 1 : mode.deployFraction;
         const dc = this.ers2026.step({
           h,
           speedKmh,
@@ -4201,8 +4215,8 @@ export class VehiclePhysics {
           cutStepW: Math.max(F1_2026_ERS.limitStepW, bigCutW),
           cutRateWps: circuit?.cutRateWps ?? F1_2026_ERS.limitRateWps,
           resetSector: !!circuit && lapS >= 0 && this.ersResetSector(circuit, lapS),
-          share: mode.deployFraction * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
-          fillShare: mode.deployFraction * this.luts.deployVsGear.evaluate(this.gear),
+          share: boostDeployFrac * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
+          fillShare: boostDeployFrac * this.luts.deployVsGear.evaluate(this.gear),
           valueSPerMJ: ersValueSPerMJ(speedKmh / 3.6, this.ersBrakeAheadM(), this.totalMassKg),
           deployAboveSPerMJ: em ? em.deployAbove.evaluate(socN) : Number.NaN,
           superclipBelowSPerMJ: em ? em.superclipBelow.evaluate(socN) : 0,
@@ -4267,6 +4281,64 @@ export class VehiclePhysics {
         tK = inp.brake > 0.05 ? Math.min(tK, -lift) : -lift;
       }
     }
+    // 2026 transparent ICE-to-MGU-K torque arbitration (FIA C5.2.5 / C5.2.10 i): during trail/medium braking and
+    // low-to-mid part throttle (5 %–60 % pedal, before positive MGU-K deploy blends in), run the ICE above the driver's
+    // wheel-torque demand and absorb the exact surplus torque into the MGU-K generator (tIce += tArb, tK -= tArb). Net
+    // crank torque (tIce + tK) and rear brake-by-wire balance remain bit-exact while keeping the turbo spooled and
+    // recovering electrical energy cleanly without requiring heavy full-throttle superclipping.
+    this.iceArbPlate = this.icePlate;
+    if (
+      this.ers2026 &&
+      coupled &&
+      !shiftCut &&
+      this.shiftTimer <= 0 &&
+      !downshifting &&
+      this.limiterTimer <= 0 &&
+      sparkShare >= 0.99 &&
+      !(this.ersBoost && !this.ersLowGrip) &&
+      soc < 0.99 &&
+      this.lapHarvestJ < this.ersRechargeLimitJ() &&
+      rpm > eng.idleRpm + 800
+    ) {
+      let arbWeight = 0;
+      const socNeed = 1 - smoothstep(soc, 0.7, 0.92);
+      if (inp.brake > 0.05) {
+        arbWeight = 0.85 * socNeed * smoothstep(rpm, eng.idleRpm + 800, 7500);
+      } else if (inp.throttle > 0.05 && inp.throttle < DEPLOY_THROTTLE_START && pK >= 0 && !(topGear && inp.throttle < ers.liftThrottle)) {
+        arbWeight = 0.9 * socNeed * smoothstep(inp.throttle, 0.05, 0.15) * (1 - smoothstep(inp.throttle, 0.45, DEPLOY_THROTTLE_START));
+      } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0 && pK < 0) {
+        arbWeight = smoothstep(inp.throttle, 0.05, 0.15) * (1 - smoothstep(inp.throttle, 0.75, 0.9));
+      }
+      if (arbWeight > 0) {
+        const wetScale =
+          this.wetness > 0
+            ? Math.max(0.35, (1 - 0.32 * this.wetness) * (1 - 0.18 * Math.min(1.5, Math.abs(this.telemetry.latG)) * this.wetness))
+            : 1;
+        const mgukMaxNm = this.luts.mgukHarvest.evaluate(rpm) * wetScale;
+        const mgukHeadroomNm = Math.max(0, mgukMaxNm - Math.max(0, -tK));
+        // Only arbitrate from the FIA lap recharge budget left over after reserving upcoming braking zones so late-lap
+        // pure kinetic braking (e.g. a final hairpin before the main straight) is never starved
+        const arbBudgetJ =
+          Number.isFinite(this.trackProgress) && this.lapLengthM > 0
+            ? this.superclipRoomJ()
+            : Math.max(0, this.ersRechargeLimitJ() - this.lapHarvestJ);
+        const eRoomJ = Math.min(ers.ERS_MAX_CHARGE - this.ersEnergyJ, arbBudgetJ);
+        const roomMaxNm = eRoomJ / Math.max(1e-6, ers.harvestEfficiency * h * omegaE);
+        const roomHeadroomNm = Math.max(0, roomMaxNm - Math.max(0, -tK));
+        const arbBoostShare = turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm))) : 1;
+        const tIceCapNm = tCombustionMax * sparkShare * arbBoostShare * this.damagePowerMult;
+        const iceHeadroomNm = Math.max(0, tIceCapNm - tIce);
+        const tArb = Math.min(mgukHeadroomNm, roomHeadroomNm, iceHeadroomNm) * arbWeight;
+        if (tArb > 0) {
+          tIce += tArb;
+          tIceUncut += tArb;
+          tK -= tArb;
+          if (tCombustionMax > 1) {
+            this.iceArbPlate = clamp(plate + tArb / tCombustionMax, this.icePlate, 1);
+          }
+        }
+      }
+    }
     // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
     // curve and the gear's power clip, from the same store and lap allowance as the deploy
     if (deployAllowed && turboDeficit > 0) {
@@ -4306,7 +4378,9 @@ export class VehiclePhysics {
     this.stepPowerSamples++;
 
     // ---- brakes (physical brake pad μ(T))
-    const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
+    // Net drivetrain braking torque at the crank: when 2026 ICE-to-MGU-K arbitration fires the ICE into unused generator
+    // headroom during braking (tIce > 0, tK < 0), only the net retarding torque -(tIce + tK) slows the rear axle
+    const crankBrake = Math.max(0, -(tIce + tK));
     // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
     // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify/verify-powertrain.ts)
     // (a lift's harvest is on from the first of the pedal, so the rear calipers give way to it from there too)
@@ -4570,9 +4644,12 @@ export class VehiclePhysics {
       this.lapHarvestJ += e;
     }
     if (this.ers2026) {
-      this.ers2026.lastDcW = pMech > 0 ? pMech / ers.deployEfficiency : 0;
+      // Preserve pre-shift deployment across the brief 20 ms upshift torque cut so a cut starting right after a shift
+      // steps down from the actual power rather than snapping to 0
+      if (!shiftCut) this.ers2026.lastDcW = pMech > 0 ? pMech / ers.deployEfficiency : 0;
       this.ersOmegaStep = this.engineOmega - omegaAtStart;
-      // What the brakes could have recovered here, the recharge limit aside: the room the next lap keeps for them
+      // What the braking zones could have recovered here (including braking-headroom arbitration), the recharge limit
+      // aside: the room the next lap reserves so superclipping and part-throttle arbitration never starve late braking
       if (brakeWantW > 0 && Number.isFinite(this.trackProgress)) {
         const w = Math.min(brakeWantW, this.luts.mgukHarvest.evaluate(this.rpm) * Math.max(0, this.engineOmega));
         this.lapBrakeHarvestJ[Math.min(ERS_LAP_BINS - 1, Math.max(0, Math.floor(this.trackProgress * ERS_LAP_BINS)))] += w * ers.harvestEfficiency * h;

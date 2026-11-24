@@ -761,9 +761,10 @@ export class CarAudioEngine {
 
   /**
    * Short cockpit tones over the engine, through the master gain (so mute and pause apply): a rising two-tone
-   * when DRS becomes available, a bright chime when the flap opens, and a short shift beep.
+   * when DRS becomes available, a bright chime when the flap opens, a short shift beep, and the rolling-start
+   * 3-2-1 countdown & green-flag go cues.
    */
-  public cue(kind: 'drs_available' | 'drs_open' | 'shift'): void {
+  public cue(kind: 'drs_available' | 'drs_open' | 'shift' | 'rolling_countdown' | 'rolling_green'): void {
     const ctx = this.ctx;
     const out = this.masterGain;
     if (!ctx || !out || this.isMuted || this.isPaused || ctx.state !== 'running') return;
@@ -799,6 +800,15 @@ export class CarAudioEngine {
         break;
       case 'shift':
         tone(2600, 0, 0.055, 0.32, 'square');
+        break;
+      case 'rolling_countdown':
+        // Crisp motorsport countdown pip (A5) for 3 — 2 — 1
+        tone(880, 0, 0.11, 0.42, 'triangle');
+        break;
+      case 'rolling_green':
+        // Bright octave-up go tone (A6 + subtle E6 fifth) when leader crosses Start/Finish
+        tone(1760, 0, 0.28, 0.44, 'triangle');
+        tone(1319, 0, 0.2, 0.22, 'sine');
         break;
     }
   }

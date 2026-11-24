@@ -3,13 +3,15 @@
  * the final classification. A multiplayer race also runs its start procedure here, on the host's clock, so every
  * client shows the same lights and has the same lights-out instant.
  */
-import type { RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
+import type { DnfReason, RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
-import type { SimulatorCar } from "@/lib/sim/simulator-car";
+import { ROLLING_SLOT_SPACING_M, ROLLING_START_PACE_MS, type SimulatorCar } from "@/lib/sim/simulator-car";
+import { rollingFormationStep } from "@/lib/sim/race-start";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
 import { CarDamage } from "@/lib/sim/car-damage";
 import { damageStatusOf, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
 import { ContactGuard } from "@/lib/sim/contact-guard";
+import { MP_PROTECTED_LAUNCH_GHOST_S } from "@/lib/sim/mp-contact";
 import { classifiedTimeS, raceOrder, type RacerProgress } from "@/lib/sim/race-order";
 import {
   addFinish,
@@ -230,6 +232,10 @@ export function classify(
         : finished
           ? Math.max(0, winnerLaps - lapsCompleted)
           : Math.max(0, Math.floor((winnerLaps * lapLengthM - r.distM) / lapLengthM));
+    const dnf = !!r.dnf || !!r.dq || (final && !finished);
+    const dnfReason: DnfReason | undefined = !dnf
+      ? undefined
+      : r.dnfReason ?? (r.dq ? "track_limits" : final && !finished ? "time_limit" : undefined);
     return {
       position: i + 1,
       driverCode: r.code,
@@ -241,8 +247,9 @@ export function classify(
       lapsDown,
       lapsCompleted,
       bestLapMs: r.bestLapMs,
-      dnf: !!r.dnf || !!r.dq || (final && !finished),
+      dnf,
       dq: r.dq || undefined,
+      dnfReason,
       penaltyS: r.penaltyS ? r.penaltyS : undefined,
     };
   });
@@ -448,6 +455,12 @@ export class MultiplayerRace {
   readonly damage: CarDamage | null;
   /** The qualifying classification the race started from, formatted for the HUD */
   private readonly qualifyingRows?: { code: string; isPlayer: boolean; lapMs: number | null }[];
+  /** Rolling-start formation state (multiplayer rolling starts only; standing starts leave this false) */
+  private rollingFormation = false;
+  private rollingPaceMs = 0;
+  private rollingStageOrder = 0;
+  private rollingDistanceToLineM = 0;
+  private rollingMaxWaitS = 0;
 
   constructor(
     readonly start: RaceStartInfo,
@@ -502,6 +515,37 @@ export class MultiplayerRace {
     return slot >= 0 ? slot : this.start.grid.length;
   }
 
+  /** Arms the Nuzzi-style rolling-start formation limiter and 3-2-1 countdown after placing the car on its rolling slot */
+  startRollingFormation(paceMs: number): void {
+    const clamped = Math.min(ROLLING_START_PACE_MS, Math.max(0, paceMs));
+    if (this.start.startType !== "rolling" || clamped <= 5) {
+      this.rollingFormation = false;
+      this.rollingPaceMs = 0;
+      this.rollingStageOrder = 0;
+      this.rollingDistanceToLineM = 0;
+      return;
+    }
+    const poleDistM =
+      this.gridSlot === 0
+        ? this.lapClock.distM
+        : Math.min(-5, this.lapClock.distM + this.gridSlot * ROLLING_SLOT_SPACING_M);
+    if (poleDistM >= -5) {
+      this.rollingFormation = false;
+      this.rollingPaceMs = 0;
+      return;
+    }
+    this.rollingFormation = true;
+    this.rollingPaceMs = clamped;
+    this.rollingDistanceToLineM = Math.max(0, -poleDistM);
+    this.rollingStageOrder = rollingFormationStep(this.rollingDistanceToLineM, clamped, clamped, 0).stageOrder;
+    this.rollingMaxWaitS = Math.max(12, this.rollingDistanceToLineM / Math.max(5, clamped) + 8);
+  }
+
+  /** Active formation speed limit (m/s) for the local car while rolling to Start/Finish; undefined once green */
+  get rollingLimiterMs(): number | undefined {
+    return this.rollingFormation && this.latestFrame?.phase === "racing" ? this.rollingPaceMs : undefined;
+  }
+
   /** Someone has taken the chequered flag: every car still running finishes on its next line crossing */
   get flagOut(): boolean {
     if (this.lapClock.finishTimeS !== null) return true;
@@ -546,20 +590,23 @@ export class MultiplayerRace {
     return { phase: "racing", lightsOn: 0, countdownS: 0, raceTimeS: (hostNowMs - this.lightsOutHostMs) / 1000 };
   }
 
-  /** Contact with other players this frame (never on the grid; optionally not on the opening lap) */
+  /** Contact with other players this frame (never on the grid; brief launch window in protected mode; lap 1 only in ghost_lap1) */
   collisionsActive(frame: MultiplayerRaceFrame): boolean {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
-    if (this.start.collisions !== "on") return this.lapClock.distM >= this.lapLengthM;
-    return true;
+    if (this.start.collisions === "on") return true;
+    if (this.start.collisions === "protected") {
+      return frame.raceTimeS >= MP_PROTECTED_LAUNCH_GHOST_S || this.lapClock.distM >= this.lapLengthM;
+    }
+    return this.lapClock.distM >= this.lapLengthM;
   }
 
   /** The fair-play rule of an open race (collision rule 'protected'), applied on top of `collisionsActiveWith` */
   readonly guard: ContactGuard | null;
 
   /**
-   * Contact with one other player this frame. With ghosting on the opening lap the two cars are solid only once both
-   * are past it: each client resolves its own car, so keying it on this car alone had one car pushed by a car that,
-   * on the other client, was still a ghost.
+   * Contact with one other player this frame. With `ghost_lap1` both cars must clear lap 1; with `protected` (open
+   * races) collisions turn on right after the brief launch spawn-protection window (instead of ghosting a full lap),
+   * while `ContactGuard` handles parked/wrong-way hazards and extreme rams.
    */
   collisionsActiveWith(frame: MultiplayerRaceFrame, peerId: string): boolean {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
@@ -567,6 +614,12 @@ export class MultiplayerRace {
     if (this.lapClock.finishTimeS !== null || (this.remote.get(peerId)?.finishTimeS ?? null) !== null) return false;
     if (this.start.collisions === "on") return true;
     const other = this.remote.get(peerId);
+    if (this.start.collisions === "protected") {
+      return (
+        other !== undefined &&
+        (frame.raceTimeS >= MP_PROTECTED_LAUNCH_GHOST_S || (this.lapClock.distM >= this.lapLengthM && other.distM >= this.lapLengthM))
+      );
+    }
     return this.lapClock.distM >= this.lapLengthM && other !== undefined && other.distM >= this.lapLengthM;
   }
 
@@ -700,6 +753,7 @@ export class MultiplayerRace {
         finishLaps: row.timeS === null ? undefined : row.laps,
         bestLapMs: row.bestLapMs ?? known?.bestLapMs ?? null,
         dnf: row.dnf,
+        dnfReason: row.dnf ? (known?.dnfReason ?? (official.final ? "time_limit" : undefined)) : undefined,
         grid: row.grid - 1,
       };
     });
@@ -744,6 +798,7 @@ export class MultiplayerRace {
         compound: p.race.cmp,
         // Retired when the classification closed: that stands even if its packets come back
         dnf: existing?.dnf,
+        dnfReason: existing?.dnfReason,
       });
     }
   }
@@ -772,7 +827,9 @@ export class MultiplayerRace {
       // Not heard from yet: on the grid, placed against this car's own grid spot by grid order (a guess at a fixed
       // distance would put a car ahead of the one in front of it on another screen)
       const placed = this.lastSeenS.has(r.id) ? r : { ...r, distM: this.lapClock.startDistM + (this.gridSlot - (r.grid ?? this.start.grid.length)) * 8 };
-      return !r.dnf && frame.phase === "racing" && r.finishTimeS === null && !this.present.has(r.id) ? { ...placed, dnf: true } : placed;
+      return !r.dnf && frame.phase === "racing" && r.finishTimeS === null && !this.present.has(r.id)
+        ? { ...placed, dnf: true, dnfReason: "disconnected" as const }
+        : placed;
     });
     const field = [me, ...remote];
     const L = this.lapLengthM;
@@ -803,6 +860,8 @@ export class MultiplayerRace {
         intervalS,
         name: r.name,
         finished: r.finishTimeS !== null,
+        retired: r.dnf || undefined,
+        dnfReason: r.dnfReason,
         bestLapMs: r.bestLapMs,
         lastLapMs: r.lastLapMs ?? null,
         trackS: lapPositionM(r.distM, L),
@@ -816,7 +875,10 @@ export class MultiplayerRace {
       // The classification closes: the cars out now stay out, and the result is kept as it stands
       for (const r of remote) {
         const kept = this.remote.get(r.id);
-        if (r.dnf && kept) kept.dnf = true;
+        if (r.dnf && kept) {
+          kept.dnf = true;
+          kept.dnfReason ??= r.dnfReason;
+        }
       }
       this.finalResults = withGridPositions(classify(ordered, L, this.start.laps, true), ordered);
     }
@@ -828,10 +890,32 @@ export class MultiplayerRace {
     const officialResults = official && (playerFinished || official.final) ? this.officialResults(field, official) : null;
     const officialPlace = officialResults?.findIndex((r) => r.isPlayer) ?? -1;
     const damageStatus = damageStatusOf(this.damage);
+    let rollingStatus: RaceStatus["rollingFormation"] = undefined;
+    if (frame.phase === "racing" && this.rollingFormation) {
+      const poleId = this.start.grid[0];
+      const pole = poleId === this.localPeerId ? me : (remote.find((r) => r.id === poleId) ?? ordered[0]);
+      if (!pole || pole.dnf || pole.distM >= 0 || frame.raceTimeS >= this.rollingMaxWaitS) {
+        this.rollingFormation = false;
+        this.rollingStageOrder = 0;
+        this.rollingDistanceToLineM = 0;
+      } else {
+        this.rollingDistanceToLineM = Math.max(0, -pole.distM);
+        const step = rollingFormationStep(this.rollingDistanceToLineM, pole.speedMs, this.rollingPaceMs, this.rollingStageOrder);
+        this.rollingStageOrder = step.stageOrder;
+        rollingStatus = {
+          paceMs: this.rollingPaceMs,
+          stage: step.stage,
+          countdown: step.countdown,
+          limiterActive: true,
+          distanceToLineM: Math.round(this.rollingDistanceToLineM),
+        };
+      }
+    }
     return {
       phase: frame.phase === "racing" ? (playerFinished ? "finished" : "racing") : "lights",
       lightsOn: frame.lightsOn,
       countdownS: frame.phase === "countdown" ? frame.countdownS : undefined,
+      rollingFormation: rollingStatus,
       qualifying: this.qualifyingRows,
       position: officialPlace >= 0 && playerFinished ? officialPlace + 1 : ordered.indexOf(me) + 1,
       fieldSize: ordered.length,

@@ -2501,6 +2501,36 @@ async function main() {
       assert.equal(dev.log.length, 0, name);
     }
   });
+  await check("#189: TMX, T150, T500RS and start-up ids stay refused for the bridge even if Windows exposes a HID PID collection", async () => {
+    for (const [productId, name] of [
+      [0xb67f, "B67F"],
+      [0xb677, "T150"],
+      [0xb65e, "T500RS"],
+      [0xb65d, "Thrustmaster FFB Wheel"],
+    ] as const) {
+      const dev = new FakeHidDevice(pidCollections());
+      dev.vendorId = 0x044f;
+      dev.productId = productId;
+      dev.productName = name;
+      const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, new FakeClock().deps);
+      assert.equal(await ffb.connect(), null, `${name} connect`);
+      assert.equal(ffb.status.state, "unsupported", `${name} status`);
+      assert.match(ffb.status.message ?? "", /bridge/, `${name} message`);
+      assert.equal(dev.opened, false, `${name} never opened`);
+      assert.equal(dev.log.length, 0, `${name} no writes`);
+      // Reconnect must not hijack an already-granted device either
+      const again = new WebHidFfb(fakeHid([], [dev]).api, new FakeClock().deps);
+      assert.equal(await again.reconnect(), null, `${name} reconnect`);
+      assert.equal(again.status.state, "idle", `${name} stays idle on reconnect`);
+      assert.equal(dev.opened, false, `${name} never opened on reconnect`);
+      // Direct setupPidDevice also refuses
+      const direct = await setupPidDevice(dev);
+      assert.equal(direct.ok, false, `${name} direct setup`);
+      assert.equal(dev.opened, false, `${name} direct never opened`);
+      // Diagnostics still show the PID layout while explaining the refusal
+      assert.match(describeHidDevice(dev), /Refused for the bridge \(HID PID ignored\):/);
+    }
+  });
   await check("a wheel still on a start-up id (hid-tminit's b65d, b664, b69c) is refused with its own message", async () => {
     for (const productId of [0xb65d, 0xb664, 0xb69c]) {
       const startup = thrustmaster(productId, "Thrustmaster FFB Wheel");

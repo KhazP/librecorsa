@@ -87,13 +87,15 @@ const SOFTWARE = /swiftshader|llvmpipe|softpipe|lavapipe|software (rasterizer|re
  */
 const WEAK_INTEL =
   /intel.*\b(u?hd graphics|hd \d{3,4}\b|gma\b|iris(\((r|tm)\))?\s*(pro|plus)|iris(\((r|tm)\))?\s*graphics\s*[56]\d\d)|mesa dri intel|\b(ivybridge|haswell|broadwell|skylake|kabylake|(kbl|skl|cfl|whl|cml|bxt|glk|apl) gt\d?)\b/i;
+/** Windows ARM GPUs (Snapdragon X / 8cx Adreno over D3D11 ANGLE); Android phones are left out so PhysicalSky stays on */
+const WEAK_WINDOWS_ARM = /qualcomm.*adreno.*direct3d11|adreno\(tm\)\s*(x1|8cx)/i;
 
-/** What a renderer string says about the GPU: a CPU rasteriser, an older Intel chip, anything else, or nothing */
+/** What a renderer string says about the GPU: a CPU rasteriser, an older Intel or Windows ARM chip, anything else, or nothing */
 export function classifyRenderer(name: string | null | undefined): GpuClass {
   const n = (name ?? "").trim();
   if (!n || MASKED.test(n)) return "unknown";
   if (SOFTWARE.test(n)) return "software";
-  if (WEAK_INTEL.test(n)) return "weak";
+  if (WEAK_INTEL.test(n) || WEAK_WINDOWS_ARM.test(n)) return "weak";
   return "ok";
 }
 

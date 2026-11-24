@@ -261,7 +261,7 @@ export const PositionTag: React.FC<{ t: HudDesignProps["t"] }> = ({ t }) => {
  * Shift lights across the top, the gear dead centre, delta and pace to the right, energy and
  * tyres below. Everything the engineer would show you in one place, nothing in the corners.
  */
-export const WheelDashHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, mfd, lapInvalid, mapMode, leftExtra, rightExtra }) => (
+export const WheelDashHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, mfd, channels, lapInvalid, mapMode, leftExtra, rightExtra }) => (
   <div className="pointer-events-none absolute inset-0 select-none">
     <div className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)] flex flex-col items-start gap-2" style={anchor(scale, "top left")}>
       <PositionTag t={t} />
@@ -273,9 +273,10 @@ export const WheelDashHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRang
       {rightExtra ? <div className="mt-2">{rightExtra}</div> : null}
     </div>
 
-    {mfd ? (
-      <div className="absolute right-[clamp(14px,2.2vw,24px)] bottom-[clamp(14px,2.2vw,24px)] hidden lg:block" style={anchor(scale, "bottom right")}>
+    {mfd || channels ? (
+      <div className="absolute right-[clamp(14px,2.2vw,24px)] bottom-[clamp(14px,2.2vw,24px)] hidden flex-col items-end gap-2 lg:flex" style={anchor(scale, "bottom right")}>
         {mfd}
+        {channels}
       </div>
     ) : null}
 

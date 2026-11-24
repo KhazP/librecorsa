@@ -13,11 +13,12 @@ import { HallOfFame } from "@/components/board/HallOfFame";
 import { DriverProfileModal } from "@/components/board/DriverProfileModal";
 import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
-import { Button, Card, EmptyState, Select } from "@/components/ui";
+import { Button, Card, EmptyState, Modal, Select, TextField } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Segmented } from "@/components/ui/Segmented";
 import { Icon } from "@/components/ui/icons";
 import { formatCount } from "@/lib/net/board-client";
+import { sanitizeDriverName } from "@/lib/settings/player-settings";
 
 export interface ChallengePanelProps {
   challenge: WeeklyChallenge;
@@ -33,6 +34,12 @@ export interface ChallengePanelProps {
   /** Changes when the board may have changed (a lap went up) */
   boardVersion: number;
   driverName: string;
+  /** True while the player still only has an auto-generated default name */
+  driverNameGenerated?: boolean;
+  /** Claims / updates the driver name (returns an error string if rejected, or null on success) */
+  onRenameDriver?: (name: string) => Promise<string | null>;
+  /** Explicitly keeps the current auto-generated name so the prompt does not repeat */
+  onConfirmDriverName?: () => void;
   /** Sets the game up to the week's rules and goes out on track */
   onDrive: () => void;
   /** Races on the week's circuit and car run on this site (they are entered from Multiplayer) */
@@ -74,6 +81,9 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   loadBoard,
   boardVersion,
   driverName,
+  driverNameGenerated = false,
+  onRenameDriver,
+  onConfirmDriverName,
   onDrive,
   hasRaces = false,
   onOpenBoard,
@@ -81,11 +91,60 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   const tx = useTranslations("menu.challenge");
   const [tab, setTab] = useState<ChallengeTab>("week");
   const [profileDriver, setProfileDriver] = useState<string | null>(null);
+  const [nameModal, setNameModal] = useState<"drive" | "edit" | null>(null);
+  const [nameDraft, setNameDraft] = useState(driverName);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, []);
+
+  const openNamePrompt = (mode: "drive" | "edit") => {
+    setNameDraft(driverName);
+    setNameError(null);
+    setNameSaving(false);
+    setNameModal(mode);
+  };
+
+  const handleDriveClick = () => {
+    if (driverNameGenerated && (onRenameDriver || onConfirmDriverName)) {
+      openNamePrompt("drive");
+      return;
+    }
+    onDrive();
+  };
+
+  const handleKeepName = () => {
+    const proceed = nameModal === "drive";
+    onConfirmDriverName?.();
+    setNameModal(null);
+    if (proceed) onDrive();
+  };
+
+  const handleSaveName = async () => {
+    const proceed = nameModal === "drive";
+    const cleaned = sanitizeDriverName(nameDraft);
+    if (cleaned === driverName) {
+      handleKeepName();
+      return;
+    }
+    if (!onRenameDriver) {
+      handleKeepName();
+      return;
+    }
+    setNameSaving(true);
+    setNameError(null);
+    const problem = await onRenameDriver(nameDraft);
+    setNameSaving(false);
+    if (problem !== null) {
+      setNameError(problem);
+      return;
+    }
+    setNameModal(null);
+    if (proceed) onDrive();
+  };
 
   const [reload, setReload] = useState(0);
   // The board picked (lap-types.ts `BoardChoice`): the one laps go on now, or one kept from before an update
@@ -154,8 +213,23 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
               <span className="lc-mono text-[12px] text-lc-fog">{challengeConditionsLabel(challenge.vehicle)}</span>
             </div>
             <p className="lc-hint m-0">{hasRaces && available ? tx("aboutWithRaces") : tx("about")}</p>
+            {driverName ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lc-row border border-lc-line bg-lc-well/60 px-3 py-2">
+                <span className="min-w-0 truncate text-[13px] text-lc-fog">
+                  {tx.rich("postingAs", {
+                    name: driverName,
+                    b: (chunks) => <span className="font-semibold text-lc-chalk">{chunks}</span>,
+                  })}
+                </span>
+                {onRenameDriver ? (
+                  <Button size="sm" variant="ghost" onClick={() => openNamePrompt("edit")}>
+                    {tx("changeName")}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             {available ? (
-              <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
+              <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={handleDriveClick}>
                 {tx("drive")}
               </Button>
             ) : (
@@ -230,6 +304,59 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
         carTag={carBoardTag}
         onOpenBoard={onOpenBoard}
       />
+      <Modal
+        open={nameModal !== null}
+        onClose={() => {
+          if (!nameSaving) setNameModal(null);
+        }}
+        title={tx("namePrompt.title")}
+        size="md"
+      >
+        <p className="lc-body m-0 text-lc-fog">{tx("namePrompt.body")}</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSaveName();
+          }}
+          className="flex flex-col gap-4"
+        >
+          <TextField
+            label={tx("namePrompt.label")}
+            hint={tx("namePrompt.hint")}
+            maxLength={16}
+            autoComplete="nickname"
+            spellCheck={false}
+            autoFocus
+            value={nameDraft}
+            disabled={nameSaving}
+            error={nameError ?? undefined}
+            onChange={(v) => {
+              setNameDraft(v);
+              setNameError(null);
+            }}
+          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {nameModal === "drive" && sanitizeDriverName(nameDraft) !== driverName ? (
+              <Button type="button" variant="secondary" disabled={nameSaving} onClick={handleKeepName}>
+                {tx("namePrompt.keepAndDrive")}
+              </Button>
+            ) : (
+              <Button type="button" variant="secondary" disabled={nameSaving} onClick={() => setNameModal(null)}>
+                {tx("namePrompt.cancel")}
+              </Button>
+            )}
+            <Button type="submit" variant="primary" loading={nameSaving}>
+              {nameSaving
+                ? tx("namePrompt.saving")
+                : nameModal === "drive"
+                  ? sanitizeDriverName(nameDraft) === driverName
+                    ? tx("namePrompt.keepAndDrive")
+                    : tx("namePrompt.saveAndDrive")
+                  : tx("namePrompt.save")}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

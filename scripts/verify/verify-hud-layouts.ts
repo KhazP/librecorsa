@@ -113,6 +113,9 @@ console.log(`\n${HUD_LAYOUTS.length} layouts (${THIRD_PARTY_HUD_LAYOUTS.length} 
   check('a save without them has none', Object.keys(parsePlayerSettings({}).hud.parts).length === 0);
   const phone = parseHudParts({ phone: { 'top-left': { x: 3, y: 0, scale: 1 } } });
   check('the Phone HUD keeps its own parts', phone.phone?.['top-left']?.x === 3 && hudPartsKey('broadcast', true) === 'phone' && hudPartsKey('broadcast', false) === 'broadcast');
+  check('advanced suspension/aero telemetry widget is hidden by default', DEFAULT_PLAYER_SETTINGS.hud.engineeringTelemetry === false);
+  check('a save without engineeringTelemetry defaults it to false', parsePlayerSettings({}).hud.engineeringTelemetry === false);
+  check('enabling engineeringTelemetry survives a save and reload', parsePlayerSettings({ hud: { engineeringTelemetry: true } }).hud.engineeringTelemetry === true);
 }
 
 if (failures.length) {

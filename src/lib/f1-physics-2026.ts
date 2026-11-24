@@ -141,17 +141,24 @@ import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import {
   FLYING_SLOT_SPACING_M,
-  flyingExitSpeedMs,
   flyingStartPoint,
+  flyingStartSpeedMs,
   rollingStartSlots,
   rollingStartSpeedMs,
-  START_HANDS_OFF_S,
+  startHandsOffRunM,
   startPose,
   type TyreVisualState,
 } from './sim/simulator-car';
+import { applySpeedLimiter } from './sim/race-start';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
-import { CourseCutWatch, isCourseHop } from './sim/course-limits';
+import {
+  cornerLimitSide,
+  CourseCutWatch,
+  EXIT_OUTER_MARGIN_M,
+  INSIDE_OFF_WHEELS_CUT,
+  isCourseHop,
+} from './sim/course-limits';
 import {
   type RaceGymObservation,
   computeLookaheadVectors,
@@ -588,6 +595,8 @@ export class F1Physics2026 {
   public aiAutopilot = false;
   /** Held on a manual-start grid through the lights (`SimulatorCar.gridHold`) */
   public gridHold = false;
+  /** Rolling-start formation speed limiter (m/s); undefined when inactive */
+  public speedLimiterMs: number | undefined = undefined;
   /** AI driver pace (fraction of the car's limit), line shift (m, + right) and speed ceiling (m/s) */
   public aiPaceScale = 1;
   public aiLineBiasM = 0;
@@ -1054,6 +1063,7 @@ export class F1Physics2026 {
     if (pointToPoint) flyingStart = false;
     this.runActive = false;
     this.atRestOnLine = false;
+    this.speedLimiterMs = undefined;
     const lapLen = this.track.totalLengthM;
     let flyingGear = 7;
     if (flyingStart) {
@@ -1077,18 +1087,31 @@ export class F1Physics2026 {
         return Math.min(75, (0.9 * (sample.brakeLimitKmh ?? sample.optimalSpeedKmh)) / 3.6);
       };
       const cornerExit = start.cornerS === null ? 0 : (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
-      let speed = spotSpeed(s);
-      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
-      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, (s - start.cornerS + lapLen) % lapLen));
+      const speed =
+        fieldSize !== undefined
+          ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
+          : flyingStartSpeedMs(this.track, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
-        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
-        // first second (`startPose`; a race's rolling start is left on its line along the road, as `F12026CarSim` does)
+        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt and
+        // clear of barriers for its first second (`startPose`; a race's rolling start is left on its line along the
+        // road, as `F12026CarSim` does)
         const footprint = {
           halfWidthM: Math.max(...this.wheels.map((w) => Math.abs(w.staticPos.y) + 0.5 * w.tyre.spec.width)),
           frontM: this.cgToFrontAxleM,
           rearM: this.cgToRearAxleM,
         };
-        const pose = startPose(this.track, this.ground ?? null, s, lineAt(s), lineAt, -edge, edge, footprint, speed * START_HANDS_OFF_S);
+        const pose = startPose(
+          this.track,
+          this.ground ?? null,
+          s,
+          lineAt(s),
+          lineAt,
+          -edge,
+          edge,
+          footprint,
+          startHandsOffRunM(speed),
+          this.walls ?? null
+        );
         this.placeCar(s, speed, pose.lateral);
         // + = nose right of the road's tangent
         const tangent = this.track.getSampleAtDistance(s).tangent;
@@ -1131,6 +1154,7 @@ export class F1Physics2026 {
     this.telemetry.outLap = this.lineCrossingStartsLap;
     this.settleSuspension();
     this.finishPlacement();
+    this.atRestOnLine = pointToPoint && this.sMeters >= lapLen - 10;
   }
 
   /** The track collider the car drives on (null on the track samples' ground), for the rigs to seat the wheels on */
@@ -1153,6 +1177,7 @@ export class F1Physics2026 {
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     this.telemetry.outLap = false;
     // Moved mid-lap (corner practice, a stuck-car rescue): the lap under way can't count
     this.invalidateLap();
@@ -1178,6 +1203,7 @@ export class F1Physics2026 {
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
     if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
@@ -1801,14 +1827,22 @@ export class F1Physics2026 {
       if (drv.boostRemainingS <= 0) drv.ersMode = aiOvertake ? 'OVERRIDE' : ai.ersMode;
     } else {
       steerNorm = this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, dt);
+      const lim = !this.gridHold ? applySpeedLimiter(this.vxMs, this.speedLimiterMs, throttle, brake) : null;
+      const limited = lim?.active === true;
+      if (limited && lim) {
+        throttle = lim.throttle;
+        brake = lim.brake;
+      }
 
-      if (inputs.manualOverride && drv.ersEnergyJ > 0) {
+      if (!limited && inputs.manualOverride && drv.ersEnergyJ > 0) {
         drv.ersMode = 'OVERRIDE';
       } else if (drv.boostRemainingS <= 0 && drv.ersMode === 'OVERRIDE') {
         drv.ersMode = this.userErsMode;
       }
 
-      if (this.autoXMode) {
+      if (limited) {
+        this.activeAeroMode = 'Z_MODE';
+      } else if (this.autoXMode) {
         const canXMode =
           sample.drsZone &&
           isRearFlapAllowedInWet(this.weatherSample.wetness) &&
@@ -3041,8 +3075,8 @@ export class F1Physics2026 {
     const p2p = this.track.pointToPoint;
     if (p2p) {
       // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it.
-      // A run counts from a standing start: at rest within 10 m of the line first, or the run is timed but not valid
-      if (this.sMeters >= this.track.totalLengthM - 10 && Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      // A run counts from a standing start: at rest within 10 m of the line first, without backing out of that 10 m box
+      // before crossing (#191), or the run is timed but not valid
       if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
         // A jump before the start line is not the run's
         this.cutWatch.reset();
@@ -3058,6 +3092,10 @@ export class F1Physics2026 {
         if (this.cutWatch.settle()) this.invalidateLap();
         this.runActive = false;
         this.onLapCompleted();
+      } else if (this.sMeters >= this.track.totalLengthM - 10) {
+        if (Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      } else {
+        this.atRestOnLine = false;
       }
     } else if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
       // A jump ahead still pending at the line is the lap's
@@ -3312,13 +3350,52 @@ export class F1Physics2026 {
     return p;
   }
 
+  private readonly sampleCurvatureAt = (s: number): number => {
+    const S = this.track.samples;
+    const n = S.length;
+    if (n === 0) return 0;
+    const L = this.track.totalLengthM;
+    const wrapped = ((s % L) + L) % L;
+    return S[Math.floor((wrapped / L) * n) % n].curvature;
+  };
+
   private buildObservation(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): RaceGymObservation {
     const { lookaheadCurvatures, lookaheadTargetSpeedsMs } = computeLookaheadVectors(this.track, this.sMeters);
     const racelineOffsetM = aiLineOffsetM(sample);
     const gapToRacingLineM = this.lateralOffsetM - racelineOffsetM;
+    const cornerSide = cornerLimitSide(this.sampleCurvatureAt, this.sMeters, this.lateralOffsetM, this.track.totalLengthM);
     let wheelsOut = 0;
+    let asphaltWheels = 0;
     for (const w of this.wheels) {
-      if (w.surfaceType === 'runoff' || w.surfaceType === 'grass') wheelsOut++;
+      if (w.surfaceType === 'asphalt') asphaltWheels++;
+      else if (w.surfaceType === 'runoff' || w.surfaceType === 'grass') wheelsOut++;
+    }
+    let outOfTrack: boolean;
+    if (cornerSide === 'inside') {
+      // Inside of a corner/chicane: white-line rule (all wheels off asphalt, or 3+ wheels on runoff/grass)
+      outOfTrack = asphaltWheels === 0 || wheelsOut >= INSIDE_OFF_WHEELS_CUT;
+    } else if (cornerSide === 'outside') {
+      outOfTrack = wheelsOut >= 4;
+      if (outOfTrack) {
+        const bl = Math.hypot(sample.binormal.x, sample.binormal.z) || 1;
+        const outSign = Math.sign(this.lateralOffsetM);
+        const stepX = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.x) / bl;
+        const stepZ = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.z) / bl;
+        const speed = Math.abs(this.vxMs);
+        for (const w of this.wheels) {
+          const px = w.worldPos.x + stepX;
+          const pz = w.worldPos.z + stepZ;
+          const approxS = this.sMeters + w.staticPos.x;
+          const c = queryWheelGroundContact(this.track, px, pz, approxS, speed);
+          const onValidKerb = this.meshKerbBumpAt(px, pz, c.zRoad, approxS, speed) !== null;
+          if (onValidKerb || c.surfaceType === 'asphalt' || c.surfaceType === 'kerb') {
+            outOfTrack = false;
+            break;
+          }
+        }
+      }
+    } else {
+      outOfTrack = wheelsOut >= 4;
     }
     const W = this.wheels;
     return {
@@ -3348,7 +3425,7 @@ export class F1Physics2026 {
       lookaheadCurvatures,
       lookaheadTargetSpeedsMs,
       wheelsOutOfTrack: wheelsOut,
-      outOfTrack: wheelsOut >= 3,
+      outOfTrack,
     };
   }
 

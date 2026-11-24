@@ -97,6 +97,13 @@ export const THRUSTMASTER_VENDOR_ID = 0x044f;
  */
 export const THRUSTMASTER_STARTUP_PRODUCT_IDS: readonly number[] = [0xb65d, 0xb664, 0xb69c];
 
+/**
+ * Thrustmaster wheels WebHID does not drive even when Windows exposes a HID PID collection for them (#189): the T150
+ * and TMX take scarburato's t150_driver command set, and the T500RS is not in hid-tmff2. They stay on the native
+ * DirectInput bridge.
+ */
+export const THRUSTMASTER_BRIDGE_ONLY_PRODUCT_IDS: readonly number[] = [0xb677, 0xb67f, 0xb65e];
+
 export interface ThrustmasterModel {
   productId: number;
   name: string;
@@ -136,6 +143,17 @@ export const THRUSTMASTER_WHEELS: readonly ThrustmasterModel[] = [
 export function thrustmasterModel(vendorId: number, productId: number): ThrustmasterModel | null {
   if (vendorId !== THRUSTMASTER_VENDOR_ID) return null;
   return THRUSTMASTER_WHEELS.find((m) => m.productId === productId) ?? null;
+}
+
+/** True for a Thrustmaster wheel WebHID must refuse and leave to the native bridge (T150, TMX, T500RS, start-up ids) */
+export function isThrustmasterBridgeOnly(vendorId: number, productId: number): boolean {
+  if (vendorId !== THRUSTMASTER_VENDOR_ID) return false;
+  return THRUSTMASTER_BRIDGE_ONLY_PRODUCT_IDS.includes(productId) || THRUSTMASTER_STARTUP_PRODUCT_IDS.includes(productId);
+}
+
+/** True for any known Thrustmaster belt/gear wheel id (WebHID-driven or bridge-only) */
+export function isThrustmasterWheel(vendorId: number, productId: number): boolean {
+  return thrustmasterModel(vendorId, productId) !== null || isThrustmasterBridgeOnly(vendorId, productId);
 }
 
 /** "T300RS, T-GT II, T248, TX, TS-XW and TS-PC": the wheels the Thrustmaster driver is written for, for copy */

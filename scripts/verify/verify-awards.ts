@@ -155,7 +155,7 @@ function limiter(max: number): RateLimit {
 
 async function main(): Promise<void> {
   // 1. Pure ranking & physics version mapping ------------------------------------------------------------------------
-  check("physicsIdOf: maps V1, V2, LC26 offsets and restarted circuits", physicsIdOf(7) === "v1" && physicsIdOf(527) === "v1" && physicsIdOf(1007) === "v1" && physicsIdOf(8) === "v2" && physicsIdOf(528) === "v2" && physicsIdOf(2528) === "v2");
+  check("physicsIdOf: maps V1, V2, LC26 offsets (current and prior) and restarted circuits", physicsIdOf(7) === "v1" && physicsIdOf(527) === "v1" && physicsIdOf(1007) === "v1" && physicsIdOf(8) === "v2" && physicsIdOf(528) === "v2" && physicsIdOf(538) === "v2" && physicsIdOf(2538) === "v2");
 
   const ranked = rankPodiums(
     [

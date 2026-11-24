@@ -3,12 +3,22 @@
  *   npx tsx scripts/verify/verify-input.ts
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ScreenWakeLock, shouldHoldWakeLock, type WakeLockSentinelLike } from '../../src/lib/screen-wake-lock';
 import { FlashTimer, HeadlightButton, LIGHTS_HOLD_MS, MIN_FLASH_MS } from '../../src/lib/input/headlight-button';
+import {
+  isMfdDialAction,
+  MFD_DIAL_ACTIONS,
+  MFD_REPEAT_DELAY_MS,
+  MFD_REPEAT_RATE_MS,
+  MfdRepeatController,
+} from '../../src/lib/input/mfd-input';
 import { HELD_KEYS, heldActionsOf, PhysicalKeys } from '../../src/lib/input/held-keys';
 import {
   buildKeyLookup,
   clearKey,
+  clearPadButton,
   DEFAULT_KEY_BINDINGS,
   BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_BUTTONS,
@@ -28,6 +38,7 @@ import {
   pressPedalText,
   rebindKey,
   withPedalSet,
+  WHEEL_FALLBACK_BUTTONS,
   type PadPedalSources,
   rebindPadButton,
   RETIRED_GT_STYLE_BUTTONS,
@@ -36,6 +47,7 @@ import {
   autoConfigureWheel,
   CAR_WHEEL_LOCK_DEG,
   carWheelLockDeg,
+  clearWheelButton,
   DEFAULT_WHEEL_SETTINGS,
   DeviceInputReader,
   PAD_TRIGGER_PRESS,
@@ -44,6 +56,7 @@ import {
   PAD_SENSITIVITY,
   padPedals,
   pedalValue,
+  rebindWheelButton,
   snapshotAxes,
   strongestAxisChange,
   wheelSteerValue,
@@ -348,9 +361,13 @@ check('controller layouts: every action set, no shared button, pedal buttons / D
     for (const { id: action } of PAD_ACTIONS) {
       assert.notEqual(b[action], undefined, `${id}.${action} unset`);
       if (b[action] !== null) used.push(b[action] as number);
+      if (!isMfdDialAction(action) && b[action] !== null) {
+        assert.ok((b[action] as number) <= 11, `${id}: non-MFD action ${action} uses D-pad or Home (${b[action]})`);
+      }
     }
     assert.equal(new Set(used).size, used.length, `${id}: a button does two things`);
-    for (const button of used) assert.ok(button <= 11, `${id}: button ${button} is the D-pad or Home`);
+    assert.deepEqual([b.mfdUp, b.mfdDown, b.mfdPrev, b.mfdNext], [12, 13, 14, 15], `${id}: MFD dials on D-pad`);
+    for (const button of used) assert.ok(button !== 16, `${id}: button ${button} is Home`);
     // Trigger pedals leave RT / LT alone; stick pedals leave R3 alone (the pedal thumb clicks it)
     if (pedals === 'triggers') for (const button of used) assert.ok(button !== 6 && button !== 7, `${id}: button ${button} is a pedal`);
     else assert.ok(!used.includes(PAD_RIGHT_STICK_BUTTON), `${id}: R3 under the pedal stick`);
@@ -713,6 +730,110 @@ check('an unplugged wheel is reported once (the game pauses), not silently hande
   assert.equal(r2.read([pad('DD base', '', [0.1])], pedalled, 1 / 60).wheelLost, true, 'pedals unplugged');
 });
 
+check('wheel shift paddles (e.g. Moza R3 buttons 12/13) never adjust TC / MFD dials, and MFD controls can be rebound and unbound', () => {
+  const mozaR3Id = 'MOZA R3 Base (Vendor: 346e Product: 0005)';
+  const mozaPad = (pressed: number[] = [], mapping = ''): PadLike => ({
+    id: mozaR3Id,
+    index: 0,
+    mapping,
+    axes: [0, -1, -1],
+    buttons: Array.from({ length: 24 }, (_, i) => ({ pressed: pressed.includes(i), value: pressed.includes(i) ? 1 : 0 })),
+  });
+
+  // 1. Calibrated Moza R3 with shift paddles on DirectInput buttons 12 and 13 (what standard gamepads use for D-pad Up/Down)
+  let wheelButtons = rebindWheelButton(DEFAULT_WHEEL_SETTINGS.buttons, 'shiftDown', { padId: mozaR3Id, button: 12 });
+  wheelButtons = rebindWheelButton(wheelButtons, 'shiftUp', { padId: mozaR3Id, button: 13 });
+  const calibratedWheel = {
+    ...DEFAULT_WHEEL_SETTINGS,
+    steer: { padId: mozaR3Id, axis: 0, center: 0, invert: false },
+    buttons: wheelButtons,
+  };
+  const wheelReader = new DeviceInputReader();
+  const repeat = new MfdRepeatController();
+  wheelReader.read([mozaPad()], { wheel: calibratedWheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+
+  const downShift = wheelReader.read([mozaPad([12])], { wheel: calibratedWheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.deepEqual([...downShift.pressed], ['shiftDown'], 'left paddle (btn 12) shifts down only, never mfdUp/TC');
+  assert.deepEqual(repeat.update(downShift.pressed, downShift.held, 100, true), []);
+  wheelReader.read([mozaPad()], { wheel: calibratedWheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+
+  const upShift = wheelReader.read([mozaPad([13])], { wheel: calibratedWheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.deepEqual([...upShift.pressed], ['shiftUp'], 'right paddle (btn 13) shifts up only, never mfdDown/TC');
+  assert.deepEqual(repeat.update(upShift.pressed, upShift.held, 200, true), []);
+
+  // 2. Uncalibrated Moza R3 (both PC non-standard mode and Xbox standard mode): buttons 12–15 never trigger MFD/TC
+  for (const a of ['mfd', 'mfdPage', ...MFD_DIAL_ACTIONS] as const) {
+    assert.equal(WHEEL_FALLBACK_BUTTONS[a], null, `WHEEL_FALLBACK_BUTTONS.${a} is unbound`);
+  }
+  for (const mapping of ['', 'standard']) {
+    const r = new DeviceInputReader();
+    r.read([mozaPad([], mapping)], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+    for (const btn of [12, 13, 14, 15]) {
+      const f = r.read([mozaPad([btn], mapping)], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+      for (const mfdAction of MFD_DIAL_ACTIONS) {
+        assert.ok(!f.pressed.has(mfdAction), `uncalibrated Moza R3 (${mapping || 'raw'}) btn ${btn} must not fire ${mfdAction}`);
+      }
+      r.read([mozaPad([], mapping)], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+    }
+  }
+
+  // 3. Wheel player can bind MFD dials to dedicated buttons, rebinding resolves collisions, and clearWheelButton unbinds cleanly
+  let withMfd = rebindWheelButton(wheelButtons, 'mfdUp', { padId: mozaR3Id, button: 20 });
+  withMfd = rebindWheelButton(withMfd, 'mfdDown', { padId: mozaR3Id, button: 21 });
+  assert.equal(withMfd.mfdUp?.button, 20);
+  assert.equal(withMfd.shiftUp?.button, 13);
+  // Colliding bind: assigning mfdUp to btn 13 clears shiftUp so one physical paddle never triggers two actions
+  const moved = rebindWheelButton(withMfd, 'mfdUp', { padId: mozaR3Id, button: 13 });
+  assert.equal(moved.mfdUp?.button, 13);
+  assert.equal(moved.shiftUp, null, 'conflicting shiftUp cleared when button moved to mfdUp');
+  // Individual unbind + persistence round-trip
+  const unboundWheel = clearWheelButton(withMfd, 'mfdUp');
+  assert.equal(unboundWheel.mfdUp, null);
+  assert.equal(unboundWheel.mfdDown?.button, 21);
+  const reloadedWheel = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, wheel: { ...calibratedWheel, buttons: unboundWheel } }))).wheel;
+  assert.equal(reloadedWheel.buttons.mfdUp, null);
+  assert.equal(reloadedWheel.buttons.mfdDown?.button, 21);
+  assert.equal(reloadedWheel.buttons.shiftUp?.button, 13);
+
+  // 4. Standard controller keeps D-pad 12–15 MFD controls + auto-repeat, and allows rebinding / unbinding with persistence
+  const padReader = new DeviceInputReader();
+  const padRepeat = new MfdRepeatController();
+  const padSettings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS };
+  padReader.read([pad('Xbox', 'standard', [0, 0])], padSettings, 1 / 60);
+  const p1 = padReader.read([pad('Xbox', 'standard', [0, 0], [12])], padSettings, 1 / 60);
+  assert.ok(p1.pressed.has('mfdUp'), 'controller D-pad up triggers mfdUp');
+  assert.deepEqual(padRepeat.update(p1.pressed, p1.held, 1000, true), ['mfdUp']);
+  const pHold1 = padReader.read([pad('Xbox', 'standard', [0, 0], [12])], padSettings, 1 / 60);
+  assert.deepEqual(padRepeat.update(pHold1.pressed, pHold1.held, 1000 + MFD_REPEAT_DELAY_MS - 1, true), [], 'no repeat before delay');
+  assert.deepEqual(padRepeat.update(pHold1.pressed, pHold1.held, 1000 + MFD_REPEAT_DELAY_MS, true), ['mfdUp'], 'repeats after delay');
+  assert.deepEqual(padRepeat.update(pHold1.pressed, pHold1.held, 1000 + MFD_REPEAT_DELAY_MS + MFD_REPEAT_RATE_MS, true), ['mfdUp'], 'repeats at rate');
+  // Disarms while paused/menu so holding through pause never fires a stale adjustment on resume
+  assert.deepEqual(padRepeat.update(pHold1.pressed, pHold1.held, 2000, false), []);
+  assert.deepEqual(padRepeat.update(pHold1.pressed, pHold1.held, 3000, true), [], 'button held through pause does not fire on resume');
+
+  // Unbinding mfdUp/mfdDown on a controller stops D-pad 12/13 from adjusting TC and persists across reloads
+  const noTcPad = clearPadButton(clearPadButton(DEFAULT_PAD_BUTTONS, 'mfdUp'), 'mfdDown');
+  assert.equal(noTcPad.mfdUp, null);
+  assert.equal(noTcPad.mfdDown, null);
+  const reloadedPad = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, padButtons: noTcPad }))).padButtons;
+  assert.equal(reloadedPad.mfdUp, null);
+  assert.equal(reloadedPad.mfdDown, null);
+  assert.equal(reloadedPad.mfdPrev, 14);
+  const r2 = new DeviceInputReader();
+  const fUnbound = r2.read([pad('Xbox', 'standard', [0, 0], [12, 13])], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: reloadedPad }, 1 / 60);
+  assert.ok(!fUnbound.pressed.has('mfdUp') && !fUnbound.pressed.has('mfdDown'));
+  // Older save without mfdUp..mfdNext inherits D-pad unless already claimed by another action
+  const { mfdUp: _u, mfdDown: _d, mfdPrev: _p, mfdNext: _n, ...legacyPad } = BUMPER_SHIFT_BUTTONS;
+  const migrated = parsePlayerSettings({ padButtons: { ...legacyPad, shiftUp: 12 } }).padButtons;
+  assert.equal(migrated.shiftUp, 12);
+  assert.equal(migrated.mfdUp, null, 'legacy save claiming button 12 does not collide with mfdUp');
+  assert.equal(migrated.mfdDown, 13);
+
+  // 5. Regression guard: TunerMfdPanel must not poll raw connectedPads() buttons directly
+  const tunerSrc = readFileSync(join(process.cwd(), 'src/components/hud/TunerMfdPanel.tsx'), 'utf8');
+  assert.ok(!tunerSrc.includes('connectedPads'), 'TunerMfdPanel must not poll raw connectedPads directly');
+});
+
 console.log('Wheel detection and force feedback');
 const MOZA_BASE = 'MOZA R9 Base (Vendor: 346e Product: 0002)';
 const MOZA_PEDALS = 'MOZA SRP pedals (Vendor: 346e Product: 0003)';
@@ -763,6 +884,27 @@ check('a listed Logitech wheel without "wheel" in its name is recognised by its 
     assert.equal(dfgt?.hidFfb, true);
   }
   assert.equal(autoConfigureWheel([pad('Logitech Dual Action (Vendor: 046d Product: c216)', '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'a Logitech gamepad is not a wheel');
+});
+check('#189: Thrustmaster TMX / T150 / T500RS are recognised by USB id (e.g. Windows "B67F") as belt wheels on the bridge', () => {
+  for (const id of [
+    'B67F (Vendor: 044f Product: b67f)',
+    '044f-b67f-B67F',
+    'Thrustmaster TMX Racing Wheel',
+    'Thrustmaster T150 (Vendor: 044f Product: b677)',
+    'Thrustmaster T500RS (Vendor: 044f Product: b65e)',
+    'Thrustmaster FFB Wheel (Vendor: 044f Product: b65d)',
+  ]) {
+    const patch = autoConfigureWheel([pad(id, '', [0])], DEFAULT_WHEEL_SETTINGS);
+    assert.ok(patch, id);
+    assert.equal(patch.steer?.padId, id, id);
+    assert.equal(patch.type, 'belt_gear', id);
+    assert.equal(patch.rotationDeg, 900, id);
+    assert.equal(patch.hidFfb, false, `${id} starts on the bridge`);
+  }
+  const t300 = autoConfigureWheel([pad('B66E (Vendor: 044f Product: b66e)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(t300?.type, 'belt_gear');
+  assert.equal(t300?.hidFfb, true, 'a WebHID-supported Thrustmaster base (T300RS) still starts on WebHID');
+  assert.equal(autoConfigureWheel([pad('T-LCM Pedals (Vendor: 044f Product: b371)', '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'pedals are not a wheel');
 });
 check('FFB gain and minimum force: continuous through zero, monotonic, sign kept', () => {
   const w = { ffbGain: 1.5, ffbMinForce: 0.1 };

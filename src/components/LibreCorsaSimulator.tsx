@@ -9,7 +9,7 @@ import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
 import type { OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
-import { CARS, carById, carForVehicle, carsForClassRule, listedVehiclesForClassRule, type CarId } from "@/lib/cars/car-registry";
+import { CARS, carById, carClass, carForVehicle, carsForClassRule, listedVehiclesForClassRule, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
@@ -20,7 +20,20 @@ import type { ReportFacts } from "@/lib/diagnostics/report-details";
 import { carMaker, circuitMaker } from "@/lib/modders";
 import { isStoreBuild } from "@/lib/store-mode";
 import { markShown, markThanked, promptFor, readPromptState, writePromptState, type PromptItem } from "@/lib/support-prompt";
-import { getMultiplayerManager, type CarClassRule, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type RoomSessionInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
+import {
+  getMultiplayerManager,
+  isVehicleAllowed,
+  isVehicleRestricted,
+  vehicleClassOf,
+  type CarClassRule,
+  type LobbySettings,
+  type LobbyState,
+  type PeerNetStats,
+  type RaceStartInfo,
+  type RoomSessionInfo,
+  type ScheduledRaceStatus,
+  type VehicleRule,
+} from "@/lib/sim/multiplayer-sync";
 import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/online-config";
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
@@ -74,7 +87,7 @@ import { dualShock4Hid } from "@/lib/input/webhid-dualshock4";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
 import { loadCarChoice, saveCarChoice } from "@/lib/settings/car-choice";
-import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
+import { clampFov, codeFromName, confirmDriverProfileName, DEFAULT_PLAYER_SETTINGS, loadOnboarded, loadPlayerSettings, loadRumble, needsDriverNamePrompt, pushLibraryRecent, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
 import { signalBoardLap } from "@/components/hud/BoardWidget";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
@@ -123,6 +136,11 @@ const roomCarSwitch = (rule: { vehicle?: VehicleModelId; carClass: CarClassRule 
 const modCarSwap = (car: CarId, scheduled: boolean): CarId | null => {
   const def = carById(car);
   return def.mod && (scheduled || def.simProfile) ? raceCarFor(def.physics, scheduled).id : null;
+};
+/** Human-readable name for a room's car class or spec vehicle lock */
+const vehicleRuleLabel = (rule: VehicleRule): string => {
+  if (rule.vehicle) return vehicleLabel(rule.vehicle);
+  return rule.carClass === "any" ? tr("hud.multiplayerPanel.anyCar") : carClass(rule.carClass).title;
 };
 /** The listed cars a room's class rule lets in, as the lobby offers them */
 const classCars = (rule: CarClassRule) => carsForClassRule(rule).map((c) => ({ id: c.id, title: c.title }));
@@ -313,6 +331,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // ---- Multiplayer lobby and races
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [peerStats, setPeerStats] = useState<PeerNetStats[]>([]);
+  /** Banner/toast shown when joining a class-locked lobby auto-switches the player's car or blocks a mismatched pick */
+  const [mpCarNotice, setMpCarNotice] = useState<{ seq: number; text: string } | null>(null);
+  const mpCarNoticeSeqRef = useRef(0);
+  const showMpCarNotice = useCallback((text: string) => {
+    setMpCarNotice({ seq: ++mpCarNoticeSeqRef.current, text });
+  }, []);
+  useEffect(() => {
+    if (!mpCarNotice) return;
+    const timer = window.setTimeout(() => setMpCarNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [mpCarNotice]);
   /** The results card was closed for this race */
   const [resultsClosed, setResultsClosed] = useState(false);
 
@@ -541,13 +570,32 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     },
     [session]
   );
-  /** The car picker: the car is fixed for a multiplayer race (its start picks one the class allows) */
+  /** Auto-switches the player into an allowed car for a class/spec-locked lobby and shows a clear banner */
+  const enforceLobbyCar = useCallback(
+    (rule: VehicleRule, scheduled: boolean): boolean => {
+      if (!isVehicleRestricted(rule)) return false;
+      const switchTo = roomCarSwitch(rule, vehicleModelRef.current);
+      if (!switchTo) return false;
+      const target = raceCarFor(switchTo, scheduled);
+      changeCar(target.id);
+      showMpCarNotice(tr("game.simulator.carAutoSwitched", { car: target.title, rule: vehicleRuleLabel(rule) }));
+      return true;
+    },
+    [changeCar, showMpCarNotice]
+  );
+
+  /** The car picker: fixed for a multiplayer race, and restricted to the lobby's car class/spec while in a locked room */
   const handleChangeCar = useCallback(
     (next: CarId) => {
       if (session?.race.kind === "mp") return;
+      const activeSettings = getMultiplayerManager().lobby?.settings;
+      if (activeSettings && isVehicleRestricted(activeSettings) && !isVehicleAllowed(carPhysics(next), activeSettings)) {
+        showMpCarNotice(tr("game.simulator.carBlockedByLobby", { rule: vehicleRuleLabel(activeSettings) }));
+        return;
+      }
       changeCar(next);
     },
-    [session, changeCar]
+    [session, changeCar, showMpCarNotice]
   );
 
   // The car picker's physics switch: a ported F1 car moves onto the other vehicle model, in place (body kept)
@@ -725,7 +773,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     syncHostConditionsToLobby();
   }, [syncHostConditionsToLobby]);
   const handleSetLobbySettings = useCallback((patch: Partial<LobbySettings>) => {
-    getMultiplayerManager().setLobbySettings(patch);
+    const mp = getMultiplayerManager();
+    mp.setLobbySettings(patch);
+    const updated = mp.lobby?.settings;
+    if (updated && (patch.carClass !== undefined || patch.vehicle !== undefined)) {
+      enforceLobbyCar(updated, mp.inScheduledRace);
+    }
     if (patch.weather !== undefined || patch.timeOfDay !== undefined || patch.timeScale !== undefined) {
       setRoomConditions((prev) => ({
         ...prev,
@@ -734,7 +787,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         ...(patch.timeScale !== undefined ? { timeScale: patch.timeScale } : {}),
       }));
     }
-  }, []);
+  }, [enforceLobbyCar]);
   const handleSetReady = useCallback((ready: boolean) => getMultiplayerManager().setReady(ready), []);
   const handleStartMpRace = useCallback(() => {
     // A hill climb has no races: one car at a time, start to finish
@@ -938,6 +991,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         const rolling = start.startType === "rolling";
         physics.resetToStartGrid(rolling, race.gridSlot, rolling ? start.grid.length : undefined, true);
         race.lapClock.reset(physics.sMeters);
+        if (rolling) race.startRollingFormation(physics.vxMs);
       }
     },
     [session, track, changeCar, startSession, applyWeekRules, getTrackEnv]
@@ -1198,10 +1252,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    * laps and race results under the old name move with it. The name and code once it has taken, else why it didn't.
    * Nothing changes here until the board has said yes.
    */
+  const confirmDriverName = useCallback(() => {
+    setSettings((s) => {
+      const next = confirmDriverProfileName(s.profile);
+      return next === s.profile ? s : { ...s, profile: next };
+    });
+  }, []);
   const renameDriver = useCallback(async (raw: string): Promise<{ error: string } | { name: string; code: string }> => {
     const name = sanitizeDriverName(raw);
     const prev = settingsRef.current.profile;
-    if (name === prev.name) return { name, code: prev.code };
+    if (name === prev.name) {
+      if (prev.generated) confirmDriverName();
+      return { name, code: prev.code };
+    }
     const problem = nameProblem(name);
     if (problem) return { error: problem };
     // A code the game derived from its own made-up name follows the new name; one the player set stays
@@ -1220,7 +1283,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setBoardVersion((v) => v + 1);
     if (boardStateRef.current === "on") flushQueued({ name, code });
     return { name, code };
-  }, [flushQueued, tx]);
+  }, [confirmDriverName, flushQueued, tx]);
   const renameFromSettings = useCallback(async (raw: string) => {
     const res = await renameDriver(raw);
     return "error" in res ? res.error : null;
@@ -1626,20 +1689,24 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setLocalPeerId(mp.localPeerId);
     setLobby(mp.lobby);
     /**
-     * In the menus a guest follows the host by itself: its circuit, then a car its class allows (or the one car a
-     * scheduled race names). While driving it is asked instead (the lobby's "Switch circuit" and car choices), so a lap
-     * is never cut short.
+     * Enforces the room's car class/spec lock immediately on join (in menus or while driving) with a clear toast,
+     * and in the menus also follows the host's circuit automatically.
      */
     const follow = (l: LobbyState | null) => {
-      if (!l || l.hostId === mp.localPeerId || (phaseRef.current !== "title" && phaseRef.current !== "loading")) return;
+      if (!l) return;
+      const switched = isVehicleRestricted(l.settings) && enforceLobbyCar(l.settings, mp.inScheduledRace);
+      if (l.hostId === mp.localPeerId || (phaseRef.current !== "title" && phaseRef.current !== "loading")) return;
       if (l.settings.trackId !== trackId) {
         if (onSelectTrack && roomTrackStatus(l.settings.trackId, l.settings.trackMod) === "ok") onSelectTrack(l.settings.trackId);
         return;
       }
-      const switchTo = roomCarSwitch(l.settings, vehicleModelRef.current);
-      const modSwap = switchTo ? null : modCarSwap(carIdRef.current, mp.inScheduledRace);
-      if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
-      else if (modSwap) changeCar(modSwap);
+      if (!switched) {
+        const modSwap = modCarSwap(carIdRef.current, mp.inScheduledRace);
+        if (modSwap) changeCar(modSwap);
+      }
+    };
+    mp.onRoomCarRule = (rule) => {
+      enforceLobbyCar(rule, mp.inScheduledRace);
     };
     mp.onLobbyChange = (l) => {
       setLobby(l ? { ...l, players: [...l.players] } : null);
@@ -1714,6 +1781,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
     return () => {
       mp.onLobbyChange = undefined;
+      mp.onRoomCarRule = undefined;
       mp.onRaceStatusChange = undefined;
       mp.weatherProvider = undefined;
       mp.onQualifyingStart = undefined;
@@ -1724,7 +1792,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.onRaceResult = undefined;
       window.clearInterval(timer);
     };
-  }, [session, trackId, onSelectTrack, takeRaceStart, takeQualifyingStart, endMpRace, changeCar, restoreOwnConditionsNow]);
+  }, [session, trackId, onSelectTrack, takeRaceStart, takeQualifyingStart, endMpRace, changeCar, enforceLobbyCar, restoreOwnConditionsNow]);
 
   // ---- Weekly challenge
   // The week is read when the menus open (it only turns on Monday)
@@ -1810,8 +1878,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   soloRaceRef.current = () => goChallenge(true);
   const handleJoinRace = useCallback(() => {
     session?.unlockAudio();
+    // Auto-switch into this week's scheduled race car (e.g. LC-LMDH) before connecting so hello already carries it
+    const weekRace = challengeAt(Date.now()).race;
+    enforceLobbyCar({ carClass: vehicleClassOf(weekRace.vehicle), vehicle: weekRace.vehicle }, true);
     getMultiplayerManager().joinScheduledRace();
-  }, [session]);
+  }, [session, enforceLobbyCar]);
   const handleLeaveRace = useCallback(() => getMultiplayerManager().leaveScheduledRace(), []);
   // The challenge asked for from another circuit, now that this one has loaded
   useEffect(() => {
@@ -2477,6 +2548,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   loadBoard: loadChallengeBoard,
                   boardVersion,
                   driverName: settings.profile.name,
+                  driverNameGenerated: needsDriverNamePrompt(settings.profile),
+                  onRenameDriver: renameFromSettings,
+                  onConfirmDriverName: confirmDriverName,
                   onDrive: handleDriveChallenge,
                   hasRaces: races.on && racesAvailable,
                 }
@@ -2562,6 +2636,22 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       ) : null}
 
       <NowPlayingToast nowPlaying={nowPlaying} />
+
+      {mpCarNotice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed top-[max(1rem,env(safe-area-inset-top))] left-1/2 z-(--z-lc-results) -translate-x-1/2 max-w-[min(480px,calc(100%-2rem))]"
+        >
+          <div
+            key={mpCarNotice.seq}
+            className="lc-toast-in flex items-center gap-2.5 rounded-lc-tile border border-lc-caution/40 bg-lc-carbon/95 px-4 py-2.5 text-[13px] leading-snug font-semibold text-lc-chalk shadow-lc-pop"
+          >
+            <span aria-hidden className="size-2 shrink-0 rounded-full bg-lc-caution" />
+            <span>{mpCarNotice.text}</span>
+          </div>
+        </div>
+      ) : null}
 
       {gpuNoticeKind ? (
         <GpuLostNotice

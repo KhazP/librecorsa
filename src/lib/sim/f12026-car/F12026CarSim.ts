@@ -64,11 +64,11 @@ import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import {
   FLYING_SLOT_SPACING_M,
-  flyingExitSpeedMs,
   flyingStartPoint,
+  flyingStartSpeedMs,
   rollingStartSlots,
   rollingStartSpeedMs,
-  START_HANDS_OFF_S,
+  startHandsOffRunM,
   type SimulatorCar,
   type SimulatorWheel,
   type StartFootprint,
@@ -86,7 +86,7 @@ import {
   type PerformanceModeName,
   type TyresCompoundData,
 } from './F12026CarConfig';
-import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './TrackColliderQuery';
+import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind, type WallQuery } from './TrackColliderQuery';
 import { trackColliders } from '../track-colliders';
 import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
@@ -94,9 +94,18 @@ import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
-import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
+import {
+  beyondLayoutEdge,
+  cornerLimitSide,
+  CourseCutWatch,
+  EXIT_OUTER_MARGIN_M,
+  inLapStretch,
+  INSIDE_OFF_WHEELS_CUT,
+  isCourseHop,
+  isInsideCornerSurfaceValid,
+} from '../course-limits';
 import { coneLaneRangeAt } from '../cone-lanes';
-import { keptOnGrid } from '../race-start';
+import { applySpeedLimiter, keptOnGrid } from '../race-start';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -1080,6 +1089,7 @@ const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _qInv = new THREE.Quaternion();
+const _exitProbeHit = createGroundHit();
 
 export class F12026CarSim implements SimulatorCar {
   public readonly vehicle: VehiclePhysics;
@@ -1167,6 +1177,10 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /** AI driver skill level (0..100, default 70 = Pro) */
+  public aiSkill = 70;
+  /** Strategic FIA-2026 Boost latch for high-skill AI on long acceleration zones */
+  private aiBoostLatched = false;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -1211,6 +1225,8 @@ export class F12026CarSim implements SimulatorCar {
    * gear with the throttle up, the car goes: moving before the lights go out is the jump start
    */
   public gridHold = false;
+  /** Rolling-start formation speed limiter (m/s); undefined when inactive */
+  public speedLimiterMs: number | undefined = undefined;
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3): there is no automatic mode, so writes are ignored */
@@ -1289,8 +1305,20 @@ export class F12026CarSim implements SimulatorCar {
   private realism: SimRealismFlags = { ...FULL_REALISM };
   private coldPsi: WheelPressures = axlePressures(0, 0);
   private onColliders = false;
+  /** Fallback sample-based ground query used until track colliders attach */
+  private readonly sampleGround: TrackSampleGroundQuery;
   /** The track's road collider once the car is on it (`attachTrackRoot`) */
   private collider: GroundQuery | null = null;
+  private readonly sampleCurvatureAt = (s: number): number => {
+    const S = this.track.samples;
+    const n = S.length;
+    if (n === 0) return 0;
+    const L = this.track.totalLengthM;
+    const wrapped = ((s % L) + L) % L;
+    return S[Math.floor((wrapped / L) * n) % n].curvature;
+  };
+  /** The track's barrier colliders once attached (`attachTrackRoot`) */
+  private walls: WallQuery | null = null;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
   private s = 0;
@@ -1403,8 +1431,9 @@ export class F12026CarSim implements SimulatorCar {
       cornerPacker: { front: sp.front.bumpStop.packerGap ?? 0, rear: sp.rear.bumpStop.packerGap ?? 0 },
     };
     const L = track.totalLengthM;
+    this.sampleGround = new TrackSampleGroundQuery(track);
     this.vehicle = new VehiclePhysics({
-      ground: new TrackSampleGroundQuery(track),
+      ground: this.sampleGround,
       config: this.config,
       compound: this.config.compoundSlots[this.compound],
       airDensity: airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M),
@@ -1532,6 +1561,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.setWalls(walls);
     this.onColliders = true;
     this.collider = ground;
+    this.walls = walls.segments.length > 0 ? walls : null;
     return true;
   }
 
@@ -1932,7 +1962,7 @@ export class F12026CarSim implements SimulatorCar {
    * other cars push mode (PSH) for 8 s, on a 2026 car in a race only with Overtake Mode earned
    */
   public activateBoostOverride(): boolean {
-    if (this.config.ers.regulations === 'f1-2026') return this.profile.hasErs && this.vehicle.ersEnergyJ > 200_000;
+    if (this.config.ers.regulations === 'f1-2026') return this.profile.hasErs && this.vehicle.ersCanBoost;
     if (this.profile.hasErs && this.overtakeAvailable && this.vehicle.ersEnergyJ > 200_000 && this.boostCooldownS <= 0) {
       this.boostRemainingS = BOOST_S;
       return true;
@@ -1991,7 +2021,8 @@ export class F12026CarSim implements SimulatorCar {
   private refreshBrakingGuide(waterMm: number = this.lastGuideWaterMm, force = false): void {
     const v = this.vehicle;
     const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
-    const wetGrip = waterMm > 0.02 ? wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) / (traits.dryGrip ?? 1) : 1;
+    const dryScale = traits.dryGrip ?? 1;
+    const wetGrip = waterMm > 0.02 ? dryScale * wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) : dryScale;
     const scaled = Math.max(8, Math.min(20, wetGrip * 20));
     // Hysteresis prevents rapid guide swapping when crossing a drying racing line near a bucket boundary
     if (!force && Math.abs(scaled - this.brakingGuideGripBucket) < 0.75) return;
@@ -2059,6 +2090,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.coldGarageStart = this.realism.coldGarageStart && !flyingStart && !raceStart && !pointToPoint && !this.aiAutopilot;
     this.runActive = false;
     this.atRestOnLine = false;
+    this.speedLimiterMs = undefined;
     // Fuelled before it is seated, so it settles at the ride height of that load
     this.fillFuel();
     const L = this.track.totalLengthM;
@@ -2080,19 +2112,34 @@ export class F12026CarSim implements SimulatorCar {
       const [lo, hi] = rangeAt(s);
       const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
       const ownAt = (at: number) => prof[Math.floor(wrap(at, L) / (L / prof.length)) % prof.length];
+      const maxStartMs = Math.min(75, this.profile.speedProfile?.vMaxMs ?? 75);
       const spotSpeed = (at: number) => {
         const sample = this.track.getSampleAtDistance(at);
-        return Math.min(75, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
+        return Math.min(maxStartMs, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
       };
       const cornerExit =
-        start.cornerS === null ? 0 : 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6);
-      let speed = spotSpeed(s);
-      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
-      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, wrap(s - start.cornerS, L)));
+        start.cornerS === null
+          ? 0
+          : Math.min(maxStartMs, 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6));
+      const speed =
+        fieldSize !== undefined
+          ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
+          : flyingStartSpeedMs(this.track, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
-        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
-        // first second (`startPose`)
-        const pose = startPose(this.track, this.collider, s, lineAt(s), lineAt, lo, hi, this.startFootprint(), speed * START_HANDS_OFF_S);
+        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt and
+        // clear of barriers for its first second (`startPose`)
+        const pose = startPose(
+          this.track,
+          this.collider,
+          s,
+          lineAt(s),
+          lineAt,
+          lo,
+          hi,
+          this.startFootprint(),
+          startHandsOffRunM(speed),
+          this.walls
+        );
         this.progressHintS = this.poseHintS = s;
         this.resetVehicle(pose.x, pose.z, pose.yawRad, speed);
       } else {
@@ -2111,6 +2158,7 @@ export class F12026CarSim implements SimulatorCar {
       }
     }
     this.afterPlacement();
+    this.atRestOnLine = pointToPoint && this.s >= L - 10;
     this.vehicle.coldGarageStart = false;
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
@@ -2134,6 +2182,7 @@ export class F12026CarSim implements SimulatorCar {
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     this.telemetry.outLap = false;
     // Moved mid-lap (corner practice, a stuck or lost car's rescue): the lap under way can't count
     this.invalidateLap();
@@ -2147,6 +2196,7 @@ export class F12026CarSim implements SimulatorCar {
     // back onto the out-lap does not count the out-lap as a lap), otherwise preserve the current out-lap flag.
     if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
       this.telemetry.lapCount = Math.max(0, Math.floor(pose.lapCount));
@@ -2176,6 +2226,7 @@ export class F12026CarSim implements SimulatorCar {
     const [xb, zb] = onLine(target.s + 2.5);
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     // Corner practice moves the car mid-lap: the lap under way can't count
     this.invalidateLap();
     this.progressHintS = this.poseHintS = target.s;
@@ -2247,6 +2298,19 @@ export class F12026CarSim implements SimulatorCar {
     v.flapsLowGrip = straight2026 ? this.lowGrip : null;
     v.ersLowGrip = lowGrip;
     const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
+    // High-skill AI (above Pro) also deploys FIA-legal Boost strategically on straights/exits when battery SoC has
+    // surplus, using the exact same `ersCanBoost`, 4 MJ store, and 8.5 MJ/lap recharge cap as a human driver
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const ersCapJ = Math.max(1, this.config.ers.ERS_MAX_CHARGE);
+    const soc = v.ersEnergyJ / ersCapJ;
+    const straightExit = this.apThrottle > 0.92 && Math.abs(this.steerCmd) < 0.14 && v.speedMs > 30 && v.speedMs < 95;
+    if (this.aiAutopilot && straight2026 && racing && !lowGrip && alienShare > 0.15 && v.ersCanBoost) {
+      if (!this.aiBoostLatched && straightExit && soc >= 0.58 - 0.14 * alienShare) this.aiBoostLatched = true;
+      else if (this.aiBoostLatched && (!straightExit || soc < 0.22)) this.aiBoostLatched = false;
+    } else {
+      this.aiBoostLatched = false;
+    }
+    const aiStrategicBoost = this.aiBoostLatched;
     v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
     if (this.config.ers.regulations === 'f1-2026') {
@@ -2263,7 +2327,7 @@ export class F12026CarSim implements SimulatorCar {
       const autoOt =
         straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
         zoneNow && inputs.throttle >= 0.98;
-      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersEnergyJ > 0;
+      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake || aiStrategicBoost) && v.ersCanBoost;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;
       v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);
@@ -2311,15 +2375,18 @@ export class F12026CarSim implements SimulatorCar {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(CONTROL_DT_S) : this.driverCommand(inputs, CONTROL_DT_S);
+      const lim = !this.aiAutopilot && !held ? applySpeedLimiter(v.speedMs, this.speedLimiterMs, cmd.throttle, cmd.brake) : null;
+      const limited = lim?.active === true;
+      const baseCut = this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0;
       const vin: VehicleInputs = {
-        throttle: pinned && this.aiAutopilot ? 0 : cmd.throttle,
+        throttle: pinned && this.aiAutopilot ? 0 : lim ? lim.throttle : cmd.throttle,
         // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
         // spared: it starts on a load nobody chose and has no pit stop to take
-        ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
-        brake: pinned ? 1 : cmd.brake,
+        ignitionCut: limited && lim ? Math.min(baseCut, lim.ignitionCut) : baseCut,
+        brake: pinned ? 1 : lim ? lim.brake : cmd.brake,
         brakeWheelScale: pinned ? undefined : cmd.brakeWheelScale,
         steer: pinned && this.aiAutopilot ? 0 : cmd.steer,
-        drs: !held && (drsPress || cmd.drs),
+        drs: !held && !limited && (drsPress || cmd.drs),
         shiftUp: !held && shiftUp,
         shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
@@ -2411,16 +2478,12 @@ export class F12026CarSim implements SimulatorCar {
       o.slipRatio = w.slipRatio;
       o.onRoad = w.ground.surface === 'road' || w.ground.surface === 'pitlane';
     }
+    const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
     const wetMuScale =
-      v.waterMm > 0
-        ? wetGripFactor(
-            this.compoundData.wetTraits ?? SLICK_TRAITS,
-            v.waterMm,
-            v.speedMs,
-            v.realism.wetSeverity,
-            0.5 * (v.wheels[0].wear + v.wheels[1].wear)
-          ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
-        : 1;
+      (traits.dryGrip ?? 1) *
+      (v.waterMm > 0
+        ? wetGripFactor(traits, v.waterMm, v.speedMs, v.realism.wetSeverity, 0.5 * (v.wheels[0].wear + v.wheels[1].wear))
+        : 1);
     return {
       vxMs: this.vxMs,
       vyMs: this.bodyVy(),
@@ -2444,7 +2507,36 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilotDials(): AidDials {
     const d = this.profile.assistDials.semi_pro;
-    return d.absLevel > 0 || this.profile.absAllowed !== false ? d : { ...d, absLevel: this.profile.assistDials.assisted.absLevel };
+    const assisted = this.profile.assistDials.assisted;
+    const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
+    const wet = clamp(this.vehicle.wetness, 0, 1);
+    if (wet <= 0.15) {
+      const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+      if (alienShare <= 0) return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+      // Above Pro on a dry road, ease TC/ABS intervention slightly toward the tyres' true peak slip for stronger exits & braking
+      return {
+        ...d,
+        tcLevel: d.tcLevel,
+        tc2Level: d.tc2Level,
+        absLevel: baseAbs > 0 ? Math.max(3, Math.round(baseAbs - 1 * alienShare)) : 0,
+      };
+    }
+    if (wet <= 0.2) {
+      return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+    }
+    // On wet / flooded roads step AI TC and ABS smoothly toward the wet-safe assisted calibration
+    const u = clamp((wet - 0.2) / 0.6, 0, 1);
+    const lerpInt = (a: number, b: number) => Math.round(a + (Math.max(a, b) - a) * u);
+    return {
+      ...d,
+      tcLevel: lerpInt(d.tcLevel, assisted.tcLevel),
+      tc2Level: lerpInt(d.tc2Level, assisted.tc2Level),
+      absLevel: lerpInt(baseAbs, assisted.absLevel),
+      tcSlipAngleLevel:
+        d.tcSlipAngleLevel !== undefined && assisted.tcSlipAngleLevel !== undefined
+          ? lerpInt(d.tcSlipAngleLevel, assisted.tcSlipAngleLevel)
+          : d.tcSlipAngleLevel,
+    };
   }
 
   /**
@@ -2651,7 +2743,9 @@ export class F12026CarSim implements SimulatorCar {
         : kF > 0
           ? clamp((v.totalMassKg * speed * speed * kappa * this.cgToRearAxleM) / (v.wheelbaseM * kF), -peak, peak)
           : 0;
-    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
+    const wet = clamp(v.wetness, 0, 1);
+    const betaGain = 0.8 + 0.45 * wet;
+    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + betaGain * beta + kYawP * kYaw * yawErr + this.apYawI;
     const delta = clamp(raw, betaF - peak, betaF + peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
@@ -2661,6 +2755,15 @@ export class F12026CarSim implements SimulatorCar {
     const lead = Math.max(5, speed * 0.2);
     const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
     const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
+    const wetBrakeScale =
+      v.waterMm > 0
+        ? clamp(
+            wetGripFactor(this.compoundData.wetTraits ?? SLICK_TRAITS, v.waterMm, Math.max(30, speed), v.realism.wetSeverity, 0) *
+              (this.compoundData.wetTraits?.dryGrip ?? 1),
+            0.35,
+            1
+          )
+        : 1;
     let vTarget = this.aiSpeedCapMs;
     let pedalFF = 0;
     if (plan) {
@@ -2677,7 +2780,10 @@ export class F12026CarSim implements SimulatorCar {
       const own = tab[Math.floor(((p.s + lead + d) % L) / (L / tab.length)) % tab.length];
       const vC = Math.min((smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6, own) * this.aiPaceScale;
       if (vC >= vTarget) continue;
-      const a = 0.5 * (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * d))));
+      const a =
+        0.5 *
+        (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * wetBrakeScale * d)))) *
+        wetBrakeScale;
       vTarget = Math.min(vTarget, Math.sqrt(vC * vC + 2 * a * d));
     }
     // Off the line the corner is tighter than planned: give speed away for it
@@ -2695,16 +2801,26 @@ export class F12026CarSim implements SimulatorCar {
     const pedal = clamp(this.apPedal + pedalP + pedalFF, -1, 1);
     const W = v.wheels;
     // The rear stepping out (on a trail-braked entry, or on the power): ease both pedals as the rears' slip angle
-    // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
+    // passes the rear guard of their peak, so they regain grip to hold the car with rather than spinning it
     const rearSlip = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / peak;
-    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - AP_REAR_GUARD), 0.15, 1);
+    const rearGuard = AP_REAR_GUARD - 0.22 * wet;
+    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - rearGuard), 0.15, 1);
     // squeezed on rather than stabbed: at most full throttle in 0.4 s. Off the line (from rest until 72 km/h) it goes
-    // down at once, the traction control metering the wheelspin as on a player's launch (the squeeze cost the AI a car
-    // length to 100 km/h). Only from rest: a quick pedal out of a slow corner put the car in the barrier at Sepang
+    // down at once in the dry, the traction control metering the wheelspin; in wet conditions, feed power progressively
+    // and trim low-speed rear wheelspin even below the car's TC min speed so GT3/F1 never spin up on a flooded grid
     if (speed < 1) this.apLaunch = true;
     else if (speed > 20) this.apLaunch = false;
-    const squeeze = this.apLaunch ? 12 : 2.5;
-    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const dryExitSqueeze = 2.5 + 0.8 * alienShare;
+    const squeeze = this.apLaunch ? Math.max(2.2, 12 - 9.5 * wet) : Math.max(1.2, dryExitSqueeze * (1 - 0.55 * wet));
+    let wetLaunchTrim = 1;
+    if (wet > 0.15 && speed < 25) {
+      const [dl, dr] = v.drivenWheels;
+      const driveSpin = Math.max(0, W[dl].slipRatio, W[dr].slipRatio);
+      const spinLimit = 0.22 - 0.08 * wet;
+      if (driveSpin > spinLimit) wetLaunchTrim = clamp(1 - (driveSpin - spinLimit) * 3.5, 0.2, 1);
+    }
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut * wetLaunchTrim;
     this.apThrottle = throttle;
     // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
     // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
@@ -2827,9 +2943,14 @@ export class F12026CarSim implements SimulatorCar {
     // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
     // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
     // only cut the corners further
+    const wet = clamp(v.wetness, 0, 1);
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
+    // On wet roads lengthen the look-ahead and soften rejoin lateral acceleration so lane shifts never excite a tank-slapper
+    const lookMin = TRACK_LOOK_MIN_M * (1 + 0.55 * wet);
+    const lookS = TRACK_LOOK_S * (1 + 0.55 * wet);
+    const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.35 * wet);
+    const ld = Math.max(lookMin, speed * lookS, Math.sqrt((2 * speed * speed * eFar) / rejoinMs2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);
@@ -2853,6 +2974,19 @@ export class F12026CarSim implements SimulatorCar {
       this.trackI = clamp(this.trackI + TRACK_KI * errLeft * CONTROL_DT_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
       kappa += this.trackI / Math.max(100, speed * speed);
     }
+    if (wet > 0.15) {
+      // Cap curvature to the tyres' true physical wet lateral capability (plus banking), not the conservative
+      // weatherPace² plan grip — otherwise an off-line car in a fast bend cannot even match road curvature
+      const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
+      const liveWetGrip =
+        (traits.dryGrip ?? 1) *
+        (v.waterMm > 0 ? wetGripFactor(traits, v.waterMm, Math.max(20, speed), v.realism.wetSeverity, 0) : 1);
+      const ayDry = plan.limits.lateral(speed) / Math.max(0.15, plan.limits.gripScale);
+      const ayRealWet = ayDry * liveWetGrip + G * Math.abs(Math.sin(p.sample.bankingRad));
+      const ayWetCap = Math.max(plan.limits.lateral(speed) * 1.25, ayRealWet * (1.18 - 0.08 * wet));
+      const kappaCap = ayWetCap / Math.max(25, speed * speed);
+      kappa = clamp(kappa, -kappaCap, kappaCap);
+    }
     return kappa;
   }
 
@@ -2864,6 +2998,7 @@ export class F12026CarSim implements SimulatorCar {
   private planSpeedTarget(plan: AiDrivePlan, s: number, speed: number, prof: Float32Array): { v: number; pedalFF: number } {
     const t = plan.track;
     const L = this.track.totalLengthM;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
     const lead = Math.max(3, speed * 0.15);
     // Racing, the plan's top speed is no limit: a car in a tow runs past it, held by its own drag, and brakes from there
     // on the open envelope. Held at the plan's top speed, the tow was worth nothing and a quicker car sat behind a slower
@@ -2888,9 +3023,11 @@ export class F12026CarSim implements SimulatorCar {
     const aFF = (v1 * v1 - v0 * v0) / 12;
     if (aFF >= -0.5 && speed < v0) {
       // Still cornering hard (a corner exit): the full plan's acceleration, which shares the tyres between the corner
-      // and the throttle; flooring it there ran the car wide on the power. Near straight: as hard as it can
+      // and the throttle; flooring it there ran the car wide on the power. Above Pro on a dry road, delay this cap
+      // until higher lateral utilisation so Alien drivers stay flat out through gentle sweeps and open throttle earlier.
       const ayShare = (Math.abs(sampleGrid(plan.kappa, s + lead, t.ds)) * speed * speed) / plan.limits.lateral(speed);
-      if (ayShare > 0.3) {
+      const ayThreshold = this.vehicle.wetness < 0.15 ? 0.3 + 0.07 * alienShare : 0.3;
+      if (ayShare > ayThreshold) {
         const vExp = sampleGrid(plan.vExpected, s + lead, t.ds) * pace;
         const vExp1 = sampleGrid(plan.vExpected, s + lead + 6, t.ds) * pace;
         const aExp = (vExp1 * vExp1 - vExp * vExp) / 12;
@@ -3154,8 +3291,8 @@ export class F12026CarSim implements SimulatorCar {
     const p2p = this.track.pointToPoint;
     if (p2p) {
       // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it.
-      // A run counts from a standing start: at rest within 10 m of the line first, or the run is timed but not valid
-      if (this.s >= L - 10 && Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      // A run counts from a standing start: at rest within 10 m of the line first, without backing out of that 10 m box
+      // before crossing (#191), or the run is timed but not valid
       if (this.prevS > L * 0.85 && this.s < L * 0.15) {
         // A jump before the start line is not the run's
         this.cutWatch.reset();
@@ -3171,6 +3308,10 @@ export class F12026CarSim implements SimulatorCar {
         if (this.cutWatch.settle()) this.invalidateLap();
         this.runActive = false;
         this.onLapCompleted();
+      } else if (this.s >= L - 10) {
+        if (Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      } else {
+        this.atRestOnLine = false;
       }
     } else if (this.prevS > L * 0.85 && this.s < L * 0.15) {
       // A jump ahead still pending at the line is the lap's
@@ -3252,24 +3393,53 @@ export class F12026CarSim implements SimulatorCar {
     for (let i = 0; i < 4; i++) surfaces[i] = surfaceType(W[i].ground.surface);
     const onKerbLeft = surfaces[0] === 'kerb' || surfaces[2] === 'kerb';
     const onKerbRight = surfaces[1] === 'kerb' || surfaces[3] === 'kerb';
-    // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
-    // Judged on the wheels touching the road: an airborne wheel's ground is its last contact (the probe only reaches
-    // 0.6 m), so a jump keeps the verdict it took off with rather than reading stale surfaces
-    // Where another layout's road leaves the lap, this lap's road edge and kerbs are the limit: that road's asphalt and
-    // kerbs past it are off the track (course-limits.ts)
+    // Corner-relative track limits on grounded wheels (an airborne wheel keeps the verdict it took off with rather
+    // than reading stale surfaces; where another layout's road leaves the lap, this lap's road edge is the limit):
+    //   - Inside of a corner/chicane: white-line rule (kerbs do not keep a wheel on-track; all grounded wheels off
+    //     road/pitlane, or 3+ wheels on invalid surfaces, is an inside corner cut).
+    //   - Outside of a corner / corner exit: kerbs count as valid track plus a small outer margin (`EXIT_OUTER_MARGIN_M`)
+    //     probed inboard toward the track so marginally wide exits do not instantly delete laps, while genuine
+    //     off-track excursions are still caught.
+    //   - Neutral straights: standard all-four-wheels-off check.
     const fenced = inLapStretch(this.track.otherLayoutRoads, this.s, this.track.totalLengthM);
+    const cornerSide = cornerLimitSide(this.sampleCurvatureAt, this.s, this.lateral, this.track.totalLengthM);
+    const insideCorner = cornerSide === 'inside';
     let anyGrounded = false;
     let allOff = true;
+    let invalidGrounded = 0;
     for (let i = 0; i < 4; i++) {
       const w = W[i];
       if (!w.grounded) continue;
       anyGrounded = true;
       const kind = w.ground.surface;
-      if (!w.ground.props.validTrack) continue;
-      if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
+      const fencedOut = fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z);
+      if (!w.ground.props.validTrack || fencedOut) {
+        invalidGrounded++;
+        continue;
+      }
+      if (insideCorner && !isInsideCornerSurfaceValid(kind)) continue;
       allOff = false;
     }
-    const offTrack = anyGrounded ? allOff : this.wasOffTrack;
+    if (anyGrounded && allOff && cornerSide === 'outside') {
+      const activeGround = this.collider ?? this.sampleGround;
+      const bl = Math.hypot(sample.binormal.x, sample.binormal.z) || 1;
+      const outSign = Math.sign(this.lateral);
+      const stepX = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.x) / bl;
+      const stepZ = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.z) / bl;
+      for (let i = 0; i < 4; i++) {
+        const w = W[i];
+        if (!w.grounded) continue;
+        const px = w.hardpointWorld.x + stepX;
+        const pz = w.hardpointWorld.z + stepZ;
+        if (!activeGround.query(px, pz, Math.max(w.hardpointWorld.y, w.ground.height) + 0.5, _exitProbeHit)) continue;
+        if (!_exitProbeHit.props.validTrack) continue;
+        const pk = _exitProbeHit.surface;
+        if (fenced && (pk === 'road' || pk === 'kerb') && beyondLayoutEdge(sample, px, pz)) continue;
+        allOff = false;
+        break;
+      }
+    }
+    const offTrack = anyGrounded ? (allOff || (insideCorner && invalidGrounded >= INSIDE_OFF_WHEELS_CUT)) : this.wasOffTrack;
     this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;

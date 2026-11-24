@@ -3,8 +3,8 @@
  * tracks, seeds and stand-in profiles for each arm, raced in parallel, then raw totals per arm and per profile.
  *
  *   npx tsx scripts/ai/race-ab.ts [--tracks spielberg,istanbul_park] [--car lc26] [--seeds 4] [--seed0 0] [--laps 3] [--ai 7]
- *       [--profiles line,slow,early,weave,none] [--jobs 4] [--a '<racecraft json>'] [--b '<racecraft json>']
- *       [--planner on|off] [--json out.json]
+ *       [--profiles line,slow,early,weave,autopilot,none] [--jobs 4] [--a '<racecraft json>'] [--b '<racecraft json>']
+ *       [--planner on|off] [--skill 0.5] [--weather clear|light_rain|heavy_rain|...] [--json out.json]
  *
  * `--seed0 N` starts at the N-th seed: a held-out set for a final check after knobs were picked on the first ones.
  * Each arm is a set of racecraft knobs (`RacecraftParams`) over the defaults; with no `--b` only the defaults race.
@@ -41,6 +41,8 @@ for (const p of profiles) if (!(STAND_IN_PROFILES as readonly string[]).includes
 const arms: { name: string; racecraft: Record<string, number> }[] = [{ name: 'A', racecraft: JSON.parse(opt('a', '{}')) }];
 if (argv.includes('--b')) arms.push({ name: 'B', racecraft: JSON.parse(opt('b', '{}')) });
 const localPlanner = opt('planner', 'off') === 'on';
+const skill = argv.includes('--skill') ? Number(opt('skill', '0.5')) : undefined;
+const weather = argv.includes('--weather') ? (opt('weather', 'clear') as StandInRaceOptions['weather']) : undefined;
 
 function runOne(o: StandInRaceOptions): Promise<StandInRaceResult | null> {
   return new Promise((resolve) => {
@@ -103,6 +105,7 @@ interface Totals {
   dnf: number;
   passes: number;
   penS: number;
+  siPenS: number;
   aiLapS: number[];
   standInLapS: number[];
 }
@@ -110,7 +113,7 @@ interface Totals {
 function totals(rs: (StandInRaceResult | null)[]): Totals {
   const t: Totals = {
     races: rs.length, ok: 0, vsEvents: 0, vsAiFault: 0, vsStandInFault: 0, vsRacing: 0, vsRearEnd: 0, vsSide: 0, touchS: 0, lost: 0, won: 0,
-    aaEvents: 0, aaFault: 0, spins: 0, offs: 0, walls: 0, dnf: 0, passes: 0, penS: 0, aiLapS: [], standInLapS: [],
+    aaEvents: 0, aaFault: 0, spins: 0, offs: 0, walls: 0, dnf: 0, passes: 0, penS: 0, siPenS: 0, aiLapS: [], standInLapS: [],
   };
   for (const r of rs) {
     if (!r) continue;
@@ -132,6 +135,7 @@ function totals(rs: (StandInRaceResult | null)[]): Totals {
     t.dnf += r.aiDnf;
     t.passes += r.aiPasses;
     t.penS += r.aiPenaltiesS;
+    t.siPenS += r.standInPenaltiesS ?? 0;
     if (Number.isFinite(r.aiMeanLapS)) t.aiLapS.push(r.aiMeanLapS);
     if (Number.isFinite(r.standInMeanLapS)) t.standInLapS.push(r.standInMeanLapS);
   }
@@ -143,7 +147,7 @@ const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.lengt
 function printTotals(label: string, t: Totals): void {
   console.log(
     `${padR(label, 16)}${pad(`${t.ok}/${t.races}`, 7)}${pad(t.vsEvents, 6)}${pad(t.vsAiFault, 6)}${pad(t.vsStandInFault, 6)}${pad(t.vsRacing, 6)}${pad(t.vsRearEnd, 5)}${pad(t.vsSide, 5)}` +
-      `${pad(t.touchS.toFixed(1), 7)}${pad(t.lost, 6)}${pad(t.won, 5)}${pad(t.aaEvents, 6)}${pad(t.aaFault, 6)}${pad(t.spins, 6)}${pad(t.offs, 5)}${pad(t.walls, 5)}${pad(t.dnf, 4)}${pad(t.passes, 7)}${pad(t.penS, 5)}` +
+      `${pad(t.touchS.toFixed(1), 7)}${pad(t.lost, 6)}${pad(t.won, 5)}${pad(t.aaEvents, 6)}${pad(t.aaFault, 6)}${pad(t.spins, 6)}${pad(t.offs, 5)}${pad(t.walls, 5)}${pad(t.dnf, 4)}${pad(t.passes, 7)}${pad(t.penS, 5)}${pad(t.siPenS, 6)}` +
       `${pad(mean(t.aiLapS).toFixed(2), 8)}${pad(mean(t.standInLapS).toFixed(2), 8)}`
   );
 }
@@ -154,7 +158,7 @@ async function main(): Promise<void> {
     for (const trackId of tracks)
       for (const standIn of profiles)
         for (let k = 0; k < seeds; k++)
-          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner } });
+          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner, skill, weather } });
   console.error(`${races.length} races (${arms.length} arm(s) × ${tracks.length} tracks × ${profiles.length} profiles × ${seeds} seeds), ${jobsN} at once`);
   const started = Date.now();
   const results = await pool(races.map((r) => () => runOne(r.o)), jobsN);
@@ -166,7 +170,7 @@ async function main(): Promise<void> {
   for (const arm of arms) if (Object.keys(arm.racecraft).length) console.log(`arm ${arm.name}: ${JSON.stringify(arm.racecraft)}`);
   console.log(
     `${padR('', 16)}${pad('races', 7)}${pad('vsSI', 6)}${pad('AIflt', 6)}${pad('SIflt', 6)}${pad('race', 6)}${pad('rear', 5)}${pad('side', 5)}` +
-      `${pad('touch', 7)}${pad('lost', 6)}${pad('won', 5)}${pad('AvA', 6)}${pad('AvAf', 6)}${pad('spin', 6)}${pad('off', 5)}${pad('wall', 5)}${pad('dnf', 4)}${pad('passes', 7)}${pad('pen', 5)}${pad('AI lap', 8)}${pad('SI lap', 8)}`
+      `${pad('touch', 7)}${pad('lost', 6)}${pad('won', 5)}${pad('AvA', 6)}${pad('AvAf', 6)}${pad('spin', 6)}${pad('off', 5)}${pad('wall', 5)}${pad('dnf', 4)}${pad('passes', 7)}${pad('pen', 5)}${pad('SIpen', 6)}${pad('AI lap', 8)}${pad('SI lap', 8)}`
   );
   for (const arm of arms) {
     const mine = rows.filter((r) => r.arm === arm.name);
@@ -177,7 +181,7 @@ async function main(): Promise<void> {
   console.log(
     'vsSI = contacts with the stand-in (once per pair per s) · AIflt/SIflt = race control has the AI / stand-in at fault · race = racing incident\n' +
       'rear/side = from behind / moved across · touch = s the stand-in spent touching an AI car · lost/won = places the stand-in lost/won on the road\n' +
-      'AvA = AI v AI contacts, AvAf at fault · passes = AI passes (all) · pen = AI penalty s · AI lap / SI lap = mean flying lap (s)'
+      'AvA = AI v AI contacts, AvAf at fault · passes = AI passes (all) · pen = AI penalty s · SIpen = stand-in penalty s · AI lap / SI lap = mean flying lap (s)'
   );
 }
 

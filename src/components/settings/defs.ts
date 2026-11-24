@@ -718,6 +718,12 @@ export const boardWidget = choice("segmented", {
   ],
   ...hud("boardWidget"),
 });
+export const engineeringTelemetry = toggle({
+  id: "engineeringTelemetry",
+  get label() { return rt("engineeringTelemetry.label"); },
+  hint: () => rt("engineeringTelemetry.hint"),
+  ...hud("engineeringTelemetry"),
+});
 
 export const hudAdvanced: RowDef[] = [
   toggle({

@@ -10,6 +10,7 @@ import {
   PAD_PEDALS,
   PAD_THROTTLE_BUTTON,
   pedalOnButton,
+  type PadAction,
   type PadButtonBindings,
   type PadPedalSources,
 } from "@/lib/input/bindings";
@@ -33,6 +34,14 @@ type Row = {
 
 /** What a button does: a fixed control, or the action bound to it */
 const bound = (button: number) => (b: PadButtonBindings) => PAD_ACTIONS.find((a) => b[a.id] === button)?.label ?? null;
+/** What a D-pad axis pair does: its shorthand label when on the default MFD dial pair, else whatever is bound there */
+const dpadPair =
+  (a: number, b: number, aAction: PadAction, bAction: PadAction, pairLabel: () => string) =>
+  (bindings: PadButtonBindings): string | null => {
+    if (bindings[aAction] === a && bindings[bAction] === b) return pairLabel();
+    const labels = [bound(a)(bindings), bound(b)(bindings)].filter((s): s is string => s !== null);
+    return labels.length ? labels.join(" / ") : null;
+  };
 const btn = (button: number, fixed?: string): Row => ({
   key: `b${button}`,
   buttons: [button],
@@ -77,8 +86,8 @@ const rows = (sources: PadPedalSources): { left: Row[]; right: Row[] } => {
       ...axisRow(0),
       ...axisRow(1),
       button(10),
-      { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: () => t("setup.padMap.mfdDial") },
-      { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: () => t("setup.padMap.mfdValue") },
+      { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: dpadPair(14, 15, "mfdPrev", "mfdNext", () => t("setup.padMap.mfdDial")) },
+      { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: dpadPair(12, 13, "mfdUp", "mfdDown", () => t("setup.padMap.mfdValue")) },
     ],
     right: [
       button(PAD_THROTTLE_BUTTON),

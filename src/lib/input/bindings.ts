@@ -58,6 +58,10 @@ export type PadAction =
   | "pause"
   | "mfd"
   | "mfdPage"
+  | "mfdUp"
+  | "mfdDown"
+  | "mfdPrev"
+  | "mfdNext"
   | "hud"
   | "board"
   | "headlights"
@@ -118,6 +122,10 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "pause", get label() { return t("game.padActions.pause"); } },
   { id: "mfd", get label() { return t("game.padActions.mfd"); } },
   { id: "mfdPage", get label() { return t("game.padActions.mfdPage"); } },
+  { id: "mfdUp", get label() { return t("game.padActions.mfdUp"); } },
+  { id: "mfdDown", get label() { return t("game.padActions.mfdDown"); } },
+  { id: "mfdPrev", get label() { return t("game.padActions.mfdPrev"); } },
+  { id: "mfdNext", get label() { return t("game.padActions.mfdNext"); } },
   { id: "hud", get label() { return t("game.padActions.hud"); } },
   { id: "board", get label() { return t("game.padActions.board"); } },
   // One button for both, as GT7's L3 carries the switch and the flash: a tap flashes, a hold switches them on or off
@@ -192,6 +200,10 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   pause: 9, // Menu
   mfd: 10, // LS click (L3)
   mfdPage: 1, // B
+  mfdUp: 12, // D-pad ↑
+  mfdDown: 13, // D-pad ↓
+  mfdPrev: 14, // D-pad ←
+  mfdNext: 15, // D-pad →
   hud: 11, // RS click (R3)
   // Every button has a job already: a player can give it one
   board: null,
@@ -222,6 +234,10 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   headlights: 10, // LS (L3)
   mfd: null,
   mfdPage: 1, // B (○)
+  mfdUp: 12, // D-pad ↑
+  mfdDown: 13, // D-pad ↓
+  mfdPrev: 14, // D-pad ←
+  mfdNext: 15, // D-pad →
   hud: 4, // LB (L1)
   racingLine: null,
   board: null,
@@ -242,6 +258,20 @@ export const RETIRED_GT_STYLE_BUTTONS: PadButtonBindings = {
 
 /** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
 export const DEFAULT_PAD_BUTTONS: PadButtonBindings = GT_STYLE_BUTTONS;
+
+/**
+ * Fallback layout for an uncalibrated steering wheel: shifts on bumpers (4/5) and leaves all MFD / TC controls
+ * unbound so non-standard wheel paddles (e.g. Moza R3 buttons 12–13) never adjust Traction Control or other dials.
+ */
+export const WHEEL_FALLBACK_BUTTONS: PadButtonBindings = {
+  ...BUMPER_SHIFT_BUTTONS,
+  mfd: null,
+  mfdPage: null,
+  mfdUp: null,
+  mfdDown: null,
+  mfdPrev: null,
+  mfdNext: null,
+};
 
 /** Fixed standard-mapping buttons: the triggers, the stick clicks */
 export const PAD_THROTTLE_BUTTON = 7; // RT
@@ -402,6 +432,10 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       aero: 3, // Y (△)
       mfd: 10, // LS (L3)
       mfdPage: 1, // B (○)
+      mfdUp: 12, // D-pad ↑
+      mfdDown: 13, // D-pad ↓
+      mfdPrev: 14, // D-pad ←
+      mfdNext: 15, // D-pad →
       hud: 2, // X (□)
       racingLine: null,
       board: null,
@@ -430,6 +464,10 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       flyingLap: null,
       mfd: 10, // LS (L3)
       mfdPage: null,
+      mfdUp: 12, // D-pad ↑
+      mfdDown: 13, // D-pad ↓
+      mfdPrev: 14, // D-pad ←
+      mfdNext: 15, // D-pad →
       hud: 11, // RS (R3)
       racingLine: null,
       board: null,
@@ -457,6 +495,10 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       flyingLap: null,
       mfd: 4, // LB (L1)
       mfdPage: 3, // Y (△)
+      mfdUp: 12, // D-pad ↑
+      mfdDown: 13, // D-pad ↓
+      mfdPrev: 14, // D-pad ←
+      mfdNext: 15, // D-pad →
       hud: 11, // RS (R3)
       racingLine: null,
       board: null,
@@ -494,8 +536,17 @@ export function matchPadLayout(bindings: PadButtonBindings, sources: PadPedalSou
   );
 }
 
-/** Window events the game loop fires for the HUD's own pad toggles (the MFD and the HUD listen for them) */
-export const HUD_TOGGLE_EVENT = { mfd: "lc:toggle-mfd", mfdPage: "lc:mfd-page", hud: "lc:toggle-hud", board: "lc:toggle-board" } as const;
+/** Window events the game loop fires for the HUD's own pad toggles and MFD dial controls */
+export const HUD_TOGGLE_EVENT = {
+  mfd: "lc:toggle-mfd",
+  mfdPage: "lc:mfd-page",
+  mfdUp: "lc:mfd-up",
+  mfdDown: "lc:mfd-down",
+  mfdPrev: "lc:mfd-prev",
+  mfdNext: "lc:mfd-next",
+  hud: "lc:toggle-hud",
+  board: "lc:toggle-board",
+} as const;
 
 export const STANDARD_BUTTON_NAMES: Record<number, string> = {
   0: "A",
@@ -634,6 +685,11 @@ export function rebindPadButton(bindings: PadButtonBindings, action: PadAction, 
   }
   next[action] = button;
   return next;
+}
+
+/** Removes the controller button bound to `action` */
+export function clearPadButton(bindings: PadButtonBindings, action: PadAction): PadButtonBindings {
+  return bindings[action] === null ? bindings : { ...bindings, [action]: null };
 }
 
 /**

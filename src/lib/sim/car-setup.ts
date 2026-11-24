@@ -282,7 +282,7 @@ export const BRAKE_DUCT_STEP = 0.18;
 export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   lc26: 11,
   "f12026-car": 11,
-  "amg-gt3": 12.6,
+  "amg-gt3": 14.2,
   liana: 15,
   "mtr-496r": 14,
   // 527° of rim lock for 20° at the road wheels [est]

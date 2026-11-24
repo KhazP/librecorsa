@@ -44,10 +44,16 @@ const BRAKE_GLOW = { own: 4.2, plain: 3.6 } as const;
 const LENS_GLOW_LOW = 4.5;
 const LENS_GLOW_HIGH = 10;
 
-/** Sun elevation below which automatic headlights switch on (deg; covers dusk, night, early dawn) */
-export const AUTO_HEADLIGHT_SUN_DEG = 4;
-/** Rain intensity above which automatic headlights switch on (0..1) */
-export const AUTO_HEADLIGHT_RAIN = 0.35;
+/** Sun elevation below which automatic headlights switch on (deg; covers dawn, dusk, night) */
+export const AUTO_HEADLIGHT_SUN_DEG = 6;
+/** Rain intensity above which automatic headlights switch on (0..1; covers light and heavy rain) */
+export const AUTO_HEADLIGHT_RAIN = 0.25;
+/** Physical SpotLight distance decay exponent: softer than 1.0 to offset grazing N·L collapse on flat asphalt */
+export const HEADLIGHT_BEAM_DECAY = 0.8;
+/** Virtual beam origin lift above the physical lens (m) so flat asphalt 30..130 m ahead receives useful N·L */
+export const HEADLIGHT_SPOT_HEIGHT_LIFT_M = 0.52;
+/** Merged single-SpotLight intensity multiplier (Low / Medium) vs one lamp of a twin High rig */
+export const MERGED_SPOT_INTENSITY_MULT = 1.85;
 
 export interface LampPlacement {
   /** Lateral offset from the car centreline (+X = left, m) */
@@ -138,11 +144,11 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.60,
     rearHeightM: 0.72,
     color: 0xf8fbff,
-    intensity: 215,
-    distanceM: 200,
-    angleRad: 0.56,
-    penumbra: 0.58,
-    aimSpreadM: 3.2,
+    intensity: 340,
+    distanceM: 260,
+    angleRad: 0.58,
+    penumbra: 0.62,
+    aimSpreadM: 3.6,
     flareSizeM: 0.32,
     rearFlareSizeM: 0.22,
   },
@@ -154,11 +160,11 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.64,
     rearHeightM: 0.62,
     color: 0xf4f9ff,
-    intensity: 240,
-    distanceM: 210,
-    angleRad: 0.58,
-    penumbra: 0.56,
-    aimSpreadM: 3.4,
+    intensity: 370,
+    distanceM: 280,
+    angleRad: 0.60,
+    penumbra: 0.60,
+    aimSpreadM: 3.8,
     flareSizeM: 0.32,
     rearFlareSizeM: 0.20,
   },
@@ -170,11 +176,11 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.54,
     rearHeightM: 0.58,
     color: 0xffe4b0,
-    intensity: 180,
-    distanceM: 165,
-    angleRad: 0.56,
-    penumbra: 0.62,
-    aimSpreadM: 2.8,
+    intensity: 280,
+    distanceM: 225,
+    angleRad: 0.58,
+    penumbra: 0.64,
+    aimSpreadM: 3.2,
     flareSizeM: 0.28,
     rearFlareSizeM: 0.20,
   },
@@ -186,11 +192,11 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.60,
     rearHeightM: 0.74,
     color: 0xfff0d4,
-    intensity: 160,
-    distanceM: 155,
+    intensity: 270,
+    distanceM: 220,
     angleRad: 0.58,
-    penumbra: 0.64,
-    aimSpreadM: 2.6,
+    penumbra: 0.66,
+    aimSpreadM: 3.0,
     flareSizeM: 0.28,
     rearFlareSizeM: 0.22,
   },
@@ -446,8 +452,12 @@ export function canSessionGetDark(conditions: SessionConditions): boolean {
  * only). Low and Medium use 1 merged centre SpotLight, High 2 twin SpotLights. Low used to have none, and an unlit
  * circuit at night was then undrivable on it: one light is a few ALU ops a fragment.
  */
-export function headlightSpotCountFor(conditions: SessionConditions, quality: GraphicsQuality): HeadlightSpotCount {
-  if (!canSessionGetDark(conditions)) return 0;
+export function headlightSpotCountFor(
+  conditions: SessionConditions,
+  quality: GraphicsQuality,
+  manualOn = false
+): HeadlightSpotCount {
+  if (!manualOn && !canSessionGetDark(conditions)) return 0;
   return quality === "high" ? 2 : 1;
 }
 
@@ -477,12 +487,13 @@ function getFlareTexture(): THREE.CanvasTexture | null {
   return tex;
 }
 
-/** The beam's cone against the profile's, and its soft edge: a narrower cone with a wide falloff reads as a real beam */
-const BEAM_ANGLE = 0.86;
-const BEAM_PENUMBRA = 0.86;
+/** The beam's cone against the profile's, and its soft edge: broad usable core with smooth outer falloff */
+export const BEAM_ANGLE = 0.95;
+export const BEAM_PENUMBRA = 0.72;
 /** Where the low beam's middle meets the road, and the high beam's aim (m ahead of the lamps) */
-const LOW_BEAM_AIM_M = 75;
-const HIGH_BEAM_AIM_M = 140;
+export const LOW_BEAM_AIM_M = 90;
+export const LOW_BEAM_AIM_Y_M = 0.18;
+export const HIGH_BEAM_AIM_M = 150;
 
 const HEADLIGHT_MAT_RE = /(?:head_?light|front_?light|lamp_?front|hl_glass|light_?front|farol|scheinwerfer)/i;
 const TAILLIGHT_MAT_RE = /(?:tail_?light|rear_?light|brake_?light|stop_?light|lamp_?rear)/i;
@@ -558,37 +569,42 @@ export class CarHeadlights {
     if (this.spotCount === 2) {
       this.spotIntensity = p.intensity;
       const makeSpot = (side: 1 | -1): THREE.SpotLight => {
-        // Decay 1.0 + slightly raised virtual beam origin avoids grazing-angle Lambertian collapse on flat asphalt
-        // past 30 m while keeping near-nose intensity balanced under AgX tone mapping.
-        const spot = new THREE.SpotLight(p.color, 0, p.distanceM, p.angleRad * BEAM_ANGLE, Math.max(p.penumbra, BEAM_PENUMBRA), 1.0);
+        // Decay 0.80 + raised virtual beam origin avoids grazing-angle Lambertian collapse on flat asphalt past 30 m
+        // so corners, kerbs and braking markers stay readable to 100..140 m while near-nose stays balanced under AgX.
+        const spot = new THREE.SpotLight(
+          p.color,
+          0,
+          p.distanceM,
+          p.angleRad * BEAM_ANGLE,
+          Math.max(p.penumbra, BEAM_PENUMBRA),
+          HEADLIGHT_BEAM_DECAY
+        );
         spot.castShadow = false;
-        spot.position.set(side * p.halfWidthM, p.heightM + 0.3, p.frontZM);
-        // Low beam: aimed far down the road, nearly level, gently outward for corner apexes, so the hot middle of
-        // the beam lies 30..80 m ahead and the road just ahead of the nose sits in its soft lower edge (a real low
-        // beam's pattern; aimed close it painted a hard bright trapezoid in front of the car and little beyond).
-        // High beam: level, further out
-        this.lowAims.push(new THREE.Vector3(side * (p.halfWidthM + p.aimSpreadM), 0, p.frontZM + LOW_BEAM_AIM_M));
-        this.highAims.push(new THREE.Vector3(side * (p.halfWidthM + 0.6 * p.aimSpreadM), p.heightM + 0.6, p.frontZM + HIGH_BEAM_AIM_M));
+        spot.position.set(side * p.halfWidthM, p.heightM + HEADLIGHT_SPOT_HEIGHT_LIFT_M, p.frontZM);
+        // Low beam: aimed far down the road, gently outward for corner apexes, so the road is evenly lit 10..120 m ahead.
+        // High beam: level, reaching 160+ m ahead.
+        this.lowAims.push(new THREE.Vector3(side * (p.halfWidthM + p.aimSpreadM), LOW_BEAM_AIM_Y_M, p.frontZM + LOW_BEAM_AIM_M));
+        this.highAims.push(new THREE.Vector3(side * (p.halfWidthM + 0.6 * p.aimSpreadM), p.heightM + 0.75, p.frontZM + HIGH_BEAM_AIM_M));
         spot.target.position.copy(this.lowAims[this.lowAims.length - 1]);
         this.group.add(spot, spot.target);
         return spot;
       };
       this.spots.push(makeSpot(1), makeSpot(-1));
     } else if (this.spotCount === 1) {
-      // Medium quality: single merged centre SpotLight with a slightly wider cone and boosted intensity
-      this.spotIntensity = p.intensity * 1.65;
+      // Low / Medium quality: single merged centre SpotLight matching twin-lamp road illumination
+      this.spotIntensity = p.intensity * MERGED_SPOT_INTENSITY_MULT;
       const spot = new THREE.SpotLight(
         p.color,
         0,
         p.distanceM,
-        Math.min(Math.PI * 0.45, p.angleRad * 1.18 * BEAM_ANGLE),
+        Math.min(Math.PI * 0.46, p.angleRad * 1.18 * BEAM_ANGLE),
         Math.max(p.penumbra, BEAM_PENUMBRA),
-        1.0
+        HEADLIGHT_BEAM_DECAY
       );
       spot.castShadow = false;
-      spot.position.set(0, p.heightM + 0.3, p.frontZM);
-      this.lowAims.push(new THREE.Vector3(0, 0, p.frontZM + LOW_BEAM_AIM_M));
-      this.highAims.push(new THREE.Vector3(0, p.heightM + 0.6, p.frontZM + HIGH_BEAM_AIM_M));
+      spot.position.set(0, p.heightM + HEADLIGHT_SPOT_HEIGHT_LIFT_M, p.frontZM);
+      this.lowAims.push(new THREE.Vector3(0, LOW_BEAM_AIM_Y_M, p.frontZM + LOW_BEAM_AIM_M));
+      this.highAims.push(new THREE.Vector3(0, p.heightM + 0.75, p.frontZM + HIGH_BEAM_AIM_M));
       spot.target.position.copy(this.lowAims[0]);
       this.group.add(spot, spot.target);
       this.spots.push(spot);
@@ -938,13 +954,13 @@ export class CarHeadlights {
     const p = this.profile;
     const high = this.frontLevel === 2;
     const m = this.group.matrixWorld;
-    out.pos.set(0, p.heightM + 0.3, p.frontZM).applyMatrix4(m);
+    out.pos.set(0, p.heightM + HEADLIGHT_SPOT_HEIGHT_LIFT_M, p.frontZM).applyMatrix4(m);
     out.dir
-      .set(0, high ? p.heightM + 0.6 : 0, p.frontZM + (high ? HIGH_BEAM_AIM_M : LOW_BEAM_AIM_M))
+      .set(0, high ? p.heightM + 0.75 : LOW_BEAM_AIM_Y_M, p.frontZM + (high ? HIGH_BEAM_AIM_M : LOW_BEAM_AIM_M))
       .applyMatrix4(m)
       .sub(out.pos)
       .normalize();
-    out.intensity = p.intensity * 1.65 * (high ? HIGH_BEAM_GAIN : 1);
+    out.intensity = p.intensity * MERGED_SPOT_INTENSITY_MULT * (high ? HIGH_BEAM_GAIN : 1);
     out.range = p.distanceM * (high ? HIGH_BEAM_REACH : 1);
     return true;
   }

@@ -288,6 +288,10 @@
     "pause": "Pause menu",
     "mfd": "Open / close MFD",
     "mfdPage": "Next MFD page",
+    "mfdUp": "MFD value +",
+    "mfdDown": "MFD value −",
+    "mfdPrev": "Previous MFD dial",
+    "mfdNext": "Next MFD dial",
     "hud": "Show / hide HUD",
     "board": "Open / close lap board",
     "headlights": "Headlights (tap: flash, hold: on / off)",
@@ -836,7 +840,9 @@
     "launchTouch": "Hold throttle to launch",
     "launchKey": "Hold {key} to launch · Esc Menu",
     "noRacesOnHillClimb": "No races on a hill climb",
-    "backToRaces": "Back to the races"
+    "backToRaces": "Back to the races",
+    "carAutoSwitched": "Switched to {car} — lobby locked to {rule}",
+    "carBlockedByLobby": "Car locked to {rule} while in this lobby"
   },
   "telemetryHud": {
     "menu": "Menu",

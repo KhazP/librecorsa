@@ -34,6 +34,7 @@ import {
   speedUnit,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
+import { ersButtons } from "../ers-buttons";
 import { pedalLayers } from "../PedalBars";
 import { driverLabel, fuelLapsLeft, sessionBestLapMs } from "../third-party-data";
 import { revLights, useFuelPerLap, useStartFuel } from "./third-party-parts";
@@ -57,8 +58,12 @@ type Words = ReturnType<typeof useF1Words>;
 
 function useF1Words() {
   const tx = useTranslations("hudStyles.f1Like");
+  const txCluster = useTranslations("hud.speedCluster");
   return useMemo(
     () => ({
+      boost: txCluster("boost"),
+      lowGrip: txCluster("lowGrip"),
+      overtakeAuto: txCluster("overtakeAuto"),
       runningOrder: tx("runningOrder"),
       lapOf: formatOnce((lap: number, total: number) => tx("lapOf", { lap, total })),
       lap: formatOnce((lap: number) => tx("lap", { lap })),
@@ -91,6 +96,7 @@ function useF1Words() {
       overtakeOn: tx("overtakeOn"),
       overtakeLocked: tx("overtakeLocked"),
       ers: {
+        boost: txCluster("boost"),
         overtake: tx("ers.overtake"),
         deploy: tx("ers.deploy"),
         clipped: tx("ers.clipped"),
@@ -110,7 +116,7 @@ function useF1Words() {
       damage: formatOnce((pct: number) => tx("damage", { pct })),
       noDamage: tx("noDamage"),
     }),
-    [tx],
+    [tx, txCluster],
   );
 }
 
@@ -391,14 +397,41 @@ const PIPS = 15;
 const RPM_TICKS = 9;
 const BATT_NOTCHES = [0.25, 0.5, 0.75] as const;
 
-/** Overtake / extra power pill in the centre bridge's bottom dock */
+/** Boost / Overtake power pill in the centre bridge's bottom dock */
 const PowerButton: React.FC<{ t: CarTelemetry; w: Words }> = ({ t, w }) => {
   const hasErs = t.f12026?.hasErs ?? false;
   if (!hasErs) return null;
-  const twentySix = t.overtakingRules === "straight-mode-2026";
-  const locked = twentySix && t.overtakeAvailable === false;
-  const on = !locked && t.manualOverrideActive;
-  const label = on ? w.overtakeOn : locked ? w.overtakeLocked : twentySix ? w.overtakeReady : w.overtake;
+  const ersCtl = ersButtons(t);
+  if (t.ersBoostActive !== undefined) {
+    const ot = ersCtl.overtake;
+    const overtakeOn = ot === "on" || ot === "auto";
+    // Show active Boost in any session (including races with Overtake locked/available and Low Grip) when Overtake itself isn't active
+    if (ersCtl.boostOn && !overtakeOn) {
+      return (
+        <Badge tone="info" variant="solid" size="hud" icon="overtake" title={ersCtl.lowGrip ? w.lowGrip : w.boost}>
+          {w.boost}
+        </Badge>
+      );
+    }
+    // In a race (or Low Grip), show Overtake status (keep badge text short for the 154 px centre bridge; detail goes in title)
+    if (ot !== null) {
+      const locked = ot === "locked" || ot === "lowGrip";
+      const title = ot === "lowGrip" ? w.lowGrip : ot === "auto" ? w.overtakeAuto : overtakeOn ? w.overtakeOn : locked ? w.overtakeLocked : w.overtakeReady;
+      return (
+        <Badge tone={locked ? "neutral" : "info"} variant={overtakeOn ? "solid" : locked ? "soft" : "outline"} size="hud" icon="overtake" title={title}>
+          {w.overtake}
+        </Badge>
+      );
+    }
+    return (
+      <Badge tone="info" variant="outline" size="hud" icon="overtake" title={w.boost}>
+        {w.boost}
+      </Badge>
+    );
+  }
+  const locked = ersCtl.boostLocked;
+  const on = ersCtl.boostOn;
+  const label = on ? w.overtakeOn : locked ? w.overtakeLocked : w.overtake;
   return (
     <Badge tone={locked ? "neutral" : "info"} variant={on ? "solid" : locked ? "soft" : "outline"} size="hud" icon="overtake" title={label}>
       {w.overtake}
@@ -408,7 +441,7 @@ const PowerButton: React.FC<{ t: CarTelemetry; w: Words }> = ({ t, w }) => {
 
 /** Semantic text colour for the 2026 ERS operating state */
 function ersTextClass(state: ErsState): string {
-  if (state === "overtake" || state === "deploy") return "text-lc-info";
+  if (state === "boost" || state === "overtake" || state === "deploy") return "text-lc-info";
   if (state === "braking" || state === "liftCoast" || state === "superclip" || state === "trickle") return "text-lc-gain";
   if (state === "clipped") return "text-lc-caution";
   return "text-lc-slate";
@@ -831,6 +864,7 @@ export const F1LikeHud: React.FC<HudDesignProps> = ({
   revRange,
   scale,
   mfd,
+  channels,
   ffb,
   lapInvalid,
   mapMode,
@@ -876,6 +910,7 @@ export const F1LikeHud: React.FC<HudDesignProps> = ({
       {/* Bottom right: MFD over CAD car-status panel */}
       <div className="absolute hidden flex-col items-end gap-2 lg:flex" style={{ bottom: EDGE, right: EDGE, ...anchor(scale, "bottom right") }}>
         {mfd}
+        {channels}
         <div>
           <CarStatus t={t} compound={compound as TireCompound} w={w} />
         </div>

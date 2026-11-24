@@ -39,6 +39,7 @@ export const CAR_SETTABLE = [
   "trackLimitsMode",
   "trackLimitsHold",
   "gridHold",
+  "speedLimiterMs",
   "aiSelfRecovery",
   "vxMs",
   "sMeters",

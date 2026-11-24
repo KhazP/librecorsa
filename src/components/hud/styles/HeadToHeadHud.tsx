@@ -25,6 +25,7 @@ import type { IconName } from "@/components/ui/icons/registry";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { aidsActive, formatSpeed, formatTemp, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
+import { ersButtons } from "../ers-buttons";
 import { type WeatherHudState } from "../WeatherBadge";
 import {
   dayClock,
@@ -338,6 +339,8 @@ const CarCells: React.FC<{ t: CarTelemetry; revRange: [number, number]; fuelPerL
   const tuner = t.liveTuner;
   const aids = aidsActive(t);
   const hasErs = t.f12026?.hasErs ?? tuner?.hasErs ?? false;
+  const ersCtl = ersButtons(t);
+  const extraPower = ersCtl.boostOn || ersCtl.overtake === "on" || ersCtl.overtake === "auto";
   const aero = aeroReadout(t);
   const showAero = t.overtakingRules !== undefined && t.overtakingRules !== "none";
   const revs = revLights(t.rpm, revRange, REV_LIGHTS);
@@ -357,7 +360,7 @@ const CarCells: React.FC<{ t: CarTelemetry; revRange: [number, number]; fuelPerL
     // The source's pit limiter cell: the battery on a hybrid, the fuel on a car that burns it (lit and pulsing under
     // two laps left, as the limiter's cell is while it is on)
     ...(hasErs
-      ? [{ key: "ers", label: "ERS", icon: "ers", value: `${Math.round(t.ersBatteryPercent)}%`, tone: "yellow", active: t.manualOverrideActive } satisfies Cell]
+      ? [{ key: "ers", label: "ERS", icon: "ers", value: `${Math.round(t.ersBatteryPercent)}%`, tone: "yellow", active: extraPower } satisfies Cell]
       : t.fuelKg > 0
         ? [
             {

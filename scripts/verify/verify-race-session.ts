@@ -689,28 +689,42 @@ console.log("AI rolling start · formation pace until Start/Finish");
     );
   }
 
-  // 3. Player on pole accelerates in the final acceleration zone (< 55 m before S/F) -> green drops early
+  // 3. Player on pole holding full throttle: formation speed limiter holds ~65 km/h through 3-2-1 countdown until S/F crossing
   {
     const player = new F1Physics2026(track);
     const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 2), undefined, { seed: 13, learning: false });
     field.playerGrid = "front";
     field.startRace(false);
     const paceMs = field.status().rollingFormation?.paceMs ?? 0;
-    let earlyGreenDist = Infinity;
-    for (let i = 0; i < 60 * 15; i++) {
-      const pDist = field.status().standings.find((s) => s.isPlayer)?.raceDistM ?? -200;
-      const throttle = pDist >= -50 ? 1 : player.vxMs < paceMs - 0.5 ? 0.25 : 0.05;
-      player.step(dt, { throttle, brake: 0 });
+    let maxPlayerBeforeGreen = 0;
+    let greenDist = -Infinity;
+    const seenStages: string[] = [];
+    for (let i = 0; i < 60 * 18; i++) {
+      player.step(dt, { throttle: 1, brake: 0 });
       field.update(dt);
-      if (!field.isRollingFormation) {
-        earlyGreenDist = field.status().standings.find((s) => s.isPlayer)?.raceDistM ?? 0;
+      const rf = field.status().rollingFormation;
+      if (rf) {
+        maxPlayerBeforeGreen = Math.max(maxPlayerBeforeGreen, player.vxMs);
+        const key = rf.stage === "countdown" ? String(rf.countdown) : rf.stage;
+        if (seenStages[seenStages.length - 1] !== key) seenStages.push(key);
+      } else {
+        greenDist = field.status().standings.find((s) => s.isPlayer)?.raceDistM ?? 0;
         break;
       }
     }
     check(
-      "pole player accelerating in the final 55 m zone triggers early green flag",
-      !field.isRollingFormation && earlyGreenDist >= -55 && earlyGreenDist < 0,
-      `earlyGreenDist=${earlyGreenDist.toFixed(1)} m`,
+      "formation speed limiter clamps full-throttle pole player near ~65 km/h until S/F",
+      !field.isRollingFormation &&
+        player.speedLimiterMs === undefined &&
+        maxPlayerBeforeGreen <= paceMs + 1.5 &&
+        greenDist >= -1 &&
+        greenDist < 20,
+      `max=${(maxPlayerBeforeGreen * 3.6).toFixed(1)} vs pace=${(paceMs * 3.6).toFixed(1)} km/h, greenDist=${greenDist.toFixed(1)} m, stages=${seenStages.join("->")}`,
+    );
+    check(
+      "rolling start progresses through 3-2-1 countdown before green flag",
+      seenStages.includes("3") && seenStages.includes("2") && seenStages.includes("1"),
+      seenStages.join(" -> "),
     );
   }
 

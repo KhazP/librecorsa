@@ -5,7 +5,7 @@ import * as THREE from "three";
  * wing mirrors are not in shot (TV pod, bumper / nose, shoulder, and the cockpit of cars without working mirrors).
  *
  * A rear-facing camera on the chassis (roof height, the car's own model hidden) renders into a 640x160 half-float
- * target every second frame. After the main post-processed frame, one screen quad draws that image into a rounded
+ * target (every second frame, or every frame at a low frame rate: `MirrorClock`). After the main post-processed frame, one screen quad draws that image into a rounded
  * rectangle through renderer.toneMapping (AgX) and the sRGB output transform, so it matches the main image. The quad
  * mirrors the image horizontally: a camera looking backwards has screen-right = the car's left, a mirror shows the
  * car's left on the left.
@@ -112,16 +112,16 @@ export class VirtualMirror {
   }
 
   /**
-   * Before the main render: refresh the rear view (every second frame) when the mirror is on. `hide` is the player's
-   * car, kept out of its own mirror.
+   * Before the main render: refresh the rear view when the mirror is on and `refresh` says this frame does
+   * (`MirrorClock`). `hide` is the player's car, kept out of its own mirror.
    */
-  update(frameIndex: number, enabled: boolean, chassis: THREE.Object3D, hide: THREE.Object3D): void {
+  update(refresh: boolean, enabled: boolean, chassis: THREE.Object3D, hide: THREE.Object3D): void {
     if (enabled !== this.active) {
       this.active = enabled;
       this.renderNext = enabled;
     }
     if (!enabled) return;
-    if (!this.renderNext && frameIndex % 2 !== 0) return;
+    if (!this.renderNext && !refresh) return;
     this.renderNext = false;
 
     chassis.updateWorldMatrix(true, false);

@@ -395,6 +395,10 @@
         "closed": "Closed"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Suspension & aero telemetry",
+      "hint": "Live wheel grip, bumpstop travel, ride height, aero balance and diff lock"
+    },
     "inputTrace": {
       "label": "Input trace"
     },

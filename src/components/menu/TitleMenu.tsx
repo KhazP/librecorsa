@@ -8,7 +8,8 @@ import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import type { VehicleModelId } from "@/types/f1";
 import { carById, carClass, carSkinSwatchBackground } from "@/lib/cars/car-registry";
 import { carSkinFor } from "@/lib/cars/car-skins";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { vehicleModelSpec, vehicleModelsFor } from "@/lib/cars/vehicle-models";
+import { isVehicleRestricted } from "@/lib/sim/multiplayer-sync";
 import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { formatLapTime } from "@/components/hud/hud-format";
 import { EngineersGarage } from "./EngineersGarage";
@@ -653,6 +654,18 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const vehicle = carById(props.carId);
   // The car is fixed for an online race (the shell refuses the swap too)
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
+  // When in a class-locked or spec-locked lobby, restrict the car browser to eligible vehicles
+  const lobbyCarRestriction = useMemo(() => {
+    const s = props.lobby?.settings;
+    if (!s || !isVehicleRestricted(s)) return null;
+    const allowedVehicles: VehicleModelId[] = s.vehicle ? [s.vehicle] : vehicleModelsFor(s.carClass);
+    const label = s.vehicle
+      ? (props.vehicleLabel?.(s.vehicle) ?? s.vehicle)
+      : s.carClass === "any"
+        ? ""
+        : carClass(s.carClass).title;
+    return { label, allowedVehicles };
+  }, [props.lobby?.settings, props.vehicleLabel]);
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
   // This car's personal best on this circuit, for the Lap times entry and the Up next sheet alike: this car's own laps
@@ -1058,6 +1071,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       onChangeLivery={props.onChangeLivery}
                       library={props.library}
                       lockedReason={carLocked ? t("carFixed") : undefined}
+                      lobbyRestriction={lobbyCarRestriction}
                     />
                   ) : null}
                   {panel === "garage" ? <EngineersGarage {...props} onOpenCarBrowser={() => openPanel("car")} /> : null}

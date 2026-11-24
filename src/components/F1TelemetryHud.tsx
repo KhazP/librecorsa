@@ -552,7 +552,13 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
   const showTyres = classic;
   const showMap = classic;
-  const showChannels = classic;
+  const showChannels = !phone && hud?.engineeringTelemetry === true;
+  const channelsNode =
+    f12026 && showChannels ? (
+      <div className="hidden sm:block">
+        <F12026ChannelsPanel channels={f12026} aero={aeroReadout(telemetry)} aids={aidsActive(telemetry)} />
+      </div>
+    ) : null;
   const showKeyHints = !phone && preset !== "minimal" && !style?.ownsBottomLeft;
   // Telemetry (and the styles with a trace of their own) have their own; a phone's thumbs sit where the trace would
   const showTrace = !phone && !style?.ownTrace && hud?.inputTrace === true;
@@ -678,6 +684,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           trackCode={trackInfo.country.slice(0, 3).toUpperCase()}
           ffb={props.ffbMeter ? <FfbMeter {...props.ffbMeter} /> : null}
           mfd={phone || touch ? undefined : mfdNode}
+          channels={phone || touch ? undefined : channelsNode}
           touch={touch}
           topInset={mirrorTop ?? undefined}
           lapInvalid={lapInvalid}
@@ -940,11 +947,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <div className="hidden sm:block">
           {mfdNode}
         </div>
-        {f12026 && showChannels ? (
-          <div className="hidden sm:block">
-            <F12026ChannelsPanel channels={f12026} aero={aeroReadout(telemetry)} aids={aidsActive(telemetry)} />
-          </div>
-        ) : null}
+        {channelsNode}
         {minimal ? (
           <div data-hud-avoid>
           <SpeedCluster

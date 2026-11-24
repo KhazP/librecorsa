@@ -282,6 +282,8 @@ export interface HudSettings {
   boardWidget: BoardWidgetMode;
   /** Names over the other players' and AI cars, the top three in podium colours */
   showPlayerNames: boolean;
+  /** Advanced bottom-right suspension, grip and aero engineering telemetry widget */
+  engineeringTelemetry: boolean;
 }
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
@@ -443,6 +445,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   headMovement: "natural",
   boardWidget: "lapEnd",
   showPlayerNames: true,
+  engineeringTelemetry: false,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -520,6 +523,16 @@ export function randomDriverProfile(rand: () => number = Math.random): DriverPro
   const noun = pick(NAME_WORDS[1]);
   const name = `${pick(NAME_WORDS[0])} ${noun} ${10 + Math.floor(rand() * 90)}`;
   return { ...DEFAULT_DRIVER_PROFILE, name, code: sanitizeDriverCode(noun), generated: true };
+}
+
+/** True while the player still only has an auto-generated name and hasn't chosen or explicitly kept one yet */
+export function needsDriverNamePrompt(profile: Pick<DriverProfile, "generated">): boolean {
+  return profile.generated === true;
+}
+
+/** Marks the player's current display name as explicitly confirmed so early name prompts do not repeat */
+export function confirmDriverProfileName(profile: DriverProfile): DriverProfile {
+  return profile.generated ? { ...profile, generated: false } : profile;
 }
 
 /** Code for a name the player typed: its first three letters (or the default code's to fill in) */
@@ -827,6 +840,7 @@ function parseHud(v: unknown): HudSettings {
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
+    engineeringTelemetry: bool(v.engineeringTelemetry, d.engineeringTelemetry),
   };
 }
 

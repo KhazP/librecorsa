@@ -1,19 +1,243 @@
 import * as THREE from "three";
+import { anyCarById, type CarClassId, type CarId } from "@/lib/cars/car-registry";
+import type { GraphicsQuality } from "@/lib/settings/player-settings";
+import { DETAIL_LAYER } from "@/lib/render/layers";
 
 /**
- * Falling rain around the camera: one LineSegments draw call of up to 6000 streaks, animated entirely on the GPU
- * (each streak's position wraps through a box that follows the camera), so the CPU cost per frame is a few uniform
- * writes. The streak count follows the rain intensity (draw range), and streaks lean against the camera's motion,
- * so rain at 250 km/h comes at the screen.
+ * Falling rain around the camera: one LineSegments draw call of up to 3200 streaks on `DETAIL_LAYER` (main view only,
+ * never redrawn into the car reflection cubemap or mirrors), animated entirely on the GPU (each streak wraps through a
+ * tight camera-following box so fewer streaks maintain high visual density). Streak count scales with rain intensity,
+ * graphics quality, and adaptive render-scale LOD; closed-cockpit cars clip streaks against their cabin volume so rain
+ * never falls inside enclosed interiors while remaining visible right outside the windscreen.
  */
 
-const MAX_STREAKS = 6000;
-/** Box of rain around the camera (m): wide enough for the chase cams, short enough to stay dense */
-const BOX = new THREE.Vector3(44, 22, 44);
+export const RAIN_STREAK_BUDGET: Readonly<Record<GraphicsQuality, number>> = {
+  low: 1000,
+  medium: 2000,
+  high: 3200,
+};
+const MAX_STREAKS = RAIN_STREAK_BUDGET.high;
+/** Box of rain around the camera (m): compact around the visible fade sphere so every streak counts */
+const BOX = new THREE.Vector3(34, 18, 34);
 const FALL_MS = 9;
+
+/** Computes the active rain streak count for an intensity (0..1), graphics quality tier, and adaptive LOD scale (0.5..1) */
+export function rainStreakCountFor(
+  effectiveIntensity: number,
+  quality: GraphicsQuality = "high",
+  lodScale = 1
+): number {
+  const r = THREE.MathUtils.clamp(effectiveIntensity, 0, 1);
+  if (r <= 0.001) return 0;
+  const budget = RAIN_STREAK_BUDGET[quality] ?? MAX_STREAKS;
+  const scale = THREE.MathUtils.clamp(Number.isFinite(lodScale) ? lodScale : 1, 0.5, 1);
+  return Math.min(MAX_STREAKS, Math.round(budget * scale * Math.pow(r, 0.8)));
+}
 
 /** Longest the rain clock runs before it must wrap (s): float32 time keeps sub-millisecond steps up to here */
 const RAIN_CLOCK_MAX_S = 4 * 3600;
+
+/**
+ * Enclosed cockpit occlusion volume in chassisGroup local space (+X left, +Y up, +Z forward):
+ * an AABB (`min`..`max`) intersected with a forward-raked windscreen half-space (`dot(n, p) <= d`).
+ */
+export interface CockpitRainVolume {
+  min: readonly [number, number, number];
+  max: readonly [number, number, number];
+  /** Outward windscreen plane `[nx, ny, nz, d]` where points inside the cabin satisfy `dot(n, p) <= d` */
+  windscreenPlane: readonly [number, number, number, number];
+}
+
+interface CabinProfile {
+  /** Fallback driver eye position in chassis space when model camera anchors have not loaded yet */
+  defaultEye: readonly [number, number, number];
+  /** Lateral half-width of the cabin interior from car centreline (m) */
+  halfWidthM: number;
+  /** Floor clearance below driver eye (m) */
+  floorBelowEyeM: number;
+  /** Roofline height above driver eye (m) */
+  roofAboveEyeM: number;
+  /** Rear bulkhead distance behind driver eye (m) */
+  rearBehindEyeM: number;
+  /** Lower windscreen / cowl distance ahead of driver eye (m) */
+  frontAheadOfEyeM: number;
+  /** Upper windscreen header distance ahead of driver eye (m; smaller than frontAheadOfEyeM for raked glass) */
+  roofFrontAheadOfEyeM: number;
+}
+
+const CABIN_CLASS_PROFILES: Readonly<Record<Exclude<CarClassId, "f1">, CabinProfile>> = {
+  gt3: {
+    defaultEye: [0.4, 0.95, -0.58],
+    halfWidthM: 0.78,
+    floorBelowEyeM: 0.85,
+    roofAboveEyeM: 0.34,
+    rearBehindEyeM: 0.82,
+    frontAheadOfEyeM: 0.96,
+    roofFrontAheadOfEyeM: 0.48,
+  },
+  proto: {
+    defaultEye: [0.22, 0.82, -0.25],
+    halfWidthM: 0.68,
+    floorBelowEyeM: 0.72,
+    roofAboveEyeM: 0.28,
+    rearBehindEyeM: 0.76,
+    frontAheadOfEyeM: 0.88,
+    roofFrontAheadOfEyeM: 0.38,
+  },
+  classic: {
+    defaultEye: [0.35, 0.92, -0.48],
+    halfWidthM: 0.74,
+    floorBelowEyeM: 0.82,
+    roofAboveEyeM: 0.34,
+    rearBehindEyeM: 0.82,
+    frontAheadOfEyeM: 0.98,
+    roofFrontAheadOfEyeM: 0.50,
+  },
+  road: {
+    defaultEye: [0.36, 1.05, -0.45],
+    halfWidthM: 0.76,
+    floorBelowEyeM: 0.92,
+    roofAboveEyeM: 0.38,
+    rearBehindEyeM: 0.95,
+    frontAheadOfEyeM: 0.96,
+    roofFrontAheadOfEyeM: 0.48,
+  },
+};
+
+const CABIN_CAR_OVERRIDES: Partial<Record<CarId, Partial<CabinProfile>>> = {
+  "lc-lmdh": {
+    halfWidthM: 0.64,
+    roofAboveEyeM: 0.26,
+    rearBehindEyeM: 0.72,
+    frontAheadOfEyeM: 0.80,
+    roofFrontAheadOfEyeM: 0.32,
+  },
+  "mtr-496r": {
+    halfWidthM: 0.74,
+    roofAboveEyeM: 0.28,
+    frontAheadOfEyeM: 1.05,
+    roofFrontAheadOfEyeM: 0.55,
+  },
+  "bmw-m1-procar": {
+    frontAheadOfEyeM: 1.04,
+    roofFrontAheadOfEyeM: 0.54,
+  },
+};
+
+/** Whether a car has an enclosed cockpit (open-cockpit F1 single-seaters return false) */
+export function carHasClosedCockpit(carId: CarId): boolean {
+  const cls = anyCarById(carId)?.classId;
+  return cls !== undefined ? cls !== "f1" : carId !== "lc26";
+}
+
+/**
+ * Computes the enclosed cabin occlusion volume in chassisGroup local space for `carId`, anchored to the car's
+ * loaded cockpit eye point when available. Returns `null` for open-cockpit cars (F1).
+ */
+export function cockpitRainVolumeFor(
+  carId: CarId,
+  eyePos?: { readonly x: number; readonly y: number; readonly z: number } | null
+): CockpitRainVolume | null {
+  if (!carHasClosedCockpit(carId)) return null;
+  const cls = anyCarById(carId)?.classId;
+  const base = CABIN_CLASS_PROFILES[cls && cls !== "f1" ? cls : "gt3"];
+  const ov = CABIN_CAR_OVERRIDES[carId];
+  const p = ov ? { ...base, ...ov } : base;
+
+  const ex = eyePos ? eyePos.x : p.defaultEye[0];
+  const ey = eyePos ? eyePos.y : p.defaultEye[1];
+  const ez = eyePos ? eyePos.z : p.defaultEye[2];
+
+  const halfW = Math.max(p.halfWidthM, Math.abs(ex) + 0.36);
+  const minY = Math.max(0.08, ey - p.floorBelowEyeM);
+  const maxY = ey + p.roofAboveEyeM;
+  const minZ = ez - p.rearBehindEyeM;
+  const maxZ = ez + p.frontAheadOfEyeM;
+  const roofFrontZ = ez + p.roofFrontAheadOfEyeM;
+
+  // Sloped windscreen plane from lower cowl (yBase, maxZ) back to roof header (maxY, roofFrontZ).
+  // Outward unit normal points forward (+Z) and upward (+Y); interior points satisfy dot(n, pos) <= d.
+  const yBase = Math.max(minY, ey - 0.16);
+  const nyRaw = Math.max(0.05, maxZ - roofFrontZ);
+  const nzRaw = Math.max(0.05, maxY - yBase);
+  const len = Math.hypot(nyRaw, nzRaw);
+  const ny = nyRaw / len;
+  const nz = nzRaw / len;
+  const d = ny * yBase + nz * maxZ;
+
+  return {
+    min: [-halfW, minY, minZ],
+    max: [halfW, maxY, maxZ],
+    windscreenPlane: [0, ny, nz, d],
+  };
+}
+
+export interface RainStreakClipResult {
+  /** Whether the streak intersected the cockpit volume */
+  clipped: boolean;
+  /** False when the entire streak lies inside the cockpit (culled) */
+  visible: boolean;
+  /** Remaining exterior parametric start along [head -> tail] (0..1) */
+  t0: number;
+  /** Remaining exterior parametric end along [head -> tail] (0..1) */
+  t1: number;
+}
+
+/**
+ * Exact CPU mirror of the vertex shader's Cyrus-Beck segment clipping against an enclosed cockpit volume.
+ * Used for deterministic verification of closed-cockpit rain exclusion.
+ */
+export function clipRainStreakAgainstCockpit(
+  headLocal: readonly [number, number, number],
+  tailLocal: readonly [number, number, number],
+  volume: CockpitRainVolume
+): RainStreakClipResult {
+  const dx = tailLocal[0] - headLocal[0];
+  const dy = tailLocal[1] - headLocal[1];
+  const dz = tailLocal[2] - headLocal[2];
+  let tEnter = 0;
+  let tExit = 1;
+
+  const axes: readonly [number, number, number, number][] = [
+    [headLocal[0], dx, volume.min[0], volume.max[0]],
+    [headLocal[1], dy, volume.min[1], volume.max[1]],
+    [headLocal[2], dz, volume.min[2], volume.max[2]],
+  ];
+  for (const [o, d, mn, mx] of axes) {
+    if (Math.abs(d) < 1e-6) {
+      if (o < mn || o > mx) return { clipped: false, visible: true, t0: 0, t1: 1 };
+    } else {
+      const inv = 1 / d;
+      const a = (mn - o) * inv;
+      const b = (mx - o) * inv;
+      tEnter = Math.max(tEnter, Math.min(a, b));
+      tExit = Math.min(tExit, Math.max(a, b));
+    }
+  }
+
+  const [nx, ny, nz, pd] = volume.windscreenPlane;
+  const denom = nx * dx + ny * dy + nz * dz;
+  const numer = pd - (nx * headLocal[0] + ny * headLocal[1] + nz * headLocal[2]);
+  if (Math.abs(denom) < 1e-6) {
+    if (numer < 0) return { clipped: false, visible: true, t0: 0, t1: 1 };
+  } else if (denom > 0) {
+    tExit = Math.min(tExit, numer / denom);
+  } else {
+    tEnter = Math.max(tEnter, numer / denom);
+  }
+
+  if (tEnter >= tExit) return { clipped: false, visible: true, t0: 0, t1: 1 };
+
+  const preLen = tEnter;
+  const postLen = 1 - tExit;
+  if (preLen <= 0.02 && postLen <= 0.02) {
+    return { clipped: true, visible: false, t0: 0, t1: 0 };
+  }
+  if (preLen >= postLen) {
+    return { clipped: true, visible: true, t0: 0, t1: tEnter };
+  }
+  return { clipped: true, visible: true, t0: tExit, t1: 1 };
+}
 
 const VERT = /* glsl */ `
 attribute vec4 aSeed;
@@ -23,20 +247,88 @@ uniform vec3 uBox;
 uniform vec3 uVel;
 uniform vec2 uWindXZ;
 uniform float uLength;
+uniform float uCockpitEnabled;
+uniform mat4 uCockpitInvMatrix;
+uniform vec3 uCockpitMin;
+uniform vec3 uCockpitMax;
+uniform vec4 uCockpitWindscreen;
 varying float vAlpha;
 void main() {
-  vec3 p = aSeed.xyz * uBox;
+  vec3 pHead = aSeed.xyz * uBox;
   float fallSpeed = ${FALL_MS.toFixed(1)} * (0.85 + 0.3 * aSeed.x);
-  p.y = mod(p.y - uTime * fallSpeed, uBox.y);
-  p.xz += uWindXZ * uTime * 0.35;
+  pHead.y = mod(pHead.y - uTime * fallSpeed, uBox.y);
+  pHead.xz += uWindXZ * uTime * 0.35;
   // Wrap around the camera so the box follows it without the streaks moving with it
-  p.xz = mod(p.xz - uCamPos.xz + 0.5 * uBox.xz, uBox.xz) - 0.5 * uBox.xz + uCamPos.xz;
-  p.y += uCamPos.y - 0.5 * uBox.y;
+  pHead.xz = mod(pHead.xz - uCamPos.xz + 0.5 * uBox.xz, uBox.xz) - 0.5 * uBox.xz + uCamPos.xz;
+  pHead.y += uCamPos.y - 0.5 * uBox.y;
   // The streak runs along the drop's velocity (including wind) relative to the camera
   vec3 rel = vec3(uWindXZ.x, -fallSpeed, uWindXZ.y) - uVel;
   float speed = max(length(rel), 0.001);
   vec3 dir = rel / speed;
-  p += dir * uLength * clamp(speed / 20.0, 0.6, 3.0) * aSeed.w;
+  vec3 pTail = pHead + dir * uLength * clamp(speed / 20.0, 0.6, 3.0);
+
+  // Reject streaks whose entire span sits outside the outer fade sphere before rasterization (both vertices agree)
+  float midDist = length(0.5 * (pHead + pTail) - uCamPos);
+  if (midDist > 0.5 * uBox.x + 1.5) {
+    vAlpha = 0.0;
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+
+  float t0 = 0.0;
+  float t1 = 1.0;
+  if (uCockpitEnabled > 0.5) {
+    vec3 lHead = (uCockpitInvMatrix * vec4(pHead, 1.0)).xyz;
+    vec3 lTail = (uCockpitInvMatrix * vec4(pTail, 1.0)).xyz;
+    vec3 lDir = lTail - lHead;
+    float tEnter = 0.0;
+    float tExit = 1.0;
+    bool hit = true;
+
+    for (int axis = 0; axis < 3; axis++) {
+      float o = axis == 0 ? lHead.x : (axis == 1 ? lHead.y : lHead.z);
+      float d = axis == 0 ? lDir.x : (axis == 1 ? lDir.y : lDir.z);
+      float mn = axis == 0 ? uCockpitMin.x : (axis == 1 ? uCockpitMin.y : uCockpitMin.z);
+      float mx = axis == 0 ? uCockpitMax.x : (axis == 1 ? uCockpitMax.y : uCockpitMax.z);
+      if (abs(d) < 1e-6) {
+        if (o < mn || o > mx) hit = false;
+      } else {
+        float invD = 1.0 / d;
+        float ta = (mn - o) * invD;
+        float tb = (mx - o) * invD;
+        tEnter = max(tEnter, min(ta, tb));
+        tExit = min(tExit, max(ta, tb));
+      }
+    }
+
+    if (hit) {
+      float denom = dot(uCockpitWindscreen.xyz, lDir);
+      float numer = uCockpitWindscreen.w - dot(uCockpitWindscreen.xyz, lHead);
+      if (abs(denom) < 1e-6) {
+        if (numer < 0.0) hit = false;
+      } else if (denom > 0.0) {
+        tExit = min(tExit, numer / denom);
+      } else {
+        tEnter = max(tEnter, numer / denom);
+      }
+    }
+
+    if (hit && tEnter < tExit) {
+      float preLen = tEnter;
+      float postLen = 1.0 - tExit;
+      if (preLen <= 0.02 && postLen <= 0.02) {
+        vAlpha = 0.0;
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        return;
+      } else if (preLen >= postLen) {
+        t1 = tEnter;
+      } else {
+        t0 = tExit;
+      }
+    }
+  }
+
+  vec3 p = mix(pHead, pTail, mix(t0, t1, aSeed.w));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   // Fade near the camera (avoids huge streaks across the lens) and at the box edge
@@ -50,7 +342,9 @@ uniform vec3 uColor;
 uniform float uOpacity;
 varying float vAlpha;
 void main() {
-  gl_FragColor = vec4(uColor, uOpacity * vAlpha);
+  float a = uOpacity * vAlpha;
+  if (a < 0.003) discard;
+  gl_FragColor = vec4(uColor, a);
 }
 `;
 
@@ -138,17 +432,23 @@ float hash21(vec2 p) {
 void main() {
   vec2 centered = vUv - 0.5;
   float dist = length(centered);
-  // Radial airflow blows droplets outward at speed; gravity pulls them down at low speed
-  vec2 radialDir = dist > 0.001 ? centered / dist : vec2(0.0, 1.0);
-  vec2 flowUv = vUv - radialDir * (uTime * 0.18 * uSpeedNorm) + vec2(0.0, uTime * 0.06 * (1.0 - 0.7 * uSpeedNorm));
-  vec2 cell = floor(flowUv * vec2(28.0, 18.0));
-  vec2 local = fract(flowUv * vec2(28.0, 18.0)) - 0.5;
-  float h = hash21(cell);
-  float bead = smoothstep(0.28, 0.06, length(local - vec2(h - 0.5, fract(h * 17.3) - 0.5) * 0.45));
-  float activeBead = bead * step(1.0 - uDroplets * 0.85, h);
+  float activeBead = 0.0;
+  if (uDroplets > 0.01) {
+    // Radial airflow blows droplets outward at speed; gravity pulls them down at low speed
+    vec2 radialDir = dist > 0.001 ? centered / dist : vec2(0.0, 1.0);
+    vec2 flowUv = vUv - radialDir * (uTime * 0.18 * uSpeedNorm) + vec2(0.0, uTime * 0.06 * (1.0 - 0.7 * uSpeedNorm));
+    vec2 grid = flowUv * vec2(28.0, 18.0);
+    vec2 cell = floor(grid);
+    vec2 local = fract(grid) - 0.5;
+    float h = hash21(cell);
+    if (h >= 1.0 - uDroplets * 0.85) {
+      activeBead = smoothstep(0.28, 0.06, length(local - vec2(h - 0.5, fract(h * 17.3) - 0.5) * 0.45));
+    }
+  }
   // Edge vignette mist from rooster-tail spray wake
   float mist = uSpray * smoothstep(0.18, 0.72, dist) * 0.22;
   float alpha = clamp(activeBead * 0.22 * uDroplets + mist, 0.0, 0.35);
+  if (alpha < 0.003) discard;
   gl_FragColor = vec4(uTint, alpha);
 }
 `;
@@ -156,6 +456,13 @@ void main() {
 export interface RainFx {
   readonly object: THREE.LineSegments;
   readonly windscreenState: WindscreenWetState;
+  /** Sets the graphics tier and adaptive render-scale LOD (0.5..1) that cap active rain streak draw count */
+  setQuality(quality: GraphicsQuality, lodScale?: number): void;
+  /**
+   * Configures enclosed-cockpit streak clipping for the focused car this frame.
+   * Pass `null` for open-cockpit cars (F1) or when no car cabin should occlude rain.
+   */
+  setCockpitOcclusion(volume: CockpitRainVolume | null, chassisMatrixWorld: THREE.Matrix4 | null): void;
   /**
    * Per frame: rain intensity 0..1, the camera, its world velocity (m/s), the sky brightness (0..1, darker rain at
    * dusk), optional world wind velocity (m/s), and optional rooster-tail spray wake intensity (0..1).
@@ -213,6 +520,11 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       uLength: { value: 0.55 },
       uColor: { value: new THREE.Color(0xb8c2cc) },
       uOpacity: { value: 0.32 },
+      uCockpitEnabled: { value: 0 },
+      uCockpitInvMatrix: { value: new THREE.Matrix4() },
+      uCockpitMin: { value: new THREE.Vector3() },
+      uCockpitMax: { value: new THREE.Vector3() },
+      uCockpitWindscreen: { value: new THREE.Vector4(0, 0, 1, 10) },
     },
     transparent: true,
     depthWrite: false,
@@ -223,6 +535,8 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   object.frustumCulled = false;
   object.renderOrder = 1001;
   object.visible = false;
+  // View-only detail layer: drawn by the main and XR cameras, skipped by the car reflection probe and mirrors
+  object.layers.set(DETAIL_LAYER);
   scene.add(object);
 
   const visorGeo = new THREE.PlaneGeometry(2, 2);
@@ -252,13 +566,39 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   const vel = material.uniforms.uVel.value as THREE.Vector3;
   const windXZ = material.uniforms.uWindXZ.value as THREE.Vector2;
   const color = material.uniforms.uColor.value as THREE.Color;
+  const cockpitInvMatrix = material.uniforms.uCockpitInvMatrix.value as THREE.Matrix4;
+  const cockpitMin = material.uniforms.uCockpitMin.value as THREE.Vector3;
+  const cockpitMax = material.uniforms.uCockpitMax.value as THREE.Vector3;
+  const cockpitWindscreen = material.uniforms.uCockpitWindscreen.value as THREE.Vector4;
   const visorTint = visorMat.uniforms.uTint.value as THREE.Color;
   const baseColor = new THREE.Color(0xb8c2cc);
+  let qualityNow: GraphicsQuality = "high";
+  let lodScaleNow = 1;
   let time = 0;
 
   return {
     object,
     windscreenState,
+    setQuality(quality, lodScale = 1) {
+      qualityNow = quality;
+      lodScaleNow = THREE.MathUtils.clamp(Number.isFinite(lodScale) ? lodScale : 1, 0.5, 1);
+    },
+    setCockpitOcclusion(volume, chassisMatrixWorld) {
+      if (!volume || !chassisMatrixWorld || Math.abs(chassisMatrixWorld.determinant()) < 1e-12) {
+        material.uniforms.uCockpitEnabled.value = 0;
+        return;
+      }
+      cockpitInvMatrix.copy(chassisMatrixWorld).invert();
+      cockpitMin.set(volume.min[0], volume.min[1], volume.min[2]);
+      cockpitMax.set(volume.max[0], volume.max[1], volume.max[2]);
+      cockpitWindscreen.set(
+        volume.windscreenPlane[0],
+        volume.windscreenPlane[1],
+        volume.windscreenPlane[2],
+        volume.windscreenPlane[3]
+      );
+      material.uniforms.uCockpitEnabled.value = 1;
+    },
     update(dt, intensity, camera, cameraVelocity, brightness, windVxMs = 0, windVzMs = 0, sprayIntensity = 0) {
       const r = THREE.MathUtils.clamp(intensity, 0, 1);
       const spray = THREE.MathUtils.clamp(sprayIntensity, 0, 1);
@@ -269,7 +609,8 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       time += dt;
 
       const showVisor = windscreenState.dropletDensity > 0.015 || spray > 0.02;
-      const streaksShown = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8)) > 0;
+      const count = rainStreakCountFor(effectiveIntensity, qualityNow, lodScaleNow);
+      const streaksShown = count > 0;
       // The streak phase is time × a per-drop speed, so wrapping the clock moves every drop at once. Wrap it only
       // while nothing is drawn; the hard limit (float precision in the shader) is only reached by four hours of
       // unbroken rain
@@ -283,8 +624,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
         visorTint.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.45 + 0.55 * brightness, 0.25, 1));
       }
 
-      const count = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8));
-      object.visible = count > 0;
+      object.visible = streaksShown;
       if (!object.visible) return;
       material.uniforms.uTime.value = time;
       camera.getWorldPosition(camPos);

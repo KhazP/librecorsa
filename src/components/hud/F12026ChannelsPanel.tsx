@@ -47,6 +47,13 @@ export const F12026ChannelsPanel: React.FC<{
   const lbl = useMemo(
     () => ({
       region: tx("region"),
+      title: tx("title"),
+      suspensionGrip: tx("suspensionGrip"),
+      wheelLegend: tx("wheelLegend"),
+      grip: tx("grip"),
+      aeroDiff: tx("aeroDiff"),
+      activeAero: tx("activeAero"),
+      driverAids: tx("driverAids"),
       wheels: [tx("wheels.lf"), tx("wheels.rf"), tx("wheels.lr"), tx("wheels.rr")],
       wheelTitles: [
         tx("wheelTitle", { wheel: tx("wheels.lf") }),
@@ -83,26 +90,35 @@ export const F12026ChannelsPanel: React.FC<{
   return (
     <section aria-label={lbl.region} className={`w-[320px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
       <div className="flex items-center justify-between gap-2">
-        <ClassTag
-          carClass={
-            c.carId === "amg-gt3"
-              ? "gt3"
-              : ROAD_CAR_IDS.has(c.carId)
-                ? "road"
-                : PROTO_CAR_IDS.has(c.carId)
-                  ? "proto"
-                  : CLASSIC_CAR_IDS.has(c.carId)
-                    ? "classic"
-                    : "openWheel"
-          }
-          size="hud"
-        />
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`${HUD_LBL} truncate text-lc-chalk`}>{lbl.title}</span>
+          <ClassTag
+            carClass={
+              c.carId === "amg-gt3"
+                ? "gt3"
+                : ROAD_CAR_IDS.has(c.carId)
+                  ? "road"
+                  : PROTO_CAR_IDS.has(c.carId)
+                    ? "proto"
+                    : CLASSIC_CAR_IDS.has(c.carId)
+                      ? "classic"
+                      : "openWheel"
+            }
+            size="hud"
+          />
+        </span>
         <Badge size="hud">{c.performanceMode}</Badge>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+      <div className="mt-2.5 flex items-baseline justify-between gap-2">
+        <span className={`${HUD_LBL} text-lc-fog`}>{lbl.suspensionGrip}</span>
+        <span className="lc-mono text-[9px] tracking-[0.06em] text-lc-slate uppercase">{lbl.wheelLegend}</span>
+      </div>
+
+      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1.5">
         {WHEELS.map((name, i) => {
           const frac = c.circleFraction[i];
+          const gripPct = Math.round(Math.max(0, Math.min(1.5, frac)) * 100);
           return (
             <div
               key={name}
@@ -120,78 +136,91 @@ export const F12026ChannelsPanel: React.FC<{
                   <span className="text-[9px] text-lc-slate"> mm</span>
                 </span>
               </div>
-              <span className="relative h-1.5 overflow-hidden rounded-full bg-lc-titanium">
-                {/* Slid in from the left by transform (no layout every tick); the right end stays round */}
-                <span
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    transform: `translateX(${(Math.max(0, Math.min(1, frac)) - 1) * 100}%)`,
-                    backgroundColor: circleColor(frac),
-                  }}
-                />
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="lc-mono text-[9px] tracking-[0.04em] text-lc-slate uppercase">{lbl.grip}</span>
+                <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-lc-titanium">
+                  {/* Slid in from the left by transform (no layout every tick); the right end stays round */}
+                  <span
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      transform: `translateX(${(Math.max(0, Math.min(1, frac)) - 1) * 100}%)`,
+                      backgroundColor: circleColor(frac),
+                    }}
+                  />
+                </span>
+                <span className="lc-data w-7 text-end text-[9px]" style={{ color: circleColor(frac) }}>
+                  {gripPct}%
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-1.5">
+      <div className="mt-2.5 flex items-baseline justify-between gap-2">
+        <span className={`${HUD_LBL} text-lc-fog`}>{lbl.aeroDiff}</span>
+      </div>
+
+      <div className="mt-1 grid grid-cols-3 gap-1.5">
         <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title={lbl.aeroHeightTitle}>
-          <span className={`${HUD_LBL} tracking-[0.1em]`}>{lbl.aeroHeight}</span>
+          <span className={`${HUD_LBL} tracking-[0.08em]`}>{lbl.aeroHeight}</span>
           <span className="lc-data mt-0.5 text-[12px] text-lc-chalk">{(c.AERO_HEIGHT * 1000).toFixed(0)} mm</span>
         </div>
         <div
           className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`}
           title={lbl.aeroBalanceTitle}
         >
-          <span className={`${HUD_LBL} tracking-[0.1em]`}>{lbl.aeroBalance}</span>
+          <span className={`${HUD_LBL} tracking-[0.08em]`}>{lbl.aeroBalance}</span>
           <span className="lc-data mt-0.5 text-[12px] text-lc-info">{c.AERO_BALANCE.toFixed(1)}%</span>
         </div>
         <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title={lbl.lsdTitle}>
-          <span className={`${HUD_LBL} tracking-[0.1em]`}>{lbl.lsd}</span>
+          <span className={`${HUD_LBL} tracking-[0.08em]`}>{lbl.lsd}</span>
           <span className="lc-data mt-0.5 text-[12px] text-lc-chalk">{Math.round(c.LSD_LOCKING_TORQUE)} Nm</span>
         </div>
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-lc-line pt-2">
-        {c.hasDrs ? (
-          <>
-            <span className="flex items-center gap-1.5" title={aero.straightMode ? lbl.straightModeTitle : lbl.drsTitle}>
-              <span className={HUD_LBL}>{aero.straightMode ? lbl.xMode : "DRS"}</span>
-              <Badge
-                tone={aero.open || aero.armed ? "info" : "neutral"}
-                variant={aero.open ? "solid" : aero.armed ? "outline" : "soft"}
-                size="hud"
-                icon={aero.open ? "drsOpen" : "drsClosed"}
-              >
-                {drsState}
-              </Badge>
-              <span className="lc-data text-[10px] text-lc-slate">×{c.drsOpenEvents}</span>
+      <div className="mt-2.5 flex flex-col gap-1 border-t border-lc-line pt-2">
+        <span className={`${HUD_LBL} text-lc-fog`}>{c.hasDrs ? lbl.activeAero : lbl.driverAids}</span>
+        <div className="flex items-center justify-between gap-2">
+          {c.hasDrs ? (
+            <>
+              <span className="flex items-center gap-1.5" title={aero.straightMode ? lbl.straightModeTitle : lbl.drsTitle}>
+                <span className={HUD_LBL}>{aero.straightMode ? lbl.xMode : "DRS"}</span>
+                <Badge
+                  tone={aero.open || aero.armed ? "info" : "neutral"}
+                  variant={aero.open ? "solid" : aero.armed ? "outline" : "soft"}
+                  size="hud"
+                  icon={aero.open ? "drsOpen" : "drsClosed"}
+                >
+                  {drsState}
+                </Badge>
+                <span className="lc-data text-[10px] text-lc-slate">×{c.drsOpenEvents}</span>
+              </span>
+              <span className={`${HUD_LBL} truncate`}>
+                {/* A 2026 car's flaps need no detection: the 1 s verdict there is Overtake Mode's (races only) */}
+                {aero.straightMode
+                  ? c.overtakeDetection
+                    ? c.overtakeDetection.earned
+                      ? lbl.overtakeEarned
+                      : lbl.overtakeLocked
+                    : lbl.noVerdict
+                  : c.drsDetection
+                    ? tx(c.drsDetection.eligible ? "zoneEarned" : "zoneLocked", { zone: c.drsDetection.zone })
+                    : lbl.noDetection}
+              </span>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <AidLamp label="TC" active={aids.tc} />
+              <AidLamp label="ABS" active={aids.abs} />
             </span>
-            <span className={`${HUD_LBL} truncate`}>
-              {/* A 2026 car's flaps need no detection: the 1 s verdict there is Overtake Mode's (races only) */}
-              {aero.straightMode
-                ? c.overtakeDetection
-                  ? c.overtakeDetection.earned
-                    ? lbl.overtakeEarned
-                    : lbl.overtakeLocked
-                  : lbl.noVerdict
-                : c.drsDetection
-                  ? tx(c.drsDetection.eligible ? "zoneEarned" : "zoneLocked", { zone: c.drsDetection.zone })
-                  : lbl.noDetection}
-            </span>
-          </>
-        ) : (
-          <span className="flex items-center gap-1.5">
-            <AidLamp label="TC" active={aids.tc} />
-            <AidLamp label="ABS" active={aids.abs} />
-          </span>
-        )}
-        {c.wallContact ? (
-          <Badge tone="bad" variant="solid" size="hud" icon="warning">
-            {lbl.wall}
-          </Badge>
-        ) : null}
+          )}
+          {c.wallContact ? (
+            <Badge tone="bad" variant="solid" size="hud" icon="warning">
+              {lbl.wall}
+            </Badge>
+          ) : null}
+        </div>
       </div>
     </section>
   );

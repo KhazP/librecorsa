@@ -376,11 +376,11 @@ async function main(): Promise<void> {
     const env = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: fakeR2() } as unknown as Env;
     const ON = "oschersleben";
     const RESETS = CIRCUIT_BOARD_RESETS as Record<string, CircuitBoardReset[]>;
-    // Pre-reset lap (revision 528)
+    // Pre-reset lap (revision 538)
     await addLap(db, { name: "Alice", track: ON, vehicle: "lc26", physics: lapPhysicsVersion("lc26", ON), ms: 70_000 });
     RESETS[ON] = [{ physics: PHYSICS_VERSION, oldBoard: "Old kerbs", why: "profile test" }];
     try {
-      // Post-reset laps (revision 1528)
+      // Post-reset laps (revision 1538)
       await addLap(db, { name: "Alice", track: ON, vehicle: "lc26", ms: 72_000 });
       await addLap(db, { name: "Bob", track: ON, vehicle: "lc26", ms: 71_000 });
       const res = await apiCall(env, "/api/drivers/profile?name=Alice");
@@ -546,7 +546,7 @@ async function main(): Promise<void> {
               recordedAt: NOW,
               position: 1,
               boardSize: 42,
-              conditions: { assists: "pro", realism: "full", surface: "dry", compound: "soft", physicsVersion: 528, input: "wheel" },
+              conditions: { assists: "pro", realism: "full", surface: "dry", compound: "soft", physicsVersion: 538, input: "wheel" },
             },
             {
               id: "lap-2",

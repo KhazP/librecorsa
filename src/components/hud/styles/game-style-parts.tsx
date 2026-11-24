@@ -175,15 +175,27 @@ export function brakeNow(t: Pick<CarTelemetry, "brakingUrgency" | "aiAutopilot" 
  * the deployment tapered away), super clip (harvesting flat out), harvesting under braking, lift and coast, a trickle
  * charge on part throttle, or neutral; Overtake or Boost while the driver's own extra power is on.
  */
-export type ErsState = "overtake" | "deploy" | "clipped" | "superclip" | "braking" | "liftCoast" | "trickle" | "neutral";
+export type ErsState = "boost" | "overtake" | "deploy" | "clipped" | "superclip" | "braking" | "liftCoast" | "trickle" | "neutral";
 
 /** Below this the MGU-K counts as idle (kW) */
 const ERS_IDLE_KW = 6;
 
-export function ersStateOf(t: Pick<CarTelemetry, "mgukPowerKw" | "throttle" | "brake" | "speedKmh" | "manualOverrideActive" | "overtakingRules" | "overtakeAvailable">): ErsState {
+export function ersStateOf(
+  t: Pick<
+    CarTelemetry,
+    "mgukPowerKw" | "throttle" | "brake" | "speedKmh" | "manualOverrideActive" | "overtakingRules" | "overtakeAvailable" | "ersBoostActive" | "overtakeInUse"
+  >,
+): ErsState {
   const kw = t.mgukPowerKw;
-  if (t.manualOverrideActive && kw > ERS_IDLE_KW && !(t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false)) return "overtake";
-  if (kw > ERS_IDLE_KW) return "deploy";
+  if (kw > ERS_IDLE_KW) {
+    if (t.ersBoostActive !== undefined) {
+      if (t.overtakeInUse) return "overtake";
+      if (t.ersBoostActive) return "boost";
+      return "deploy";
+    }
+    if (t.manualOverrideActive && !(t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false)) return "overtake";
+    return "deploy";
+  }
   if (kw < -ERS_IDLE_KW) {
     if (t.brake > 0.08) return "braking";
     if (t.throttle >= 0.95) return "superclip";

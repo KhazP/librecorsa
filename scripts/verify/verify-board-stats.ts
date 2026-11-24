@@ -480,7 +480,7 @@ async function main(): Promise<void> {
       const before = await read(`&version=${PHYSICS_VERSION}`);
       check(
         'restart: every car\'s board is the restarted one, the board before it kept',
-        now.laps.map((r) => r.name).join() === 'Post Fix,Post Fix Gt3' && now.current?.lc26 === 1528 && now.current?.['amg-gt3'] === 1008 &&
+        now.laps.map((r) => r.name).join() === 'Post Fix,Post Fix Gt3' && now.current?.lc26 === 1538 && now.current?.['amg-gt3'] === 1008 &&
           before.laps.map((r) => r.name).join() === 'Pre Fix,Pre Fix Two,Pre Fix Gt3' && before.current?.lc26 === LC26,
         `${now.laps.map((r) => r.name).join()} | ${before.laps.map((r) => r.name).join()}`
       );

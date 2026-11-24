@@ -23,6 +23,7 @@ Default bindings are mapped by physical key position, so an AZERTY keyboard auto
 | Steer left, steer right | `A` or `←`, `D` or `→` |
 | Gear up, gear down, neutral | `E`, `Q`, `N` |
 | Boost (hold), boost (latch) | `Space` or either `Shift`, `B` |
+| Overtake Mode (2026 race toggle) | `Z` |
 | Active aero X / Z | `X` |
 | Half throttle, half brake (hold) | `F`, `G` |
 | Clutch (hold) | Unbound by default |
@@ -53,6 +54,7 @@ Xbox and PlayStation controllers work out of the box through the browser's Gamep
 | Throttle, brake | `RT`, `LT` | `R2`, `L2` |
 | Gear up, gear down | `A`, `X` | `✕`, `□` |
 | Boost | Right stick click | `R3` |
+| Overtake Mode (2026 race) | None (`LB` in Formula style; Automatic Overtake on by default) | None (`L1` in Formula style) |
 | Active aero | `Y` | `△` |
 | Camera | `RB` | `R1` |
 | Headlights (tap: flash, hold: on / off) | Left stick click | `L3` |
@@ -84,7 +86,7 @@ In Chrome and Edge, LibreCorsa can communicate directly with PlayStation control
 - **First-launch options:** On phones and tablets, the initial setup lets you choose between **Touch** (on-screen steering and pedals) and **Tilt** (tilt-to-steer with on-screen pedals).
 - **Configuration:** Under **Controls > Touch**, configure **Touch controls** (`Auto`, `On`, or `Off`), **Touch style** (`Sliders` or `Buttons`), **Tilt to steer**, and **Tilt range** (`10°`–`60°`, default `30°`).
 - **Tilt permission on iOS and iPadOS:** Safari prompts for motion access when you enable tilt steering. If you decline, steering automatically reverts to the on-screen slider.
-- **On-track layout:** **Pause** and **Camera** buttons sit in the top-left corner, joined by **Recentre tilt** when tilt steering is active. **Shift up** and **Shift down** appear with a manual gearbox; with an automatic gearbox, a **Drive** / **Reverse** toggle appears when needed. **Boost**, **Active aero**, and **Headlights** buttons appear only on cars equipped with them.
+- **On-track layout:** **Pause** and **Camera** buttons sit in the top-left corner, joined by **Recentre tilt** when tilt steering is active. **Shift up** and **Shift down** appear with a manual gearbox; with an automatic gearbox, a **Drive** / **Reverse** toggle appears when needed. **Boost**, **Overtake** (`OT`, in 2026 races), **Active aero**, and **Headlights** buttons appear only on cars equipped with them.
 
 ## Wheels and pedals
 
