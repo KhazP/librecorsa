@@ -12,7 +12,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "LibreCorsa docs",
-      description: "How to port cars, circuits and wheels to LibreCorsa, and how its physics and race AI work.",
+      description: "Documentation for LibreCorsa: controls and wheels, online racing, modding, porting cars and circuits, translating, physics validation, and race AI.",
       logo: {
         dark: "./src/assets/brand/librecorsa-logo.svg",
         light: "./src/assets/brand/librecorsa-logo-on-light.svg",
