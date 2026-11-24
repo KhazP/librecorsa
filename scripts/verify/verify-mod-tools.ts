@@ -1,11 +1,13 @@
 /**
- * The modder's tools (scripts/mods): packaging a built circuit and a converted car, the mod.json they write, the zip
- * `pack` writes read back by the game's importer, and every importer's shape. No converter runs here (those need
+ * The modder's tools (scripts/mods): packaging a built circuit and a converted car, the mod.json they write, the paths
+ * they refuse before writing or deleting anything, the zip `pack` writes read back by the game's importer, every
+ * importer's shape, and the command line (`--help` everywhere, `from-car`'s paths). No converter runs here (those need
  * Python and a source mod); each importer's own checks are its suite.
  *
  *   npx tsx scripts/verify/verify-mod-tools.ts
  */
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { packageCircuit } from "../mods/lib/circuit-package";
@@ -68,6 +70,37 @@ try {
 }
 check("a circuit naming another circuit's files is refused", refused);
 
+// --- Paths the packagers refuse, before anything is written or deleted ---
+const refuses = (f: () => unknown, re: RegExp): string | true => {
+  try {
+    f();
+    return "not refused";
+  } catch (err) {
+    return re.test((err as Error).message) || (err as Error).message;
+  }
+};
+write(join(build, "track_data.json"), JSON.stringify(trackData));
+const ringOpts = { builtId: "modimport_ring", buildDir: build, packageDir: pkgDir, info, localId: "ring" };
+const intact = () => existsSync(join(pkgDir, "mod.json")) && existsSync(join(pkgDir, "ring", "track_data.json"));
+const asCheck = (name: string, r: string | true, extra = true) => check(name, r === true && extra, r === true ? "" : r);
+asCheck("a circuit id that is no id (..) is refused, and nothing is deleted", refuses(() => packageCircuit({ ...ringOpts, localId: ".." }), /not an id/), intact());
+write(join(build, "track_data.json"), JSON.stringify({ ...trackData, metadata: { mesh: { url: "/tracks/modimport_ring/../../secret.glb" } } }));
+asCheck("track data naming a file outside the build (..) is refused", refuses(() => packageCircuit(ringOpts), /not a path a package may use/), intact());
+write(join(tmp, "outside.glb"), "someone else's");
+write(join(build, "track_data.json"), JSON.stringify({ ...trackData, metadata: { mesh: { url: "/tracks/modimport_ring/linked.glb" } } }));
+symlinkSync(join(tmp, "outside.glb"), join(build, "linked.glb"));
+asCheck("a file the track data names that is a symbolic link is refused", refuses(() => packageCircuit(ringOpts), /symbolic link/), intact());
+write(join(build, "track_data.json"), JSON.stringify(trackData));
+write(join(tmp, "LICENSE.txt"), "CC BY 4.0");
+asCheck("an extra file going outside the package is refused", refuses(() => packageCircuit({ ...ringOpts, extraFiles: [{ from: join(tmp, "LICENSE.txt"), to: "../escape.txt" }] }), /not a path a package may use/), intact() && !existsSync(join(tmp, "mods", "escape.txt")));
+symlinkSync(join(tmp, "LICENSE.txt"), join(tmp, "linked-licence.txt"));
+asCheck("an extra file that is a symbolic link is refused", refuses(() => packageCircuit({ ...ringOpts, extraFiles: [{ from: join(tmp, "linked-licence.txt"), to: "ring/LICENSE.txt" }] }), /symbolic link/));
+const ok2 = packageCircuit({ ...ringOpts, removeBuild: true, credit: { author: "J. Doe", license: "unknown", note: "For personal use only: the author's permission is needed to share it" } });
+const ownData = JSON.parse(readFileSync(join(pkgDir, "ring", "track_data.json"), "utf8"));
+check("the track data's own credit is the circuit's in the package", ok2.checked.ok && ownData.metadata.credit.license === "unknown" && ownData.metadata.author === "J. Doe (unknown)");
+check("a build outside public/tracks/ is never removed", existsSync(join(build, "track_data.json")));
+packageCircuit(ringOpts);
+
 // --- A converted car as a package, in the same package ---
 const carSrc = join(tmp, "car");
 write(join(carSrc, "gt-x.glb"), "glb");
@@ -99,6 +132,21 @@ const bad = packageCar({
   sound: { car: "amg-gt3" },
 });
 check("a car whose physics patch the game refuses fails the checks, by its path", !bad.checked.ok && bad.checked.problems.some((p) => /totalMassKg/.test(p)), bad.checked.problems.join("; "));
+const carOpts = {
+  packageDir: pkgDir,
+  info,
+  car: { localId: "gt-x", title: "GT X", sub: "A test GT", badge: "GT X", classId: "gt3" as const, year: 2024, base: "amg-gt3" },
+  model: join(carSrc, "gt-x.glb"),
+  paint: { id: "factory", name: "Factory", swatch: ["#111111", "#eeeeee"] as [string, string] },
+  sound: { car: "amg-gt3" },
+};
+const carIntact = () => existsSync(join(pkgDir, "cars", "gt-x", "gt-x.glb"));
+asCheck("a car id that is no id (../..) is refused, and nothing is deleted", refuses(() => packageCar({ ...carOpts, car: { ...carOpts.car, localId: "../.." } }), /not an id/), carIntact());
+asCheck("a livery id that is no id is refused", refuses(() => packageCar({ ...carOpts, skins: [{ id: "../red", name: "Red", swatch: ["#cc0000", "#111111"], dir: join(carSrc, "skins", "red") }] }), /not an id/), carIntact());
+asCheck("an extra file going outside the package is refused", refuses(() => packageCar({ ...carOpts, extraFiles: [{ from: join(tmp, "LICENSE.txt"), to: "cars/../../escape.txt" }] }), /not a path a package may use/), carIntact());
+write(join(carSrc, "skins", "blue", "paint.png"), "png");
+symlinkSync(join(tmp, "outside.glb"), join(carSrc, "skins", "blue", "linked.png"));
+asCheck("a livery folder holding a symbolic link is refused", refuses(() => packageCar({ ...carOpts, skins: [{ id: "blue", name: "Blue", swatch: ["#0000cc", "#111111"], dir: join(carSrc, "skins", "blue") }] }), /symbolic link/), carIntact());
 
 // --- pack: the zip the game's importer reads ---
 void (async () => {
@@ -115,6 +163,26 @@ void (async () => {
     const imp = ((await import(join(dir, f))) as { default?: Importer }).default;
     check(`importer ${f}: a summary, a usage and a run`, !!imp && typeof imp.summary === "string" && imp.summary.length > 10 && typeof imp.usage === "string" && typeof imp.run === "function");
   }
+
+  // --- The command line ---
+  const repo = join(__dirname, "..", "..");
+  const tool = (...args: string[]) => spawnSync(process.execPath, ["--disable-warning=THREE_CJS_DEPRECATED", "--import", "tsx", join(repo, "scripts", "mods", "mod-tool.ts"), ...args], { cwd: repo, encoding: "utf8" });
+  for (const args of [["--help"], ["-h"], [], ["index", "--help"], ["check", "--help"], ["pack", "-h"], ["catalogue", "--help"], ["from-circuit", "--help"], ["from-car", "--help"]]) {
+    const r = tool(...args);
+    check(`mod-tool ${args.join(" ") || "(no command)"}: its usage, exit 0`, r.status === 0 && /Usage|npm run mod/.test(r.stdout), `exit ${r.status} ${r.stderr.trim().split("\n").pop() ?? ""}`);
+  }
+  check("`index --help` writes no index in a folder named --help", !existsSync(join(repo, "--help")));
+  const help = tool("import", "blender-track", "--help");
+  check("an importer's --help lists --keep-build as it is", help.status === 0 && /--keep-build +keep the converter's working files/.test(help.stdout));
+  const fromCircuitHelp = tool("from-circuit", "--help");
+  check("from-circuit's usage has no --keep-build (it never removes a build)", !/--keep-build/.test(fromCircuitHelp.stdout));
+  check("an unknown command: the usage, exit 1", tool("no-such-command").status === 1);
+  // from-car: every path in the spec is the spec's, extra files too
+  const specDir = join(tmp, "spec");
+  write(join(specDir, "LICENSE-CC-BY-4.0.txt"), "CC BY 4.0");
+  write(join(specDir, "spec.json"), JSON.stringify({ ...carOpts, packageDir: "../spec-pkg", car: { ...carOpts.car, localId: "spec-car" }, model: "../car/gt-x.glb", extraFiles: [{ from: "LICENSE-CC-BY-4.0.txt", to: "cars/spec-car/LICENSE-CC-BY-4.0.txt" }] }));
+  const fromCar = tool("from-car", join(specDir, "spec.json"));
+  check("from-car: the spec's extra files are found beside the spec", fromCar.status === 0 && existsSync(join(tmp, "spec-pkg", "cars", "spec-car", "LICENSE-CC-BY-4.0.txt")), (fromCar.stdout + fromCar.stderr).trim().split("\n").pop());
 
   rmSync(tmp, { recursive: true, force: true });
   if (failed) {

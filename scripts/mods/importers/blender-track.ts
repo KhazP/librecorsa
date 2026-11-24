@@ -40,6 +40,8 @@ ${PACKAGE_USAGE}`,
     report(packageDir, out.checked);
     if (out.skipped.length) console.log(`      left out (the track data doesn't name them): ${out.skipped.join(", ")}`);
     console.log(`      ${out.contentId} in ${packageDir}`);
+    if (!out.checked.ok) throw new Error(`${packageDir}: the package fails the game's checks (above)`);
+    return packageDir;
   },
 };
 

@@ -14,28 +14,37 @@ export interface Importer {
   summary: string;
   /** Its arguments after `npm run mod -- import <name>`, and a line on each option of its own */
   usage: string;
-  /** Converts and packages; throws with a message a modder can act on */
-  run(argv: string[]): Promise<void>;
+  /** Converts and packages, and returns the package's folder; throws with a message a modder can act on */
+  run(argv: string[]): Promise<string>;
 }
 
-/** The options every importer takes: where the package goes and what it is called */
+/** The options every package a tool writes takes: where it goes and what it is called */
 export const PACKAGE_OPTIONS = {
   package: { type: "string" },
   name: { type: "string" },
   version: { type: "string" },
   out: { type: "string" },
-  "keep-build": { type: "boolean" },
 } as const satisfies ParseArgsConfig["options"];
 
-export const PACKAGE_USAGE = `  --package <author.name>  the package's id (default: made from the source's author and name)
+/** The package options, as `--help` lists them (`from-circuit`'s) */
+export const PACKAGE_ONLY_USAGE = `  --package <author.name>  the package's id (default: made from the source's author and name)
   --name <text>            the package's name, as players see it
   --version <text>         its version (default 1.0.0)
-  --out <folder>           the mods folder to write it into (default public/mods, which the dev server and the launcher serve)
-  --keep-build             keep the converter's working copy in public/tracks/ (for debugging)`;
+  --out <folder>           the mods folder to write it into (default public/mods, which the dev server and the launcher serve)`;
 
-/** Parses an importer's arguments: the package options plus its own */
-export function parseImportArgs<O extends NonNullable<ParseArgsConfig["options"]>>(argv: string[], own: O) {
+/** The options every importer takes, as its `--help` lists them: the package's, and keeping the converter's files */
+export const PACKAGE_USAGE = `${PACKAGE_ONLY_USAGE}
+  --keep-build             keep the converter's working files, for debugging (a circuit's build in public/tracks/, a
+                           car's working folder)`;
+
+/** Parses a tool's arguments: the package options plus its own */
+export function parsePackageArgs<O extends NonNullable<ParseArgsConfig["options"]>>(argv: string[], own: O) {
   return parseArgs({ args: argv, options: { ...PACKAGE_OPTIONS, ...own }, allowPositionals: true, strict: true });
+}
+
+/** Parses an importer's arguments: the package options, --keep-build, and its own */
+export function parseImportArgs<O extends NonNullable<ParseArgsConfig["options"]>>(argv: string[], own: O) {
+  return parsePackageArgs(argv, { "keep-build": { type: "boolean" }, ...own });
 }
 
 /**

@@ -6,8 +6,8 @@
  *   centreline, start line and pit lane, the banking and kerb in the GLB, and a small AC3D model whose road object is
  *   left out and whose scenery is kept where it stands;
  * - surface mapping: Speed Dreams' surface names and a circuit's own surfaces by their grip, to the builder's;
- * - the licence gate: what a readme's statement allows, the asset database's word for a fetched circuit, refusals,
- *   and --personal;
+ * - the licence gate: every statement file and the trackdef's header read, the asset database's word only for a copy
+ *   fetched at the archive it pins, refusals, and --personal;
  * - with Speed Dreams circuits in the cache (`npm run mod -- import sd-track --fetch <circuit>`), each one: its road
  *   generated where the circuit's own model has it, and its licence.
  *
@@ -20,8 +20,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { circuitLicence, includesResolve, type CircuitSource } from "../mods/importers/sd-track";
-import { copyrightHolders, recogniseLicence } from "../mods/lib/licences";
+import { circuitLicence, includesResolve, trackdefOf, type CircuitSource } from "../mods/importers/sd-track";
+import { circuitCatalogue as catalogue } from "../mods/lib/sd-fetch";
+import { PERSONAL_USE_NOTE } from "../mods/lib/licences";
 import { REPO_ROOT } from "../mods/lib/toolchain";
 import { readSdSource, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 
@@ -33,7 +34,7 @@ function check(name: string, ok: boolean, detail = ""): void {
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 const tmp = mkdtempSync(join(tmpdir(), "sd-track-"));
 
-// --- The licence gate -------------------------------------------------------------------------------------------------
+// --- The licence gate (the reader itself: verify-licences.ts) ---------------------------------------------------------
 
 const FAL_README = `Brno
 ------------------------------------------------------------------------------------
@@ -44,51 +45,71 @@ it and/or modify it according to terms of the Free Art license.
 You will find a specimen of this license on the site
 Copyleft Attitude http://artlibre.org as well as on other sites.
 `;
-const fal = recogniseLicence(FAL_README);
-check("a Speed Dreams readme's Free Art License statement lets players share", fal.kind === "shareable" && fal.licence.id === "FAL-1.3", JSON.stringify(fal));
-const ccby = recogniseLicence("Creative Commons Attribution 4.0 International");
-check("Creative Commons Attribution 4.0, in words, is CC BY 4.0", ccby.kind === "shareable" && ccby.licence.id === "CC-BY-4.0");
-const ccsa = recogniseLicence("Licensed under https://creativecommons.org/licenses/by-sa/3.0/");
-check("a CC BY-SA link keeps its version", ccsa.kind === "shareable" && ccsa.licence.id === "CC-BY-SA-3.0");
-check("CC BY-NC-SA is refused: non-commercial only", recogniseLicence("CC BY-NC-SA 4.0").kind === "restricted");
-check("CC BY-ND is refused: no changed copies", recogniseLicence("Creative Commons Attribution-NoDerivatives 4.0").kind === "restricted");
-check("all rights reserved is refused", recogniseLicence("(C) 2020 Someone. All rights reserved.").kind === "restricted");
-check("'do not redistribute' is refused", recogniseLicence("Free for personal use, do not redistribute.").kind === "restricted");
-const gpl = recogniseLicence("under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.");
-check("the GPL 2 or later is recognised", gpl.kind === "shareable" && gpl.licence.id === "GPL-2.0" && gpl.licence.name.endsWith("or later"));
-check("a statement with no licence is unrecognised", recogniseLicence("Track made by me in 2010. Have fun!").kind === "unrecognised");
-check("copyright holders come from the Copyright lines", copyrightHolders("Copyright © 2002 Eric Espie\nCopyright � 2012 Bernhard Wymann (totally reworked)").join("|") === "Eric Espie|Bernhard Wymann", copyrightHolders("Copyright © 2002 Eric Espie\nCopyright � 2012 Bernhard Wymann (totally reworked)").join("|"));
-
+const GPL_HEADER = `<?xml version="1.0" encoding="UTF-8"?>
+<!--
+copyright           : (C) 2005 by Charalampos Alexopoulos
+-->
+<!--
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+-->
+<params name="x" type="param" mode="mw"/>
+`;
 const folder = (name: string, files: Record<string, string>) => {
   const dir = join(tmp, "lic", name);
+  rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
   return dir;
 };
+const refusal = (f: () => unknown): string => {
+  try {
+    f();
+    return "";
+  } catch (err) {
+    return (err as Error).message;
+  }
+};
 const withReadme = folder("brno", { "readme.txt": FAL_README, "brno.xml": "<params/>" });
 const ok = circuitLicence(withReadme, { title: "Brno", source: null, personal: false });
 check("a circuit with a FAL readme is credited to its author under the FAL", ok.credit.license === "Free Art License 1.3" && ok.credit.author === "Simon Schäler" && ok.credit.licenseUrl === "https://artlibre.org/licence/lal/en/", JSON.stringify(ok.credit));
-check("its package carries the readme and the licence's text", ok.files.map((f) => f.name).join() === "speed-dreams-readme.txt,LICENCE-FAL-1.3.txt" && ok.files.every((f) => existsSync(f.from)));
+check("its package carries the readme and the licence's text (LICENSE-<id>.txt)", ok.files.map((f) => f.name).join() === "speed-dreams-readme.txt,LICENSE-FAL-1.3.txt" && ok.files.every((f) => existsSync(f.from)), ok.files.map((f) => f.name).join());
+const withHeader = folder("brno-gpl", { "readme.txt": FAL_README, "brno-gpl.xml": GPL_HEADER });
+const both = circuitLicence(withHeader, { title: "Brno", source: null, personal: false, trackdef: join(withHeader, "brno-gpl.xml") });
+check("the trackdef's GPL header: the data's licence, and its text, beside the FAL", both.credit.license === "Free Art License 1.3, GNU GPL 2.0 or later" && both.files.map((f) => f.name).join() === "speed-dreams-readme.txt,LICENSE-FAL-1.3.txt,LICENSE-GPL-2.0-or-later.txt", both.credit.license ?? "");
+const restrictedHeader = folder("hdr", { "readme.txt": FAL_README, "hdr.xml": GPL_HEADER.replace("(at your option) any later version.", "(at your option) any later version. Do not redistribute the logos.") });
+check("a restriction in the trackdef's header is refused", /forbids/.test(refusal(() => circuitLicence(restrictedHeader, { title: "Hdr", source: null, personal: false, trackdef: join(restrictedHeader, "hdr.xml") }))));
+const twoFiles = folder("two", { "LICENSE.txt": "Free Art License 1.3", "README.txt": "Copyright 2019 J. Doe. All Rights Reserved." });
+check("every statement file is read: a FAL LICENSE beside an all-rights-reserved README is refused", /rights reserved/.test(refusal(() => circuitLicence(twoFiles, { title: "Two", source: null, personal: false }))));
 const bare = folder("corkscrew", { "corkscrew.xml": "<params/>" });
-let refused = "";
-try {
-  circuitLicence(bare, { title: "Corkscrew", source: null, personal: false });
-} catch (err) {
-  refused = (err as Error).message;
-}
-check("a circuit with no licence statement is refused, with a message that says so", /states no licence/.test(refused) && /--personal/.test(refused), refused.split("\n")[0]);
-const dbSource = (author: string): CircuitSource => ({ from: "asset-database", directory: "x", archive: "https://files.speed-dreams.net/public/x", sha256: "a".repeat(64), revision: 0, page: "https://forge.a-lec.org/speed-dreams/x", license: "Free Art License", author });
-const viaDb = circuitLicence(bare, { title: "X", source: dbSource("Eric Espie, Andrew Sumner"), personal: false });
-check("a fetched circuit without a readme takes the asset database's licence and authors", viaDb.credit.license === "Free Art License 1.3" && viaDb.credit.author === "Eric Espie, Andrew Sumner" && /asset database/.test(viaDb.summary));
-refused = "";
-try {
-  circuitLicence(bare, { title: "Corkscrew", source: dbSource("(missing readme.txt)"), personal: false });
-} catch (err) {
-  refused = (err as Error).message;
-}
-check("…but not when the database names no author for it (Corkscrew)", /names no author/.test(refused), refused.split("\n")[0]);
+const refused = refusal(() => circuitLicence(bare, { title: "Corkscrew", source: null, personal: false }));
+check("a circuit with no licence statement is refused, with a message that says so", /no readme or licence file/.test(refused) && /--personal/.test(refused), refused.split("\n")[0]);
+
+// The asset database's word: only for a copy fetched at the archive it pins
+const pinned = catalogue().find((e) => e.directory === "e-track-4")!;
+const fetched = (over: Partial<CircuitSource> = {}): CircuitSource => ({ from: "asset-database", directory: pinned.directory, archive: pinned.archive, sha256: pinned.sha256, revision: pinned.revision, page: pinned.page, license: pinned.license, author: pinned.author, ...over });
+const eTrack = folder("e-track-4", { "e-track-4.xml": "<params/>" });
+const viaDb = circuitLicence(eTrack, { title: "E-Track 4", source: fetched(), personal: false });
+check("a fetched circuit without a readme takes the pinned database's licence and authors", viaDb.credit.license === "Free Art License 1.3" && viaDb.credit.author === pinned.author && /asset database/.test(viaDb.summary), viaDb.summary);
+check("…not when its record doesn't match the pin (another archive)", /no readme or licence file/.test(refusal(() => circuitLicence(eTrack, { title: "E-Track 4", source: fetched({ sha256: "0".repeat(64) }), personal: false }))));
+check("…nor its record's own licence and author, which the pin's replace", circuitLicence(eTrack, { title: "E", source: fetched({ license: "CC0 1.0", author: "Someone Else" }), personal: false }).credit.author === pinned.author);
+check("…nor a local folder of that name with no record", /no readme or licence file/.test(refusal(() => circuitLicence(eTrack, { title: "E-Track 4", source: null, personal: false }))));
+const renamed = folder("my-copy", { "my-copy.xml": "<params/>" });
+check("…nor a fetched record moved to a folder of another name", /no readme or licence file/.test(refusal(() => circuitLicence(renamed, { title: "X", source: fetched(), personal: false }))));
+const ownStatement = folder("e-track-4", { "e-track-4.xml": "<params/>", "readme.txt": "Have fun!" });
+check("…nor when the folder has a statement file of its own, whatever it says", /names no licence/.test(refusal(() => circuitLicence(ownStatement, { title: "E", source: fetched(), personal: false }))));
+const cork = catalogue().find((e) => e.directory === "corkscrew")!;
+check("…nor when the database names no author for it (Corkscrew)", /names no author/.test(refusal(() => circuitLicence(bare, { title: "Corkscrew", source: { from: "asset-database", directory: "corkscrew", archive: cork.archive, sha256: cork.sha256, page: cork.page }, personal: false }))));
+
 const personal = circuitLicence(folder("nc", { "readme.txt": "Licensed CC BY-NC 4.0 by A. Person" }), { title: "NC", source: null, personal: true });
-check("--personal converts a refused circuit, marked for personal use only", personal.personal && personal.credit.note!.startsWith("for personal use only, not for sharing") && personal.credit.license === "CC BY-NC 4.0");
+check(
+  `--personal: "unknown", the note word for word, no licence text or link`,
+  personal.personal && personal.credit.license === "unknown" && personal.credit.note === PERSONAL_USE_NOTE && !personal.credit.licenseUrl && !personal.files.some((f) => /^LICEN[CS]E-/.test(f.name)),
+  JSON.stringify(personal.credit),
+);
+check("…and the circuit's own readme still in it, for its credit", personal.files.map((f) => f.name).join() === "speed-dreams-readme.txt");
 
 // --- Geometry and surfaces, from a synthetic circuit ------------------------------------------------------------------
 
@@ -324,11 +345,14 @@ if (!ran) {
     check(`${d}: its scenery is kept`, (g.scenery?.triangles ?? 0) > 0, `${g.scenery?.triangles ?? 0} triangles`);
     let lic = "";
     try {
-      lic = circuitLicence(dir, { title: d, source, personal: false }).summary;
+      lic = circuitLicence(dir, { title: d, source, personal: false, trackdef: trackdefOf(dir) }).summary;
     } catch (err) {
       lic = `refused: ${(err as Error).message.split("\n")[0]}`;
     }
     console.log(`INFO  ${d}: licence ${lic}`);
+    // Speed Dreams' own circuits under the Free Art License stay shareable; Corkscrew has no readme and no author listed
+    if (d === "corkscrew") check(`${d}: refused, no statement and no author listed`, lic.startsWith("refused"), lic);
+    else if (existsSync(join(dir, "readme.txt"))) check(`${d}: shareable under its readme's Free Art License`, /^Free Art License 1\.3/.test(lic), lic);
   }
 }
 

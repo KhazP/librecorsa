@@ -13,14 +13,14 @@ What it reads (each value is printed with where it came from, and the guessed on
   climb, oval), author, version and URL
 - `data/surfaces.ini`: the mod's own surface keys the porter's shared names miss, each read from its grip, whether it
   counts as track, its sound and its pit-lane flag (`physicsNodeOverrides`)
-- a readme or licence file: the author, when ui_track.json has none, an open licence, and lines that set the mod's
-  terms ("do not upload", "without my permission")
+- a readme or licence file: the author, when ui_track.json has none
 
 What it can't know is guessed: the altitude (0 m), a layout name for a mod with one layout, and a description when
-the mod's is only its name. The licence is "unknown" unless the mod names one that lets a converted copy be shared (a
-Creative Commons licence without NoDerivatives, CC0, the GPL, the public domain); otherwise the credit carries a note
-that the circuit is for personal use only. A JSON file of overrides (`--settings`) is merged over the entry: any key
-AC_TRACKS takes, and `credit` key by key.
+the mod's is only its name. The licence isn't decided here: the credit's is "unknown", with the note that the circuit is
+for personal use only, and the mod tool (scripts/mods/importers/ac-track.ts) reads the mod's statements and the
+modder's settings with the one licence reader every importer uses (scripts/mods/lib/licences.ts) and credits the
+package. A JSON file of overrides (`--settings`) is merged over the entry: any key AC_TRACKS takes, and `credit` key
+by key.
 
 Only the standard library: the mod tools and their checks read entries without the porter's packages.
 """
@@ -31,7 +31,9 @@ import re
 
 # The porter's own default (port_ac_track.build_from_sources): a mod that doesn't say how many pit boxes it has
 DEFAULT_PITBOXES = 24
-PERSONAL_USE_NOTE = "For personal use only: the author's permission is needed to share it."
+# The credit of a circuit read from a mod until the mod tool reads its licence (scripts/mods/lib/licences.ts, the same
+# words)
+PERSONAL_USE_NOTE = "For personal use only: the author's permission is needed to share it"
 # Assetto Corsa's own pit crew, marshals and props, which mods borrow from the game, several with its logo: the
 # hand-written entries leave them out one by one (`hideTextures`), an entry read from the mod leaves out all of them
 AC_GAME_TEXTURES = r'^(ac_crew|props_pitlane|commissario\w*|marshal+\w*|sign_turn_kunosSim|DRIVER_Suit2|driver_face)\.dds$'
@@ -50,17 +52,6 @@ COUNTRIES = {
 }
 LAYOUT_FILE = os.path.join('ai', 'fast_lane.ai')
 TEXT_FILE = re.compile(r'^(read[ _-]?me|licen[cs]e|copying|terms|credits?)\b.*\.(txt|md)$|^(licen[cs]e|copying)$', re.I)
-# Licences that let a converted copy be shared (a conversion is an adaptation, which NoDerivatives forbids)
-OPEN_LICENCE = re.compile(
-    r'\bCC[ -]?BY(?:[ -](?:NC|SA)){0,2}(?:[ -]\d\.\d)?\b|\bCC0\b|\bCreative Commons Attribution(?:[- ](?:NonCommercial|'
-    r'ShareAlike)){0,2}(?: \d\.\d)?(?: International)?(?: License| Licence)?|\bGNU General Public Licen[cs]e(?: v?\d)?|'
-    # "GPL" alone is as often Grand Prix Legends, the sim many old circuits come from
-    r'\bGPL-?v?[23](?:\.0)?\b|\bpublic domain\b', re.I)
-NO_DERIVATIVES = re.compile(r'\bND\b|NoDerivatives|No Derivatives', re.I)
-TERMS = re.compile(
-    r"\b(do not|don'?t|please do not|not allowed|is not allowed|prohibited|forbidden)\b.{0,40}\b(copy|upload|share|"
-    r"redistribut\w*|convert\w*|chang\w*|modif\w*|reproduc\w*|sell|port\w*)|\ball rights reserved\b|\bwithout (my|the "
-    r"author'?s?|our) (permission|approval|consent)|\bprior (my |to my )?(approval|permission)", re.I)
 AUTHOR_LINE = re.compile(
     r'^\s*(?:original\s+)?(?:authors?|created by|made by|track by|conversion(?: to ac)?(?: by)?|converted(?: to ac)? '
     r'by|ac conversion(?: by)?)\s*[:\-–]\s*(.+)$', re.I)
@@ -372,9 +363,9 @@ def read_text(path):
 
 
 def readme_facts(paths):
-    """From a mod's readme and licence files: authors named on their own lines or as "made by …", an open licence,
-    and the lines that set its terms"""
-    authors, licence, terms = [], None, []
+    """From a mod's readme and licence files: the authors named on their own lines or as "made by …" (its licence and
+    terms are the mod tool's to read)"""
+    authors = []
     for p in paths:
         lines = read_text(p).split('\n')
         for i, line in enumerate(lines[:400]):
@@ -389,12 +380,7 @@ def readme_facts(paths):
                     n = re.split(r'\s{2,}|\t|\s*[(\[,;]|\s[-–]\s', n.strip())[0].strip(' .:-')
                     if 2 <= len(n) <= 60 and n.lower() not in (a.lower() for a in authors):
                         authors.append(n)
-            lm = OPEN_LICENCE.search(s)
-            if lm and not licence and not NO_DERIVATIVES.search(s):
-                licence = lm.group(0).strip()
-            if TERMS.search(s) and len(terms) < 4:
-                terms.append(text(s, 160))
-    return authors, licence, terms
+    return authors
 
 
 def hillclimb_markers(src):
@@ -445,7 +431,7 @@ def deep_merge(base, over):
 def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None):
     """The AC_TRACKS entry of the mod in `src` (its track folder), read from the mod, with the overrides in `settings`
     (a JSON file) merged over it. `classify` is the porter's shared surface names (port_ac_track.classify_physics_node).
-    The entry's `_auto` holds what the porter doesn't read: where each value came from, the licence, the mod's terms"""
+    The entry's `_auto` holds what the porter doesn't read: where each value came from, the layouts, the models"""
     src = os.path.abspath(os.path.expanduser(src))
     if not os.path.isdir(src):
         raise EntryError(f'{src}: not a folder')
@@ -521,8 +507,9 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
     note('physicsNodeOverrides', surface_notes or ['the shared surface names'], os.path.join(lay, 'data', 'surfaces.ini') if lay else 'data/surfaces.ini')
     cfg['hideTextures'] = note('hideTextures', AC_GAME_TEXTURES, "guessed: Assetto Corsa's own crew, marshals and props")
 
-    # The credit: ui_track.json's author, else the readme's; an open licence named in the mod, else unknown
-    authors, licence, terms = readme_facts(text_files(src, lay))
+    # The credit: ui_track.json's author, else the readme's. The licence is the mod tool's to decide (see above): until
+    # it does, the circuit is for personal use only
+    authors = readme_facts(text_files(src, lay))
     author = text(ui.get('author'), 80)
     if author:
         note('credit.author', author, ui_rel)
@@ -539,8 +526,9 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
         'author': author,
         'url': note('credit.url', url, ui_rel) if url else None,
         'short': None,
-        'license': note('credit.license', licence, 'the mod\'s readme') if licence else note('credit.license', 'unknown', 'guessed: the mod names no licence'),
+        'license': 'unknown',
         'licenseUrl': None,
+        'note': PERSONAL_USE_NOTE,
     }
     if version:
         note('version', version, ui_rel)
@@ -564,14 +552,7 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
         if not isinstance(overrides_json, dict):
             raise EntryError(f'{settings}: not a JSON object of settings')
         cfg = deep_merge(cfg, {k: v for k, v in overrides_json.items() if not k.startswith('_')})
-    # Shared only under a licence that allows it: one the mod names, with no line of its readme saying otherwise, or
-    # one the modder's settings name (their record of the author's permission)
     own_credit = overrides_json.get('credit') if isinstance(overrides_json.get('credit'), dict) else {}
-    set_licence = 'license' in own_credit
-    lic = str(cfg['credit'].get('license') or '').strip()
-    shareable = (set_licence and lic.lower() not in ('', 'unknown')) or bool(licence and lic == licence and not terms)
-    if not shareable and not own_credit.get('note'):
-        cfg['credit']['note'] = PERSONAL_USE_NOTE
 
     cfg['base_dir'] = src
     cfg['_auto'] = {
@@ -585,9 +566,6 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
         'models': model_notes,
         'uiLengthM': length_m(ui.get('length')),
         'version': version,
-        'personalUse': not shareable,
-        'licenceFrom': 'settings' if set_licence else ('mod' if licence else None),
-        'terms': terms,
     }
     return cfg
 
@@ -625,9 +603,3 @@ def report(cfg, log=print):
     for n in a['models']:
         log(f'    models: {n}')
     log('    (override any of these: --settings <file.json>, e.g. {"baseAltitudeM": 120, "credit": {"license": "…"}})')
-    if a['terms']:
-        log("  the mod's readme says:")
-        for t in a['terms']:
-            log(f'    "{t}"')
-    if a['personalUse']:
-        log(f"  licence: {cfg['credit']['license']}. {PERSONAL_USE_NOTE}")

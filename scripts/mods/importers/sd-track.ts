@@ -11,19 +11,35 @@
  * when the circuit's folder doesn't sit in a Speed Dreams install that has them, the surfaces are fetched once and the
  * textures as each circuit needs them.
  *
- * The licence (lib/licences.ts): the circuit's own readme or licence file must name one that lets players share a
- * converted copy. A circuit fetched from Speed Dreams without such a file takes the asset database's word for it, when
- * the database also names its author. Anything else is refused, unless --personal converts it marked for personal use.
+ * The licence (lib/licences.ts): every statement file in the circuit's folder (readme, licence, credits…) is read, and
+ * its trackdef's header, and together they must name a licence that lets players share a converted copy, with nothing
+ * that takes it back. A circuit with no statement file takes the asset database's word for it only when it was fetched
+ * at the archive the database pins and the database names its author. Anything else is refused, unless --personal
+ * converts it, marked for personal use only.
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { packageCircuit } from "../lib/circuit-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
-import { copyrightHolders, decodeText, licenceText, recogniseLicence, statementFiles, type LicenceFinding } from "../lib/licences";
+import {
+  authorLine,
+  carriedName,
+  creditLicence,
+  decodeText,
+  isShareable,
+  licenceTextFiles,
+  mergeReadings,
+  PERSONAL_USE_NOTE,
+  readLicenceEntry,
+  readLicenceText,
+  statementFiles,
+  xmlLeadingComments,
+  type LicenceReading,
+} from "../lib/licences";
 import { localIdFrom, packageCredit, packageIdFrom, type SourceCredit } from "../lib/manifest-file";
 import { report } from "../lib/package-check";
-import { circuitCatalogue, fetchSdCircuit, fetchSdTextures, readSdSource, sdBaseData, type CircuitSource } from "../lib/sd-fetch";
+import { circuitCatalogue, fetchSdCircuit, fetchSdTextures, readSdSource, sdBaseData, type CatalogueEntry, type CircuitSource } from "../lib/sd-fetch";
 import { runPython } from "../lib/toolchain";
 
 export type { CircuitSource } from "../lib/sd-fetch";
@@ -56,21 +72,9 @@ export function trackHeader(xml: string): { name?: string; author?: string; desc
   return { name: attr("name"), author: attr("author"), description: attr("description") };
 }
 
-/** A credit's author: the names given, cut to what a package's credit holds (80 characters) at a name's end */
-export function authorLine(names: string[]): string {
-  const all = names.join(", ");
-  if (all.length <= 80) return all;
-  let out = "";
-  for (const n of names) {
-    if (`${out}${out ? ", " : ""}${n} and others`.length > 80) break;
-    out = `${out}${out ? ", " : ""}${n}`;
-  }
-  return `${out || names[0].slice(0, 66)} and others`;
-}
-
 export interface CircuitLicence {
   credit: SourceCredit;
-  /** Files to put beside the circuit in the package: its own statement, and the licence's full text */
+  /** Files to put beside the circuit in the package: its own statements, and the licences' full texts when shareable */
   files: { from: string; name: string }[];
   /** Converted for personal use only */
   personal: boolean;
@@ -79,78 +83,82 @@ export interface CircuitLicence {
 }
 
 /**
- * The circuit's licence and credit, or an error that says why it can't be shared: from its own readme or licence
- * file, else (for a circuit fetched from Speed Dreams) from the asset database when it names the author too
+ * The asset database's entry for a fetched circuit, when the folder is the copy the database pins: its record
+ * (.source.json) names this folder's circuit, and the archive and sha256 sd-track.circuits.json pins for it. The
+ * licence and author are then the pinned list's, never the record's own. Null for anything else: a folder from an
+ * install or elsewhere, Speed Dreams' base data (the database doesn't list it), a record that doesn't match its pin
  */
-export function circuitLicence(folder: string, opts: { title: string; source: CircuitSource | null; headerAuthor?: string; personal: boolean }): CircuitLicence {
+export function pinnedCircuit(folder: string, source: CircuitSource | null): CatalogueEntry | null {
+  if (source?.from !== "asset-database" || source.directory !== basename(folder)) return null;
+  return circuitCatalogue().find((e) => e.directory === source.directory && e.sha256 === source.sha256 && e.archive === source.archive) ?? null;
+}
+
+/**
+ * The circuit's licence and credit, or an error that says why it can't be shared: every statement file in its folder,
+ * else (for a circuit fetched at the archive the asset database pins) the database's entry when it names the author;
+ * and its trackdef's header (`trackdef`), the licence of the data the circuit is built from
+ */
+export function circuitLicence(folder: string, opts: { title: string; source: CircuitSource | null; headerAuthor?: string; personal: boolean; trackdef?: string }): CircuitLicence {
   const statements = statementFiles(folder);
-  let finding: LicenceFinding | null = null;
-  let statement: { file: string; text: string } | null = null;
-  for (const s of statements) {
-    const f = recogniseLicence(s.text);
-    if (f.kind !== "unrecognised" || !finding) {
-      finding = f;
-      statement = s;
-    }
-    if (f.kind !== "unrecognised") break;
+  const pinned = statements.length ? null : pinnedCircuit(folder, opts.source);
+  const dbAuthors = pinned && !pinned.author.startsWith("(") ? pinned.author.split(/\s*,\s*/) : null;
+  // The circuit's own licence: its statements', or the database's, which must name the author too
+  let art: LicenceReading;
+  let via: string;
+  if (statements.length) {
+    art = mergeReadings(statements.map((s) => s.reading));
+    via = statements.map((s) => s.file).join(", ");
+    if (!art.licences.length) art.problems.push(`${via} name${statements.length === 1 ? "s" : ""} no licence this tool knows`);
+  } else if (pinned && dbAuthors) {
+    art = readLicenceEntry(pinned.license);
+    via = "Speed Dreams' asset database";
+  } else {
+    art = { licences: [], problems: [pinned ? `it has no readme or licence file, and Speed Dreams' asset database names no author for it ("${pinned.author}")` : "it has no readme or licence file that names one"], holders: [] };
+    via = "";
   }
+  // The trackdef's own header (the GPL notice most carry): the data's licence, and anything there that takes it back
+  const header = opts.trackdef && existsSync(opts.trackdef) ? xmlLeadingComments(decodeText(readFileSync(opts.trackdef))) : "";
+  const data = header ? readLicenceText(header) : null;
+  // (art names a licence or has a problem, so the header's licence alone never makes the circuit shareable)
+  const reading = mergeReadings(data ? [art, { ...data, holders: [] }] : [art]);
+  const shareable = isShareable(reading);
+
   const source = opts.source;
-  const dbAuthorKnown = !!source?.author && !source.author.startsWith("(");
-  let via = statement ? statement.file : "";
-  if ((!finding || finding.kind === "unrecognised") && source?.license && dbAuthorKnown) {
-    const db = recogniseLicence(source.license);
-    if (db.kind === "shareable") {
-      finding = db;
-      via = "Speed Dreams' asset database";
-    }
-  }
   const page = source?.page;
-  const holders = statement ? copyrightHolders(statement.text) : [];
-  const author = authorLine(holders.length ? holders : dbAuthorKnown ? source!.author!.split(/\s*,\s*/) : [opts.headerAuthor || "Unknown"]);
+  const author = authorLine(art.holders.length ? art.holders : dbAuthors ?? [opts.headerAuthor || "Unknown"]);
   const from = source?.from === "asset-database"
     ? `From Speed Dreams' asset database (revision ${source.revision}, sha256 ${source.sha256!.slice(0, 12)}…).`
     : source?.from === "speed-dreams-data"
       ? `From Speed Dreams' base data (speed-dreams-data ${source.commit!.slice(0, 12)}).`
       : "From Speed Dreams.";
-  const statementFile = statement ? [{ from: join(folder, statement.file), name: `speed-dreams-${statement.file.replace(/[^A-Za-z0-9._-]+/g, "_")}${/\.(txt|md)$/i.test(statement.file) ? "" : ".txt"}` }] : [];
+  const statementCopies = statements.filter((s) => s.readable).map((s) => ({ from: s.path, name: carriedName("speed-dreams", s.file) }));
+  const terms = creditLicence(reading);
 
-  if (finding?.kind === "shareable") {
-    const text = licenceText(finding.licence);
+  if (shareable) {
     return {
       credit: {
         title: opts.title,
         author,
         url: page,
-        license: finding.licence.name,
-        licenseUrl: finding.licence.url,
-        note: `${from} Converted to LibreCorsa; the circuit's licence statement and the licence's text are in its folder.`,
+        license: terms.license,
+        licenseUrl: terms.licenseUrl,
+        note: `${from} Converted to LibreCorsa; the circuit's licence statements and the licences' texts are in its folder.`,
       },
-      files: [...statementFile, ...(text ? [{ from: text, name: `LICENCE-${finding.licence.id}.txt` }] : [])],
+      files: [...statementCopies, ...licenceTextFiles(reading)],
       personal: false,
-      summary: `${finding.licence.name}, as ${via} states`,
+      summary: `${terms.license}, as ${[via, data?.licences.length ? "its trackdef's header" : ""].filter(Boolean).join(" and ")} state${statements.length === 1 && !data?.licences.length ? "s" : ""}`,
     };
   }
 
-  const why = !finding
-    ? `${opts.title} states no licence: it has no readme or licence file that names one${source && !dbAuthorKnown && source.license ? `, and Speed Dreams' asset database names no author for it ("${source.author}")` : ""}`
-    : finding.kind === "restricted"
-      ? `${opts.title}'s licence doesn't let a converted copy be shared: ${finding.reason} (${via})`
-      : `${opts.title}'s ${via} names no licence this importer recognises as letting a converted copy be shared`;
+  const why = `${opts.title}'s licence doesn't let a converted copy be shared: ${reading.problems.join("; ")}`;
   if (!opts.personal) {
-    throw new Error(`${why}.\nIt is not converted. With --personal it is, for you alone: the package is marked "for personal use only, not for sharing".`);
+    throw new Error(`${why}.\nIt is not converted. With --personal it is, for you alone: the package's credit then says "${PERSONAL_USE_NOTE}".`);
   }
   return {
-    credit: {
-      title: opts.title,
-      author,
-      url: page,
-      license: finding?.kind === "restricted" && finding.licence ? finding.licence.name : "No licence to share",
-      ...(finding?.kind === "restricted" && finding.licence ? { licenseUrl: finding.licence.url } : {}),
-      note: `for personal use only, not for sharing. ${why}. ${from}`.slice(0, 500),
-    },
-    files: statementFile,
+    credit: { title: opts.title, author, url: page, license: terms.license, note: terms.note },
+    files: statementCopies,
     personal: true,
-    summary: `for personal use only (${why})`,
+    summary: `for personal use only (${reading.problems.join("; ")})`,
   };
 }
 
@@ -166,7 +174,7 @@ const importer: Importer = {
   --id <id>                the circuit's id in the package (default: made from its folder name)
   --country <name>         where it is (default: its weather station's country, or one its description names, else Speed Dreams)
   --city <name>            (default: Speed Dreams; a trackdef names none)
-  --personal              convert a circuit whose licence doesn't allow sharing, marked "for personal use only, not for sharing"
+  --personal               convert a circuit whose licence doesn't allow sharing, its credit marked "${PERSONAL_USE_NOTE}"
 ${PACKAGE_USAGE}
   The package id defaults to sd.<circuit>.`,
   async run(argv) {
@@ -189,7 +197,7 @@ ${PACKAGE_USAGE}
     const title = displayName(listed?.name ?? header.name ?? directory);
 
     // The licence decides first: nothing is converted that can't be packaged
-    const licence = circuitLicence(folder, { title, source, headerAuthor: header.author, personal: !!values.personal });
+    const licence = circuitLicence(folder, { title, source, headerAuthor: header.author, personal: !!values.personal, trackdef: xml });
     console.log(`      licence: ${licence.summary}`);
     const credit = packageCredit(licence.credit);
     const localId = localIdFrom(values.id ?? directory);
@@ -231,8 +239,9 @@ ${PACKAGE_USAGE}
       });
       report(packageDir, out.checked);
       if (out.skipped.length) console.log(`      left out (the track data doesn't name them): ${out.skipped.join(", ")}`);
-      console.log(`      ${out.contentId} in ${packageDir}${licence.personal ? " (for personal use only, not for sharing)" : ""}`);
+      console.log(`      ${out.contentId} in ${packageDir}${licence.personal ? ` (${PERSONAL_USE_NOTE})` : ""}`);
       if (!out.checked.ok) throw new Error("the package doesn't pass the game's checks");
+      return packageDir;
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

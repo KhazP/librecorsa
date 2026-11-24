@@ -50,7 +50,7 @@ Every importer also takes:
 
 - `--package <author.name>`, `--name` and `--version`: the package's id, name and version (each has a default made from the source).
 - `--out <folder>`: where the package goes. The default is `public/mods/`, which the dev server and the launcher serve: run `npm run dev` and the package is in the game.
-- `--keep-build`: keep the converter's working copy in `public/tracks/`, for debugging.
+- `--keep-build`: keep the converter's working files, for debugging: a circuit's build in `public/tracks/`, a car's working folder.
 
 The import never touches the game's own circuits or cars. To share a package, `npm run mod -- pack public/mods/<package>` writes its zip; [a catalogue](modding.md#sharing-packages-through-a-catalogue) can offer it in the Mods panel.
 
@@ -69,7 +69,7 @@ npm run mod -- import sd-track ~/speed-dreams/data/tracks/circuit/brno      # a 
 
 `--fetch` downloads the circuit the way Speed Dreams' own downloader does, checks it against a pinned hash (`scripts/mods/importers/sd-track.circuits.json`), and keeps it in `scripts/mods/.cache/speed-dreams/`. Speed Dreams' shared surfaces and textures come from its `speed-dreams-data` repository at the commit `scripts/cars/speed-dreams-cars.json` pins: each is fetched once, checked against that commit, and reused.
 
-**What you get:** a package `sd.<circuit>` in `public/mods/`. The road, kerbs, run-off, grass, gravel, pit lane and barriers are rebuilt from the circuit's layout, so the cars drive the same road Speed Dreams does. The buildings, trees and terrain come from the circuit's 3D model. The package includes the circuit's readme and the full licence text.
+**What you get:** a package `sd.<circuit>` in `public/mods/`. The road, kerbs, run-off, grass, gravel, pit lane and barriers are rebuilt from the circuit's layout, so the cars drive the same road Speed Dreams does. The buildings, trees and terrain come from the circuit's 3D model. The package includes the circuit's readme and licence files, and the full text of each licence it is shared under.
 
 Options: `--id`, `--country` and `--city` (Speed Dreams files don't say where a circuit is), `--sd-data <folder>` to use your own Speed Dreams data, and the usual package options.
 
@@ -89,7 +89,7 @@ The package (`sd.<car>`) holds:
 - the car's model, with its driver, steering wheel and wheels, its liveries and its picture;
 - a sound bank made from its engine sample, pitched as Speed Dreams plays it at every rpm;
 - its physics as a patch on the closest of the game's cars (a GT on the AMG GT3, a modern open-wheeler on the 2026 car, a road car on the Scirocco or the Liana). Its weights, engine, gearbox, brakes, tyres, suspension and aero are converted; `CONVERSION.md` in the package lists every value and what was left out;
-- the licence texts and the car's own readme.
+- the car's and its liveries' readmes and licence files, and the full text of each licence it is shared under.
 
 Before packaging, the importer drives the car in the game's simulation: flat out on a straight, full braking, and a lap of RISE Motordrome. It refuses a car that spins, can't reach a sensible top speed or can't stop.
 
@@ -97,7 +97,11 @@ Options: `--base <model>` picks the car it drives as, `--class` and `--year` pla
 
 ### Licences
 
-The importer reads each circuit's or car's own readme or licence file, or the official list's entry when it has none, and converts it only when its licence lets you share a changed copy: the Free Art License (most of Speed Dreams), CC BY, CC BY-SA, CC0 or the GPL. Anything else is refused with the reason: no licence, an unclear one, "all rights reserved", non-commercial or no-derivatives licences. `--personal` converts it anyway, for you alone: the package then says "For personal use only, not for sharing", so don't pass it on. A livery whose own readme is unclear is left out.
+The importer reads every readme, licence, credits and authors file in the circuit's or car's folder, and the notice at the top of its XML (and a car's category's), and converts it only when, together, they let you share a changed copy (see [What counts as shareable](#what-counts-as-shareable)). Anything else is refused with the reason. The official list's licence counts only for a circuit or car fetched with `--fetch` at the revision the importer pins, when its folder has no readme or licence file of its own; a folder you already have takes nothing from the list.
+
+A livery with a readme of its own (`<car>-<livery>-readme.txt`, `<Car>_<Livery>_readme.txt`) must be shareable too, or it is left out. So must a wheel or engine sample the car takes from Speed Dreams' shared data: Speed Dreams' data is under the Free Art License unless its credits say otherwise (`data/sound/SoundCredits.txt`), and a shared sample that can't be shared is replaced by one of the game's sounds.
+
+`--personal` converts a circuit or car anyway, for you alone: its licence is then "unknown" and its credit says **"For personal use only: the author's permission is needed to share it"**, so don't pass it on. Anything the package holds that isn't shareable (a livery, a sample) does the same.
 
 ## From Assetto Corsa
 
@@ -147,9 +151,10 @@ One command makes the whole package:
 ### Licences
 
 - Kunos's own cars and circuits (the game's and its packs', the `ks_` folders, encrypted or not) are refused, and so is a mod made from them, however its folder is named: a model, a sound bank, its sounds' events or a `parent` named for a Kunos car, a `ks_` model in a circuit, or Kunos named as the author. So is any encrypted model.
-- If the mod names a licence that lets a changed copy be shared (Creative Commons without NoDerivatives, CC0, the GPL, MIT, the public domain), and nothing in its readme says otherwise, the package carries that licence. A line that forbids sharing outranks any licence.
-- Otherwise its licence is "unknown", and its credit says **"For personal use only: the author's permission is needed to share it."** The import prints this, with any lines of the readme that set the mod's terms. Keep the package on your own machine: don't upload, host or share it.
-- If the author gives you permission, add the licence to your settings and import again: `{"credit": {"license": "Used with permission"}}`. Keep a record of the permission.
+- The importer reads every text file in the mod's folder (and a circuit's layout folder, a car's skin folders) and a car's `ui_car.json` licence. If together they let a changed copy be shared (see [What counts as shareable](#what-counts-as-shareable)), the package carries that licence and its full text. A line that forbids sharing, anywhere, outranks any licence.
+- Otherwise its licence is "unknown", and its credit says **"For personal use only: the author's permission is needed to share it"**. The import prints this, with the words in the mod that decided it. Keep the package on your own machine: don't upload, host or share it.
+- If the author gives you permission to share a circuit, add it to your settings and import again: `{"credit": {"license": "Used with permission"}}`, or the licence they gave, such as `"CC BY 4.0"`. Keep a record of the permission. A licence in your settings that doesn't allow sharing ("All rights reserved", a no-derivatives licence) keeps the circuit for personal use, and so does a note in your settings: the personal-use note always stays.
+- The mod's own readme and licence files go in the package either way.
 - LibreCorsa hosts some Assetto Corsa circuits with their authors' permission. That permission is the game's and doesn't cover your copy; the import tells you when you import one of them.
 
 ## From F1 25
@@ -160,7 +165,7 @@ npm run mod -- import f1-track <mod.erp> [--track <code>] [--mat-prefix <prefix>
 
 This runs the extractor Qiddiya Speed Park was ported with ([Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md)) and builds the circuit from what it extracts. Its tables (surfaces, lights, branding) and its settings are Qiddiya's, so another mod needs `--track`, `--mat-prefix` and a settings file with its name, place and credit, and may need the tables edited. `npm run mod -- import f1-track --help` lists the extractor's options.
 
-A circuit from an F1 25 mod is **always for personal use only**, whatever the settings say: an `.erp` carries the base game's files beside the mod's, and a mod author's permission covers their own copy, not yours. The package's credit says so.
+A circuit from an F1 25 mod is **always for personal use only**, whatever the settings say: an `.erp` carries the base game's files beside the mod's, and a mod author's permission covers their own copy, not yours. The package's licence is "unknown" and its credit carries the personal-use note.
 
 ## Your own circuit from Blender
 
@@ -178,5 +183,19 @@ Model the circuit as [Porting circuits](PORTING-TRACKS.md) describes (surface me
 | Assetto Corsa             | Always converts (Kunos content refused), marking anything without a sharing licence "for personal use only"   | Only when the package names a licence that allows it    |
 | F1 25                     | Always converts, always "for personal use only"                                                               | No                                                      |
 | Your own Blender circuit  | Converts with the licence your settings give                                                                  | Your call                                               |
+
+### What counts as shareable
+
+Every importer reads licences the same way. A converted copy may be shared only under a licence that allows changing the work and passing it on for any use, and whose full text the package can carry:
+
+- the **Free Art License 1.3** (also when a readme names it without a version, as Speed Dreams' do, or as an older 1.x "or later");
+- **CC BY** and **CC BY-SA**, versions 3.0 and 4.0, and **CC0 1.0**;
+- the **GNU GPL**, version 2.0 or 3.0, "only" or "or later".
+
+A version is never guessed: "CC-BY" or "the GNU General Public License" alone isn't enough, nor is a version whose text isn't carried ("CC BY 2.0", "Free Art License 1.1" without "or later"). "GPL" alone isn't a licence in a readme (it is as often Grand Prix Legends). MIT, the LGPL and other licences aren't carried, so content under them stays for personal use, as does "public domain" without CC0 1.0.
+
+Every licence and every restriction in every file is read, and one problem anywhere keeps the content from being shared: non-commercial or no-derivatives terms (NC, ND, in any spelling), a licence the text says doesn't apply ("not under the GPL"), one marked with "?" or "*", "Creative Commons" without saying which, and wording such as "all rights reserved", "personal use", "do not upload", "without my permission", "logos are property of their owners", "ripped from" another game or "restricted".
+
+Content that may be shared is credited with its licences and carries their texts (`LICENSE-<id>.txt`) and the source's own readme and licence files. Content that may not has the licence "unknown", the note "For personal use only: the author's permission is needed to share it", and no licence text or link.
 
 Whatever the importer says, you are responsible for what you share. A package never carries code, so it can't harm a player's machine, but it can carry someone else's work.
