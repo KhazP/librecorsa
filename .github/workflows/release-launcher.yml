@@ -159,9 +159,9 @@ jobs:
           if [ "${{ matrix.platform }}" = "win" ]; then extra="--no-archive"; fi
           node launcher/build.mjs --bundle --only "${{ matrix.targets }}" --version "$VERSION" $extra
 
-      # Tag builds are signed with release-signing once the repository variable SIGNPATH_SIGN_RELEASES is "true"
-      # (as release-desktop.yml), which waits for SignPath's production certificate. Until then a tag build ships
-      # unsigned. SignPath's artifact configuration signs only a LibreCorsa.exe whose product version is the one passed.
+      # Tag builds are signed with release-signing once the repository variable SIGNPATH_SIGN_RELEASES is "true",
+      # which waits for SignPath's production certificate. Until then a tag build ships unsigned. SignPath's artifact
+      # configuration signs only a LibreCorsa.exe whose product version is the one passed.
       - name: Pick SignPath signing policy
         id: signing
         if: matrix.platform == 'win'
@@ -314,8 +314,9 @@ jobs:
             artifacts/*.tar.gz
             artifacts/*.dmg
 
-      # Marked latest: launchers find the manifest at releases/latest/download/launcher-latest.json (a desktop
-      # release made latest after it is passed over: the launcher then looks the newest launcher release up)
+      # Marked latest: launchers find the manifest at releases/latest/download/launcher-latest.json. Android releases
+      # (release-android.yml) never take latest; were another release latest, the launcher looks the newest launcher
+      # release up.
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/launcher-v')
         env:

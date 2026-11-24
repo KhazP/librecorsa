@@ -45,8 +45,8 @@ const (
 	latestManifestURL = releasesPage + "/latest/download/" + release.ManifestName
 	// releaseDownloads is where every release's files are, and the only place an archive may come from
 	releaseDownloads = releasesPage + "/download/"
-	// releasesAPI lists the releases, for when the latest isn't a launcher's (the desktop app's releases share the
-	// repository)
+	// releasesAPI lists the releases, for when the latest isn't a launcher's (the Android app's releases, and the
+	// Electron app's before it, share the repository)
 	releasesAPI = "https://api.github.com/repos/librecorsa/librecorsa/releases?per_page=30"
 	// launcherTagPrefix starts a launcher release's tag
 	launcherTagPrefix = "launcher-v"
@@ -364,7 +364,7 @@ func (u *updater) check(ctx context.Context) error {
 }
 
 // fetchManifest fetches the newest launcher release's manifest, and says where its signature is. The repository's
-// latest release may be the desktop app's: then the newest launcher release is looked up in the list of releases.
+// latest release may be another app's: then the newest launcher release is looked up in the list of releases.
 func (u *updater) fetchManifest(ctx context.Context) ([]byte, string, error) {
 	data, err := u.fetchSmall(ctx, u.manifestURL, release.MaxManifestBytes)
 	if err == nil {

@@ -88,8 +88,8 @@ export function typedLinkCode(raw: string): string {
  * The desktop app, which a sign-in page of Discord, Google or Steam never comes back to:
  * - the launcher (launcher/), which serves the game on this computer and opens it at http://127.0.0.1 (a clone's dev
  *   server is at localhost): the provider's page returns to librecorsa.org, not to it
- * - the Electron app: it stays on librecorsa.org and sends every other site to the system browser
- *   (desktop/src/nav-policy.js); Electron names itself in the user agent
+ * - the Electron app, retired, whose installed copies still open librecorsa.org: it stays on librecorsa.org and sends
+ *   every other site to the system browser; Electron names itself in the user agent
  */
 export function inDesktopApp(): boolean {
   return inLauncher() || (typeof navigator !== "undefined" && /\bElectron\//.test(navigator.userAgent));

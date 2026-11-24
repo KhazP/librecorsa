@@ -296,7 +296,7 @@ func TestUpdateRefusesAnUnsafeArchive(t *testing.T) {
 func TestUpdateFindsTheLauncherReleaseBehindAnother(t *testing.T) {
 	skipWithoutSh(t)
 	f := newUpdateFixture(t, "0.2.0")
-	// The latest release is the desktop app's: it has no launcher manifest
+	// The latest release is another app's (the Electron app's, before it was retired): it has no launcher manifest
 	f.publish(t, "0.3.0", nil, nil, nil)
 	data := f.rs.files["/latest/download/"+release.ManifestName]
 	sig := f.rs.files["/latest/download/"+release.SignatureName]
@@ -306,6 +306,7 @@ func TestUpdateFindsTheLauncherReleaseBehindAnother(t *testing.T) {
 	f.rs.put("/download/launcher-v0.3.0/"+release.SignatureName, sig)
 	f.rs.put("/api/releases", []byte(`[
 		{"tag_name":"desktop-v9.0.0","draft":false,"prerelease":false},
+		{"tag_name":"android-v9.0.0","draft":false,"prerelease":false},
 		{"tag_name":"launcher-v0.4.0-beta.1","draft":false,"prerelease":true},
 		{"tag_name":"launcher-v0.9.0","draft":true,"prerelease":false},
 		{"tag_name":"launcher-v0.3.0","draft":false,"prerelease":false},
