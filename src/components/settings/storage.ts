@@ -15,6 +15,8 @@ const NOT_GAME_DATA: readonly string[] = ["librecorsa.adminKey"];
 
 /** The IndexedDB database of lap history and ghosts (`src/lib/sim/ghost-store.ts`) */
 export const LAP_DATABASE = "bugesera-laps";
+/** The IndexedDB database of the last lap finished per circuit and car, for the lap board's Analysis view (ghost-store.ts) */
+export const LATEST_LAP_DATABASE = "librecorsa-latest-laps";
 
 export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
   { key: "bugesera.settings.v1", holds: "every setting" },
@@ -74,17 +76,19 @@ export async function clearSavedData(): Promise<void> {
   if (getAccountState().phase === "signed-in") {
     await Promise.race([accountActions.signOut(), new Promise<void>((resolve) => setTimeout(resolve, 4000))]);
   }
-  // The database first (it is asynchronous); the keys go right before the reload, so nothing can save them back
-  await new Promise<void>((resolve) => {
-    try {
-      const req = indexedDB.deleteDatabase(LAP_DATABASE);
-      req.onsuccess = req.onerror = () => resolve();
-      // Another tab holding the database open: the delete waits for it, the page should not
-      req.onblocked = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
+  // The databases first (they are asynchronous); the keys go right before the reload, so nothing can save them back
+  for (const name of [LAP_DATABASE, LATEST_LAP_DATABASE]) {
+    await new Promise<void>((resolve) => {
+      try {
+        const req = indexedDB.deleteDatabase(name);
+        req.onsuccess = req.onerror = () => resolve();
+        // Another tab holding the database open: the delete waits for it, the page should not
+        req.onblocked = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  }
   try {
     for (const store of [localStorage, sessionStorage]) {
       const doomed: string[] = [];

@@ -469,7 +469,8 @@ export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, bo
   notifyBestLapsChanged();
 }
 
-const LATEST_DB_NAME = "lc_latest_lap_v1";
+/** The last lap finished per circuit and car (the lap board's Analysis view); Settings' clear deletes it (storage.ts) */
+const LATEST_DB_NAME = "librecorsa-latest-laps";
 const LATEST_STORE = "latest";
 
 function openLatestDb(): Promise<IDBDatabase | null> {
