@@ -825,7 +825,7 @@ def find_steering_wheel(parts, eyes):
 
 
 def body_plan(pts, mid_z):
-    """The body's outline at barrier height, as scripts/measure-car-plans.ts measures it: points 8 cm to 0.8 m above the
+    """The body's outline at barrier height, as scripts/cars/measure-car-plans.ts measures it: points 8 cm to 0.8 m above the
     body's floor, folded onto the right half and hulled, from the nose round to the tail, simplified to within 5 cm, as
     [half width, z from the axles' midpoint]"""
     floor = pts[:, 1].min()

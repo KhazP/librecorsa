@@ -34,7 +34,7 @@ that XML names (Graphic > 3d description, an .ac or .acc).
   an install finds them on its own.
 - --needs-json: only lists the textures the circuit's folder lacks, so the importer fetches just those from the base
   data.
-- --geometry-json: also writes what was built, for scripts/verify-sd-track.ts: the lap's length, the centreline, the
+- --geometry-json: also writes what was built, for scripts/verify/verify-sd-track.ts: the lap's length, the centreline, the
   surfaces by role, the pit lane, and how far the AC3D road lies from the generated one.
 
 Closed circuits only, as build_blender_track.py: Speed Dreams' own tracks all are.
@@ -1279,7 +1279,7 @@ def main():
     ap.add_argument('--out-glb', required=True)
     ap.add_argument('--out-settings', required=True)
     ap.add_argument('--sd-data', help="Speed Dreams' base data (data/tracks/surfaces.xml, data/textures/)")
-    ap.add_argument('--geometry-json', help='also write what was built (scripts/verify-sd-track.ts reads it)')
+    ap.add_argument('--geometry-json', help='also write what was built (scripts/verify/verify-sd-track.ts reads it)')
     ap.add_argument('--no-scenery', action='store_true', help='leave the AC3D model out (only the generated surfaces)')
     ap.add_argument('--needs-json', help="only list the textures the circuit's folder lacks (to fetch from the base "
                                          'data), as {"textures": [...]}, and write nothing else')

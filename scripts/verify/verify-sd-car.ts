@@ -4,22 +4,22 @@
  * sound bank the converters write. Cars downloaded with `--fetch` (scripts/mods/.cache/speed-dreams/) are checked too;
  * those checks are skipped when the cache is empty, and the converter runs when uv or ffmpeg is missing.
  *
- *   npx tsx scripts/verify-sd-car.ts
+ *   npx tsx scripts/verify/verify-sd-car.ts
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { SdParams, sdUnitToSI } from "./lib/sd-params";
-import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdTyreCurve, sdTyreMu } from "./cars/sd-car-physics";
-import { findCarLicence, readLicenceEntry, readLicenceText, shareable } from "./cars/sd-licence";
-import { readPins, SD_CACHE_DIR } from "./cars/sd-fetch";
-import { fitAero, withAero } from "./mods/lib/aero-fit";
-import { driveSanity } from "./mods/lib/car-sanity";
-import { modSimProfile, MOD_PHYSICS_FORMAT } from "../src/lib/mods/mod-physics";
-import { VEHICLE_MODELS } from "../src/lib/cars/vehicle-models";
-import type { VehicleModelId } from "../src/types/f1";
+import { SdParams, sdUnitToSI } from "../lib/sd-params";
+import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
+import { findCarLicence, readLicenceEntry, readLicenceText, shareable } from "../cars/sd-licence";
+import { readPins, SD_CACHE_DIR } from "../cars/sd-fetch";
+import { fitAero, withAero } from "../mods/lib/aero-fit";
+import { driveSanity } from "../mods/lib/car-sanity";
+import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../src/lib/mods/mod-physics";
+import { VEHICLE_MODELS } from "../../src/lib/cars/vehicle-models";
+import type { VehicleModelId } from "../../src/types/f1";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
