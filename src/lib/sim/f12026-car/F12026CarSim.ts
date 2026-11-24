@@ -64,11 +64,11 @@ import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import {
   FLYING_SLOT_SPACING_M,
-  flyingExitSpeedMs,
   flyingStartPoint,
+  flyingStartSpeedMs,
   rollingStartSlots,
   rollingStartSpeedMs,
-  START_HANDS_OFF_S,
+  startHandsOffRunM,
   type SimulatorCar,
   type SimulatorWheel,
   type StartFootprint,
@@ -86,7 +86,7 @@ import {
   type PerformanceModeName,
   type TyresCompoundData,
 } from './F12026CarConfig';
-import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './TrackColliderQuery';
+import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind, type WallQuery } from './TrackColliderQuery';
 import { trackColliders } from '../track-colliders';
 import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
@@ -1305,6 +1305,8 @@ export class F12026CarSim implements SimulatorCar {
     const wrapped = ((s % L) + L) % L;
     return S[Math.floor((wrapped / L) * n) % n].curvature;
   };
+  /** The track's barrier colliders once attached (`attachTrackRoot`) */
+  private walls: WallQuery | null = null;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
   private s = 0;
@@ -1545,6 +1547,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.setWalls(walls);
     this.onColliders = true;
     this.collider = ground;
+    this.walls = walls.segments.length > 0 ? walls : null;
     return true;
   }
 
@@ -2093,19 +2096,34 @@ export class F12026CarSim implements SimulatorCar {
       const [lo, hi] = rangeAt(s);
       const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
       const ownAt = (at: number) => prof[Math.floor(wrap(at, L) / (L / prof.length)) % prof.length];
+      const maxStartMs = Math.min(75, this.profile.speedProfile?.vMaxMs ?? 75);
       const spotSpeed = (at: number) => {
         const sample = this.track.getSampleAtDistance(at);
-        return Math.min(75, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
+        return Math.min(maxStartMs, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
       };
       const cornerExit =
-        start.cornerS === null ? 0 : 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6);
-      let speed = spotSpeed(s);
-      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
-      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, wrap(s - start.cornerS, L)));
+        start.cornerS === null
+          ? 0
+          : Math.min(maxStartMs, 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6));
+      const speed =
+        fieldSize !== undefined
+          ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
+          : flyingStartSpeedMs(this.track, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
-        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
-        // first second (`startPose`)
-        const pose = startPose(this.track, this.collider, s, lineAt(s), lineAt, lo, hi, this.startFootprint(), speed * START_HANDS_OFF_S);
+        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt and
+        // clear of barriers for its first second (`startPose`)
+        const pose = startPose(
+          this.track,
+          this.collider,
+          s,
+          lineAt(s),
+          lineAt,
+          lo,
+          hi,
+          this.startFootprint(),
+          startHandsOffRunM(speed),
+          this.walls
+        );
         this.progressHintS = this.poseHintS = s;
         this.resetVehicle(pose.x, pose.z, pose.yawRad, speed);
       } else {
