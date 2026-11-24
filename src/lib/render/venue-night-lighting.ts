@@ -61,8 +61,8 @@ export interface VenueNightLighting {
   dispose(): void;
 }
 
-/** Share of the key light left away from the circuit, per channel: a trace of cool light, as of the moon */
-const MOONLIGHT_FLOOR = "vec3( 0.013, 0.021, 0.04 )";
+/** Share of the key light left away from the circuit, per channel: a readable cool moonlight floor */
+const MOONLIGHT_FLOOR = "vec3( 0.028, 0.044, 0.078 )";
 /** How far beyond the road's edge the floodlight reaches before it has faded out (m) */
 const FLOOD_REACH_M = 42;
 /** A mast's own pool of light on the ground (m) */

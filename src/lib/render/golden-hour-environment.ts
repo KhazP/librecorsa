@@ -108,6 +108,8 @@ const GROUND_SKY_LIGHT = 0.6;
 const EXPOSURE = 1.15;
 /** Display-referred grade after AgX (DisplayGradeEffect): contrast and saturation gain */
 const GRADE_CONTRAST = 0.12;
+/** Reduced display contrast at full night so dark road edges and distant kerbs do not crush to pure #000000 */
+const GRADE_CONTRAST_NIGHT = 0.03;
 const GRADE_SATURATION = 0.18;
 const SKY_TURBIDITY = 2.8;
 const SKY_RAYLEIGH = 1.8;
@@ -233,6 +235,11 @@ export interface PostFx {
    * off. A colour it cannot read keeps the last one.
    */
   setEdgeGlow(color: string | null): void;
+  /**
+   * Blends the display grade's shadow contrast smoothly for night driving (0 = full daytime contrast, 1 = night
+   * shadow-preserving contrast so dark asphalt/kerbs are not crushed to pure black).
+   */
+  setNightShare(share: number): void;
   dispose(): void;
 }
 
@@ -382,17 +389,43 @@ function colorCurve(keys: readonly Key[], x: number, out: THREE.Color): THREE.Co
 // Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg, and extends smoothly into
 // moonlit night below -3 deg while keeping dawn..noon curves identical.
 const SUN_COLOR_KEYS: readonly Key[] = [[-18, 0x7692c8], [-6, 0x8088b2], [-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
-const SUN_INTENSITY_KEYS: readonly Key[] = [[-18, 0.42], [-6, 0.1], [-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
-// The sky's prefiltered environment already lights everything from the sky dome; this flat fill on top of it only
-// washes out shading and reflections (cars read as matte plastic), so it is kept to a trace
-const FILL_INTENSITY_KEYS: readonly Key[] = [[-18, 0.04], [-8, 0.04], [-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
-const FOG_COLOR_KEYS: readonly Key[] = [[-18, 0x060a14], [-8, 0x161a2c], [-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
-const ENV_INTENSITY_KEYS: readonly Key[] = [[-18, 0.16], [-8, 0.18], [-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
-const EXPOSURE_KEYS: readonly Key[] = [[-18, 1.65], [-8, 1.58], [-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
-const NIGHT_FILL_SKY = 0x182542;
+const SUN_INTENSITY_KEYS: readonly Key[] = [[-18, 0.72], [-6, 0.35], [-3, 0.18], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
+// The sky's prefiltered environment already lights everything from the sky dome; by day this fill stays a trace,
+// while at night a cool moonlit ambient floor keeps unlit track edges, kerbs and barriers readable (never pitch black).
+const FILL_INTENSITY_KEYS: readonly Key[] = [[-18, 0.22], [-8, 0.20], [-3, 0.15], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
+const FOG_COLOR_KEYS: readonly Key[] = [[-18, 0x0b1224], [-8, 0x1a2138], [-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
+const ENV_INTENSITY_KEYS: readonly Key[] = [[-18, 0.36], [-8, 0.36], [-3, 0.42], [4, 0.7], [14, 1], [70, 1.1]];
+const EXPOSURE_KEYS: readonly Key[] = [[-18, 1.85], [-8, 1.72], [-3, 1.55], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
+const NIGHT_FILL_SKY = 0x263a62;
 /** Fill added on a fully overcast night */
-const NIGHT_OVERCAST_FILL = 0.1;
-const NIGHT_FILL_GROUND = 0x070a10;
+const NIGHT_OVERCAST_FILL = 0.18;
+const NIGHT_FILL_GROUND = 0x121824;
+
+/** Evaluates the core night/day lighting scalars at `(elevationDeg, cloud, rain)` for headless lighting checks */
+export function evaluateSkyLighting(
+  elevationDeg: number,
+  cloud: number,
+  rain: number
+): {
+  nightShare: number;
+  keyIntensity: number;
+  fillIntensity: number;
+  environmentIntensity: number;
+  exposure: number;
+  gradeContrast: number;
+} {
+  const cl = THREE.MathUtils.clamp(cloud, 0, 1);
+  const rn = THREE.MathUtils.clamp(rain, 0, 1);
+  const nightShare = nightShareOf(elevationDeg);
+  return {
+    nightShare,
+    keyIntensity: curve(SUN_INTENSITY_KEYS, elevationDeg) * (1 - (0.88 - 0.38 * nightShare) * Math.pow(cl, 1.5)),
+    fillIntensity: curve(FILL_INTENSITY_KEYS, elevationDeg) * (1 + 1.1 * cl) + NIGHT_OVERCAST_FILL * nightShare * cl,
+    environmentIntensity: curve(ENV_INTENSITY_KEYS, elevationDeg) * (1 - 0.25 * rn),
+    exposure: curve(EXPOSURE_KEYS, elevationDeg) * (1 + 0.3 * cl),
+    gradeContrast: THREE.MathUtils.lerp(GRADE_CONTRAST, GRADE_CONTRAST_NIGHT, nightShare),
+  };
+}
 const OVERCAST_SUN = 0xe6e8ea;
 const OVERCAST_FOG = 0xb2b6ba;
 const RAIN_FOG = 0x8c9297;
@@ -704,8 +737,8 @@ export function createGoldenHourEnvironment(
     skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
     sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
     colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud * (1 - nightShare));
-    // Cloud blocks most direct sun; an overcast sky still leaves faint, soft shadows
-    sunLight.intensity = curve(SUN_INTENSITY_KEYS, e) * (1 - 0.88 * Math.pow(cloud, 1.5));
+    // Cloud blocks most direct sun by day; at night clouds still scatter moonlight/skyglow rather than extinguishing it
+    sunLight.intensity = curve(SUN_INTENSITY_KEYS, e) * (1 - (0.88 - 0.38 * nightShare) * Math.pow(cloud, 1.5));
 
     // Fill: an overcast sky lights everything from above; at night it deepens to cool indigo
     fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud).lerp(tint.setHex(NIGHT_FILL_SKY), nightShare);
@@ -917,6 +950,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     (this.uniforms.get("uEdgeGlow") as THREE.Uniform<number>).value = level;
     if (color) (this.uniforms.get("uEdgeColor") as THREE.Uniform<THREE.Vector3>).value.copy(color);
   }
+
+  setContrast(contrast: number): void {
+    (this.uniforms.get("uContrast") as THREE.Uniform<number>).value = contrast;
+  }
 }
 
 /** The page's breathing: 55 % to full and back over 1.8 s, eased at each end like CSS's ease-in-out */
@@ -996,11 +1033,12 @@ export function createPostFx(
   const rcasEffects: RcasEffect[] = [];
   const grades: DisplayGradeEffect[] = [];
   let sharpnessNow = 0;
+  let contrastNow = GRADE_CONTRAST;
   let edgeGlowColor: THREE.Vector3 | null = null;
   const toneMapAndGrade = () => {
     const rcas = new RcasEffect(sharpnessNow);
     rcasEffects.push(rcas);
-    const grade = new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION);
+    const grade = new DisplayGradeEffect(contrastNow, GRADE_SATURATION);
     if (edgeGlowSinceMs !== null) {
       grade.setEdgeGlow(edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs), edgeGlowColor ?? undefined);
     }
@@ -1130,6 +1168,14 @@ export function createPostFx(
       for (const grade of grades) grade.setEdgeGlow(1, rgb ?? undefined);
       edgeGlowSinceMs = performance.now();
       edgeGlowSteady = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    },
+
+    setNightShare(share: number): void {
+      const k = THREE.MathUtils.clamp(share, 0, 1);
+      const next = THREE.MathUtils.lerp(GRADE_CONTRAST, GRADE_CONTRAST_NIGHT, k);
+      if (Math.abs(next - contrastNow) < 1e-4) return;
+      contrastNow = next;
+      for (const grade of grades) grade.setContrast(contrastNow);
     },
 
     dispose(): void {

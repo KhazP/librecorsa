@@ -7,11 +7,11 @@
  * Cost: a few ALU ops per sky pixel, and a hash for the stars only where a star cell could hold one.
  */
 
-/** Linear scene radiance of the night sky at the horizon and overhead (before exposure, which is ~1.6 at night) */
-export const NIGHT_SKY_HORIZON = [0.02, 0.026, 0.045] as const;
-export const NIGHT_SKY_ZENITH = [0.0045, 0.0062, 0.015] as const;
+/** Linear scene radiance of the night sky at the horizon and overhead (before exposure, which is ~1.85 at night) */
+export const NIGHT_SKY_HORIZON = [0.028, 0.038, 0.064] as const;
+export const NIGHT_SKY_ZENITH = [0.007, 0.01, 0.024] as const;
 /** A night cloud's underside, lit by the glow of the ground: greyer than the clear sky, as bright as its horizon */
-export const NIGHT_CLOUD_GLOW = [0.019, 0.021, 0.028] as const;
+export const NIGHT_CLOUD_GLOW = [0.026, 0.03, 0.042] as const;
 
 const vec3 = (c: readonly number[]) => `vec3(${c.map((v) => v.toFixed(4)).join(", ")})`;
 

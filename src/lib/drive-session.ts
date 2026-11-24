@@ -1576,14 +1576,16 @@ export class DriveSession {
     const initialHeadlightConditions = canSessionGetDark(getTrackEnv().weather.conditions)
       ? getTrackEnv().weather.conditions
       : settings.conditions;
+    let headlightMode: HeadlightMode = "auto";
     // (a car without headlights, an F1 car, has no beam to build)
     const desiredHeadlightSpots = () =>
-      carHasHeadlights(carRigCar) ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality) : 0;
+      carHasHeadlights(carRigCar)
+        ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality, headlightMode === "on")
+        : 0;
     let carHeadlights = new CarHeadlights(carIdNow, {
       spotCount: headlightSpotCountFor(initialHeadlightConditions, settings.graphics.quality),
     });
     carHeadlights.attach(carRig.chassisGroup);
-    let headlightMode: HeadlightMode = "auto";
     const syncHeadlightSpots = () => {
       const wanted = desiredHeadlightSpots();
       if (wanted === carHeadlights.spotCount) return;
@@ -2257,6 +2259,7 @@ export class DriveSession {
         case "headlights": {
           const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, getTrackEnv().weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
+          syncHeadlightSpots();
           lastWeatherHudMs = -Infinity;
           break;
         }
@@ -4333,7 +4336,10 @@ export class DriveSession {
         skyConditions.windVxMs = wx.windVxMs;
         skyConditions.windVzMs = wx.windVzMs;
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
-          if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) {
+          if (
+            cloudConditions &&
+            (cloudConditions.timeOfDay !== wx.conditions.timeOfDay || cloudConditions.weather !== wx.conditions.weather)
+          ) {
             headlightMode = "auto";
             lastWeatherHudMs = -Infinity;
           }
@@ -4347,7 +4353,9 @@ export class DriveSession {
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
-        venueNight?.setNight(nightShareOf(skyConditions.elevationDeg));
+        const nightShare = nightShareOf(skyConditions.elevationDeg);
+        venueNight?.setNight(nightShare);
+        postFx.setNightShare(nightShare);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
