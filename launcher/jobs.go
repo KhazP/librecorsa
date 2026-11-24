@@ -230,7 +230,10 @@ var (
 	errBadImportArg = errors.New("not a folder in the import folder")
 )
 
-// startConvert converts one folder of the import folder (named as listed) into a package in the mods folder
+// startConvert converts one folder of the import folder (named as listed) into a package in the mods folder. The
+// folder is checked here, then copied (its plain files and folders only, through os.Root) into a folder of the
+// launcher's own that no one else can write to, and the copy is converted: what is in the import folder can change
+// while the converter runs, minutes later, without reaching it.
 func (js *jobs) startConvert(name string) (*jobStatus, error) {
 	if js.conv == nil {
 		return nil, errNoConverter
@@ -257,8 +260,25 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 	if !js.tc.ready(js.conv) {
 		return nil, errNotReady
 	}
-	source := filepath.Join(js.importDir, filepath.FromSlash(entry.Source))
 	return js.start("convert", name, entry.Kind, func(ctx context.Context, j *job) error {
+		js.update(j, func(s *jobStatus) { s.Step = "copy" })
+		staged, cleanup, err := js.stageImport(ctx, name)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		// Recognised again in the copy, which is what is converted
+		stagedRoot, err := os.OpenRoot(staged)
+		if err != nil {
+			return err
+		}
+		again := detectImport(stagedRoot, name)
+		stagedRoot.Close()
+		if again.Kind != entry.Kind || again.Source == "" {
+			return fmt.Errorf("%s changed while it was copied: convert it again", name)
+		}
+		source := filepath.Join(staged, filepath.FromSlash(again.Source))
+
 		js.update(j, func(s *jobStatus) { s.Step = "convert" })
 		// What a stopped conversion left, before and after
 		js.conv.clearWork()
@@ -304,6 +324,109 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 			return errors.New("the package has problems: the game won't load what they touch")
 		}
 		return nil
+	})
+}
+
+// stagingDir holds the copies of import folders being converted, in the toolchain's folder (this user's alone, and
+// on a disk with room: a circuit can be gigabytes, more than a temporary folder held in memory may take)
+func (js *jobs) stagingDir() string { return filepath.Join(js.tc.dir, "staging") }
+
+// stageImport copies import/<name> into a new private folder, as <that folder>/<name>, and returns the folder and
+// what removes it. What an earlier launcher left there (one that stopped mid-copy) goes first.
+func (js *jobs) stageImport(ctx context.Context, name string) (string, func(), error) {
+	if err := js.tc.makeDir(); err != nil {
+		return "", nil, err
+	}
+	base := js.stagingDir()
+	os.RemoveAll(base)
+	if err := os.Mkdir(base, 0o700); err != nil {
+		return "", nil, err
+	}
+	// MkdirTemp makes it 0700
+	dir, err := os.MkdirTemp(base, "import-*")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(dir) }
+	if err := copyImportTree(ctx, js.importDir, name, dir); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	return dir, cleanup, nil
+}
+
+// errChangedWhileCopied is a file of the import folder that was replaced while it was copied
+var errChangedWhileCopied = errors.New("changed while it was copied: convert it again")
+
+// copyImportTree copies importDir/name into destDir/name: its folders and regular files only, each read through
+// os.Root (nothing outside the folder can be reached, whatever is swapped in) and refused when it isn't the file the
+// walk found (a file replaced by a link meanwhile). A link, a device or a pipe stops the copy, as checkImportTree does.
+func copyImportTree(ctx context.Context, importDir, name, destDir string) error {
+	src, err := os.OpenRoot(importDir)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	sub, err := src.OpenRoot(name)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+	dst, err := os.OpenRoot(destDir)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if err := dst.Mkdir(name, 0o700); err != nil {
+		return err
+	}
+	count := 0
+	buf := make([]byte, 1<<20)
+	return fs.WalkDir(sub.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		count++
+		if count > maxImportEntries {
+			return fmt.Errorf("%s holds more than %d files and folders", name, maxImportEntries)
+		}
+		if p == "." {
+			return nil
+		}
+		to := name + "/" + p
+		switch {
+		case d.Type()&fs.ModeSymlink != 0:
+			return fmt.Errorf("%s %w (%s): copy the files themselves", name, errLinkInImport, p)
+		case d.IsDir():
+			return dst.Mkdir(to, 0o700)
+		case !d.Type().IsRegular():
+			return fmt.Errorf("%s holds %s, which is not a file", name, p)
+		}
+		walked, err := sub.Lstat(p)
+		if err != nil || !walked.Mode().IsRegular() {
+			return fmt.Errorf("%s: %s %w", name, p, errChangedWhileCopied)
+		}
+		in, err := sub.Open(p)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		opened, err := in.Stat()
+		if err != nil || !opened.Mode().IsRegular() || !os.SameFile(walked, opened) {
+			return fmt.Errorf("%s: %s %w", name, p, errChangedWhileCopied)
+		}
+		out, err := dst.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		_, err = io.CopyBuffer(out, in, buf)
+		if cerr := out.Close(); err == nil {
+			err = cerr
+		}
+		return err
 	})
 }
 

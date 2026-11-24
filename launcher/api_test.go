@@ -50,6 +50,7 @@ func fakeModTool(args []string) int {
 	kind, source, mods := args[1], args[2], args[4]
 	cwd, _ := os.Getwd()
 	fmt.Printf("importing %s from %s in %s\n", kind, filepath.Base(source), filepath.Base(cwd))
+	fmt.Printf("source path %s\n", source)
 	fmt.Printf("NODE_OPTIONS %s\n", map[bool]string{true: "set", false: "unset"}[os.Getenv("NODE_OPTIONS") != ""])
 	fmt.Printf("PATH starts with %s\n", strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0])
 	name := filepath.Base(filepath.Dir(source))
@@ -367,6 +368,19 @@ func TestConvert(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(base, "mods", "tests.my-circuit", "mod.json")); err != nil {
 		t.Error("the package isn't in the mods folder")
+	}
+	// The importer was given a copy, in the toolchain's staging folder, which is gone once the job ends
+	var source string
+	for _, l := range job.Log {
+		if p, ok := strings.CutPrefix(l, "source path "); ok {
+			source = p
+		}
+	}
+	if !strings.HasPrefix(source, s.imports.jobs.stagingDir()+string(filepath.Separator)) || filepath.Base(source) != "my_circuit.glb" {
+		t.Errorf("converted %q, not a copy in %s", source, s.imports.jobs.stagingDir())
+	}
+	if _, err := os.Stat(source); !os.IsNotExist(err) {
+		t.Errorf("the copy is left: %v", err)
 	}
 	// The game lists it on its next start
 	if !strings.Contains(get(s, "/mods/_index.json").Body.String(), "tests.my-circuit") {
