@@ -51,6 +51,7 @@ interface LapSummaryProps {
   summary: LapSummaryData;
   onClose: () => void;
   onSaveGhost?: () => void;
+  onAnalyze?: () => void;
   /** Uploads the lap by hand (automatic posting off, or a retry); without it the card only shows how the upload went */
   onSubmit?: () => void;
   /** `waiting`: the board couldn't be reached, and the lap goes up by itself once it can */
@@ -485,6 +486,7 @@ const LapCard: React.FC<
   onClose,
   onCollapse,
   onSaveGhost,
+  onAnalyze,
   onSubmit,
   submitState = "idle",
   submitRank = null,
@@ -659,6 +661,11 @@ const LapCard: React.FC<
             {submitState === "sent" ? sentLabel : submitState === "sending" ? words.posting : submitState === "waiting" ? (submitError ?? "") : ""}
           </span>
           {onSubmit && notRanked && submitState !== "sent" ? <span className={`me-auto text-[12px] ${skinCss.inkDim}`}>{notRanked}</span> : null}
+          {onAnalyze ? (
+            <SkinButton onClick={onAnalyze} className="h-8 px-3 text-[12px] font-semibold">
+              Analyze lap
+            </SkinButton>
+          ) : null}
           {onSaveGhost ? (
             <SkinButton onClick={onSaveGhost} className="h-8 px-3 text-[12px] font-semibold">
               {words.saveGhost}
@@ -768,6 +775,11 @@ const LapCard: React.FC<
         </span>
         {/* Why the lap cannot go online, in words beside the greyed button */}
         {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint me-auto">{notRanked}</span> : null}
+        {onAnalyze ? (
+          <Button size="sm" variant="secondary" onClick={onAnalyze}>
+            Analyze lap
+          </Button>
+        ) : null}
         {onSaveGhost ? (
           <Button size="sm" variant="ghost" onClick={onSaveGhost}>
             {words.saveGhost}
