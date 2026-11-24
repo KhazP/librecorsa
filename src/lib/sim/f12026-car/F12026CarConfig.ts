@@ -236,6 +236,26 @@ export function turboBoostAsked(turbo: TurboData, rpm: number, plate: number): n
   return turbo.maxBoost * Math.min(1, Math.max(0, (plate * rpm) / turbo.referenceRpm)) ** turbo.gamma;
 }
 
+/**
+ * Motor Generator Unit – Heat (2014–2025 F1 Technical Regulations, Art. 5.3.2 & 5.3.4): coaxial with the
+ * turbocharger shaft (up to 125 000 rpm). Motors the compressor to eliminate turbo lag (while the active mode deploys
+ * and the store has charge), harvests unlimited electrical energy from exhaust enthalpy, transfers power directly to
+ * the MGU-K without counting against the 4 MJ/lap ES → MGU-K cap, and charges the store with any surplus without
+ * counting against the 2 MJ/lap MGU-K → ES cap.
+ */
+export interface MguHData {
+  /** Peak continuous electrical harvest from the exhaust turbine (W) */
+  maxHarvestW: number;
+  /** Fraction of `maxHarvestW` harvested against engine speed (rpm → 0..1) */
+  harvestCurve: LutPoints;
+  /** Peak electrical draw from the store to spool / hold the turbo (W) */
+  motorMaxW: number;
+  /** Turbo spool-up time constant while MGU-H anti-lag motoring is active (s) */
+  spoolUpS: number;
+  /** Minimum fraction of steady full-load boost held off-throttle at race revs (0..1) */
+  liftFloorBoostFraction: number;
+}
+
 export interface ERSData {
   /** Max MGU-K deploy torque at the crank (rpm → Nm) */
   torqueLut: LutPoints;
@@ -270,13 +290,19 @@ export interface ERSData {
   /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
   /**
-   * The rules the energy runs under (`ers-2026.ts`). 'f1-2026': the 2026 F1 car's, by the FIA's numbers: the ERS-K's
-   * power against road speed, with Overtake or not, in place of `ERS_MAX_DEPLOY`; no deploy limit a lap
-   * (`deployPerLapJ` is not read), the lap's recharge limit `harvestPerLapJ` plus Overtake's extra; the cuts with the
-   * driver flat out at the rules' rates; and each mode's `energyManagement` in place of its `socFloor`. Absent: the
-   * mode tables as they stand
+   * The rules the energy runs under:
+   * - `'f1-2026'` (`ers-2026.ts`): the 2026 F1 car's FIA numbers — ERS-K power vs road speed, no per-lap deploy limit,
+   *   `harvestPerLapJ` + Overtake extra, cuts at the rules' rates, and each mode's `energyManagement`.
+   * - `'f1-2025'` (FIA 2025 Art. 5.3.2–5.3.4): 120 kW / 200 Nm MGU-K, 4 MJ/lap ES → MGU-K, 2 MJ/lap MGU-K → ES,
+   *   unlimited MGU-H exhaust harvest + unlimited direct MGU-H → MGU-K transfer bypassing the 4 MJ ES cap, and
+   *   standing-start MGU-K lockout until `standingStartLockoutKmh` (100 km/h).
+   * - Absent: the mode tables as they stand.
    */
-  regulations?: 'f1-2026';
+  regulations?: 'f1-2026' | 'f1-2025';
+  /** Coaxial exhaust-turbine Motor Generator Unit – Heat (`regulations: 'f1-2025'`) */
+  mguH?: MguHData;
+  /** Standing-start MGU-K deploy lockout speed (km/h, FIA 2025 Art. 5.3.2: 100 km/h); absent: no lockout */
+  standingStartLockoutKmh?: number;
   /**
    * The motor's torque demand may not vary faster than `maxHz` below `belowKmh` with the driver on the throttle (over
    * 10 %), off the brake and out of a shift, the drive torque positive (the LMDh regulations, Art. 5.5.2): the

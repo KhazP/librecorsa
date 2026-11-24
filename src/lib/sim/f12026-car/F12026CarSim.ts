@@ -97,6 +97,7 @@ import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
 import { coneLaneRangeAt } from '../cone-lanes';
 import { keptOnGrid } from '../race-start';
+import { Lut, type LutPoints } from '../lut';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -276,11 +277,13 @@ export interface CarSimProfile {
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
    */
   understeerRadPerMs2?: number;
-  /** Fuel flow at full throttle (kg/s) where `fuelLPerS1000Rpm` is absent; default 0.0278, an F1 car's */
+  /** Fuel flow at full throttle (kg/s) where `fuelLPerS1000Rpm` and `fuelFlowCurveKgS` are absent; default 0.0278, an F1 car's */
   fuelFlowKgS?: number;
+  /** Optional full-throttle fuel mass flow curve against engine speed (rpm → kg/s, e.g. FIA 2025 Art. 5.2.3) */
+  fuelFlowCurveKgS?: LutPoints;
   /**
    * Fuel flow that follows the engine: litres a second per 1000 rpm at full throttle, so the flow is
-   * rpm / 1000 × this × throttle (× `FUEL_KG_PER_L`). Absent: the constant `fuelFlowKgS` × throttle
+   * rpm / 1000 × this × throttle (× `FUEL_KG_PER_L`). Absent: `fuelFlowCurveKgS` or the constant `fuelFlowKgS` × throttle
    */
   fuelLPerS1000Rpm?: number;
   /** The TC / ABS dial positions of each driver-assist preset */
@@ -1225,6 +1228,7 @@ export class F12026CarSim implements SimulatorCar {
   private energyTimeTrial = false;
 
   private readonly track: BuiltTrackData;
+  private readonly fuelFlowCurveLut: Lut | null;
   private trackRoot: THREE.Object3D | null = null;
   private readonly baseWingDeg: number[];
   /** Garage: the profile's own suspension and ride heights, the wing trim (deg) and the setup in force */
@@ -1357,6 +1361,7 @@ export class F12026CarSim implements SimulatorCar {
   ) {
     this.track = track;
     this.profile = profile;
+    this.fuelFlowCurveLut = profile.fuelFlowCurveKgS ? new Lut(profile.fuelFlowCurveKgS) : null;
     this.line = profile.racingLine ?? 'f1';
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
@@ -2268,7 +2273,8 @@ export class F12026CarSim implements SimulatorCar {
       this.pushActive = boost || (racing && (this.overtakeInUse || aiOvertake || autoOt));
     } else {
       if (!overtakeOk) this.boostRemainingS = 0;
-      const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
+      const canPush = v.ersEnergyJ > 0 || (this.config.ers.regulations === 'f1-2025' && v.mguHPowerW > 0);
+      const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && canPush;
       this.pushActive = push;
       v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
       v.ersOvertake = push;
@@ -2337,7 +2343,13 @@ export class F12026CarSim implements SimulatorCar {
       if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
         const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
         const perRpm = this.profile.fuelLPerS1000Rpm;
-        const baseFlowKgS = perRpm !== undefined ? (v.rpm / 1000) * perRpm * FUEL_KG_PER_L : (this.profile.fuelFlowKgS ?? 0.0278);
+        const flowLut = this.fuelFlowCurveLut;
+        const baseFlowKgS =
+          perRpm !== undefined
+            ? (v.rpm / 1000) * perRpm * FUEL_KG_PER_L
+            : flowLut
+              ? flowLut.evaluate(v.rpm)
+              : (this.profile.fuelFlowKgS ?? 0.0278);
         this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * CONTROL_DT_S);
         v.setFuelMass(this.fuelKg);
       }
