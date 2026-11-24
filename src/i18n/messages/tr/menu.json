@@ -726,7 +726,6 @@
     "attemptBadge": "Deneme {attempt}/{max}",
     "seasonNumber": "Sezon {season}",
     "startSeason": "Sezonu başlat",
-    "testDay": "Test günü",
     "startSeasonTitle": "Bu sezon başlasın mı?",
     "startSeasonBody": "Sezon başlayınca aracın, takvim ve tekrar hakların kilitlenir. Ayaklar arasında yarış ayarlarını yine de değiştirebilirsin.",
     "startSeasonConfirm": "Sezonu başlat",

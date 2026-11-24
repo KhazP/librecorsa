@@ -726,7 +726,6 @@
     "attemptBadge": "المحاولة {attempt} من {max}",
     "seasonNumber": "الموسم {season}",
     "startSeason": "بدء الموسم",
-    "testDay": "يوم الاختبار",
     "startSeasonTitle": "هل تريد بدء هذا الموسم؟",
     "startSeasonBody": "تُقفل السيارة والروزنامة وفرص الإعادة عند بدء الموسم. ويمكنك تغيير إعدادات السباق بين الجولات.",
     "startSeasonConfirm": "بدء الموسم",

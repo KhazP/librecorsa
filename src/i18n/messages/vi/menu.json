@@ -726,7 +726,6 @@
     "attemptBadge": "Lần thử {attempt}/{max}",
     "seasonNumber": "Mùa {season}",
     "startSeason": "Bắt đầu mùa giải",
-    "testDay": "Ngày chạy thử",
     "startSeasonTitle": "Bắt đầu mùa giải này?",
     "startSeasonBody": "Xe, lịch đua và lượt đua lại sẽ bị khóa khi mùa giải bắt đầu. Bạn vẫn có thể đổi cài đặt cuộc đua giữa các chặng.",
     "startSeasonConfirm": "Bắt đầu mùa giải",

@@ -726,7 +726,6 @@
     "attemptBadge": "Tentative {attempt} sur {max}",
     "seasonNumber": "Saison {season}",
     "startSeason": "Lancer la saison",
-    "testDay": "Journée d’essais",
     "startSeasonTitle": "Lancer cette saison ?",
     "startSeasonBody": "La voiture, le calendrier et les mulligans sont verrouillés dès le début de la saison. Vous pourrez toujours modifier les paramètres de course entre les manches.",
     "startSeasonConfirm": "Lancer la saison",

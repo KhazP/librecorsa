@@ -726,7 +726,6 @@
     "attemptBadge": "도전 {attempt}/{max}",
     "seasonNumber": "시즌 {season}",
     "startSeason": "시즌 시작",
-    "testDay": "테스트 데이",
     "startSeasonTitle": "이 시즌을 시작하시겠습니까?",
     "startSeasonBody": "시즌이 시작되면 차량, 캘린더, 멀리건이 고정됩니다. 라운드 사이에는 레이스 설정을 계속 변경할 수 있습니다.",
     "startSeasonConfirm": "시즌 시작",

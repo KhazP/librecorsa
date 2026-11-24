@@ -726,7 +726,6 @@
     "attemptBadge": "第 {attempt}/{max} 次挑戰",
     "seasonNumber": "第 {season} 賽季",
     "startSeason": "開始賽季",
-    "testDay": "測試日",
     "startSeasonTitle": "要開始這個賽季嗎？",
     "startSeasonBody": "賽季開始後，車輛、賽曆與重賽機會都會鎖定。各站之間仍可調整賽事設定。",
     "startSeasonConfirm": "開始賽季",
