@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Player nameplates"
     },
+    "preRaceShow": {
+      "label": "Career pre-race show",
+      "hint": "Before each career round: the circuit, the weather, the tyres and the grid, set to music. Space skips it, Enter starts."
+    },
     "boardWidget": {
       "label": "Lap board",
       "options": {

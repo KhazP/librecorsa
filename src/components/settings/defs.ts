@@ -708,6 +708,12 @@ export const playerNames = toggle({
   get label() { return rt("showPlayerNames.label"); },
   ...hud("showPlayerNames"),
 });
+export const preRaceShow = toggle({
+  id: "preRaceShow",
+  get label() { return rt("preRaceShow.label"); },
+  hint: () => rt("preRaceShow.hint"),
+  ...hud("preRaceShow"),
+});
 export const boardWidget = choice("segmented", {
   id: "boardWidget",
   get label() { return rt("boardWidget.label"); },

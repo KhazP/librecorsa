@@ -36,7 +36,9 @@ import {
   type CareerSave,
 } from "@/lib/career/career-state";
 import { seriesById, type CareerContent } from "@/lib/career/ladder";
-import { rivalAsDriver } from "@/lib/career/rivals";
+import { rivalAsDriver, rivalCode } from "@/lib/career/rivals";
+import type { ShowContext, ShowDriver } from "@/lib/show/show-context";
+import { SHOW_CUE_MARKERS } from "@/lib/audio/music-catalog";
 import type { DriveSession, SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import { getTrackInfo, LISTED_TRACKS, trackDefaultTimeOfDay } from "@/lib/track-registry";
@@ -224,7 +226,10 @@ export function useCareerDrive(d: CareerDriveDeps) {
       const ownCar = careerDrive?.ownCar ?? d.carIdRef.current;
       d.startSession({ kind: "practice" });
       d.changeCar(season.settings.car, { remember: false });
-      if (plan) d.applyConditions(roundConditions(run, season.seriesId, plan.roundIndex, trackDefaultTimeOfDay(plan.trackId) === "night"));
+      const conditions = plan ? roundConditions(run, season.seriesId, plan.roundIndex, trackDefaultTimeOfDay(plan.trackId) === "night") : null;
+      if (conditions) d.applyConditions(conditions);
+      // The pre-race show for a round (none for a test day): the series, the round, the field's names, the table
+      session.preRaceShow.arm(plan && conditions ? showContextOf(run, plan, profile, conditions) : null, SHOW_CUE_MARKERS);
       careerDrive = { runId, mode, plan, ownCar, lapsLed: 0, lastLap: 0, recorded: false };
       setDriving(true);
       setRoundRecorded(false);
@@ -369,6 +374,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
     careerDrive = null;
     setDriving(false);
     d.session?.setRaceOverride(null);
+    d.session?.preRaceShow.arm(null);
     if (cur && cur.ownCar !== d.carIdRef.current) d.changeCar(cur.ownCar, { remember: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.session, d.changeCar]);
@@ -494,5 +500,43 @@ export function useCareerDrive(d: CareerDriveDeps) {
     racing: driving && careerDrive?.mode === "race",
     /** Leaving the car while driving for the career: back to its screen */
     backToCareer,
+  };
+}
+
+/** What the pre-race show tells of a round: its series and number, the field by race code, the table before it */
+function showContextOf(
+  run: CareerRun,
+  plan: CareerRacePlan,
+  profile: PlayerSettings["profile"],
+  conditions: { weather: WeatherPresetId; timeOfDay: TimeOfDayId }
+): ShowContext {
+  const season = run.season!;
+  const drivers: Record<string, ShowDriver> = {};
+  for (const x of plan.drivers) {
+    const r = run.rivals.find((y) => y.id === x.id);
+    if (r) drivers[x.code] = { code: x.code, first: r.first, last: r.last, number: r.number, color: r.color, isPlayer: false };
+  }
+  // The player's own name, its last word as the surname (a name ending in a number, like a handle, stays whole)
+  const words = profile.name.trim().split(/\s+/).filter(Boolean);
+  const split = words.length > 1 && /\p{L}/u.test(words[words.length - 1]);
+  const last = split ? words[words.length - 1] : words.join(" ") || profile.code;
+  const first = split ? words.slice(0, -1).join(" ") : "";
+  drivers[profile.code] = { code: profile.code, first, last, number: null, color: profile.color, isPlayer: true };
+  const codeOf = (who: string) => {
+    if (who === "me") return profile.code;
+    const r = run.rivals.find((y) => y.id === who);
+    return r ? rivalCode(r, profile.code) : who;
+  };
+  return {
+    seriesId: season.seriesId,
+    roundIndex: plan.roundIndex,
+    rounds: season.rounds.length,
+    laps: plan.laps,
+    pitStops: plan.pitStops,
+    qualifyingMin: plan.qualifying,
+    drivers,
+    standings: seasonStandings(season).map((row, i) => ({ position: i + 1, code: codeOf(row.who), points: row.points, isPlayer: row.who === "me" })),
+    weather: conditions.weather,
+    timeOfDay: conditions.timeOfDay,
   };
 }
