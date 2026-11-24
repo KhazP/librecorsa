@@ -1,0 +1,330 @@
+name: Release Launcher
+
+# The offline launcher (launcher/, the desktop app that serves the game on this computer), packaged per platform with
+# the game's export inside (launcher/build.mjs --bundle), the Windows launcher signed through SignPath, and the update
+# manifest (launcher-latest.json) signed with the launcher's update key, which the launchers already installed check
+# before they update themselves (launcher/update.go).
+
+on:
+  push:
+    tags:
+      - "launcher-v*"
+  # A manual run builds and signs but never publishes a release, which is how SignPath test signing is checked.
+  workflow_dispatch:
+    inputs:
+      signing_policy:
+        description: SignPath signing policy for the Windows launcher
+        type: choice
+        options:
+          - test-signing
+          - release-signing
+          - none
+        default: test-signing
+
+permissions:
+  contents: read
+
+env:
+  SIGNPATH_ORGANIZATION_ID: 915def1d-d8da-483d-9c78-1533563d92de
+  SIGNPATH_PROJECT_SLUG: librecorsa
+  # The artifact configuration that signs LibreCorsa.exe (a zip holding it, as upload-artifact makes it)
+  SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: launcher
+
+jobs:
+  # The game, built once: the same static export goes into every platform's app
+  export:
+    name: Game export
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/launcher-v* ]]; then
+            version="${GITHUB_REF_NAME#launcher-v}"
+          else
+            version="$(node -p "require('./package.json').version")"
+          fi
+          if ! [[ "$version" =~ ^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$version is not a version (MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Launcher version $version"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # As the site ships it (deploy-pages.yml): the default car's GLB meshopt-compressed
+      - name: Compress models
+        run: node scripts/cars/compress-car-glb.mjs --all
+
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_BASE_PATH: ""
+          # The online side, which the launcher passes on to librecorsa.org
+          NEXT_PUBLIC_ONLINE_API: "/api"
+          # List every car and circuit, the ones not in the repository served from librecorsa.org
+          NEXT_PUBLIC_HOSTED_CONTENT: "1"
+          NEXT_PUBLIC_BUILD: ${{ github.sha }}
+        run: npm run build
+
+      - name: Pack the export
+        run: tar -cf launcher-export.tar out
+
+      - name: Upload the export
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-export
+          path: launcher-export.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  package:
+    name: Package (${{ matrix.platform }})
+    needs: export
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # SignPath reads this run's job details and downloads the unsigned launcher artifact.
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS for the .app, its ad hoc signature (codesign) and the .dmg (hdiutil)
+          - os: macos-latest
+            platform: mac
+            targets: darwin-arm64,darwin-amd64
+          - os: windows-latest
+            platform: win
+            targets: windows-amd64
+          - os: ubuntu-latest
+            platform: linux
+            targets: linux-amd64
+    env:
+      VERSION: ${{ needs.export.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      # The converter is bundled with esbuild (launcher/converter/build.mjs)
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: launcher/go.mod
+
+      - name: Download the export
+        uses: actions/download-artifact@v8
+        with:
+          name: launcher-export
+
+      - name: Unpack the export
+        shell: bash
+        run: tar -xf launcher-export.tar && rm launcher-export.tar
+
+      # vet on every runner; the tests on Linux, where deploy-pages.yml runs them for every change too
+      - name: Launcher checks
+        working-directory: launcher
+        shell: bash
+        run: |
+          go vet ./...
+          if [ "${{ matrix.platform }}" = "linux" ]; then go test ./...; fi
+
+      # Windows signs the launcher before it is packed, so the folders are built first and packed after
+      - name: Build the app (${{ matrix.platform }})
+        shell: bash
+        run: |
+          extra=""
+          if [ "${{ matrix.platform }}" = "win" ]; then extra="--no-archive"; fi
+          node launcher/build.mjs --bundle --only "${{ matrix.targets }}" --version "$VERSION" $extra
+
+      # Tag builds are signed with release-signing once the repository variable SIGNPATH_SIGN_RELEASES is "true"
+      # (as release-desktop.yml), which waits for SignPath's production certificate. Until then a tag build ships
+      # unsigned. SignPath's artifact configuration signs only a LibreCorsa.exe whose product version is the one passed.
+      - name: Pick SignPath signing policy
+        id: signing
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
+          DISPATCH_POLICY: ${{ inputs.signing_policy }}
+          SIGN_RELEASES: ${{ vars.SIGNPATH_SIGN_RELEASES }}
+        run: |
+          policy=""
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DISPATCH_POLICY" != "none" ]; then policy="$DISPATCH_POLICY"; fi
+          elif [ "$SIGN_RELEASES" = "true" ]; then
+            policy="release-signing"
+          fi
+          # The launcher's version resource, as launcher/build.mjs writes it: MAJOR.MINOR.PATCH.0
+          product_version="$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/').0"
+          echo "policy=$policy" >> "$GITHUB_OUTPUT"
+          echo "product_version=$product_version" >> "$GITHUB_OUTPUT"
+          echo "SignPath policy: ${policy:-none, the launcher stays unsigned} (product version $product_version)"
+
+      - name: Upload unsigned launcher for SignPath
+        id: unsigned
+        if: steps.signing.outputs.policy != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: signpath-unsigned-launcher
+          path: launcher/dist/windows-amd64/LibreCorsa/LibreCorsa.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      # release-signing waits for an approver in SignPath, so the wait is an hour instead of the default 10 minutes.
+      - name: Sign the launcher with SignPath
+        if: steps.signing.outputs.policy != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          artifact-configuration-slug: ${{ env.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          signing-policy-slug: ${{ steps.signing.outputs.policy }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: launcher/dist-signed
+          parameters: |
+            version: ${{ toJSON(steps.signing.outputs.product_version) }}
+
+      - name: Use the signed launcher
+        if: steps.signing.outputs.policy != ''
+        shell: bash
+        run: |
+          if [ ! -f launcher/dist-signed/LibreCorsa.exe ]; then
+            echo "::error::SignPath returned no LibreCorsa.exe"
+            ls -R launcher/dist-signed
+            exit 1
+          fi
+          cp launcher/dist-signed/LibreCorsa.exe launcher/dist/windows-amd64/LibreCorsa/LibreCorsa.exe
+
+      - name: Check the launcher's signature
+        if: steps.signing.outputs.policy != ''
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature launcher/dist/windows-amd64/LibreCorsa/LibreCorsa.exe
+          if (-not $signature.SignerCertificate) {
+            Write-Error "LibreCorsa.exe has no Authenticode signature"
+            exit 1
+          }
+          # A test-signed launcher reports an untrusted root here; the subject shows which certificate signed it.
+          "LibreCorsa.exe: signed by $($signature.SignerCertificate.Subject) ($($signature.Status))"
+
+      # Packed after signing: the update manifest's SHA-256 is the archive's as published
+      - name: Pack the app (windows)
+        if: matrix.platform == 'win'
+        shell: bash
+        run: node launcher/build.mjs --archive-only --only windows-amd64 --version "$VERSION"
+
+      - name: Upload release files (${{ matrix.platform }})
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            launcher/dist/LibreCorsa-*.zip
+            launcher/dist/LibreCorsa-*.tar.gz
+            launcher/dist/LibreCorsa-*.dmg
+
+  release:
+    name: Update manifest and release
+    needs: [export, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Build provenance: id-token gets the Sigstore signing certificate, attestations stores the result
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.export.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: launcher/go.mod
+
+      - name: Download release files
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: launcher-*
+          merge-multiple: true
+
+      - name: Leave the export out
+        run: rm -f artifacts/launcher-export.tar
+
+      # Signed with LAUNCHER_UPDATE_KEY when launcher/update-key.pub is committed (tools/release checks the secret is
+      # that key's private half). Without update-key.pub it goes unsigned: launchers then only say a release is out.
+      - name: Write and sign the update manifest
+        env:
+          LAUNCHER_UPDATE_KEY: ${{ secrets.LAUNCHER_UPDATE_KEY }}
+        run: |
+          shopt -s nullglob
+          go -C launcher run ./tools/release manifest \
+            --version "$VERSION" \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/launcher-v$VERSION" \
+            --out ../artifacts \
+            ../artifacts/*.zip ../artifacts/*.tar.gz
+          ls -l artifacts
+          cat artifacts/launcher-latest.json
+
+      # A manual run keeps what it made for a day, to look at, and publishes nothing
+      - name: Keep the manifest (manual run)
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-manifest
+          path: artifacts/launcher-latest.json*
+          retention-days: 1
+
+      # A signed SLSA build provenance attestation for each file people download, so anyone can check a file came
+      # from this workflow at this tag: gh attestation verify <file> -R librecorsa/librecorsa
+      - name: Attest build provenance
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/*.zip
+            artifacts/*.tar.gz
+            artifacts/*.dmg
+
+      # Marked latest: launchers find the manifest at releases/latest/download/launcher-latest.json (a desktop
+      # release made latest after it is passed over: the launcher then looks the newest launcher release up)
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/launcher-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --latest \
+            --title "LibreCorsa $VERSION ($GITHUB_REF_NAME)" \
+            --notes-file launcher/release-notes.md \
+            --generate-notes
