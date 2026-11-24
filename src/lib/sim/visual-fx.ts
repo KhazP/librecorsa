@@ -828,10 +828,18 @@ export class SimVisualFxManager {
         entry.ghostMats = undefined;
         entry.ghostCheckS = 0;
       }
+      const liveryKey =
+        peer.liveryId === 'custom' && peer.customLivery
+          ? `custom:${peer.customLivery.primary}:${peer.customLivery.secondary}:${peer.customLivery.accent}`
+          : (peer.liveryId ?? '');
       if (!entry) {
         entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, ghost, wheelRot: 0 };
+        (entry as { liveryKey?: string }).liveryKey = liveryKey;
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
+      } else if (!ghost && peer.liveryId !== undefined && (entry as { liveryKey?: string }).liveryKey !== liveryKey) {
+        (entry as { liveryKey?: string }).liveryKey = liveryKey;
+        entry.rig.setLivery(resolveLivery(peer.liveryId, peer.customLivery));
       }
       const carRig = entry.rig;
       // A late model load adds meshes to a ghost: look for them twice a second, not by walking the rig every frame
