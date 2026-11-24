@@ -1,0 +1,410 @@
+{
+  "source": "LibreCorsa procedural 2025 1.6L V6 Turbo-Hybrid + MGU-H synthesis (scripts/audio/synth_f1_2025_bank.py)",
+  "sampleRate": 48000,
+  "loopSeconds": 2.2,
+  "engine": {
+    "ext": [
+      {
+        "file": "engine_ext_on_4000.ogg",
+        "layer": "on",
+        "rpm": 4000,
+        "channels": 1,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_ext_on_6000.ogg",
+        "layer": "on",
+        "rpm": 6000,
+        "channels": 1,
+        "rms": 0.1772
+      },
+      {
+        "file": "engine_ext_on_8000.ogg",
+        "layer": "on",
+        "rpm": 8000,
+        "channels": 1,
+        "rms": 0.1894
+      },
+      {
+        "file": "engine_ext_on_10500.ogg",
+        "layer": "on",
+        "rpm": 10500,
+        "channels": 1,
+        "rms": 0.2047
+      },
+      {
+        "file": "engine_ext_on_13000.ogg",
+        "layer": "on",
+        "rpm": 13000,
+        "channels": 1,
+        "rms": 0.22
+      },
+      {
+        "file": "engine_ext_off_4000.ogg",
+        "layer": "off",
+        "rpm": 4000,
+        "channels": 1,
+        "rms": 0.125
+      },
+      {
+        "file": "engine_ext_off_6000.ogg",
+        "layer": "off",
+        "rpm": 6000,
+        "channels": 1,
+        "rms": 0.1361
+      },
+      {
+        "file": "engine_ext_off_8000.ogg",
+        "layer": "off",
+        "rpm": 8000,
+        "channels": 1,
+        "rms": 0.1472
+      },
+      {
+        "file": "engine_ext_off_10500.ogg",
+        "layer": "off",
+        "rpm": 10500,
+        "channels": 1,
+        "rms": 0.1611
+      },
+      {
+        "file": "engine_ext_off_13000.ogg",
+        "layer": "off",
+        "rpm": 13000,
+        "channels": 1,
+        "rms": 0.175
+      }
+    ],
+    "int": [
+      {
+        "file": "engine_int_on_4000.ogg",
+        "layer": "on",
+        "rpm": 4000,
+        "channels": 1,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_int_on_6000.ogg",
+        "layer": "on",
+        "rpm": 6000,
+        "channels": 1,
+        "rms": 0.1772
+      },
+      {
+        "file": "engine_int_on_8000.ogg",
+        "layer": "on",
+        "rpm": 8000,
+        "channels": 1,
+        "rms": 0.1894
+      },
+      {
+        "file": "engine_int_on_10500.ogg",
+        "layer": "on",
+        "rpm": 10500,
+        "channels": 1,
+        "rms": 0.2047
+      },
+      {
+        "file": "engine_int_on_13000.ogg",
+        "layer": "on",
+        "rpm": 13000,
+        "channels": 1,
+        "rms": 0.22
+      },
+      {
+        "file": "engine_int_off_4000.ogg",
+        "layer": "off",
+        "rpm": 4000,
+        "channels": 1,
+        "rms": 0.125
+      },
+      {
+        "file": "engine_int_off_6000.ogg",
+        "layer": "off",
+        "rpm": 6000,
+        "channels": 1,
+        "rms": 0.1361
+      },
+      {
+        "file": "engine_int_off_8000.ogg",
+        "layer": "off",
+        "rpm": 8000,
+        "channels": 1,
+        "rms": 0.1472
+      },
+      {
+        "file": "engine_int_off_10500.ogg",
+        "layer": "off",
+        "rpm": 10500,
+        "channels": 1,
+        "rms": 0.1611
+      },
+      {
+        "file": "engine_int_off_13000.ogg",
+        "layer": "off",
+        "rpm": 13000,
+        "channels": 1,
+        "rms": 0.175
+      }
+    ]
+  },
+  "turbo": [
+    {
+      "file": "turbo_on_06.ogg",
+      "layer": "on",
+      "boost": 0.6,
+      "channels": 1,
+      "rms": 0.0692
+    },
+    {
+      "file": "turbo_on_15.ogg",
+      "layer": "on",
+      "boost": 1.5,
+      "channels": 1,
+      "rms": 0.0798
+    },
+    {
+      "file": "turbo_on_25.ogg",
+      "layer": "on",
+      "boost": 2.5,
+      "channels": 1,
+      "rms": 0.0916
+    },
+    {
+      "file": "turbo_off_06.ogg",
+      "layer": "off",
+      "boost": 0.6,
+      "channels": 1,
+      "rms": 0.0488
+    },
+    {
+      "file": "turbo_off_15.ogg",
+      "layer": "off",
+      "boost": 1.5,
+      "channels": 1,
+      "rms": 0.0562
+    },
+    {
+      "file": "turbo_off_25.ogg",
+      "layer": "off",
+      "boost": 2.5,
+      "channels": 1,
+      "rms": 0.0644
+    }
+  ],
+  "transmission": [
+    {
+      "file": "trans_on_160.ogg",
+      "layer": "on",
+      "drivetrainSpeed": 160,
+      "channels": 1,
+      "rms": 0.044
+    },
+    {
+      "file": "trans_off_160.ogg",
+      "layer": "off",
+      "drivetrainSpeed": 160,
+      "channels": 1,
+      "rms": 0.03
+    }
+  ],
+  "oneshots": [
+    {
+      "file": "oneshot_gear_up.ogg",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.145,
+      "peak": 0.76
+    },
+    {
+      "file": "oneshot_shift_cut.ogg",
+      "role": "shift_cut",
+      "channels": 1,
+      "seconds": 0.11,
+      "peak": 0.74
+    },
+    {
+      "file": "oneshot_gear_down.ogg",
+      "role": "gear_down",
+      "channels": 1,
+      "seconds": 0.185,
+      "peak": 0.75
+    },
+    {
+      "file": "oneshot_backfire_int_1.ogg",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.22,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_2.ogg",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.27,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_3.ogg",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.19,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_1.ogg",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.34,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_2.ogg",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.46,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_3.ogg",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.28,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_pop_ext_1.ogg",
+      "role": "pop_ext",
+      "channels": 1,
+      "seconds": 0.17,
+      "peak": 0.76
+    },
+    {
+      "file": "oneshot_pop_ext_2.ogg",
+      "role": "pop_ext",
+      "channels": 1,
+      "seconds": 0.21,
+      "peak": 0.76
+    },
+    {
+      "file": "oneshot_blowoff.ogg",
+      "role": "blowoff",
+      "channels": 1,
+      "seconds": 0.28,
+      "peak": 0.66
+    },
+    {
+      "file": "oneshot_limiter.ogg",
+      "role": "limiter",
+      "channels": 1,
+      "seconds": 0.78,
+      "peak": 0.78
+    }
+  ],
+  "throttleCurve": {
+    "ext": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.24
+      ],
+      [
+        0.25,
+        0.54
+      ],
+      [
+        0.5,
+        0.81
+      ],
+      [
+        0.75,
+        0.94
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ],
+    "int": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.27
+      ],
+      [
+        0.25,
+        0.57
+      ],
+      [
+        0.5,
+        0.83
+      ],
+      [
+        0.75,
+        0.95
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ]
+  },
+  "driveline": {
+    "kmhPerRadS": 1.296,
+    "torqueRefNm": 2600,
+    "coastTorqueRefNm": 950,
+    "floor": 0.14,
+    "gain": {
+      "int": 0.85,
+      "ext": 0.3
+    }
+  },
+  "loadFilter": {
+    "coastHz": 2400,
+    "loadHz": 15500,
+    "tauS": 0.022
+  },
+  "viewTone": {
+    "int": {
+      "peakHz": 240,
+      "peakDb": 3.0,
+      "peakQ": 1.4,
+      "shelfHz": 4200,
+      "shelfDb": -2.5
+    },
+    "ext": {
+      "peakHz": 880,
+      "peakDb": 1.8,
+      "peakQ": 1.1,
+      "shelfHz": 5200,
+      "shelfDb": 1.5
+    }
+  },
+  "shift": {
+    "style": "sequential",
+    "cutS": 0.025
+  },
+  "lift": {
+    "popMinRpm": 8000,
+    "crackleMinRpm": 8800,
+    "downshiftPopChance": 0.55
+  },
+  "limiterRetriggerS": 0.8,
+  "mgu": {
+    "file": "mgu.ogg",
+    "channels": 1,
+    "rms": 0.085,
+    "baseRpm": 10000,
+    "fullKw": 120,
+    "gain": {
+      "int": 0.36,
+      "ext": 0.14
+    }
+  }
+}

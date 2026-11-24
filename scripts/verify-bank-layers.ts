@@ -196,12 +196,15 @@ async function bankWithoutSections(): Promise<void> {
   bank.dispose();
 }
 
-async function bankWithSections(): Promise<void> {
-  console.log("\n3. A bank built with the sections (the LC-LMDH's)");
-  const dir = "/cars/lc-lmdh/audio/";
+async function bankWithSections(label: string, dir: string, required = false): Promise<void> {
+  console.log(`\n3. A bank built with the sections (${label})`);
   const manifestPath = join("public", dir, "manifest.json");
   if (!existsSync(manifestPath)) {
-    noteSkip("lc-lmdh bank layers", manifestPath);
+    if (required) {
+      check(`${label}: manifest exists`, false, manifestPath);
+      return;
+    }
+    noteSkip(`${label} bank layers`, manifestPath);
     return;
   }
   const m = JSON.parse(readFileSync(manifestPath, "utf8")) as Lc26AudioManifest;
@@ -257,7 +260,8 @@ async function bankWithSections(): Promise<void> {
 async function main() {
   mixingMaths();
   await bankWithoutSections();
-  await bankWithSections();
+  await bankWithSections("the LC25 Prototype's, in the repository", "/cars/lc25/audio/", true);
+  await bankWithSections("the LC-LMDH's", "/cars/lc-lmdh/audio/", false);
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

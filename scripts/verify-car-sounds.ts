@@ -240,7 +240,7 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
 console.log("\n3. CREDITS.md Car sounds section check");
 const credits = readFileSync("CREDITS.md", "utf8");
 check("CREDITS.md has 'Car sounds' section", /###\s+Car sounds/i.test(credits));
-for (const dirId of ["f12026", "bmw-m4-gt3"]) {
+for (const dirId of ["f12026", "lc25", "bmw-m4-gt3"]) {
   check(
     `CREDITS.md documents public/cars/${dirId}/audio/`,
     credits.includes(`public/cars/${dirId}/audio/`),
