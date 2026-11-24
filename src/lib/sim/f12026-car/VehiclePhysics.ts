@@ -107,6 +107,7 @@ import { createKerbHitState, kerbHitLevel, stepKerbHit, type KerbHitState } from
 import {
   type AeroRideHeightMap,
   type AxleSuspensionData,
+  type BrakesData,
   type BumpStopSettingsUnits,
   type CarPhysicsConfig,
   blanketTempC,
@@ -816,7 +817,7 @@ const smoothstep = (x: number, min: number, max: number): number => {
   return t * t * (3 - 2 * t);
 };
 const ENGINE_MAP_TORQUE_SCALE = [1.0, 0.985, 0.96, 0.925, 0.87] as const;
-const DEFAULT_BRAKE_MIGRATION = { amount: 0.015, rampStart: 0 } as const;
+const DEFAULT_BRAKE_MIGRATION: Readonly<NonNullable<BrakesData['migration']>> = { amount: 0.015, rampStart: 0 };
 
 export function computeBandLoadShares(
   out: [number, number, number],
@@ -4297,7 +4298,7 @@ export class VehiclePhysics {
     const migAmount = this.liveBrakeMigrationAmount;
     this.dynamicBrakeBias =
       br.brakeByWire !== false || migAmount > 0
-        ? computeDynamicBrakeMigration(this.brakeBias, inp.brake, migAmount, mig.rampStart)
+        ? computeDynamicBrakeMigration(this.brakeBias, inp.brake, migAmount, mig.rampStart, mig.exponent ?? 1)
         : this.brakeBias;
     const bias = this.dynamicBrakeBias;
 
