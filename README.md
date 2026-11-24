@@ -88,7 +88,7 @@ You can play straight in any modern browser at **[librecorsa.org](https://librec
 ### Cars
 | Car | Model | Notes |
 | :-- | :-- | :-- |
-| **2026 Prototype** (default) | 6-DOF rigid body on the track colliders | 1.6 L V6 turbo + 350 kW MGU-K, 4 MJ battery, manual override boost; turbo boost that builds with exhaust energy while the MGU-K fills the lag; Z/X-mode aero with the flaps opened in every DRS zone, and Overtake Mode earned within 1 s at the detection point; live telemetry channels |
+| **2026 Prototype** (default) | 6-DOF rigid body on the track colliders | 1.6 L V6 turbo + 350 kW MGU-K, 4 MJ battery, Boost (usable any time) and Overtake Mode (earned within 1 s at the detection point in races, +0.5 MJ recharge); turbo boost that builds with exhaust energy while the MGU-K fills the lag; Z/X-mode Straight Mode active aero; live telemetry channels |
 | **Mercedes-AMG GT3 Evo** | 6-DOF rigid body | 6.2 L NA V8, 6-speed sequential, multi-stage ABS / TC, its own braking-point model. The BMW M4 GT3 Evo drives on its physics |
 | **MTRacing 496R** | 6-DOF rigid body | 2025 prototype: 4.0 L NA V8, rear-wheel drive, 6-speed paddle shift, heave springs, splitter / diffuser / rear-wing aero, TC, three slicks. 20 liveries, a live wheel screen and shift lights. Model, sound and physics from munyuturbo's mod of this car, used with permission |
 | **LC-LMDH** | 6-DOF rigid body | LMDh prototype: twin-turbo V8 with the class's spec hybrid on a 7-speed spec gearbox, rear-wheel drive, power capped at the driveshafts as the regulations set it, TC and no ABS |
@@ -208,7 +208,8 @@ The physics is checked against data, not just tuned by feel, and the evidence is
 | `W` / `↑` · `S` / `↓` | Throttle · brake (ramped like a pedal) |
 | `A` / `D` or `←` / `→` | Steer (speed-sensitive on keyboard) |
 | `E` / `Q` | Upshift / downshift |
-| `Space` / `Shift` / `B` | Manual override boost (MGU-K) |
+| `Space` / `Shift` / `B` | Boost (hold / latch) — overrides ERS cuts any time |
+| `Z` | 2026 Overtake Mode toggle (in races, once earned within `1 s`) |
 | `X` | Active aero (Z-mode / X-mode) or DRS |
 | `C` | Cycle driving cameras |
 | `F7` | Free camera (`WASD` fly · `Q`/`E` height · drag look · scroll speed · `R` reset) |

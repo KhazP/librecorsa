@@ -22,6 +22,7 @@ These are the default keys. They follow the key's position, so on an AZERTY keyb
 | Steer left, steer right | A or ←, D or → |
 | Gear up, gear down, neutral | E, Q, N |
 | Boost (hold), boost (latch) | Space or either Shift, B |
+| Overtake Mode (2026 race toggle) | Z |
 | Active aero X / Z | X |
 | Half throttle, half brake (hold) | F, G |
 | Clutch (hold) | none until you add one |
@@ -50,6 +51,7 @@ Xbox and PlayStation controllers work through the browser. The default layout is
 | Throttle, brake | RT, LT | R2, L2 |
 | Gear up, gear down | A, X | ✕, □ |
 | Boost | Right stick click | R3 |
+| Overtake Mode (2026 race) | none (LB in Formula style; Automatic Overtake on by default) | none (L1 in Formula style) |
 | Active aero | Y | △ |
 | Camera | RB | R1 |
 | Headlights (tap: flash, hold: on / off) | Left stick click | L3 |
@@ -81,7 +83,7 @@ In Chrome or Edge the game can talk to a PlayStation controller directly over We
 - **First launch**: on a phone or tablet the setup offers Touch (on-screen steering and pedals) and Tilt (tilt to steer, on-screen pedals).
 - **Controls > Touch**: Touch controls (Auto, On or Off), Touch style (Sliders or Buttons), Tilt to steer, and Tilt range (10° to 60°, 30° to start with).
 - **Tilt on iPhone and iPad**: iOS asks before a page can read tilt, and the prompt comes when you turn tilt on. If you refuse, steering goes back to the on-screen slider.
-- **On track**: Pause and Camera sit top left, with Recentre tilt while you tilt. Shift up and Shift down show with a manual gearbox. With the automatic one, a Drive or Reverse button shows when you need it. Boost, Active aero and Headlights show when the car has them.
+- **On track**: Pause and Camera sit top left, with Recentre tilt while you tilt. Shift up and Shift down show with a manual gearbox. With the automatic one, a Drive or Reverse button shows when you need it. Boost, Overtake (OT, in 2026 races), Active aero and Headlights show when the car has them.
 
 ## Wheels and pedals
 
