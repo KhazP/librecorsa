@@ -60,6 +60,8 @@ export interface CarPackageOptions {
   skins?: CarSkinSource[];
   /** A sound bank folder (engine_ext_on/off_<rpm>.ogg and its json) with the limiter it was recorded to, or a game car's */
   sound: { dir: string; limiterRpm: number } | { car: string };
+  /** Files to put in the package as they are (a licence, the source's readme): `to` is the path in the package */
+  extraFiles?: { from: string; to: string }[];
 }
 
 export interface PackagedCar {
@@ -105,6 +107,11 @@ export function packageCar(opts: CarPackageOptions): PackagedCar {
     copyFolder(opts.sound.dir, join(target, "audio"), PACKAGE_FILE, skipped);
     sound = { dir: `${folder}/audio`, limiterRpm: Math.round(opts.sound.limiterRpm) };
   } else sound = { car: opts.sound.car };
+
+  for (const f of opts.extraFiles ?? []) {
+    mkdirSync(dirname(join(opts.packageDir, f.to)), { recursive: true });
+    copyFileSync(f.from, join(opts.packageDir, f.to));
+  }
 
   let physics: ModCar["physics"] = car.base;
   if (car.physicsPatch && Object.keys(car.physicsPatch).length) {
