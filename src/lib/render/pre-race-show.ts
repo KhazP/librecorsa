@@ -170,6 +170,8 @@ export class PreRaceShowDirector {
     this.ctx = ctx;
     if (markers) this.markers = markers;
     if (!ctx && this.clock) this.end();
+    // The round's context on the snapshot straight away: the race's broadcast cards name its drivers by it, shown or not
+    else if (!this.clock) this.publish();
   }
 
   update(f: ShowFrame): void {
