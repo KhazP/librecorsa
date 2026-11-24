@@ -36,7 +36,9 @@ func importFixture(t *testing.T) string {
 		"sc-boxer-96/sc-boxer-96.acc":  "AC3Db",
 		"sd_car_without_model/car.xml": `<params><section name="Car"></section></params>`,
 		// F1 25 circuit
-		"qiddiya/qiddiya.erp": "ERP",
+		"qiddiya/qiddiya.erp":  "ERP",
+		"two_erps/b_track.erp": "ERP",
+		"two_erps/a_track.erp": "ERP",
 		// A circuit modelled in Blender: the export and its settings
 		"my-circuit/my_circuit.glb":      "glTF",
 		"my-circuit/my_circuit.json":     "{}",
@@ -81,7 +83,8 @@ func TestDetectImports(t *testing.T) {
 		"aalborg":              {kindSDTrack, "aalborg"},
 		"sc-boxer-96":          {kindSDCar, "sc-boxer-96"},
 		"sd_car_without_model": {kindUnknown, ""},
-		"qiddiya":              {kindF1Track, "qiddiya"},
+		"qiddiya":              {kindF1Track, "qiddiya/qiddiya.erp"},
+		"two_erps":             {kindF1Track, "two_erps/a_track.erp"},
 		"my-circuit":           {kindBlenderTrack, "my-circuit/my_circuit.glb"},
 		"glb_without_settings": {kindUnknown, ""},
 		"nested_track":         {kindACTrack, "nested_track/nested_track"},
