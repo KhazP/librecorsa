@@ -31,7 +31,8 @@ const launcherDir = dirname(fileURLToPath(import.meta.url));
 const repoDir = join(launcherDir, "..");
 const distDir = join(launcherDir, "dist");
 const outDir = join(repoDir, "out");
-const iconsDir = join(repoDir, "desktop", "build");
+/** The app's icons: icon.icns (macOS), icon.ico (Windows), icon.png (Linux) */
+const iconsDir = join(launcherDir, "icons");
 
 /** The platforms a release is built for: the same as internal/release Targets, whose archive names tools/release checks */
 const TARGETS = [

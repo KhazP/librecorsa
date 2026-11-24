@@ -359,9 +359,9 @@ writes for the build and removes after. Tests: `cd launcher && go vet ./... && g
 
 | Platform | App                                  | Packed                                                         |
 | -------- | ------------------------------------ | -------------------------------------------------------------- |
-| macOS    | `darwin-<arch>/LibreCorsa.app`: `Info.plist` (`org.librecorsa.launcher`, the version from package.json, `LSUIElement`: no Dock icon or menu, the game's window is the app), `icon.icns` from `desktop/build` | `LibreCorsa-<version>-mac-<arm64\|x64>.zip`, and `.dmg` on a Mac (hdiutil) |
-| Windows  | `windows-amd64/LibreCorsa/`, its icon from `desktop/build/icon.ico` | `LibreCorsa-<version>-win-x64.zip`                 |
-| Linux    | `linux-amd64/LibreCorsa/`, with `librecorsa.desktop` and `librecorsa.png` | `LibreCorsa-<version>-linux-x64.tar.gz`      |
+| macOS    | `darwin-<arch>/LibreCorsa.app`: `Info.plist` (`org.librecorsa.launcher`, the version from package.json, `LSUIElement`: no Dock icon or menu, the game's window is the app), `icon.icns` from `launcher/icons` | `LibreCorsa-<version>-mac-<arm64\|x64>.zip`, and `.dmg` on a Mac (hdiutil) |
+| Windows  | `windows-amd64/LibreCorsa/`, its icon from `launcher/icons/icon.ico` | `LibreCorsa-<version>-win-x64.zip`                 |
+| Linux    | `linux-amd64/LibreCorsa/`, with `librecorsa.desktop` and `librecorsa.png` (`launcher/icons/icon.png`) | `LibreCorsa-<version>-linux-x64.tar.gz`      |
 
 The macOS app is signed ad hoc (`codesign --sign -`) when it is built on a Mac: no Developer ID yet, so macOS asks on
 the first start (`release-notes.md`). Each archive holds the app's one folder, written by `go run ./tools/release pack`
