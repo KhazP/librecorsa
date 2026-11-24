@@ -181,11 +181,28 @@ def layout_list(found, names):
     return 'The layouts:\n' + '\n'.join(rows)
 
 
+def model_path(src, name):
+    """A model a models INI names (its FILE), as a path inside the track folder: '/' between its folders and no '.'
+    steps. None for one outside the folder (an absolute path, a drive, a '..' step, or a link that leads out of it),
+    which a mod has no reason to name and the converter never reads"""
+    parts = [p for p in name.strip().replace('\\', '/').split('/')]
+    if not name.strip() or parts[0] == '' or re.match(r'^[A-Za-z]:', parts[0]) or '..' in parts:
+        return None
+    parts = [p for p in parts if p not in ('', '.')]
+    if not parts:
+        return None
+    root = os.path.realpath(src)
+    if os.path.commonpath([root, os.path.realpath(os.path.join(root, *parts))]) != root:
+        return None
+    return '/'.join(parts)
+
+
 def models(src, layout):
     """The KN5 models Assetto Corsa loads for the layout, and notes on those left out. From models_<layout>.ini (or
     models.ini): every MODEL_n placed where it was modelled (the porter draws each where its file puts it, so one the
     INI moves or turns, a helicopter in the sky, is left out), no DYNAMIC_OBJECT_n (balloons and planes AC moves
-    about) and none from extension/ (Custom Shaders Patch's, which it animates). Without an INI, <folder>.kn5 as Assetto Corsa loads it, else every .kn5 in the folder"""
+    about), none from extension/ (Custom Shaders Patch's, which it animates) and none outside the track folder
+    (`model_path`). Without an INI, <folder>.kn5 as Assetto Corsa loads it, else every .kn5 in the folder"""
     notes = []
     ini = None
     for name in ([f'models_{layout}.ini'] if layout else []) + ['models.ini']:
@@ -205,6 +222,11 @@ def models(src, layout):
                 continue
             if not sec.startswith('MODEL_'):
                 continue
+            inside = model_path(src, f)
+            if inside is None:
+                notes.append(f'{f}: outside the track folder, left out')
+                continue
+            f = inside
             moved = [k for k in ('POSITION', 'ROTATION')
                      if any(abs(float(x or 0)) > 1e-6 for x in re.split(r'[,\s]+', cp[sec].get(k, '0,0,0').strip()) if re.fullmatch(r'-?[\d.]+', x or ''))]
             if moved:
@@ -214,7 +236,7 @@ def models(src, layout):
                 notes.append(f'{f}: named in {ini} but not in the folder')
                 continue
             # Custom Shaders Patch's own objects (helicopters, drones, flag marshals), which it animates
-            if re.match(r'extension[\\/]', f, re.I):
+            if re.match(r'extension/', f, re.I):
                 notes.append(f'{f}: animated by Custom Shaders Patch, left out')
                 continue
             if f not in out:

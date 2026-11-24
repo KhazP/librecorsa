@@ -1414,7 +1414,8 @@ def get_kn5_list(cfg):
     out = []
     for sec in cp.sections():
         if sec.startswith('MODEL_') or sec.startswith('DYNAMIC_OBJECT_'):
-            f = cp[sec].get('FILE', '').strip()
+            # Only the track folder's own models: a FILE outside it (an absolute path, '..') is never read
+            f = ac_mod_entry.model_path(base, cp[sec].get('FILE', ''))
             if f and f.lower().endswith('.kn5') and os.path.exists(os.path.join(base, f)):
                 if f not in out:
                     out.append(f)

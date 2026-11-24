@@ -9,7 +9,7 @@
  *   npx tsx scripts/verify/verify-ac-track.ts
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { circuitIdFrom, licenceNotice, packageVersion, type AutoEntry } from "../mods/importers/ac-track";
@@ -196,6 +196,26 @@ IS_PITLANE=1
   check("--layout by its name in the game", short?.layout_dir === "short" && short.layout === "Short Course" && short.pitboxes === 20);
   const missing = entryOf("autotest_park", ["--src", park, "--layout", "reverse"]);
   check("a layout the mod hasn't got: refused, with the layouts listed", !missing.entry && /no layout "reverse"/.test(missing.error));
+
+  // A models INI naming files outside the mod (an absolute path, '..', a link out of it): never read
+  const outside = join(tmp, "outside.kn5");
+  write(outside, "sc6969");
+  const trav = join(tmp, "testtrav");
+  for (const f of ["testtrav.kn5", join("sub", "ok.kn5"), join("extension", "heli.kn5")]) write(join(trav, f), "sc6969");
+  write(join(trav, "ai", "fast_lane.ai"), "lane");
+  symlinkSync(outside, join(trav, "linked.kn5"));
+  const named = ["../outside.kn5", outside, "sub/../../outside.kn5", "linked.kn5", "testtrav.kn5", "./extension/heli.kn5", ".\\sub\\ok.kn5"];
+  write(join(trav, "models.ini"), named.map((f, i) => `[MODEL_${i}]\nFILE=${f}\n`).join("\n"));
+  const { entry: tr, error: trErr } = entryOf("autotest_trav", ["--src", trav]);
+  check("a models INI's files outside the track folder are left out, and said", JSON.stringify(tr?.kn5_files) === '["testtrav.kn5","sub/ok.kn5"]' && named.slice(0, 4).every((f) => tr?._auto.models.includes(`${f}: outside the track folder, left out`)), JSON.stringify(tr?.kn5_files) + trErr.slice(-200));
+  check("... and ./extension/ is Custom Shaders Patch's, however it is written", !!tr?._auto.models.some((n) => /^extension\/heli\.kn5: animated/.test(n)));
+  const porter = spawnSync(
+    "uv",
+    ["run", "--python", "3.14", "--no-project", "--with-requirements", "scripts/tracks/requirements.txt", "python", "-P", "-c",
+      "import json, sys; sys.path.insert(0, 'scripts/tracks'); import port_ac_track as p; print(json.dumps(p.get_kn5_list({'base_dir': sys.argv[1], 'models_ini': 'models.ini'})))", trav],
+    { cwd: REPO_ROOT, encoding: "utf8" },
+  );
+  check("a hand-written entry's models INI: the folder's own models alone", porter.stdout.trim().split("\n").at(-1) === '["testtrav.kn5", "extension/heli.kn5", "sub/ok.kn5"]', porter.stdout.trim().split("\n").at(-1) ?? porter.stderr.slice(-200));
 
   // NoDerivatives: a conversion is an adaptation, so it can't be shared
   write(join(park, "LICENSE.txt"), "Licensed CC BY-NC-ND 4.0.\n");
