@@ -1169,5 +1169,23 @@
     "startRace": "Bắt đầu đua",
     "startQualifying": "Bắt đầu phân hạng",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Sự kiện cuộc đua",
+    "event": {
+      "winner": "Chiến thắng",
+      "newLeader": "Dẫn đầu mới",
+      "fastestLap": "Vòng nhanh nhất",
+      "pitStop": "Dừng pit",
+      "retired": "Bỏ cuộc"
+    },
+    "lap": "Vòng {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "So kè vị trí P{position}",
+    "attacking": "Đang tấn công",
+    "closing": "Rút ngắn {rate} s/vòng",
+    "closingCatch": "Rút ngắn {rate} s/vòng · bắt kịp sau {laps, plural, other {# vòng}}",
+    "pullingAway": "Đang bỏ xa",
+    "stable": "Khoảng cách ổn định"
   }
 }

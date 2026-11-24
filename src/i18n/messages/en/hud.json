@@ -1169,5 +1169,23 @@
     "startRace": "Start the race",
     "startQualifying": "Start qualifying",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Race events",
+    "event": {
+      "winner": "Winner",
+      "newLeader": "New leader",
+      "fastestLap": "Fastest lap",
+      "pitStop": "Pit stop",
+      "retired": "Retired"
+    },
+    "lap": "Lap {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Battle for P{position}",
+    "attacking": "Attacking",
+    "closing": "Closing {rate} s/lap",
+    "closingCatch": "Closing {rate} s/lap · catch in {laps, plural, one {# lap} other {# laps}}",
+    "pullingAway": "Pulling away",
+    "stable": "Gap stable"
   }
 }

@@ -1169,5 +1169,23 @@
     "startRace": "레이스 시작",
     "startQualifying": "예선 시작",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "레이스 이벤트",
+    "event": {
+      "winner": "우승",
+      "newLeader": "새 선두",
+      "fastestLap": "패스티스트 랩",
+      "pitStop": "피트 스톱",
+      "retired": "리타이어"
+    },
+    "lap": "{lap}랩",
+    "stationary": "{seconds}초",
+    "battleFor": "P{position} 배틀",
+    "attacking": "공격 중",
+    "closing": "랩당 {rate}초 추격",
+    "closingCatch": "랩당 {rate}초 추격 · {laps, plural, other {#랩}} 후 따라잡음",
+    "pullingAway": "격차 벌리는 중",
+    "stable": "격차 유지"
   }
 }

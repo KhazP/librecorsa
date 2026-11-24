@@ -1169,5 +1169,23 @@
     "startRace": "ابدأ السباق",
     "startQualifying": "ابدأ التصفيات",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "أحداث السباق",
+    "event": {
+      "winner": "الفائز",
+      "newLeader": "متصدّر جديد",
+      "fastestLap": "أسرع لفة",
+      "pitStop": "توقف صيانة",
+      "retired": "انسحب"
+    },
+    "lap": "اللفة {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "معركة على P{position}",
+    "attacking": "يهاجم",
+    "closing": "يقلّص {rate} s/لفة",
+    "closingCatch": "يقلّص {rate} s/لفة · يلحق خلال {laps, plural, one {لفة واحدة} two {لفتين} few {# لفات} many {# لفة} other {# لفة}}",
+    "pullingAway": "يبتعد",
+    "stable": "الفارق ثابت"
   }
 }

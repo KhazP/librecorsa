@@ -1169,5 +1169,23 @@
     "startRace": "Avvia gara",
     "startQualifying": "Avvia qualifica",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Eventi di gara",
+    "event": {
+      "winner": "Vincitore",
+      "newLeader": "Nuovo leader",
+      "fastestLap": "Giro più veloce",
+      "pitStop": "Sosta ai box",
+      "retired": "Ritirato"
+    },
+    "lap": "Giro {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Lotta per la P{position}",
+    "attacking": "All’attacco",
+    "closing": "Recupera {rate} s/giro",
+    "closingCatch": "Recupera {rate} s/giro · lo prende in {laps, plural, one {# giro} other {# giri}}",
+    "pullingAway": "Allunga",
+    "stable": "Distacco stabile"
   }
 }

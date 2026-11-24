@@ -1169,5 +1169,23 @@
     "startRace": "開始賽事",
     "startQualifying": "開始排位賽",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "賽事事件",
+    "event": {
+      "winner": "冠軍",
+      "newLeader": "新領先者",
+      "fastestLap": "最快單圈",
+      "pitStop": "進站",
+      "retired": "退賽"
+    },
+    "lap": "第 {lap} 圈",
+    "stationary": "{seconds} 秒",
+    "battleFor": "爭奪 P{position}",
+    "attacking": "發動攻勢",
+    "closing": "每圈追近 {rate} 秒",
+    "closingCatch": "每圈追近 {rate} 秒 · {laps, plural, other {# 圈}}後追上",
+    "pullingAway": "逐漸拉開",
+    "stable": "差距穩定"
   }
 }

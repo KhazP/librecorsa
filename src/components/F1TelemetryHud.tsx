@@ -104,6 +104,7 @@ import type { NextRaceProps } from "./hud/RaceResults";
 import type { PodiumUi } from "@/lib/render/podium-shot";
 import type { PreRaceShowUi } from "@/lib/render/pre-race-show";
 import { PreRaceShow } from "./hud/pre-race/PreRaceShow";
+import { RaceBroadcast } from "./hud/RaceBroadcast";
 import type { RaceRecord } from "@/lib/sim/race-history";
 
 /** A full-screen HUD style and what the shared layer around it does for it */
@@ -712,6 +713,19 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         </div>
       )}
       </HudRunProvider>
+
+      {/* The race's broadcast: driver cards and the battle strip, in an offline AI race (a career round's named by its
+          context); kept mounted through a pause so it loses nothing, shown on the live HUD only. Not on a phone's
+          screen or under the touch controls, where its corner is the controls' */}
+      {race && !race.multiplayer && hud?.raceEventCards !== false && hudMode !== "results" && !phone && !touch ? (
+        <RaceBroadcast
+          race={race}
+          context={props.preRaceShow?.ui.context ?? null}
+          shown={hudMode === "live" && !hudHidden && !lightsPhase}
+          scale={scale}
+          layout={preset}
+        />
+      ) : null}
 
       {/* A frame round the virtual mirror, so its sky never reads as the real one (the renderer places it in window pixels) */}
       {mirrorRect && !hudHidden ? (

@@ -1169,5 +1169,23 @@
     "startRace": "Yarışı başlat",
     "startQualifying": "Sıralamayı başlat",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Yarış olayları",
+    "event": {
+      "winner": "Kazanan",
+      "newLeader": "Yeni lider",
+      "fastestLap": "En hızlı tur",
+      "pitStop": "Pit duruşu",
+      "retired": "Yarış dışı"
+    },
+    "lap": "{lap}. tur",
+    "stationary": "{seconds} s",
+    "battleFor": "P{position} mücadelesi",
+    "attacking": "Atakta",
+    "closing": "Turda {rate} s yaklaşıyor",
+    "closingCatch": "Turda {rate} s yaklaşıyor · {laps, plural, other {# turda}} yetişir",
+    "pullingAway": "Uzaklaşıyor",
+    "stable": "Fark sabit"
   }
 }

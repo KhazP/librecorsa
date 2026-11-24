@@ -1169,5 +1169,23 @@
     "startRace": "Iniciar corrida",
     "startQualifying": "Iniciar classificação",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Eventos da corrida",
+    "event": {
+      "winner": "Vencedor",
+      "newLeader": "Novo líder",
+      "fastestLap": "Volta mais rápida",
+      "pitStop": "Pit stop",
+      "retired": "Abandonou"
+    },
+    "lap": "Volta {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Disputa pelo P{position}",
+    "attacking": "Atacando",
+    "closing": "Tirando {rate} s/volta",
+    "closingCatch": "Tirando {rate} s/volta · alcança em {laps, plural, one {# volta} other {# voltas}}",
+    "pullingAway": "Abrindo vantagem",
+    "stable": "Diferença estável"
   }
 }

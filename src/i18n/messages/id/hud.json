@@ -1169,5 +1169,23 @@
     "startRace": "Mulai balapan",
     "startQualifying": "Mulai kualifikasi",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Momen balapan",
+    "event": {
+      "winner": "Pemenang",
+      "newLeader": "Pemimpin baru",
+      "fastestLap": "Lap tercepat",
+      "pitStop": "Pit stop",
+      "retired": "Gagal finis"
+    },
+    "lap": "Lap {lap}",
+    "stationary": "{seconds} dtk",
+    "battleFor": "Duel untuk P{position}",
+    "attacking": "Menyerang",
+    "closing": "Memangkas {rate} dtk/lap",
+    "closingCatch": "Memangkas {rate} dtk/lap · menyusul dalam {laps, plural, other {# lap}}",
+    "pullingAway": "Menjauh",
+    "stable": "Gap stabil"
   }
 }
