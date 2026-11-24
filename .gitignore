@@ -67,6 +67,7 @@ UI-RESEARCH-*.md
 /public/tracks/rwanda_official/*.ktx2.*.glb
 /public/cars/*
 !/public/cars/f12026/
+!/public/cars/lc25/
 /public/gt3/
 # The soundtrack (src/lib/audio/music-catalog.ts): hosted like the circuits, never committed
 /public/music/

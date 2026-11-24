@@ -6,7 +6,7 @@ import {
   installF1LiveryPaint,
   resolveLiveryVisual,
 } from "@/lib/render/livery-repaint";
-import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance } from "@/lib/lc26-car-model";
+import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance, type Lc26RigChassis } from "@/lib/lc26-car-model";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -917,7 +917,7 @@ export function createF1Car2026(
   initialCompound: TireCompound = "soft",
   modelUrl: string = LC26_MODEL_URL,
   /** `opponent`: a car that is not the player's (its driver's arms follow the wheel in steps) */
-  options: { opponent?: boolean } = {}
+  options: { opponent?: boolean; chassis?: Lc26RigChassis } = {}
 ): F1CarRig2026 {
   const root = new THREE.Group();
   const chassisGroup = new THREE.Group();
