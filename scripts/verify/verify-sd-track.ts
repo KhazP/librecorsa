@@ -20,7 +20,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { circuitLicence, type CircuitSource } from "../mods/importers/sd-track";
+import { circuitLicence, includesResolve, type CircuitSource } from "../mods/importers/sd-track";
 import { copyrightHolders, recogniseLicence } from "../mods/lib/licences";
 import { REPO_ROOT } from "../mods/lib/toolchain";
 import { readSdSource, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
@@ -330,6 +330,24 @@ if (!ran) {
     }
     console.log(`INFO  ${d}: licence ${lic}`);
   }
+}
+
+// --- Whether the base data is needed -----------------------------------------------------------------------------------
+
+{
+  const install = join(tmp, "install");
+  const circuit = join(install, "tracks", "circuit", "inc");
+  mkdirSync(join(install, "data", "tracks"), { recursive: true });
+  mkdirSync(circuit, { recursive: true });
+  writeFileSync(join(install, "data", "tracks", "surfaces.xml"), "<params/>");
+  const xml = (doctype: string) => {
+    writeFileSync(join(circuit, "inc.xml"), `<?xml version="1.0"?>\n${doctype}\n<params name="inc"/>`);
+    return join(circuit, "inc.xml");
+  };
+  const inInstall = includesResolve(xml('<!DOCTYPE params SYSTEM "x.dtd" [\n<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">\n]>'));
+  const missing = includesResolve(xml('<!DOCTYPE params SYSTEM "x.dtd" [\n<!ENTITY default-objects SYSTEM "../../../data/tracks/objects.xml">\n]>'));
+  const none = includesResolve(xml('<!DOCTYPE params SYSTEM "x.dtd">'));
+  check("the base data is fetched unless every include is where the trackdef says, and for a trackdef with none", inInstall && !missing && !none, JSON.stringify({ inInstall, missing, none }));
 }
 
 rmSync(tmp, { recursive: true, force: true });

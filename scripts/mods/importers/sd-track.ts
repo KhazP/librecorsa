@@ -37,11 +37,15 @@ export function trackdefOf(folder: string): string {
   return join(folder, xml[0]);
 }
 
-/** Whether the trackdef's included files (Speed Dreams' default surfaces) are where it says, as in an install */
-function includesResolve(xml: string): boolean {
+/**
+ * Whether the trackdef includes files (Speed Dreams' default surfaces) and every one is where it says, as in an
+ * install. A trackdef that includes none still draws on the shared textures by its surfaces' names, so the base data is
+ * fetched for it too
+ */
+export function includesResolve(xml: string): boolean {
   const text = readFileSync(xml, "latin1");
   const files = [...text.matchAll(/<!ENTITY\s+[\w.-]+\s+SYSTEM\s+"([^"]+)"/g)].map((m) => m[1]);
-  return files.every((f) => existsSync(resolve(dirname(xml), f)));
+  return files.length > 0 && files.every((f) => existsSync(resolve(dirname(xml), f)));
 }
 
 /** The trackdef's Header: the circuit's name, author and description */
