@@ -1983,7 +1983,8 @@ export class F12026CarSim implements SimulatorCar {
   private refreshBrakingGuide(waterMm: number = this.lastGuideWaterMm, force = false): void {
     const v = this.vehicle;
     const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
-    const wetGrip = waterMm > 0.02 ? wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) / (traits.dryGrip ?? 1) : 1;
+    const dryScale = traits.dryGrip ?? 1;
+    const wetGrip = waterMm > 0.02 ? dryScale * wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) : dryScale;
     const scaled = Math.max(8, Math.min(20, wetGrip * 20));
     // Hysteresis prevents rapid guide swapping when crossing a drying racing line near a bucket boundary
     if (!force && Math.abs(scaled - this.brakingGuideGripBucket) < 0.75) return;
@@ -2400,16 +2401,12 @@ export class F12026CarSim implements SimulatorCar {
       o.slipRatio = w.slipRatio;
       o.onRoad = w.ground.surface === 'road' || w.ground.surface === 'pitlane';
     }
+    const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
     const wetMuScale =
-      v.waterMm > 0
-        ? wetGripFactor(
-            this.compoundData.wetTraits ?? SLICK_TRAITS,
-            v.waterMm,
-            v.speedMs,
-            v.realism.wetSeverity,
-            0.5 * (v.wheels[0].wear + v.wheels[1].wear)
-          ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
-        : 1;
+      (traits.dryGrip ?? 1) *
+      (v.waterMm > 0
+        ? wetGripFactor(traits, v.waterMm, v.speedMs, v.realism.wetSeverity, 0.5 * (v.wheels[0].wear + v.wheels[1].wear))
+        : 1);
     return {
       vxMs: this.vxMs,
       vyMs: this.bodyVy(),
