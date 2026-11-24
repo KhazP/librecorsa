@@ -208,6 +208,8 @@ export interface TrackSamplePoint {
   racingLineOffset: number;
   /** The GT3's own lap-time line, same scale (the F1 line where a track has none) */
   racingLineOffsetGt3?: number;
+  /** The road cars' own lap-time line, same scale, where a track has one (else they drive the GT3's) */
+  racingLineOffsetRoad?: number;
   optimalSpeedKmh: number; // Computed physics target speed at this point
   /** Highest speed here from which the car can still brake for every corner ahead (km/h) */
   brakeLimitKmh?: number;
@@ -853,7 +855,8 @@ export function isVehicleModelId(value: unknown): value is VehicleModelId {
 }
 
 /** Which lap-time racing line a car drives: the F1 cars share one, the GT3 has its own */
-export type RacingLineId = "f1" | "gt3";
+/** A circuit's lap-time lines: the F1 cars', the GT3's (every closed-wheel car's) and, where it has one, the road cars' */
+export type RacingLineId = "f1" | "gt3" | "road";
 
 /**
  * f12026-car engineering telemetry channels. Wheel order LF, RF, LR, RR (= FL, FR, RL, RR).

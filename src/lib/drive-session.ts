@@ -2,7 +2,7 @@ import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
 import { text as tx } from "@/lib/text";
 import { perLanguage } from "@/lib/per-language";
-import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
+import { TURN_METADATA, inDeadZone, planCheckFor, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
@@ -1033,7 +1033,8 @@ export class DriveSession {
     this.startQualifying = (field, minutes) => {
       if (disposed) return;
       this.setRace({ kind: "practice" });
-      const check = getActiveTrackMetadata().aiPlans?.[vehicleNow];
+      // The plan check on the line this car drives here (the road cars' own, where it passed theirs)
+      const check = planCheckFor(vehicleNow, physics.racingLineId ?? "f1");
       let ref: NonNullable<typeof quali>["ref"];
       if (check?.ok && check.physicsLapS > 0) {
         ref = { lapMs: Math.round(check.physicsLapS * 1000), base: LINE_CHECK_REF_BASE, car: null, lap0: 0, simS: 0 };

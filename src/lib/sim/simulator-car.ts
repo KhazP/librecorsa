@@ -116,7 +116,7 @@ export interface SimulatorCar {
   /** Identifier of this vehicle model (derived from the car's profile) */
   readonly vehicleId?: import('@/types/f1').VehicleModelId;
   /** Racing line family used by this car ('f1' | 'gt3') */
-  readonly racingLineId?: 'f1' | 'gt3';
+  readonly racingLineId?: import('@/types/f1').RacingLineId;
   aiAutopilot: boolean;
   /** Fraction of the car's limit speed the autopilot runs at */
   aiPaceScale?: number;

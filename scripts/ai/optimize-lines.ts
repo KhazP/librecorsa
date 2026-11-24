@@ -2,14 +2,27 @@
  * Racing lines from the car's own limits: lap-time optimisation of the line on the AI grid (scripts/ai/lib/line-opt.ts),
  * validated by a full-physics AI lap tracking it (scripts/ai/lib/physics-lap.ts).
  *
- *   npx tsx scripts/ai/optimize-lines.ts --track spielberg [--car f1|gt3] [--iters 4 (sweeps per step size)] [--write] [--grip 0.95]
+ *   npx tsx scripts/ai/optimize-lines.ts --track spielberg [--line f1|gt3] [--judges f12026-car,lc26] [--strict]
+ *       [--iters 4 (sweeps per step size)] [--write] [--grip 0.95]
  *       [--margin 0.4 (m kept between the car and a barrier)] [--robust-grip 1] [--ghosts] [--ac-line] [--straighten 2 [--slack 0.1]]
  *       [--prefer-ac 2 (% the AC author's line may lose)] [--verbose]
  *       [--replace (write the quickest clean line even if it is not quicker: the current one breaks a new limit)]
  *       [--edge 1.4 (m the car's centre keeps from the road's edges: a narrow road lined with barriers)]
  *       [--seed line-seed.json [--lock 650:900,2100:2400]] (scripts/line-from-lap.ts: a lap you drove as a start)
  *       [--no-mintime (skip the optimal-control start, scripts/ai/mintime/solve.py)]
- *   npx tsx scripts/ai/optimize-lines.ts --all [--write] (every circuit, both lines, one process each)
+ *   npx tsx scripts/ai/optimize-lines.ts --all [--write] (every circuit, both lines, one process each; --strict)
+ *
+ * `--line` is the line slot (`--car` is its old name); `--judges` the cars that drive it on drive plans and judge every
+ * candidate (default: the f12026-car and the LC26 for the F1 line, the AMG for the GT3's, the Liana and the Scirocco for
+ * the road cars'). The first judge's limits plan
+ * the line, its barrier probes and chassis (the optimal-control start) are used, and the line stays inside every
+ * judge's road. A judge already unclean on the current line may stay unclean on a new one if no worse there (the LC26
+ * through Monaco's barriers), except with `--strict`, where every judge must drive every candidate cleanly: a batch run
+ * nobody reads the log of once wrote a line 1403 frames off the road for an excused judge.
+ *
+ * The road line (`roRoad`, `metadata.racingLineRoad`) starts from the GT3's where a circuit has none, and is written
+ * only if a candidate beats it: the road cars drive the GT3's line until then, and a road car drives the road line only
+ * where its check on it passed (check-lines.ts --line road, `aiPlansByLine.road`).
  *
  * A new circuit's lines come from here: the track converters (scripts/tracks) run it with `--write` for the F1 line
  * and the GT3's once the circuit is built, on its geometric (minimum-curvature) line.
@@ -49,9 +62,9 @@ import { loadGlbGeometry } from '../lib/glb-geometry';
 import { lineBoundsFromCar, lineCost, LineParam, minCurvatureLine, optimiseLapTime, wallPenalty, type RunSpec, type WallClearance } from './lib/line-opt';
 import { TrackWallQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
 import { vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
-import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
-import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
-import { physicsLap, type PhysicsLap, type PhysicsLapCar } from './lib/physics-lap';
+import type { RacingLineId, VehicleModelId } from '../../src/types/f1';
+import { physicsLap, physicsLapVehicle, type PhysicsLap, type PhysicsLapCar } from './lib/physics-lap';
+import { candidatePasses, excusedJudges, isCleanLap, noWorseLap, timedLaps } from './lib/line-judging';
 import { cornerMinima, cornerSegments, filled, loadGhostLines, smoothLine, stitchFastest } from './lib/ghosts';
 import { mintimeLine, type MintimeChassis } from './lib/mintime';
 import { loadFastLane } from './lib/references';
@@ -63,14 +76,17 @@ const opt = (name: string, fallback: string) => {
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
 if (argv.includes('--all')) {
-  // One process per circuit and line: the track module holds one active circuit
-  const pass = argv.filter((a, i) => a !== '--all' && !['--track', '--car'].includes(a) && !['--track', '--car'].includes(argv[i - 1]));
+  // One process per circuit and line: the track module holds one active circuit. Nobody reads a batch's log line by
+  // line: no judge is excused there
+  const named = ['--track', '--car', '--line', '--judges'];
+  const pass = argv.filter((a, i) => a !== '--all' && !named.includes(a) && !named.includes(argv[i - 1]));
+  if (!pass.includes('--strict')) pass.push('--strict');
   const ids = (JSON.parse(readFileSync('public/tracks/index.json', 'utf8')) as { id: string }[]).map((e) => e.id);
   const failed: string[] = [];
   for (const id of ids) {
     for (const car of ['f1', 'gt3']) {
       console.log(`\n===== ${id} / ${car} =====`);
-      const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--track', id, '--car', car, ...pass], { stdio: 'inherit' });
+      const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--track', id, '--line', car, ...pass], { stdio: 'inherit' });
       if (r.status !== 0) failed.push(`${id}/${car}`);
     }
   }
@@ -78,7 +94,12 @@ if (argv.includes('--all')) {
   process.exit(failed.length ? 1 : 0);
 }
 const trackId = opt('track', 'spielberg');
-const line = opt('car', 'f1') as 'f1' | 'gt3';
+const line = opt('line', opt('car', 'f1')) as RacingLineId;
+/** The cars that drive this line on plans, in the game (`racingLine` in their profiles) */
+const DEFAULT_JUDGES: Record<RacingLineId, VehicleModelId[]> = { f1: ['f12026-car', 'lc26'], gt3: ['amg-gt3'], road: ['liana', 'vw-scirocco-gtx'] };
+if (!(line in DEFAULT_JUDGES)) throw new Error(`--line ${line}: one of ${Object.keys(DEFAULT_JUDGES).join(', ')}`);
+const judges: VehicleModelId[] = opt('judges', DEFAULT_JUDGES[line].join(',')).split(',').map((c) => physicsLapVehicle(c as PhysicsLapCar));
+const strict = argv.includes('--strict');
 const iters = Number(opt('iters', '3'));
 const grip = Number(opt('grip', '0.95'));
 const write = argv.includes('--write');
@@ -104,6 +125,7 @@ interface RawSample {
   p: number[];
   ro: number;
   roGt3?: number;
+  roRoad?: number;
   r: number[];
   w: number;
   b: number;
@@ -112,19 +134,22 @@ const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown as RawTrackJson & 
 setActiveTrack(trackId, raw);
 const track = getActiveTrackData(1200);
 const t = aiTrackFor(track);
-const limits = carLimitsFor(line === 'gt3' ? 'amg-gt3' : 'f12026-car', grip);
+const limits = carLimitsFor(judges[0], grip);
 const root = loadGlbGeometry(`public${track.meshUrl}`);
-// The line stays where this car's tracker can follow it: its usable road, lips and kerbs included. The F1 line is the
-// LC26's too: inside both cars' roads, so neither is asked onto a kerb too tall for it (the LC26 takes lower kerbs)
-const boundsCar = line === 'gt3' ? createAmgGt3Sim(track, root) : new F12026CarSim(track, root);
-const lc26Bounds = line === 'gt3' ? null : (vehicleModelSpec('lc26').createSim(track, root) as unknown as { lateralRangeAt?: (s: number) => [number, number] });
+// The line stays where every judge's tracker can follow it: its usable road, lips and kerbs included. The F1 line is
+// the LC26's too: inside both cars' roads, so neither is asked onto a kerb too tall for it (the LC26 takes lower kerbs)
+type RangeCar = { lateralRangeAt?: (s: number) => [number, number] };
+const judgeSims = judges.map((j) => vehicleModelSpec(j).createSim(track, root) as unknown as RangeCar);
+const boundsCar = judgeSims[0];
 const bounds = lineBoundsFromCar(t, (s) => {
-  const [lo, hi] = boundsCar.lateralRangeAt(s);
-  const other = lc26Bounds?.lateralRangeAt?.(s);
-  if (!other) return [lo, hi];
-  const a = Math.max(lo, other[0]);
-  const b = Math.min(hi, other[1]);
-  return a <= b ? [a, b] : [0.5 * (a + b), 0.5 * (a + b)];
+  let lo = -Infinity, hi = Infinity;
+  for (const car of judgeSims) {
+    const r = car.lateralRangeAt?.(s);
+    if (!r) continue;
+    lo = Math.max(lo, r[0]);
+    hi = Math.min(hi, r[1]);
+  }
+  return lo <= hi ? [lo, hi] : [0.5 * (lo + hi), 0.5 * (lo + hi)];
 });
 // `--edge M`: the car's centre at least M from the road's edges (the converters' `lineMarginM`)
 const edgeM = Number(opt('edge', '0'));
@@ -218,7 +243,7 @@ if (seedPath) {
 const mintimeOn = !argv.includes('--no-mintime') && !(preferAcPct > 0) && !lockRanges.length;
 if (mintimeOn) {
   const chassis = (boundsCar as unknown as { config?: { chassis?: MintimeChassis } }).config?.chassis;
-  const vehicle = line === 'gt3' ? 'amg-gt3' : 'f12026-car';
+  const vehicle = judges[0];
   const startV = lineCost(t, current, limits, 0, undefined, 0, run).plan.v;
   const mt = chassis
     ? mintimeLine(t, bounds, current, startV, vehicle, chassis, { grip, run, step: Math.max(1, Math.round(4 / t.ds)), verbose, log })
@@ -253,9 +278,8 @@ if (acLineOn) {
 }
 
 // Who drives the candidates: the cars that run this line on drive plans
-const judges: PhysicsLapCar[] = line === 'gt3' ? ['gt3'] : ['f1', 'lc26'];
-const drive = (n: ArrayLike<number>) => judges.map((car) => physicsLap(track, root, car, n, grip));
-const isClean = (l: PhysicsLap) => l.offTrackFrames <= 12 && l.wallHits === 0 && l.maxErrM < 2.5 && Number.isFinite(l.lapS);
+const drive = (n: ArrayLike<number>, g = grip) => judges.map((car) => physicsLap(track, root, car, n, g, undefined, { line }));
+const isClean = (l: PhysicsLap) => isCleanLap(l);
 const oldLaps = drive(current);
 
 if (ghostsOn) {
@@ -282,20 +306,23 @@ if (ghostsOn) {
 const fmt = (l: PhysicsLap) =>
   `${l.lapS.toFixed(3)} s (${p2p ? '' : `plan ${l.plan.lapS.toFixed(3)} s, `}${l.offTrackFrames} off, ${l.wallHits} hits, worst ${l.maxErrM.toFixed(2)} m)`;
 const sum = (ls: PhysicsLap[]) => ls.reduce((a, l) => a + l.lapS, 0);
-// A judge already off the current line (the LC26 through Monaco's barriers) does not hold the others back
-const mustBeClean = oldLaps.map((l) => isClean(l));
-const anyClean = mustBeClean.some(Boolean);
-const currentClean = oldLaps.every((l, k) => isClean(l) || (anyClean && !mustBeClean[k]));
+// A judge already off the current line (the LC26 through Monaco's barriers) does not hold the others back, unless
+// --strict
+const excused = excusedJudges(oldLaps, strict);
+const currentClean = candidatePasses(oldLaps, oldLaps, excused);
 console.log(`current line: ${oldLaps.map(fmt).join(' · ')}`);
+if (excused.some(Boolean)) console.log(`excused (unclean on the current line): ${judges.filter((_, k) => excused[k]).join(', ')}`);
 // Robustness: the race field plans up to about this grip (fast drivers on good laps). A line that is clean at `grip`
 // but leaves the road a little above it crashes cars in a race, so a judge clean on the current line here must stay
 // clean on the new one
-const oldRobust = judges.map((car) => physicsLap(track, root, car, current, robustGrip));
+const oldRobust = drive(current, robustGrip);
 console.log(`current line at grip ${robustGrip}: ${oldRobust.map(fmt).join(' · ')}`);
+/** Clean at the robust grip, or (not --strict) no worse there than the current line, which was not clean either */
+const holdsAtRobust = (robust: PhysicsLap[]) => robust.every((l, k) => isClean(l) || (!strict && !isClean(oldRobust[k]) && noWorseLap(l, oldRobust[k])));
 const quick: { name: string; n: Float64Array; laps: PhysicsLap[] }[] = [];
 for (const cand of candidates) {
   const laps = drive(cand.n);
-  const clean = laps.every((l, k) => isClean(l) || (anyClean && !mustBeClean[k]));
+  const clean = candidatePasses(laps, oldLaps, excused);
   const wp = walls ? `, ${wallPenalty(t, cand.n, walls).toFixed(3)} m³ into the barrier margin` : '';
   console.log(`${cand.name}: ${laps.map(fmt).join(' · ')}${wp}${clean ? '' : ' · NOT CLEAN'}`);
   if (clean) quick.push({ name: cand.name, n: cand.n, laps });
@@ -304,7 +331,7 @@ for (const cand of candidates) {
  * A line is timed by the judges clean on the current line: one excused for being off it may not finish the lap at all
  * (an infinite time), which would make every sum infinite and stop the search at the first candidate
  */
-const timed = (ls: PhysicsLap[]) => ls.reduce((a, l, k) => a + (anyClean && !mustBeClean[k] ? 0 : l.lapS), 0);
+const timed = (ls: PhysicsLap[]) => timedLaps(ls, excused);
 let best: { name: string; n: Float64Array; laps: PhysicsLap[] } | null = null;
 let notQuicker = false;
 const acWithin = (cand: { name: string; laps: PhysicsLap[] }) =>
@@ -318,8 +345,8 @@ for (const cand of pool.sort((a, b) => timed(a.laps) - timed(b.laps))) {
     notQuicker = true;
     break;
   }
-  const robust = judges.map((car) => physicsLap(track, root, car, cand.n, robustGrip));
-  const holds = robust.every((l, k) => isClean(l) || !isClean(oldRobust[k]));
+  const robust = drive(cand.n, robustGrip);
+  const holds = holdsAtRobust(robust);
   console.log(`${cand.name} at grip ${robustGrip}: ${robust.map(fmt).join(' · ')}${holds ? '' : ' · NOT CLEAN'}`);
   if (holds) {
     best = cand;
@@ -336,7 +363,10 @@ console.log(
 const changed = !!best && better;
 const chosen = changed && best ? best : { name: 'current line', n: current, laps: oldLaps };
 
-if (write) {
+// A circuit without a road line keeps none unless one beats the GT3's for the road cars (they drive that one)
+const noRoadLine = line === 'road' && !raw.samples.some((smp) => (smp as RawSample).roRoad !== undefined);
+if (write && noRoadLine && !changed) console.log(`No road line written: the road cars keep the GT3's.`);
+if (write && !(noRoadLine && !changed)) {
   const L = raw.samples[raw.samples.length - 1].s + (raw.samples[1].s - raw.samples[0].s);
   const scale = t.lengthM / L;
   const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -381,6 +411,7 @@ if (write) {
     if (changed) {
       const nOff = r3(sampleGrid(chosen.n, s, t.ds));
       if (line === 'gt3') smp.roGt3 = nOff;
+      else if (line === 'road') smp.roRoad = nOff;
       else {
         smp.ro = nOff;
         // World position of the line: the centreline moved along the flattened right vector, banking lifting it
@@ -417,7 +448,7 @@ if (write) {
       turn.description = turn.description?.replace(/apex \d+ km\/h in gear \d+/, `apex ${turn.apexSpeedKmh} km/h in gear ${turn.gear}`);
     }
   }
-  const key = line === 'gt3' ? 'racingLineGt3' : 'racingLine';
+  const key = line === 'gt3' ? 'racingLineGt3' : line === 'road' ? 'racingLineRoad' : 'racingLine';
   const meta = { ...((raw.metadata[key] as Record<string, unknown>) ?? {}) };
   if (changed) {
     meta.method = 'lap-time optimised on the car\'s measured limits (scripts/ai/optimize-lines.ts)';
@@ -427,12 +458,45 @@ if (write) {
     else delete meta.straightW;
   }
   meta.modelLapS = fin(final.lapS);
-  if (line === 'gt3') {
-    meta.physicsLapS = fin(chosen.laps[0].lapS);
+  // Read back: the line as the game reads it from the file (the track's own samples, rebuilt and put on the AI grid
+  // again) is not the grid line that was driven, and once came back 53 frames off the road (Qiddiya). Each judge drives
+  // the new line from the file at both grips; it is written only if it still passes as it did
+  let laps = chosen.laps;
+  if (changed) {
+    setActiveTrack(trackId, JSON.parse(JSON.stringify(raw)) as RawTrackJson);
+    const back = getActiveTrackData(1200);
+    const tb = aiTrackFor(back);
+    const nBack = new Float64Array(tb.n);
+    for (let i = 0; i < tb.n; i++) nBack[i] = aiLineOffsetM(back.getSampleAtDistance(i * tb.ds), line);
+    const drove = judges.map((car) => physicsLap(back, root, car, nBack, grip, undefined, { line }));
+    const droveRobust = judges.map((car) => physicsLap(back, root, car, nBack, robustGrip, undefined, { line }));
+    let worst = 0;
+    for (let i = 0; i < tb.n; i++) worst = Math.max(worst, Math.abs(nBack[i] - chosen.n[i]));
+    console.log(`read back (worst ${worst.toFixed(2)} m from the grid line): ${drove.map(fmt).join(' · ')} · at grip ${robustGrip}: ${droveRobust.map(fmt).join(' · ')}`);
+    const byTime = !(preferAcPct > 0 || lockRanges.length > 0 || replace) && currentClean;
+    const why = !candidatePasses(drove, oldLaps, excused)
+      ? 'not clean'
+      : !holdsAtRobust(droveRobust)
+        ? `not clean at grip ${robustGrip}`
+        : byTime && !(timed(drove) < timed(oldLaps) - 0.05 + slackS)
+          ? `no longer quicker (${timed(oldLaps).toFixed(3)} → ${timed(drove).toFixed(3)} s)`
+          : '';
+    if (why) {
+      console.error(`Not written: the line read back from the file is ${why}. ${path} is unchanged.`);
+      process.exit(1);
+    }
+    laps = drove;
+  }
+  const lapOf = (car: VehicleModelId) => fin(laps[judges.indexOf(car)].lapS);
+  if (line === 'road') {
+    meta.physicsLapS = fin(laps[0].lapS);
+    meta.judges = Object.fromEntries(judges.map((car) => [car, lapOf(car)]));
+  } else if (line === 'gt3') {
+    meta.physicsLapS = fin(laps[0].lapS);
     delete meta.physicsAiLapS;
   } else {
-    meta.physicsAiLapS = fin(chosen.laps[0].lapS);
-    if (judges.includes('lc26')) meta.physicsLc26LapS = fin(chosen.laps[1].lapS);
+    meta.physicsAiLapS = fin(laps[0].lapS);
+    if (judges.includes('lc26')) meta.physicsLc26LapS = lapOf('lc26');
   }
   meta.brakingZones = zones.map((z) => ({ startS: r1(z.startS), endS: r1(z.endS), entryKmh: Math.round(z.entryKmh), minKmh: Math.round(z.minKmh) }));
   (raw.metadata as Record<string, unknown>)[key] = meta;

@@ -47,6 +47,7 @@ import {
   createTrackSampleBuffer,
   evaluateSampleLateralHeightM,
   getActiveSurfaceTable,
+  racingLineFor,
   RWANDA_DRS_ZONES,
   type TrackProjectionResult,
 } from '@/lib/track-data';
@@ -95,6 +96,7 @@ import { contactBoxOfBody } from './body-outline';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
+import { planLookS } from '../ai/plan-tracking';
 import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
@@ -266,7 +268,10 @@ export interface CarSimProfile {
    * Without one the car is shown the circuit's car's (`circuitBrakingGuide`).
    */
   speedProfile?: SpeedProfileCarModel;
-  /** The racing line this car drives, plans on and draws (default: the F1 line) */
+  /**
+   * The racing line this car drives, plans on and draws (default: the F1 line). `road` is the road cars' line where a
+   * circuit has one and it passed this car's check, else the GT3's (`racingLineFor`)
+   */
   racingLine?: RacingLineId;
   /**
    * The tallest kerb (its rise over the ground it stands on, m) the AI lets this car's outer tyres run onto (default
@@ -739,7 +744,9 @@ const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
 function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: AutopilotEdges | null): Float32Array {
   let perCar = apProfiles.get(track);
   if (!perCar) apProfiles.set(track, (perCar = new Map()));
-  const key = edges ? `${profile.id}:colliders` : profile.id;
+  // The line this car drives here (`racingLineFor`): fixed for a circuit, as the cache is
+  const line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
+  const key = edges ? `${profile.id}:${line}:colliders` : `${profile.id}:${line}`;
   const cached = perCar.get(key);
   if (cached) return cached;
   const b = envelopeAt(profile.braking, airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M));
@@ -754,7 +761,7 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
     const smp = track.getSampleAtDistance(i * ds);
     bank[i] = smp.bankingRad;
     const [lo, hi] = autopilotLateralRange(track, smp, i * ds, edges, profile);
-    offs[i] = clamp(aiLineOffsetM(smp, profile.racingLine), lo, hi);
+    offs[i] = clamp(aiLineOffsetM(smp, line), lo, hi);
   }
   // The clamp kinks the path where the line meets it, and a kink read over ±10 m is a corner twice as tight as the
   // line (82 instead of ~120 km/h planned through Shanghai's turn 13): the path the car drives through it is the
@@ -937,8 +944,7 @@ const AP_LINE_MAX_MS2 = 3;
  * Tracking a supplied plan (`aiPlan`): pure pursuit on the plan's path with a short look-ahead, a slow integral on
  * the lateral error, and the plan's speed with its own slope as the pedal feed-forward
  */
-/** Pure-pursuit look-ahead on a plan: this many seconds of travel, at least the minimum (m) */
-const TRACK_LOOK_S = 0.22;
+/** Pure-pursuit look-ahead on a plan: the car's seconds of travel (plan-tracking.ts), at least the minimum (m) */
 const TRACK_LOOK_MIN_M = 5;
 /** Lateral acceleration a car metres off its path gets back onto it with (m/s²): sets the look-ahead's stretch */
 const TRACK_REJOIN_MS2 = 6;
@@ -1093,7 +1099,7 @@ export class F12026CarSim implements SimulatorCar {
   public brakingGuide: BrakingGuide;
   private brakingGuideGripBucket = 20;
   private lastGuideWaterMm = 0;
-  /** The racing line this car follows (`CarSimProfile.racingLine`) */
+  /** The racing line this car follows (`CarSimProfile.racingLine`, as this circuit has it: `racingLineFor`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
   public get cgHeightM(): number {
@@ -1143,7 +1149,7 @@ export class F12026CarSim implements SimulatorCar {
   public get vehicleId(): import('@/types/f1').VehicleModelId {
     return this.profile.id as import('@/types/f1').VehicleModelId;
   }
-  public get racingLineId(): 'f1' | 'gt3' {
+  public get racingLineId(): RacingLineId {
     return this.line;
   }
   public aiAutopilot = false;
@@ -1166,6 +1172,8 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /** Pure-pursuit look-ahead on a plan (s of travel): this car's (plan-tracking.ts) */
+  private readonly planLookS: number;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -1374,7 +1382,8 @@ export class F12026CarSim implements SimulatorCar {
     // in its first step on the road
     void track.pitLane;
     this.profile = profile;
-    this.line = profile.racingLine ?? 'f1';
+    this.line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
+    this.planLookS = planLookS(profile.id);
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
       : circuitBrakingGuide(track.samples, this.line);
@@ -2835,7 +2844,7 @@ export class F12026CarSim implements SimulatorCar {
     // only cut the corners further
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
+    const ld = Math.max(TRACK_LOOK_MIN_M, speed * this.planLookS, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);

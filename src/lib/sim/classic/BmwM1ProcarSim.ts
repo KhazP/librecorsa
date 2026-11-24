@@ -89,8 +89,8 @@ export const BMW_M1_PROCAR_SIM_PROFILE: CarSimProfile = {
   // 9.8° of front against 4.5° of rear slip at the peak of a 100 km/h steer ramp (1.32 g, scripts/verify-bmw-m1-procar.ts)
   understeerRadPerMs2: 0.007,
   speedProfile: BMW_M1_PROCAR_PROFILE_CAR,
-  // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's
-  racingLine: 'gt3',
+  // The road cars' line where a circuit has one for it, else the GT3's: grip well short of a GT3's
+  racingLine: 'road',
   // Fuel flow with the engine's speed: 0.005 l/s per 1000 rpm flat out, ≈ 0.045 l/s (0.033 kg/s) at 9000 rpm
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.005,
