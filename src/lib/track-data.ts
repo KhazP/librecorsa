@@ -6,6 +6,7 @@ import {
   LiveryCategory,
   LiveryConfig,
   LiveryId,
+  RacingLineId,
   RunoffStyle,
   TrackSamplePoint,
   TurnMetadata,
@@ -1159,6 +1160,28 @@ export interface TrackMetaExtras {
    * plan's time); elsewhere it keeps its own driver
    */
   aiPlans?: Partial<Record<string, AiPlanCheck>>;
+  /**
+   * Drive-plan checks on the circuit's lines past the F1 and GT3 ones (the road cars' `roRoad`), per line and car. Kept
+   * apart from `aiPlans`, which older builds read for the car's own line: a check on the road line there would put the
+   * car on plans along the GT3 line. A road car drives the road line where its check on it passed (`racingLineFor`)
+   */
+  aiPlansByLine?: Partial<Record<Exclude<RacingLineId, "f1" | "gt3">, Partial<Record<string, AiPlanCheck>>>>;
+}
+
+/**
+ * The line a car of this profile drives on the active circuit: its profile's, except a road car (`road`) drives the
+ * circuit's road line only where the road line was checked for it and passed, and the GT3's elsewhere (with the plan
+ * checked there, if any): a road line that loses a car's race check is not that car's
+ */
+export function racingLineFor(line: RacingLineId, vehicleId: string): RacingLineId {
+  if (line !== "road") return line;
+  return getActiveTrackMetadata().aiPlansByLine?.road?.[vehicleId]?.ok === true ? "road" : "gt3";
+}
+
+/** A car's drive-plan check on the line it drives here (`racingLineFor`): `aiPlans` for the F1 and GT3 lines */
+export function planCheckFor(vehicleId: string, line: RacingLineId): AiPlanCheck | undefined {
+  const meta = getActiveTrackMetadata();
+  return line === "f1" || line === "gt3" ? meta.aiPlans?.[vehicleId] : meta.aiPlansByLine?.[line]?.[vehicleId];
 }
 
 export interface AiPlanCheck {
@@ -1176,6 +1199,10 @@ export interface AiPlanCheck {
   /** Date of the check (ISO) */
   checked: string;
 }
+
+/** A per-sample value only some circuits have (the road line): interpolated where both ends have it */
+const lerpOptional = (a: number | undefined, b: number | undefined, t: number): number | undefined =>
+  a === undefined || b === undefined ? undefined : a + (b - a) * t;
 
 /** The active circuit as it was given to `setActiveTrack`: what another thread needs to make it its own active circuit */
 export function getActiveTrackSource(): { id: string; raw: RawTrackJson } {
@@ -1487,6 +1514,9 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   const positions: THREE.Vector3[] = [];
   const racingOffsetsM: number[] = [];
   const gt3OffsetsM: number[] = [];
+  // The road cars' line, only where a circuit has one: their samples then fall back to the GT3's line (`aiLineOffsetM`)
+  const hasRoadLine = rawSamples.some((r) => (r as { roRoad?: number }).roRoad !== undefined);
+  const roadOffsetsM: number[] = [];
   const yProfs: number[][] = [];
   const widths: number[] = [];
   const bankings: number[] = [];
@@ -1530,6 +1560,11 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     // The GT3's own lap-time line (`roGt3`); a track without one gives it the F1 line
     const roGt3 = (r: typeof r0) => (r as { roGt3?: number }).roGt3 ?? r.ro;
     gt3OffsetsM.push(cubic(roGt3(rm1), roGt3(r0), roGt3(r1), roGt3(r2)));
+    // The road cars' (`roRoad`), where the circuit has one; elsewhere they drive the GT3's
+    if (hasRoadLine) {
+      const roRoad = (r: typeof r0) => (r as { roRoad?: number }).roRoad ?? roGt3(r);
+      roadOffsetsM.push(cubic(roRoad(rm1), roRoad(r0), roRoad(r1), roRoad(r2)));
+    }
     widths.push(THREE.MathUtils.lerp(r0.w, r1.w, alpha));
 
     const meshBank = THREE.MathUtils.lerp(r0.b, r1.b, alpha);
@@ -1650,6 +1685,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   const slopeSins: number[] = [];
   const racingOffsetsNorm: number[] = [];
   const gt3OffsetsNorm: number[] = [];
+  const roadOffsetsNorm: number[] = [];
 
   for (let i = 0; i < NUM_SAMPLES; i++) {
     const prev2 = positions[(i - 2 + NUM_SAMPLES) % NUM_SAMPLES];
@@ -1729,6 +1765,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     // Normalised so that aiLineOffsetM(sample) returns the exported offset in metres
     racingOffsetsNorm.push(racingOffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
     gt3OffsetsNorm.push(gt3OffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
+    if (hasRoadLine) roadOffsetsNorm.push(roadOffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
   }
 
   const samples: TrackSamplePoint[] = [];
@@ -1767,6 +1804,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
       drsZone: isInDrsZone(t),
       racingLineOffset: racingOffsetsNorm[i],
       racingLineOffsetGt3: gt3OffsetsNorm[i],
+      ...(hasRoadLine ? { racingLineOffsetRoad: roadOffsetsNorm[i] } : {}),
       optimalSpeedKmh: 0,
       brakingZone: 0,
       gripMultiplier: grips[i],
@@ -1943,6 +1981,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     const gt30 = s0.racingLineOffsetGt3 ?? s0.racingLineOffset;
     const gt31 = s1.racingLineOffsetGt3 ?? s1.racingLineOffset;
     out.racingLineOffsetGt3 = gt30 + (gt31 - gt30) * alpha;
+    out.racingLineOffsetRoad = lerpOptional(s0.racingLineOffsetRoad, s1.racingLineOffsetRoad, alpha);
     out.optimalSpeedKmh = s0.optimalSpeedKmh + (s1.optimalSpeedKmh - s0.optimalSpeedKmh) * alpha;
     const bl0 = s0.brakeLimitKmh ?? s0.optimalSpeedKmh;
     const bl1 = s1.brakeLimitKmh ?? s1.optimalSpeedKmh;
@@ -2021,6 +2060,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
       slopeSin: s0.slopeSin + (s1.slopeSin - s0.slopeSin) * alpha,
       racingLineOffset: s0.racingLineOffset + (s1.racingLineOffset - s0.racingLineOffset) * alpha,
       racingLineOffsetGt3: gt30 + (gt31 - gt30) * alpha,
+      racingLineOffsetRoad: lerpOptional(s0.racingLineOffsetRoad, s1.racingLineOffsetRoad, alpha),
       optimalSpeedKmh: s0.optimalSpeedKmh + (s1.optimalSpeedKmh - s0.optimalSpeedKmh) * alpha,
       brakeLimitKmh: bl0 + (bl1 - bl0) * alpha,
       gripMultiplier: g0 + (g1 - g0) * alpha,

@@ -99,8 +99,8 @@ const COMMON = {
   electronics: E,
   // 360° of rim lock each way on a 14.1:1 rack [spec car.ini STEER_LOCK, STEER_RATIO]
   steerRatio: 14.1,
-  // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's
-  racingLine: 'gt3' as const,
+  // The road cars' line where a circuit has one for it, else the GT3's: grip well short of a GT3's
+  racingLine: 'road' as const,
   // Levels index the electronics tables from the most intrusive (12): ABS 6 is the data's 13 %; TC 6 its 12 %
   assistDials: {
     pro: { tcLevel: 0, tc2Level: 6, absLevel: 0 },

@@ -9,7 +9,7 @@
 import { steerAngleOf, wheelRpmOf } from './car-pose';
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
-import { createTrackSampleBuffer, DEFAULT_TRACK_ID, getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
+import { createTrackSampleBuffer, DEFAULT_TRACK_ID, planCheckFor, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { AI_PIT_MOVE_OVER_M, AI_PIT_TAKEOVER_BEFORE_M, AiPitRun, ownStopWanted, pitBoxIndex, plannedStopLaps, type AiPitOrder } from '@/lib/sim/pit/ai-pit';
@@ -490,7 +490,8 @@ function driveHooksFor(sim: SimulatorCar, track: BuiltTrackData): AiDriveHooks |
 }
 
 /** Tuning class of a car: GT3 by its racing line or model, otherwise the 2026 open-wheelers */
-const classOf = (sim: SimulatorCar): AiClassId => (sim.vehicleId === 'amg-gt3' || sim.racingLineId === 'gt3' ? 'gt3' : 'f1-2026');
+// Every closed-wheel car (on the GT3's line or the road cars') races on the GT3's tuning
+const classOf = (sim: SimulatorCar): AiClassId => (sim.vehicleId === 'amg-gt3' || (sim.racingLineId ?? 'f1') !== 'f1' ? 'gt3' : 'f1-2026');
 
 export interface AiFieldOptions {
   /** AI skill 0-100 (`AI_SKILL_DEFAULT`, Pro: the field as it always drove) */
@@ -1117,7 +1118,7 @@ export class AiOpponentField implements AiRace {
    * keeps its own driver
    */
   private static tracksPlans(sim: SimulatorCar): boolean {
-    return 'aiPlan' in sim && getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? '']?.ok === true;
+    return 'aiPlan' in sim && planCheckFor(sim.vehicleId ?? '', sim.racingLineId ?? 'f1')?.ok === true;
   }
 
   /**
@@ -1140,7 +1141,7 @@ export class AiOpponentField implements AiRace {
     // The fastest levels plan toward the most grip this car drove cleanly here (the circuit's line check), one step
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
     // the full step the LC26 hit Okayama's barriers four times as often)
-    const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
+    const checked = planCheckFor(sim.vehicleId ?? '', sim.racingLineId ?? 'f1')?.maxGrip;
     const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
     // On a race's first lap the pack brakes into the corners together: the extra grip waits for the second lap (with
     // it, Alien GT3 fields went off at Spielberg's Turn 1 on lap 1 two races in six)

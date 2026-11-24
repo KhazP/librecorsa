@@ -85,8 +85,8 @@ export const PORSCHE_934_RSR_SIM_PROFILE: CarSimProfile = {
   // As the M1's [est]
   understeerRadPerMs2: 0.007,
   speedProfile: PORSCHE_934_RSR_PROFILE_CAR,
-  // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's
-  racingLine: 'gt3',
+  // The road cars' line where a circuit has one for it, else the GT3's: grip well short of a GT3's
+  racingLine: 'road',
   // Fuel flow with the engine's speed: 0.0042 l/s per 1000 rpm flat out, ≈ 0.03 l/s at 7200 rpm [spec car.ini FUEL
   // CONSUMPTION]
   fuelLPerS1000Rpm: 0.0042,

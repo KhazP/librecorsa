@@ -47,6 +47,7 @@ import {
   createTrackSampleBuffer,
   evaluateSampleLateralHeightM,
   getActiveSurfaceTable,
+  racingLineFor,
   RWANDA_DRS_ZONES,
   type TrackProjectionResult,
 } from '@/lib/track-data';
@@ -264,7 +265,10 @@ export interface CarSimProfile {
    * Without one the car is shown the circuit's car's (`circuitBrakingGuide`).
    */
   speedProfile?: SpeedProfileCarModel;
-  /** The racing line this car drives, plans on and draws (default: the F1 line) */
+  /**
+   * The racing line this car drives, plans on and draws (default: the F1 line). `road` is the road cars' line where a
+   * circuit has one and it passed this car's check, else the GT3's (`racingLineFor`)
+   */
   racingLine?: RacingLineId;
   /**
    * The tallest kerb (its rise over the ground it stands on, m) the AI lets this car's outer tyres run onto (default
@@ -737,6 +741,8 @@ const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
 function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: AutopilotEdges | null): Float32Array {
   let perCar = apProfiles.get(track);
   if (!perCar) apProfiles.set(track, (perCar = new Map()));
+  // The line this car drives here (`racingLineFor`): fixed for a circuit, as the cache is
+  const line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
   const key = edges ? `${profile.id}:colliders` : profile.id;
   const cached = perCar.get(key);
   if (cached) return cached;
@@ -752,7 +758,7 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
     const smp = track.getSampleAtDistance(i * ds);
     bank[i] = smp.bankingRad;
     const [lo, hi] = autopilotLateralRange(track, smp, i * ds, edges, profile);
-    offs[i] = clamp(aiLineOffsetM(smp, profile.racingLine), lo, hi);
+    offs[i] = clamp(aiLineOffsetM(smp, line), lo, hi);
   }
   // The clamp kinks the path where the line meets it, and a kink read over ±10 m is a corner twice as tight as the
   // line (82 instead of ~120 km/h planned through Shanghai's turn 13): the path the car drives through it is the
@@ -1091,7 +1097,7 @@ export class F12026CarSim implements SimulatorCar {
   public brakingGuide: BrakingGuide;
   private brakingGuideGripBucket = 20;
   private lastGuideWaterMm = 0;
-  /** The racing line this car follows (`CarSimProfile.racingLine`) */
+  /** The racing line this car follows (`CarSimProfile.racingLine`, as this circuit has it: `racingLineFor`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
   public get cgHeightM(): number {
@@ -1139,7 +1145,7 @@ export class F12026CarSim implements SimulatorCar {
   public get vehicleId(): import('@/types/f1').VehicleModelId {
     return this.profile.id as import('@/types/f1').VehicleModelId;
   }
-  public get racingLineId(): 'f1' | 'gt3' {
+  public get racingLineId(): RacingLineId {
     return this.line;
   }
   public aiAutopilot = false;
@@ -1370,7 +1376,7 @@ export class F12026CarSim implements SimulatorCar {
     // in its first step on the road
     void track.pitLane;
     this.profile = profile;
-    this.line = profile.racingLine ?? 'f1';
+    this.line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
       : circuitBrakingGuide(track.samples, this.line);
