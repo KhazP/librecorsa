@@ -1,0 +1,157 @@
+name: Release Android
+
+# The Android app (android/, a Trusted Web Activity that opens librecorsa.org/play), built as a signed APK and
+# published on its own release. Its releases are never marked latest: the desktop app updates itself from the
+# repository's latest release (launcher/update.go), so the latest is always the desktop app's.
+
+on:
+  push:
+    tags:
+      - "android-v*"
+  # A manual run builds (and signs, when the secrets are set) but never publishes a release
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (MAJOR.MINOR.PATCH); empty builds android/app/build.gradle's default
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (android)
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.apk.outputs.signed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build Android APK
+        id: apk
+        working-directory: android
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          KEYSTORE_B64: ${{ secrets.LIBRECORSA_ANDROID_KEYSTORE_BASE64 }}
+          LIBRECORSA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.LIBRECORSA_ANDROID_KEYSTORE_PASSWORD }}
+          LIBRECORSA_ANDROID_KEY_ALIAS: ${{ secrets.LIBRECORSA_ANDROID_KEY_ALIAS }}
+          LIBRECORSA_ANDROID_KEY_PASSWORD: ${{ secrets.LIBRECORSA_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${JAVA_HOME_21_X64:-}" ]; then
+            export JAVA_HOME="$JAVA_HOME_21_X64"
+            export PATH="$JAVA_HOME/bin:$PATH"
+          fi
+
+          # The version from the tag (android-v0.2.4 is 0.2.4), or a manual run's input. versionCode is
+          # MAJOR*10000 + MINOR*100 + PATCH, which phones compare: a release's version is higher than the last APK's
+          # (the APKs that came with the desktop-v* releases count too: desktop-v0.2.3's is 0.2.3, versionCode 203).
+          if [[ "$GITHUB_REF" == refs/tags/android-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#android-v}"
+          else
+            VERSION="${INPUT_VERSION:-}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "No version given: android/app/build.gradle's default"
+          elif [[ "$VERSION" =~ ^([0-9]{1,3})\.([0-9]{1,2})\.([0-9]{1,2})(-[0-9A-Za-z.-]+)?$ ]]; then
+            export LIBRECORSA_ANDROID_VERSION_NAME="$VERSION"
+            export LIBRECORSA_ANDROID_VERSION_CODE="$((10#${BASH_REMATCH[1]} * 10000 + 10#${BASH_REMATCH[2]} * 100 + 10#${BASH_REMATCH[3]}))"
+            echo "Android version $LIBRECORSA_ANDROID_VERSION_NAME (versionCode $LIBRECORSA_ANDROID_VERSION_CODE)"
+          else
+            echo "::error::$VERSION is not a version (MAJOR.MINOR.PATCH, minor and patch below 100)"
+            exit 1
+          fi
+
+          KEYSTORE_FILE=""
+          SIGNED=0
+          trap 'rm -f "${KEYSTORE_FILE:-}"' EXIT
+
+          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${LIBRECORSA_ANDROID_KEYSTORE_PASSWORD:-}" ] \
+            && [ -n "${LIBRECORSA_ANDROID_KEY_ALIAS:-}" ] && [ -n "${LIBRECORSA_ANDROID_KEY_PASSWORD:-}" ]; then
+            KEYSTORE_FILE="$RUNNER_TEMP/librecorsa-upload.jks"
+            printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$KEYSTORE_FILE"
+            chmod 600 "$KEYSTORE_FILE"
+            export LIBRECORSA_ANDROID_KEYSTORE="$KEYSTORE_FILE"
+            SIGNED=1
+          fi
+
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+          mkdir -p dist
+          if [ "$SIGNED" = "1" ]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
+            SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            APKSIGNER="$(ls -1 "$SDK_ROOT"/build-tools/*/apksigner | sort -V | tail -n 1)"
+            "$APKSIGNER" verify --verbose "$APK"
+            cp "$APK" "dist/LibreCorsa-${VERSION:-dev}-android.apk"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Android signing secrets (LIBRECORSA_ANDROID_KEYSTORE_BASE64, LIBRECORSA_ANDROID_KEYSTORE_PASSWORD, LIBRECORSA_ANDROID_KEY_ALIAS, LIBRECORSA_ANDROID_KEY_PASSWORD) are unset; skipping unsigned APK upload because Android cannot install unsigned APKs."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Android APK
+        if: steps.apk.outputs.signed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          if-no-files-found: error
+          path: android/dist/*.apk
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/android-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Build provenance: id-token gets the Sigstore signing certificate, attestations stores the result
+      id-token: write
+      attestations: write
+    steps:
+      # An unsigned APK can't be installed, so a release without the signed one isn't made
+      - name: Check the APK is signed
+        if: needs.build.outputs.signed != 'true'
+        run: |
+          echo "::error::The APK isn't signed (the Android signing secrets are unset), so there is nothing to release"
+          exit 1
+
+      - name: Checkout release notes
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: android/release-notes.md
+          sparse-checkout-cone-mode: false
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          name: android-apk
+
+      # A signed SLSA build provenance attestation for the APK, so anyone can check it came from this workflow at this
+      # tag: gh attestation verify <file> -R librecorsa/librecorsa
+      # A failure here leaves the release to go out without it rather than stopping the release.
+      - name: Attest build provenance
+        continue-on-error: true
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/*.apk
+
+      # The gh CLI on the runner, not a third-party action: the repository allows GitHub's own actions plus the
+      # SignPath one only. --latest=false: the repository's latest release stays the desktop app's, which installed
+      # desktop apps update from. The notes file comes first, then GitHub's notes.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --latest=false \
+            --title "LibreCorsa for Android ($GITHUB_REF_NAME)" \
+            --notes-file android/release-notes.md \
+            --generate-notes
