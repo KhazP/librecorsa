@@ -157,6 +157,41 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
+  console.log("\n== The porter on a mod's odd files: skin folders, data/, INI files, the driver's eyes");
+  if (!uv) console.log('SKIP  uv is not on this machine');
+  else {
+    const odd = join(tmp, 'odd_car');
+    for (const skin of ['Red car', 'red_car', '日本', '中国']) write(join(odd, 'skins', skin, 'paint.png'), '');
+    write(join(odd, 'data', 'car.ini'), '\xEF\xBB\xBFa line before any section\n[BASIC]\nTOTALMASS=1000\nnot a key\n[GRAPHICS]\nDRIVEREYES=0.3,0.8,-0.2\n');
+    write(join(odd, 'data', 'backup', 'car.ini'), '[BASIC]\nTOTALMASS=1\n');
+    const code = [
+      'import json, os, sys',
+      "sys.path.insert(0, 'scripts/cars')",
+      'import port_ac_car as p',
+      'from PIL import Image',
+      'odd = sys.argv[1]',
+      'data = p.read_car_data(odd)',
+      "ids = p.unique_skin_ids({}, sorted(os.listdir(os.path.join(odd, 'skins'))))",
+      "eyes = lambda d: None if p.ini_driver_eyes(d) is None else p.ini_driver_eyes(d).tolist()",
+      // A preset's livery export, of two skins of four
+      "Image.new('RGB', (8, 8), (200, 0, 0)).save(os.path.join(odd, 'skins', 'Red car', 'paint.png'))",
+      "Image.new('RGB', (8, 8), (0, 0, 200)).save(os.path.join(odd, 'skins', 'red_car', 'paint.png'))",
+      "raw = open(os.path.join(odd, 'skins', 'Red car', 'paint.png'), 'rb').read()",
+      "preset = {'skin_files': ['paint.png'], 'skin_maps': {'body': ('paint.jpg', 'plain')}}",
+      "listing = p.export_skins(odd, preset, {'paint.png': raw}, [{'name': 'body', 'maps': {'txDiffuse': 'paint.png'}}], os.path.join(odd, 'out'), 64, 64, 80, only={'Red car'})",
+      "print(json.dumps({'files': sorted(data), 'mass': p.ini(data['car.ini'])['BASIC']['TOTALMASS'], 'ids': ids, 'eyes': eyes(data), 'upper': eyes({'CAR.INI': '[GRAPHICS]\\nDRIVEREYES=0.1,0.7,-0.3'}), 'none': eyes({'car.ini': '[BASIC]\\nTOTALMASS=1'}), 'exported': [s['id'] for s in listing]}))",
+    ].join('\n');
+    const r = spawnSync('uv', ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'pillow', 'python', '-P', '-c', code, odd], { encoding: 'utf8' });
+    const got = r.status === 0 ? (JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}') as { files: string[]; mass: string; ids: Record<string, string>; eyes: number[] | null; upper: number[] | null; none: number[] | null; exported: string[] }) : null;
+    check('a folder inside data/ is no file of the car\'s data', JSON.stringify(got?.files) === '["car.ini"]', got ? JSON.stringify(got.files) : r.stderr.slice(-300));
+    check('an INI with a byte-order mark, a line before its first section and a line that is no key=value', got?.mass === '1000' && JSON.stringify(got.eyes) === '[0.3,0.8,-0.2]');
+    const ids = Object.values(got?.ids ?? {});
+    check('skin folders all in another script, or alike but for case and spaces: an id each, none empty', ids.length === 4 && new Set(ids).size === 4 && ids.every((id) => /^[a-z0-9_-]+$/.test(id)), JSON.stringify(got?.ids));
+    check("the driver's eyes from CAR.INI in capitals; none from a car.ini without them, not a crash", JSON.stringify(got?.upper) === '[0.1,0.7,-0.3]' && got?.none === null);
+    check("a preset's liveries: --skins-only's alone", JSON.stringify(got?.exported) === '["Red car"]', JSON.stringify(got?.exported));
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
   console.log('\n== ui_car.json, as mods write it');
   {
     const ui = parseUiCar(

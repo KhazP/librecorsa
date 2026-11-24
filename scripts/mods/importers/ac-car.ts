@@ -84,6 +84,21 @@ function skinIds(ids: string[]): string[] {
   });
 }
 
+/**
+ * A livery's name as the package's manifest takes it (80 UTF-16 units at most), cut between characters and ended with
+ * a "…" when it is longer
+ */
+function liveryName(s: { number: string; name: string; folder?: string; id: string }): string {
+  const full = (s.number ? `#${s.number} ` : '') + (s.name || s.folder || s.id);
+  if (full.length <= 80) return full;
+  let cut = '';
+  for (const c of full) {
+    if (cut.length + c.length > 79) break;
+    cut += c;
+  }
+  return `${cut.trimEnd()}…`;
+}
+
 const swatchOf = (s: string[]): ModSkin['swatch'] => (s.length >= 2 ? [s[0], s[1]] : [s[0] ?? '#808080', s[0] ?? '#808080']);
 
 const importer: Importer = {
@@ -210,14 +225,14 @@ ${PACKAGE_USAGE}`,
         mkdirSync(dir, { recursive: true });
         const own = previewOf(carDir, s.folder ?? s.id);
         if (own) thumbs.push({ src: own, out: join(dir, 'thumb.webp'), fit: 'cover' });
-        skins.push({ id: ids[i], name: (s.number ? `#${s.number} ` : '') + (s.name || s.folder || s.id), swatch: swatchOf(s.swatch), dir, ...(s.files ? { files: s.files } : {}), ...(s.variant ? { variant: s.variant } : {}) });
+        skins.push({ id: ids[i], name: liveryName(s), swatch: swatchOf(s.swatch), dir, ...(s.files ? { files: s.files } : {}), ...(s.variant ? { variant: s.variant } : {}) });
       }
       if (skins.length > 63) skins.length = 63;
       makeThumbs(thumbs, work);
       // The first livery's preview, else the badge
       const thumb = [previewThumb, badgeThumb].find((f) => existsSync(f));
       const paint = paintEntry
-        ? { id: ids[0], name: (paintEntry.number ? `#${paintEntry.number} ` : '') + (paintEntry.name || paintEntry.folder || paintEntry.id), swatch: swatchOf(paintEntry.swatch) }
+        ? { id: ids[0], name: liveryName(paintEntry), swatch: swatchOf(paintEntry.swatch) }
         : { id: 'factory', name: 'Factory', swatch: ['#808080', '#202020'] as ModSkin['swatch'] };
 
       const traction = DRIVE[facts.traction] ?? 'rear-wheel drive';
