@@ -1,7 +1,7 @@
 /**
  * SHA-256 a piece at a time, for a package downloaded from a catalogue (mod-catalogue.ts): each piece is hashed as it
  * arrives. The platform's `crypto.subtle.digest` takes its whole input at once, which for a package of a gigabyte
- * would mean holding it in memory a second time. scripts/verify-mod-catalogue.ts checks it against the platform's.
+ * would mean holding it in memory a second time. scripts/verify/verify-mod-catalogue.ts checks it against the platform's.
  */
 
 /** Int32 throughout: V8 keeps 32-bit signed values as small integers, while a Uint32Array's upper half reads back as doubles */

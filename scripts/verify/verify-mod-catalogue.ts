@@ -4,7 +4,7 @@
  * installed, the streamed download and its size and SHA-256 checks, and an install refused when the download isn't
  * the package and content its catalogue lists. Also `npm run mod -- catalogue`, which writes one from packed zips.
  *
- *   npx tsx scripts/verify-mod-catalogue.ts
+ *   npx tsx scripts/verify/verify-mod-catalogue.ts
  */
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -23,13 +23,13 @@ import {
   parseCatalogue,
   readCatalogue,
   type CatalogueEntry,
-} from "../src/lib/mods/mod-catalogue";
-import { Sha256 } from "../src/lib/mods/sha256-stream";
-import { modDefinitions } from "../src/lib/mods/mod-content";
-import { installPackage, readInstalled, zipSource } from "../src/lib/mods/mod-store";
-import { buildCatalogue, linkBase } from "./mods/lib/catalogue";
-import { checkPackage, hashFolder } from "./mods/lib/package-check";
-import { zipPackage } from "./mods/lib/zip-writer";
+} from "../../src/lib/mods/mod-catalogue";
+import { Sha256 } from "../../src/lib/mods/sha256-stream";
+import { modDefinitions } from "../../src/lib/mods/mod-content";
+import { installPackage, readInstalled, zipSource } from "../../src/lib/mods/mod-store";
+import { buildCatalogue, linkBase } from "../mods/lib/catalogue";
+import { checkPackage, hashFolder } from "../mods/lib/package-check";
+import { zipPackage } from "../mods/lib/zip-writer";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
