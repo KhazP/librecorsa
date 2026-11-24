@@ -714,6 +714,12 @@ export const preRaceShow = toggle({
   hint: () => rt("preRaceShow.hint"),
   ...hud("preRaceShow"),
 });
+export const raceEventCards = toggle({
+  id: "raceEventCards",
+  get label() { return rt("raceEventCards.label"); },
+  hint: () => rt("raceEventCards.hint"),
+  ...hud("raceEventCards"),
+});
 export const boardWidget = choice("segmented", {
   id: "boardWidget",
   get label() { return rt("boardWidget.label"); },

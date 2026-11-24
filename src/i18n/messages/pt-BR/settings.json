@@ -391,6 +391,10 @@
       "label": "Pré-corrida da carreira",
       "hint": "Antes de cada etapa da carreira: circuito, clima, pneus e grid com música. Space pula, Enter inicia."
     },
+    "raceEventCards": {
+      "label": "Cartões de eventos da corrida",
+      "hint": "Em corridas com IA: um cartão do piloto quando um carro vence, assume a liderança, faz a volta mais rápida, para no box ou abandona, e uma faixa sobre uma disputa apertada com sua previsão."
+    },
     "boardWidget": {
       "label": "Ranking de tempos",
       "options": {

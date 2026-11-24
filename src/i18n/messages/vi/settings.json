@@ -391,6 +391,10 @@
       "label": "Chương trình trước đua sự nghiệp",
       "hint": "Trước mỗi chặng sự nghiệp: đường đua, thời tiết, lốp và hàng xuất phát kèm nhạc. Nhấn Space để bỏ qua, Enter để bắt đầu."
     },
+    "raceEventCards": {
+      "label": "Thẻ sự kiện cuộc đua",
+      "hint": "Khi đua với AI: thẻ tay đua khi một xe thắng, vươn lên dẫn đầu, lập vòng nhanh nhất, dừng pit hoặc bỏ cuộc, cùng dải theo dõi một cuộc so kè sát nút kèm dự báo."
+    },
     "boardWidget": {
       "label": "Bảng xếp hạng vòng",
       "options": {

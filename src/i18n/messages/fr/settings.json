@@ -391,6 +391,10 @@
       "label": "Avant-course en carrière",
       "hint": "Avant chaque manche de carrière : circuit, météo, pneus et grille en musique. Space passe, Enter lance."
     },
+    "raceEventCards": {
+      "label": "Cartes d’événements de course",
+      "hint": "En course contre l’IA : une carte du pilote quand une voiture gagne, prend la tête, signe le tour le plus rapide, s’arrête au stand ou abandonne, et un bandeau sur une bagarre serrée avec sa prévision."
+    },
     "boardWidget": {
       "label": "Classement",
       "options": {

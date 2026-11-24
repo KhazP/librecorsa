@@ -391,6 +391,10 @@
       "label": "Tayangan prabalapan karier",
       "hint": "Sebelum tiap ronde karier: sirkuit, cuaca, ban, dan grid dengan musik. Space untuk lewati, Enter untuk mulai."
     },
+    "raceEventCards": {
+      "label": "Kartu momen balapan",
+      "hint": "Di Balapan AI: kartu pembalap saat mobil menang, memimpin, mencetak lap tercepat, pit stop, atau gagal finis, dan strip duel ketat beserta prakiraannya."
+    },
     "boardWidget": {
       "label": "Papan waktu lap",
       "options": {

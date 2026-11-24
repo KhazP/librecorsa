@@ -391,6 +391,10 @@
       "label": "Karriere-Vorprogramm",
       "hint": "Vor jedem Karrierelauf: Strecke, Wetter, Reifen und Startaufstellung mit Musik. Space überspringt, Enter startet."
     },
+    "raceEventCards": {
+      "label": "Renn-Ereigniskarten",
+      "hint": "In KI-Rennen: eine Fahrerkarte, wenn ein Auto gewinnt, die Führung übernimmt, die schnellste Runde fährt, an die Box kommt oder ausscheidet, und ein Balken zu einem engen Duell mit Prognose."
+    },
     "boardWidget": {
       "label": "Bestenliste",
       "options": {
