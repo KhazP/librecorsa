@@ -186,7 +186,6 @@
     "list": "Lackierungen von {car}"
   },
   "downloads": {
-    "intro": "Optionale native Wrapper für Windows, macOS, Linux und Android. Sie öffnen librecorsa.org direkt, sodass Spiel-Updates ohne Neuinstallation ankommen.",
     "directLink": "Direktlink",
     "platforms": "Plattformen",
     "thisDevice": "Dieses Gerät",
@@ -198,17 +197,15 @@
     "installCommand": "Installationsbefehl für {platform}",
     "whyInstall": "Warum die App installieren",
     "highlights": {
-      "desktop": {
-        "label": "Desktop",
-        "text": "Fordert auf Laptops mit mehreren GPUs die dedizierte GPU an, erteilt WebHID für Lenkräder und DualSense stillschweigend, deaktiviert die Drosselung im Hintergrund und prüft GitHub Releases auf Updates."
+      "desktopApp": {
+        "label": "Desktop"
       },
       "android": {
         "label": "Android",
         "text": "Vollbild-Trusted-Web-Activity ohne Adressleiste, Sticky-Immersive-Randwischen, Android Game Mode und Launcher-Verknüpfungen für Drive / Boards."
       },
-      "current": {
-        "label": "Immer aktuell",
-        "text": "Jeder Wrapper öffnet librecorsa.org direkt, statt Strecken oder Autos mitzuliefern, sodass Updates für Physik, Strecken und Mehrspieler sofort ankommen."
+      "live": {
+        "label": "Immer aktuell"
       },
       "browser": {
         "label": "Browser & iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "Builds & Signierung",
-    "builds": "Alle Installer und APKs werden von GitHub Actions aus dem Quellcode dieses Repositorys gebaut und mit SHA-256-Prüfsummen auf GitHub Releases veröffentlicht. Kostenlose Windows-Codesignierung über die SignPath Foundation wird gerade eingerichtet; macOS-Builds sind derzeit unsigniert; die Android-APK ist mit dem Upload-Schlüssel signiert, der durch <code>{file}</code> bestätigt wird.",
     "allReleases": "Alle Releases auf GitHub",
     "signingPolicy": "Richtlinie zur Codesignierung"
   }

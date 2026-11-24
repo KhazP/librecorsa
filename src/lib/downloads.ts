@@ -2,15 +2,30 @@ import { text as t } from "@/lib/text";
 import { REPO_URL } from "./site";
 
 /**
- * Native app releases published on GitHub Releases (.github/workflows/release-desktop.yml).
+ * The apps' downloads, each app from its own GitHub release:
+ * - the desktop app for Windows, macOS and Linux (launcher/): a launcher-v* release, made by
+ *   .github/workflows/release-launcher.yml with the files launcher/build.mjs names. It is the repository's latest
+ *   release, which installed copies update themselves from.
+ * - the Android app (android/): an android-v* release, made by .github/workflows/release-android.yml and never marked
+ *   latest.
  *
- * All four platforms (Windows, macOS, Linux, Android) ship from one release tag so desktop auto-updates
- * (electron-updater, which reads the repo's Latest release) never collide with a separate Android release.
- * Update APP_RELEASE when a new desktop-v* tag is published (or when an APK is attached to the current tag).
+ * A link only ever goes to a file that is there: until a release is out (`published: false`) its buttons go to the
+ * releases page, and a file a release doesn't have (`file: null`) to that release's page. Never a dead 404 link.
  */
 
 export type PlatformId = "windows" | "macos" | "linux" | "android";
 export type DetectedPlatform = "windows" | "macos-arm64" | "macos-x64" | "linux" | "android" | null;
+
+export interface AppRelease {
+  /** The release's tag, such as launcher-v0.3.0 */
+  tag: string;
+  /** The version in its file names */
+  version: string;
+  /** YYYY-MM-DD, or null while it isn't out */
+  date: string | null;
+  /** Whether the release is out on GitHub: until it is, its links go to the releases page */
+  published: boolean;
+}
 
 export interface DownloadArtifact {
   id: string;
@@ -18,15 +33,17 @@ export interface DownloadArtifact {
   label: string;
   /** Architecture or format note shown alongside size */
   detail: string;
-  /** Asset filename on GitHub Releases, or null when not attached to this tag yet */
+  /** Asset filename on GitHub Releases, or null when the release doesn't have it */
   file: string | null;
-  /** Exact asset size in bytes, or null when not attached yet */
+  /** Exact asset size in bytes, or null when not known yet */
   sizeBytes: number | null;
 }
 
 export interface PlatformDownload {
   id: PlatformId;
   name: string;
+  /** The release its files come from */
+  release: AppRelease;
   summary: string;
   /** Short honest note on opening/installing the build */
   installNote: string;
@@ -39,41 +56,63 @@ export interface PlatformDownload {
   artifacts: readonly DownloadArtifact[];
 }
 
-export const APP_RELEASE = {
+/**
+ * The desktop app's release. launcher-v0.3.0 is its first: until it is out the Windows, macOS and Linux buttons go to
+ * the releases page. After it is published, set `published: true` and `date`, and fill in each desktop file's
+ * `sizeBytes` from the release (`gh release view launcher-v0.3.0 --json assets`). For a later release, change `tag`,
+ * `version` and `date` (the file names follow `version`), then the sizes.
+ */
+export const DESKTOP_RELEASE: AppRelease = {
+  tag: "launcher-v0.3.0",
+  version: "0.3.0",
+  date: null,
+  published: false,
+};
+
+/**
+ * The Android app's release. Its APK is still the one released with desktop-v0.2.2, the Electron app's release, which
+ * carried the APK too. For an android-v* release, change `tag`, `version`, `date`, and the APK's file name and size.
+ */
+export const ANDROID_RELEASE: AppRelease = {
   tag: "desktop-v0.2.2",
   version: "0.2.2",
-  /** YYYY-MM-DD */
   date: "2026-11-23",
-  releaseUrl: `${REPO_URL}/releases/tag/desktop-v0.2.2`,
-  latestReleasesUrl: `${REPO_URL}/releases/latest`,
+  published: true,
+};
+
+export const RELEASE_LINKS = {
   allReleasesUrl: `${REPO_URL}/releases`,
   codeSigningPolicyUrl: `${REPO_URL}#code-signing-policy`,
 } as const;
+
+/** A desktop file's name, as launcher/build.mjs makes it: LibreCorsa-<version>-<platform>.<format> */
+const desktopFile = (platform: string): string => `LibreCorsa-${DESKTOP_RELEASE.version}-${platform}`;
 
 export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
   {
     id: "windows",
     name: "Windows",
-    get summary() { return t("game.downloads.windowsSummary"); },
-    get installNote() { return t("game.downloads.windowsInstallNote"); },
+    release: DESKTOP_RELEASE,
+    get summary() { return t("game.downloads.desktopSummary"); },
+    get installNote() { return t("game.downloads.windowsZipNote"); },
     signed: false,
     get statusLabel() { return t("game.downloads.windowsStatusLabel"); },
     artifacts: [
       {
         id: "windows-x64",
-        get label() { return t("game.downloads.windowsX64Label"); },
-        get detail() { return t("game.downloads.windowsX64Detail"); },
-        file: "LibreCorsa-0.2.2-win-x64-Setup.exe",
-        sizeBytes: 121_681_197,
+        get label() { return t("game.downloads.windowsZipLabel"); },
+        get detail() { return t("game.downloads.windowsZipDetail"); },
+        file: desktopFile("win-x64.zip"),
+        sizeBytes: null,
       },
     ],
   },
   {
     id: "macos",
     name: "macOS",
-    get summary() { return t("game.downloads.macosSummary"); },
-    get installNote() { return t("game.downloads.macosInstallNote"); },
-    installCommand: "xattr -cr /Applications/LibreCorsa.app",
+    release: DESKTOP_RELEASE,
+    get summary() { return t("game.downloads.desktopSummary"); },
+    get installNote() { return t("game.downloads.macosDmgNote"); },
     signed: false,
     get statusLabel() { return t("game.downloads.macosStatusLabel"); },
     artifacts: [
@@ -81,39 +120,41 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
         id: "macos-arm64",
         get label() { return t("game.downloads.macosArm64Label"); },
         get detail() { return t("game.downloads.macosArm64Detail"); },
-        file: "LibreCorsa-0.2.2-mac-arm64.dmg",
-        sizeBytes: 121_566_744,
+        file: desktopFile("mac-arm64.dmg"),
+        sizeBytes: null,
       },
       {
         id: "macos-x64",
         get label() { return t("game.downloads.macosX64Label"); },
         get detail() { return t("game.downloads.macosX64Detail"); },
-        file: "LibreCorsa-0.2.2-mac-x64.dmg",
-        sizeBytes: 125_687_175,
+        file: desktopFile("mac-x64.dmg"),
+        sizeBytes: null,
       },
     ],
   },
   {
     id: "linux",
     name: "Linux",
-    get summary() { return t("game.downloads.linuxSummary"); },
-    get installNote() { return t("game.downloads.linuxInstallNote"); },
-    installCommand: "chmod +x LibreCorsa-0.2.2-linux-x86_64.AppImage",
+    release: DESKTOP_RELEASE,
+    get summary() { return t("game.downloads.desktopSummary"); },
+    get installNote() { return t("game.downloads.linuxTarNote"); },
+    installCommand: `tar -xzf ${desktopFile("linux-x64.tar.gz")} && ./LibreCorsa/librecorsa`,
     signed: false,
-    statusLabel: "AppImage",
+    statusLabel: "tar.gz",
     artifacts: [
       {
         id: "linux-x64",
-        get label() { return t("game.downloads.linuxX64Label"); },
+        get label() { return t("game.downloads.linuxTarLabel"); },
         get detail() { return t("game.downloads.linuxX64Detail"); },
-        file: "LibreCorsa-0.2.2-linux-x86_64.AppImage",
-        sizeBytes: 126_167_482,
+        file: desktopFile("linux-x64.tar.gz"),
+        sizeBytes: null,
       },
     ],
   },
   {
     id: "android",
     name: "Android",
+    release: ANDROID_RELEASE,
     get summary() { return t("game.downloads.androidSummary"); },
     get installNote() { return t("game.downloads.androidInstallNote"); },
     signed: true,
@@ -130,10 +171,20 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
   },
 ];
 
-/** Direct GitHub Releases asset URL when published, else the latest release page (never a dead 404 link) */
-export function artifactHref(artifact: DownloadArtifact, tag: string = APP_RELEASE.tag): string {
-  if (!artifact.file) return APP_RELEASE.latestReleasesUrl;
-  return `${REPO_URL}/releases/download/${tag}/${artifact.file}`;
+/** A release's own page once it is out, else the releases page (never a dead 404 link) */
+export function releasePageUrl(release: AppRelease): string {
+  return release.published ? `${REPO_URL}/releases/tag/${release.tag}` : RELEASE_LINKS.allReleasesUrl;
+}
+
+/** Whether an artifact's button downloads the file itself: its release is out and has it */
+export function isDirectDownload(artifact: DownloadArtifact, release: AppRelease): boolean {
+  return release.published && artifact.file !== null;
+}
+
+/** The file on GitHub Releases when it is there, else the release's page or the releases page (releasePageUrl) */
+export function artifactHref(artifact: DownloadArtifact, release: AppRelease): string {
+  if (!isDirectDownload(artifact, release)) return releasePageUrl(release);
+  return `${REPO_URL}/releases/download/${release.tag}/${artifact.file}`;
 }
 
 /** Human-readable decimal megabytes (121_681_020 → "122 MB", 1_430_000 → "1.4 MB") */

@@ -186,7 +186,6 @@
     "list": "Libreas de {car}"
   },
   "downloads": {
-    "intro": "Apps nativas opcionales para Windows, macOS, Linux y Android. Abren librecorsa.org directamente, así que las actualizaciones del juego llegan sin reinstalar.",
     "directLink": "Enlace directo",
     "platforms": "Plataformas",
     "thisDevice": "Este dispositivo",
@@ -198,17 +197,15 @@
     "installCommand": "Comando de instalación para {platform}",
     "whyInstall": "Por qué instalar la app",
     "highlights": {
-      "desktop": {
-        "label": "Escritorio",
-        "text": "Solicita la GPU dedicada en equipos portátiles con varias GPU, concede WebHID en silencio para volantes y DualSense, desactiva la limitación en segundo plano y busca actualizaciones en GitHub Releases."
+      "desktopApp": {
+        "label": "Escritorio"
       },
       "android": {
         "label": "Android",
         "text": "Trusted Web Activity a pantalla completa sin barra de URL del navegador, gestos de borde inmersivos fijos, Android Game Mode y accesos directos Drive / Boards."
       },
-      "current": {
-        "label": "Siempre al día",
-        "text": "Cada app abre librecorsa.org directamente en lugar de incluir pistas o autos, así que las actualizaciones de física, circuitos y multijugador llegan al instante."
+      "live": {
+        "label": "Siempre al día"
       },
       "browser": {
         "label": "Navegador e iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "Compilaciones y firma",
-    "builds": "Todos los instaladores y APK se compilan desde el código fuente de este repositorio con GitHub Actions y se publican en GitHub Releases con sumas SHA-256. Se está configurando la firma de código gratuita para Windows con SignPath Foundation; las compilaciones de macOS están sin firmar por ahora; el APK de Android está firmado con la clave de subida verificada por <code>{file}</code>.",
     "allReleases": "Todas las versiones en GitHub",
     "signingPolicy": "Política de firma de código"
   }

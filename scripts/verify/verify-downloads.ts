@@ -1,18 +1,25 @@
 /**
- * App download catalog and visitor platform detection (src/lib/downloads.ts): every platform has valid URLs,
- * Android UA is never misclassified as Linux, iOS gets no desktop/APK recommendation, macOS distinguishes Intel
+ * App download catalog and visitor platform detection (src/lib/downloads.ts): every platform has valid URLs from its
+ * own release (the desktop app's for Windows, macOS and Linux, the Android app's), an unpublished release never links
+ * a file (no 404), Android UA is never misclassified as Linux, iOS gets no desktop/APK recommendation, macOS distinguishes Intel
  * from Apple Silicon via UA-CH, and visitor ordering puts the matching platform first without dropping any others.
  *
  *   npx tsx scripts/verify/verify-downloads.ts
  */
 import {
-  APP_RELEASE,
+  ANDROID_RELEASE,
+  DESKTOP_RELEASE,
   PLATFORM_DOWNLOADS,
+  RELEASE_LINKS,
   artifactHref,
   detectVisitorPlatform,
   formatDownloadSize,
+  isDirectDownload,
   orderPlatformsForVisitor,
   platformIdOf,
+  releasePageUrl,
+  type AppRelease,
+  type DownloadArtifact,
 } from "../../src/lib/downloads";
 
 let failed = 0;
@@ -30,20 +37,56 @@ check(
     (p) =>
       p.artifacts.length > 0 &&
       p.artifacts.every((a) => {
-        const href = artifactHref(a);
-        return href.startsWith("https://github.com/librecorsa/librecorsa/releases/") && !href.includes("undefined");
+        const href = artifactHref(a, p.release);
+        return href.startsWith("https://github.com/librecorsa/librecorsa/releases") && !href.includes("undefined");
       }),
   ),
 );
 check(
-  "Direct artifacts point to the current release tag",
-  PLATFORM_DOWNLOADS.flatMap((p) => p.artifacts)
-    .filter((a) => a.file !== null)
-    .every((a) => artifactHref(a) === `https://github.com/librecorsa/librecorsa/releases/download/${APP_RELEASE.tag}/${a.file}`),
+  "Windows, macOS and Linux come from the desktop app's release, Android from its own",
+  PLATFORM_DOWNLOADS.every((p) => p.release === (p.id === "android" ? ANDROID_RELEASE : DESKTOP_RELEASE)) &&
+    DESKTOP_RELEASE !== ANDROID_RELEASE,
 );
 check(
-  "Unpublished artifacts fall back to the latest release page (no 404)",
-  artifactHref({ id: "t", label: "Download .apk", detail: "Android", file: null, sizeBytes: null }) === APP_RELEASE.latestReleasesUrl,
+  "The desktop app's release is a launcher-v tag of its version",
+  DESKTOP_RELEASE.tag === `launcher-v${DESKTOP_RELEASE.version}` && ANDROID_RELEASE.tag.endsWith(`-v${ANDROID_RELEASE.version}`),
+  `${DESKTOP_RELEASE.tag}, ${ANDROID_RELEASE.tag}`,
+);
+check(
+  "Desktop files are named as launcher/build.mjs makes them",
+  JSON.stringify(PLATFORM_DOWNLOADS.filter((p) => p.release === DESKTOP_RELEASE).flatMap((p) => p.artifacts.map((a) => a.file))) ===
+    JSON.stringify(["win-x64.zip", "mac-arm64.dmg", "mac-x64.dmg", "linux-x64.tar.gz"].map((f) => `LibreCorsa-${DESKTOP_RELEASE.version}-${f}`)),
+);
+check(
+  "A published release has its date; an unpublished one none",
+  [DESKTOP_RELEASE, ANDROID_RELEASE].every((r) => (r.published ? /^\d{4}-\d{2}-\d{2}$/.test(r.date ?? "") : r.date === null)),
+);
+check(
+  "Direct artifacts point to their own release's tag",
+  PLATFORM_DOWNLOADS.every((p) =>
+    p.artifacts
+      .filter((a) => isDirectDownload(a, p.release))
+      .every((a) => artifactHref(a, p.release) === `https://github.com/librecorsa/librecorsa/releases/download/${p.release.tag}/${a.file}`),
+  ),
+);
+check(
+  "Every artifact of an unpublished release links the releases page, never a file (no 404)",
+  PLATFORM_DOWNLOADS.filter((p) => !p.release.published).every((p) =>
+    p.artifacts.every((a) => !isDirectDownload(a, p.release) && artifactHref(a, p.release) === RELEASE_LINKS.allReleasesUrl),
+  ),
+);
+const unpublished: AppRelease = { tag: "launcher-v9.9.9", version: "9.9.9", date: null, published: false };
+const published: AppRelease = { tag: "launcher-v9.9.9", version: "9.9.9", date: "2026-12-01", published: true };
+const someFile: DownloadArtifact = { id: "t", label: "Download .zip", detail: "Windows x64", file: "LibreCorsa-9.9.9-win-x64.zip", sizeBytes: null };
+const noFile: DownloadArtifact = { ...someFile, file: null };
+check(
+  "An unpublished release links the releases page, for its files and its own page",
+  artifactHref(someFile, unpublished) === RELEASE_LINKS.allReleasesUrl && releasePageUrl(unpublished) === RELEASE_LINKS.allReleasesUrl,
+);
+check(
+  "Once published, a file links itself and a missing one the release's page",
+  artifactHref(someFile, published) === "https://github.com/librecorsa/librecorsa/releases/download/launcher-v9.9.9/LibreCorsa-9.9.9-win-x64.zip" &&
+    artifactHref(noFile, published) === "https://github.com/librecorsa/librecorsa/releases/tag/launcher-v9.9.9",
 );
 
 // --- Size formatting ---

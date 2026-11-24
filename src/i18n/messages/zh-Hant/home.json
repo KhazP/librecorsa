@@ -186,7 +186,6 @@
     "list": "{car} 塗裝列表"
   },
   "downloads": {
-    "intro": "提供 Windows、macOS、Linux 與 Android 的選用原生封裝應用程式。程式直接開啟 librecorsa.org，遊戲更新無需重新安裝。",
     "directLink": "直接連結",
     "platforms": "支援平台",
     "thisDevice": "此裝置",
@@ -198,17 +197,15 @@
     "installCommand": "{platform} 安裝指令",
     "whyInstall": "為何安裝應用程式",
     "highlights": {
-      "desktop": {
-        "label": "桌面版",
-        "text": "在雙顯卡筆電上請求啟用獨立 GPU、為方向盤與 DualSense 靜默授權 WebHID、停用背景降速，並透過 GitHub Releases 檢查更新。"
+      "desktopApp": {
+        "label": "桌面版"
       },
       "android": {
         "label": "Android",
         "text": "全螢幕無網址列 Trusted Web Activity、沉浸式邊緣手勢、Android Game Mode，以及「開始駕駛／圈速榜」桌面捷徑。"
       },
-      "current": {
-        "label": "永遠保持最新",
-        "text": "所有封裝程式皆直接開啟 librecorsa.org，不另外打包賽道或車輛，物理引擎、賽道與多人連線更新都會即時套用。"
+      "live": {
+        "label": "永遠保持最新"
       },
       "browser": {
         "label": "瀏覽器與 iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "建置與簽章",
-    "builds": "所有安裝檔與 APK 均由 GitHub Actions 自本專案原始碼建置，並連同 SHA-256 雜湊值發佈於 GitHub Releases。透過 SignPath Foundation 申請的免費 Windows 程式碼簽章正在設定中；macOS 版本目前為未簽章；Android APK 則以 <code>{file}</code> 驗證的上傳金鑰簽章。",
     "allReleases": "GitHub 所有發行版本",
     "signingPolicy": "程式碼簽章政策"
   }
