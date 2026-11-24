@@ -2526,7 +2526,8 @@ export class AiOpponentField implements AiRace {
 
   /**
    * The player's car on autopilot drives its line blind to traffic: in a race it gets the same grid-lane hold off the
-   * start and "never closer than it could stop" cap as the AI cars, or it swerves across rows / runs into the back of them.
+   * start, "never closer than it could stop" cap and path check as the AI cars, or it swerves across rows / runs into
+   * the back of them.
    */
   private capPlayerAutopilot(L: number, dtS: number): void {
     const me = this.cars.find((c) => c.isPlayer);
@@ -2549,9 +2550,22 @@ export class AiOpponentField implements AiRace {
     }
     const sample = this.track.getSampleAtDistance(sim.sMeters);
     const line = aiLineOffsetM(sample, sim.racingLineId);
+    // The path check the AI cars run (`pathCheck`): where its line takes it over the next moments against where each
+    // car near it will be. A car its line closes onto is followed, one beside it would squeeze is given room (or, with
+    // none, a lift to drop in behind). Looking only down its own lane, it came down the outside into a pack braking for
+    // a hairpin at racing speed and turned in across the car beside it (GT3s at RISE short's Turn 3, on lap 1)
+    let check: { capMs: number; biasM: number | null; rateMs: number | null } | null = null;
+    if (this.phase === 'racing' && !this.rollingFormation && me.startLaneM === null && this.rc.predictS > 0) {
+      this.predictShare = this.rc.predictAiLatWet > 0 || this.environment.weatherPaceScale(sim) >= 0.999 ? 1 : 0;
+      check = this.pathCheck(me, me.biasM, AVOID_RATE_MS, sample.width / 2 - 1.2, line);
+    }
     // Hold the grid lane through the lights and off the start until a corner arrives or the opening run is done
     if (me.startLaneM !== null) {
       me.biasM = clamp(me.startLaneM - line, -6, 6);
+      if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
+    } else if (check && check.biasM !== null) {
+      const rate = check.rateMs ?? AVOID_RATE_MS;
+      me.biasM += clamp(check.biasM - me.biasM, -rate * dtS, rate * dtS);
       if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
     } else if (me.biasM !== 0) {
       // Ease back to the racing line at a frame-rate-independent rate (τ ≈ 0.25 s)
@@ -2593,6 +2607,7 @@ export class AiOpponentField implements AiRace {
         cap = Math.min(cap, follow);
       }
     }
+    if (check) cap = Math.min(cap, check.capMs);
     sim.aiSpeedCapMs = cap;
   }
 
@@ -2643,7 +2658,8 @@ export class AiOpponentField implements AiRace {
     half: number,
     line: number
   ): { capMs: number; biasM: number | null; rateMs: number | null } {
-    const me = car.ai as SimulatorCar;
+    // (the AI car's own physics, or the player's car on its autopilot: `capPlayerAutopilot`)
+    const me = car.sim;
     const L = this.track.totalLengthM;
     const steps = Math.min(this.pathLine.length, Math.max(1, Math.round(this.rc.predictS / PATH_STEP_S)));
     const meS = me.sMeters;
@@ -2687,8 +2703,10 @@ export class AiOpponentField implements AiRace {
       const besideNow = Math.abs(dsNow) < lenGap;
       const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0) + (besideNow && this.rc.yawMargin > 0 ? this.yawRoomM(this.worldHeading(me), os) : 0);
       // Another AI car already beside us keeps the racecraft rules too (room on its side, the corner yielded): those
-      // rules deal with it. The player's car is checked all the way: it keeps none of them
-      if (!human && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
+      // rules deal with it. The player's car is checked all the way: it keeps none of them (nor, on its autopilot, does
+      // it keep them against the AI cars: it checks every car all the way)
+      const keepsRules = !human && !car.isPlayer;
+      if (keepsRules && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
       const oV = Math.max(0, os.vxMs);
       const oA = (os.telemetry.longitudinalG ?? 0) * 9.81;
       const oLat = human ? this.lateralSpeedMs(os) : 0;
@@ -2730,7 +2748,7 @@ export class AiOpponentField implements AiRace {
         // Ahead: slot in behind it
         capMs = Math.min(capMs, followCapMs(os, dsNow - CAR_LEN_M - (human ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2));
       } else if (dsNow > -lenGap) {
-        if (!human && this.rc.pathSidePlayerOnly) continue;
+        if (keepsRules && this.rc.pathSidePlayerOnly) continue;
         // Beside: room on our side of it, made quickly, if the road has it; and, not clearly ahead, a lift to drop in
         // behind when it doesn't or the move can't be made in time
         let want: number = (biasM ?? biasTarget) + away * (hit.need + 0.1);
