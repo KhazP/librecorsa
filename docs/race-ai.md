@@ -1,78 +1,73 @@
-# Race AI, contact and damage
+# Race AI, contact, and damage
 
-How an AI race works: who drives what, what happens when cars touch, and how race control judges it. The numbers
-in this file are tuning values checked against headless races. They are not measured or regulatory figures.
+LibreCorsa's AI field drives the same 500 Hz rigid-body vehicle physics as the player, layered with racecraft planning, human-like reaction delays after collisions, zone-based damage, and automated race control. All numeric thresholds below are tuning constants validated against headless race simulations rather than regulatory figures.
 
-## Layers
+## Architecture layers
 
-| Layer | File | What it does |
-|---|---|---|
-| Line and speed | `speed-profile.ts`, `ai-tuning.ts`, `public/ai/*.json` | Each car's limit speed along its racing line, scaled by skill, per-lap errors and what it has learnt per corner |
-| Driving | `F12026CarSim.autopilot` / `F1Physics2026` | Pure pursuit plus a yaw-rate loop on the full vehicle model, at 500 Hz |
-| The driver's hands | `ai-car-control.ts` | Reaction time after a knock, the catch-or-spin decision, stopping, waiting for a gap, rejoining, marshals |
-| Racecraft | `ai-racecraft.ts` + `AiOpponentField.planTraffic` | Lateral target and speed cap per car from the cars around it |
-| Contact | `track-evolution.ts` (OBB solver) + `AiOpponentField.resolveContacts` | Impulse with off-centre yaw, impact-scaled caps, world-space broad phase |
-| Damage | `car-damage.ts` | Per-zone damage from impact speed and contact point; aero, toe, grip, punctures, retirement |
-| Race control | `race-incidents.ts` | Blame, penalties, warnings, yellow flags, the HUD messages |
+| Layer | Source files | Responsibility |
+| :-- | :-- | :-- |
+| **Line and speed** | `speed-profile.ts`, `ai-tuning.ts`, `public/ai/*.json` | Computes each car's speed profile along its racing line, scaled by skill, per-lap error, and corner-by-corner learning |
+| **Vehicle control** | `F12026CarSim.autopilot` / `F1Physics2026` | Pure-pursuit steering with a yaw-rate feedback loop running on the full 500 Hz vehicle model |
+| **Driver reaction** | `ai-car-control.ts` | Post-impact reaction latency, catch-or-spin logic, braking to a stop, waiting for a safe gap, rejoining, and marshal recovery |
+| **Racecraft** | `ai-racecraft.ts`, `AiOpponentField.planTraffic` | Chooses lateral lane offsets and speed caps based on surrounding traffic and flags |
+| **Contact solver** | `track-evolution.ts` (OBB solver), `AiOpponentField.resolveContacts` | World-space broad phase plus oriented-bounding-box impulse solver with off-centre yaw torque and impact-scaled caps |
+| **Damage** | `car-damage.ts` | Per-zone structural damage from impact normal velocity and contact point: aero loss, toe bend, grip loss, punctures, and retirements |
+| **Race control** | `race-incidents.ts` | Fault attribution, time penalties, warnings, local yellow flags, and HUD steward notifications |
 
 ## Racecraft rules
 
-- **Following.** A car never closes on the car in its path faster than it could still stop behind it:
-  `v ≤ v_ahead + √(2·6·(gap − 2.5))`. Without this, the pack ran into each other going into braking zones.
-- **Passing.** The car stays in the tow until it is close (nose to tail `3 + (0.9 + t)·closing` m, where `t` is the
-  time the move across takes, and 6 m more with a corner ahead), then pulls out. Once
-  started, the pass is held even after the car leaves the other car's wake. It commits to a side when the braking
-  zone is near, and pushes a little harder once alongside. A pass is only started if the car can draw alongside
-  before the turn-in plus part of the braking zone (`passFeasible`). That rules out lunges.
-- **Corner ownership.** The car on the inside, with its nose at least at the other car's middle, owns the corner.
-  The outside car yields only if it doesn't own the corner.
-- **Defending.** One move per straight, made on the throttle, never against a car already alongside or one lapping
-  us, and never under a yellow.
-- **Blue flags.** A car about to be lapped gives up the inside of the next corner.
-- **Hazards.** A car that is spinning, stopped, crawling or retired is an obstacle to pass on the side with room. If
-  the gap is tight the car slows down for it, and it is never followed into. The yellow zone runs from 350 m before
-  the hazard to 40 m after it. Cars in it lift and don't overtake.
-- **Side by side.** Cars keep about 0.9 m of air (2.9 m centre to centre).
+- **Safe following:** A car caps its closing speed behind traffic ahead so it can always brake cleanly into corners: `v ≤ v_ahead + √(2·6·(gap − 2.5))`. This prevents pack pile-ups in heavy braking zones.
+- **Overtaking:** Attacking cars stay in the slipstream until nose-to-tail distance drops to `3 + (0.9 + t)·closing` metres (where `t` is the lateral lane-change time, plus an extra `6 m` when approaching a corner), then pull out to pass. Once initiated, the move is held even after leaving the tow. The car commits to a side approaching the braking zone and pushes slightly harder once alongside. Moves are gated by `passFeasible`, which cancels speculative lunges that cannot get alongside before turn-in plus part of the braking zone.
+- **Corner ownership:** An inside car with its nose at least level with the outside car's midpoint owns the corner. The outside car yields only if it does not hold ownership.
+- **Defending:** Limited to one defensive move per straight while on throttle—never against a car already alongside, never against a lapping car, and never under yellow flags.
+- **Blue flags:** Cars about to be lapped concede the inside line at the upcoming corner.
+- **Hazards and local yellows:** Spinning, stopped, crawling, or retired cars are treated as obstacles rather than cars to draft—AI steers to whichever side offers clear space and slows when gaps are tight. Each hazard projects a yellow-flag zone from `350 m` before to `40 m` after the incident, within which AI drivers lift and hold position.
+- **Side-by-side clearance:** Cars leave roughly `0.9 m` of daylight between bodies (`2.9 m` centre-to-centre).
 
-## Contact and the driver
+## Contact and driver reaction
 
-The autopilot has no reaction time, so on its own it caught every slide at once. When a car is knocked (yaw
-change > 0.18 rad/s, lateral speed change > 0.9 m/s, or a barrier hit > 4 m/s), the driver holds the wheel and lifts
-for their reaction time, which is 0.17 to 0.36 s depending on skill. After that, the autopilot gets the car back only
-if body slip and yaw error are inside the driver's catch. Otherwise the car spins with both feet in, stops, waits
-for the road behind to clear, and rejoins at walking pace. If it faces the wrong way, it turns round first. The
-marshals move a car only when it can't get going on its own.
+A raw autopilot has zero reaction latency and would catch virtually every slide instantly. To produce realistic incidents, LibreCorsa inserts a human reaction layer whenever a car takes a significant knock (yaw-rate delta `> 0.18 rad/s`, lateral velocity delta `> 0.9 m/s`, or a barrier impact `> 4 m/s`):
 
-## Damage
+1. **Reaction hold:** The AI freezes steering and lifts off the throttle for a skill-dependent reaction window of `0.17`–`0.36 s`.
+2. **Catch or spin:** Once the window expires, the autopilot recovers the car only if body slip angle and yaw error remain within the driver's catch envelope.
+3. **Recovery and rejoin:** Beyond that limit, the car locks all four brakes and spins to a halt, waits for oncoming traffic to clear, rotates back onto the track direction if facing the wrong way, and rejoins at walking pace. Track marshals relocate a car only if it is permanently stranded.
 
-Damage is judged by the closing speed along the contact normal. Barrier hits count 1.25× as hard.
+## Damage model
 
-| | Reduced | Full |
-|---|---|---|
-| Aero parts (2 → 20 m/s) | half | full |
-| Suspension near a wheel (from 6 m/s) | half | full |
-| Puncture chance on a wheel (from 4 m/s) | yes | yes |
-| One hit that retires the car | 34 m/s | 24 m/s |
+Structural damage scales with closing speed along the contact normal. Barrier impacts are weighted `1.25×` heavier than car-to-car contact.
 
-On the f12026-car physics, which the LC26 ships on too, damage reaches the car through the wake multipliers
-(downforce, drag), per-wheel grip and toe, and engine torque. On the LC26's older engine it only takes the aero loss.
+| Component / outcome | Reduced damage | Full damage |
+| :-- | :-- | :-- |
+| Aero bodywork (`2` → `20 m/s`) | 50% scale | 100% scale |
+| Suspension near a wheel (from `6 m/s`) | 50% scale | 100% scale |
+| Tyre puncture chance on wheel impact (from `4 m/s`) | Enabled | Enabled |
+| Single-impact terminal retirement | `34 m/s` | `24 m/s` |
+
+On the `f12026-car` rigid-body engine (also used by the LC26), damage degrades downforce and drag multipliers, individual wheel grip and toe alignment, and engine torque output. On the legacy LC26 engine, damage applies aerodynamic loss only.
 
 ## Race control
 
-Contacts under 1.5 m/s are ignored. The others are judged on the facts at the moment of contact:
+Glancing contacts below `1.5 m/s` are ignored. Harder collisions are classified from the cars' relative geometry at impact:
 
-- **From behind** (cars in line, the car behind not yet alongside): the car behind is at fault.
-- **Alongside:** the car that moved across into the other is at fault.
-- **Anything else** is a racing incident.
+- **Rear-end:** Trailing car is inline and not yet alongside → trailing car is at fault.
+- **Side-to-side:** Cars are already alongside → whichever car moved laterally across into the other is at fault.
+- **All other cases:** Recorded as a racing incident with no blame assigned.
 
-Three seconds later race control looks at the consequences. If the at-fault car spun, damaged or retired the other
-car, that is causing a collision: 5 s, or 10 s if the other car is out. Without a consequence, the player gets a
-warning. An AI driver at fault races with more caution for 20 s.
+Stewards wait **3 seconds** to assess consequences:
 
-## Checking it
+- If the innocent car spun, took damage, or retired, the at-fault driver receives a **causing a collision** penalty: `+5 s`, or `+10 s` if the victim retired.
+- If no lasting consequence occurred, a human driver at fault receives a warning.
+- Any AI driver judged at fault drives more conservatively for the next `20 s`.
 
-```
-npx tsx scripts/verify-race-contact.ts     # rear-end, taps, spins, rejoin, a stopped car, barriers, damage off
-npx tsx scripts/verify-race-craft.ts       # judgements, race control, grid, a duel, a stopped car on the line
+## Running the verification suites
+
+```bash
+# Contact physics, spins, rejoins, stopped cars, barriers, and damage-off checks
+npx tsx scripts/verify-race-contact.ts
+
+# Steward decisions, grid behavior, duels, and stopped-car avoidance
+npx tsx scripts/verify-race-craft.ts
+
+# Full headless race benchmark with results summary
 npm run race:headless -- --track rwanda_official_short --car f12026-car --laps 3 --cars 8 --grid qualifying --damage full
 ```
