@@ -397,7 +397,7 @@ def readme_facts(paths):
     return authors, licence, terms
 
 
-def hillclimb_markers(src, files):
+def hillclimb_markers(src):
     """The model holding a hill climb's start and finish gates (AC_AB_START_* / AC_AB_FINISH_*): AC.kn5 in most, else
     the smallest that has them"""
     cands = sorted((f for f in os.listdir(src) if f.lower().endswith('.kn5')),
@@ -505,7 +505,7 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
     if kind:
         cfg['type'] = note('type', kind, f'{ui_rel} (tags)')
     if kind == 'hillclimb':
-        markers = hillclimb_markers(src, kn5)
+        markers = hillclimb_markers(src)
         if not markers:
             raise EntryError(f'{src}: tagged a hill climb, but no model holds its start and finish gates (AC_AB_START, '
                              'AC_AB_FINISH). Set "type" and "pointToPoint" in --settings if it is a closed circuit')

@@ -1033,7 +1033,6 @@ function mapPlanning(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnT
   const c = defaultCompound(mod);
   const radius = mod.num('tyres.ini', `REAR${c}`, 'RADIUS');
   const turbos = acTurbos(mod);
-  const eff = base.config.gearbox.efficiency;
   // The peak up to the limiter, as the engine reaches it (acCarFacts' rule)
   const limiter = mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER') || Infinity;
   let peakW = 0;
