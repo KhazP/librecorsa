@@ -13,10 +13,12 @@
  * - C5.2.11: at most 500 Nm of MGU-K torque, referred to the crankshaft.
  * - C5.2.12: from a standing start the MGU-K deploys only once the car has reached 50 km/h.
  * - C5.2.21: electrical and mechanical power convert at a fixed 0.97.
- * - C5.12.4 to C5.12.7: when the control unit takes power away with the driver flat out (a power-limited period), the
- *   driver's maximum demand drops by at most 150 kW at once, then the ERS-K's power by at most 100 kW a second while it
- *   is over 100 kW; not below 210 km/h, in a gearshift, with the driver off the throttle, or where the speed limit
- *   above takes it. None of it is given back in the same period except by the driver's Boost.
+ * - C5.12.4 to C5.12.7: when the control unit takes power away with the driver flat out above 210 km/h, entering Power
+ *   Limited Pending (PLP) on fresh full throttle caps the initial drop at 150 kW held fixed for 1 s (larger in FIA
+ *   Power Reduction sectors), after which Power Limited (PL) ramps ERS-K power down at no faster than 100 kW/s
+ *   (50 kW/s on circuits over 3.5 km power-limited) while above 100 kW, then drops freely below 100 kW; not below
+ *   210 km/h, in a gearshift, with the driver off the throttle, or where the speed limit above takes it. None of it is
+ *   given back in the same period except by the driver's Boost.
  * - B7.2.3: in practice and qualifying (lap-time sessions) Overtake is active all the time; in a race it is earned at
  *   the detection line within the detection gap (`overtaking-rules.ts`).
  *
@@ -71,6 +73,22 @@ export const SUPERCLIP_DC_W = 350_000;
 export const SUPERCLIP_RAMP_WPS = 540_000;
 
 /**
+ * Slew rate when Boost recovers power after a cut or superclipping (DC W/s): 0 → 350 kW in 0.175 s (0 → 150 kW in
+ * 0.075 s) so pressing Boost feels immediate without snapping the halfshafts on a 700 kW reversal
+ */
+export const BOOST_RAMP_WPS = 2_000_000;
+
+/**
+ * Minimum throttle above which normal positive MGU-K deployment blends in (0..1): below this threshold, part-throttle
+ * torque arbitration uses surplus ICE torque to harvest into the MGU-K transparently without altering net wheel torque;
+ * above it, MGU-K deployment ramps smoothly to 100 % at full throttle (Boost deploys from any positive pedal)
+ */
+export const DEPLOY_THROTTLE_START = 0.6;
+
+/** Energy margin kept at the bottom of the store so the battery never snaps to 0 J under power (J; 0.5 % of 4 MJ) */
+export const CUT_ENERGY_MARGIN_J = 20_000;
+
+/**
  * Minimum speed to start normal energy-management superclipping (km/h): keeps full-throttle harvest to the top end of
  * straights and gives hysteresis above the 210 km/h release floor (Charge mode still harvests from 210 km/h)
  */
@@ -91,16 +109,25 @@ const PENDING_S = 1;
 const FLAT_OUT = 0.95;
 
 /**
- * The energy a cut from `fromW` of deployment takes at the rules' rates (J): 150 kW at once, held fixed for 1 s
- * (C5.12.4), then 100 kW/s (or 50 kW/s) down to 100 kW, under which it may go at once; with 20 kJ to spare
+ * The energy a power-limited cut (C5.12.6 / C5.12.7) from `fromW` down to 100 kW at `rateWps` (100 or 50 kW/s) takes,
+ * under which the rest drops at once; plus `CUT_ENERGY_MARGIN_J` (20 kJ) to spare
  */
 export function cutEnergyJ(fromW: number, rateWps: number = F1_2026_ERS.limitRateWps): number {
   const R = F1_2026_ERS;
-  const after = fromW - R.limitStepW;
-  if (after <= 0) return 20_000;
-  const holdJ = after * R.limitHoldS;
-  if (after <= R.limitFreeBelowW) return 20_000 + holdJ;
-  return 20_000 + holdJ + (0.5 * (after + R.limitFreeBelowW) * (after - R.limitFreeBelowW)) / rateWps;
+  if (fromW <= R.limitFreeBelowW) return CUT_ENERGY_MARGIN_J;
+  return CUT_ENERGY_MARGIN_J + (0.5 * (fromW + R.limitFreeBelowW) * (fromW - R.limitFreeBelowW)) / rateWps;
+}
+
+/**
+ * Inverse of `cutEnergyJ`: the highest DC deploy power (W) from which the store's remaining `energyJ` can still execute
+ * a compliant C5.12.6 ramp down to 100 kW at `rateWps` without emptying. Draining along this ceiling naturally yields
+ * dP/dt = −rateWps down to 100 kW at `CUT_ENERGY_MARGIN_J`, then cuts cleanly to 0 W
+ */
+export function maxSafeDeployW(energyJ: number, rateWps: number = F1_2026_ERS.limitRateWps): number {
+  if (energyJ <= CUT_ENERGY_MARGIN_J) return 0;
+  const R = F1_2026_ERS;
+  const p0 = R.limitFreeBelowW;
+  return Math.min(R.maxDcW, Math.sqrt(p0 * p0 + 2 * rateWps * (energyJ - CUT_ENERGY_MARGIN_J)));
 }
 
 /**
@@ -210,18 +237,20 @@ export interface ErsStepInput {
 export class Ers2026Control {
   /** The control unit's own deployment ceiling (DC W): what its cuts have left of the motor */
   private levelW = 0;
-  /** In a power-limited period: flat out above 210 km/h with power taken away (C5.12.4 to 7) */
+  /** Flat out above 210 km/h (in either Power Limited Pending or Power Limited) */
+  private inPeriod = false;
+  /** Power has been reduced below full demand or superclipping is active inside this period */
   private limited = false;
-  /** Remaining mandatory 1 s fixed hold after the initial cut step (C5.12.4) */
+  /** Remaining mandatory 1 s fixed hold for the Power Limited Pending (PLP) initial reduction (C5.12.4) */
   private holdS = 0;
+  /** Whether the previous step was flat out (`throttle >= FLAT_OUT`), to detect entering PLP at >= 210 km/h */
+  private prevFlatOut = false;
   /** Harvesting flat out in this power-limited period */
   private superclipping = false;
   /** Ramped superclipping harvest power (DC W, 0..SUPERCLIP_DC_W) */
   private superclipW = 0;
   /** Latched when speed drops below 210 km/h during superclipping, cleared on lift/reset/boost to stop 210 km/h chatter */
   private superclipInhibited = false;
-  /** Latched when a battery-protection cut starts (`!storeOk`), so mid-cut curve drops never bounce power back up */
-  private storeCut = false;
   /** Holding the deployment back after a standing start (C5.2.12) */
   private standingStart = false;
   /** The DC power the store gave the motor last step (W, + deploy): a cut runs from it */
@@ -229,7 +258,7 @@ export class Ers2026Control {
   /** The driver's Boost held since this press, and the power it was pressed at (DC W) */
   private boostHeld = false;
   private boostFromW = 0;
-  /** Time flat out (s), towards a power-limited period */
+  /** Time flat out at >= PENDING_THROTTLE (s), towards Alt 1 power-limited period */
   private flatS = 0;
   /** The deployment ceiling this step, the rules' and the control unit's (DC W) */
   public deployCeilingW = 0;
@@ -248,13 +277,13 @@ export class Ers2026Control {
 
   reset(): void {
     this.levelW = 0;
-    this.limited = this.superclipping = this.superclipInhibited = this.storeCut = this.standingStart = this.boostHeld = false;
+    this.inPeriod = this.limited = this.superclipping = this.superclipInhibited = this.standingStart = this.boostHeld = this.prevFlatOut = false;
     this.holdS = this.superclipW = this.lastDcW = this.deployCeilingW = this.fillCeilingW = this.boostFromW = this.flatS = 0;
   }
 
   /** A step the control did not run: the driver lifting or braking, or the drive out. Any power-limited period ends */
   release(): void {
-    this.limited = this.superclipping = this.superclipInhibited = this.storeCut = false;
+    this.inPeriod = this.limited = this.superclipping = this.superclipInhibited = this.prevFlatOut = false;
     this.holdS = this.superclipW = this.deployCeilingW = this.fillCeilingW = this.boostFromW = this.flatS = 0;
   }
 
@@ -273,6 +302,9 @@ export class Ers2026Control {
     const R = F1_2026_ERS;
     if (this.standingStart && i.speedKmh >= R.standingStartKmh) this.standingStart = false;
     const share = Math.max(0, i.share);
+    const flatOut = i.throttle >= FLAT_OUT;
+    const wasFlatOut = this.prevFlatOut;
+    this.prevFlatOut = flatOut;
     this.flatS = i.throttle >= PENDING_THROTTLE ? this.flatS + i.h : 0;
     const alt1 = i.alt1Sector && this.flatS >= PENDING_S;
     let capW = ersKDeployLimitW(i.speedKmh, i.overtake, i.curves, alt1);
@@ -293,76 +325,97 @@ export class Ers2026Control {
     // In Low Grip Conditions it only stops the power dropping: no cut while it is held, and nothing raised or given back
     const boostRaises = this.boostHeld && !i.boostHoldOnly;
     const boostHolds = this.boostHeld && i.boostHoldOnly;
-    let wantW = fullW;
-    if (boostRaises && managedCut) wantW = i.boostCapped ? Math.min(fullW, Math.max(this.boostFromW, BOOST_RACE_FLOOR_W)) : fullW;
-    // The store is never run empty under power: a cut from the most the motor may deploy here, at the rules' rates,
-    // needs this much (an empty store would drop the motor at once, faster than they allow). Under Boost, allow up to
-    // 150 kW down to the 20 kJ floor only when already at or below 150 kW (or when free below 210 km/h / off throttle)
-    // and not in a battery-protection cut, so draining from > 150 kW always executes its full regulated cut to 0 without
-    // hitting 0 J. Using min(levelW, lastDcW) matches the cut origin and absorbs small engine-speed prediction overshoot.
-    const flatOut = i.throttle >= FLAT_OUT;
+
     const slow = i.speedKmh < R.limitFreeBelowKmh;
     const liftedOrSlow = !flatOut || slow;
     if (!flatOut) this.superclipInhibited = false;
-    if (liftedOrSlow) this.storeCut = false;
 
+    // The store is never run empty under power: `maxSafeDeployW` caps deploy along the exact C5.12.6 deceleration
+    // parabola so draining at full throttle always ramps down at cutRateWps to 100 kW at 20 kJ (0.5 % SOC) and cuts
+    // cleanly to 0 W without ever snapping to 0 J or stranding usable charge above 0.5 % SOC.
     const energyJ = i.soc * R.storeJ;
-    const mostW = Math.max(this.lastDcW, capW * Math.max(share, i.fillShare));
-    if (this.storeCut && energyJ > cutEnergyJ(R.maxDcW, i.cutRateWps)) this.storeCut = false;
-    const storeOk = !this.storeCut && energyJ > cutEnergyJ(mostW, i.cutRateWps) && !this.standingStart;
-    const cutOriginW = Math.min(this.levelW, Math.max(0, this.lastDcW));
-    const boostFloorOk =
-      boostRaises &&
-      !this.standingStart &&
-      !this.storeCut &&
-      (liftedOrSlow || cutOriginW <= BOOST_RACE_FLOOR_W) &&
-      energyJ > cutEnergyJ(BOOST_RACE_FLOOR_W, i.cutRateWps);
-    let allowed = (!managedCut || boostRaises) && storeOk;
-    if (!allowed && boostFloorOk) {
-      wantW = Math.min(wantW, BOOST_RACE_FLOOR_W);
-      allowed = wantW > 0;
-    }
-    if (!allowed) {
-      if (!liftedOrSlow && !storeOk && !this.standingStart && Math.max(this.lastDcW, this.levelW) > 1) this.storeCut = true;
-      wantW = 0;
-    }
+    const safeW = this.standingStart ? 0 : maxSafeDeployW(energyJ, i.cutRateWps);
 
-    if (liftedOrSlow || i.resetSector || (boostRaises && wantW >= this.levelW)) {
-      // Off the throttle or slow, no power-limited period: the ceiling follows the management at once. The Boost, or a
-      // sector the FIA names, gives back what a period cut (C5.12.5). If speed dipped below 210 km/h while flat-out
-      // superclipping, inhibit re-entry until the driver lifts so we never chatter around 210 km/h.
+    let wantW = fullW;
+    if (managedCut && !boostRaises) wantW = 0;
+    else if (boostRaises && managedCut && i.boostCapped) wantW = Math.min(fullW, Math.max(this.boostFromW, BOOST_RACE_FLOOR_W));
+    wantW = Math.min(wantW, safeW);
+    const allowed = wantW > 0;
+
+    if (liftedOrSlow || i.resetSector) {
+      // Off the throttle, below 210 km/h, or in an FIA reset sector (C5.12.5): no active power-limited period. If
+      // speed dipped below 210 km/h while flat-out superclipping, inhibit re-entry until the driver lifts so we never
+      // chatter around 210 km/h.
       if (slow && flatOut && this.superclipping) this.superclipInhibited = true;
-      if (i.resetSector || (boostRaises && wantW >= this.levelW)) this.superclipInhibited = false;
-      this.limited = this.superclipping = false;
+      if (i.resetSector) this.superclipInhibited = false;
+      this.inPeriod = this.limited = this.superclipping = false;
       this.holdS = 0;
       this.superclipW = 0;
       this.levelW = wantW;
+    } else if (boostRaises && wantW >= this.levelW - 1) {
+      // Driver Boost recovers or holds power inside a power-limited period (C5.12.5), ramping up cleanly at 2000 kW/s
+      // when recovering from a cut or superclipping so releasing/pressing never bangs the driveline.
+      this.superclipInhibited = false;
+      this.limited = this.superclipping = false;
+      this.holdS = 0;
+      this.superclipW = 0;
+      this.inPeriod = true;
+      this.levelW = wantW > this.levelW ? Math.min(wantW, this.levelW + BOOST_RAMP_WPS * i.h) : wantW;
     } else if (i.shifting) {
       // C5.12.7: rate limit is suspended during a gearshift so a cut may take effect at once,
       // without ending an active power-limited period (C5.12.5) or breaking a Low Grip Boost hold
-      if (wantW < this.levelW && !(boostHolds && storeOk)) {
+      this.inPeriod = true;
+      if (wantW < this.levelW && !(boostHolds && this.levelW <= safeW + 1)) {
         this.levelW = wantW;
         this.limited = true;
         this.holdS = 0;
       }
       this.superclipping = false;
       this.superclipW = 0;
-    } else if (boostHolds && storeOk && wantW < this.levelW) {
-      // A Low Grip Boost: the ceiling stays where it is
+    } else if (!this.inPeriod) {
+      // Entering flat-out above 210 km/h: distinguish starting Power Limited Pending (PLP, C5.12.4) on fresh full
+      // throttle vs crossing 210 km/h after already accelerating flat out through PLP.
+      this.inPeriod = true;
+      const bigCut = i.cutStepW > R.limitStepW;
+      if (!wasFlatOut && wantW < Math.min(capW * share, safeW) - 1) {
+        // C5.12.4: at the start of PLP, initial reduction cannot exceed 150 kW (min 200 kW from 350 kW) and stays
+        // fixed for 1 s, except in FIA Power Reduction sectors (`bigCut`) where a larger initial cut is permitted.
+        const startW = Math.min(capW * share, safeW);
+        this.levelW = Math.max(wantW, startW - i.cutStepW);
+        this.limited = true;
+        this.holdS = bigCut ? 0 : R.limitHoldS;
+        if (this.holdS <= 0 && this.levelW < R.limitFreeBelowW) this.levelW = wantW;
+      } else if (wantW < this.levelW - 1 && !(boostHolds && this.levelW <= safeW + 1)) {
+        const from = Math.min(this.levelW, Math.max(0, this.lastDcW));
+        this.levelW = Math.max(wantW, from - i.cutRateWps * i.h);
+        if (this.levelW < R.limitFreeBelowW) this.levelW = wantW;
+        this.limited = true;
+        this.holdS = 0;
+      } else {
+        this.levelW = wantW;
+      }
+    } else if (boostHolds && this.levelW <= safeW + 1 && wantW < this.levelW) {
+      // A Low Grip Boost (B7.2.1 g i): holds the deployment ceiling fixed while the store can sustain it
     } else if (wantW < this.levelW - 1) {
-      // A cut with the driver flat out: from the power being deployed, drop by at most cutStepW (150 kW, C5.12.4), hold
-      // fixed for 1 s in normal sectors, then ramp at cutRateWps down to 100 kW, under which the rest goes at once (C5.12.7)
-      if (!this.limited) {
+      // Inside an active period: honor any remaining C5.12.4 1 s PLP hold (while battery can sustain it); once in
+      // Power Limited (PL), ramp down purely at C5.12.6's rate (100 or 50 kW/s) with no mid-straight 150 kW cliff,
+      // dropping freely to wantW once under 100 kW (C5.12.7). In FIA-designated Power Reduction sectors
+      // (`cutStepW > 150 kW`), C5.12.4 permits an immediate drop up to `cutStepW` when the cut begins.
+      const bigCut = i.cutStepW > R.limitStepW;
+      if (!this.limited && bigCut) {
         const from = Math.min(this.levelW, Math.max(0, this.lastDcW));
         this.levelW = Math.max(wantW, from - i.cutStepW);
+        if (this.levelW < R.limitFreeBelowW) this.levelW = wantW;
         this.limited = true;
-        this.holdS = i.cutStepW > R.limitStepW ? 0 : R.limitHoldS;
-        if (this.holdS <= 0 && this.levelW < R.limitFreeBelowW) this.levelW = wantW;
-      } else if (this.holdS > 0) {
+        this.holdS = 0;
+      } else if (this.holdS > 0 && this.levelW <= safeW + 1) {
         this.holdS = Math.max(0, this.holdS - i.h);
       } else {
-        this.levelW = Math.max(wantW, this.levelW - i.cutRateWps * i.h);
+        this.holdS = 0;
+        const from = this.limited ? this.levelW : Math.min(this.levelW, Math.max(0, this.lastDcW));
+        this.levelW = Math.max(wantW, from - i.cutRateWps * i.h);
         if (this.levelW < R.limitFreeBelowW) this.levelW = wantW;
+        this.limited = true;
       }
     } else if (!this.limited) {
       this.levelW = wantW;
@@ -370,10 +423,18 @@ export class Ers2026Control {
     // (inside a power-limited period nothing cut is given back: the ceiling holds; a Low Grip Boost holds it too)
 
     this.deployCeilingW = Math.min(this.levelW, capW * share);
-    const fillCapW = capW * Math.max(0, i.fillShare);
-    const cappedFill = (!storeOk && boostFloorOk) || (boostRaises && managedCut && i.boostCapped);
-    this.fillCeilingW = allowed && !this.limited ? (cappedFill ? Math.min(fillCapW, this.levelW) : fillCapW) : this.deployCeilingW;
-    const deployW = this.deployCeilingW * Math.min(1, i.throttle);
+    const fillCapW = Math.min(capW * Math.max(0, i.fillShare), safeW);
+    const cappedFill = safeW < capW || (boostRaises && managedCut && i.boostCapped);
+    const deployPedal = boostRaises
+      ? Math.min(1, i.throttle)
+      : Math.max(0, Math.min(1, (i.throttle - DEPLOY_THROTTLE_START) / (1 - DEPLOY_THROTTLE_START)));
+    this.fillCeilingW =
+      allowed && !this.limited && (boostRaises || i.throttle > DEPLOY_THROTTLE_START)
+        ? cappedFill
+          ? Math.min(fillCapW, this.levelW)
+          : fillCapW
+        : this.deployCeilingW * (boostRaises || i.throttle > DEPLOY_THROTTLE_START ? 1 : 0);
+    const deployW = this.deployCeilingW * deployPedal;
     if (deployW > 0) {
       this.superclipping = false;
       this.superclipW = 0;

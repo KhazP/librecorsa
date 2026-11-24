@@ -215,7 +215,8 @@ function rechargeFor(flatShare: number, brakingS: number): FiaEvent['recharge'] 
   if (flatShare < 0.7) return { race: 8.5, qualifying: 8.0, practice: 9.0 };
   // Austria, Silverstone, Melbourne, Montreal, Spa: 8.0, qualifying 6.5, practice 8.5
   if (flatShare < 0.8) return { race: 8.0, qualifying: 6.5, practice: 8.5 };
-  // Monza, where braking recovers too little for more: 7.0, qualifying 5.0, practice 7.5
+  // Monza-class low-braking circuits: 7.0 race, 4.0-5.0 qualifying (C5.2.10 ii floor is 4 MJ), 7.5 practice
+  if (brakingS < 16) return { race: 7.0, qualifying: 4.0, practice: 7.5 };
   if (brakingS < 20) return { race: 7.0, qualifying: 5.0, practice: 7.5 };
   // Las Vegas: long straights into heavy braking: 8.0, qualifying 6.0, practice 8.5
   return { race: 8.0, qualifying: 6.0, practice: 8.5 };
