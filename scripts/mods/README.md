@@ -13,11 +13,14 @@ lib/
   mods-index.ts      a mods folder's _index.json, for the dev server
   manifest-file.ts   mod.json read, started, added to and written; ids and credits made from a source's
   circuit-package.ts a circuit the converters built (public/tracks/<id>/) → a package
-  car-package.ts     a converted car (its GLB, liveries, sound, physics patch) → a package
+  car-package.ts     a converted car (its GLB, liveries, sound, physics patch, licence files) → a package
+  aero-fit.ts        a converted car's aero scaled until, driven, it makes the source's downforce and drag
+  car-sanity.ts      a converted car driven headless: flat out on a straight, braking, a lap on the autopilot
   importer.ts        what an importer is, and the options every importer takes
   toolchain.ts       running the repository's Python (uv) and TypeScript (tsx) converters
 importers/
   <name>.ts          one per source: `npm run mod -- import <name>`
+licences/            the licence texts a package carries (`LICENSE-<id>.txt`)
 ```
 
 The game's side of packages (the manifest's rules, the zip reader, the store, the loader) is in `src/lib/mods/`; the
@@ -51,3 +54,6 @@ packager. `npm run mod -- import` finds it by its file name. `importers/blender-
 - Refuse content the source's licence doesn't let a player share, with a message that says so, rather than packaging
   it.
 - Give it a suite (`scripts/verify-<name>.ts`) that runs on a small sample, skipped when the sample isn't there.
+- A source it downloads (`--fetch`) goes in `scripts/mods/.cache/<source>/`, which git ignores, at a pinned revision.
+- A car with physics of its own: match its aero with `fitAero` and drive it with `driveSanity` before packaging it, so
+  a conversion that spins, crawls or can't stop is caught here rather than by a player.
