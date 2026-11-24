@@ -1032,7 +1032,8 @@ export class AiOpponentField implements AiRace {
   private applySkill(): void {
     for (const car of this.cars) {
       if (!car.ai) continue;
-      car.basePace = Math.min(0.999, (1 - (1 - car.defPace) * this.mods.spread) * this.mods.paceMult * this.tuning.params.pace);
+      car.ai.aiSkill = this.skillLevel;
+      car.basePace = Math.min(1.035, (1 - (1 - car.defPace) * this.mods.spread) * this.mods.paceMult * this.tuning.params.pace);
       car.pace = car.basePace;
     }
   }
@@ -1145,14 +1146,18 @@ export class AiOpponentField implements AiRace {
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
     // the full step the LC26 hit Okayama's barriers four times as often)
     const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
-    const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
-    // On a race's first lap the pack brakes into the corners together: the extra grip waits for the second lap (with
-    // it, Alien GT3 fields went off at Spielberg's Turn 1 on lap 1 two races in six); in heavy rain keep a slight
-    // Lap 1 cold/pack margin so the field navigates Turn 1 cleanly on standing water
-    const reach = this.started && car.clock.lapsDone === 0 ? 0 : this.mods.gripReach;
+    const baseCeiling = checked !== undefined ? checked - RACE_GRIP_MARGIN : PLAN_GRIP + 0.03;
+    const ceiling = Math.max(PLAN_GRIP, baseCeiling);
+    // On a race's first lap the pack brakes into the corners together: hold back half of the extra grip in the dry
+    // (and all of it in heavy rain) until lap 2 so the opening corners stay clean while Alien remains brisk off the start
+    const reach =
+      this.started && car.clock.lapsDone === 0 ? (weather < 0.92 ? 0 : 0.45 * this.mods.gripReach) : this.mods.gripReach;
     const wetLap1Margin = this.started && car.clock.lapsDone === 0 && weather < 0.88 ? 0.94 : 1;
     const planGrip = (PLAN_GRIP + (ceiling - PLAN_GRIP) * reach) * wetLap1Margin;
-    const grip = Math.round(planGrip * car.pace * car.pace * weather * weather * damaged * 200) / 200;
+    const rawGrip = planGrip * car.pace * car.pace * weather * weather * damaged;
+    // Never plan past a circuit's checked clean grip ceiling in dry conditions (keeps Alien fast without overshooting kerbs)
+    const maxSafeGrip = checked !== undefined && weather >= 0.999 ? Math.max(0.85, checked - 0.01) : Infinity;
+    const grip = Math.round(Math.min(rawGrip, maxSafeGrip) * 200) / 200;
     if (sim.aiPlan && grip === car.planGrip) {
       // Back on the grip it has: a plan still being built for another is dropped
       this.dropPlanJob(car);
@@ -2506,7 +2511,7 @@ export class AiOpponentField implements AiRace {
       // Past the corner's reach for a car alongside: that line is tighter than the plan's, so a little slower
       const pastReach = this.rc.alongsideReachM > 0 ? Math.max(0, Math.abs(car.biasM) - cornerReach) : 0;
       const offLine = (me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM)) * (1 - 0.015 * pastReach);
-      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
+      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 1.035, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
       me.aiTopSpeedOpen = yellowLift === 1 && blueLift === 1;
       car.hooks?.setSteerGain(T.at('steerGain', me.sMeters));

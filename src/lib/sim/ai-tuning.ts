@@ -249,7 +249,7 @@ const SKILL_ANCHORS: readonly [number, AiSkillModifiers][] = [
   [0, { paceMult: 0.94, brakeMarginAdd: 0.14, apexMult: 0.965, lapPaceSigma: 0.05, cornerBrakeSigma: 0.5, mistakesPerLap: 0.3, cautionAdd: 0.35, defendMult: 0.3, spread: 1, gripReach: 0 }],
   [35, { paceMult: 0.97, brakeMarginAdd: 0.06, apexMult: 0.985, lapPaceSigma: 0.03, cornerBrakeSigma: 0.3, mistakesPerLap: 0.1, cautionAdd: 0.15, defendMult: 0.7, spread: 1, gripReach: 0 }],
   [70, { paceMult: 1, brakeMarginAdd: 0, apexMult: 1, lapPaceSigma: 0.012, cornerBrakeSigma: 0.1, mistakesPerLap: 0, cautionAdd: 0, defendMult: 1, spread: 1, gripReach: 0 }],
-  [100, { paceMult: 1.012, brakeMarginAdd: 0, apexMult: 1.01, lapPaceSigma: 0.006, cornerBrakeSigma: 0.05, mistakesPerLap: 0, cautionAdd: -0.15, defendMult: 1.25, spread: 0.75, gripReach: 1 }],
+  [100, { paceMult: 1.022, brakeMarginAdd: 0, apexMult: 1.02, lapPaceSigma: 0.0025, cornerBrakeSigma: 0.015, mistakesPerLap: 0, cautionAdd: -0.15, defendMult: 1.4, spread: 0.65, gripReach: 1 }],
 ];
 
 export function aiSkillModifiers(skill: number): AiSkillModifiers {

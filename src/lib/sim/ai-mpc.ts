@@ -164,7 +164,11 @@ export class RacingLineDriver {
       sample.drsZone && !brakingAhead && brakeCmd === 0 && Math.abs(kappa) < 0.0025 && Math.abs(steerCmd) < 0.12 && v > 42
         ? 'X_MODE'
         : 'Z_MODE';
-    const ersMode: ERSMode = aeroMode === 'X_MODE' && throttleCmd > 0.85 ? 'HOTLAP' : 'BALANCED';
+    const ersMode: ERSMode =
+      (aeroMode === 'X_MODE' && throttleCmd > 0.85) ||
+      ((params.paceScale ?? 1) >= 0.99 && throttleCmd > 0.9 && brakeCmd === 0 && Math.abs(kappa) < 0.0025 && Math.abs(steerCmd) < 0.12 && v > 42)
+        ? 'HOTLAP'
+        : 'BALANCED';
 
     return {
       steerCmd,

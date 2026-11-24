@@ -1171,6 +1171,10 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /** AI driver skill level (0..100, default 70 = Pro) */
+  public aiSkill = 70;
+  /** Strategic FIA-2026 Boost latch for high-skill AI on long acceleration zones */
+  private aiBoostLatched = false;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -2263,6 +2267,19 @@ export class F12026CarSim implements SimulatorCar {
     v.flapsLowGrip = straight2026 ? this.lowGrip : null;
     v.ersLowGrip = lowGrip;
     const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
+    // High-skill AI (above Pro) also deploys FIA-legal Boost strategically on straights/exits when battery SoC has
+    // surplus, using the exact same `ersCanBoost`, 4 MJ store, and 8.5 MJ/lap recharge cap as a human driver
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const ersCapJ = Math.max(1, this.config.ers.ERS_MAX_CHARGE);
+    const soc = v.ersEnergyJ / ersCapJ;
+    const straightExit = this.apThrottle > 0.92 && Math.abs(this.steerCmd) < 0.14 && v.speedMs > 30 && v.speedMs < 95;
+    if (this.aiAutopilot && straight2026 && racing && !lowGrip && alienShare > 0.15 && v.ersCanBoost) {
+      if (!this.aiBoostLatched && straightExit && soc >= 0.58 - 0.14 * alienShare) this.aiBoostLatched = true;
+      else if (this.aiBoostLatched && (!straightExit || soc < 0.22)) this.aiBoostLatched = false;
+    } else {
+      this.aiBoostLatched = false;
+    }
+    const aiStrategicBoost = this.aiBoostLatched;
     v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
     if (this.config.ers.regulations === 'f1-2026') {
@@ -2279,7 +2296,7 @@ export class F12026CarSim implements SimulatorCar {
       const autoOt =
         straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
         zoneNow && inputs.throttle >= 0.98;
-      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersCanBoost;
+      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake || aiStrategicBoost) && v.ersCanBoost;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;
       v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);
@@ -2457,6 +2474,17 @@ export class F12026CarSim implements SimulatorCar {
     const assisted = this.profile.assistDials.assisted;
     const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
     const wet = clamp(this.vehicle.wetness, 0, 1);
+    if (wet <= 0.15) {
+      const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+      if (alienShare <= 0) return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+      // Above Pro on a dry road, ease TC/ABS intervention slightly toward the tyres' true peak slip for stronger exits & braking
+      return {
+        ...d,
+        tcLevel: d.tcLevel,
+        tc2Level: d.tc2Level,
+        absLevel: baseAbs > 0 ? Math.max(3, Math.round(baseAbs - 1 * alienShare)) : 0,
+      };
+    }
     if (wet <= 0.2) {
       return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
     }
@@ -2746,7 +2774,9 @@ export class F12026CarSim implements SimulatorCar {
     // and trim low-speed rear wheelspin even below the car's TC min speed so GT3/F1 never spin up on a flooded grid
     if (speed < 1) this.apLaunch = true;
     else if (speed > 20) this.apLaunch = false;
-    const squeeze = this.apLaunch ? Math.max(2.2, 12 - 9.5 * wet) : Math.max(1.2, 2.5 - 1.1 * wet);
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const dryExitSqueeze = 2.5 + 0.8 * alienShare;
+    const squeeze = this.apLaunch ? Math.max(2.2, 12 - 9.5 * wet) : Math.max(1.2, dryExitSqueeze * (1 - 0.55 * wet));
     let wetLaunchTrim = 1;
     if (wet > 0.15 && speed < 25) {
       const [dl, dr] = v.drivenWheels;
@@ -2924,6 +2954,7 @@ export class F12026CarSim implements SimulatorCar {
   private planSpeedTarget(plan: AiDrivePlan, s: number, speed: number, prof: Float32Array): { v: number; pedalFF: number } {
     const t = plan.track;
     const L = this.track.totalLengthM;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
     const lead = Math.max(3, speed * 0.15);
     // Racing, the plan's top speed is no limit: a car in a tow runs past it, held by its own drag, and brakes from there
     // on the open envelope. Held at the plan's top speed, the tow was worth nothing and a quicker car sat behind a slower
@@ -2948,9 +2979,11 @@ export class F12026CarSim implements SimulatorCar {
     const aFF = (v1 * v1 - v0 * v0) / 12;
     if (aFF >= -0.5 && speed < v0) {
       // Still cornering hard (a corner exit): the full plan's acceleration, which shares the tyres between the corner
-      // and the throttle; flooring it there ran the car wide on the power. Near straight: as hard as it can
+      // and the throttle; flooring it there ran the car wide on the power. Above Pro on a dry road, delay this cap
+      // until higher lateral utilisation so Alien drivers stay flat out through gentle sweeps and open throttle earlier.
       const ayShare = (Math.abs(sampleGrid(plan.kappa, s + lead, t.ds)) * speed * speed) / plan.limits.lateral(speed);
-      if (ayShare > 0.3) {
+      const ayThreshold = this.vehicle.wetness < 0.15 ? 0.3 + 0.07 * alienShare : 0.3;
+      if (ayShare > ayThreshold) {
         const vExp = sampleGrid(plan.vExpected, s + lead, t.ds) * pace;
         const vExp1 = sampleGrid(plan.vExpected, s + lead + 6, t.ds) * pace;
         const aExp = (vExp1 * vExp1 - vExp * vExp) / 12;
