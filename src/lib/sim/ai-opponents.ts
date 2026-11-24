@@ -50,6 +50,7 @@ import {
   chooseDefenseTarget,
   hazardHalfWidthM,
   hazardLine,
+  hazardPaceProfile,
   inYellowZone,
   isHazardSpeed,
   overlapNow,
@@ -676,8 +677,18 @@ const DOUBLE_STOPPED_MS = 2;
 const HAZARD_LAUNCH_MAX_S = 40;
 /** …and before that only if it sits stalled (under `DOUBLE_STOPPED_MS`) past the lights' reaction window (s) */
 const HAZARD_STALL_AFTER_S = 8;
-/** Off the start, got going: half the road's speed, or 12 m/s where the road is slow (well clear of `isHazardSpeed`) */
+/** Off the start, got going: half its own speed there, or 12 m/s where that is slow (well clear of `isHazardSpeed`) */
 export const hasLaunched = (speedMs: number, roadSpeedMs: number): boolean => speedMs >= Math.max(12, 0.5 * roadSpeedMs);
+/**
+ * A car model's own pace round its line (`AiOpponentField.ownPace`), per circuit, model and line: its expected speeds
+ * and the eased ones its slowness is judged by (`hazardPaceProfile`), m/s every `ds` m
+ */
+interface OwnPace {
+  expected: Float64Array;
+  hazard: Float64Array;
+  ds: number;
+}
+const ownPaces = new WeakMap<BuiltTrackData, Map<string, OwnPace>>();
 const DOUBLE_CLUSTER_M = 250;
 const DOUBLE_ON_S = 0.5;
 const DOUBLE_OFF_S = 2;
@@ -1536,6 +1547,8 @@ export class AiOpponentField implements AiRace {
     this.yellowPasses.reset();
     this.blueFlags.reset();
     this.vsc.reset();
+    // Each car's own pace, built now rather than at its first hazard check mid-race (~10 ms a model)
+    for (const car of this.cars) this.ownPace(car.sim);
     this.passOrder = [];
     this.passTimerS = 0;
     this.damageHistory.length = 0;
@@ -2861,7 +2874,8 @@ export class AiOpponentField implements AiRace {
     // Off the start everyone is slow; and a finished car on its in-lap is no obstacle anyone races
     const early = this.rc.earlyHazard > 0;
     if (early ? car.distM - car.clock.startDistM < 50 : this.raceTimeS < 10 || car.distM - car.clock.startDistM < 150) return false;
-    const road = this.track.getSampleAtDistance(car.sim.sMeters).optimalSpeedKmh / 3.6;
+    // Slow for this car, at its own pace here (`ownSpeedMs`); under the VSC the whole field runs at its share of it
+    const road = this.ownSpeedMs(car, true) * (this.vsc.active ? VSC_PACE_SHARE : 1);
     // A slow car (a road car, the back of a long grid) is still getting up to speed well past 10 s: not a hazard until it
     // has got going, unless it is really stalled once the lights' reaction window is over; judged as any other after
     // HAZARD_LAUNCH_MAX_S whatever
@@ -2874,6 +2888,46 @@ export class AiOpponentField implements AiRace {
     // (simplix keeps a dangerous car flagged for 2 s: a car sliding back to straight is still where it went wrong)
     if (now) car.hazardUntilS = this.raceTimeS + 2;
     return now || this.raceTimeS < car.hazardUntilS;
+  }
+
+  /** Each car's own pace (`ownPace`), looked up once per car (a car's model and line never change) */
+  private readonly ownPaceOf = new WeakMap<SimulatorCar, OwnPace | null>();
+
+  /**
+   * A car's own pace round the lap: its model's plan on its line at the plan grip (its cornering, braking, traction
+   * and top speed), built once per circuit, model and line. The circuit's speed profile is the LC26's: a road car's
+   * top speed is 50 m/s where that is 85, its hairpin 10 m/s where that is 18. Null on a point-to-point road
+   */
+  private ownPace(sim: SimulatorCar): OwnPace | null {
+    let pace = this.ownPaceOf.get(sim);
+    if (pace !== undefined) return pace;
+    pace = null;
+    if (!this.track.pointToPoint) {
+      let byModel = ownPaces.get(this.track);
+      if (!byModel) ownPaces.set(this.track, (byModel = new Map()));
+      const line = sim.racingLineId ?? 'f1';
+      const key = `${sim.vehicleId ?? ''}|${line}`;
+      pace = byModel.get(key) ?? null;
+      if (!pace) {
+        const limits = carLimitsFor(sim.vehicleId, PLAN_GRIP);
+        const t = (this.aiTrack ??= aiTrackFor(this.track));
+        const expected = makeDrivePlan(t, this.driveLineFor(line), limits).vExpected;
+        pace = { expected, hazard: hazardPaceProfile(expected, t.ds, (v) => limits.braking(v)), ds: t.ds };
+        byModel.set(key, pace);
+      }
+    }
+    this.ownPaceOf.set(sim, pace);
+    return pace;
+  }
+
+  /**
+   * The speed a car is expected to carry where it is at its own pace (m/s): what its VSC pace is a share of, and
+   * (`hazard`: with its braking zones eased) what its slowness is judged by. The circuit's own off a point-to-point road
+   */
+  private ownSpeedMs(car: FieldCar, hazard = false): number {
+    const pace = this.ownPace(car.sim);
+    if (!pace) return this.track.getSampleAtDistance(car.sim.sMeters).optimalSpeedKmh / 3.6;
+    return sampleGrid(hazard ? pace.hazard : pace.expected, car.sim.sMeters, pace.ds);
   }
 
   /** A car's heading in the world (rad, about +y) */
