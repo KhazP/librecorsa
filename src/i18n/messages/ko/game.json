@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "메뉴",
     "poolRace": "레이스",
-    "poolResults": "결과 및 리플레이"
+    "poolResults": "결과 및 리플레이",
+    "poolShow": "프리 레이스 쇼"
   },
   "carQuality": {
     "ownBadge": "전용 물리",

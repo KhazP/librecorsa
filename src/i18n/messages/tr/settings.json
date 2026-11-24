@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Oyuncu isimlikleri"
     },
+    "preRaceShow": {
+      "label": "Kariyer yarış öncesi yayını",
+      "hint": "Her kariyer ayağından önce müzik eşliğinde pist, hava durumu, lastikler ve grid. Space atlar, Enter başlatır."
+    },
     "boardWidget": {
       "label": "Tur tablosu",
       "options": {

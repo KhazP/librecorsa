@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menu",
     "poolRace": "Course",
-    "poolResults": "Résultats et replay"
+    "poolResults": "Résultats et replay",
+    "poolShow": "Avant-course"
   },
   "carQuality": {
     "ownBadge": "PHYSIQUE PROPRE",

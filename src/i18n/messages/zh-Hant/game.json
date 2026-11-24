@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "選單",
     "poolRace": "正賽",
-    "poolResults": "結算與重播"
+    "poolResults": "結算與重播",
+    "poolShow": "賽前節目"
   },
   "carQuality": {
     "ownBadge": "專屬物理",

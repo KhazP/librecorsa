@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menu",
     "poolRace": "Cuộc đua",
-    "poolResults": "Kết quả và phát lại"
+    "poolResults": "Kết quả và phát lại",
+    "poolShow": "Trước cuộc đua"
   },
   "carQuality": {
     "ownBadge": "Vật lý riêng",

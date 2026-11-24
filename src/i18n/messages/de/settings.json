@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Spielernamen"
     },
+    "preRaceShow": {
+      "label": "Karriere-Vorprogramm",
+      "hint": "Vor jedem Karrierelauf: Strecke, Wetter, Reifen und Startaufstellung mit Musik. Space überspringt, Enter startet."
+    },
     "boardWidget": {
       "label": "Bestenliste",
       "options": {

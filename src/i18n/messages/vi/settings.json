@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Bảng tên người chơi"
     },
+    "preRaceShow": {
+      "label": "Chương trình trước đua sự nghiệp",
+      "hint": "Trước mỗi chặng sự nghiệp: đường đua, thời tiết, lốp và hàng xuất phát kèm nhạc. Nhấn Space để bỏ qua, Enter để bắt đầu."
+    },
     "boardWidget": {
       "label": "Bảng xếp hạng vòng",
       "options": {

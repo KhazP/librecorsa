@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "القائمة",
     "poolRace": "السباق",
-    "poolResults": "النتائج والإعادة"
+    "poolResults": "النتائج والإعادة",
+    "poolShow": "عرض ما قبل السباق"
   },
   "carQuality": {
     "ownBadge": "فيزياء مخصصة",

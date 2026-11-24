@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menü",
     "poolRace": "Yarış",
-    "poolResults": "Sonuçlar ve tekrar"
+    "poolResults": "Sonuçlar ve tekrar",
+    "poolShow": "Yarış öncesi"
   },
   "carQuality": {
     "ownBadge": "Kendi fiziği",

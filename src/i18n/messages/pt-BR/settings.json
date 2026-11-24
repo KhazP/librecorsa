@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Nomes dos jogadores"
     },
+    "preRaceShow": {
+      "label": "Pré-corrida da carreira",
+      "hint": "Antes de cada etapa da carreira: circuito, clima, pneus e grid com música. Space pula, Enter inicia."
+    },
     "boardWidget": {
       "label": "Ranking de tempos",
       "options": {

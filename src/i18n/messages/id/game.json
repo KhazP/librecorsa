@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menu",
     "poolRace": "Balapan",
-    "poolResults": "Hasil dan tayangan ulang"
+    "poolResults": "Hasil dan tayangan ulang",
+    "poolShow": "Tayangan prabalapan"
   },
   "carQuality": {
     "ownBadge": "Fisika khusus",

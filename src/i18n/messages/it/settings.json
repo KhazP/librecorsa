@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Nomi dei piloti"
     },
+    "preRaceShow": {
+      "label": "Pre-gara in carriera",
+      "hint": "Prima di ogni round di carriera: circuito, meteo, gomme e griglia con musica. Space salta, Enter avvia."
+    },
     "boardWidget": {
       "label": "Classifica",
       "options": {

@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Nama pemain di atas mobil"
     },
+    "preRaceShow": {
+      "label": "Tayangan prabalapan karier",
+      "hint": "Sebelum tiap ronde karier: sirkuit, cuaca, ban, dan grid dengan musik. Space untuk lewati, Enter untuk mulai."
+    },
     "boardWidget": {
       "label": "Papan waktu lap",
       "options": {

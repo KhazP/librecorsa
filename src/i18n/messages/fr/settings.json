@@ -387,6 +387,10 @@
     "showPlayerNames": {
       "label": "Noms des joueurs"
     },
+    "preRaceShow": {
+      "label": "Avant-course en carrière",
+      "hint": "Avant chaque manche de carrière : circuit, météo, pneus et grille en musique. Space passe, Enter lance."
+    },
     "boardWidget": {
       "label": "Classement",
       "options": {
