@@ -864,6 +864,7 @@ export const F1LikeHud: React.FC<HudDesignProps> = ({
   revRange,
   scale,
   mfd,
+  channels,
   ffb,
   lapInvalid,
   mapMode,
@@ -909,6 +910,7 @@ export const F1LikeHud: React.FC<HudDesignProps> = ({
       {/* Bottom right: MFD over CAD car-status panel */}
       <div className="absolute hidden flex-col items-end gap-2 lg:flex" style={{ bottom: EDGE, right: EDGE, ...anchor(scale, "bottom right") }}>
         {mfd}
+        {channels}
         <div>
           <CarStatus t={t} compound={compound as TireCompound} w={w} />
         </div>

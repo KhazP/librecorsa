@@ -15,6 +15,7 @@ import {
   deltaBar,
   defaultView,
   driverBody,
+  engineeringTelemetry,
   fieldOfView,
   frameRate,
   headMovement,
@@ -117,7 +118,7 @@ export function HudTab() {
     <>
       <HudLayoutCard />
       <HudPlacementCard />
-      <SettingsCard title={tx("title")} rows={[deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
+      <SettingsCard title={tx("title")} rows={[deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, engineeringTelemetry, ...hudAdvanced]} />
     </>
   );
 }
