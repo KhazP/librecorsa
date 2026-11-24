@@ -10,7 +10,8 @@
  * cars on the F1 line, the closed-wheel cars on the GT3's, the road cars on the road line where it passed their check,
  * else the GT3's), with its own limits. `--line` checks every car on that line instead. A check is written for the line
  * it was made on: the F1 and GT3 lines' to `aiPlans` (what every build reads), the road line's to `aiPlansByLine.road`
- * (which older builds ignore: they drive road cars on the GT3's line, with the check there). A car is only written for
+ * (which older builds ignore: they drive road cars on the GT3's line, with the check there), and every check of a car
+ * that tracks plans differently from older builds (plan-tracking.ts) to `aiPlansByLine` too. A car is only written for
  * its profile's line, or the GT3's for a road car: a check on a line the car never drives would put it on plans there.
  *
  * With --ceiling, a car that passes is driven again at each grip in turn until one fails, held to a tighter 2.5 m off
@@ -34,6 +35,7 @@ import type { RacingLineId } from '../../src/types/f1';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { physicsLap, physicsLapLine, physicsLapProfileLine, physicsLapVehicle, type PhysicsLapCar } from './lib/physics-lap';
 import { isCleanLap } from './lib/line-judging';
+import { tracksOwnPlanChecks } from '../../src/lib/sim/ai/plan-tracking';
 
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -63,8 +65,12 @@ const lines = new Map<RacingLineId, Float64Array>();
 type PlanStore = Record<string, AiPlanCheck>;
 const legacyPlans: PlanStore = { ...((raw.metadata.aiPlans as PlanStore) ?? {}) };
 const byLine = structuredClone((raw.metadata.aiPlansByLine as Record<string, PlanStore>) ?? {});
-/** Where a check on this line is kept: `aiPlans` for the F1 and GT3 lines, `aiPlansByLine[line]` past them */
-const storeFor = (line: RacingLineId): PlanStore => (line === 'f1' || line === 'gt3' ? legacyPlans : (byLine[line] ??= {}));
+/**
+ * Where a check is kept: `aiPlans` for the F1 and GT3 lines, what every build reads, unless the car tracks plans
+ * differently from older builds (plan-tracking.ts); `aiPlansByLine[line]` for those and for the road line
+ */
+const storeFor = (line: RacingLineId, car: string): PlanStore =>
+  (line === 'f1' || line === 'gt3') && !tracksOwnPlanChecks(car) ? legacyPlans : (byLine[line] ??= {});
 const checks: Record<string, AiPlanCheck> = {};
 const checkedOn = new Map<string, RacingLineId>();
 for (const car of cars) {
@@ -82,7 +88,7 @@ for (const car of cars) {
   const lap = physicsLap(track, root, car, offsets, grip, undefined, { line });
   const ok = isCleanLap(lap, 3);
   const r3 = (x: number) => Math.round(x * 1000) / 1000;
-  checks[car] = storeFor(line)[car] = {
+  checks[car] = storeFor(line, car)[car] = {
     ok,
     physicsLapS: r3(lap.lapS),
     planLapS: r3(lap.plan.lapS),

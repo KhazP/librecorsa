@@ -94,6 +94,7 @@ import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehicleP
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
+import { planLookS } from '../ai/plan-tracking';
 import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
@@ -941,8 +942,7 @@ const AP_LINE_MAX_MS2 = 3;
  * Tracking a supplied plan (`aiPlan`): pure pursuit on the plan's path with a short look-ahead, a slow integral on
  * the lateral error, and the plan's speed with its own slope as the pedal feed-forward
  */
-/** Pure-pursuit look-ahead on a plan: this many seconds of travel, at least the minimum (m) */
-const TRACK_LOOK_S = 0.22;
+/** Pure-pursuit look-ahead on a plan: the car's seconds of travel (plan-tracking.ts), at least the minimum (m) */
 const TRACK_LOOK_MIN_M = 5;
 /** Lateral acceleration a car metres off its path gets back onto it with (m/s²): sets the look-ahead's stretch */
 const TRACK_REJOIN_MS2 = 6;
@@ -1168,6 +1168,8 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /** Pure-pursuit look-ahead on a plan (s of travel): this car's (plan-tracking.ts) */
+  private readonly planLookS: number;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -1377,6 +1379,7 @@ export class F12026CarSim implements SimulatorCar {
     void track.pitLane;
     this.profile = profile;
     this.line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
+    this.planLookS = planLookS(profile.id);
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
       : circuitBrakingGuide(track.samples, this.line);
@@ -2836,7 +2839,7 @@ export class F12026CarSim implements SimulatorCar {
     // only cut the corners further
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
+    const ld = Math.max(TRACK_LOOK_MIN_M, speed * this.planLookS, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);

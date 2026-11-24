@@ -17,6 +17,7 @@ import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } fr
 import type { SceneryCutBox } from "./scenery-cuts";
 import type { LapStretches } from "./sim/course-limits";
 import { correctedDrsZones } from "./drs-zone-fixes";
+import { tracksOwnPlanChecks } from "./sim/ai/plan-tracking";
 
 /** Raw `track_data.json` layout shared by every circuit (the bundled circuit's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
@@ -1161,11 +1162,12 @@ export interface TrackMetaExtras {
    */
   aiPlans?: Partial<Record<string, AiPlanCheck>>;
   /**
-   * Drive-plan checks on the circuit's lines past the F1 and GT3 ones (the road cars' `roRoad`), per line and car. Kept
-   * apart from `aiPlans`, which older builds read for the car's own line: a check on the road line there would put the
-   * car on plans along the GT3 line. A road car drives the road line where its check on it passed (`racingLineFor`)
+   * Drive-plan checks per line and car that older builds must not read, kept apart from `aiPlans` (which they read for
+   * the car's own line): checks on the road cars' line (`roRoad`; in `aiPlans` they would put the car on plans along the
+   * GT3's line), and checks of the cars that track plans differently from those builds (`tracksOwnPlanChecks`,
+   * plan-tracking.ts), on any line. A road car drives the road line where its check on it passed (`racingLineFor`)
    */
-  aiPlansByLine?: Partial<Record<Exclude<RacingLineId, "f1" | "gt3">, Partial<Record<string, AiPlanCheck>>>>;
+  aiPlansByLine?: Partial<Record<RacingLineId, Partial<Record<string, AiPlanCheck>>>>;
 }
 
 /**
@@ -1178,10 +1180,15 @@ export function racingLineFor(line: RacingLineId, vehicleId: string): RacingLine
   return getActiveTrackMetadata().aiPlansByLine?.road?.[vehicleId]?.ok === true ? "road" : "gt3";
 }
 
-/** A car's drive-plan check on the line it drives here (`racingLineFor`): `aiPlans` for the F1 and GT3 lines */
+/**
+ * A car's drive-plan check on the line it drives here (`racingLineFor`): this build's own (`aiPlansByLine`), else for the
+ * F1 and GT3 lines the hosted `aiPlans`, unless the car tracks plans differently from the builds those were made on
+ */
 export function planCheckFor(vehicleId: string, line: RacingLineId): AiPlanCheck | undefined {
   const meta = getActiveTrackMetadata();
-  return line === "f1" || line === "gt3" ? meta.aiPlans?.[vehicleId] : meta.aiPlansByLine?.[line]?.[vehicleId];
+  const own = meta.aiPlansByLine?.[line]?.[vehicleId];
+  if (own || line === "road" || tracksOwnPlanChecks(vehicleId)) return own;
+  return meta.aiPlans?.[vehicleId];
 }
 
 export interface AiPlanCheck {

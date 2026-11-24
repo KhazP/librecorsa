@@ -27,23 +27,23 @@ const activate = (raw: Raw) => setActiveTrack(TRACK, raw as unknown as RawTrackJ
 const pass = (lapS: number): AiPlanCheck => ({ ok: true, physicsLapS: lapS, planLapS: lapS - 1, wallHits: 0, offTrackFrames: 0, maxErrM: 1, checked: '2026-11-24', maxGrip: 1.04 });
 const fail = (lapS: number): AiPlanCheck => ({ ...pass(lapS), ok: false, wallHits: 2 });
 
-// A circuit as the live files are: no road line, the road cars' checks on the GT3's line in aiPlans
+// A circuit with no road line, the Liana's check on the GT3's line made on this build's plan tracking (plan-tracking.ts)
 const plain = structuredClone(base);
-plain.metadata.aiPlans = { ...(plain.metadata.aiPlans as object), liana: pass(177) };
+plain.metadata.aiPlansByLine = { gt3: { liana: pass(177) } };
 activate(plain);
 let track = getActiveTrackData(1200);
 const gt3At = track.samples.map((smp) => aiLineOffsetM(smp, 'gt3'));
 check('no road line: the samples carry none', track.samples.every((smp) => smp.racingLineOffsetRoad === undefined));
 check('no road line: the road line is the GT3\'s', track.samples.every((smp, i) => aiLineOffsetM(smp, 'road') === gt3At[i]));
 check('no road line: a road car drives the GT3\'s line', racingLineFor('road', 'liana') === 'gt3');
-check('...with its check there (aiPlans)', planCheckFor('liana', racingLineFor('road', 'liana'))?.physicsLapS === 177);
+check('...with its check there', planCheckFor('liana', racingLineFor('road', 'liana'))?.physicsLapS === 177);
 check('the F1 and GT3 lines are untouched', racingLineFor('f1', 'lc26') === 'f1' && racingLineFor('gt3', 'amg-gt3') === 'gt3');
 check('a Liana built here drives the GT3\'s line', createSuzukiLianaSim(track, null).racingLineId === 'gt3');
 
 // The same circuit with a road line 2 m right of the GT3's and the Liana's check on it
 const withRoad = structuredClone(plain);
 withRoad.samples.forEach((smp) => (smp.roRoad = (smp.roGt3 ?? smp.ro) + 2));
-withRoad.metadata.aiPlansByLine = { road: { liana: pass(172), 'vw-scirocco-gtx': fail(160) } };
+withRoad.metadata.aiPlansByLine = { gt3: { liana: pass(177) }, road: { liana: pass(172), 'vw-scirocco-gtx': fail(160) } };
 activate(withRoad);
 track = getActiveTrackData(1200);
 check('road line: every sample carries it', track.samples.every((smp) => typeof smp.racingLineOffsetRoad === 'number'));
@@ -58,7 +58,7 @@ check('...with that check', planCheckFor('liana', 'road')?.physicsLapS === 172);
 check('a road car whose check failed keeps the GT3\'s line', racingLineFor('road', 'vw-scirocco-gtx') === 'gt3');
 check('a road car never checked keeps the GT3\'s line', racingLineFor('road', 'bmw-m1-procar') === 'gt3');
 check('the road line\'s checks never answer for the GT3\'s line', planCheckFor('vw-scirocco-gtx', 'gt3') === undefined);
-check('older builds read aiPlans only: the Liana\'s GT3 check is still there', (withRoad.metadata.aiPlans as Record<string, AiPlanCheck>).liana.physicsLapS === 177);
+check('the Liana\'s GT3-line check is still there for circuits it drives the GT3\'s line on', planCheckFor('liana', 'gt3')?.physicsLapS === 177);
 const liana = createSuzukiLianaSim(track, null);
 check('a Liana built here drives the road line', liana.racingLineId === 'road');
 check('...and its braking guide (the drawn line) is the road line\'s', liana.brakingGuide.line === 'road');
