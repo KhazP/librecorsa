@@ -83,7 +83,7 @@ export function lapPhysicsVersion(vehicle: VehicleModelId | undefined, trackId: 
  * stay under `PHYSICS_VERSION`, an older board of that car. Raise the offset by ten when that car alone changes: the
  * other cars keep their boards. A version and its offset stay under CIRCUIT_REVISION_STEP.
  */
-const LC26_RIGID_BODY_OFFSET = 520;
+const LC26_RIGID_BODY_OFFSET = 530;
 export function carPhysicsVersion(vehicle?: VehicleModelId): number {
   return revisionIn(PHYSICS_VERSION, LC26_RIGID_BODY_OFFSET, vehicle);
 }
@@ -119,8 +119,8 @@ function revisionIn(physics: number, lc26Offset: number, vehicle?: VehicleModelI
  */
 export const PHYSICS_VERSIONS = [
   { name: "V1", physics: 7, lc26Offset: 520 },
-  { name: "V2", physics: 8, lc26Offset: 520 },
-] as const satisfies readonly { name: string; physics: number; lc26Offset: number }[];
+  { name: "V2", physics: 8, lc26Offset: 530, priorLc26Offsets: [520] },
+] as const satisfies readonly { name: string; physics: number; lc26Offset: number; priorLc26Offsets?: readonly number[] }[];
 export type NamedPhysicsVersion = (typeof PHYSICS_VERSIONS)[number];
 
 /** The named version whose PHYSICS_VERSION is `physics`; null for one the boards don't name */

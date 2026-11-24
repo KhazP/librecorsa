@@ -191,7 +191,12 @@ export function tallyRecordHolders(
  */
 export function physicsIdOf(revision: number): string {
   const p = ((revision % CIRCUIT_REVISION_STEP) + CIRCUIT_REVISION_STEP) % CIRCUIT_REVISION_STEP;
-  const named = PHYSICS_VERSIONS.find((v) => p === v.physics || p === v.physics + v.lc26Offset);
+  const named = PHYSICS_VERSIONS.find(
+    (v) =>
+      p === v.physics ||
+      p === v.physics + v.lc26Offset ||
+      ("priorLc26Offsets" in v && v.priorLc26Offsets.some((o) => p === v.physics + o)),
+  );
   return named ? named.name.toLowerCase() : `r${p}`;
 }
 

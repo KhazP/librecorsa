@@ -175,9 +175,9 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
   );
   const v1 = PHYSICS_VERSIONS[0];
   check(
-    'versions: Physics V1 is revision 7, the LC26\'s 527',
-    v1.physics === 7 && boardPhysicsVersion(v1.physics, 'lc26') === 527 && boardPhysicsVersion(v1.physics, 'amg-gt3') === 7 && PHYSICS_VERSION === 8 && shipped === 528,
-    `p${boardPhysicsVersion(v1.physics, 'lc26')}`
+    'versions: Physics V1 is revision 7, the LC26\'s 527; V2 LC26 is 538',
+    v1.physics === 7 && boardPhysicsVersion(v1.physics, 'lc26') === 527 && boardPhysicsVersion(v1.physics, 'amg-gt3') === 7 && PHYSICS_VERSION === 8 && shipped === 538,
+    `p${boardPhysicsVersion(v1.physics, 'lc26')} / p${shipped}`
   );
   const classicV1 = (() => {
     g.window = { location: { search: '' } };
@@ -191,13 +191,13 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
   check('versions: named "Physics V2 (New)" and "Physics V1"', physicsVersionLabel(PHYSICS_VERSION) === 'Physics V2 (New)' && physicsVersionLabel(7) === 'Physics V1' && physicsVersionLabel(PHYSICS_VERSION, { short: true }) === 'Physics V2');
   check(
     'versions: a lap\'s revision finds its board, on either LC26 engine',
-    boardChoiceOfLap(TRACK, 'lc26', 527) === '7' && boardChoiceOfLap(TRACK, 'lc26', 7) === '7' && boardChoiceOfLap(TRACK, 'lc26', 528) === '8' && boardChoiceOfLap(TRACK, 'amg-gt3', 8) === '8' &&
+    boardChoiceOfLap(TRACK, 'lc26', 527) === '7' && boardChoiceOfLap(TRACK, 'lc26', 7) === '7' && boardChoiceOfLap(TRACK, 'lc26', 538) === '8' && boardChoiceOfLap(TRACK, 'amg-gt3', 8) === '8' &&
       boardChoiceOfLap(TRACK, 'amg-gt3', 527) === null && boardChoiceOfLap(TRACK, 'amg-gt3', 6) === null
   );
   check(
-    'versions: only the version driven now takes laps, the LC26\'s on either engine',
-    isCurrentLapPhysics('lc26', 528, TRACK) && isCurrentLapPhysics('lc26', 8, TRACK) && isCurrentLapPhysics('liana', 8, TRACK) &&
-      !isCurrentLapPhysics('lc26', 527, TRACK) && !isCurrentLapPhysics('liana', 7, TRACK) && !isCurrentLapPhysics('liana', 528, TRACK)
+    'versions: only the version driven now takes laps, the LC26\'s on either engine (prior LC26 offset 528 rejected)',
+    isCurrentLapPhysics('lc26', 538, TRACK) && isCurrentLapPhysics('lc26', 8, TRACK) && isCurrentLapPhysics('liana', 8, TRACK) &&
+      !isCurrentLapPhysics('lc26', 528, TRACK) && !isCurrentLapPhysics('lc26', 527, TRACK) && !isCurrentLapPhysics('liana', 7, TRACK) && !isCurrentLapPhysics('liana', 538, TRACK)
   );
   check(
     'versions: a version and the LC26\'s offset stay under a circuit\'s step',
@@ -219,11 +219,11 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
   try {
     check(
       'circuits: a restart folds into every car\'s revision there, the LC26\'s offset kept',
-      circuitRevision(TRACK) === 1 && lapPhysicsVersion('amg-gt3', TRACK) === 1008 && lapPhysicsVersion('lc26', TRACK) === 1528 && currentBoardBase(TRACK) === 1008,
+      circuitRevision(TRACK) === 1 && lapPhysicsVersion('amg-gt3', TRACK) === 1008 && lapPhysicsVersion('lc26', TRACK) === 1538 && currentBoardBase(TRACK) === 1008,
       `p${lapPhysicsVersion('amg-gt3', TRACK)} / p${lapPhysicsVersion('lc26', TRACK)}`
     );
-    check('circuits: on the LC26\'s older engine too', older.restarted === 1008 && fresh.restarted === 1528, `p${older.restarted} / p${fresh.restarted}`);
-    check('circuits: the other circuits keep their boards', lapPhysicsVersion('amg-gt3', 'spielberg') === 8 && lapPhysicsVersion('lc26', 'spielberg') === 528 && circuitRevision('spielberg') === 0);
+    check('circuits: on the LC26\'s older engine too', older.restarted === 1008 && fresh.restarted === 1538, `p${older.restarted} / p${fresh.restarted}`);
+    check('circuits: the other circuits keep their boards', lapPhysicsVersion('amg-gt3', 'spielberg') === 8 && lapPhysicsVersion('lc26', 'spielberg') === 538 && circuitRevision('spielberg') === 0);
     const choices = boardChoices(TRACK);
     check(
       'circuits: the board from before the restart stays in the picker, under its version',
@@ -236,23 +236,23 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
     );
     check(
       'circuits: a lap finds its board, before and after the restart',
-      revisionOnBoard(8, 'lc26') === 528 && revisionOnBoard(1008, 'lc26') === 1528 && boardChoiceOfLap(TRACK, 'lc26', 528) === '8-0' && boardChoiceOfLap(TRACK, 'lc26', 1528) === '8' &&
+      revisionOnBoard(8, 'lc26') === 538 && revisionOnBoard(1008, 'lc26') === 1538 && boardChoiceOfLap(TRACK, 'lc26', 538) === '8-0' && boardChoiceOfLap(TRACK, 'lc26', 1538) === '8' &&
         boardChoiceOfLap(TRACK, 'amg-gt3', 1008) === '8' && boardChoiceOfLap(TRACK, 'amg-gt3', 7) === '7' && boardChoiceOfLap(TRACK, 'amg-gt3', 1007) === null
     );
     check(
       'circuits: only the restarted board takes laps there',
-      isCurrentLapPhysics('lc26', 1528, TRACK) && isCurrentLapPhysics('lc26', 1008, TRACK) && !isCurrentLapPhysics('lc26', 528, TRACK) && !isCurrentLapPhysics('amg-gt3', 8, TRACK) &&
-        isCurrentLapPhysics('amg-gt3', 8, 'spielberg') && parseLapConditions({ ...real.conditions, physicsVersion: 1528 }) !== null
+      isCurrentLapPhysics('lc26', 1538, TRACK) && isCurrentLapPhysics('lc26', 1008, TRACK) && !isCurrentLapPhysics('lc26', 538, TRACK) && !isCurrentLapPhysics('amg-gt3', 8, TRACK) &&
+        isCurrentLapPhysics('amg-gt3', 8, 'spielberg') && parseLapConditions({ ...real.conditions, physicsVersion: 1538 }) !== null
     );
     const recorder = new LapRecorder({ trackLengthM: 1000, turns: [], trackId: TRACK, vehicle: 'amg-gt3', driverName: 'Rec', driverCode: 'REC' });
     const recorded = () => (recorder as unknown as { physicsVersion: number }).physicsVersion;
     const gt3 = recorded();
     recorder.setContext({ vehicle: 'lc26' });
-    check('circuits: the lap recorder ranks laps on the restarted board, for a car set later too', gt3 === 1008 && recorded() === 1528, `p${gt3} / p${recorded()}`);
+    check('circuits: the lap recorder ranks laps on the restarted board, for a car set later too', gt3 === 1008 && recorded() === 1538, `p${gt3} / p${recorded()}`);
     const now = lapConditionsNow({ assists: 'pro', compound: 'soft', lineWaterMm: 0, realism: 'full', vehicle: 'lc26', trackId: TRACK });
     check(
       'circuits: the personal best and the online board are kept per restart',
-      lapBoardClass(now) === 'p1528-pro-full-dry' && boardKeyOf({ trackId: TRACK, vehicle: 'lc26', conditions: now }) === `${TRACK}|lc26|p1528-pro-full-dry`
+      lapBoardClass(now) === 'p1538-pro-full-dry' && boardKeyOf({ trackId: TRACK, vehicle: 'lc26', conditions: now }) === `${TRACK}|lc26|p1538-pro-full-dry`
     );
   } finally {
     delete RESETS[TRACK];
