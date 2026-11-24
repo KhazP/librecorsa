@@ -18,11 +18,12 @@
  *      mapped where and what was left out.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { packageCar, type CarSkinSource } from "../lib/car-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "../lib/importer";
-import { localIdFrom, packageCredit } from "../lib/manifest-file";
+import { localIdFrom, packageCredit, packageIdFrom } from "../lib/manifest-file";
 import { report } from "../lib/package-check";
 import { runPython, REPO_ROOT } from "../lib/toolchain";
 import { fitAero, withAero, type AeroFit } from "../lib/aero-fit";
@@ -30,7 +31,7 @@ import { driveSanity, type SanityResult } from "../lib/car-sanity";
 import { SdParams } from "../../lib/sd-params";
 import { sdAeroTargets, sdCarPhysics, PHYSICS_BASES, SD_KEYS_NOT_CARRIED, type SdCar, type SdPhysics } from "../../cars/sd-car-physics";
 import { findCarLicence, LICENCES, shareable, type CarLicence, type LicenceId } from "../../cars/sd-licence";
-import { fetchedSource, fetchSdCar, plainFileName, readPins, SD_CACHE_DIR, SD_DATA_DIR, sdCategoryFile, sdSharedFile, type PinnedCar } from "../lib/sd-fetch";
+import { fetchedSource, fetchSdCar, plainFileName, readPins, SD_DATA_DIR, sdCategoryFile, sdSharedFile, type PinnedCar } from "../lib/sd-fetch";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../../src/lib/mods/mod-physics";
 import { VEHICLE_MODELS } from "../../../src/lib/cars/vehicle-models";
 import type { CarSimProfile } from "../../../src/lib/sim/f12026-car/F12026CarSim";
@@ -66,9 +67,9 @@ function plainName(name: string, where: string, car: string): string {
   return name;
 }
 
-/** The liveries a car folder has: `<car>-<id>.<image>` that is no texture of its own */
+/** The liveries a car folder has: `<car>-<id>.<image>` that is no texture of its own (the formats port_sd_car.py reads) */
 function liveryCandidates(carDir: string, car: string): string[] {
-  const re = new RegExp(`^${car.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(.+)\\.(png|jpe?g|rgb)$`, "i");
+  const re = new RegExp(`^${car.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(.+)\\.(png|jpe?g|rgb|bmp|tga)$`, "i");
   const ids = new Set<string>();
   for (const f of readdirSync(carDir)) {
     const m = re.exec(f);
@@ -95,6 +96,22 @@ function expectedTopSpeed(car: SdCar, drag: number): number {
   const top = car.gears.ratios[car.gears.ratios.length - 1] * car.diff.ratio;
   const byGearing = ((car.engine.limiterRpm * Math.PI) / 30 / top) * car.tyres.rear.radius;
   return Math.min(byPower, byGearing) * 3.6;
+}
+
+/**
+ * Each livery's id in the package (16 characters at most): its own made into one, and where two come out alike, the
+ * later one numbered
+ */
+export function liveryLocalIds(ids: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const id of ids) {
+    let local = localIdFrom(id);
+    for (let n = 2; taken.has(local); n++) local = `${localIdFrom(id).slice(0, 16 - `-${n}`.length).replace(/[-_]+$/, "")}-${n}`;
+    taken.add(local);
+    out.set(id, local);
+  }
+  return out;
 }
 
 /** The car's id in the package: its folder's name, without its category's prefix when it is too long */
@@ -153,7 +170,7 @@ function conversionReport(o: {
   return `${lines.join("\n")}\n`;
 }
 
-const importer: Importer = {
+const importer: Importer & { convert(argv: string[], work: string): Promise<void> } = {
   summary: "a Speed Dreams car (its folder, or --fetch <car> from the official repositories)",
   usage: `<car folder> | --fetch <car> [--base <model>] [--id <car id>] [--class <class>] [--year <year>] [--personal]
   --fetch <car>            download the car (its folder's name, e.g. ls2-cavallo-360r) at its pinned revision first
@@ -168,6 +185,16 @@ const importer: Importer = {
 ${PACKAGE_USAGE}
   Default package id: sd.<car>.`,
   async run(argv) {
+    // The converters' working copy: removed after the import, failed or not, unless --keep-build keeps it
+    const work = mkdtempSync(join(tmpdir(), "sd-car-"));
+    try {
+      await importer.convert(argv, work);
+    } finally {
+      if (argv.includes("--keep-build")) console.log(`      the working copy is kept in ${work}`);
+      else rmSync(work, { recursive: true, force: true });
+    }
+  },
+  async convert(argv, work) {
     const { values, positionals } = parseImportArgs(argv, {
       fetch: { type: "string" },
       base: { type: "string" },
@@ -179,6 +206,7 @@ ${PACKAGE_USAGE}
       "no-lap": { type: "boolean" },
       "skip-drive-check": { type: "boolean" },
     });
+    if (values.fetch && positionals.length) throw new Error("give a car folder or --fetch <car>, not both");
     const carDir = values.fetch ? await fetchSdCar(values.fetch) : positionals[0] && resolve(positionals[0]);
     if (!carDir || !existsSync(carDir)) throw new Error("name the car's folder (…/cars/models/<car>), or --fetch <car>");
     const car = basename(carDir);
@@ -186,6 +214,7 @@ ${PACKAGE_USAGE}
     if (!existsSync(xml)) throw new Error(`${carDir}: no ${car}.xml (the folder must keep the car's own name)`);
     if (values.base && !PHYSICS_BASES.includes(values.base as VehicleModelId)) throw new Error(`--base must be one of ${PHYSICS_BASES.join(", ")}`);
     if (values.class && !CLASSES.includes(values.class as ModCarClass)) throw new Error(`--class must be one of ${CLASSES.join(", ")}`);
+    if (values.year !== undefined && !/^\d{4}$/.test(values.year)) throw new Error(`--year must be a year (1890 to 2100), not "${values.year}"`);
 
     // ---- 1. Parameters: the car over its category
     const own = SdParams.read(xml);
@@ -234,6 +263,7 @@ ${PACKAGE_USAGE}
     const phys = sdCarPhysics(params, { base: values.base as VehicleModelId | undefined });
     const classId = (values.class as ModCarClass | undefined) ?? phys.classId;
     const year = values.year ? Number(values.year) : phys.year;
+    if (!(year >= 1890 && year <= 2100)) throw new Error(`--year must be a year (1890 to 2100), not ${year}`);
     const baseProfile = VEHICLE_MODELS[phys.base].simProfile!;
     const pkgCarId = carLocalId(values.id ?? car);
     const profileOf = (patch: Record<string, unknown>): CarSimProfile => {
@@ -262,9 +292,6 @@ ${PACKAGE_USAGE}
     }
 
     // ---- 4. Model, liveries, picture; sound
-    const work = join(SD_CACHE_DIR, "build", car);
-    rmSync(work, { recursive: true, force: true });
-    mkdirSync(work, { recursive: true });
     const paramsJson = join(work, "params.json");
     const sections: Record<string, Record<string, number | string>> = {};
     for (const [path, key, a] of params.entries()) (sections[path] ??= {})[key] = a.val;
@@ -347,7 +374,7 @@ ${PACKAGE_USAGE}
       { authorUrl: "https://www.speed-dreams.net/" }
     );
     const { info: pkgInfo, packageDir } = importTarget(
-      { ...values, package: values.package ?? `sd.${car.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 24).replace(/[-_]+$/, "")}` },
+      { ...values, package: values.package ?? packageIdFrom("sd", car) },
       {
         author: "sd",
         name: values.name ?? `${title} (Speed Dreams)`,
@@ -355,9 +382,9 @@ ${PACKAGE_USAGE}
         description: `${title}, a ${phys.car.category} car from Speed Dreams, converted with its liveries and sound; physics on the ${phys.base} model.`,
       }
     );
-    const skins: CarSkinSource[] = ported.liveries
-      .filter((l) => liveriesOk.includes(l.id))
-      .map((l) => ({ id: localIdFrom(l.id), name: l.name, swatch: l.swatch, dir: l.dir }));
+    const kept = ported.liveries.filter((l) => liveriesOk.includes(l.id));
+    const localIds = liveryLocalIds(kept.map((l) => l.id));
+    const skins: CarSkinSource[] = kept.map((l) => ({ id: localIds.get(l.id)!, name: l.name, swatch: l.swatch, dir: l.dir }));
     const extraFiles = [...licenceIds].map((id) => ({ from: LICENCES[id].textFile, to: `cars/${pkgCarId}/LICENSE-${id}.txt` }));
     for (const r of lic.readmes) extraFiles.push({ from: join(carDir, r), to: `cars/${pkgCarId}/speed-dreams-${r.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}${/\.(txt|md)$/i.test(r) ? "" : ".txt"}` });
     const conversion = join(work, "CONVERSION.md");
@@ -401,7 +428,6 @@ ${PACKAGE_USAGE}
       sound,
       extraFiles,
     });
-    if (!values["keep-build"]) rmSync(work, { recursive: true, force: true });
     report(packageDir, out.checked);
     for (const w of ported.warnings) console.log(`      note: ${w}`);
     for (const l of leftOutLiveries) console.log(`      left out: ${l}`);

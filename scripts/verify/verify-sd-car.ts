@@ -18,7 +18,7 @@ import { readPins, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 import { fitAero, withAero } from "../mods/lib/aero-fit";
 import { driveSanity } from "../mods/lib/car-sanity";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../src/lib/mods/mod-physics";
-import sdCarImporter from "../mods/importers/sd-car";
+import sdCarImporter, { liveryLocalIds } from "../mods/importers/sd-car";
 import { VEHICLE_MODELS } from "../../src/lib/cars/vehicle-models";
 import type { VehicleModelId } from "../../src/types/f1";
 
@@ -595,6 +595,11 @@ async function importerChecks(): Promise<void> {
   );
   const whyWheel = await refusal([wheelDir, "--personal", "--no-lap", "--skip-drive-check", "--out", out]);
   check("a car whose wheel model reaches outside is refused before it is looked for", /wheel model .* not a plain file name/.test(whyWheel), whyWheel);
+  check("--year must be a year", /--year must be a year/.test(await refusal([wheelDir, "--year", "abc", "--out", out])));
+  check("a car folder and --fetch together are refused", /not both/.test(await refusal([wheelDir, "--fetch", "ls2-cavallo-360r", "--out", out])));
+  check("nothing was packaged by the refused imports", !existsSync(out));
+  const ids = liveryLocalIds(["blue-very-long-name-1", "blue-very-long-name-2", "red"]);
+  check("two liveries whose package ids would collide get one each", new Set(ids.values()).size === 3 && [...ids.values()].every((v) => v.length <= 16), JSON.stringify([...ids]));
 }
 
 void importerChecks()
