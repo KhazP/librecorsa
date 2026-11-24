@@ -395,6 +395,10 @@
       "label": "Pódio em tela cheia",
       "hint": "Depois de uma corrida com IA: os três primeiros no pódio, os dez primeiros e a volta mais rápida, antes dos resultados. Qualquer tecla fecha."
     },
+    "raceEventCards": {
+      "label": "Cartões de eventos da corrida",
+      "hint": "Em corridas com IA: um cartão do piloto quando um carro vence, assume a liderança, faz a volta mais rápida, para no box ou abandona, e uma faixa sobre uma disputa apertada com sua previsão."
+    },
     "boardWidget": {
       "label": "Ranking de tempos",
       "options": {

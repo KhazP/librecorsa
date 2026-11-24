@@ -797,7 +797,8 @@
       "lastVsBestTitle": "Dernier tour comparé à votre meilleur",
       "lastVsTheirsTitle": "Son dernier tour comparé au vôtre",
       "personalBest": "RP",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Tour",
@@ -1194,5 +1195,23 @@
     "revLimit": "Rupteur à {value} tr/min",
     "go": "C’est parti",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Événements de course",
+    "event": {
+      "winner": "Vainqueur",
+      "newLeader": "Nouveau leader",
+      "fastestLap": "Tour le plus rapide",
+      "pitStop": "Pit stop",
+      "retired": "Abandon"
+    },
+    "lap": "Tour {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Bagarre pour P{position}",
+    "attacking": "À l’attaque",
+    "closing": "Reprend {rate} s/tour",
+    "closingCatch": "Reprend {rate} s/tour · revient dans {laps, plural, one {# tour} other {# tours}}",
+    "pullingAway": "S’échappe",
+    "stable": "Écart stable"
   }
 }

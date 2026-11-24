@@ -797,7 +797,8 @@
       "lastVsBestTitle": "Last lap against your best",
       "lastVsTheirsTitle": "Their last lap against yours",
       "personalBest": "PB",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Lap",
@@ -1194,5 +1195,23 @@
     "revLimit": "{value} rpm limit",
     "go": "Go",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Race events",
+    "event": {
+      "winner": "Winner",
+      "newLeader": "New leader",
+      "fastestLap": "Fastest lap",
+      "pitStop": "Pit stop",
+      "retired": "Retired"
+    },
+    "lap": "Lap {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Battle for P{position}",
+    "attacking": "Attacking",
+    "closing": "Closing {rate} s/lap",
+    "closingCatch": "Closing {rate} s/lap · catch in {laps, plural, one {# lap} other {# laps}}",
+    "pullingAway": "Pulling away",
+    "stable": "Gap stable"
   }
 }

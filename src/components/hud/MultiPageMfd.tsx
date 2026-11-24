@@ -33,6 +33,7 @@ import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE, LapMarkGlyph } from "./styles/hud-st
 import { SkinButton, skinCss, SkinPanel, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudModeRef } from "./hud-mode";
 import { MfdPitPage, MfdPitPill } from "./MfdPitPage";
+import { usePitGap } from "./pit-clock";
 
 export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd" | "pit";
 
@@ -400,6 +401,7 @@ const Empty: React.FC<{ text: string }> = ({ text }) => {
 const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, laps }) => {
   const skin = useHudSkin();
   const text = useMfdText();
+  const pitGap = usePitGap();
   const standings = t.race?.standings;
   if (standings && standings.length > 0) {
     const fastest = standings.reduce<number | null>((m, s) => (s.bestLapMs && (m === null || s.bestLapMs < m) ? s.bestLapMs : m), null);
@@ -441,7 +443,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                       {formatLapTime(s.bestLapMs)}
                     </span>
                   </td>
-                  <td className="w-13 pe-1 text-end">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                  <td className="w-13 pe-1 text-end">{pitGap(s) ?? (pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`)}</td>
                 </tr>
               );
             }
@@ -462,7 +464,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                     {formatLapTime(s.bestLapMs)}
                   </span>
                 </td>
-                <td className="w-13 rounded-e-lc-nub pe-1 text-end">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                <td className="w-13 rounded-e-lc-nub pe-1 text-end">{pitGap(s) ?? (pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`)}</td>
               </tr>
             );
           })}

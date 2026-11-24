@@ -720,6 +720,12 @@ export const fullPodium = toggle({
   hint: () => rt("fullPodium.hint"),
   ...hud("fullPodium"),
 });
+export const raceEventCards = toggle({
+  id: "raceEventCards",
+  get label() { return rt("raceEventCards.label"); },
+  hint: () => rt("raceEventCards.hint"),
+  ...hud("raceEventCards"),
+});
 export const boardWidget = choice("segmented", {
   id: "boardWidget",
   get label() { return rt("boardWidget.label"); },

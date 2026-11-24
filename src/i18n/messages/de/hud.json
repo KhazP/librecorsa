@@ -797,7 +797,8 @@
       "lastVsBestTitle": "Letzte Runde gegen deine Bestzeit",
       "lastVsTheirsTitle": "Deren letzte Runde gegen deine",
       "personalBest": "PB",
-      "pit": "BOX"
+      "pit": "BOX",
+      "pitClock": "BOX {seconds}"
     },
     "lap": {
       "region": "Runde",
@@ -1194,5 +1195,23 @@
     "revLimit": "Begrenzer bei {value} U/min",
     "go": "Los",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Rennereignisse",
+    "event": {
+      "winner": "Sieger",
+      "newLeader": "Neuer Führender",
+      "fastestLap": "Schnellste Runde",
+      "pitStop": "Boxenstopp",
+      "retired": "Ausgeschieden"
+    },
+    "lap": "Runde {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Duell um P{position}",
+    "attacking": "Greift an",
+    "closing": "Holt {rate} s/Runde auf",
+    "closingCatch": "Holt {rate} s/Runde auf · dran in {laps, plural, one {# Runde} other {# Runden}}",
+    "pullingAway": "Setzt sich ab",
+    "stable": "Abstand stabil"
   }
 }

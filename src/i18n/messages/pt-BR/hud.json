@@ -797,7 +797,8 @@
       "lastVsBestTitle": "Última volta contra a sua melhor",
       "lastVsTheirsTitle": "Última volta deles contra a sua",
       "personalBest": "RP",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Volta",
@@ -1194,5 +1195,23 @@
     "revLimit": "Corte a {value} rpm",
     "go": "Vai",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Eventos da corrida",
+    "event": {
+      "winner": "Vencedor",
+      "newLeader": "Novo líder",
+      "fastestLap": "Volta mais rápida",
+      "pitStop": "Pit stop",
+      "retired": "Abandonou"
+    },
+    "lap": "Volta {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Disputa pelo P{position}",
+    "attacking": "Atacando",
+    "closing": "Tirando {rate} s/volta",
+    "closingCatch": "Tirando {rate} s/volta · alcança em {laps, plural, one {# volta} other {# voltas}}",
+    "pullingAway": "Abrindo vantagem",
+    "stable": "Diferença estável"
   }
 }

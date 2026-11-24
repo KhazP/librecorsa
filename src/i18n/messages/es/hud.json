@@ -797,7 +797,8 @@
       "lastVsBestTitle": "Última vuelta frente a tu mejor",
       "lastVsTheirsTitle": "Su última vuelta frente a la tuya",
       "personalBest": "MP",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Vuelta",
@@ -1194,5 +1195,23 @@
     "revLimit": "Corte a {value} rpm",
     "go": "Adelante",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Eventos de carrera",
+    "event": {
+      "winner": "Ganador",
+      "newLeader": "Nuevo líder",
+      "fastestLap": "Vuelta más rápida",
+      "pitStop": "Parada en boxes",
+      "retired": "Retirado"
+    },
+    "lap": "Vuelta {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Lucha por P{position}",
+    "attacking": "Atacando",
+    "closing": "Recorta {rate} s/vuelta",
+    "closingCatch": "Recorta {rate} s/vuelta · lo alcanza en {laps, plural, one {# vuelta} other {# vueltas}}",
+    "pullingAway": "Se escapa",
+    "stable": "Diferencia estable"
   }
 }

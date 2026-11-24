@@ -315,6 +315,8 @@ export interface HudSettings {
   preRaceShow: boolean;
   /** After an offline AI race, the full-screen podium (the top three, the top ten, the fastest lap) before the table */
   fullPodium: boolean;
+  /** In an offline AI race: the broadcast's driver cards (winner, new leader, fastest lap, pit stop, retired) and battle strip */
+  raceEventCards: boolean;
 }
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
@@ -478,6 +480,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   showPlayerNames: true,
   preRaceShow: true,
   fullPodium: true,
+  raceEventCards: true,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -873,6 +876,7 @@ function parseHud(v: unknown): HudSettings {
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
     preRaceShow: bool(v.preRaceShow, d.preRaceShow),
     fullPodium: bool(v.fullPodium, d.fullPodium),
+    raceEventCards: bool(v.raceEventCards, d.raceEventCards),
   };
 }
 

@@ -395,6 +395,10 @@
       "label": "Vollbild-Podium",
       "hint": "Nach einem KI-Rennen: die ersten drei auf dem Podium, die Top Ten und die schnellste Runde, vor dem Ergebnis. Jede Taste schließt es."
     },
+    "raceEventCards": {
+      "label": "Renn-Ereigniskarten",
+      "hint": "In KI-Rennen: eine Fahrerkarte, wenn ein Auto gewinnt, die Führung übernimmt, die schnellste Runde fährt, an die Box kommt oder ausscheidet, und ein Balken zu einem engen Duell mit Prognose."
+    },
     "boardWidget": {
       "label": "Bestenliste",
       "options": {

@@ -395,6 +395,10 @@
       "label": "Podio a pantalla completa",
       "hint": "Tras una carrera con IA: los tres primeros en el podio, los diez primeros y la vuelta más rápida, antes de los resultados. Cualquier tecla lo cierra."
     },
+    "raceEventCards": {
+      "label": "Tarjetas de eventos de carrera",
+      "hint": "En carreras con IA: una tarjeta del piloto cuando un coche gana, toma el liderato, marca la vuelta más rápida, para en boxes o abandona, y una franja sobre una lucha cerrada con su pronóstico."
+    },
     "boardWidget": {
       "label": "Clasificación de vueltas",
       "options": {

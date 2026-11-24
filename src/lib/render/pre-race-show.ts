@@ -189,8 +189,9 @@ export class PreRaceShowDirector {
     this.ctx = ctx;
     if (markers) this.markers = markers;
     if (!ctx && this.clock) this.end();
-    // The same show told more (a test day's target once known): the overlay redraws with it
-    else if (same && this.clock) this.publish();
+    // With no show playing, the round's context goes on the snapshot straight away (the race's broadcast cards name its
+    // drivers by it, shown or not); the same show told more (a test day's target once known) redraws with it
+    else if (!this.clock || same) this.publish();
   }
 
   update(f: ShowFrame): void {

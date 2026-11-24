@@ -291,8 +291,10 @@ export interface RaceStandingEntry {
   damage?: number;
   /** In the pit lane now */
   inPit?: boolean;
-  /** Pit stops made this race (an AI car's) */
+  /** Pit stops made this race (an AI car's by the field; the player's by the page's crew, `withPlayerPit`) */
   pitStops?: number;
+  /** Stopped in its pit box while the crew works: seconds so far, and the stop's whole length (s) */
+  pitBox?: { elapsedS: number; totalS: number };
 }
 
 /** One line of the final classification */

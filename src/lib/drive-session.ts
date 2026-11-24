@@ -161,6 +161,7 @@ import { sharedMusic, type NowPlaying } from "@/lib/audio/bgm-controller";
 import { MusicDirector } from "@/lib/audio/music-director";
 import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
 import { PitStopManager } from "@/lib/sim/pit/pit-stop";
+import { withPlayerPit } from "@/lib/broadcast/player-pit";
 import { pitBoxIndex } from "@/lib/sim/pit/ai-pit";
 import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 import type {
@@ -3613,7 +3614,8 @@ export class DriveSession {
         driving && settingsNow.device === "wheel",
         vehicleNow
       );
-      physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
+      // An AI race's standing, with the player's own pit stops on their line (the crew is the page's)
+      physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : withPlayerPit(aiField?.status(), physics.telemetry.pit);
       // The reaction to the lights: from the frame they go out, as this frame's status has it (a rolling start has none)
       {
         const status = physics.telemetry.race;

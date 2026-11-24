@@ -68,6 +68,7 @@ import {
 } from "../third-party-data";
 import { revLights, useLapHistory } from "./third-party-parts";
 import css from "./retro.module.css";
+import { usePitGap } from "../pit-clock";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -435,6 +436,7 @@ const RelativePanel: React.FC<{ t: CarTelemetry; map: HudMap }> = ({ t, map }) =
   const rows = relativeCars(t, map.lengthM, 3);
   const me = rows.findIndex((r) => r.entry.isPlayer);
   const w = useRetroWords();
+  const pitGap = usePitGap();
   return (
     <Frame size="large" edge="metal" face="panel" faceClassName="flex flex-col gap-2 p-2">
       <div className="flex gap-1.5 max-md:hidden">
@@ -451,7 +453,7 @@ const RelativePanel: React.FC<{ t: CarTelemetry; map: HudMap }> = ({ t, map }) =
           const k = Math.abs(i - me);
           const pos = standings.indexOf(r.entry) + 1;
           const player = r.entry.isPlayer;
-          const gap = player ? "0.0" : `${r.gapS > 0 ? "−" : "+"}${formatGap(Math.abs(r.gapS))}`;
+          const gap = pitGap(r.entry) ?? (player ? "0.0" : `${r.gapS > 0 ? "−" : "+"}${formatGap(Math.abs(r.gapS))}`);
           return (
             <div
               key={r.entry.driverCode + (r.entry.name ?? "")}

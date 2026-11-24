@@ -797,7 +797,8 @@
       "lastVsBestTitle": "Lap sebelumnya dibanding terbaikmu",
       "lastVsTheirsTitle": "Lap sebelumnya mereka dibanding milikmu",
       "personalBest": "PB",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Lap",
@@ -1194,5 +1195,23 @@
     "revLimit": "Batas putaran {value} rpm",
     "go": "Jalan",
     "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Momen balapan",
+    "event": {
+      "winner": "Pemenang",
+      "newLeader": "Pemimpin baru",
+      "fastestLap": "Lap tercepat",
+      "pitStop": "Pit stop",
+      "retired": "Gagal finis"
+    },
+    "lap": "Lap {lap}",
+    "stationary": "{seconds} dtk",
+    "battleFor": "Duel untuk P{position}",
+    "attacking": "Menyerang",
+    "closing": "Memangkas {rate} dtk/lap",
+    "closingCatch": "Memangkas {rate} dtk/lap · menyusul dalam {laps, plural, other {# lap}}",
+    "pullingAway": "Menjauh",
+    "stable": "Gap stabil"
   }
 }
