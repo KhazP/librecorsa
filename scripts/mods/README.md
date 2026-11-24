@@ -15,9 +15,12 @@ lib/
   circuit-package.ts a circuit the converters built (public/tracks/<id>/) → a package
   car-package.ts     a converted car (its GLB, liveries, sound, physics patch) → a package
   importer.ts        what an importer is, and the options every importer takes
+  licences.ts        a source's licence statement read: which licence, whether players may share a conversion
   toolchain.ts       running the repository's Python (uv) and TypeScript (tsx) converters
+licences/            the full texts of the licences the importers recognise, for the packages they make
 importers/
   <name>.ts          one per source: `npm run mod -- import <name>`
+  sd-track.circuits.json   Speed Dreams' circuits as its asset database lists them, each archive pinned by its sha256
 ```
 
 The game's side of packages (the manifest's rules, the zip reader, the store, the loader) is in `src/lib/mods/`; the
@@ -51,7 +54,12 @@ packager. `npm run mod -- import` finds it by its file name. `importers/blender-
 
 - Put the source's credit and licence in the package: `packageCredit` keeps https links only, and a licence file the
   source carries goes in with `extraFiles`.
-- Content whose licence doesn't let a player share it is still packaged, for the player's own use: its credit's
-  `note` says "For personal use only: the author's permission is needed to share it", and the import prints that
-  plainly. Most Assetto Corsa mods are like this (`ac-track`), and every F1 25 mod (`f1-track`).
+- What the source's licence allows decides what an import does, and the import says so plainly. `lib/licences.ts`
+  reads a readme's or licence file's statement.
+  - Speed Dreams' content is free by default, so a circuit or car without a licence that lets a player share it is
+    refused, with the reason (`importers/sd-track.ts` `circuitLicence` shows the whole gate). `--personal` converts
+    it anyway, marked for personal use.
+  - Most Assetto Corsa mods can't be shared, so `ac-track` and `ac-car` always package them for the player's own use:
+    unless the mod states a licence that allows sharing, the credit's `note` says "For personal use only: the
+    author's permission is needed to share it". An F1 25 mod (`f1-track`) is always for personal use.
 - Give it a suite (`scripts/verify-<name>.ts`) that runs on a small sample, skipped when the sample isn't there.
