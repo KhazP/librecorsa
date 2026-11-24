@@ -17,6 +17,7 @@
  *   5. the package (lib/car-package.ts), with the licence texts, the car's readme and a CONVERSION.md of what was
  *      mapped where and what was left out.
  */
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { packageCar, type CarSkinSource } from "../lib/car-package";
@@ -290,21 +291,27 @@ ${PACKAGE_USAGE}
         console.log(`      its engine sample ${sample}: ${(err as Error).message}`);
       }
     }
-    let sound: { dir: string; limiterRpm: number } | { car: string };
-    let soundNote: string;
+    let sound: { dir: string; limiterRpm: number } | { car: string } = { car: SOUND_BY_CLASS[classId] };
+    let soundNote = "";
     const rpmScale = params.num("Sound", "rpm scale") ?? 1;
-    if (samplePath) {
+    // The bank's Ogg loops are encoded with ffmpeg, from PATH (`ffmpeg -version` runs on every platform)
+    const ffmpeg = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0 ? "ffmpeg" : null;
+    if (!samplePath) soundNote = `the game's ${SOUND_BY_CLASS[classId]} (the engine sample ${sample} was not found)`;
+    else if (!ffmpeg) soundNote = `the game's ${SOUND_BY_CLASS[classId]} (ffmpeg isn't installed, so its engine sample ${sample} couldn't be converted)`;
+    else if (!(rpmScale > 0)) soundNote = `the game's ${SOUND_BY_CLASS[classId]} (Sound/rpm scale is ${rpmScale}, so its engine sample has no pitch)`;
+    else {
       const audio = join(work, "audio");
-      runPython(
-        "scripts/audio/port_sd_sound.py",
-        [samplePath, audio, "--rpm-scale", String(rpmScale), "--limiter", String(Math.round(phys.car.engine.limiterRpm)), "--idle", String(Math.round(phys.car.engine.idleRpm)), "--source", `Speed Dreams: ${car} (${sample})`],
-        { requirements: null, withPackages: ["numpy==2.4.3", "scipy==1.18.1", "fsb5"] }
-      );
-      sound = { dir: audio, limiterRpm: phys.car.engine.limiterRpm };
-      soundNote = `its own engine sample (${sample}), resampled to Speed Dreams' pitch at each rpm of the bank (rpm scale ${rpmScale}: the sample's own pitch at ${Math.round(5729.58 / rpmScale)} rpm), at Speed Dreams' loudness on and off throttle`;
-    } else {
-      sound = { car: SOUND_BY_CLASS[classId] };
-      soundNote = `the game's ${SOUND_BY_CLASS[classId]} (the engine sample ${sample} was not found)`;
+      try {
+        runPython(
+          "scripts/audio/port_sd_sound.py",
+          [samplePath, audio, "--rpm-scale", String(rpmScale), "--limiter", String(Math.round(phys.car.engine.limiterRpm)), "--idle", String(Math.round(phys.car.engine.idleRpm)), "--source", `Speed Dreams: ${car} (${sample})`, "--ffmpeg", ffmpeg],
+          { requirements: null, withPackages: ["numpy==2.4.3", "scipy==1.18.1", "fsb5"] }
+        );
+        sound = { dir: audio, limiterRpm: phys.car.engine.limiterRpm };
+        soundNote = `its own engine sample (${sample}), resampled to Speed Dreams' pitch at each rpm of the bank (rpm scale ${rpmScale}: the sample's own pitch at ${Math.round(5729.58 / rpmScale)} rpm), at Speed Dreams' loudness on and off throttle`;
+      } catch (err) {
+        soundNote = `the game's ${SOUND_BY_CLASS[classId]} (its engine sample ${sample} couldn't be converted: ${(err as Error).message})`;
+      }
     }
 
     // ---- 5. The package

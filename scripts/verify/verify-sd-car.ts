@@ -525,6 +525,25 @@ else {
     const offTop = m.engine.ext.find((e: any) => e.layer === "off" && e.rpm === 9000);
     check("off throttle at Speed Dreams' quieter curve", offTop.rms < on[on.length - 1].rms && near(offTop.rms / on[on.length - 1].rms, Math.exp(1.3 * (0.25 - 1)) / 1, 0.02));
   }
+  // Values that would divide by 0 or loop on nothing, and an ffmpeg that isn't there: a message, not a crash
+  const empty = join(tmp, "empty.wav");
+  // The tone's header with no samples after it
+  const header = Buffer.from(wav.subarray(0, 44));
+  header.writeUInt32LE(36, 4);
+  header.writeUInt32LE(0, 40);
+  writeFileSync(empty, header);
+  const soundRun = (args: string[]) =>
+    spawnSync("uv", ["run", "--python", "3.14", "--no-project", "--with", "numpy==2.4.3", "--with", "scipy==1.18.1", "--with", "fsb5", "python", "-P", "scripts/audio/port_sd_sound.py", ...args], { encoding: "utf8" });
+  for (const [what, args] of [
+    ["an rpm scale of 0", [wf, join(tmp, "a0"), "--rpm-scale", "0", "--limiter", "9000", "--idle", "1000"]],
+    ["a limiter of 0", [wf, join(tmp, "a1"), "--rpm-scale", "0.5", "--limiter", "0", "--idle", "1000"]],
+    ["a sample with no frames", [empty, join(tmp, "a2"), "--rpm-scale", "0.5", "--limiter", "9000", "--idle", "1000"]],
+    ["an ffmpeg that isn't there", [wf, join(tmp, "a3"), "--rpm-scale", "0.5", "--limiter", "9000", "--idle", "1000", "--ffmpeg", join(tmp, "no-ffmpeg")]],
+  ] as const) {
+    const r = soundRun([...args]);
+    const out = `${r.stdout}${r.stderr}`;
+    check(`port_sd_sound.py refuses ${what} with a message, not a crash`, r.status !== 0 && !/Traceback/.test(out) && out.trim().length > 0, out.trim().split("\n").pop()?.slice(0, 120));
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

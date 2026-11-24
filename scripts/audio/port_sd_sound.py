@@ -12,7 +12,8 @@ Speed Dreams sounds at every rpm. This writes such loops at a few rpm from idle 
 Speed Dreams' two loudness curves (scaled so full throttle at the limiter sits at the bank format's top level), the same
 loops for the cockpit and outside (Speed Dreams has one), and a limiter stutter made from the top loop.
 
-Usage (numpy, scipy and fsb5 for port_ac_bank.py's helpers; ffmpeg for the Ogg encode):
+Usage (numpy, scipy and fsb5 for port_ac_bank.py's helpers; ffmpeg for the Ogg encode, found on PATH unless --ffmpeg
+names it):
 
   uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 python -P scripts/audio/port_sd_sound.py \
     <sample.wav> <out folder> --rpm-scale 0.71 --limiter 9500 --idle 1000 --source "Speed Dreams: ls2-cavallo-360r"
@@ -23,6 +24,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import shutil
+import subprocess
 import sys
 import wave
 from pathlib import Path
@@ -47,9 +50,14 @@ THROTTLE_CURVE = {
 
 def read_wav(path: Path) -> np.ndarray:
     """The sample as mono float32 at RATE (Speed Dreams takes mono 8- or 16-bit PCM at any rate)"""
-    with wave.open(str(path), "rb") as w:
-        ch, width, sr, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
-        raw = w.readframes(n)
+    try:
+        with wave.open(str(path), "rb") as w:
+            ch, width, sr, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
+            raw = w.readframes(n)
+    except (wave.Error, EOFError) as e:
+        raise SystemExit(f"{path}: not a PCM WAV file Speed Dreams plays ({e})")
+    if n <= 0 or sr <= 0 or ch <= 0 or len(raw) < width * ch:
+        raise SystemExit(f"{path}: no sound in it ({n} frames at {sr} Hz)")
     if width == 1:
         x = (np.frombuffer(raw, np.uint8).astype(np.float32) - 128.0) / 128.0
     elif width == 2:
@@ -88,8 +96,16 @@ def main() -> None:
     ap.add_argument("--limiter", type=float, required=True, help="Engine/revs limiter (rpm)")
     ap.add_argument("--idle", type=float, required=True, help="Engine/tickover (rpm)")
     ap.add_argument("--source", default="Speed Dreams")
-    ap.add_argument("--ffmpeg", default=FFMPEG_DEFAULT)
+    ap.add_argument("--ffmpeg", default=shutil.which("ffmpeg") or FFMPEG_DEFAULT, help="ffmpeg (default: the one on PATH)")
     a = ap.parse_args()
+    for what, v, ok in (("--rpm-scale", a.rpm_scale, a.rpm_scale > 0), ("--limiter", a.limiter, a.limiter > 0),
+                        ("--idle", a.idle, a.idle >= 0)):
+        if not (math.isfinite(v) and ok):
+            raise SystemExit(f"{what} {v}: it must be a finite number, {'0 or more' if what == '--idle' else 'more than 0'}")
+    try:
+        subprocess.run([a.ffmpeg, "-version"], check=True, capture_output=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise SystemExit(f"ffmpeg ({a.ffmpeg}) doesn't run ({e}): install it, or name it with --ffmpeg")
 
     x = read_wav(a.wav)
     if rms(x) < 1e-4:
