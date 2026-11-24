@@ -186,7 +186,8 @@ async function main(): Promise<void> {
                 totalWritten++;
                 totalKb += webp.length / 1024;
               }
-              console.log(`  ok    ${car.id} liveries: ${liveries.length} thumbs → public/lc26/thumbs/ (${totalKb.toFixed(0)} KB total)`);
+              const dir = toRel(carLiveryThumbUrl(car.id, first.id)).replace(/\/[^/]+$/, "/");
+              console.log(`  ok    ${car.id} liveries: ${liveries.length} thumbs → public/${dir} (${totalKb.toFixed(0)} KB total)`);
             }
           } finally {
             await closeCarPage(page);
