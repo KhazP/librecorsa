@@ -20,11 +20,14 @@ const identityPath = "/__launcher"
 // modsPrefix is where mod packages are served, as the game asks for them (src/lib/mods/mod-store.ts MODS_PATH)
 const modsPrefix = "/mods/"
 
-// server answers the game's pages and files from one folder and mod packages from another, for one port on loopback
+// server answers the game's pages and files from one folder (or the live site, mirror.go) and mod packages from
+// another, for one port on loopback
 type server struct {
 	game *os.Root
 	mods *modsFolder
 	port int
+	// site is the live site's mirror, when there is an upstream (mirror.go)
+	site *mirror
 	// imports is the import folder's API (api.go), when the launcher has one
 	imports *importsAPI
 	// session tells the window the launcher opened from other programs (session.go)
@@ -49,6 +52,9 @@ func newServer(gameDir, modsDir string, port int) (*server, error) {
 func (s *server) Close() error {
 	if s.imports != nil {
 		s.imports.jobs.Close()
+	}
+	if s.site != nil && s.site.cache != nil {
+		s.site.cache.Close()
 	}
 	s.mods.Close()
 	return s.game.Close()
@@ -99,9 +105,16 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mods.serveCatalogue(w, r, strings.TrimPrefix(p, cataloguePrefix))
 	case strings.HasPrefix(p, modsPrefix):
 		s.mods.serveFile(w, r, strings.TrimPrefix(p, modsPrefix))
-	default:
+	case s.site == nil || isLocalPath(p):
 		s.serveGame(w, r, p)
+	default:
+		s.serveSite(w, r, p)
 	}
+}
+
+// isLocalPath reports whether p is the launcher's own or the player's mods, which are never asked of the site
+func isLocalPath(p string) bool {
+	return strings.HasPrefix(p, identityPath) || p == "/mods" || strings.HasPrefix(p, modsPrefix)
 }
 
 func (s *server) serveIdentity(w http.ResponseWriter, r *http.Request) {

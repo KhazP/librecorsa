@@ -1,5 +1,6 @@
-// Command librecorsa serves LibreCorsa's static export and the player's mod packages on 127.0.0.1 and opens the game
-// in a Chromium browser as an app window, so the game runs with no network. See README.md.
+// Command librecorsa serves LibreCorsa on 127.0.0.1, the live site mirrored and kept on disk (else the static export
+// beside it) with the player's mod packages, and opens the game in a Chromium browser as an app window, so the game
+// runs online and offline. See README.md.
 package main
 
 import (
@@ -37,6 +38,9 @@ func run() int {
 	importFlag := flag.String("import", "", "folder of circuits and cars to convert (default: import/ beside the launcher)")
 	converterFlag := flag.String("converter", "", "the converter bundle (default: converter/ beside the launcher, else dist/converter)")
 	toolchainFlag := flag.String("toolchain", "", "where the converter's downloaded tools go (default: beside the browser profile)")
+	siteFlag := flag.String("site", "", "the live site to mirror (default: "+defaultSite+"; none in a clone); \"\" for none")
+	cacheFlag := flag.String("cache", "", "where the site's files are kept (default: beside the browser profile)")
+	offline := flag.Bool("offline", false, "never contact the site: what is kept, else the export")
 	port := flag.Int("port", defaultPort, "port on 127.0.0.1 (keep it fixed: the browser keeps saves per port)")
 	noBrowser := flag.Bool("no-browser", false, "only serve; don't open a browser")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -93,6 +97,21 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	// The live site in a release; in a clone the developer's own build, unless --site says otherwise
+	siteGiven := false
+	flag.Visit(func(f *flag.Flag) { siteGiven = siteGiven || f.Name == "site" })
+	site, err := resolveSite(*siteFlag, siteGiven, clone)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	cacheDir := *cacheFlag
+	if cacheDir == "" {
+		cacheDir = defaultSiteCacheDir()
+	} else if cacheDir, err = filepath.Abs(cacheDir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 
 	origin := fmt.Sprintf("http://127.0.0.1:%d", *port)
 	playURL := origin + "/play"
@@ -125,6 +144,27 @@ func run() int {
 		return 1
 	}
 	defer s.Close()
+	siteNote := "none (the export only)"
+	if site != "" {
+		cache, err := openSiteCache(cacheDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "can't use the cache folder %s: %v (the site's files won't be kept)\n", cacheDir, err)
+			cache = nil
+		}
+		m, err := newMirror(site, cache, *offline)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		s.enableSite(m)
+		siteNote = site + ", kept in " + cacheDir
+		if cache == nil {
+			siteNote = site + ", not kept"
+		}
+		if *offline {
+			siteNote += " (offline: what is kept, else the export)"
+		}
+	}
 	// The import folder, and the converter if the release has one: the game runs without either
 	convNote := "none (converting circuits and cars needs a release's converter/ folder)"
 	conv, convErr := loadConverter(converterDir)
@@ -151,7 +191,7 @@ func run() int {
 	if *noBrowser {
 		shown = openURL + "\n        (once; then " + playURL + ")"
 	}
-	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, gameDir, modsDir, importDir, convNote, shown)
+	fmt.Printf("LibreCorsa %s\n  site: %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, siteNote, gameDir, modsDir, importDir, convNote, shown)
 	if !*noBrowser {
 		openGame(openURL)
 	}
