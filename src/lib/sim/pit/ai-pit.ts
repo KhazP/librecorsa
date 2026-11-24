@@ -52,6 +52,8 @@ export interface AiPitOrder {
   compound: TireCompound;
   /** Repair time on top of the tyres (s; 0: no repairs) */
   repairS: number;
+  /** A stop for the weather's tyres alone (ai-weather-tyres.ts): called off if the call goes, and made in place of the next required one */
+  weather?: boolean;
 }
 
 export interface AiPitPose {
