@@ -41,6 +41,7 @@ import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_Y
 import { CarDamage, worldToCarLocal, type CarDamageSnapshot, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import {
   brakingDistanceM,
+  canStartDefenseMove,
   chooseAttackSide,
   chooseDefenseTarget,
   hazardHalfWidthM,
@@ -312,8 +313,8 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   plannerLine: 0.15,
   plannerProximity: 25,
   plannerConsistency: 0.4,
-  defendLookM: 45,
-  defendClosingMs: 1,
+  defendLookM: 55,
+  defendClosingMs: 0.6,
   defendReachM: 2.9,
   defendRoomS: 0.8,
   startLaneMaxM: 900,
@@ -1958,6 +1959,7 @@ export class AiOpponentField implements AiRace {
       let aheadGap = Infinity;
       let attacker: FieldCar | null = null;
       let attackerGap = Infinity;
+      let anyAlongside = false;
       let alongsideAhead: FieldCar | null = null;
       let squeezedBy: FieldCar | null = null;
       let hazard: FieldCar | null = null;
@@ -1978,6 +1980,7 @@ export class AiOpponentField implements AiRace {
         const dLat = other.sim.lateralOffsetM - me.lateralOffsetM;
         const along = overlapNow(craft.alongside.get(other.id) ?? false, ds, dLat, CAR_LEN_M, CAR_WID_M);
         craft.alongside.set(other.id, along);
+        if (along) anyAlongside = true;
         // A car spun, stopped or crawling: an obstacle to pass, not a car to race (and never one to follow in)
         if (this.isHazard(other)) {
           if (ds > -CAR_LEN_M && ds < hazardLook && ds < hazardGap) {
@@ -2018,8 +2021,12 @@ export class AiOpponentField implements AiRace {
           ahead = other;
           aheadGap = ds;
         }
-        // Closing in from behind, not yet alongside
-        if (ds < -CAR_LEN_M && ds > -this.rc.defendLookM && other.sim.vxMs - me.vxMs > this.rc.defendClosingMs && -ds < attackerGap) {
+        // Closing in from behind (or sitting right in divebomb striking range behind us), not yet alongside
+        const closingOnMe = other.sim.vxMs - me.vxMs;
+        const striking =
+          ds < -CAR_LEN_M &&
+          ((ds > -this.rc.defendLookM && closingOnMe > this.rc.defendClosingMs) || (ds > -26 && closingOnMe > -2.5));
+        if (striking && -ds < attackerGap) {
           attacker = other;
           attackerGap = -ds;
         }
@@ -2058,26 +2065,40 @@ export class AiOpponentField implements AiRace {
       }
 
       // Tight corners leave little room to run off-line, so look as far ahead as the car needs to
-      // brake: a pass started on the straight must not reach the hairpin off-line
+      // brake: a pass started on the straight must not reach the hairpin off-line. Look a little further
+      // for defensive positioning so the defender protects the inside BEFORE the braking zone starts.
       let kAbs = Math.abs(sample.curvature);
       let kNext = sample.curvature;
       let distToCorner = Math.abs(sample.curvature) > 0.006 ? 0 : Infinity;
+      let defKAbs = kAbs;
+      let defKNext = kNext;
+      let distToDefCorner = distToCorner;
       const lookM = 30 + (me.vxMs * me.vxMs) / 60;
+      const defLookM = lookM + 130;
       const sampleK = this.track.sampleCurvatureAtDistance;
-      for (let d = 10; d <= lookM; d += 10) {
+      for (let d = 10; d <= defLookM; d += 10) {
         const sAhead = (me.sMeters + d) % L;
         const k = sampleK ? sampleK(sAhead) : this.track.getSampleAtDistance(sAhead).curvature;
-        if (Math.abs(k) > 0.006 && !Number.isFinite(distToCorner)) distToCorner = d;
-        if (Math.abs(k) > kAbs) {
-          kAbs = Math.abs(k);
-          kNext = k;
+        if (d <= lookM) {
+          if (Math.abs(k) > 0.006 && !Number.isFinite(distToCorner)) distToCorner = d;
+          if (Math.abs(k) > kAbs) {
+            kAbs = Math.abs(k);
+            kNext = k;
+          }
+        }
+        if (Math.abs(k) > 0.006 && !Number.isFinite(distToDefCorner)) distToDefCorner = d;
+        if (Math.abs(k) > defKAbs) {
+          defKAbs = Math.abs(k);
+          defKNext = k;
         }
       }
       let maxBias = kAbs > 0.012 ? 1.2 : kAbs > 0.006 ? 2.5 : 6;
       const insideSign = Math.sign(kNext);
+      const defInsideSign = Math.sign(defKNext);
       const inCorner = Math.abs(sample.curvature) > 0.004;
-      // A new straight: the defence count starts again, and a pass commitment ends with the corner it was for
-      if (inCorner) craft.defendMoves = 0;
+      // A new straight after exiting a corner: the single-move defence count resets cleanly
+      if (craft.wasInCorner && !inCorner) craft.defendMoves = 0;
+      craft.wasInCorner = inCorner;
       if (craft.commitSide !== 0 && wrapHalf(me.sMeters - craft.commitUntilS, L) > 0) craft.commitSide = 0;
 
       if (ahead && targetLat === null) {
@@ -2222,42 +2243,70 @@ export class AiOpponentField implements AiRace {
         if (!owns) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - clamp(1.5 * overlapM, 1.5, 5));
       }
       if (squeezedBy) speedCap = Math.min(speedCap, squeezedBy.sim.vxMs - 2);
-      // Defending: a quicker car closing from behind and a real corner coming: cover the inside, the move made while
-      // still on the throttle (never started under braking, never while a pass of our own is on), held through the
-      // braking zone and given up once the car is in the corner itself, where it rejoins its own line to make the turn.
-      // One move per straight; none against a car lapping us, none under a yellow
-      // Off the start the grid lane gives way to it: the run to the first corner is where places go, and a car that
-      // only held its lane was driven past by anything quicker off the line
+      // FIA-style single-move defence: when an attacker is within striking distance approaching a braking zone,
+      // protect the inside line early (before braking, never while passing or with a car already alongside, never
+      // in heavy rain on Lap 1). Once committed, hold the locked defensive line straight through the braking zone
+      // (no weaving under braking!) until turn-in, always yielding a car's width if the attacker gets alongside.
       const onStartLane = car.startLaneM !== null && targetLat === car.startLaneM;
-      const mayDefend =
-        (targetLat === null || onStartLane) && attacker !== null && defend > 0 && (kAbs > 0.006 || onStartLane) && !inCorner && !lapper && !yellow;
-      // ... and only with room to make it: the move must be made before the attacker gets there (a move across the
-      // nose of a car already right behind is a brake test). Half a car length plus 0.8 s of the closing speed (defaults)
+      const brakingNow = me.telemetry.brake >= 0.05;
+      const wetLap1 = car.clock.lapsDone === 0 && wetLevel > 0.5;
+      const cornerAheadForDef = defKAbs > 0.006 && defInsideSign !== 0 && distToDefCorner <= defLookM;
+      const canDefendEnv = (targetLat === null || onStartLane) && craft.passTargetId === null && defend > 0 && !inCorner && !lapper && !yellow && !wetLap1 && roomFor === null && !anyAlongside;
       const attackerClosing = attacker ? Math.max(0, attacker.sim.vxMs - me.vxMs) : 0;
       const startsDefence =
-        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 0.5 * CAR_LEN_M + this.rc.defendRoomS * attackerClosing;
+        canDefendEnv &&
+        attacker !== null &&
+        (cornerAheadForDef || onStartLane) &&
+        canStartDefenseMove({
+          alreadyDefending: car.defending,
+          defendMoves: craft.defendMoves,
+          brake: me.telemetry.brake,
+          anyAlongside: anyAlongside || roomFor !== null || alongsideAhead !== null,
+          attackerGapM: attackerGap,
+          attackerClosingMs: attackerClosing,
+          carLenM: CAR_LEN_M,
+          defendRoomS: this.rc.defendRoomS,
+        });
+      // Hold an active defence straight through braking (no weaving back onto the racing line under braking!)
+      // and on the run-in while the attacker remains nearby or the corner is imminent; yield immediately if a car
+      // gets alongside (`roomFor !== null`) or at corner turn-in (`inCorner`).
+      const holdDefence =
+        car.defending &&
+        !inCorner &&
+        !lapper &&
+        !yellow &&
+        roomFor === null &&
+        (targetLat === null || onStartLane) &&
+        (brakingNow || attacker !== null || (cornerAheadForDef && distToDefCorner < lookM + 40));
       const wasDefending = car.defending;
-      car.defending = mayDefend && (car.defending || startsDefence);
+      car.defending = holdDefence || startsDefence;
       if (car.defending && !wasDefending && attacker) {
         craft.defendMoves++;
+        const chosenInside = cornerAheadForDef ? defInsideSign : insideSign;
         const to = chooseDefenseTarget({
           lineLatM: line,
           myLatM: me.lateralOffsetM,
           attackerLatM: attacker.sim.lateralOffsetM,
           halfRoadM: half,
-          insideSign,
+          insideSign: chosenInside,
           defendReachM: this.rc.defendReachM,
           defendStrength: defend,
           onStartLane,
         });
-        craft.defendOffLine = onStartLane;
-        craft.defendLatM = onStartLane ? to : to - line;
+        craft.defendOffLine = true;
+        craft.defendTargetLatM = to;
+        craft.defendLatM = to;
+        craft.defendSide = chosenInside || Math.sign(to - me.lateralOffsetM);
         // The new lane is the one held to the first corner: going back to the grid slot's would be a second move
         if (onStartLane) car.startLaneM = to;
       }
       if (car.defending) {
-        targetLat = clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
-        biasRate = Math.max(biasRate, 3.0);
+        // FIA no-moving-under-braking: once heavy braking begins, hold the current line straight until turn-in
+        if (me.telemetry.brake > 0.25 && Math.abs(craft.defendTargetLatM - me.lateralOffsetM) > 0.35) {
+          craft.defendTargetLatM = clamp(me.lateralOffsetM, -half, half);
+        }
+        targetLat = clamp(craft.defendTargetLatM, -half, half);
+        biasRate = Math.max(biasRate, 3.2 * wetBiasScale);
       }
       // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
       let blueLift = 1;
@@ -2363,8 +2412,12 @@ export class AiOpponentField implements AiRace {
       // (between two cars, the middle of the gap is the place, wherever the corner's reach ends: clamped to the reach, the
       // car was taken across into one of them)
       if (sandwiched && pos !== null) maxBias = Math.max(maxBias, Math.abs(pos - line));
-      // How far off its line the corner lets this car go before the room for a car alongside (the off-line speed below)
+      // How far off its line the corner lets this car go before the room for a car alongside or an active inside defence
+      // (keeping `cornerReach` at the natural reach ensures a defending car slows appropriately for the tighter inside apex)
       const cornerReach = maxBias;
+      if (car.defending && pos !== null) {
+        maxBias = Math.max(maxBias, Math.min(half * 2, Math.abs(pos - line)));
+      }
       // Side by side: the room for the other car may take us past the corner's reach (and costs speed there, below).
       // Held to the reach, a car alongside that stays where it is was turned in on: another AI car moves over too, so
       // between them they made the room, but a player doesn't
