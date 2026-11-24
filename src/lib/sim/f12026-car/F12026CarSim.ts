@@ -247,6 +247,8 @@ export interface CarSimProfile {
   hasDrs: boolean;
   /** Turbocharged (telemetry boost pressure) */
   turbo: boolean;
+  /** Default overtaking-aid rules for this model's era (absent: `'straight-mode-2026'`) */
+  defaultOvertakingRules?: OvertakingRules;
   coldPsiRange: [number, number];
   frontCamberRange: [number, number];
   rearCamberRange: [number, number];
@@ -1457,6 +1459,7 @@ export class F12026CarSim implements SimulatorCar {
     this.channels.carId = profile.id;
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
+    if (profile.defaultOvertakingRules) this.setOvertakingRules(profile.defaultOvertakingRules);
     this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
     // On the colliders without the re-seat `attachTrackRoot` gives a car at rest: the grid placement below seats it,
     // and a settle where it stands now would be thrown away
@@ -1626,7 +1629,8 @@ export class F12026CarSim implements SimulatorCar {
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
     const id = this.profile.id;
-    return id === 'amg-gt3' ||
+    return id === 'lc25' ||
+      id === 'amg-gt3' ||
       id === 'liana' ||
       id === 'mtr-496r' ||
       id === 'lc-lmdh' ||

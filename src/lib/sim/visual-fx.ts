@@ -28,7 +28,8 @@ import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from './classic/Chaparral
 import { PORSCHE_934_RSR_CONFIG } from './classic/Porsche934RsrConfig';
 import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
-import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
+import { LC25_MODEL_URL, LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
+import { LC25_CAR_CONFIG } from '@/lib/sim/f12025-car/Lc25Config';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
@@ -757,7 +758,11 @@ export class SimVisualFxManager {
 
   private buildPrewarm(vehicle: VehicleModelId | undefined, kind: string): Promise<boolean> {
     const template: Promise<unknown> =
-      kind !== 'f1' ? loadPortedTemplate(PORTED_ONLY[kind as PortedKind].url) : loadLc26Template(LC26_MODEL_URL, 'opponents');
+      kind === 'f1'
+        ? loadLc26Template(LC26_MODEL_URL, 'opponents')
+        : kind === 'lc25'
+          ? loadLc26Template(LC25_MODEL_URL, 'opponents')
+          : loadPortedTemplate(PORTED_ONLY[kind as PortedKind].url);
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
@@ -1105,9 +1110,11 @@ const PORTED_ONLY = {
   },
 } as const;
 type PortedKind = keyof typeof PORTED_ONLY;
-/** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), or the 2026 car's for the F1 models */
-const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
-  vehicle === 'amg-gt3'
+/** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), the LC25 body, or the 2026 car's */
+const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' | 'lc25' =>
+  vehicle === 'lc25'
+    ? 'lc25'
+    : vehicle === 'amg-gt3'
     ? 'gt3'
     : vehicle === 'liana'
       ? 'road'
@@ -1134,7 +1141,11 @@ export function opponentGtTyreBrand(vehicle: VehicleModelId | undefined): GtTyre
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
   let rig: SimCarRig;
   const kind = rigKind(vehicle);
-  if (kind !== 'f1') {
+  if (kind === 'f1') {
+    rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });
+  } else if (kind === 'lc25') {
+    rig = createF1Car2026(livery, 'medium', LC25_MODEL_URL, { opponent: true, chassis: LC25_CAR_CONFIG.chassis });
+  } else {
     const own = PORTED_ONLY[kind];
     rig = createPortedCarRig({
       url: own.url,
@@ -1144,8 +1155,6 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       gtSidewall: opponentGtTyreBrand(vehicle),
       opponent: true,
     });
-  } else {
-    rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });
   }
   addContactShadow(rig.root, vehicle);
   addCarShadowProxy(rig.root, vehicle);

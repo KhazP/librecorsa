@@ -142,6 +142,7 @@ export const CAR_WHEEL_LOCK_DEG = 360;
  */
 export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   lc26: 360,
+  lc25: 360,
   "f12026-car": 360,
   "amg-gt3": 640,
   liana: 1080,

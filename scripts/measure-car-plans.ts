@@ -13,7 +13,7 @@ import path from 'node:path';
 import * as THREE from 'three';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { CARS } from '../src/lib/cars/car-registry';
-import { LC26_MODEL_URL } from '../src/lib/lc26-car-model';
+import { LC25_MODEL_URL, LC26_MODEL_URL } from '../src/lib/lc26-car-model';
 import { VEHICLE_MODELS } from '../src/lib/cars/vehicle-models';
 import { getActiveTrackData } from '../src/lib/track-data';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
@@ -63,7 +63,7 @@ const track = getActiveTrackData();
 for (const car of CARS) {
   // The Prototype wears its own body (`lc26-car-model.ts`), fitted by its front axle; the ported cars by their axles'
   // midpoint (`ported-car-model.ts`)
-  const url = car.modelUrl ?? (car.physics === 'lc26' ? LC26_MODEL_URL : null);
+  const url = car.modelUrl ?? (car.physics === 'lc26' ? LC26_MODEL_URL : car.physics === 'lc25' ? LC25_MODEL_URL : null);
   if (!url) continue;
   const byFrontAxle = !car.modelUrl;
   const file = path.join(carsDir, url.replace(/^\/cars\//, ''));

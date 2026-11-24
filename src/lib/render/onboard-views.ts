@@ -21,6 +21,7 @@ interface OverWheelView {
 
 const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
   lc26: { fromEye: [0, -0.03, 0.18], pitchDeg: -14, fovDeg: 58 },
+  lc25: { fromEye: [0, -0.03, 0.18], pitchDeg: -14, fovDeg: 58 },
   // Both GT3 cameras sit ahead of everything the wheel sweeps (the near plane is 12 cm), so no grip crosses the lens
   "amg-gt3": { fromEye: [0, 0.02, 0.56], pitchDeg: -4, fovDeg: 58 },
   "bmw-m4-gt3": { fromEye: [0, 0.02, 0.62], pitchDeg: -7, fovDeg: 58 },

@@ -452,6 +452,7 @@ console.log('\n== Weather & time of day');
   );
   const allCarIds = [
     'lc26',
+    'lc25',
     'amg-gt3',
     'bmw-m4-gt3',
     'mtr-496r',

@@ -15,6 +15,7 @@ import {
   type CarSoundSource,
 } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
+import { LC25_SOUND } from "../src/lib/sim/f12025-car/Lc25Sim";
 import { SUZUKI_LIANA_SOUND } from "../src/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "../src/lib/sim/proto/Mtr496rSim";
 import { LC_LMDH_SOUND } from "../src/lib/sim/proto/LcLmdhSim";
@@ -39,6 +40,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 
 const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number }> = {
   lc26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
+  lc25: { sound: LC25_SOUND, maxIdleRpm: 4200 },
   "amg-gt3": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
   liana: { sound: SUZUKI_LIANA_SOUND, maxIdleRpm: 1000 },

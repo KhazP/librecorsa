@@ -25,6 +25,7 @@ import { TYRE_SETUP_LIMITS } from "../src/lib/sim/tyre-setup";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import type { TyreSetup, VehicleModelId } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
+import { createLc25Sim } from "../src/lib/sim/f12025-car/Lc25Sim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
 import { createMtr496rSim } from "../src/lib/sim/proto/Mtr496rSim";
@@ -53,6 +54,7 @@ const flat = createFlatTestTrack();
 const track = getActiveTrackData();
 const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
   lc26: (t) => new F1Physics2026(t),
+  lc25: (t) => createLc25Sim(t),
   "f12026-car": (t) => new F12026CarSim(t),
   "amg-gt3": (t) => createAmgGt3Sim(t),
   liana: (t) => createSuzukiLianaSim(t),
@@ -262,6 +264,7 @@ console.log("Fuel load");
   // trims' fixed sprint loads
   const LEGACY_FUEL_KG: Record<VehicleModelId, number> = {
     lc26: 40,
+    lc25: 35,
     "f12026-car": 35,
     "amg-gt3": 30,
     liana: 22,

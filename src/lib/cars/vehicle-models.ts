@@ -8,6 +8,8 @@ import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import { F12026CarSim, F12026_SIM_PROFILE } from "@/lib/sim/f12026-car/F12026CarSim";
 import { F12026_CAR_CONFIG, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
 import { createLc26Sim } from "@/lib/sim/f12026-car/Lc26Sim";
+import { LC25_SIM_PROFILE, createLc25Sim } from "@/lib/sim/f12025-car/Lc25Sim";
+import { LC25_CAR_CONFIG } from "@/lib/sim/f12025-car/Lc25Config";
 import { lc26OnRigidBody } from "./lc26-engine";
 import { AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
@@ -85,6 +87,17 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     tyreSetupRanges: LC26_TYRE_SETUP_RANGES,
     // No ported body runs on the LC26 model today; one would be fitted like the other F1 cars
     rigConfig: F12026_CAR_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: true,
+  },
+  lc25: {
+    id: "lc25",
+    classId: "f1",
+    createSim: (track, trackRoot) => createLc25Sim(track, trackRoot),
+    limiterRpm: LC25_CAR_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 15000,
+    tyreSetupRanges: LC25_SIM_PROFILE,
+    rigConfig: LC25_CAR_CONFIG,
     gt3Cockpit: false,
     floorSparks: true,
   },

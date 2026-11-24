@@ -11,6 +11,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { carById, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
+import { LC25_MODEL_URL, LC26_MODEL_URL } from "@/lib/lc26-car-model";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { clearSkinTextureCache, createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
@@ -52,7 +53,12 @@ function buildRig(id: CarId): SimCarRig {
       })
     : model.gt3Cockpit
       ? createGt3CarRig()
-      : createF1Car2026(livery, "soft");
+      : createF1Car2026(
+          livery,
+          "soft",
+          def.physics === "lc25" ? LC25_MODEL_URL : LC26_MODEL_URL,
+          def.physics === "lc25" ? { chassis: model.rigConfig.chassis } : undefined
+        );
   rig.setLivery(livery);
   rig.setTireCompound("soft");
   return rig;

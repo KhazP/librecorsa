@@ -210,7 +210,7 @@ const AxisCalibrator: React.FC<{
 
 /** Cars that share a steering lock in the wheel setup: a class in words (`group`, translated) or by its name */
 const STEER_LOCK_CLASSES = [
-  { group: "formula", models: ["lc26", "f12026-car"] },
+  { group: "formula", models: ["lc26", "lc25", "f12026-car"] },
   { name: "GT3", models: ["amg-gt3"] },
   // The two prototypes turn through different locks
   { group: "prototypes", models: ["mtr-496r"] },

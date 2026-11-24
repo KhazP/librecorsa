@@ -103,6 +103,7 @@ console.log('== Each car through the messages, against a car stepped directly');
 const MODELS: [string, VehicleModelId, boolean][] = [
   ['LC26', 'lc26', false],
   ['LC26 (rigid-body)', 'lc26', true],
+  ['LC25 Prototype', 'lc25', false],
   ['f12026-car', 'f12026-car', false],
   ['AMG GT3', 'amg-gt3', false],
   ['MTR 496R', 'mtr-496r', false],

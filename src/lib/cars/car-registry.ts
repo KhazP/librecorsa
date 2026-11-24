@@ -2,6 +2,7 @@ import { text as t } from "@/lib/text";
 import type { VehicleModelId } from "@/types/f1";
 import type { CarClassRule } from "@/lib/net/wire";
 import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
+import { LC25_SOUND } from "@/lib/sim/f12025-car/Lc25Sim";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
@@ -31,6 +32,7 @@ import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
  */
 export type CarId =
   | "lc26"
+  | "lc25"
   | "amg-gt3"
   | "bmw-m4-gt3"
   | "mtr-496r"
@@ -110,6 +112,7 @@ export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
 export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
   lc26: "Its physics are checked against the reference data they were built from.",
+  lc25: "Its physics follow the 2025 FIA Formula 1 regulations and are checked against 2025 qualifying telemetry.",
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
   "mtr-496r": "Its physics come from the Assetto Corsa mod this car was made for.",
@@ -174,6 +177,15 @@ const QVIST_F1_2026: CarCredit = {
   author: "Qvist Designs",
   url: "https://qvistdesigns.framer.website/",
   note: "Steering wheel from DeX's AM26 (CC BY 4.0)",
+  ...CC_BY,
+};
+
+/** The LC25 Prototype's body (`public/cars/lc25/model/lc25.glb`), with the AM26's steering wheel */
+const SHUNQI_F1_2025: CarCredit = {
+  title: "F1 2025 McLaren MCL39",
+  author: "shunqi",
+  url: "https://sketchfab.com/3d-models/f1-2025-mclaren-mcl39-c6194270002b401bb25be7e35ab56e34",
+  note: "Steering wheel from DeX's AM26 (CC BY 4.0); repainted in LibreCorsa livery zones",
   ...CC_BY,
 };
 
@@ -302,6 +314,19 @@ const ALL_CARS: readonly CarDefinition[] = [
     physics: "lc26",
     year: 2026,
     sound: F1_2026_SOUND,
+  },
+  {
+    id: "lc25",
+    classId: "f1",
+    title: "LC25 Prototype",
+    sub: "2025 model · MGU-H · rear DRS",
+    badge: "PROTO 25",
+    quality: "own",
+    credit: SHUNQI_F1_2025,
+    tyreCredit: { author: "Purple Sector", url: "https://www.patreon.com/cw/PurpleSector" },
+    physics: "lc25",
+    year: 2025,
+    sound: LC25_SOUND,
   },
   {
     id: "amg-gt3",
@@ -589,7 +614,7 @@ export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): n
 export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
 
 const carThumbDir = (id: CarId): string => {
-  if (REPO_CAR_IDS.has(id)) return "/lc26";
+  if (id === "lc26") return "/lc26";
   // Beside the car's model, so a car that took over another's body shows that body's picture
   const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
   return modelDir ?? `/cars/${id}`;

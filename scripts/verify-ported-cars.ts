@@ -22,7 +22,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 console.log("Registry checks");
-for (const native of ["lc26", "amg-gt3", "bmw-m4-gt3", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar", "vw-scirocco-gtx", "chaparral-2d", "chaparral-2d-67", "porsche-934-rsr"] as const) {
+for (const native of ["lc26", "lc25", "amg-gt3", "bmw-m4-gt3", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar", "vw-scirocco-gtx", "chaparral-2d", "chaparral-2d-67", "porsche-934-rsr"] as const) {
   // A hosted car is only listed where hosted content is on; elsewhere carById falls back to another car
   if (!carListed(native)) {
     console.log(`  SKIP  ${native}: hosted on librecorsa.org only, not listed in this copy`);
@@ -42,7 +42,7 @@ check("A saved or linked vf26 opens the lc26", resolveCarId("vf26") === "lc26" &
 check("The amg-gt3's picture is beside its model", carThumbUrl("amg-gt3") === "/cars/amg-gt3-evo/thumb.webp", carThumbUrl("amg-gt3"));
 
 const f1Cars = carsInClass("f1").map((c) => c.id);
-check("F1 class has the 2026 Prototype only", f1Cars.join(",") === "lc26", f1Cars.join(", "));
+check("F1 class has the 2026 and 2025 Prototypes", f1Cars.join(",") === "lc26,lc25", f1Cars.join(", "));
 
 // The menus group each class by year, newest first; no heading may be a single car's name
 check(

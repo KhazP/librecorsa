@@ -10,6 +10,7 @@ import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type PortedSkin, type SimCarRig } from "@/lib/car-builder-2026";
+import { LC25_MODEL_URL, LC26_MODEL_URL } from "@/lib/lc26-car-model";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
 import { setKtx2Renderer } from "@/lib/render/ktx2";
@@ -1563,7 +1564,12 @@ export class DriveSession {
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
-          : createF1Car2026(livery, physics.tireCompound);
+          : createF1Car2026(
+              livery,
+              physics.tireCompound,
+              def.physics === "lc25" ? LC25_MODEL_URL : LC26_MODEL_URL,
+              def.physics === "lc25" ? { chassis: model.rigConfig.chassis } : undefined
+            );
       rig.setLivery(livery);
       rig.setTireCompound(physics.tireCompound);
       reflectionProbe.track(rig.root);

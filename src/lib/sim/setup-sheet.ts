@@ -14,6 +14,7 @@ import type { TyreSetup, VehicleModelId } from "@/types/f1";
 import { ARB_DETACHED_PCT, type ChassisSetup, CHASSIS_LIMITS, DEFAULT_CHASSIS_SETUP, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
 import { LC26_CHASSIS } from "./lc26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
+import { LC25_CAR_CONFIG } from "./f12025-car/Lc25Config";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
 import { SUZUKI_LIANA_CONFIG } from "./road/SuzukiLianaConfig";
 import { MTR_496R_CONFIG } from "./proto/Mtr496rConfig";
@@ -30,6 +31,7 @@ export type SetupClassId = "f1" | "gt3";
 
 export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   lc26: "f1",
+  lc25: "f1",
   "f12026-car": "f1",
   "amg-gt3": "gt3",
   // A closed road car: the GT3 sheet (tyres, electronics, mechanical grip, dampers, fuel)
@@ -163,6 +165,7 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
     steerRatio: STEER_RATIO_BASE.lc26,
   },
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
+  lc25: rigidBaseline(LC25_CAR_CONFIG, "lc25"),
   "amg-gt3": { ...rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"), brakeBiasRangePct: [56, 70] },
   liana: rigidBaseline(SUZUKI_LIANA_CONFIG, "liana"),
   // Its 58 % sits below a GT3's bias range: the mod's adjuster runs from 52 % [spec setup.ini FRONT_BIAS] to the 78 %
@@ -189,6 +192,7 @@ const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, 
 /** Each car's physics data, for the parts of a sheet that depend on what the car has */
 const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
   lc26: null,
+  lc25: LC25_CAR_CONFIG as unknown as CarPhysicsConfig,
   "f12026-car": F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
   "amg-gt3": AMG_GT3_CONFIG as unknown as CarPhysicsConfig,
   liana: SUZUKI_LIANA_CONFIG as unknown as CarPhysicsConfig,

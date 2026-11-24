@@ -213,6 +213,17 @@ const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> =
     rearFlareSizeM: 0.18,
     measured: true,
   },
+  lc25: {
+    halfWidthM: 0.16,
+    heightM: 0.58,
+    frontZM: 2.38,
+    rearHalfWidthM: 0,
+    rearHeightM: 0.30,
+    rearZM: -2.42,
+    flareSizeM: 0.20,
+    rearFlareSizeM: 0.18,
+    measured: true,
+  },
   "amg-gt3": {
     halfWidthM: 0.74,
     heightM: 0.50,
