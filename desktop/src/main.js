@@ -1,9 +1,9 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
-const { app, BrowserWindow, Menu, screen, session, shell } = require("electron");
-const { autoUpdater } = require("electron-updater");
-const { APP_URL, decideNavigation } = require("./nav-policy");
+const { app, BrowserWindow, Menu, dialog, screen, session, shell } = require("electron");
+const { APP_URL, NEW_APP_URL, decideNavigation, isAllowedAppUrl, isBrowserUrl } = require("./nav-policy");
 const { isAllowedHidDevice, isAllowedOrigin, pickPreferredHidDevice } = require("./hid-policy");
 
 const ALLOWED_PERMISSIONS = new Set([
@@ -13,10 +13,18 @@ const ALLOWED_PERMISSIONS = new Set([
   "clipboard-sanitized-write",
 ]);
 
-const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+// This is the last version of this app: the new desktop app (librecorsa.org/download) replaces it, and its releases
+// take the repository's latest release, where electron-updater would find no update. So it no longer checks, and
+// tells players about the new app instead.
+
+/** "Later" keeps the notice about the new app quiet for this long */
+const NOTICE_LATER_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
+
+/** Shown once a run at most */
+let newAppNoticeShown = false;
 
 // Prefer discrete GPU on multi-GPU laptops before Chromium initializes GPU process.
 app.commandLine.appendSwitch("force_high_performance_gpu");
@@ -147,6 +155,58 @@ function attachNavigationGuards(contents) {
   });
 }
 
+/** Where "Later" is kept: { "laterUntil": <ms since 1970> } */
+function noticeFile() {
+  return path.join(app.getPath("userData"), "new-app-notice.json");
+}
+
+/** @returns {boolean} */
+function noticeIsLater() {
+  try {
+    const { laterUntil } = JSON.parse(fs.readFileSync(noticeFile(), "utf8"));
+    return typeof laterUntil === "number" && Date.now() < laterUntil;
+  } catch {
+    return false;
+  }
+}
+
+function noticeLater() {
+  try {
+    fs.mkdirSync(path.dirname(noticeFile()), { recursive: true });
+    fs.writeFileSync(noticeFile(), `${JSON.stringify({ laterUntil: Date.now() + NOTICE_LATER_MS })}\n`);
+  } catch (err) {
+    console.error("[notice]", err && err.message ? err.message : err);
+  }
+}
+
+/**
+ * Tell the player about the new desktop app, over the game's window.
+ * @param {BrowserWindow} win
+ */
+async function showNewAppNotice(win) {
+  if (newAppNoticeShown || win.isDestroyed() || noticeIsLater()) return;
+  newAppNoticeShown = true;
+  const { response } = await dialog.showMessageBox(win, {
+    type: "info",
+    title: "LibreCorsa",
+    message: "LibreCorsa has a new desktop app",
+    detail:
+      "This app gets no more updates. The new one plays offline too, and takes mods.\n\n" +
+      "Your laps and settings come with you when you sign in to your account in both apps. The new app signs in " +
+      "with a code: in this one, open Settings, then Profile and data, then Account, and choose Show a code for " +
+      "another device.",
+    buttons: ["Get the new app", "Later"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+  if (response === 0) {
+    if (isBrowserUrl(NEW_APP_URL)) void shell.openExternal(NEW_APP_URL);
+  } else {
+    noticeLater();
+  }
+}
+
 function createMainWindow() {
   const { width: workW, height: workH } = screen.getPrimaryDisplay().workAreaSize;
   const width = Math.min(1920, Math.max(1024, Math.round(workW * 0.9)));
@@ -196,31 +256,24 @@ function createMainWindow() {
     void win.loadFile(path.join(__dirname, "offline.html"));
   });
 
+  // Once the game's page has loaded (not the offline page), and the window is up
+  win.webContents.on("did-finish-load", () => {
+    if (!isAllowedAppUrl(win.webContents.getURL())) return;
+    const show = () => {
+      showNewAppNotice(win).catch((err) => {
+        console.error("[notice]", err && err.message ? err.message : err);
+      });
+    };
+    if (win.isVisible()) show();
+    else win.once("show", show);
+  });
+
   win.on("closed", () => {
     mainWindow = null;
   });
 
   mainWindow = win;
   void win.loadURL(APP_URL);
-}
-
-function setupAutoUpdater() {
-  if (!app.isPackaged) return;
-
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on("error", (err) => {
-    console.error("[updater]", err && err.message ? err.message : err);
-  });
-
-  const check = () => {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error("[updater]", err && err.message ? err.message : err);
-    });
-  };
-
-  setTimeout(check, 5000).unref();
-  setInterval(check, UPDATE_CHECK_INTERVAL_MS).unref();
 }
 
 app.on("web-contents-created", (_event, contents) => {
@@ -238,7 +291,6 @@ app.whenReady().then(() => {
   buildAppMenu();
   configureSessionSecurity(session.defaultSession);
   createMainWindow();
-  setupAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

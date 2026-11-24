@@ -4,8 +4,10 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const {
   APP_URL,
+  NEW_APP_URL,
   isAllowedAppUrl,
   isExternalBrowserUrl,
+  isBrowserUrl,
   decideNavigation,
 } = require("../src/nav-policy");
 const {
@@ -50,6 +52,15 @@ describe("nav-policy", () => {
       openExternal: true,
     });
     assert.equal(isExternalBrowserUrl("https://example.com"), true);
+  });
+
+  it("opens the new app's download page in the system browser", () => {
+    assert.equal(NEW_APP_URL, "https://librecorsa.org/download");
+    assert.equal(isBrowserUrl(NEW_APP_URL), true);
+    assert.equal(isBrowserUrl("https://github.com/librecorsa/librecorsa/releases"), true);
+    for (const url of ["file:///etc/passwd", "javascript:alert(1)", "smb://192.168.1.2/share", "", null, "not a url"]) {
+      assert.equal(isBrowserUrl(url), false);
+    }
   });
 
   it("blocks non-http(s) and malformed URLs completely", () => {

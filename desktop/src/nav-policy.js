@@ -2,6 +2,8 @@
 
 const APP_URL = "https://librecorsa.org/play";
 const ALLOWED_ORIGIN = "https://librecorsa.org";
+/** Where the new desktop app is, which this last version sends players to in their browser */
+const NEW_APP_URL = "https://librecorsa.org/download";
 
 /**
  * Parse a URL string safely, returning null for malformed input.
@@ -41,6 +43,16 @@ function isExternalBrowserUrl(rawUrl) {
 }
 
 /**
+ * True for the http(s) URLs the app may hand to the system browser: a site outside librecorsa.org, or a
+ * librecorsa.org page the app opens there on purpose (NEW_APP_URL). Other schemes never leave the app.
+ * @param {unknown} rawUrl
+ * @returns {boolean}
+ */
+function isBrowserUrl(rawUrl) {
+  return isAllowedAppUrl(rawUrl) || isExternalBrowserUrl(rawUrl);
+}
+
+/**
  * Decide how the Electron main window should handle a navigation or popup target.
  * @param {unknown} rawUrl
  * @returns {{ allowInApp: boolean, openExternal: boolean }}
@@ -58,7 +70,9 @@ function decideNavigation(rawUrl) {
 module.exports = {
   APP_URL,
   ALLOWED_ORIGIN,
+  NEW_APP_URL,
   isAllowedAppUrl,
   isExternalBrowserUrl,
+  isBrowserUrl,
   decideNavigation,
 };
