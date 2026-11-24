@@ -90,8 +90,8 @@ if (!hasUv) {
 } else {
   // A street circuit with one layout, a ui_track.json as mods write them, its own surface keys and a readme's terms
   const ring = join(tmp, "testring");
-  write(join(ring, "testring.kn5"), "kn5");
-  write(join(ring, "other.kn5"), "kn5");
+  write(join(ring, "testring.kn5"), "sc6969");
+  write(join(ring, "other.kn5"), "sc6969");
   write(join(ring, "ai", "fast_lane.ai"), "lane");
   write(
     join(ring, "data", "surfaces.ini"),
@@ -169,7 +169,7 @@ IS_PITLANE=1
 
   // Several layouts, models INI files, an open licence
   const park = join(tmp, "testpark");
-  for (const f of ["testpark.kn5", "park_gp.kn5", "heli.kn5", "balloon.kn5"]) write(join(park, f), "kn5");
+  for (const f of ["testpark.kn5", "park_gp.kn5", "heli.kn5", "balloon.kn5"]) write(join(park, f), "sc6969");
   write(join(park, "gp", "ai", "fast_lane.ai"), "lane");
   write(join(park, "short", "ai", "fast_lane.ai"), "lane");
   write(join(park, "nolane", "data", "surfaces.ini"), "");
@@ -224,7 +224,7 @@ IS_PITLANE=1
 
   // A hill climb: its start and finish gates
   const hill = join(tmp, "testhill");
-  write(join(hill, "testhill.kn5"), "kn5");
+  write(join(hill, "testhill.kn5"), "sc6969");
   write(join(hill, "AC.kn5"), "sc6969 ... AC_AB_START_L ... AC_AB_FINISH_L ...");
   write(join(hill, "ai", "fast_lane.ai"), "lane");
   write(join(hill, "ui", "ui_track.json"), JSON.stringify({ name: "Test Hill", tags: ["A2B", "Hillclimb"], run: "Hill Climb" }));
@@ -236,6 +236,28 @@ IS_PITLANE=1
   write(join(empty, "readme.txt"), "nothing here");
   check("a folder without an AI lane: refused, saying what it needs", /fast_lane\.ai/.test(entryOf("autotest_none", ["--src", empty]).error));
   check("an id the game uses: refused", /taken|game/.test(entryOf("rwanda_official", ["--src", ring]).error));
+
+  // Kunos's own circuits, and mods made of them: refused before anything is read or built
+  const kunosMod = (folder: string, files: Record<string, string>, ui: Record<string, string> = {}) => {
+    const dir = join(tmp, "kunos", folder);
+    write(join(dir, "ai", "fast_lane.ai"), "lane");
+    write(join(dir, "ui", "ui_track.json"), JSON.stringify({ name: "A Circuit", ...ui }));
+    for (const [f, data] of Object.entries(files)) write(join(dir, f), data);
+    return entryOf("autotest_kunos", ["--src", dir]);
+  };
+  const refusedAs = (r: { entry?: Entry; error: string }, why: RegExp) => !r.entry && /refused: /.test(r.error) && why.test(r.error);
+  const ksFolder = kunosMod("ks_test_circuit", { "ks_test_circuit.kn5": "sc6969" });
+  check('a "ks_" circuit is refused', refusedAs(ksFolder, /"ks_test_circuit" is one of Kunos's own circuits/), ksFolder.error.split("\n").at(-1));
+  const baseGame = kunosMod("imola", { "imola.kn5": "sc6969" });
+  check("one of the base game's circuits is refused", refusedAs(baseGame, /base game's own circuits/), baseGame.error.split("\n").at(-1));
+  const ksModel = kunosMod("my_circuit", { "my_circuit.kn5": "sc6969", "ks_props.kn5": "sc6969" });
+  check('a renamed mod holding a "ks_" model is refused', refusedAs(ksModel, /"ks_props\.kn5" is one of Kunos's own/), ksModel.error.split("\n").at(-1));
+  const byKunos = kunosMod("my_circuit2", { "my_circuit2.kn5": "sc6969" }, { author: "Kunos Simulazioni", url: "https://www.assettocorsa.net" });
+  check("a ui_track.json naming Kunos is refused", refusedAs(byKunos, /names Kunos/), byKunos.error.split("\n").at(-1));
+  const encrypted = kunosMod("my_circuit3", { "my_circuit3.kn5": "ENCRYPTEDxxxx" });
+  check("an encrypted model is refused", refusedAs(encrypted, /"my_circuit3\.kn5" is encrypted/), encrypted.error.split("\n").at(-1));
+  const modders = kunosMod("my_circuit4", { "my_circuit4.kn5": "sc6969" }, { author: "J. Doe" });
+  check("a modder's circuit is not Kunos's", !!modders.entry, modders.error.slice(-200));
 
   // --- The mods on this machine, against their hand-written entries ---
   const sourcesPath = join(REPO_ROOT, "scripts", "tracks", "sources.local.json");

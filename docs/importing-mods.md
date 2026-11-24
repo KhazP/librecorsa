@@ -146,7 +146,7 @@ One command makes the whole package:
 
 ### Licences
 
-- Kunos's own cars (the game's and its packs', the `ks_` folders, encrypted or not) are refused. So is any encrypted model.
+- Kunos's own cars and circuits (the game's and its packs', the `ks_` folders, encrypted or not) are refused, and so is a mod made from them, however its folder is named: a model, a sound bank, its sounds' events or a `parent` named for a Kunos car, a `ks_` model in a circuit, or Kunos named as the author. So is any encrypted model.
 - If the mod names a licence that lets a changed copy be shared (Creative Commons without NoDerivatives, CC0, the GPL, MIT, the public domain), and nothing in its readme says otherwise, the package carries that licence. A line that forbids sharing outranks any licence.
 - Otherwise its licence is "unknown", and its credit says **"For personal use only: the author's permission is needed to share it."** The import prints this, with any lines of the readme that set the mod's terms. Keep the package on your own machine: don't upload, host or share it.
 - If the author gives you permission, add the licence to your settings and import again: `{"credit": {"license": "Used with permission"}}`. Keep a record of the permission.

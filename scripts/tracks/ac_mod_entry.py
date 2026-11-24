@@ -253,6 +253,40 @@ def models(src, layout):
     return every, None, notes
 
 
+# The base game's own circuits, by folder: Kunos's original release (its packs' circuits all start with "ks_")
+KUNOS_TRACKS = {'drift', 'imola', 'magione', 'monza', 'mugello', 'spa', 'trento-bondone'}
+
+
+def kunos_folder(src):
+    """Why a track folder is one of Kunos's own circuits by its name ("ks_…", or one of the base game's), or None"""
+    folder = os.path.basename(os.path.normpath(src)).lower()
+    if folder.startswith('ks_'):
+        return f'"{folder}" is one of Kunos\'s own circuits (a "ks_" circuit from the game or its packs)'
+    if folder in KUNOS_TRACKS:
+        return f'"{folder}" is one of the base game\'s own circuits'
+    return None
+
+
+def kunos_circuit(src, ui, kn5_files):
+    """Why a circuit mod is Kunos's own content, or a copy of it, or None: its folder (`kunos_folder`), a model named
+    "ks_…" in the folder or among the layout's, a ui_track.json whose author or link names Kunos, or an encrypted model
+    among the ones the layout loads (Kunos's own are, and some paid mods'), which can't be read either"""
+    why = kunos_folder(src)
+    if why:
+        return why
+    names = [f for f in sorted(os.listdir(src)) if f.lower().endswith('.kn5')] + list(kn5_files)
+    own = next((f for f in names if os.path.basename(f).lower().startswith('ks_')), None)
+    if own:
+        return f'its model "{own}" is one of Kunos\'s own'
+    if re.search(r'kunos|assettocorsa\.net', f"{text(ui.get('author'))} {text(ui.get('url'))}", re.I):
+        return 'its ui_track.json names Kunos Simulazioni as the author'
+    for f in kn5_files:
+        with open(os.path.join(src, f), 'rb') as fh:
+            if fh.read(6) != b'sc6969':
+                return f'its model "{f}" is encrypted, as Kunos\'s own circuits and some paid mods are: it can\'t be read'
+    return None
+
+
 def surface_kind(key, sec):
     """What one of the mod's surfaces.ini keys is to the game, from its own values: 'pit', 'kerb', 'gravel', 'grass',
     'wall', 'road' or 'runoff'"""
@@ -413,6 +447,9 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
     src = os.path.abspath(os.path.expanduser(src))
     if not os.path.isdir(src):
         raise EntryError(f'{src}: not a folder')
+    refused = 'Kunos\'s circuits are the game\'s own content, never converted or packaged.'
+    if kunos_folder(src):
+        raise EntryError(f'refused: {kunos_folder(src)}. {refused}')
     lay, found, ui_names = pick_layout(src, layout)
     folder = os.path.basename(os.path.normpath(src))
     layout_path = os.path.join(src, lay) if lay else src
@@ -433,6 +470,9 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
 
     cfg = {'folder': folder, 'layout_dir': lay}
     kn5, ini, model_notes = models(src, lay)
+    kunos = kunos_circuit(src, ui, kn5)
+    if kunos:
+        raise EntryError(f'refused: {kunos}. {refused}')
     cfg['models_ini'] = None
     cfg['kn5_files'] = note('kn5_files', kn5, ini or ('the folder\'s own model' if kn5 == [folder + '.kn5'] else 'every model in the folder'))
 
