@@ -38,6 +38,8 @@ type importsAPI struct {
 	importDir string
 	modsDir   string
 	jobs      *jobs
+	// app is the API for the app around the game (appapi.go): folders, the window's calls, the update
+	app *appAPI
 }
 
 // enableImports turns on the import folder and its API (a server without it answers those paths with 404)
@@ -51,7 +53,7 @@ func isAPIPath(p string) bool {
 	case importsPath, convertPath, cancelPath, toolchainPath:
 		return true
 	}
-	return false
+	return isAppPath(p)
 }
 
 // checkAPICall returns why a call to the API is refused, and the code the panel tells it by ("" when it isn't). The
@@ -80,16 +82,26 @@ func (a *importsAPI) serve(s *server, w http.ResponseWriter, r *http.Request, p 
 	h.Set("Cache-Control", "no-store")
 	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	allow := map[string]string{importsPath: "GET", convertPath: "GET, POST", cancelPath: "POST", toolchainPath: "POST"}[p]
+	if allow == "" {
+		if a.app == nil {
+			writeAPIError(w, http.StatusNotFound, "not-found", "not here")
+			return
+		}
+		allow = appMethods[p]
+	}
 	if !slices.Contains(strings.Split(allow, ", "), r.Method) {
 		h.Set("Allow", allow)
 		writeAPIError(w, http.StatusMethodNotAllowed, "method", "method not allowed")
 		return
 	}
-	if code, why := s.checkAPICall(r); code != "" {
+	// A page's call that it is open needs no session (appapi.go)
+	if code, why := s.checkAPICall(r); code != "" && !(code == "session" && p == alivePath) {
 		writeAPIError(w, http.StatusForbidden, code, why)
 		return
 	}
 	switch {
+	case isAppPath(p):
+		a.app.serve(w, r, p)
 	case p == importsPath:
 		a.serveImports(w)
 	case p == convertPath && r.Method == http.MethodGet:

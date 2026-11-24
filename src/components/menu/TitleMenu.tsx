@@ -66,6 +66,7 @@ import { EmbeddedBadge } from "./EmbeddedBadge";
 import { InstallAppButton } from "./InstallAppButton";
 import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
+import { LauncherUpdate } from "@/components/launcher/LauncherUpdate";
 import { TitleMusic } from "./TitleMusic";
 
 type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "mods" | "request";
@@ -906,6 +907,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? tp("startRace") : tp("drive") }] : []),
   ];
   const phonePrompts = prompts.filter((p) => p.action !== "move" && p.action !== "tabs");
+  // What reloading the page for an update ends, if anything: a room, or a race joined
+  const updateEnds = props.lobby
+    ? t("updateLeavesRoom")
+    : props.races?.entry.state === "joined" || props.races?.entry.state === "joining"
+      ? t("updateLeavesRace")
+      : undefined;
 
   return (
     <div
@@ -936,15 +943,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             {/* Never beside the badge: a framed game offers no install */}
             <InstallAppButton />
             {/* A newer build is out: from the title screen a reload loses nothing, unless it leaves a room or a race */}
-            <UpdateReady
-              endsSession={
-                props.lobby
-                  ? t("updateLeavesRoom")
-                  : props.races?.entry.state === "joined" || props.races?.entry.state === "joining"
-                    ? t("updateLeavesRace")
-                    : undefined
-              }
-            />
+            <UpdateReady endsSession={updateEnds} />
+            {/* The desktop app's own update (the offline launcher): installed with a restart that keeps this window */}
+            <LauncherUpdate endsSession={updateEnds} />
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
             <InputHint pad={pad} />

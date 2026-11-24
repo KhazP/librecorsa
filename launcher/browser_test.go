@@ -1,11 +1,13 @@
 package main
 
 import (
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBrowserCandidates(t *testing.T) {
@@ -65,10 +67,59 @@ func TestStartReportsAQuickFailure(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
-	if err := start("sh", "-c", "exit 3"); err == nil {
+	if _, err := start("sh", "-c", "exit 3"); err == nil {
 		t.Error("a program that quits with an error at once counts as started")
 	}
-	if err := start("sh", "-c", "exit 0"); err != nil {
+	proc, err := start("sh", "-c", "exit 0")
+	if err != nil {
 		t.Errorf("a program that hands over and quits cleanly counts as failed: %v", err)
+	}
+	if proc != nil {
+		t.Error("a program that handed over is watched")
+	}
+}
+
+func TestStartWatchesABrowserThatStays(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	proc, err := start("sh", "-c", "sleep 3")
+	if err != nil || proc == nil || proc.pid <= 0 {
+		t.Fatalf("a program still running after the grace isn't watched: %v %v", proc, err)
+	}
+	select {
+	case <-proc.exited:
+		t.Fatal("it ended at once")
+	default:
+	}
+	select {
+	case <-proc.exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("its end wasn't seen")
+	}
+}
+
+func TestWatchPID(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sleep")
+	}
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	proc := watchPID(cmd.Process.Pid)
+	if proc == nil {
+		t.Fatal("a running process isn't watched")
+	}
+	cmd.Process.Kill()
+	cmd.Wait()
+	select {
+	case <-proc.exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("its end wasn't seen")
+	}
+	if watchPID(cmd.Process.Pid) != nil {
+		t.Error("a process that ended is watched")
 	}
 }

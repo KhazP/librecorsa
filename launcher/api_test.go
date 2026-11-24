@@ -16,8 +16,12 @@ import (
 )
 
 // The test binary stands in for the converter's programs: copied to where the toolchain's Node and uv go, it acts as
-// the mod tool (`node <converter>/scripts/mods/mod-tool.mjs import <kind> <source> --out <mods>`) or as uv.
+// the mod tool (`node <converter>/scripts/mods/mod-tool.mjs import <kind> <source> --out <mods>`) or as uv. It also
+// stands in for a launcher an update installed (update_apply_test.go).
 func TestMain(m *testing.M) {
+	if spec := os.Getenv(fakeLauncherEnv); spec != "" {
+		os.Exit(fakeLauncher(spec))
+	}
 	if len(os.Args) > 1 {
 		switch {
 		case strings.HasSuffix(filepath.ToSlash(os.Args[1]), "scripts/mods/mod-tool.mjs"):

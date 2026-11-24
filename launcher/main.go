@@ -29,13 +29,16 @@ var version = "dev"
 const defaultPort = 47826
 
 func main() {
-	os.Exit(run())
+	os.Args = dropFinderArgs(os.Args)
+	code := run()
+	closeLog()
+	os.Exit(code)
 }
 
 func run() int {
 	gameFlag := flag.String("game", "", "folder of the game's static export (default: game/ beside the launcher, else ../out)")
-	modsFlag := flag.String("mods", "", "folder of mod packages (default: mods/ beside the launcher, else ../public/mods)")
-	importFlag := flag.String("import", "", "folder of circuits and cars to convert (default: import/ beside the launcher)")
+	modsFlag := flag.String("mods", "", "folder of mod packages (default: Documents/LibreCorsa/mods; in a clone ../public/mods)")
+	importFlag := flag.String("import", "", "folder of circuits and cars to convert (default: Documents/LibreCorsa/import; in a clone import/)")
 	converterFlag := flag.String("converter", "", "the converter bundle (default: converter/ beside the launcher, else dist/converter)")
 	toolchainFlag := flag.String("toolchain", "", "where the converter's downloaded tools go (default: beside the browser profile)")
 	siteFlag := flag.String("site", "", "the live site to mirror (default: "+defaultSite+"; none in a clone); \"\" for none")
@@ -43,6 +46,7 @@ func run() int {
 	offline := flag.Bool("offline", false, "never contact the site: what is kept, else the export")
 	port := flag.Int("port", defaultPort, "port on 127.0.0.1 (keep it fixed: the browser keeps saves per port)")
 	noBrowser := flag.Bool("no-browser", false, "only serve; don't open a browser")
+	noUpdate := flag.Bool("no-update", false, "don't check for updates, nor install one")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -55,11 +59,19 @@ func run() int {
 		return 2
 	}
 
-	exeDir := executableDir()
+	// A window app has no terminal: what it prints goes to the log too (applog.go)
+	attachParentConsole()
+	startLog(logPath())
+	// From the launcher that installed an update, if it started this one (update_apply.go)
+	handedOver := takeHandoff()
+
+	exeDir := programDir()
+	// Started as an app (not with --no-browser from a terminal, nor by go run, nor by an update trying itself), a
+	// failure to start is shown in a message box too
+	asApp := !*noBrowser && handedOver.From == "" && exeDir != "" && !isGoRunDir(exeDir)
 	gameDir, inClone, err := resolveGameDir(*gameFlag, exeDir)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return failStart(asApp, err.Error())
 	}
 	// Beside the launcher; in a clone (serving ../out, or `go run .`, whose binary sits in a temporary folder) the mods
 	// in public/mods, where `npm run mod -- index` lists them for the dev server too, and the import folder and the
@@ -75,12 +87,13 @@ func run() int {
 			return filepath.Join(exeDir, release), nil
 		}
 	}
-	modsDir, err := beside(*modsFlag, "mods", filepath.Join("..", "public", "mods"))
+	// The player's folders: in Documents/LibreCorsa (folders.go), or in a clone where they were
+	modsDir, err := playerFolder(*modsFlag, "mods", filepath.Join("..", "public", "mods"), clone)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	importDir, err := beside(*importFlag, "import", "import")
+	importDir, err := playerFolder(*importFlag, "import", "import", clone)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -125,23 +138,34 @@ func run() int {
 			}
 			return 0
 		}
-		fmt.Fprintf(os.Stderr, "Port %d on 127.0.0.1 is in use by another program, so LibreCorsa can't start.\n", *port)
-		fmt.Fprintf(os.Stderr, "Close that program, or start with --port <n> (your saves stay with the port they were made on).\n")
-		fmt.Fprintf(os.Stderr, "(%v)\n", err)
-		return 1
+		return failStart(asApp, fmt.Sprintf("Port %d on 127.0.0.1 is in use by another program, so LibreCorsa can't start.\n"+
+			"Close that program, or start with --port <n> (your saves stay with the port they were made on).\n(%v)", *port, err))
+	}
+	// An update downloaded earlier goes in place now, before anything is opened, and the new launcher takes over
+	exe, _ := os.Executable()
+	updates := newUpdater(updaterConfig{
+		version: version, goos: runtime.GOOS, goarch: runtime.GOARCH, exe: exe, clone: clone, off: *noUpdate,
+		keys: updatePublicKeys, dir: filepath.Join(configDir(), "update"), args: os.Args[1:],
+	})
+	if st := updates.pending(); st != nil && handedOver.From == "" {
+		ln.Close()
+		if updates.install(st, handoff{}, origin) == nil {
+			return 0
+		}
+		if ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port)); err != nil {
+			return failStart(asApp, fmt.Sprintf("LibreCorsa couldn't take port %d back after a failed update: %v", *port, err))
+		}
 	}
 	// After the port: a second start hands over to the first without needing to write anywhere
-	if err := os.MkdirAll(modsDir, 0o755); err != nil {
+	if err := makeModsDir(modsDir); err != nil {
 		ln.Close()
-		fmt.Fprintf(os.Stderr, "can't create the mods folder %s: %v\n", modsDir, err)
-		return 1
+		return failStart(asApp, fmt.Sprintf("Can't create the mods folder %s: %v", modsDir, err))
 	}
 
 	s, err := newServer(gameDir, modsDir, *port)
 	if err != nil {
 		ln.Close()
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return failStart(asApp, err.Error())
 	}
 	defer s.Close()
 	siteNote := "none (the export only)"
@@ -153,8 +177,7 @@ func run() int {
 		}
 		m, err := newMirror(site, cache, *offline)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+			return failStart(asApp, err.Error())
 		}
 		s.enableSite(m)
 		siteNote = site + ", kept in " + cacheDir
@@ -165,9 +188,12 @@ func run() int {
 			siteNote += " (offline: what is kept, else the export)"
 		}
 	}
+	if handedOver.Secret != "" {
+		s.session.adopt(handedOver.Secret)
+	}
 	// The import folder, and the converter if the release has one: the game runs without either
 	convNote := "none (converting circuits and cars needs a release's converter/ folder)"
-	conv, convErr := loadConverter(converterDir)
+	conv, convErr := loadConverter(writableConverter(converterDir))
 	if convErr == nil {
 		convNote = fmt.Sprintf("%s (%s)", conv.Dir, strings.Join(conv.Importers, ", "))
 	} else if !errors.Is(convErr, os.ErrNotExist) {
@@ -175,9 +201,9 @@ func run() int {
 	}
 	if err := makeImportDir(importDir); err != nil {
 		fmt.Fprintf(os.Stderr, "can't create the import folder %s: %v\n", importDir, err)
-	} else {
-		s.enableImports(importDir, newJobs(importDir, modsDir, conv, newToolchain(toolchainDir, runtime.GOOS, runtime.GOARCH)))
 	}
+	// The API answers even without the folder (the panel lists it empty): the app's calls (appapi.go) go through it
+	s.enableImports(importDir, newJobs(importDir, modsDir, conv, newToolchain(toolchainDir, runtime.GOOS, runtime.GOARCH)))
 	srv := &http.Server{Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
@@ -185,6 +211,24 @@ func run() int {
 	// Ctrl+C stops the server cleanly from here on, while a browser starts too
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// The app around the game (appapi.go, lifetime.go): it quits with the game's window, opens the player's folders, and
+	// updates itself
+	converting := func() bool { return s.imports != nil && s.imports.jobs.running() }
+	var endsBrowser func(int) error
+	if runtime.GOOS == "darwin" {
+		endsBrowser = endBrowser
+	}
+	life := newLifetime(*noBrowser, func() bool { return converting() || updates.installing.Load() }, endsBrowser)
+	s.enableApp(&appAPI{
+		folders: map[string]string{"mods": modsDir, "import": importDir},
+		life:    life, updates: updates, busy: converting, open: openFolder,
+	})
+	updates.cleanupAfterStart(ctx, handedOver.From != "")
+	go updates.runChecks(ctx)
+	if runtime.GOOS == "linux" && !clone {
+		installDesktopEntry(exeDir)
+	}
+
 	// The address that opens the game with this run's session (session.go), good once: the window it opens may convert
 	openURL := s.session.openURL(origin)
 	shown := playURL
@@ -192,21 +236,41 @@ func run() int {
 		shown = openURL + "\n        (once; then " + playURL + ")"
 	}
 	fmt.Printf("LibreCorsa %s\n  site: %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, siteNote, gameDir, modsDir, importDir, convNote, shown)
-	if !*noBrowser {
-		openGame(openURL)
+	switch {
+	case handedOver.KeepWindow:
+		// The game's window stayed open through the update: this launcher lives with its browser
+		life.watch(watchPID(handedOver.BrowserPID))
+	case !*noBrowser:
+		life.watch(openGame(openURL))
 	}
-	fmt.Println("Press Ctrl+C to stop.")
+	go life.run(ctx)
+	if *noBrowser {
+		fmt.Println("Press Ctrl+C to stop.")
+	} else {
+		fmt.Println("Close the game's window to quit.")
+	}
+	restart := false
 	select {
 	case err := <-served:
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	case <-ctx.Done():
+	case <-life.Done():
+		fmt.Printf("Quitting: %s\n", life.Reason())
+	case <-updates.restartRequested():
+		restart = true
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	// Downloads still running after that are cut, before the folders close under them
 	if srv.Shutdown(shutdown) != nil {
 		srv.Close()
+	}
+	if restart {
+		// "Restart to update": the new launcher takes the port, the session and the game's window
+		stop()
+		s.Close()
+		return updates.restartForUpdate(handoff{Secret: s.session.current(), BrowserPID: life.browserPID(), KeepWindow: true}, origin)
 	}
 	return 0
 }

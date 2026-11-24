@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -48,6 +49,24 @@ func randomToken() string {
 
 // sessionCookiePrefix starts the session cookie's name, which never goes on to the site (apiproxy.go)
 const sessionCookiePrefix = "librecorsa_launcher_"
+
+// adopt keeps the session of the launcher this one took over from after an update, so the game's window, still open,
+// keeps converting
+func (s *session) adopt(secret string) {
+	if len(secret) != 64 || strings.Trim(secret, "0123456789abcdef") != "" {
+		return
+	}
+	s.mu.Lock()
+	s.secret = secret
+	s.mu.Unlock()
+}
+
+// current is the session's secret, for the launcher an update starts
+func (s *session) current() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.secret
+}
 
 // cookieName is per port: a browser sends a host's cookies to each of its ports, and another launcher (--port) has
 // its own
