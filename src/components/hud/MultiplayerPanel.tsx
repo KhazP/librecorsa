@@ -33,7 +33,7 @@ import {
 import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
 import { RULE_PRESET_HINTS, RULE_PRESET_LABELS, TRACK_LIMITS_CHOICE_LABELS, type TrackLimitsChoice } from "@/lib/sim/race-rules";
 import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
-import { carClass, carClassesInUse } from "@/lib/cars/car-registry";
+import { CARS, carClass, carClassesInUse } from "@/lib/cars/car-registry";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
 import { Button, Card, ConfirmDialog, Disclosure, Segmented, Select, SettingRow, Stepper, TextField, Toggle, Well } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
@@ -526,19 +526,35 @@ function LobbySettingsCards({
         />
       ),
     },
-    {
-      id: "collisions",
-      label: tx("collisions"),
-      read: collisionLabel(settings.collisions),
-      edit: (
-        <Select<CollisionMode>
-          value={settings.collisions}
-          options={COLLISION_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
-          onChange={(collisions) => set({ collisions })}
-        />
-      ),
-      hint: collisionHint(settings.collisions),
-    },
+    isPrivate
+      ? {
+          id: "ghostMode",
+          label: tx("ghostMode"),
+          read: settings.collisions === "off" ? tx("ghostModeOn") : tx("ghostModeOff"),
+          edit: (
+            <Toggle
+              checked={settings.collisions === "off"}
+              onChange={(ghost) => set({ collisions: ghost ? "off" : "on" })}
+            />
+          ),
+          hint: settings.collisions === "off" ? tx("ghostModeOnHint") : tx("ghostModeOffHint"),
+        }
+      : null,
+    !isPrivate || settings.collisions !== "off"
+      ? {
+          id: "collisions",
+          label: tx("collisions"),
+          read: collisionLabel(settings.collisions),
+          edit: (
+            <Select<CollisionMode>
+              value={settings.collisions}
+              options={COLLISION_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+              onChange={(collisions) => set({ collisions })}
+            />
+          ),
+          hint: collisionHint(settings.collisions),
+        }
+      : null,
   ];
 
   const lockedNote = isHost && locked ? (qualifyingActive ? tx("lockedQualifying") : tx("lockedRace")) : undefined;
@@ -769,14 +785,20 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     const locked = raceRunning || qualifyingActive;
     // Who hosts comes from one place, the lobby's host id: the host badge, "You are host" and the host's controls agree
     const isHost = localPeerId !== undefined && state.hostId === localPeerId;
-    // Every model of the class may race (a car only listed elsewhere too). A scheduled race's one car is taken at the
-    // start by itself, so it flags nobody here
-    const allowedVehicles = vehiclesForClass ? vehiclesForClass(settings.carClass) : null;
-    return { state, settings, qualifyingActive, locked, isHost, editable: isHost && !locked, allowedVehicles };
+    // Spec-locked lobbies (e.g. open LC-LMDH) allow only that vehicle; class-locked lobbies allow every model in the class
+    const allowedVehicles = settings.vehicle
+      ? [settings.vehicle]
+      : vehiclesForClass
+        ? vehiclesForClass(settings.carClass)
+        : null;
+    const requiredLabel = settings.vehicle
+      ? (vehicleLabel?.(settings.vehicle) ?? settings.vehicle)
+      : classRuleLabel(settings.carClass);
+    return { state, settings, qualifyingActive, locked, isHost, editable: isHost && !locked, allowedVehicles, requiredLabel };
   }
 
   /** The drivers in the room, the warnings for this player, and the start (host) or ready (guest) button */
-  const renderDrivers = ({ state, settings, qualifyingActive, isHost, allowedVehicles }: NonNullable<typeof view>) => {
+  const renderDrivers = ({ state, settings, qualifyingActive, isHost, allowedVehicles, requiredLabel }: NonNullable<typeof view>) => {
     const isPrivate = state.roomKind !== "public";
     const qualifyingTimes = new Map((state.session?.times ?? []).map((t) => [t.peer, t.ms]));
     const isHostPlayer = (p: LobbyPlayer) => p.peerId === state.hostId;
@@ -792,7 +814,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     // Warnings for this player, compared with the host's race settings
     const trackMismatch = currentTrackId !== undefined && currentTrackId !== settings.trackId;
     const vehicleBlocked = outOfClass(currentVehicle);
-    const switchCars = carsForClass?.(settings.carClass) ?? [];
+    const switchCars = settings.vehicle
+      ? CARS.filter((c) => c.physics === settings.vehicle).map((c) => ({ id: c.id, title: c.title }))
+      : (carsForClass?.(settings.carClass) ?? []);
+    const effectiveStartBlocked =
+      startBlocked ?? (vehicleBlocked ? tx("drivers.wrongCarStartBlocked", { class: requiredLabel }) : undefined);
 
     const orderedPlayers = qualifyingActive
       ? [...state.players].sort((a, b) => {
@@ -853,7 +879,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                   ) : null}
                   {isHostPlayer(p) ? <SessionBadge session="host" size="sm" /> : null}
                   {outOfClass(p.vehicle) ? (
-                    <Badge size="sm" tone="warn" icon="warning" title={tx("drivers.wrongClassTitle", { class: classRuleLabel(settings.carClass) })}>
+                    <Badge size="sm" tone="warn" icon="warning" title={tx("drivers.wrongClassTitle", { class: requiredLabel })}>
                       {tx("drivers.wrongClass")}
                     </Badge>
                   ) : null}
@@ -897,7 +923,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           <Well className="flex flex-col gap-2.5 px-3.5 py-2.5">
             <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
               <Icon name="warning" className="mt-px" />
-              {tx(switchCars.length > 0 ? "drivers.wrongCarSwitch" : "drivers.wrongCar", { class: classRuleLabel(settings.carClass) })}
+              {tx(switchCars.length > 0 ? "drivers.wrongCarSwitch" : "drivers.wrongCar", { class: requiredLabel })}
             </span>
             {switchCars.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
@@ -918,8 +944,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               size="lg"
               block
               icon={raceRunning ? undefined : <Icon name="drive" />}
-              disabled={raceRunning}
-              disabledReason={!raceRunning ? startBlocked : undefined}
+              disabled={raceRunning || Boolean(effectiveStartBlocked)}
+              disabledReason={!raceRunning ? effectiveStartBlocked : undefined}
               onClick={() => onStartRace?.()}
             >
               {raceRunning
@@ -935,8 +961,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 {qualifyingActive ? tx("drivers.endQualifying") : tx("drivers.endRaceForEveryone")}
               </Button>
             ) : null}
-            {!raceRunning && !qualifyingActive && startBlocked ? (
-              <p className="m-0 text-center text-[12px] font-medium text-lc-caution">{startBlocked}</p>
+            {!raceRunning && !qualifyingActive && effectiveStartBlocked ? (
+              <p className="m-0 text-center text-[12px] font-medium text-lc-caution">{effectiveStartBlocked}</p>
             ) : null}
           </div>
         ) : (
@@ -947,7 +973,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               block
               aria-pressed={ready}
               icon={ready ? <Icon name="success" /> : undefined}
-              disabled={!onSetReady}
+              disabled={!onSetReady || vehicleBlocked}
+              disabledReason={vehicleBlocked ? tx("drivers.wrongCarReadyBlocked", { class: requiredLabel }) : undefined}
               onClick={toggleReady}
             >
               {ready ? tx("drivers.readyButton") : tx("drivers.readyUp")}

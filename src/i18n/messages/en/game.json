@@ -836,7 +836,9 @@
     "launchTouch": "Hold throttle to launch",
     "launchKey": "Hold {key} to launch · Esc Menu",
     "noRacesOnHillClimb": "No races on a hill climb",
-    "backToRaces": "Back to the races"
+    "backToRaces": "Back to the races",
+    "carAutoSwitched": "Switched to {car} — lobby locked to {rule}",
+    "carBlockedByLobby": "Car locked to {rule} while in this lobby"
   },
   "telemetryHud": {
     "menu": "Menu",

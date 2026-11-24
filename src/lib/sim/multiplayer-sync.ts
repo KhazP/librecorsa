@@ -27,6 +27,8 @@ import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import { getOnlineConfig, onlineApiBase, onlineSocketUrl, readOnlineConfig } from '@/lib/net/online-config';
 import {
   buildRaceGrid,
+  isVehicleAllowed,
+  isVehicleRestricted,
   MAX_STATE_BYTES,
   MAX_STATE_PACKETS_PER_S,
   MIN_QUALIFYING_LAP_MS,
@@ -42,6 +44,7 @@ import {
   decodeState,
   encodeState,
   stateInfoJson,
+  vehicleClassOf,
   withLobbyDefaults,
   type CarClassRule,
   type CollisionMode,
@@ -61,13 +64,15 @@ import {
   type RoomKind,
   type RoomPhase,
   type RoomSessionInfo,
+  type VehicleRule,
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
 import { carPhysicsVersion } from '@/lib/sim/lap-types';
+import { MP_HEAVY_JITTER_MS, MP_HEAVY_LOSS_PCT } from '@/lib/sim/mp-contact';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
-export { MP_QUALIFYING_MINUTES, sanitizePacket, withLobbyDefaults };
+export { isVehicleAllowed, isVehicleRestricted, MP_QUALIFYING_MINUTES, sanitizePacket, vehicleClassOf, withLobbyDefaults };
 export type {
   CarClassRule,
   CollisionMode,
@@ -85,6 +90,7 @@ export type {
   RoomKind,
   RoomPhase,
   RoomSessionInfo,
+  VehicleRule,
 };
 
 export interface InterpolatedPeerState {
@@ -121,6 +127,8 @@ export interface InterpolatedPeerState {
   contactReady?: boolean;
   /** Nothing heard from the car for a while (STALE_GHOST_MS): drawn see-through, and never touched */
   stale?: boolean;
+  /** Severe packet loss or arrival jitter: drawn see-through and never collides until the link recovers */
+  desync?: boolean;
   /** The car reports itself a hazard (an open race's fair-play rule, contact-guard.ts) */
   hazard?: boolean;
   /** The car is flashing its headlights */
@@ -466,6 +474,8 @@ export class MultiplayerSyncManager {
   public hostId: string | null = null;
   public lobby: LobbyState | null = null;
   public onLobbyChange?: (lobby: LobbyState | null) => void;
+  /** Fired when the room server, race server or host reports a car-class/spec restriction (for immediate auto-switch) */
+  public onRoomCarRule?: (rule: VehicleRule, roomTrackId?: string) => void;
   /** Host: the session's weather, sent with every lobby update so the guests drive in the same conditions */
   public weatherProvider?: () => WeatherSyncState | null;
   public onRaceStart?: (start: RaceStartInfo) => void;
@@ -488,7 +498,7 @@ export class MultiplayerSyncManager {
   private memberSeenMs = new Map<string, number>();
   /** Host: members dropped for silence, kept so their next packet puts them back (a guest only says hello once) */
   private lapsedMembers = new Map<string, LobbyPlayer>();
-  private lobbySettings: LobbySettings = withLobbyDefaults({ trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'ghost_lap1', carClass: 'any' });
+  private lobbySettings: LobbySettings = withLobbyDefaults({ trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'on', carClass: 'any' });
   private activeRace: RaceStartInfo | null = null;
   /** Active private-room qualifying session (on host and guests) */
   public activeQualifying: RoomSessionInfo | null = null;
@@ -586,7 +596,9 @@ export class MultiplayerSyncManager {
             this.handleEnvelope(data as ControlEnvelope, null);
           } else {
             const pkt = sanitizePacket(data);
-            if (pkt && pkt.peerId !== this.localPeerId) this.ingestPacket(pkt, false);
+            if (pkt && pkt.peerId !== this.localPeerId && this.acceptsPeerPacketVehicle(pkt)) {
+              this.ingestPacket(pkt, false);
+            }
           }
         };
       } catch {
@@ -743,18 +755,21 @@ export class MultiplayerSyncManager {
           joinRetried = false;
           this.roomIce = sanitizeIceServers(msg.iceServers);
           // Bind our game peerId and current lobby settings on the room server
-          this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+          this.sendRoomServer({ t: 'join', peerId: this.localPeerId, ...(this.localVehicle ? { vehicle: this.localVehicle } : {}) });
           this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
           if (this.openPeerCount() === 0) {
             this.emitStatus({ state: 'signaling', statusText: tx('game.connection.roomOpen', { code: roomCode }) });
           }
+        } else if (msg.t === 'error' && msg.code === 'car_class_mismatch') {
+          const s = sanitizeLobbySettings({ carClass: msg.carClass, vehicle: msg.vehicle });
+          this.onRoomCarRule?.({ carClass: s.carClass, vehicle: s.vehicle }, this.lobby?.settings.trackId);
         } else if (msg.t === 'error' && msg.code === 'peer_id_taken') {
           if (!joinRetried) {
             // A replaced host socket can briefly remain listed while closing; retry join once
             joinRetried = true;
             setTimeout(() => {
               if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
-                this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+                this.sendRoomServer({ t: 'join', peerId: this.localPeerId, ...(this.localVehicle ? { vehicle: this.localVehicle } : {}) });
               }
             }, 50);
           } else {
@@ -953,7 +968,11 @@ export class MultiplayerSyncManager {
         if (msg.t === 'welcome') {
           joinRetried = false;
           this.roomIce = sanitizeIceServers(msg.iceServers);
-          this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+          if (msg.settings && typeof msg.settings === 'object') {
+            const s = sanitizeLobbySettings(msg.settings);
+            if (isVehicleRestricted(s)) this.onRoomCarRule?.({ carClass: s.carClass, vehicle: s.vehicle }, s.trackId);
+          }
+          this.sendRoomServer({ t: 'join', peerId: this.localPeerId, ...(this.localVehicle ? { vehicle: this.localVehicle } : {}) });
           const sdp = await this.offerToHost(ROOM_HOST_ID, ROOM_HOST_ID);
           if (this.signalingWs !== ws) return;
           ws.send(JSON.stringify({ t: 'signal', data: { sdp } }));
@@ -961,13 +980,16 @@ export class MultiplayerSyncManager {
             this.joinTimer = null;
             if (!answered) notFound();
           }, JOIN_TIMEOUT_MS);
+        } else if (msg.t === 'error' && msg.code === 'car_class_mismatch') {
+          const s = sanitizeLobbySettings({ carClass: msg.carClass, vehicle: msg.vehicle });
+          this.onRoomCarRule?.({ carClass: s.carClass, vehicle: s.vehicle }, this.lobby?.settings.trackId);
         } else if (msg.t === 'error' && msg.code === 'peer_id_taken') {
           if (!joinRetried) {
             // Room server relays signal by socket id regardless of join, so only the peerId binding needs retrying
             joinRetried = true;
             setTimeout(() => {
               if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
-                this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+                this.sendRoomServer({ t: 'join', peerId: this.localPeerId, ...(this.localVehicle ? { vehicle: this.localVehicle } : {}) });
               }
             }, 50);
           } else {
@@ -1357,6 +1379,11 @@ export class MultiplayerSyncManager {
         const entry = this.rtcPeers.get(remoteId);
         if (!entry || entry.refused || !this.bindGuest(entry, pkt.peerId) || !this.withinRate(entry, 'state')) return;
       }
+      // Enforce the lobby/race car-class or spec-vehicle lock on incoming state packets (and never relay mismatched cars)
+      if (!this.acceptsPeerPacketVehicle(pkt)) {
+        this.peers.delete(pkt.peerId);
+        return;
+      }
       // Only now that the sender is known to speak for this car are its name and colour taken
       if (decoded.info) this.stateInfo.set(pkt.peerId, decoded.info);
       this.ingestPacket(pkt, false);
@@ -1403,18 +1430,56 @@ export class MultiplayerSyncManager {
     this.emitStatus({ state: 'error', roomCode: '', statusText: VERSION_MISMATCH() });
   }
 
+  /** Active vehicle/class restriction for the current room or race, or null when unrestricted / offline */
+  private activeVehicleRule(): VehicleRule | null {
+    const src = this.isHost ? (this.activeRace ?? this.lobbySettings) : (this.activeRace ?? this.lobby?.settings ?? null);
+    if (!src || !isVehicleRestricted(src)) return null;
+    return { carClass: src.carClass, vehicle: src.vehicle };
+  }
+
+  /** True when a remote state packet's car matches the active class/spec rule (mismatched cars cannot broadcast in) */
+  private acceptsPeerPacketVehicle(pkt: NetworkVehiclePacket): boolean {
+    const rule = this.activeVehicleRule();
+    if (!rule) return true;
+    const knownVehicle =
+      pkt.vehicle ??
+      this.members.get(pkt.peerId)?.vehicle ??
+      this.lobby?.players.find((p) => p.peerId === pkt.peerId)?.vehicle;
+    if (knownVehicle === undefined) {
+      // Spec race/room (single fixed vehicle): coerce omitted legacy vehicle field to the spec car rather than AMR/F1
+      if (rule.vehicle !== undefined) {
+        pkt.vehicle = rule.vehicle;
+        return true;
+      }
+      return false;
+    }
+    return isVehicleAllowed(knownVehicle, rule, { allowUnspecified: false });
+  }
+
+  /** True when a peer's registered car satisfies the host's active class/spec rule */
+  private isPeerVehicleAllowed(peerId: string): boolean {
+    const rule = this.lobbySettings;
+    if (!isVehicleRestricted(rule)) return true;
+    const vehicle = peerId === this.localPeerId ? this.localVehicle : this.members.get(peerId)?.vehicle;
+    return isVehicleAllowed(vehicle, rule, { allowUnspecified: true });
+  }
+
   /** Name, code and colour shown to other players; car and circuit for the lobby */
   public setIdentity(identity: DriverIdentity, vehicle?: VehicleModelId, trackId?: string): void {
+    const vehicleChanged = vehicle !== this.localVehicle;
     const changed =
       identity.name !== this.identity.name ||
       identity.code !== this.identity.code ||
       identity.color !== this.identity.color ||
-      vehicle !== this.localVehicle ||
+      vehicleChanged ||
       trackId !== this.localTrackId;
     this.identity = { ...identity };
     this.localVehicle = vehicle;
     this.localTrackId = trackId;
     if (!changed) return;
+    if (vehicleChanged && vehicle) {
+      this.sendRoomServer({ t: 'vehicle', vehicle });
+    }
     if (this.isHost) {
       if (trackId) {
         if (this.activeQualifying && trackId !== this.lobbySettings.trackId) this.abortQualifying();
@@ -1498,6 +1563,19 @@ export class MultiplayerSyncManager {
     }
     const kind: RoomKind = this.inScheduledRace ? 'public' : 'private';
     this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch }, kind);
+    // Unready and stop showing any guest whose current car violates the new carClass/vehicle rule
+    if (isVehicleRestricted(this.lobbySettings)) {
+      for (const [peerId, member] of this.members) {
+        if (!isVehicleAllowed(member.vehicle, this.lobbySettings, { allowUnspecified: true })) {
+          member.ready = false;
+          this.peers.delete(peerId);
+          this.sendControl(
+            { type: 'refuse', reason: 'car_class', carClass: this.lobbySettings.carClass, vehicle: this.lobbySettings.vehicle },
+            peerId,
+          );
+        }
+      }
+    }
     this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
     this.broadcastLobby();
   }
@@ -1511,11 +1589,12 @@ export class MultiplayerSyncManager {
     return member.trackId === expected;
   }
 
-  /** Host: records a qualifying lap if it passes the shared 10 s floor and the peer is on the qualifying circuit */
+  /** Host: records a qualifying lap if it passes the shared 10 s floor, is on the qualifying circuit, and uses an allowed car */
   private recordHostQualifyingLap(peerId: string, rawMs: number): boolean {
     if (!this.isHost || !this.activeQualifying) return false;
     if (!Number.isFinite(rawMs) || rawMs < MIN_QUALIFYING_LAP_MS || rawMs > 1e7) return false;
     if (!this.isOnQualifyingTrack(peerId)) return false;
+    if (!this.isPeerVehicleAllowed(peerId)) return false;
     const rounded = Math.round(rawMs);
     const prev = this.qualifyingLaps.get(peerId);
     if (prev !== undefined && rounded >= prev) return false;
@@ -1560,13 +1639,20 @@ export class MultiplayerSyncManager {
     return this.startRace(countdownMs);
   }
 
+  /** Host: eligible player ids for qualifying/racing (excludes peers whose car violates the room's class/spec lock) */
+  private eligibleLobbyPeerIds(): string[] {
+    return this.lobbyPlayers()
+      .filter((p) => isVehicleAllowed(p.vehicle, this.lobbySettings, { allowUnspecified: true }))
+      .map((p) => p.peerId);
+  }
+
   /** Host: starts private-room qualifying for `lobbySettings.qualifyingMinutes` minutes */
   public startQualifying(): RoomSessionInfo | null {
     if (!this.isHost || this.inScheduledRace) return null;
     const minutes = this.lobbySettings.qualifyingMinutes ?? 0;
     if (minutes <= 0) return null;
     const id = Math.random().toString(36).slice(2, 10);
-    const players = this.lobbyPlayers().map((p) => p.peerId);
+    const players = this.eligibleLobbyPeerIds();
     this.activeRace = null;
     this.qualifyingLaps.clear();
     this.lastSentQualiLap = null;
@@ -1629,7 +1715,7 @@ export class MultiplayerSyncManager {
     notifyServer = true,
   ): RaceStartInfo | null {
     if (!this.isHost) return null;
-    const players = this.lobbyPlayers().map((p) => p.peerId);
+    const players = this.eligibleLobbyPeerIds();
     const endedQuali = this.activeQualifying;
     const fromQualifying = endedQuali !== null;
     const qualifying = fromQualifying
@@ -1884,6 +1970,7 @@ export class MultiplayerSyncManager {
             }
             break;
           }
+          const vehicleOk = isVehicleAllowed(msg.vehicle, this.lobbySettings, { allowUnspecified: true });
           this.lapsedMembers.delete(from);
           this.members.set(from, {
             peerId: from,
@@ -1892,10 +1979,19 @@ export class MultiplayerSyncManager {
             color: msg.color,
             vehicle: msg.vehicle,
             trackId: msg.trackId,
-            ready: this.members.get(from)?.ready ?? false,
+            ready: vehicleOk ? (this.members.get(from)?.ready ?? false) : false,
             isHost: false,
           });
           this.memberSeenMs.set(from, this.clock());
+          if (!vehicleOk) {
+            // Keep the link open so the guest receives the lobby and auto-switches, while removing any disallowed car
+            // state and explicitly signaling the class restriction.
+            this.peers.delete(from);
+            this.sendControl(
+              { type: 'refuse', reason: 'car_class', carClass: this.lobbySettings.carClass, vehicle: this.lobbySettings.vehicle },
+              from,
+            );
+          }
           this.broadcastLobby();
         }
         break;
@@ -1903,7 +1999,15 @@ export class MultiplayerSyncManager {
         if (this.isHost) {
           const m = this.members.get(from);
           if (m) {
-            m.ready = msg.ready;
+            if (msg.ready && !isVehicleAllowed(m.vehicle, this.lobbySettings, { allowUnspecified: true })) {
+              m.ready = false;
+              this.sendControl(
+                { type: 'refuse', reason: 'car_class', carClass: this.lobbySettings.carClass, vehicle: this.lobbySettings.vehicle },
+                from,
+              );
+            } else {
+              m.ready = msg.ready;
+            }
             this.broadcastLobby();
           }
         }
@@ -1932,7 +2036,19 @@ export class MultiplayerSyncManager {
       }
       case 'refuse':
         // From the host this guest dialled (a guest's refusal is never relayed: it is not a guest's to send)
-        if (!this.isHost && via) this.leaveForVersion();
+        if (!this.isHost) {
+          if (msg.reason === 'version' && via) {
+            this.leaveForVersion();
+          } else if (msg.reason === 'car_class' && (via || from === this.hostId)) {
+            this.onRoomCarRule?.(
+              {
+                carClass: msg.carClass ?? this.lobby?.settings.carClass ?? 'any',
+                vehicle: msg.vehicle ?? this.lobby?.settings.vehicle,
+              },
+              this.lobby?.settings.trackId,
+            );
+          }
+        }
         break;
       case 'lobby': {
         if (this.isHost) break;
@@ -2182,6 +2298,10 @@ export class MultiplayerSyncManager {
           if (!decoded.ok) return;
           const pkt = sanitizePacket(decoded.packet);
           if (!pkt || pkt.peerId === this.localPeerId) return;
+          if (!this.acceptsPeerPacketVehicle(pkt)) {
+            this.peers.delete(pkt.peerId);
+            return;
+          }
           if (decoded.info) this.stateInfo.set(pkt.peerId, decoded.info);
           const waiting = this.raceInbox.get(pkt.peerId);
           if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: this.clock() });
@@ -2203,6 +2323,9 @@ export class MultiplayerSyncManager {
             // The server's start time on this device's clock (off by the trip here, which a countdown doesn't show)
             this.emitRaceStatus({ state: 'joined', startsMs: data.startsMs - data.now + Date.now(), text: '' });
             this.emitStatus({ mode: 'race_server', state: 'connected', statusText: tx('game.connection.inNextRace') });
+          } else if (data.t === 'error' && data.code === 'car_class_mismatch') {
+            const s = sanitizeLobbySettings({ carClass: data.requiredClass, vehicle: data.requiredVehicle });
+            this.onRoomCarRule?.({ carClass: s.carClass, vehicle: s.vehicle }, this.lobby?.settings.trackId);
           } else if (data.t !== 'welcome') {
             this.failRace(raceRefusal(String(data.t)));
           }
@@ -2559,7 +2682,12 @@ export class MultiplayerSyncManager {
     // holds at any frame rate. A frame up to a quarter interval early counts (display frames jitter); a frame more
     // than an interval late (a hitch, a tab in the background) starts the schedule again rather than sending a burst
     const intervalMs = 1000 / this.stateSendHz;
-    if (localPacket && nowMs >= this.nextSendDueMs - intervalMs / 4) {
+    const activeRule = this.activeVehicleRule();
+    const localVehicleBlocked =
+      localPacket !== null &&
+      activeRule !== null &&
+      !isVehicleAllowed(localPacket.vehicle ?? this.localVehicle, activeRule, { allowUnspecified: false });
+    if (localPacket && !localVehicleBlocked && nowMs >= this.nextSendDueMs - intervalMs / 4) {
       this.nextSendDueMs = nowMs - this.nextSendDueMs >= intervalMs ? nowMs + intervalMs : this.nextSendDueMs + intervalMs;
       // Stamped with the frame's time, the moment its pose is from; how much later it leaves goes with it, so a
       // receiver's timing counts from the send (a clock other than the frame's reads as on time)
@@ -2762,9 +2890,10 @@ export class MultiplayerSyncManager {
     out.brake = s1.brake;
     out.trackS = s1.trackS;
     out.speedKmh = s1.speedKmh;
-    // No news by arrival time, or only old news (the first of a burst held up by a stall): a guess, drawn as one
+    // No news by arrival time, only old news (held up by a stall), or heavy packet loss / jitter: ghost until stable
     out.stale = nowMs - buf.lastReceivedMs > STALE_GHOST_MS || ageS * 1000 > STALE_GHOST_MS;
-    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && !out.stale && nowMs >= p.graceUntilMs;
+    out.desync = buf.lossPct >= MP_HEAVY_LOSS_PCT || buf.jitterMs >= MP_HEAVY_JITTER_MS;
+    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && !out.stale && !out.desync && nowMs >= p.graceUntilMs;
   }
 
   /**

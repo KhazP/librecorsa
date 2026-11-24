@@ -135,6 +135,8 @@
   "carBrowser": {
     "label": "Cars",
     "searchPlaceholder": "Cars, classes, years",
+    "lobbyLockedTo": "Lobby locked to {rule}",
+    "lobbyRestrictedBanner": "Lobby restricted to {rule}",
     "show": "Show",
     "showAll": "All cars",
     "showFavourites": "Favourites",

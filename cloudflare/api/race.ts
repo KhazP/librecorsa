@@ -30,10 +30,13 @@ import {
   StateInfoMemory,
   decodeState,
   encodeState,
+  isVehicleAllowed,
   sanitizeControl,
   sanitizePacket,
   stateInfoJson,
-  type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo } from "../../src/lib/net/wire";
+  vehicleClassOf,
+  type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo, type VehicleRule } from "../../src/lib/net/wire";
+import { foldVehicleModelId, isVehicleModelId, type VehicleModelId } from "../../src/types/f1";
 import { nameProblem } from "../../src/lib/net/name-filter";
 import { driverNameKey, sha256Hex } from "./board";
 import { storeRaceResult, type RaceEntrant } from "./results";
@@ -71,6 +74,19 @@ interface Entrant {
   joinedMs: number;
   /** Its driver key was taken (one try per socket) */
   identified?: boolean;
+  /** True when the entrant's last reported car violated this race's required vehicle/class */
+  vehicleMismatch?: boolean;
+}
+
+function asRequestedVehicle(raw: string | null): VehicleModelId | undefined {
+  if (!raw) return undefined;
+  const v = foldVehicleModelId(raw);
+  return isVehicleModelId(v) ? v : undefined;
+}
+
+function ruleForMeta(meta: Meta): VehicleRule {
+  const v = raceRules(meta).race.vehicle;
+  return { carClass: vehicleClassOf(v), vehicle: v };
 }
 
 /** A car on the grid as it raced: kept at the start, for the results and for a car back on a new socket */
@@ -140,7 +156,7 @@ export class RaceServer {
     const slotS = Number(q.get("slotS"));
     if (!Number.isInteger(index) || index < 1 || !Number.isFinite(slotS) || slotS < 10) return new Response("Bad slot", { status: 400 });
     const pair = new workers.WebSocketPair();
-    await this.connect(pair[1], q.get("peer") ?? "", q.get("token") ?? "", raceSlot(index, slotS), q.get("v"));
+    await this.connect(pair[1], q.get("peer") ?? "", q.get("token") ?? "", raceSlot(index, slotS), q.get("v"), q.get("vehicle"));
     return new Response(null, { status: 101, webSocket: pair[0] } as ResponseInit);
   }
 
@@ -185,15 +201,31 @@ export class RaceServer {
   }
 
   /** Takes a new socket into the race, or tells it why not (the game closes it then). `proto`: the game's PROTOCOL_VERSION */
-  async connect(ws: ServerSocket, peer: string, token: string, slot: Meta, proto: string | null): Promise<void> {
-    const refuse = (t: string) => {
+  async connect(
+    ws: ServerSocket,
+    peer: string,
+    token: string,
+    slot: Meta,
+    proto: string | null,
+    requestedVehicleRaw: string | null = null,
+  ): Promise<void> {
+    const refuse = (t: string, extra?: Record<string, unknown>) => {
       this.state.acceptWebSocket(ws, ["refused"]);
-      send(ws, JSON.stringify({ t }));
+      send(ws, JSON.stringify({ t, ...extra }));
       close(ws, 4000, t);
     };
     // Another version of the game (an older one says none) can't race this one: it is told to reload
     if (proto !== String(PROTOCOL_VERSION)) return refuse("update");
     if (!PEER_ID_RE.test(peer) || peer === RACE_SERVER_ID || !TOKEN_RE.test(token)) return refuse("bad");
+    const requestedVehicle = asRequestedVehicle(requestedVehicleRaw);
+    const slotRule = ruleForMeta(slot);
+    if (requestedVehicle !== undefined && !isVehicleAllowed(requestedVehicle, slotRule)) {
+      return refuse("car_class_mismatch", {
+        requiredVehicle: slotRule.vehicle,
+        requiredClass: slotRule.carClass,
+        vehicle: requestedVehicle,
+      });
+    }
     const meta = await this.getMeta(slot);
     if (!meta) return refuse("bad");
     const race = await this.getRace();
@@ -245,7 +277,7 @@ export class RaceServer {
   private players(gone?: ServerSocket): LobbyPlayer[] {
     return this.sockets(gone)
       .map(entrantOf)
-      .filter((e): e is Entrant => e !== null && e.name !== undefined)
+      .filter((e): e is Entrant => e !== null && e.name !== undefined && e.vehicleMismatch !== true)
       .sort((a, b) => a.joinedMs - b.joinedMs)
       .map((e) => ({
         peerId: e.peer,
@@ -263,7 +295,13 @@ export class RaceServer {
     const rules = raceRules(meta);
     const lobby: LobbyState = {
       hostId: RACE_SERVER_ID,
-      settings: { trackId: rules.race.trackId, laps: rules.race.laps, collisions: "protected", carClass: "any", vehicle: rules.race.vehicle },
+      settings: {
+        trackId: rules.race.trackId,
+        laps: rules.race.laps,
+        collisions: "protected",
+        carClass: vehicleClassOf(rules.race.vehicle),
+        vehicle: rules.race.vehicle,
+      },
       players: this.players(gone),
       race,
       // The game checks it runs the same version (the physics revision is the game's own, not this server's)
@@ -314,10 +352,39 @@ export class RaceServer {
       const to = typeof data.to === "string" && PEER_ID_RE.test(data.to) ? data.to : undefined;
       switch (msg.type) {
         case "hello": {
+          // Enforce this scheduled race's spec vehicle/class: a mismatched car is refused entry into the lobby/grid
+          const meta = await this.getMeta();
+          const rule = meta ? ruleForMeta(meta) : null;
+          if (rule && msg.vehicle !== undefined && !isVehicleAllowed(msg.vehicle, rule)) {
+            const wasAdmitted = who.name !== undefined && who.vehicleMismatch !== true;
+            ws.serializeAttachment({ ...who, vehicle: msg.vehicle, trackId: msg.trackId, vehicleMismatch: true } satisfies Entrant);
+            send(
+              ws,
+              JSON.stringify({
+                t: "error",
+                code: "car_class_mismatch",
+                requiredVehicle: rule.vehicle,
+                requiredClass: rule.carClass,
+                vehicle: msg.vehicle,
+                message: `This race requires ${rule.vehicle ?? rule.carClass}`,
+              }),
+            );
+            send(
+              ws,
+              JSON.stringify({
+                ctl: { type: "refuse", reason: "car_class", carClass: rule.carClass, vehicle: rule.vehicle },
+                from: RACE_SERVER_ID,
+                to: who.peer,
+              }),
+            );
+            if (wasAdmitted) await this.broadcastLobby();
+            break;
+          }
           // The lobby, the Races card's look at who is waiting and the stored result all show this name: one the
           // boards would refuse races as "Driver"
           const name = nameProblem(msg.name) ? "Driver" : msg.name;
-          ws.serializeAttachment({ ...who, name, code: msg.code, color: msg.color, vehicle: msg.vehicle, trackId: msg.trackId } satisfies Entrant);
+          const resolvedVehicle = msg.vehicle ?? rule?.vehicle;
+          ws.serializeAttachment({ ...who, name, code: msg.code, color: msg.color, vehicle: resolvedVehicle, trackId: msg.trackId, vehicleMismatch: false } satisfies Entrant);
           await this.broadcastLobby();
           break;
         }
@@ -365,8 +432,15 @@ export class RaceServer {
     // Cars only matter to each other once there is a race
     const race = await this.getRace();
     if (!race) return;
-    this.relay(ws, encodeState(pkt, decoded.info ? stateInfoJson(pkt) : undefined));
-    if (pkt.race?.id === race.id) this.dist.set(who.peer, pkt.race.dist);
+    // Enforce the race's vehicle/class lock on relayed state packets so a mismatched car can never broadcast into the race
+    const rule: VehicleRule = { carClass: race.carClass, vehicle: race.vehicle };
+    if (who.vehicleMismatch === true || (pkt.vehicle !== undefined && !isVehicleAllowed(pkt.vehicle, rule))) {
+      return;
+    }
+    const coercedInfo = pkt.vehicle === undefined && race.vehicle !== undefined;
+    const outboundPkt = coercedInfo ? { ...pkt, vehicle: race.vehicle } : pkt;
+    this.relay(ws, encodeState(outboundPkt, decoded.info || coercedInfo ? stateInfoJson(outboundPkt) : undefined));
+    if (outboundPkt.race?.id === race.id) this.dist.set(who.peer, outboundPkt.race.dist);
     // Only a car that has raced may report a finish
     const seen = await this.getSeen();
     if (!seen.has(who.peer)) {
@@ -389,6 +463,11 @@ export class RaceServer {
     const race = await this.getRace();
     const book = await this.getBook();
     if (!race || !book) return;
+    const who = entrantOf(ws);
+    const rule: VehicleRule = { carClass: race.carClass, vehicle: race.vehicle };
+    if (who && (who.vehicleMismatch === true || (who.vehicle !== undefined && !isVehicleAllowed(who.vehicle, rule)))) {
+      return;
+    }
     if (book.reports[peer] || book.final) {
       send(ws, this.resultText(book));
       return;
@@ -517,15 +596,21 @@ export class RaceServer {
 
   /** Makes the grid from whoever is here and tells everyone; nobody here: the room just closes */
   private async startRace(meta: Meta, nowMs: number): Promise<void> {
+    const rules = raceRules(meta);
+    const rule = ruleForMeta(meta);
     const present = this.sockets().filter((ws) => {
       const e = entrantOf(ws);
       const last = this.heard.get(ws);
-      return e?.name !== undefined && (last === undefined || nowMs - last <= GONE_AFTER_MS);
+      return (
+        e?.name !== undefined &&
+        e.vehicleMismatch !== true &&
+        isVehicleAllowed(e.vehicle, rule, { allowUnspecified: true }) &&
+        (last === undefined || nowMs - last <= GONE_AFTER_MS)
+      );
     });
     const entrants = present.map(entrantOf).filter((e): e is Entrant => e !== null);
     if (entrants.length === 0) return this.shut();
 
-    const rules = raceRules(meta);
     const times = await this.challengeTimes(rules.id, rules.trackId, rules.vehicle, entrants);
     // Fastest of this week's challenge on pole (its laps, also when the race is on another circuit); without a time,
     // behind them in the order they joined
@@ -536,7 +621,7 @@ export class RaceServer {
       holdMs: 200 + Math.random() * 2800,
       laps: rules.race.laps,
       collisions: "protected",
-      carClass: "any",
+      carClass: rule.carClass,
       trackId: rules.race.trackId,
       grid: entrants.map((e) => e.peer),
       vehicle: rules.race.vehicle,

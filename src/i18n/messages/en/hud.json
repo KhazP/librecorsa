@@ -127,10 +127,10 @@
       "protected": "Protected"
     },
     "collisionHint": {
-      "on": "Full contact",
+      "on": "Full contact (ghosted on spawn, pitlane, AFK or heavy lag)",
       "ghostLap1": "No contact on the opening lap",
       "off": "Cars pass through each other",
-      "protected": "Ghosted lap 1, then a dangerous car can't touch the others"
+      "protected": "Contact on after launch; hazards, pitlane and rams pass through"
     },
     "anyCar": "Any car",
     "startType": {
@@ -179,6 +179,11 @@
       "penaltiesOff": "Off",
       "penaltiesHint": "Time added for track limits and jump starts",
       "damage": "Damage",
+      "ghostMode": "Ghost mode",
+      "ghostModeOn": "On (no contact)",
+      "ghostModeOff": "Off (collisions on)",
+      "ghostModeOnHint": "Cars pass through each other",
+      "ghostModeOffHint": "Full contact (ghosted on spawn, pitlane, AFK or heavy lag)",
       "collisions": "Collisions",
       "lockedQualifying": "Locked while qualifying runs",
       "lockedRace": "Locked while the race runs"
@@ -203,6 +208,8 @@
       "switchCircuit": "Switch circuit",
       "wrongCar": "Your car isn't in this room's class ({class}).",
       "wrongCarSwitch": "Your car isn't in this room's class ({class}). Switch car:",
+      "wrongCarReadyBlocked": "Switch to an allowed car ({class}) before readying up",
+      "wrongCarStartBlocked": "Switch to an allowed car ({class}) before starting",
       "raceInProgress": "Race in progress",
       "startRaceNow": "Start race now",
       "startQualifying": "Start {minutes} min qualifying",

@@ -35,6 +35,9 @@ import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId }
 import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
 import type { GuardBody } from "@/lib/sim/contact-guard";
+import { evaluatePeerContact, LocalContactSafety } from "@/lib/sim/mp-contact";
+import type { GroundHit } from "@/lib/sim/f12026-car/TrackColliderQuery";
+import { DEFAULT_SURFACE_TABLE } from "@/lib/sim/track-surfaces";
 import { carPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
 import {
@@ -2599,6 +2602,8 @@ export class DriveSession {
       replayNames.clear();
       if (this.snapshot.replayAvailable) this.publish({ replayAvailable: false });
       onRunReset(reason);
+      if (reason === "race") localContactSafety.clearSpawnProtection();
+      else localContactSafety.armSpawnProtection(performance.now());
       jumpWatch.reset();
       reactionWatch.reset();
       startClutch.active = false;
@@ -2768,6 +2773,20 @@ export class DriveSession {
     const ghostPos = new THREE.Vector3();
     const guardSelf: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
+    const localContactSafety = new LocalContactSafety();
+    localContactSafety.armSpawnProtection(performance.now());
+    const pitProbeHit: GroundHit = {
+      height: 0,
+      nx: 0,
+      ny: 1,
+      nz: 0,
+      surface: "road",
+      grip: 1,
+      props: DEFAULT_SURFACE_TABLE.road,
+      source: "",
+    };
+    const isInPitlaneAt = (x: number, z: number, y: number): boolean =>
+      Boolean(physics.groundQuery?.query(x, z, y + 0.5, pitProbeHit) && pitProbeHit.surface === "pitlane");
     const radarInvQ = new THREE.Quaternion();
     // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
     let cueDrsAvail = false;
@@ -3699,6 +3718,30 @@ export class DriveSession {
         lapLengthM: track.totalLengthM,
         offTrack: physics.telemetry.offTrack,
       });
+      // Safety ghosting for local car: spawn protection, pitlane, paused/menu, or AFK (broadcast as `hz` so peers
+      // also pass through cleanly instead of hitting a paused, spawning, or pitlane car)
+      let nearestPeerDistM = Infinity;
+      for (const p of latestRemotePeers) {
+        if (p.isAiPeer) continue;
+        const d = Math.hypot(p.position.x - physics.worldPosition.x, p.position.z - physics.worldPosition.z);
+        if (d < nearestPeerDistM) nearestPeerDistM = d;
+      }
+      const localInPitlane = isInPitlaneAt(physics.worldPosition.x, physics.worldPosition.z, physics.worldPosition.y);
+      const localHasInput =
+        Math.abs(physics.steerAngleNorm) > 0.05 ||
+        physics.telemetry.throttle > 0.05 ||
+        physics.telemetry.brake > 0.05;
+      const localSafety = localContactSafety.update({
+        nowMs,
+        dtS: dtSeconds,
+        paused: this.snapshot.paused,
+        inMenu,
+        inPitlane: localInPitlane,
+        speedMs: physics.telemetry.speedKmh / 3.6,
+        hasInput: localHasInput,
+        gridHeld: mpFrozen || gridHeldLastFrame,
+        nearestPeerDistM,
+      });
       // With the GPU lost no state goes out: the others see this car go, not parked where it stopped
       const interpolatedPeers = multiplayerSync.update(
         nowMs,
@@ -3713,7 +3756,7 @@ export class DriveSession {
               : multiplayerSync.lobby
                 ? { id: "practice", dist: Math.round(physics.sMeters * 10) / 10, fin: null, best: mpPracticeBestMs, cmp: physics.tireCompound }
                 : undefined,
-          hz: guard?.self.flag || undefined,
+          hz: guard?.self.flag || localSafety.ghost || undefined,
           fl: playerFlashing || undefined,
           vehicle: vehicleNow,
           trackId,
@@ -3751,43 +3794,78 @@ export class DriveSession {
       // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
       placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
+      const activeCollisionMode = mpRace
+        ? mpRace.start.collisions
+        : (multiplayerSync.lobby?.settings.collisions ?? "on");
       if (mpRace && mpFrame) {
         mpRace.ingestPeers(samePeers, mpFrame.phase === "racing" ? mpFrame.raceTimeS : 0);
-        // Contact with the other players (one-sided: each client resolves its own car)
-        guardSelf.x = physics.worldPosition.x;
-        guardSelf.z = physics.worldPosition.z;
-        guardSelf.vx = carVelocityWorld.x;
-        guardSelf.vz = carVelocityWorld.z;
-        for (const p of samePeers) {
-          let solid = !p.isAiPeer && p.race?.id === mpRace.start.id && mpRace.collisionsActiveWith(mpFrame, p.peerId);
-          let through = false;
-          if (guard && solid) {
+      }
+      // Car-to-car contact with remote multiplayer players — active both in races AND in lobby practice/qualifying,
+      // gated by ghost-mode lobbies, spawn protection, pitlane, paused/AFK, heavy lag/desync, and open-race ContactGuard
+      guardSelf.x = physics.worldPosition.x;
+      guardSelf.z = physics.worldPosition.z;
+      guardSelf.vx = carVelocityWorld.x;
+      guardSelf.vz = carVelocityWorld.z;
+      for (const p of samePeers) {
+        if (p.isAiPeer) continue;
+        const peerInPitlane = isInPitlaneAt(p.position.x, p.position.z, p.position.y);
+        let raceSnap: Parameters<typeof evaluatePeerContact>[0]["race"] = null;
+        if (mpRace && mpFrame) {
+          const sameRace = p.race?.id === mpRace.start.id;
+          const finished =
+            mpFrame.phase === "racing" &&
+            sameRace &&
+            (mpRace.lapClock.finishTimeS !== null || p.race?.fin !== null);
+          const collisionsActiveWithPeer = sameRace && mpRace.collisionsActiveWith(mpFrame, p.peerId);
+          let guardBlocked = false;
+          let guardRammed = false;
+          if (guard && collisionsActiveWithPeer && !finished) {
             guardOther.x = p.position.x;
             guardOther.z = p.position.z;
             guardOther.vx = p.linearVelocity.x;
             guardOther.vz = p.linearVelocity.z;
-            solid = !guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
-            through = p.hazard === true || guard.rammed(p.peerId);
+            guardBlocked = guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
+            guardRammed = guard.rammed(p.peerId);
           }
-          // polish:B a car that has taken the flag passes through (collisionsActiveWith), drawn as a ghost
-          if (mpFrame.phase === "racing" && p.race?.id === mpRace.start.id && (mpRace.lapClock.finishTimeS !== null || p.race.fin !== null)) through = true;
-          p.passThrough = through;
-          if (driving && solid) {
-            const hit = resolvePlayerVsRemoteCar(physics, p, dtSeconds);
-            if (hit && mpRace.damage && mpFrame.phase === "racing") {
-              const closingMs = Math.hypot(carVelocityWorld.x - p.linearVelocity.x, carVelocityWorld.z - p.linearVelocity.z);
-              if (closingMs > 2) mpRace.damage.registerImpact({ localX: 0, localZ: 2.0, speedMs: closingMs, source: "car" });
-            }
+          raceSnap = {
+            sameRace,
+            phase: mpFrame.phase,
+            collisionsActiveWithPeer,
+            finished,
+            guardBlocked,
+            guardRammed,
+          };
+        }
+        const verdict = evaluatePeerContact({
+          collisionMode: activeCollisionMode,
+          localSafetyGhost: localSafety.ghost,
+          peer: {
+            isAiPeer: p.isAiPeer,
+            contactReady: p.contactReady,
+            stale: p.stale,
+            desync: p.desync,
+            hazard: p.hazard,
+            ghost: p.ghost,
+            inPitlane: peerInPitlane,
+          },
+          race: raceSnap,
+        });
+        p.passThrough = verdict.passThrough;
+        if (driving && verdict.solid) {
+          const hit = resolvePlayerVsRemoteCar(physics, p, dtSeconds);
+          if (hit && mpRace?.damage && mpFrame?.phase === "racing") {
+            const closingMs = Math.hypot(carVelocityWorld.x - p.linearVelocity.x, carVelocityWorld.z - p.linearVelocity.z);
+            if (closingMs > 2) mpRace.damage.registerImpact({ localX: 0, localZ: 2.0, speedMs: closingMs, source: "car" });
           }
         }
+      }
+      if (mpRace && mpFrame) {
         // Multiplayer car damage from walls and car contact when enabled by the room rules
         if (mpRace.damage && driving && mpFrame.phase === "racing") damageFeed.update(mpRace.damage, physics);
         // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
         if (physics.telemetry.race && mpFrame.phase === "racing") {
           flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters);
         }
-      } else {
-        for (const p of samePeers) p.passThrough = false;
       }
       // Practice damage (the player's setting): practice and time trials driven alone, not qualifying for an AI race nor
       // anything in an online room, where restarts are not the player's alone (as for Flashback)

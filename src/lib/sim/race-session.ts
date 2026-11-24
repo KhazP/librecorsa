@@ -10,6 +10,7 @@ import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
 import { CarDamage } from "@/lib/sim/car-damage";
 import { damageStatusOf, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
 import { ContactGuard } from "@/lib/sim/contact-guard";
+import { MP_PROTECTED_LAUNCH_GHOST_S } from "@/lib/sim/mp-contact";
 import { classifiedTimeS, raceOrder, type RacerProgress } from "@/lib/sim/race-order";
 import {
   addFinish,
@@ -546,20 +547,23 @@ export class MultiplayerRace {
     return { phase: "racing", lightsOn: 0, countdownS: 0, raceTimeS: (hostNowMs - this.lightsOutHostMs) / 1000 };
   }
 
-  /** Contact with other players this frame (never on the grid; optionally not on the opening lap) */
+  /** Contact with other players this frame (never on the grid; brief launch window in protected mode; lap 1 only in ghost_lap1) */
   collisionsActive(frame: MultiplayerRaceFrame): boolean {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
-    if (this.start.collisions !== "on") return this.lapClock.distM >= this.lapLengthM;
-    return true;
+    if (this.start.collisions === "on") return true;
+    if (this.start.collisions === "protected") {
+      return frame.raceTimeS >= MP_PROTECTED_LAUNCH_GHOST_S || this.lapClock.distM >= this.lapLengthM;
+    }
+    return this.lapClock.distM >= this.lapLengthM;
   }
 
   /** The fair-play rule of an open race (collision rule 'protected'), applied on top of `collisionsActiveWith` */
   readonly guard: ContactGuard | null;
 
   /**
-   * Contact with one other player this frame. With ghosting on the opening lap the two cars are solid only once both
-   * are past it: each client resolves its own car, so keying it on this car alone had one car pushed by a car that,
-   * on the other client, was still a ghost.
+   * Contact with one other player this frame. With `ghost_lap1` both cars must clear lap 1; with `protected` (open
+   * races) collisions turn on right after the brief launch spawn-protection window (instead of ghosting a full lap),
+   * while `ContactGuard` handles parked/wrong-way hazards and extreme rams.
    */
   collisionsActiveWith(frame: MultiplayerRaceFrame, peerId: string): boolean {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
@@ -567,6 +571,12 @@ export class MultiplayerRace {
     if (this.lapClock.finishTimeS !== null || (this.remote.get(peerId)?.finishTimeS ?? null) !== null) return false;
     if (this.start.collisions === "on") return true;
     const other = this.remote.get(peerId);
+    if (this.start.collisions === "protected") {
+      return (
+        other !== undefined &&
+        (frame.raceTimeS >= MP_PROTECTED_LAUNCH_GHOST_S || (this.lapClock.distM >= this.lapLengthM && other.distM >= this.lapLengthM))
+      );
+    }
     return this.lapClock.distM >= this.lapLengthM && other !== undefined && other.distM >= this.lapLengthM;
   }
 
