@@ -15,7 +15,7 @@ import {
 } from "@/lib/account/api-types";
 import { accountWords } from "@/lib/account/account-words";
 import { AccountDialog, ErrorLine, TickBox } from "./AccountDialog";
-import { formatAgo, formatDay, nameList, providerList, useInDesktopApp } from "./format";
+import { formatAgo, formatDay, nameList, providerList, useInDesktopApp, useInLauncher } from "./format";
 import { LinkCodeDialog } from "./LinkCodeDialog";
 import { ShowCodeRow } from "./ShowCodeRow";
 import { accountUi, useAccountUi } from "./ui-state";
@@ -85,11 +85,13 @@ export function AccountPanel({ where }: { where: AccountWhere }) {
 function SignedOut({ where, state, note }: { where: AccountWhere; state: AccountState; note: string | null }) {
   const tx = useTranslations("settings.account.signedOut");
   const desktop = useInDesktopApp();
+  const launcher = useInLauncher();
   const { busy, error, run } = useAction();
   const [codeOpen, setCodeOpen] = useState(false);
   const [leaving, setLeaving] = useState<SignInProvider | null>(null);
   const oauth = SIGN_IN_PROVIDERS.filter((p) => state.providers.includes(p));
-  const passkeys = state.providers.includes("passkey");
+  // The launcher can't use a passkey (it belongs to librecorsa.org): there the code alone
+  const passkeys = state.providers.includes("passkey") && !launcher;
   // The desktop app can't come back from a sign-in page: it leads with the code, then the passkey
   const showOauth = !desktop && oauth.length > 0;
   const codeFirst = desktop && where === "settings";
@@ -224,6 +226,7 @@ function SignedIn({
 }) {
   const tx = useTranslations("settings.account");
   const desktop = useInDesktopApp();
+  const launcher = useInLauncher();
   const ui = useAccountUi();
   const top = useAction();
   const ways = useAction();
@@ -235,7 +238,7 @@ function SignedIn({
 
   const linked = new Set(account.identities.map((i) => i.provider));
   const offered = SIGN_IN_PROVIDERS.filter((p) => linked.has(p) || (state.providers.includes(p) && !desktop));
-  const passkeysOffered = state.providers.includes("passkey") || account.passkeys.length > 0;
+  const passkeysOffered = (state.providers.includes("passkey") || account.passkeys.length > 0) && !launcher;
   const waysIn = account.identities.length + account.passkeys.length;
   const lastWay = waysIn <= 1 ? tx("signedIn.lastWay") : undefined;
   const signedInWith = providerList(
