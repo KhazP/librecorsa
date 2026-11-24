@@ -152,7 +152,8 @@ ${PACKAGE_USAGE}`,
       const only = values.skins && values.skins !== 'all' ? values.skins.split(',').map((s) => s.trim()).filter(Boolean) : null;
       runPython(
         'scripts/cars/port_ac_car.py',
-        [carDir, glb, '--skins-out', skinsOut, '--report', reportPath, ...(only ? ['--skin', only[0], '--skins-only', only.join(',')] : [])],
+        // The model checked above, named: the porter reads that one and no other
+        [carDir, glb, '--kn5', kn5, '--skins-out', skinsOut, '--report', reportPath, ...(only ? ['--skin', only[0], '--skins-only', only.join(',')] : [])],
         { withPackages: ['numpy', 'pillow'], requirements: null },
       );
       const port = JSON.parse(readFileSync(reportPath, 'utf8')) as PortReport;

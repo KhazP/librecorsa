@@ -11,7 +11,7 @@
  * The detection runs Python through uv, and is skipped without it.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { VEHICLE_MODELS } from '../../src/lib/cars/vehicle-models';
@@ -184,6 +184,30 @@ async function main(): Promise<void> {
     write(join(other, 'model_main.kn5'), 'sc6969 a bigger plain model');
     write(join(other, 'model_main_lod_b.kn5'), 'sc6969');
     check('else the largest kn5 that is no LOD or collider', findKn5(other) === 'model_main.kn5' && kn5IsPlain(join(other, 'model_main.kn5')));
+
+    // lods.ini's LOD_0 FILE: a model inside the car folder, or none at all. Both readers agree on which file it is
+    const lods = join(tmp, 'lods_car');
+    write(join(lods, 'body_main.kn5'), 'sc6969 the model');
+    write(join(lods, 'sub', 'lod0.kn5'), 'sc6969');
+    write(join(lods, 'notes.txt'), 'sc6969');
+    write(join(tmp, 'outside.kn5'), 'sc6969 a much bigger model, outside the car folder');
+    symlinkSync(join(tmp, 'outside.kn5'), join(lods, 'linked.kn5'));
+    const lod0s = ['../outside.kn5', join(tmp, 'outside.kn5'), 'sub/../../outside.kn5', 'linked.kn5', 'notes.txt', 'sub\\lod0.kn5', './sub/lod0.kn5'];
+    const want = ['body_main.kn5', 'body_main.kn5', 'body_main.kn5', 'body_main.kn5', 'body_main.kn5', 'sub/lod0.kn5', 'sub/lod0.kn5'];
+    const ts = lod0s.map((l) => findKn5(lods, l));
+    check("lods.ini: a model outside the folder (an absolute path, '..', a link), or no .kn5, is never the model", JSON.stringify(ts) === JSON.stringify(want), JSON.stringify(ts));
+    if (uv) {
+      const py = spawnSync(
+        'uv',
+        ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'pillow', 'python', '-P', '-c',
+          "import json, sys; sys.path.insert(0, 'scripts/cars'); import port_ac_car as p; " +
+            "print(json.dumps([p.find_kn5(sys.argv[1], {'lods.ini': f'[LOD_0]\\nFILE={n}\\n'}) for n in json.loads(sys.argv[2])]))",
+          lods, JSON.stringify(lod0s)],
+        { encoding: 'utf8' },
+      );
+      const got = py.stdout.trim().split('\n').at(-1) ?? '';
+      check('... and port_ac_car.py reads lods.ini the same way', got === JSON.stringify(want).replace(/,/g, ', '), got || py.stderr.slice(-300));
+    }
 
     const licence = (files: Record<string, string>, ui = '{}') => {
       const dir = mkdtempSync(join(tmp, 'lic-'));

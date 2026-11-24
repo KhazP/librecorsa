@@ -1268,9 +1268,26 @@ def read_loose_json(path):
     return {}
 
 
+def car_model_path(car_dir, name):
+    """A model the car's data names (lods.ini's FILE), as a path inside the car folder with '/' between its folders, or
+    None: not a .kn5, an absolute path, a drive, a '..' step, a link that leads out of the folder, or no such file
+    (scripts/cars/ac-car-info.ts `carModelPath` reads it the same way)"""
+    raw = name.strip()
+    parts = raw.replace('\\', '/').split('/')
+    if not raw.lower().endswith('.kn5') or parts[0] == '' or re.match(r'^[A-Za-z]:', parts[0]) or '..' in parts:
+        return None
+    parts = [p for p in parts if p not in ('', '.')]
+    root = os.path.realpath(car_dir)
+    full = os.path.join(root, *parts)
+    if not parts or not os.path.isfile(full) or not os.path.realpath(full).startswith(root + os.sep):
+        return None
+    return '/'.join(parts)
+
+
 def find_kn5(car_dir, data=None):
-    """The car's main model: <folder name>.kn5, else the file lods.ini names for LOD_0, else the largest kn5 in the folder
-    that is neither its collider nor a lower LOD"""
+    """The car's main model: <folder name>.kn5, else the file lods.ini names for LOD_0 when it is a model inside the
+    folder (`car_model_path`), else the largest kn5 in the folder that is neither its collider nor a lower LOD (nor a link
+    out of the folder)"""
     folder = os.path.basename(os.path.normpath(car_dir))
     if os.path.isfile(os.path.join(car_dir, f'{folder}.kn5')):
         return f'{folder}.kn5'
@@ -1279,11 +1296,11 @@ def find_kn5(car_dir, data=None):
     if lods:
         cp = ini(lods)
         sec = next((s for s in cp.sections() if s.upper() == 'LOD_0'), None)
-        name = cp[sec].get('FILE', '').strip() if sec else ''
-        if name and os.path.isfile(os.path.join(car_dir, name)):
+        name = car_model_path(car_dir, cp[sec].get('FILE', '')) if sec else None
+        if name:
             return name
     lower = re.compile(r'(^collider|_lod_?[b-z]|_[b-z])\.kn5$', re.I)
-    found = [f for f in os.listdir(car_dir) if f.lower().endswith('.kn5') and not lower.search(f)]
+    found = [f for f in os.listdir(car_dir) if f.lower().endswith('.kn5') and not lower.search(f) and car_model_path(car_dir, f)]
     if not found:
         raise SystemExit(f'{car_dir}: no .kn5 model in the folder')
     return max(found, key=lambda f: os.path.getsize(os.path.join(car_dir, f)))
