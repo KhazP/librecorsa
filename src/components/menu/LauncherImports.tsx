@@ -9,6 +9,7 @@ import {
   cancelJob,
   LauncherError,
   launcherPresence,
+  openLauncherFolder,
   readImports,
   readJob,
   startConvert,
@@ -431,6 +432,14 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     }
   };
 
+  const onOpenFolder = async () => {
+    try {
+      await openLauncherFolder("import");
+    } catch (err) {
+      if (mounted.current) setError(tx("openFailed", { error: refusal(tx, err) }));
+    }
+  };
+
   const onCancel = async () => {
     setCancelling(true);
     after.current = null;
@@ -456,9 +465,14 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
       </div>
       <p className="lc-body m-0 max-w-[70ch]">{tx("intro")}</p>
       {state ? (
-        <Well className="flex flex-col gap-1 px-3.5 py-2.5">
-          <span className="lc-hint">{tx("folder")}</span>
-          <span className="lc-mono text-[13px] break-all text-lc-chalk">{state.importDir}</span>
+        <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="lc-hint">{tx("folder")}</span>
+            <span className="lc-mono text-[13px] break-all text-lc-chalk">{state.importDir}</span>
+          </span>
+          <Button size="sm" variant="secondary" icon={<Icon name="browse" />} onClick={() => void onOpenFolder()}>
+            {tx("openFolder")}
+          </Button>
         </Well>
       ) : null}
 

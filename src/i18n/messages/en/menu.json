@@ -418,6 +418,19 @@
     "confirmReload": "Reload",
     "notNow": "Not now"
   },
+  "launcherUpdate": {
+    "ready": "LibreCorsa {version} is ready",
+    "restart": "Restart to update",
+    "available": "LibreCorsa {version} is out",
+    "download": "Download",
+    "failed": "LibreCorsa {version} couldn't be installed",
+    "restarting": "Restarting LibreCorsa…",
+    "notBack": "LibreCorsa didn't come back. Start it again.",
+    "restartFailed": "LibreCorsa couldn't restart: {error}",
+    "confirmTitle": "Restart LibreCorsa for the update?",
+    "confirmRestart": "Restart",
+    "notNow": "Not now"
+  },
   "loading": {
     "tipMenu": "Esc opens Garage, corner jump, AI races and multiplayer.",
     "tipBraking": "Brake straight, then trail off into the apex.",
@@ -706,12 +719,17 @@
     "restart": "Restart now",
     "switchedOff": "Mods are off for this visit (?mods=off in the address). Switch off or remove a broken package, then restart with them on.",
     "storageUnavailable": "This browser can't keep mods here: a private window, or a page not served over https. The offline launcher's mods folder works instead.",
-    "folderNote": "Packages in the mods folder beside the game are listed here too. To remove one, delete its folder."
+    "folderNote": "Packages in the mods folder beside the game are listed here too. To remove one, delete its folder.",
+    "launcherFolderNote": "Packages in your mods folder are listed here too. Put a package's folder there to add it, and delete it to remove the package.",
+    "openFolder": "Open folder",
+    "openFailed": "The folder couldn't be opened:"
   },
   "modConvert": {
     "title": "Convert from another game",
     "intro": "Copy a circuit's or a car's folder from Assetto Corsa or Speed Dreams into the launcher's import folder, then convert it here into a mod package. A circuit you modelled in Blender works too: its .glb export beside its settings .json.",
     "folder": "Import folder",
+    "openFolder": "Open folder",
+    "openFailed": "The folder couldn't be opened: {error}",
     "refresh": "Refresh",
     "empty": "Nothing in the import folder yet. Copy a circuit's or a car's folder there, then refresh.",
     "kindAcTrack": "Assetto Corsa circuit",

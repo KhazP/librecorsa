@@ -99,8 +99,12 @@ export class LauncherError extends Error {
   }
 }
 
-/** The launcher listens on 127.0.0.1 only (launcher/main.go); anywhere else there is nothing to ask */
-const onLoopback = (): boolean => typeof window !== "undefined" && /^(127\.0\.0\.1|localhost)$/.test(window.location.hostname);
+/**
+ * The launcher listens on 127.0.0.1 only (launcher/main.go), and serves a production build: anywhere else, and on a
+ * clone's dev server, there is nothing to ask
+ */
+const onLoopback = (): boolean =>
+  typeof window !== "undefined" && process.env.NODE_ENV === "production" && /^(127\.0\.0\.1|localhost)$/.test(window.location.hostname);
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -153,3 +157,84 @@ export const startToolchain = async (): Promise<LauncherJob> => (await call<{ jo
 export const cancelJob = async (): Promise<void> => {
   await call("POST", "/__launcher/convert/cancel");
 };
+
+/** The player's folders the launcher opens in Finder, Explorer or the file manager (launcher/appapi.go) */
+export type LauncherFolder = "mods" | "import";
+
+export const openLauncherFolder = async (folder: LauncherFolder): Promise<void> => {
+  await call("POST", "/__launcher/open-folder", { folder });
+};
+
+/** The launcher's own update (launcher/update.go), as GET /__launcher/update answers */
+export interface LauncherUpdate {
+  /** The running launcher's version; `run` changes with each start, so a page waiting through a restart sees it */
+  version: string;
+  run: string;
+  /**
+   * "ready": a newer release is downloaded, to install with a restart; "available": one is out that this launcher
+   * can't install itself (downloaded by hand from `releaseUrl`); "failed": the newer one couldn't be installed
+   */
+  state: "none" | "downloading" | "ready" | "available" | "failed";
+  latest?: string;
+  selfUpdate: boolean;
+  reason?: string;
+  error?: string;
+  releaseUrl: string;
+}
+
+export const readLauncherUpdate = (): Promise<LauncherUpdate> => call("GET", "/__launcher/update");
+
+/** Installs the downloaded update: the launcher stops, a new one takes the game's window over (`run` changes) */
+export const restartLauncherForUpdate = async (): Promise<void> => {
+  await call("POST", "/__launcher/update/restart");
+};
+
+/** How often an open page of the game tells the launcher so (it quits 2 minutes after the last; launcher/lifetime.go) */
+const HEARTBEAT_MS = 30_000;
+
+const pageId = (): string => {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return `page-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+};
+
+/**
+ * Tells the launcher, while the game runs under it, that this page is open: at once and every 30 s, and that it
+ * goes when it closes or reloads (pagehide). The launcher quits once no page of the game is left, when it has no
+ * browser window of its own to watch. Returns the stop.
+ */
+export function startLauncherHeartbeat(): () => void {
+  if (!onLoopback()) return () => {};
+  const page = pageId();
+  let timer: number | undefined;
+  let stopped = false;
+  const beat = (closing: boolean): void => {
+    void fetch("/__launcher/alive", {
+      method: "POST",
+      headers: { ...HEADER, "Content-Type": "application/json" },
+      body: JSON.stringify({ page, closing }),
+      cache: "no-store",
+      credentials: "same-origin",
+      // A page that is going still gets its last word out
+      keepalive: closing,
+    }).catch(() => {});
+  };
+  const onHide = (): void => beat(true);
+  const onShow = (e: PageTransitionEvent): void => {
+    // Back from the browser's page cache: open again
+    if (e.persisted) beat(false);
+  };
+  void launcherPresence().then((p) => {
+    if (stopped || p === "none") return;
+    beat(false);
+    timer = window.setInterval(() => beat(false), HEARTBEAT_MS);
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("pageshow", onShow);
+  });
+  return () => {
+    stopped = true;
+    window.clearInterval(timer);
+    window.removeEventListener("pagehide", onHide);
+    window.removeEventListener("pageshow", onShow);
+  };
+}

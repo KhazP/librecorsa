@@ -6,6 +6,7 @@ import { Button, ConfirmDialog, EmptyState, Toggle, Well, cx } from "@/component
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { LauncherImports } from "@/components/menu/LauncherImports";
+import { launcherPresence, openLauncherFolder, type LauncherPresence } from "@/lib/mods/launcher-imports";
 import { REPO_URL } from "@/lib/site";
 import { modDefinitions } from "@/lib/mods/mod-content";
 import { modsState, modsSwitchedOff, readPackages, type LoadedPackage } from "@/lib/mods/mod-loader";
@@ -81,6 +82,20 @@ export const ModsPanel: React.FC = () => {
   const listReq = useRef(0);
   const mounted = useRef(true);
   const storage = modsStorageAvailable();
+  // Under the launcher, in its own window: the mods folder is the player's (Documents/LibreCorsa/mods), opened from here
+  const [launcher, setLauncher] = useState<LauncherPresence>("none");
+  useEffect(() => {
+    void launcherPresence().then((p) => {
+      if (mounted.current) setLauncher(p);
+    });
+  }, []);
+  const openFolder = async () => {
+    try {
+      await openLauncherFolder("mods");
+    } catch (err) {
+      if (mounted.current) setNote({ tone: "bad", text: tx("openFailed"), errors: [err instanceof Error ? err.message : String(err)] });
+    }
+  };
 
   const refresh = useCallback(() => {
     const req = ++listReq.current;
@@ -301,7 +316,16 @@ export const ModsPanel: React.FC = () => {
           ))}
         </ul>
       )}
-      {packages.some((p) => p.source === "folder") ? <p className="lc-hint m-0">{tx("folderNote")}</p> : null}
+      {launcher === "session" ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <p className="lc-hint m-0 max-w-[70ch]">{tx("launcherFolderNote")}</p>
+          <Button size="sm" variant="secondary" icon={<Icon name="browse" />} onClick={() => void openFolder()}>
+            {tx("openFolder")}
+          </Button>
+        </div>
+      ) : packages.some((p) => p.source === "folder") ? (
+        <p className="lc-hint m-0">{tx("folderNote")}</p>
+      ) : null}
 
       <ModCatalogue installed={packages} claim={claim} blocked={held} onInstalled={packageAdded} />
       <LauncherImports onConverted={packageAdded} onRestart={restart} />
