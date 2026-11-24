@@ -3,7 +3,7 @@
  *
  * Deployed automatically when a car retires on/near the road or a double-yellow hazard persists (`VSC_TRIGGER_S`),
  * neutralizing the field without spawning a physical pace car:
- *  - Every car follows a reference VSC pace (`VSC_PACE_SHARE` of the track's optimal speed, clamped to
+ *  - Every car follows a reference VSC pace (`VSC_PACE_SHARE` of its own racing speed there, clamped to
  *    `[VSC_MIN_SPEED_MS, VSC_MAX_SPEED_MS]`), holding gaps across the field.
  *  - No overtaking and no overtaking aids (Straight Mode / DRS / Overtake Mode) while VSC is active.
  *  - The player manages an FIA-style live time delta (`deltaS`): positive (+) = safe, negative (−) = too fast.
@@ -65,7 +65,7 @@ export interface VscUpdateInput {
   hasDoubleYellow: boolean;
   /** Player forward speed (m/s) */
   playerSpeedMs: number;
-  /** Track optimal racing speed at the player's current position (km/h) */
+  /** The player's car's own racing speed at its current position (km/h): its VSC pace is a share of it */
   playerOptimalKmh: number;
   /** True when player delta should be judged (human driving, still running) */
   judgePlayer: boolean;

@@ -2577,7 +2577,8 @@ export class AiOpponentField implements AiRace {
 
     let cap = this.rollingFormation ? this.rollingPaceMs : Infinity;
     if (this.vsc.active) {
-      cap = Math.min(cap, vscReferenceSpeedMs(sample.optimalSpeedKmh));
+      // The car's own VSC pace, the one its delta is judged by (`updateVsc`)
+      cap = Math.min(cap, vscReferenceSpeedMs(this.ownSpeedMs(me) * 3.6));
     }
     const targetLat = line + (sim.aiLineBiasM ?? 0);
     const corridor = CAR_WID_M + 0.55;
@@ -3064,7 +3065,8 @@ export class AiOpponentField implements AiRace {
     const raceTotalM = this.raceLaps * L;
     const finalLapClosing = raceTotalM > 0 && leaderDistM >= raceTotalM - 0.4 * L;
     const me = this.cars.find((c) => c.isPlayer);
-    const playerOptimalKmh = me ? this.track.getSampleAtDistance(me.sim.sMeters).optimalSpeedKmh : 180;
+    // The VSC pace is a share of the car's own (a road car at full pace kept a positive delta against the circuit's)
+    const playerOptimalKmh = me ? this.ownSpeedMs(me) * 3.6 : 180;
     const judgePlayer = Boolean(me && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot);
     const events = this.vsc.update({
       dt,

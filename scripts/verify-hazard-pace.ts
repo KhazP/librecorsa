@@ -1,11 +1,13 @@
 /**
- * Hazards judged against a car's own pace (`isHazardSpeed`, `hazardPaceProfile`, `AiOpponentField.isHazard`):
+ * Hazards judged against a car's own pace (`isHazardSpeed`, `hazardPaceProfile`, `AiOpponentField.isHazard`), and the
+ * VSC pace taken from it:
  *   npx tsx scripts/verify-hazard-pace.ts
  *
  * A car is a hazard when it crawls for itself: well under the speed its own model carries there, not under the
  * circuit's speed profile, which is the LC26's. A road car at its normal pace through a hairpin or up a climb is none;
  * the same car at half its corner speed, or stopped, is. A queue braking early into a corner is still racing, and a car
- * held up close behind a car no faster is queuing: the car holding the jam up is the hazard.
+ * held up close behind a car no faster is queuing: the car holding the jam up is the hazard. The VSC pace the player is
+ * held to and the autopilot drives to is a share of the car's own speed too.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
@@ -13,6 +15,7 @@ import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
 import { hazardPaceProfile, isHazardSpeed } from '../src/lib/sim/ai-racecraft';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { TrackEnvironment } from '../src/lib/sim/track-environment';
+import { VSC_PACE_SHARE, vscReferenceSpeedMs } from '../src/lib/sim/vsc';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 
 const failures: string[] = [];
@@ -87,6 +90,7 @@ console.log('\n== AiOpponentField on RISE short (road cars)');
       isHazard(c: Car): boolean;
       ownSpeedMs(c: Car, hazard?: boolean): number;
       vsc: { _phase: string };
+      updateVsc(dt: number): void;
     };
     f.phase = 'racing';
     f.raceTimeS = 90;
@@ -141,6 +145,28 @@ console.log('\n== AiOpponentField on RISE short (road cars)');
     place(ai, apexS, 0.5);
     check('under the VSC, stopped: still a hazard', f.isHazard(ai));
     f.vsc._phase = 'none';
+
+    // The VSC pace on the main straight (~400 m): a share of the car's own top end, not of the LC26's
+    me.sim.teleportToDistance(400, 40, 0);
+    const ownStraight = f.ownSpeedMs(me);
+    const circuit = track.getSampleAtDistance(400).optimalSpeedKmh / 3.6;
+    check('a road car\'s own speed down the straight is its own (≤ its 52 m/s top end)', ownStraight < 53 && ownStraight > 35, `${f1(ownStraight)} vs circuit ${f1(circuit)} m/s`);
+    check('its VSC pace there is a share of that, under its top speed', vscReferenceSpeedMs(ownStraight * 3.6) < 0.7 * ownStraight + 1e-9, `${f1(vscReferenceSpeedMs(ownStraight * 3.6))} m/s (${VSC_PACE_SHARE} share)`);
+    // The player's car on autopilot under the VSC drives to that pace, not to the circuit's share (over its top speed)
+    me.sim.aiAutopilot = true;
+    f.vsc._phase = 'deployed';
+    (field as unknown as { capPlayerAutopilot(L: number, dt: number): void }).capPlayerAutopilot(track.totalLengthM, 1 / 120);
+    const cap = me.sim.aiSpeedCapMs ?? Infinity;
+    check('the autopilot\'s VSC cap is its own VSC pace', Math.abs(cap - vscReferenceSpeedMs(ownStraight * 3.6)) < 0.5 && cap < vscReferenceSpeedMs(circuit * 3.6) - 5, `cap ${f1(cap)} vs circuit share ${f1(vscReferenceSpeedMs(circuit * 3.6))} m/s`);
+    // Driven at full pace under the VSC, the delta runs out (it used to grow: the circuit's share was over its top speed)
+    me.sim.aiAutopilot = false;
+    const delta = () => (field as unknown as { vsc: { deltaS: number } }).vsc.deltaS;
+    const d0 = delta();
+    for (let k = 0; k < 120; k++) {
+      me.sim.teleportToDistance(400, ownStraight, 0);
+      f.updateVsc(1 / 60);
+    }
+    check('at full pace down the straight under the VSC, the player\'s delta falls', delta() < d0 - 0.5, `${d0.toFixed(2)} → ${delta().toFixed(2)} s in 2 s`);
   }
 }
 
