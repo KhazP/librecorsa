@@ -78,7 +78,7 @@ import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from
 import { CarDamage } from "@/lib/sim/car-damage";
 import { damageStatusOf, PlayerDamageFeed, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
 import { CoolDown } from "@/lib/sim/cool-down";
-import { PodiumDirector } from "@/lib/render/podium-shot";
+import { PodiumDirector, type PodiumView } from "@/lib/render/podium-shot";
 import { PreRaceShowDirector, type ShowGridRow } from "@/lib/render/pre-race-show";
 import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import type { BadgeContext } from "@/lib/net/awards";
@@ -2840,6 +2840,8 @@ export class DriveSession {
       camera.layers.enable(OVERLAY_LAYER);
     });
     this.podium = podium;
+    // How the full-screen podium's aerial is filmed (set each frame)
+    const podiumView: PodiumView = { fogDensity: 0.00035, still: false };
     // The career's pre-race show takes the camera while it plays; the drive's cameras start over after it
     const preRaceShow = new PreRaceShowDirector(track, () => {
       cameraRig.reset();
@@ -4445,7 +4447,8 @@ export class DriveSession {
             still: reducedMotion?.matches ?? false,
           });
         };
-        const podiumView = { fogDensity: scene.fog instanceof THREE.FogExp2 ? scene.fog.density : 0.00035, still: reducedMotion?.matches ?? false };
+        podiumView.fogDensity = scene.fog instanceof THREE.FogExp2 ? scene.fog.density : 0.00035;
+        podiumView.still = reducedMotion?.matches ?? false;
         if (!placeShowCamera() && !podium.placeCamera(camera, podiumView)) cameraRig.update({
           dt: drawDtS,
           nowMs,
