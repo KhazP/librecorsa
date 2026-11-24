@@ -616,6 +616,8 @@ interface FieldCar {
   biasRateMs: number;
   /** Race time until which it stays a hazard (earlyHazard) */
   hazardUntilS: number;
+  /** Off the start the car has got going (`hasLaunched`): until then being slow is no hazard */
+  launched: boolean;
   stuckS: number;
   peer: InterpolatedPeerState;
   /** Race time at the chequered flag (s); null while running */
@@ -670,6 +672,12 @@ export const DOUBLE_YELLOW_PACE = 0.72;
  * distance of each other (m); up once its cause has lasted `DOUBLE_ON_S`, down once it has been gone `DOUBLE_OFF_S`
  */
 const DOUBLE_STOPPED_MS = 2;
+/** Off the start a car is judged as a hazard once it has got going (`hasLaunched`), or after this long whatever (s) */
+const HAZARD_LAUNCH_MAX_S = 40;
+/** …and before that only if it sits stalled (under `DOUBLE_STOPPED_MS`) past the lights' reaction window (s) */
+const HAZARD_STALL_AFTER_S = 8;
+/** Off the start, got going: half the road's speed, or 12 m/s where the road is slow (well clear of `isHazardSpeed`) */
+export const hasLaunched = (speedMs: number, roadSpeedMs: number): boolean => speedMs >= Math.max(12, 0.5 * roadSpeedMs);
 const DOUBLE_CLUSTER_M = 250;
 const DOUBLE_ON_S = 0.5;
 const DOUBLE_OFF_S = 2;
@@ -1371,6 +1379,7 @@ export class AiOpponentField implements AiRace {
       biasTargetM: 0,
       biasRateMs: 0,
       hazardUntilS: 0,
+      launched: false,
       stuckS: 0,
       peer: {
         peerId: id,
@@ -1493,6 +1502,7 @@ export class AiOpponentField implements AiRace {
       car.biasM = car.ai ? clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
       if (car.ai) car.ai.aiLineBiasM = car.biasM;
       car.stuckS = 0;
+      car.launched = !standing;
       car.prevS = car.sim.sMeters;
       car.clock.reset(car.sim.sMeters);
       // After the per-race state above is cleared (newLap reads finishTimeS)
@@ -2852,6 +2862,13 @@ export class AiOpponentField implements AiRace {
     const early = this.rc.earlyHazard > 0;
     if (early ? car.distM - car.clock.startDistM < 50 : this.raceTimeS < 10 || car.distM - car.clock.startDistM < 150) return false;
     const road = this.track.getSampleAtDistance(car.sim.sMeters).optimalSpeedKmh / 3.6;
+    // A slow car (a road car, the back of a long grid) is still getting up to speed well past 10 s: not a hazard until it
+    // has got going, unless it is really stalled once the lights' reaction window is over; judged as any other after
+    // HAZARD_LAUNCH_MAX_S whatever
+    if (!early && !car.launched) {
+      if (hasLaunched(Math.abs(car.sim.vxMs), road) || this.raceTimeS > HAZARD_LAUNCH_MAX_S) car.launched = true;
+      else if (!(Math.abs(car.sim.vxMs) < DOUBLE_STOPPED_MS && this.raceTimeS > HAZARD_STALL_AFTER_S)) return false;
+    }
     const now = isHazardSpeed(Math.abs(car.sim.vxMs), road) || Math.abs(this.headingErr(car.sim)) > (early ? 0.6 : 1.2);
     if (!early) return now;
     // (simplix keeps a dangerous car flagged for 2 s: a car sliding back to straight is still where it went wrong)
