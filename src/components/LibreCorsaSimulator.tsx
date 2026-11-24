@@ -27,6 +27,7 @@ import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
+import { recordDrivingSlice, recordLapStats, recordRaceStats } from "@/lib/sim/driver-stats";
 import {
   boardKeyOf,
   boardStatusOf,
@@ -1014,6 +1015,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
+      if (recording.data.length > 0) {
+        recordLapStats(recording.trackLengthM ?? 0, 0, carId, trackId);
+      }
       if (settingsRef.current.hud.lapSummary) {
         // A new card: an upload still out for the last one must not land on it
         submitReqRef.current++;
@@ -1961,6 +1965,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     carId,
     kind: raceKind === "ai" ? "ai_race" : raceKind === "mp" ? (inScheduledRace ? "open_race" : "room_race") : null,
   });
+  const recordedStatsRaceRef = useRef<number | null>(null);
+  useEffect(() => {
+    const r = telemetry.race;
+    const runId = telemetry.runId ?? 0;
+    const me = r?.standings.find((e) => e.isPlayer);
+    if (!r || (!me?.finished && r.phase !== "finished")) return;
+    if (recordedStatsRaceRef.current === runId) return;
+    recordedStatsRaceRef.current = runId;
+    const fastest = r.standings.reduce<number | null>((m, e) => (e.bestLapMs && (m === null || e.bestLapMs < m) ? e.bestLapMs : m), null);
+    recordRaceStats(r.position, Boolean(fastest && me?.bestLapMs === fastest), r.totalLaps ?? r.lap);
+  }, [telemetry.race, telemetry.runId]);
   /**
    * Out of this open race (the others finish without this player) and into the next one, waited for on the title's
    * Multiplayer panel, where its entry counts down
@@ -1979,7 +1994,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const pair = `${trackId}|${carId}`;
     const d = driveTime.current;
     const now = performance.now();
-    if (d.since !== null) d.ms += now - d.since;
+    if (d.since !== null) {
+      const sliceMs = now - d.since;
+      d.ms += sliceMs;
+      const [prevTrack, prevCar] = d.pair.split("|");
+      recordDrivingSlice(sliceMs / 1000, prevCar || carId, prevTrack || trackId);
+    }
     d.since = phase === "driving" && !paused ? now : null;
     if (d.pair !== pair) {
       d.pair = pair;

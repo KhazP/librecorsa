@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icons";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { CLAIMED_TELEMETRY_PORTS, DEFAULT_TELEMETRY_PORT } from "@/lib/input/device-input";
 import { sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
+import { averageFinishOf, hydrateDriverStatsFromBestLaps, loadDriverStats, topKeyOf } from "@/lib/sim/driver-stats";
 import { autoUpload, telemetryOut } from "../defs";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
@@ -61,6 +62,60 @@ function ColourRow() {
         </label>
       </div>
     </SettingRow>
+  );
+}
+
+function DriverStatsSection() {
+  const [stats, setStats] = useState(() => loadDriverStats());
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateDriverStatsFromBestLaps().then((next) => {
+      if (!cancelled) setStats(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const favCar = topKeyOf(stats.carUsageS) ?? "—";
+  const favTrack = topKeyOf(stats.trackUsageS) ?? "—";
+  const mins = Math.floor(stats.totalDrivingS / 60);
+  const hrs = Math.floor(mins / 60);
+  const timeLabel = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+  return (
+    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-lc-line pt-3 sm:grid-cols-4">
+      <div className="flex flex-col">
+        <span className="lc-lbl">Driving Time</span>
+        <span className="lc-mono text-[14px] font-bold text-lc-chalk">{timeLabel}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Distance</span>
+        <span className="lc-mono text-[14px] font-bold text-lc-chalk">{(stats.totalDistanceM / 1000).toFixed(1)} km</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Races / Wins</span>
+        <span className="lc-mono text-[14px] font-bold text-lc-chalk">{stats.racesCompleted} / {stats.wins}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Avg Finish</span>
+        <span className="lc-mono text-[14px] font-bold text-lc-volt">{averageFinishOf(stats)}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Podiums</span>
+        <span className="lc-mono text-[13px] font-semibold text-lc-fog">{stats.podiums}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Fastest Laps</span>
+        <span className="lc-mono text-[13px] font-semibold text-lc-fog">{stats.fastestLaps}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Top Car</span>
+        <span className="truncate text-[13px] font-semibold text-lc-fog">{favCar}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="lc-lbl">Top Track</span>
+        <span className="truncate text-[13px] font-semibold text-lc-fog">{favTrack}</span>
+      </div>
+    </div>
   );
 }
 
@@ -180,6 +235,7 @@ export function DriverTab() {
       <ColourRow />
       </>
     }>
+      <DriverStatsSection />
     </SettingsCard>
   );
 }
