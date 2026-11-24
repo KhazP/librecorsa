@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import {
   cancelJob,
-  launcherHasImports,
   LauncherError,
+  launcherPresence,
   readImports,
   readJob,
   startConvert,
@@ -19,6 +19,7 @@ import {
   type LauncherCredit,
   type LauncherImports as ImportsState,
   type LauncherJob,
+  type LauncherPresence,
 } from "@/lib/mods/launcher-imports";
 
 /** How often a running job's status is asked for */
@@ -91,6 +92,8 @@ const refusal = (tx: Tx, err: unknown): string => {
         return tx("hintUnknown");
       case "bad-folder":
         return tx("errorGone");
+      case "session":
+        return tx("noSession");
       default:
         return err.message;
     }
@@ -262,7 +265,8 @@ export interface LauncherImportsProps {
  */
 export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, onRestart }) => {
   const tx = useTranslations("menu.modConvert");
-  const [present, setPresent] = useState(false);
+  const [presence, setPresence] = useState<LauncherPresence>("none");
+  const present = presence === "session";
   const [state, setState] = useState<ImportsState | null>(null);
   const [job, setJob] = useState<LauncherJob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -292,10 +296,10 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
 
   useEffect(() => {
     mounted.current = true;
-    void launcherHasImports().then((yes) => {
-      if (!mounted.current || !yes) return;
-      setPresent(true);
-      void refresh();
+    void launcherPresence().then((p) => {
+      if (!mounted.current) return;
+      setPresence(p);
+      if (p === "session") void refresh();
     });
     return () => {
       mounted.current = false;
@@ -356,7 +360,19 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     }
   }, [job, refresh, onConverted, convert]);
 
-  if (!present) return null;
+  if (presence === "none") return null;
+  if (!present) {
+    return (
+      <section className="flex flex-col gap-3 border-t border-lc-line pt-4" aria-labelledby="lc-launcher-imports">
+        <h3 id="lc-launcher-imports" className="lc-h3 m-0">
+          {tx("title")}
+        </h3>
+        <Well className="px-3.5 py-2.5">
+          <p className="lc-body m-0 text-lc-caution">{tx("noSession")}</p>
+        </Well>
+      </section>
+    );
+  }
 
   const tools = state?.toolchain;
   const downloadBytes = (tools?.downloads ?? []).reduce((n, d) => n + d.bytes, 0);

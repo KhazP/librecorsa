@@ -765,6 +765,7 @@
     "errorBusy": "Something is already converting or downloading: wait for it, or stop it.",
     "errorNotReady": "The converter's tools aren't downloaded yet.",
     "errorLink": "The folder holds a link to somewhere else: copy the files themselves into it.",
-    "errorGone": "That folder isn't in the import folder any more."
+    "errorGone": "That folder isn't in the import folder any more.",
+    "noSession": "Converting works only in the game window the launcher opened. Open the game from the launcher: start it again, or use the address it printed when it started."
   }
 }

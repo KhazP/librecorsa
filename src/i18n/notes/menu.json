@@ -455,5 +455,6 @@
   "upNext.personalBest": "Row on the title screen's Up next sheet: the player's best lap for this circuit and car.",
   "upNext.oldPhysics": "Tag beside a best lap set before the current physics. Short.",
   "upNext.noTimeYet": "Shown when the player has no lap for this circuit and car.",
-  "modCatalogue.errorInsecure": "A redirect took the download from a secure (https) address to one that isn't. https is a protocol name: keep it as it is."
+  "modCatalogue.errorInsecure": "A redirect took the download from a secure (https) address to one that isn't. https is a protocol name: keep it as it is.",
+  "modConvert.noSession": "The launcher hands its own game window a key when it opens it; a window opened another way (another browser, a typed address) has none, and the launcher refuses to convert from it."
 }
