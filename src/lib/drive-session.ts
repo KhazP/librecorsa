@@ -2017,7 +2017,9 @@ export class DriveSession {
       const isRangeInput = e.target instanceof HTMLInputElement && e.target.type === "range";
       if (
         (!isRangeInput && e.target instanceof HTMLInputElement) ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
         return;
       }
@@ -2138,8 +2140,17 @@ export class DriveSession {
 
       const action = keyLookup.get(code);
       if (!action) return;
-      // Prevent browser built-in shortcuts (e.g. F7 caret-browsing prompt on Chrome/Edge/Firefox) for bound actions
-      if (action === "freeCamera" || /^F\d+$/.test(code)) e.preventDefault();
+      // Prevent browser built-in shortcuts (F7 caret browsing; Space activating a focused HUD button or scrolling, and
+      // arrows scrolling while actively driving — never intercepting ReplayBar, RaceResults, or open dialogs/menus)
+      const inOverlayNav =
+        e.target instanceof Element && e.target.closest('[role="dialog"], [role="listbox"], [role="menu"]') !== null;
+      if (
+        action === "freeCamera" ||
+        /^F\d+$/.test(code) ||
+        (!replay.active && !coolDown.active && !inOverlayNav && (code === "Space" || code.startsWith("Arrow")))
+      ) {
+        e.preventDefault();
+      }
       // The camera key: a tap changes the view (on release), held it opens the seat panel (no seat panel during replay)
       if (action === "camera") {
         if (replay.active) {
