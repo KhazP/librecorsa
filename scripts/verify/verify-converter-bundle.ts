@@ -76,6 +76,7 @@ async function main(): Promise<void> {
 
     const all = files(out);
     check("no TypeScript source (runTsx and build_track.py then run the bundles)", !all.some((f) => /\.(ts|tsx)$/.test(f)), all.filter((f) => /\.tsx?$/.test(f)).join(", "));
+    check("nothing from a hidden folder (an importer's download cache)", !all.some((f) => f.split("/").some((part) => part.startsWith("."))), all.filter((f) => f.includes("/.")).slice(0, 3).join(", "));
     check("no native module and no node_modules", !all.some((f) => f.endsWith(".node") || f.includes("node_modules/")));
     check("no Python cache", !all.some((f) => f.includes("__pycache__")));
     const size = all.reduce((n, f) => n + statSync(join(out, f)).size, 0);

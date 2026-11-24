@@ -183,7 +183,8 @@ function copyPython() {
       for (const e of readdirSync(from, { withFileTypes: true })) {
         const p = join(from, e.name);
         if (e.isDirectory()) {
-          if (e.name !== "__pycache__" && e.name !== "sources") walk(p);
+          // Never a cache (an importer's downloads, scripts/mods/.cache) or another hidden folder
+          if (e.name !== "__pycache__" && e.name !== "sources" && !e.name.startsWith(".")) walk(p);
         } else if (e.isFile() && PYTHON_FILE.test(e.name) && !PYTHON_LEFT_OUT.has(e.name) && !/\.bak/.test(e.name)) {
           const rel = slash(relative(repoDir, p));
           mkdirSync(dirname(join(outDir, rel)), { recursive: true });
