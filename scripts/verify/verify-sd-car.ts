@@ -285,8 +285,11 @@ check("the official list: FAL clear; \"GNU Public License (v2?)\", \"CC-BY\" and
 {
   const pinned = Object.entries(readPins().cars).find(([, p]) => p.commit && p.license === "Free Art License")!;
   const [pinName, pin] = pinned;
+  // In the cache: a download record (.sd-source.json) counts only there, as a folder from elsewhere could claim one
+  mkdirSync(SD_CACHE_DIR, { recursive: true });
+  const inCache = mkdtempSync(join(SD_CACHE_DIR, ".verify-licence-"));
   const carDir = (name: string, files: Record<string, string> = {}) => {
-    const d = join(tmp, "licence", Math.random().toString(36).slice(2), name);
+    const d = join(inCache, Math.random().toString(36).slice(2), name);
     mkdirSync(d, { recursive: true });
     writeFileSync(join(d, `${name}.xml`), carXml());
     for (const [f, t] of Object.entries(files)) writeFileSync(join(d, f), t);
@@ -330,9 +333,10 @@ check("the official list: FAL clear; \"GNU Public License (v2?)\", \"CC-BY\" and
   const header = carDir("hdr-car", { "readme.txt": FAL });
   writeFileSync(join(header, "hdr-car.xml"), carXml().replace("(at your option) any later version.", "(at your option) any later version. All rights reserved for the logos."));
   check("a restriction in the car's XML header is read", !isShareable(carLicence(header, "hdr-car", [], { pin: null }).reading));
-  const category = join(tmp, "licence", "Restricted.xml");
+  const category = join(inCache, "Restricted.xml");
   writeFileSync(category, "<?xml version=\"1.0\"?>\n<!-- Copyright 2010 X. Do not redistribute. -->\n<params name=\"cat\"/>");
   check("…and one in its category's", !isShareable(carLicence(carDir("cat-car", { "readme.txt": FAL }), "cat-car", [], { pin: null, category }).reading));
+  rmSync(inCache, { recursive: true, force: true });
 }
 const pins = readPins();
 check("the pinned cars: every one at a commit or a sha256-checked zip", Object.values(pins.cars).every((c) => (c.repo && /^[0-9a-f]{40}$/.test(c.commit ?? "")) || (c.zip && /^[0-9a-f]{64}$/.test(c.sha256 ?? ""))) && /^[0-9a-f]{40}$/.test(pins.data.commit), `${Object.keys(pins.cars).length} cars`);
