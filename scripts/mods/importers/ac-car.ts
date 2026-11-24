@@ -98,9 +98,10 @@ ${PACKAGE_USAGE}`,
     const carDir = positionals[0] && resolve(positionals[0]);
     if (!carDir || !existsSync(carDir) || !statSync(carDir).isDirectory()) throw new Error('name the car\'s folder (content/cars/<car> in Assetto Corsa)');
     const ui = readUiCar(carDir);
-    const kunos = kunosContent(carDir, ui);
-    if (kunos) throw new Error(`refused: ${kunos}. Kunos's cars are the game's own content, never converted or packaged.`);
     const mod = new ModData(carDir);
+    const lodFiles = mod.sections('lods.ini').map((s) => mod.text('lods.ini', s, 'FILE') ?? '').filter(Boolean);
+    const kunos = kunosContent(carDir, ui, lodFiles);
+    if (kunos) throw new Error(`refused: ${kunos}. Kunos's cars are the game's own content, never converted or packaged.`);
     if (!mod.present) throw new Error(`${carDir}: no car data (data/ or data.acd with car.ini): not an Assetto Corsa car folder`);
     const kn5 = findKn5(carDir, mod.text('lods.ini', 'LOD_0', 'FILE'));
     if (!kn5) throw new Error(`${carDir}: no .kn5 model in the folder`);

@@ -168,6 +168,22 @@ async function main(): Promise<void> {
     check('one of the base game\'s cars is refused', !!kunosContent(join(tmp, 'ferrari_458'), parseUiCar('{}')));
     check('a car whose ui_car.json names Kunos is refused', !!kunosContent(join(tmp, 'my_car'), parseUiCar('{ "author": "Kunos Simulazioni" }')));
     check("a modder's car is not Kunos's", kunosContent(join(tmp, 'pfa_vw_scirocco_53b'), parseUiCar('{ "author": "Pfalzdriver" }')) === null);
+    // A mod made of a Kunos car, however its folder is named: its models, its parent, its sound
+    const renamed = (name: string, files: Record<string, string>) => {
+      const dir = join(tmp, 'renamed', name);
+      write(join(dir, 'my_car.kn5'), 'sc6969');
+      for (const [f, text] of Object.entries(files)) write(join(dir, f), text);
+      return dir;
+    };
+    const ui0 = parseUiCar('{ "author": "Someone" }');
+    check("a renamed base-game car: its model's name gives it away", /"ferrari_458\.kn5"/.test(kunosContent(renamed('a', { 'ferrari_458.kn5': 'sc6969' }), ui0) ?? ''));
+    check('... or a lower LOD of one', !!kunosContent(renamed('b', { 'ferrari_458_lod_b.kn5': 'sc6969' }), ui0));
+    check('... a "ks_" model', !!kunosContent(renamed('c', { 'ks_porsche_911_gt3_r_2016.kn5': 'sc6969' }), ui0));
+    check("... a model lods.ini names", !!kunosContent(renamed('d', {}), ui0, ['ks_mazda_mx5_cup.kn5']));
+    check('... a ui_car.json "parent" that is a Kunos car', /version of "ferrari_458"/.test(kunosContent(renamed('e', {}), parseUiCar('{ "parent": "ferrari_458" }')) ?? ''));
+    check('... a sound bank named for one', /sfx\/ks_ferrari_488_gt3\.bank/.test(kunosContent(renamed('f', { 'sfx/ks_ferrari_488_gt3.bank': 'x' }), ui0) ?? ''));
+    check("... sfx/GUIDs.txt playing a Kunos car's events", /"ks_ferrari_488_gt3"/.test(kunosContent(renamed('g', { 'sfx/my_car.bank': 'x', 'sfx/GUIDs.txt': '{0001} event:/cars/ks_ferrari_488_gt3/engine_ext\n' }), ui0) ?? ''));
+    check("a modder's own models, bank and events are not", kunosContent(renamed('h', { 'my_car_lod_b.kn5': 'sc6969', 'sfx/my_car.bank': 'x', 'sfx/GUIDs.txt': '{0001} event:/cars/my_car/engine_ext\n' }), parseUiCar('{ "parent": "my_car_base" }')) === null);
     let refused = '';
     try {
       await importer.run([kunosDir, '--out', join(tmp, 'mods')]);

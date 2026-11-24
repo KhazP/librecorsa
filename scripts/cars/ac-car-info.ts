@@ -13,6 +13,8 @@ export interface UiCar {
   /** AC's class: `race`, `street`, … */
   class?: string;
   tags: string[];
+  /** The car whose variant it is, by folder (`parent`): AC lists them together */
+  parent?: string;
   year?: number;
   country?: string;
   author?: string;
@@ -90,6 +92,7 @@ export function parseUiCar(text: string): UiCar {
     brand: str(j.brand),
     class: str(j.class)?.toLowerCase(),
     tags: Array.isArray(j.tags) ? j.tags.filter((t): t is string => typeof t === 'string').map((t) => plainText(t)) : [],
+    parent: str(j.parent)?.toLowerCase(),
     year,
     country: str(j.country),
     author: str(j.author),
@@ -123,15 +126,44 @@ const KUNOS_CARS = new Set([
 ]);
 
 /**
- * Why a car folder is Kunos's own content (the base game's cars and its packs'), or null: its folder name, an author or
- * link naming Kunos, or a Kunos-encrypted model. Such a car is never converted, whether or not its files are encrypted
+ * Whether a name (a folder, a model's or a sound bank's file name without its extension) is one of Kunos's cars: a
+ * "ks_" car of the game or its packs, or one of the base game's, its lower LODs (`_b`, `_lod_c`, to D) included
  */
-export function kunosContent(carDir: string, ui: UiCar): string | null {
+function kunosCarName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.startsWith('ks_') || KUNOS_CARS.has(n) || KUNOS_CARS.has(n.replace(/_lod_?[b-d]$|_[b-d]$/, ''));
+}
+
+/** A folder's file names (none when it isn't there) */
+const filesIn = (dir: string): string[] => (existsSync(dir) && statSync(dir).isDirectory() ? readdirSync(dir) : []);
+
+/**
+ * Why a car folder is Kunos's own content (the base game's cars and its packs'), or null. Such a car is never
+ * converted, whether or not its files are encrypted, and neither is a mod built from one, however its folder is named:
+ * - its folder's name ("ks_…", or one of the base game's cars);
+ * - its models: any .kn5 in the folder, or that lods.ini names (`lodFiles`), named for a Kunos car;
+ * - ui_car.json: a `parent` that is a Kunos car, or an author or link naming Kunos;
+ * - its sound: a bank in sfx/ named for a Kunos car, or sfx/GUIDs.txt playing a Kunos car's events (`event:/cars/ks_…`)
+ */
+export function kunosContent(carDir: string, ui: UiCar, lodFiles: string[] = []): string | null {
   const folder = basename(resolve(carDir)).toLowerCase();
   if (folder.startsWith('ks_')) return `"${folder}" is one of Kunos's own cars (a "ks_" car from the game or its packs)`;
   if (KUNOS_CARS.has(folder)) return `"${folder}" is one of the base game's own cars`;
+  const stem = (f: string) => basename(f.replace(/\\/g, '/')).replace(/\.[^.]*$/, '');
+  const model = [...filesIn(carDir).filter((f) => /\.kn5$/i.test(f)), ...lodFiles].find((f) => kunosCarName(stem(f)));
+  if (model) return `its model "${model}" is one of Kunos's own cars'`;
+  if (ui.parent && kunosCarName(ui.parent)) return `its ui_car.json makes it a version of "${ui.parent}", one of Kunos's own cars`;
   if (/kunos/i.test(`${ui.author ?? ''} ${ui.url ?? ''}`) || /assettocorsa\.net|kunos-simulazioni\.com/i.test(ui.url ?? '')) {
     return 'its ui_car.json names Kunos Simulazioni as the author';
+  }
+  const sfx = join(carDir, 'sfx');
+  const bank = filesIn(sfx).find((f) => /\.bank$/i.test(f) && kunosCarName(stem(f)));
+  if (bank) return `its sound bank "sfx/${bank}" is one of Kunos's own cars'`;
+  const guids = filesIn(sfx).find((f) => /^guids\.txt$/i.test(f));
+  if (guids) {
+    const text = readFileSync(join(sfx, guids)).subarray(0, 1 << 20).toString('latin1');
+    const used = [...text.matchAll(/event:\/cars\/([\w.-]+)/gi)].map((m) => m[1]).find(kunosCarName);
+    if (used) return `its sfx/${guids} plays the sounds of "${used}", one of Kunos's own cars`;
   }
   return null;
 }
