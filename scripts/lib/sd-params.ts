@@ -51,10 +51,16 @@ const unescape = (s: string): string =>
     e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : (XML_ENTITIES[e] ?? m)
   );
 
-/** A number as `getValNumFromStr` reads one (strtod: leading spaces, a prefix that parses; 0 for none) */
+/**
+ * A number as `getValNumFromStr` reads one (strtod: leading spaces, a prefix that parses; 0 for none). strtod also
+ * reads "inf", "nan" and numbers past a double's range (1e500), which no converter can use: those are NaN here, for the
+ * caller to refuse
+ */
 const numOf = (s: string): number => {
+  if (/^\s*[+-]?(inf|nan)/i.test(s)) return Number.NaN;
   const m = /^\s*[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(s);
-  return m ? Number(m[0]) : 0;
+  const v = m ? Number(m[0]) : 0;
+  return Number.isFinite(v) ? v : Number.NaN;
 };
 
 /** One unit name's factor to SI, as `evalUnit` (params.cpp) has it; Celsius is an offset, handled by the caller */
@@ -156,7 +162,8 @@ export class SdParams {
     const stack: SdSection[] = [];
     let name = "";
     let sawParams = false;
-    for (const m of body.matchAll(/<(\/?)([\w:-]+)([^>]*?)(\/?)>/g)) {
+    // A tag runs to the first `>` outside its quoted values: a value may hold a `>` ("x > y" in a description)
+    for (const m of body.matchAll(/<(\/?)([\w:-]+)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g)) {
       const [, close, tag, rest, selfClose] = m;
       if (tag === "params") {
         if (!close) {
@@ -196,7 +203,11 @@ export class SdParams {
         min = Math.min(min, val);
         max = Math.max(max, val);
         const unit = a.unit ?? "";
-        cur.attrs.set(a.name, { kind: "num", val: sdUnitToSI(unit, val), min: sdUnitToSI(unit, min), max: sdUnitToSI(unit, max), unit });
+        const si = { val: sdUnitToSI(unit, val), min: sdUnitToSI(unit, min), max: sdUnitToSI(unit, max) };
+        if (![si.val, si.min, si.max].every(Number.isFinite)) {
+          throw new Error(`${file}: <attnum name="${a.name}" val="${a.val}"${a.min !== undefined ? ` min="${a.min}"` : ""}${a.max !== undefined ? ` max="${a.max}"` : ""}> is not a finite number`);
+        }
+        cur.attrs.set(a.name, { kind: "num", ...si, unit });
       } else {
         cur.attrs.set(a.name, { kind: "str", val: a.val, within: a.in !== undefined ? a.in.split(",") : [] });
       }

@@ -126,6 +126,27 @@ check("a key only the category has is merged in", params.num("Front Right Wheel"
 check("a string the category doesn't list keeps the category's value", SdParams.parse(carXml({ drive: "FWD" })).mergeOver(cat).str("Drivetrain", "type") === "RWD");
 check("a string the category lists is the car's", SdParams.parse(carXml({ turbo: "true" })).mergeOver(cat).str("Engine", "turbo") === "true");
 check("a car's sections in order, a section path read", params.sections("Engine/data points").join() === "1,2,3,4,5" && params.num("Gearbox/gears/r", "ratio") === -2);
+{
+  const quoted = SdParams.parse(`<params name="q"><section name="Car"><attstr name="description" val="lift > drag, 'quoted'"/><attnum name="mass" val="900"/></section></params>`);
+  check("a value holding a > doesn't end its tag early", quoted.str("Car", "description") === "lift > drag, 'quoted'" && quoted.num("Car", "mass") === 900, quoted.str("Car", "description"));
+  const refused = ["1e500", "inf", "-Infinity", "nan"].filter((v) => {
+    try {
+      SdParams.parse(`<params name="n"><section name="Car"><attnum name="mass" val="${v}"/></section></params>`);
+      return false;
+    } catch (err) {
+      return /not a finite number/.test((err as Error).message);
+    }
+  });
+  check("a number that isn't finite (1e500, inf, nan) is refused", refused.length === 4, refused.join(", "));
+  check("…as is one a unit takes past a double's range", (() => {
+    try {
+      SdParams.parse(`<params name="n"><section name="Car"><attnum name="mass" unit="MPa" val="1e303"/></section></params>`);
+      return false;
+    } catch {
+      return true;
+    }
+  })());
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Physics
