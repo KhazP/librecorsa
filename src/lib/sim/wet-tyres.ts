@@ -109,6 +109,69 @@ export function f1RainTraits(kind: 'intermediate' | 'wet', slickPeakC: number): 
   return { ...WET_TYRE_TRAITS[kind], tempShiftC: pack.peakTempC - slickPeakC, wetWearScale: pack.wetWearScale };
 }
 
+/**
+ * Rain-tyre design overrides relative to the base slick compound, used when a car's wet compounds carry dedicated
+ * rain physics rather than the generic `WET_TYRE_TRAITS` + slick thermal rates.
+ */
+export interface RainTyreDesign {
+  /** Water depth cleared at 200 km/h (mm) */
+  clearMm: number;
+  /** Initial tread groove depth when new (mm) */
+  treadDepthMm: number;
+  /** Dry-road extra heat multiplier (1.0 when thermal scaling below handles the wet-vs-dry balance via water cooling) */
+  dryHeatScale: number;
+  /** Multipliers applied to the base slick's thermal parameters */
+  slipHeatScale: number;
+  hysteresisScale: number;
+  surfaceToCoreScale: number;
+  surfaceCoolingScale: number;
+  coreCoolingScale: number;
+  /** Multipliers applied to the base slick's mechanical parameters (both axles) */
+  speedSensitivityScale: number;
+  camberGainScale: number;
+}
+
+/**
+ * Rain-tyre physics ratios from Nuzzi's "All F1 Tyres for VRC Formula Alpha 2023 (Wet Physics Included)" (OverTake,
+ * used with permission; see CREDITS.md). Only the rain-tyre deltas relative to the pack's own slicks and CSP wet
+ * tread geometry (`TREAD_COVER` × `TREAD_DEPTH`) are used, applied on top of LC25's slick carcass and Cxjovich's
+ * temperature / wear curves (`F1_RAIN_TYRE_PACK`):
+ *  - Water evacuation: full wet carries 3.18× the intermediate's `TREAD_COVER × TREAD_DEPTH` (`0.35 × 0.025` vs
+ *    `0.275 × 0.010`) and 2.5× the groove depth, anchoring intermediate at 1.3 mm / 2.5 mm → wet 4.14 mm / 6.25 mm.
+ *  - Thermal balance: higher sliding heat (`FRICTION_K` 1.72× inter / 1.83× wet), higher rolling hysteresis
+ *    (`ROLLING_K` 1.20× / 1.22×), lower convective air cooling (`COOL_FACTOR` 0.714× / 0.557×), and faster tread-to-core
+ *    conduction on the deep-grooved full wet (`SURFACE_TRANSFER` 1.40×). With `dryHeatScale: 1`, water cooling alone
+ *    produces the wet-vs-dry thermal split: inters sit in their 75 °C window on damp/wet tarmac and overheat past
+ *    100 °C on a dry road, while full wets sit in their 70 °C window in heavy rain and cook on damp/dry asphalt.
+ *  - Mechanical deltas vs slick: +4.3% / +4.2% sliding-speed sensitivity, −2.2% / −1.5% camber thrust gain.
+ */
+export const NUZZI_RAIN_TYRE_DESIGN: Readonly<Record<'intermediate' | 'wet', RainTyreDesign>> = {
+  intermediate: {
+    clearMm: 1.3,
+    treadDepthMm: 2.5,
+    dryHeatScale: 1.0,
+    slipHeatScale: 1.722,
+    hysteresisScale: 1.20,
+    surfaceToCoreScale: 1.0,
+    surfaceCoolingScale: 0.714,
+    coreCoolingScale: 0.714,
+    speedSensitivityScale: 1.043,
+    camberGainScale: 0.978,
+  },
+  wet: {
+    clearMm: 4.14,
+    treadDepthMm: 6.25,
+    dryHeatScale: 1.0,
+    slipHeatScale: 1.833,
+    hysteresisScale: 1.218,
+    surfaceToCoreScale: 1.40,
+    surfaceCoolingScale: 0.557,
+    coreCoolingScale: 0.557,
+    speedSensitivityScale: 1.042,
+    camberGainScale: 0.985,
+  },
+};
+
 /** Water film depth (mm) at which the road counts as damp, wet and flooded, for labels */
 export const DAMP_MM = 0.08;
 export const WET_MM = 0.5;

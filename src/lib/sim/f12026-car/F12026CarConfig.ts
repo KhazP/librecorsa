@@ -13,7 +13,7 @@
 
 import type { LutPoints } from '../lut';
 import type { EnergyManagementData } from './ers-2026';
-import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
+import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type RainTyreDesign, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -1247,12 +1247,21 @@ export function deriveRainCompound(
   kind: 'intermediate' | 'wet',
   tyre_compound: PhysicsTyreCompound,
   name: string,
-  f1Pack = false
+  f1Pack = false,
+  design?: RainTyreDesign
 ): TyresCompoundData {
   const unblanketed = !racesOnBlankets(base.pressureData);
   const th = base.thermalData;
   const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
-  const traits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
+  const baseTraits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
+  const traits: WetTyreTraits = design
+    ? {
+        ...baseTraits,
+        clearMm: design.clearMm,
+        treadDepthMm: design.treadDepthMm,
+        dryHeatScale: design.dryHeatScale,
+      }
+    : baseTraits;
   const k = traits.dryGrip;
   const tread = kind === 'wet' ? 1.10 : 1.05;
   const angle = kind === 'wet' ? 1.12 : 1.06;
@@ -1269,6 +1278,7 @@ export function deriveRainCompound(
     if (m.relaxationLengthY !== undefined) out.relaxationLengthY = m.relaxationLengthY * tread;
     if (m.friction_limit_angle) out.friction_limit_angle = m.friction_limit_angle * angle;
     if (m.slip_ratio_limit) out.slip_ratio_limit = m.slip_ratio_limit * slipRatioScale;
+    if (design && m.speedSensitivity !== undefined) out.speedSensitivity = m.speedSensitivity * design.speedSensitivityScale;
     return out;
   };
   const thermalPerformanceCurve: LutPoints = f1Pack
@@ -1281,6 +1291,23 @@ export function deriveRainCompound(
   const model = { ...base.modelData, ...scaleModel(base.modelData) } as TyresModelData;
   model.falloff_level = Math.min(0.95, base.modelData.falloff_level + (kind === 'wet' ? 0.06 : 0.04));
   model.falloff_slope = kind === 'wet' ? 1.5 : 1.8;
+  const camberData = design
+    ? { ...base.camberData, camberGain: base.camberData.camberGain * design.camberGainScale }
+    : base.camberData;
+  const thermalData: TyresThermalPatchData = {
+    ...th,
+    thermalPerformanceCurve,
+    optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
+    ...(design
+      ? {
+          slipHeatShare: Math.min(0.85, th.slipHeatShare * design.slipHeatScale),
+          hysteresis: th.hysteresis * design.hysteresisScale,
+          surfaceToCore: th.surfaceToCore * design.surfaceToCoreScale,
+          surfaceCooling: [th.surfaceCooling[0] * design.surfaceCoolingScale, th.surfaceCooling[1] * design.surfaceCoolingScale],
+          coreCooling: [th.coreCooling[0] * design.coreCoolingScale, th.coreCooling[1] * design.coreCoolingScale],
+        }
+      : {}),
+  };
   return {
     ...base,
     name,
@@ -1288,16 +1315,17 @@ export function deriveRainCompound(
     tyre_compound,
     wetTraits: traits,
     modelData: model,
-    thermalData: {
-      ...th,
-      thermalPerformanceCurve,
-      optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
-    },
+    camberData,
+    thermalData,
     pressureData: rainPressure(base.pressureData, traits.tempShiftC),
     rearOverride: base.rearOverride
       ? {
           ...base.rearOverride,
           modelData: scaleModel(base.rearOverride.modelData),
+          camberData:
+            design && base.rearOverride.camberData?.camberGain !== undefined
+              ? { ...base.rearOverride.camberData, camberGain: base.rearOverride.camberData.camberGain * design.camberGainScale }
+              : base.rearOverride.camberData,
           pressureData: base.rearOverride.pressureData && unblanketed ? { ...base.rearOverride.pressureData, setPsi: undefined } : base.rearOverride.pressureData,
         }
       : undefined,
