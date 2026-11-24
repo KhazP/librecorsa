@@ -92,7 +92,7 @@ export function cleanScanMaterial(mat: THREE.Material): void {
   if (!std.roughnessMap) std.roughness = Math.max(std.roughness, GROUND.test(name) ? 0.8 : 0.65);
 
   if (std.transparent && std.map && std.opacity >= 0.99) {
-    // A KTX2 texture has no pixels to read here: the converter stored its kind (scripts/ktx2-track-textures.mjs)
+    // A KTX2 texture has no pixels to read here: the converter stored its kind (scripts/tracks/ktx2-track-textures.mjs)
     const stored = std.userData.alphaKind as AlphaKind | undefined;
     const kind = stored === "opaque" || stored === "cutout" || stored === "soft" ? stored : alphaKind(std.map);
     if (kind === "opaque") {

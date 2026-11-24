@@ -73,7 +73,7 @@ export const NISSAN_R32_SIM_PROFILE: CarSimProfile = {
   // and brakes at 1.25 g plus drag (measure-ggv), so the envelope is held under the corners: 1.1 × 0.85 × it is 1.12 g
   // at low speed and 1.15 g at 306 km/h, and its braking (1.02–1.05 g) sits under the brakes' 1.25–1.6 g
   braking: { lowG: 1.2, aeroG: 0.03, refMs: 80 },
-  // 5.3° of front against 2.4° of rear slip at the peak of a 100 km/h steer ramp (1.40 g, scripts/verify-nissan-r32-jtcc.ts)
+  // 5.3° of front against 2.4° of rear slip at the peak of a 100 km/h steer ramp (1.40 g, scripts/verify/verify-nissan-r32-jtcc.ts)
   understeerRadPerMs2: 0.0037,
   speedProfile: NISSAN_R32_PROFILE_CAR,
   // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's

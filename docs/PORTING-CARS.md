@@ -138,7 +138,7 @@ Once the model (and optional audio) are in `public/cars/<id>/`:
    - Physics: `quality` (`"own"`, `"shared"`, or `"era"`) and `physics` (a `VehicleModelId` from `src/types/f1.ts`, such as `"lc26"`, `"f12026-car"`, `"amg-gt3"`, or `"liana"`).
    - Assets and attribution: `modelUrl: "/cars/<id>/model/<id>.glb"`, `sound` (a `CarSoundSource`), and `credit: { title, author, url, license, licenseUrl }`.
 2. **`src/lib/hosted-content.ts`:** Add your ID to `REPO_CAR_IDS` so local clones display it in the car selector. (Setting `NEXT_PUBLIC_HOSTED_CONTENT=1` instead exposes all hosted cars, even those whose files you don't have locally.)
-3. **Exhaustive maps:** Add an entry to `EXPECTED_SOUNDS` (including `maxIdleRpm`) in `scripts/verify-car-sounds.ts` and a dash camera entry to `OVER_WHEEL` in `src/lib/render/onboard-views.ts`. Both use `Record<CarId, ...>`, so TypeScript will flag missing entries.
+3. **Exhaustive maps:** Add an entry to `EXPECTED_SOUNDS` (including `maxIdleRpm`) in `scripts/verify/verify-car-sounds.ts` and a dash camera entry to `OVER_WHEEL` in `src/lib/render/onboard-views.ts`. Both use `Record<CarId, ...>`, so TypeScript will flag missing entries.
 
 Cars with `classId: "f1"` automatically respect the menu's open-wheel physics toggle (`physics` determines which chassis the body fits). Cars using `amg-gt3` physics inherit the AMG GT3's camera rig framed around their own steering wheel.
 
@@ -160,15 +160,15 @@ Set `limiterRpm` to the recording's rev limiter. If the underlying physics model
 
 ```bash
 npx tsc --noEmit
-npx tsx scripts/verify-ported-roots.ts   # verifies every listed car GLB loads as the browser expects
+npx tsx scripts/verify/verify-ported-roots.ts   # verifies every listed car GLB loads as the browser expects
 npm run dev
 ```
 
 Open `http://localhost:3000/?car=<id>` to inspect your port in-game. For `f1`-class cars, append `&f1physics=lc26` or `&f1physics=f12026-car` to test both open-wheel physics engines.
 
-Although `scripts/verify-ported-gt3.ts` targets the hosted GT3 models by name (and skips them in a local clone), it is a great checklist for verifying your own port: GLB file size, single-primitive tyres, symmetrical wheel centres, ground clearance, and all six camera viewpoints.
+Although `scripts/verify/verify-ported-gt3.ts` targets the hosted GT3 models by name (and skips them in a local clone), it is a great checklist for verifying your own port: GLB file size, single-primitive tyres, symmetrical wheel centres, ground clearance, and all six camera viewpoints.
 
-During deployment, car GLBs are meshopt-compressed (LibreCorsa loads both raw and compressed files). Keep raw GLBs locally while iterating, as the porters and verification tools operate on uncompressed meshes. To test compressed file size, run `node scripts/compress-car-glb.mjs <file.glb>` on a copy—it overwrites the input file in place.
+During deployment, car GLBs are meshopt-compressed (LibreCorsa loads both raw and compressed files). Keep raw GLBs locally while iterating, as the porters and verification tools operate on uncompressed meshes. To test compressed file size, run `node scripts/cars/compress-car-glb.mjs <file.glb>` on a copy—it overwrites the input file in place.
 
 ## Licences
 

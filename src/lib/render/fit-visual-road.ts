@@ -81,7 +81,7 @@ export function materialNameOf(mesh: THREE.Mesh): string {
  * driven on as drawn) are left as built. On such a circuit the rest is laid on the ground under a kerb, not on its
  * top, so the road beneath stays beneath it.
  *
- * `everyVertex` asks the ground for every vertex, without `roadReach`'s test first (scripts/verify-fit-visual-road.ts
+ * `everyVertex` asks the ground for every vertex, without `roadReach`'s test first (scripts/verify/verify-fit-visual-road.ts
  * checks that the test changes nothing).
  */
 export function fitVisualRoad(

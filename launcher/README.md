@@ -101,4 +101,4 @@ and `CGO_ENABLED=0`. The bundle leaves out source maps, `_headers` and a clone's
 - The binaries are not signed or notarized: macOS Gatekeeper and Windows SmartScreen will warn on first run
   (macOS: right-click → Open; Windows: More info → Run anyway).
 - The game's hosted cars and circuits (served from librecorsa.org) are only offline when they are in the export.
-- The force-feedback bridge (`scripts/ffb-bridge.ts`) is not part of it yet.
+- The force-feedback bridge (`scripts/ffb-bridge/ffb-bridge.ts`) is not part of it yet.

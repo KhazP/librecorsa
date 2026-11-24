@@ -378,7 +378,7 @@ const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v
  * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
  * CD·A ≈ 0.99 m² (4.3 : 1) with 44.5 % of the downforce on the front axle from 100 to 300 km/h held steady, running
  * 30 mm front and 42 mm rear at speed on a 5.5° rear wing. The drag is held by the class's speed-trap figures
- * (scripts/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
+ * (scripts/verify/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
  * onboard footage of one of the class's cars came out about a tenth above what the car could hold between 110 and
  * 145 km/h (each ± 15 %: the radii are an ideal line's), all of the gain under the floor, where it costs the least drag.
  * The balance stays behind the 46 % of the weight on the front axle as the car settles, so the car keeps its understeer
@@ -778,7 +778,7 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       ffbMechanicalTrailM: 0.02,
       // Power steering, engine-driven: the same assist at any speed [est]
       powerSteering: { steeringRatio: 13.175, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
-      // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/measure-car-plans.ts`)
+      // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/cars/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.69], [0.55, 2.61], [0.92, 2.45], [1.00, 2.00], [1.00, 0.72], [0.96, -2.40], [0.00, -2.41]],
       // Torsional stiffness between the axle structures: a carbon tub with the V8 as a stressed member [est]
       chassisTorsion: { torsionalStiffnessNmPerDeg: 46_000, torsionalDampingNmsPerDeg: 340, frontRollInertiaShare: 0.45 },
@@ -847,7 +847,7 @@ export const LC_LMDH_CONFIG = config(LMDH_GEAR_SETS.short, 5.5);
 
 /**
  * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5° off,
- * as the garage's gear set and low-drag package make it: `scripts/verify-lc-lmdh.ts` checks its top speed
+ * as the garage's gear set and low-drag package make it: `scripts/verify/verify-lc-lmdh.ts` checks its top speed
  */
 export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5);
 

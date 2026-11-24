@@ -1,6 +1,6 @@
 /**
  * Attribution for the third-party models in RISE Motordrome's trackside scenery
- * (public/tracks/rwanda_official/scenery/): the trees and shrubs in foliage.glb (scripts/rwanda-official/foliage.mjs).
+ * (public/tracks/rwanda_official/scenery/): the trees and shrubs in foliage.glb (scripts/tracks/rwanda-official/foliage.mjs).
  * The file embeds its own entries in its root extras; verify-scenery checks they match these and that CREDITS.md
  * names every model.
  */

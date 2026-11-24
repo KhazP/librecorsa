@@ -1,6 +1,6 @@
 # UDP telemetry and the local bridge
 
-LibreCorsa streams 60 Hz vehicle telemetry as compact JSON UDP datagrams for external dashboards, SimHub plugins, bass shakers, and motion rigs. Because browsers cannot open raw UDP sockets directly, telemetry goes through the repository's lightweight Node.js bridge (`scripts/ffb-bridge.ts`)—the same bridge that drives DirectInput force-feedback wheels on Windows.
+LibreCorsa streams 60 Hz vehicle telemetry as compact JSON UDP datagrams for external dashboards, SimHub plugins, bass shakers, and motion rigs. Because browsers cannot open raw UDP sockets directly, telemetry goes through the repository's lightweight Node.js bridge (`scripts/ffb-bridge/ffb-bridge.ts`)—the same bridge that drives DirectInput force-feedback wheels on Windows.
 
 UDP telemetry relay works on **Windows, macOS, and Linux**, with or without a racing wheel connected.
 

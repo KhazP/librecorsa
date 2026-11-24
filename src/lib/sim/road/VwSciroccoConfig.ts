@@ -655,7 +655,7 @@ export const VW_SCIROCCO_CONFIG = {
     // The kingpin (lower ball joint → strut top) leans back 4.2° and meets the ground 15 mm ahead of the contact patch
     // [derived]
     ffbMechanicalTrailM: 0.015,
-    // The body's plan at barrier height, measured from vw-scirocco-gtx.glb (`scripts/measure-car-plans.ts`)
+    // The body's plan at barrier height, measured from vw-scirocco-gtx.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.07], [0.75, 2.00], [0.92, 0.52], [0.76, -1.88], [0.00, -1.95]],
   },
   engine: ENGINE,

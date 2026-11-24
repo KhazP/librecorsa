@@ -1,5 +1,5 @@
 /**
- * Circuit models with GPU-compressed textures, for phones. scripts/ktx2-track-textures.mjs converts a circuit GLB's
+ * Circuit models with GPU-compressed textures, for phones. scripts/tracks/ktx2-track-textures.mjs converts a circuit GLB's
  * WebP textures to KTX2 (Basis Universal), which a phone's GPU keeps compressed at an eighth to a quarter of the
  * memory, in a file about the WebP one's size; geometry and physics keep their bytes. The converted model is a new
  * file next to the original: `/tracks/<id>/<id>.ktx2.<build>.glb`, where `<build>` is the first 8 hex digits of its
@@ -17,7 +17,7 @@
 export interface Ktx2Model {
   /** The WebP model's url (track data `metadata.mesh.url`) */
   model: string;
-  /** The conversion (scripts/ktx2-track-textures.mjs prints it): the first 8 hex digits of its sha256 */
+  /** The conversion (scripts/tracks/ktx2-track-textures.mjs prints it): the first 8 hex digits of its sha256 */
   build: string;
 }
 

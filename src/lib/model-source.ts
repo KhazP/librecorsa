@@ -32,7 +32,7 @@ const RISE_SOURCE: ModelSource = {
   url: "https://www.overtake.gg/downloads/rise-motordrome-bugesera-rwanda.88890/",
   license: "CC BY-NC-SA 4.0",
   licenseUrl: `${REPO_URL}/blob/main/public/tracks/rwanda_official/LICENSE.md`,
-  note: "Built for LibreCorsa (scripts/rwanda-official in the repository). Its trees are the acacia by evolveduk and the shrub by Natural_Disbuster, both CC BY 4.0.",
+  note: "Built for LibreCorsa (scripts/tracks/rwanda-official in the repository). Its trees are the acacia by evolveduk and the shrub by Natural_Disbuster, both CC BY 4.0.",
   support: { url: SUPPORT_URL, via: "Buy Me a Coffee" },
 };
 

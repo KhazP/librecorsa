@@ -6,7 +6,7 @@
 // files a page shows or links next to it (charts, CSVs) are copied beside it, and any other repository path goes to
 // GitHub. Everything written here is generated and git-ignored.
 //
-// `--check` reads every page and resolves every link without writing anything: scripts/verify-docs-site.ts runs it
+// `--check` reads every page and resolves every link without writing anything: scripts/verify/verify-docs-site.ts runs it
 // with the game's checks, so a push that moves a file a page links to fails there, not at the next docs deploy.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, relative, resolve } from "node:path";

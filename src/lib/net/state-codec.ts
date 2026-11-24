@@ -22,7 +22,7 @@
  *           and when they change; a receiver keeps the last it had from each car (`StateInfoMemory`).
  *
  * No acceleration: at 60 packets a second a receiver's difference of two packets' velocities measured the same in the
- * netcode bench (scripts/bench-netcode.ts) as one the sender worked out.
+ * netcode bench (scripts/online/bench-netcode.ts) as one the sender worked out.
  *
  * Decoding gives a plain object shaped like the JSON packet, which then goes through `sanitizePacket` (wire.ts) as
  * every packet from the network does. No three.js and no DOM: the race server imports this too.

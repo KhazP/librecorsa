@@ -105,7 +105,7 @@ Force-feedback motors can deliver dangerous torque if left holding a force after
 
 ## Writing tests
 
-`scripts/verify-webhid-ffb.ts` exercises every protocol driver against `FakeHidDevice`, which records every output report and feature read. Derive expected reference bytes independently from the protocol documentation (never by copying the driver's own output) and verify:
+`scripts/verify/verify-webhid-ffb.ts` exercises every protocol driver against `FakeHidDevice`, which records every output report and feature read. Derive expected reference bytes independently from the protocol documentation (never by copying the driver's own output) and verify:
 
 - Exact setup report sequence and payload bytes.
 - Force report encoding and sign convention (`+1` must push in the PID-defined direction; see the header comment in `webhid-ffb.ts`).

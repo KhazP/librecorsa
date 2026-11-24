@@ -103,7 +103,7 @@ function buildLc26LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints
 
 /**
  * Tread wear per joule of contact-patch sliding energy. Calibrated so the soft loses ≈3 % of its tread
- * per lap at Rwanda (`scripts/tyre-stint-report.ts 3 soft`); medium and hard scale down by their rubber
+ * per lap at Rwanda (`scripts/physics/tyre-stint-report.ts 3 soft`); medium and hard scale down by their rubber
  * wear ratio [assumed]
  */
 const WEAR_PER_J_SOFT = 4.1e-8;
@@ -721,7 +721,7 @@ export const LC26_BRAKES = {
 
 /**
  * Reference performance envelope recorded by the mod's own AI calibration
- * (`aicardata`). Used by `scripts/verify-sim.ts` as validation targets.
+ * (`aicardata`). Used by `scripts/verify/verify-sim.ts` as validation targets.
  */
 export const LC26_AI_REFERENCE = {
   topSpeedKmh: 331,

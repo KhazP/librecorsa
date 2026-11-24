@@ -4,7 +4,7 @@
  * the race too: its field round the same car, the track environment every car shares, and the race's standing.
  *
  * It knows nothing of threads or timers: `sim-worker.ts` feeds it messages and wall-clock time, and the headless
- * checks drive it directly (`scripts/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
+ * checks drive it directly (`scripts/verify/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
  */
 import type { ControlInputs } from "@/types/f1";
 import { setLc26OnRigidBody } from "@/lib/cars/lc26-engine";

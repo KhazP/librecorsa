@@ -20,7 +20,7 @@
  * is dropped. Files unused for MAX_IDLE_MS are dropped, and once the kept files pass the budget (MAX_BYTES, or
  * QUOTA_SHARE of the site's storage quota if that is smaller) the least recently used go first.
  *
- * scripts/verify-asset-cache.ts runs this file against a stand-in server and cache.
+ * scripts/verify/verify-asset-cache.ts runs this file against a stand-in server and cache.
  */
 
 /** The kept files, one per URL */
@@ -39,7 +39,7 @@ const BASE = self.location.pathname.replace(/[^/]*$/, "");
 const MODS = "librecorsa-mods-v1";
 /** The shell: one cache per build (`librecorsa-shell-<build>`), the previous build's deleted once the next is whole */
 const SHELL_PREFIX = "librecorsa-shell-";
-/** What the build lists for the shell (scripts/build-offline-manifest.mjs) */
+/** What the build lists for the shell (scripts/site/build-offline-manifest.mjs) */
 const SHELL_MANIFEST = `${self.location.origin}${BASE}offline-manifest.json`;
 /** The record in a shell cache that says every file of its build is in it */
 const SHELL_COMPLETE = "__librecorsa-shell-complete";

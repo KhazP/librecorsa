@@ -953,7 +953,7 @@ export const PORSCHE_934_RSR_CONFIG = {
     maxRoadWheelDeg: 540 / 16.9,
     // The strut (STRUT_TYRE → STRUT_CAR) leans back 4.5° and meets the ground 27.5 mm ahead of the contact patch [derived]
     ffbMechanicalTrailM: 0.0275,
-    // The body's plan at barrier height, measured from porsche-934-rsr.glb (`scripts/measure-car-plans.ts`)
+    // The body's plan at barrier height, measured from porsche-934-rsr.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.05], [0.51, 2.02], [0.74, 1.86], [0.90, 1.53], [0.95, -0.89], [0.94, -1.52], [0.61, -2.26], [0.00, -2.35]],
   },
   engine: ENGINE,

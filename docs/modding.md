@@ -118,7 +118,7 @@ Supported built-in `car` IDs: `amg-gt3`, `bmw-m4-gt3`, `mtr-496r`, `lc-lmdh`, `l
 A mod car pairs a custom 3D body and audio bank with one of LibreCorsa's built-in vehicle physics models (`physics`): `lc26`, `f12026-car`, `amg-gt3`, `liana`, `mtr-496r`, `lc-lmdh`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, or `porsche-934-rsr`. By default, it inherits that base model's handling, garage setup ranges, tyres, and AI.
 
 - **`model`:** Path to a GLB matching LibreCorsa's car rig. `scripts/cars/port_ac_car.py` generates compatible models (see [Porting cars](PORTING-CARS.md)).
-- **`bodyPlan`:** Optional barrier-height outline polygon so wall collisions match your custom bodywork instead of the base car's shape. Generate one with `scripts/measure-car-plans.ts`.
+- **`bodyPlan`:** Optional barrier-height outline polygon so wall collisions match your custom bodywork instead of the base car's shape. Generate one with `scripts/cars/measure-car-plans.ts`.
 - **`sound`:** Either a package-local audio bank with its recorded rev limiter (`{ "dir": "cars/gt-x/audio", "limiterRpm": 7500 }`) or a reference to any built-in car's audio, including `lc26` (`{ "car": "amg-gt3" }`). In either case, the sound bank automatically scales to the car's active rev limiter.
 - **`skins`:** The first entry describes the default paint baked into the GLB; subsequent entries are file-based liveries stored in `<model folder>/skins/<id>/` by default.
 - **`classId`:** One of `f1`, `gt3`, `proto`, `classic`, or `road`. Together with `year`, this controls menu placement and—for `f1` cars—determines whether DRS or 2026 Overtake Mode rules apply.

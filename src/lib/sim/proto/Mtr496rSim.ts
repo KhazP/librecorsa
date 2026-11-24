@@ -70,7 +70,7 @@ export const MTR_496R_SIM_PROFILE: CarSimProfile = {
   // 10 % BRAKE_DX_MOD, and its drag), so the envelope is sized for the corners: 1.1 × 0.85 × it is the measured 1.55 g
   // at 54 km/h, 1.9 g at 162 (2.0 measured) and 2.9 g at 306 (the brakes' own 1.7 / 2.4 / 3.7 g plan as ≈ 70–85 % of that)
   braking: { lowG: 1.6, aeroG: 1.5, refMs: 85 },
-  // As the GT3's [est]; scripts/verify-mtr-496r.ts checks the autopilot's laps
+  // As the GT3's [est]; scripts/verify/verify-mtr-496r.ts checks the autopilot's laps
   understeerRadPerMs2: 0.0035,
   speedProfile: MTR_496R_PROFILE_CAR,
   // The GT3's line: closed-wheel grip and downforce, nearer a GT3's than an F1 car's

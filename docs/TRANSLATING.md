@@ -52,7 +52,7 @@ Pass the standard browser language tag (`tr`, `pt-BR`, `zh-Hant`) followed by th
 
 4. **Update the glossary:** Whenever you establish a translation for a recurring sim-racing term, add it to `src/i18n/glossary/<language>.md`.
 
-5. **Verify in code and in-game:** Run `npm run i18n:status` and `npx tsx scripts/verify-i18n.ts`, then open the game with `?lang=tr` (or pick the language in Settings) to check for truncation or layout overflow.
+5. **Verify in code and in-game:** Run `npm run i18n:status` and `npx tsx scripts/verify/verify-i18n.ts`, then open the game with `?lang=tr` (or pick the language in Settings) to check for truncation or layout overflow.
 
 ## Message formatting rules
 
@@ -72,4 +72,4 @@ Pass the standard browser language tag (`tr`, `pt-BR`, `zh-Hant`) followed by th
 - **Translate labels, never data:** Only localize user-facing labels. IDs, persisted settings values, wire protocol tokens, code comparisons, ghost files, bug reports, and diagnostics must remain canonical.
 - **Add context notes:** Document any short or ambiguous string in `src/i18n/notes/<area>.json`.
 - **Right-to-left (Arabic) layout:** Use CSS logical properties rather than physical left/right utilities (`ms-2`, `pe-4`, `start-0`, `text-end`, `border-s`, `rounded-e-md`), which mirror cleanly in RTL while rendering identically in LTR. Check with `node scripts/i18n/logical-classes.mjs --check` (or auto-convert with `--write`). Keyboard arrow navigation in horizontal lists (`Tabs`, `Segmented`) flips automatically when `getComputedStyle(el).direction === "rtl"`. The on-track race HUD (`dir="ltr"` in `F1TelemetryHud`) and slider tracks intentionally stay left-to-right across all languages, while directional icons (`next`, `previous`, `back`) mirror automatically.
-- **Verification:** `scripts/verify-i18n.ts` runs as part of `npm run verify`, confirming every English message parses cleanly and every translation preserves its placeholders and tags.
+- **Verification:** `scripts/verify/verify-i18n.ts` runs as part of `npm run verify`, confirming every English message parses cleanly and every translation preserves its placeholders and tags.

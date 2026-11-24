@@ -15,7 +15,7 @@ import * as THREE from "three";
  * A sight line only tests what lies in the cells it crosses, and stops at the first hit. Faces are culled as three's
  * raycast culls them (front faces of FrontSide materials, back faces of BackSide ones, both for DoubleSide), and only
  * objects on a default Raycaster's layers count (not the sun's shadow-only proxies), so the answers match
- * `Raycaster.intersectObjects(meshes, false)` (scripts/verify-tv-occlusion.ts). The build is a generator: it yields
+ * `Raycaster.intersectObjects(meshes, false)` (scripts/verify/verify-tv-occlusion.ts). The build is a generator: it yields
  * every few thousand triangles so it can be spread over idle time.
  */
 

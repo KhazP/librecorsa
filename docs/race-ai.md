@@ -63,10 +63,10 @@ Stewards wait **3 seconds** to assess consequences:
 
 ```bash
 # Contact physics, spins, rejoins, stopped cars, barriers, and damage-off checks
-npx tsx scripts/verify-race-contact.ts
+npx tsx scripts/verify/verify-race-contact.ts
 
 # Steward decisions, grid behavior, duels, and stopped-car avoidance
-npx tsx scripts/verify-race-craft.ts
+npx tsx scripts/verify/verify-race-craft.ts
 
 # Full headless race benchmark with results summary
 npm run race:headless -- --track rwanda_official_short --car f12026-car --laps 3 --cars 8 --grid qualifying --damage full

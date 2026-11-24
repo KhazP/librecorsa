@@ -2,7 +2,7 @@
  * The Grand Prix LC26 for `VehiclePhysics` (same data model as the f12026-car, see `F12026CarConfig`): the car of
  * `lc26-data.ts`, which `F1Physics2026` drives today, laid out for the rigid-body engine. Every number here is read
  * from that file's constants or computed from them, so the two engines run the same car and
- * `scripts/compare-lc26-engines.ts` puts them side by side.
+ * `scripts/physics/compare-lc26-engines.ts` puts them side by side.
  *
  *  - [data]     a constant of `lc26-data.ts` (its own tags say where each comes from)
  *  - [derived]  computed from those
@@ -613,7 +613,7 @@ export function buildLc26Config(overrides: Lc26Overrides = {}) {
       // The rack's give under load and the hydraulic assist, as the f12026-car's [est]
       steerComplianceDegPerKN: 0.05,
       powerSteering: { steeringRatio: LC26_CHASSIS.steering.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
-      // The body's plan at barrier height, measured from f12026.glb (`scripts/measure-car-plans.ts`)
+      // The body's plan at barrier height, measured from f12026.glb (`scripts/cars/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.93], [0.90, 2.59], [0.88, 0.87], [0.57, -2.46], [0.00, -2.46]],
       // Torsional stiffness between the axle structures: a carbon tub, engine and gearbox as stressed members [est]
       chassisTorsion: { torsionalStiffnessNmPerDeg: 50_000, torsionalDampingNmsPerDeg: 300, frontRollInertiaShare: 0.42 },

@@ -16,7 +16,7 @@
  *     the notice (Try again keeps their settings, Switch to Low sets it). Never again for the same loss, so one bad
  *     night does not hold anyone on Low.
  *
- * Storage goes through a small get / set / remove interface so scripts/verify-gpu-health.ts can run it on a Map.
+ * Storage goes through a small get / set / remove interface so scripts/verify/verify-gpu-health.ts can run it on a Map.
  */
 
 export type GpuClass = "software" | "weak" | "ok" | "unknown";

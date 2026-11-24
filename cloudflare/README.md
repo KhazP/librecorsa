@@ -65,7 +65,7 @@ committed): `DEV_ORIGINS=http://127.0.0.1:3000,http://localhost:3000`, `ADMIN_KE
 minutes instead of twenty.
 
 The checks run without Cloudflare: `npm run verify` covers the room server, the race server (both sides) and the
-boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`,
+boards on an in-memory database (`scripts/verify/verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`,
 `verify-leaderboard.ts`), the boards' pages and totals (`verify-board-stats.ts`), the usage counter
 (`verify-usage.ts`), and the admin numbers with the limits that guard them (`verify-admin.ts`).
 

@@ -667,7 +667,7 @@ export const BMW_M1_PROCAR_CONFIG = {
     maxRoadWheelDeg: 360 / 16,
     // The kingpin (WBTYRE_BOTTOM → WBTYRE_TOP) leans back 4.9° and meets the ground 37 mm ahead of the contact patch [derived]
     ffbMechanicalTrailM: 0.037,
-    // The body's plan at barrier height, measured from bmw-m1-procar.glb (`scripts/measure-car-plans.ts`)
+    // The body's plan at barrier height, measured from bmw-m1-procar.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.24], [0.77, 2.16], [0.95, 1.55], [0.98, 1.03], [0.97, -1.42], [0.83, -2.00], [0.00, -2.11]],
   },
   engine: ENGINE,

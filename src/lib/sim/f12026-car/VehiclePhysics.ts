@@ -4308,7 +4308,7 @@ export class VehiclePhysics {
     // ---- brakes (physical brake pad μ(T))
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
     // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
-    // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify-powertrain.ts)
+    // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify/verify-powertrain.ts)
     // (a lift's harvest is on from the first of the pedal, so the rear calipers give way to it from there too)
     const driveBrake = (inp.brake > 0.05 || liftW > 0) && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
     const [dl, dr] = this.drivenWheels;
