@@ -1,7 +1,8 @@
 /**
  * The career's pre-race show on the drive's scene (show-timeline.ts lays it out): when a career round's session forms
- * (its qualifying, or its grid at the lights) the drive waits under the show, the cameras film what each scene names,
- * and the start card hands the car back to the player. A visual only: the cars stand where the session put them, the
+ * (its qualifying, or its grid at the lights), or a career test day's practice (the car standing where it starts, no
+ * run begun), the drive waits under the show, the cameras film what each scene names, and the start card hands the car
+ * back to the player. A visual only: the cars stand where the session put them, the
  * physics and the lights wait (the drive treats the show like the pause menu), and anything missing skips a shot.
  *
  * Shots, each built from what every circuit has (the centreline, the grid, the player's car):
@@ -10,7 +11,8 @@
  * - aerial: the title screen's aerial tour (menu-aerial.ts), cut faster.
  * - tyres: low beside the player's front wheel, sweeping round it, then diving into its hub.
  * - grid intro: high behind the grid, down the whole field. A pair: beside those two cars, drifting across them.
- * - field (qualifying): round the player's car. Start card: in front of it, closing in.
+ * - field (qualifying): round the player's car. Car (test day): closer round it, low. Start card: in front of it,
+ *   closing in.
  */
 import * as THREE from "three";
 import type { BuiltTrackData } from "@/lib/track-data";
@@ -69,6 +71,11 @@ export interface ShowFrame {
   qualifying: boolean;
   /** The career round's AI race stands at the lights (before lights out; some may be lit already) */
   atLights: boolean;
+  /**
+   * A practice session (not a qualifying): the player's car standing still, or moving. Absent outside one. A test day's
+   * show starts while it stands as the test day forms; once it has moved, the run is under way and the show never comes
+   */
+  practice?: "standing" | "moving";
   /** The grid at the lights (pole first); asked for only while a race show is still to come (`wantsGrid`) */
   grid: readonly ShowGridRow[];
   /** The player's car on the lap (m), for the aerial tour's first shot */
@@ -86,6 +93,8 @@ export interface ShowFrame {
 export const MUSIC_WAIT_S = 2;
 /** How fast the clock closes on the music (per s): a drift is caught up within a second or so, never run backwards */
 const MUSIC_FOLLOW = 2;
+/** A test day's car moving this long (s) before its show could start: the run is under way, no show */
+const TEST_UNDER_WAY_S = 0.5;
 
 /** Where the cameras find the cars this frame */
 export interface ShowCars {
@@ -114,8 +123,10 @@ const smooth = (x: number) => {
 
 export class PreRaceShowDirector {
   private ctx: ShowContext | null = null;
-  /** The shows this round has had: a restart (a mulligan) does not play one again */
-  private readonly played = new Set<"qualifying" | "race">();
+  /** The shows this round (or test day) has had: a restart (a mulligan) does not play one again */
+  private readonly played = new Set<"qualifying" | "race" | "test">();
+  /** How long a test day's car has moved without its show (s) */
+  private testMovingS = 0;
   private clock: ShowClock | null = null;
   /** How long the show has waited at its opening for the music */
   private musicWaitS = 0;
@@ -165,11 +176,21 @@ export class PreRaceShowDirector {
    * armed again (its restart) keeps it, so a mulligan goes straight back to the lights.
    */
   arm(ctx: ShowContext | null, markers?: ShowMarkers): void {
-    const same = ctx && this.ctx && ctx.seriesId === this.ctx.seriesId && ctx.roundIndex === this.ctx.roundIndex;
-    if (!same) this.played.clear();
+    const same =
+      ctx &&
+      this.ctx &&
+      ctx.seriesId === this.ctx.seriesId &&
+      ctx.roundIndex === this.ctx.roundIndex &&
+      Boolean(ctx.test) === Boolean(this.ctx.test);
+    if (!same) {
+      this.played.clear();
+      this.testMovingS = 0;
+    }
     this.ctx = ctx;
     if (markers) this.markers = markers;
     if (!ctx && this.clock) this.end();
+    // The same show told more (a test day's target once known): the overlay redraws with it
+    else if (same && this.clock) this.publish();
   }
 
   update(f: ShowFrame): void {
@@ -184,6 +205,10 @@ export class PreRaceShowDirector {
     }
     const ctx = this.ctx;
     if (!ctx) return;
+    if (ctx.test) {
+      this.updateTest(f, ctx);
+      return;
+    }
     const qualifying = f.qualifying && !this.played.has("qualifying");
     const race = f.atLights && f.grid.length > 0 && !this.played.has("race");
     if (f.suppressed) {
@@ -202,9 +227,28 @@ export class PreRaceShowDirector {
     return this.ctx;
   }
 
+  /**
+   * A test day's show: as the test day forms (its car standing in the practice, the menus left); suppressed then, or
+   * the car under way first, it never plays for this test day
+   */
+  private updateTest(f: ShowFrame, ctx: ShowContext): void {
+    if (this.played.has("test") || !f.practice) return;
+    if (f.suppressed) {
+      this.played.add("test");
+      return;
+    }
+    if (!f.allowed) return;
+    if (f.practice === "moving") {
+      this.testMovingS += Math.max(0, f.dt);
+      if (this.testMovingS >= TEST_UNDER_WAY_S) this.played.add("test");
+      return;
+    }
+    this.start("test", f, ctx);
+  }
+
   /** A race show is still to come this round: the drive builds the grid for it */
   get wantsGrid(): boolean {
-    return this.ctx !== null && !this.played.has("race");
+    return this.ctx !== null && !this.ctx.test && !this.played.has("race");
   }
 
   /**
@@ -274,8 +318,9 @@ export class PreRaceShowDirector {
         placed = this.pairShot(at.scene.pair ?? 0, cars.still ? 0 : at.progress, cars);
         break;
       case "field":
+      case "car":
       case "ready":
-        placed = this.playerShot(at.scene.id === "field" ? at.localS : Math.min(at.localS, 8), at.scene.id, cars);
+        placed = this.playerShot(at.scene.id === "ready" ? Math.min(at.localS, 8) : at.localS, at.scene.id, cars);
         break;
     }
     // A shot with nothing to film: the player's car
@@ -292,9 +337,9 @@ export class PreRaceShowDirector {
   }
 
   private start(kind: ShowKind, f: ShowFrame, ctx: ShowContext): void {
-    this.played.add(kind === "qualifying" ? "qualifying" : "race");
-    this.grid = kind === "qualifying" ? [] : f.grid;
-    const size = kind === "qualifying" ? Object.keys(ctx.drivers).length : f.grid.length;
+    this.played.add(kind === "qualifying" || kind === "test" ? kind : "race");
+    this.grid = kind === "qualifying" || kind === "test" ? [] : f.grid;
+    const size = kind === "qualifying" ? Object.keys(ctx.drivers).length : kind === "test" ? 1 : f.grid.length;
     this.clock = new ShowClock(buildShowTimeline(kind, size, this.markers));
     this.musicWaitS = 0;
     this.aerial ??= new MenuAerial(this.track);
@@ -406,12 +451,21 @@ export class PreRaceShowDirector {
     return true;
   }
 
-  /** Round the player's car (the field), or in front of it closing in (the start card) */
+  /** Round the player's car (the field; closer and lower for the test day's car), or in front of it closing in (the start card) */
   private playerShot(localS: number, scene: ShowSceneId, cars: ShowCars): boolean {
     const p = cars.player;
     if (!p) return false;
     this.carAxes(p.quaternion);
-    if (scene === "field") {
+    if (scene === "car") {
+      // From its front quarter round to its side, slowly
+      const ang = (cars.still ? 0 : localS) * 0.16 + 0.45;
+      const r = 6.4;
+      this.pos
+        .copy(p.position)
+        .addScaledVector(this.fwd, Math.cos(ang) * r)
+        .addScaledVector(this.left, Math.sin(ang) * r)
+        .addScaledVector(UP, 1.35);
+    } else if (scene === "field") {
       const ang = (cars.still ? 0 : localS) * 0.12 + 0.6;
       const r = 9.2;
       this.pos

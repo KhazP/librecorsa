@@ -73,6 +73,7 @@ import {
   SwitchSeriesModal,
 } from "./CareerModals";
 import { CareerLadderView } from "./CareerLadderView";
+import { TestDayCard } from "./TestDayCard";
 
 export type CareerTab = "season" | "ladder" | "history";
 
@@ -208,6 +209,7 @@ const CareerSeasonTab: React.FC<{
           playerCode={playerCode}
           onUpdateRaceSettings={onUpdateRaceSettings}
           onRaceNext={onRaceNext}
+          onTestDay={onTestDay}
           onOpenLadder={() => onGoToTab("ladder")}
         />
         <ObjectivesRevealModal
@@ -264,8 +266,6 @@ const PreSeasonView: React.FC<{
   const seasonNum = run.history.length + 1;
   const neededRounds = roundsFor(season.settings.length, avail.calendar.length);
   const liveMulliganBonus = mulliganBonus(season.settings.mulligans);
-  const testTrackId = season.settings.circuits[0];
-  const testCircuitName = testTrackId ? trackLabel(testTrackId).name : "";
   const canSwitchSeries = run.choices.filter((id) => id !== season.seriesId).length > 0;
 
   const lengthLabel = (len: SeasonLength) => {
@@ -323,9 +323,6 @@ const PreSeasonView: React.FC<{
               >
                 {tx("startSeason")}
               </Button>
-              <Button variant="secondary" size="md" icon={<Icon name="drive" />} onClick={onTestDay}>
-                {testCircuitName ? tx("testDayCircuit", { circuit: testCircuitName }) : tx("testDay")}
-              </Button>
               {canSwitchSeries ? (
                 <Button variant="ghost" size="md" icon={<Icon name="browse" />} onClick={() => setSwitchOpen(true)}>
                   {tx("switchSeries")}
@@ -339,6 +336,9 @@ const PreSeasonView: React.FC<{
           </div>
         </div>
       </section>
+
+      {/* The pre-season test: optional, before Round 1 */}
+      <TestDayCard season={season} onTestDay={onTestDay} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 short:gap-3">
         {/* Season settings */}
@@ -461,8 +461,9 @@ const ActiveSeasonView: React.FC<{
   playerCode: string;
   onUpdateRaceSettings: (patch: Partial<RaceSettings>) => void;
   onRaceNext: () => void;
+  onTestDay: () => void;
   onOpenLadder: () => void;
-}> = ({ run, season, series, playerName, playerCode, onUpdateRaceSettings, onRaceNext, onOpenLadder }) => {
+}> = ({ run, season, series, playerName, playerCode, onUpdateRaceSettings, onRaceNext, onTestDay, onOpenLadder }) => {
   const tx = useTranslations("menu.career");
   const format = useFormatter();
   const [raceSettingsOpen, setRaceSettingsOpen] = useState(false);
@@ -724,6 +725,8 @@ const ActiveSeasonView: React.FC<{
         </Card>
 
         <div className="flex min-w-0 flex-col gap-5 short:gap-3">
+          {nextIdx !== null ? <TestDayCard season={season} onTestDay={onTestDay} compact /> : null}
+
           <Card title={tx("objectivesTitle")} bodyClassName="flex flex-col gap-2">
             {season.objectives.map((obj) => (
               <ObjectiveRow key={obj.kind} objective={obj} season={season} />

@@ -10,7 +10,8 @@ import { getActiveTrackData, TURN_METADATA } from "@/lib/track-data";
 import type { TrackInfo } from "@/lib/track-registry";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { seriesById } from "@/lib/career/ladder";
-import { seriesName } from "@/components/career/career-ui";
+import { anyCarById, CAR_CLASSES, type CarId } from "@/lib/cars/car-registry";
+import { carTitle, seriesName } from "@/components/career/career-ui";
 import { COMPOUNDS, type Compound } from "@/components/ui/badges/compounds";
 import { PlayerTag } from "@/components/ui/badges";
 import { KeyCap } from "@/components/ui/prompts";
@@ -69,6 +70,7 @@ export const PreRaceShow: React.FC<{
         {scene.id === "gridIntro" ? <GridIntro ctx={ctx} trackInfo={trackInfo} /> : null}
         {scene.id === "gridPair" ? <GridPair ctx={ctx} grid={ui.grid} pair={ui.pair ?? 0} /> : null}
         {scene.id === "field" ? <FieldCard ctx={ctx} /> : null}
+        {scene.id === "car" ? <CarCard ctx={ctx} trackInfo={trackInfo} /> : null}
         {scene.id === "ready" ? <ReadyCard ctx={ctx} trackInfo={trackInfo} kind={ui.kind} compound={compound} onStart={onStart} /> : null}
       </div>
 
@@ -185,13 +187,13 @@ const OpeningStage: React.FC<{ timeS: () => number; still: boolean }> = ({ timeS
   );
 };
 
-/** The series and the round, in the player's language */
+/** The series and the round (or the test day), in the player's language */
 function useRoundLine(ctx: ShowContext | null): string | null {
   const tx = useTranslations("hud.preRace");
   const txCareer = useTranslations("menu.career");
   if (!ctx) return null;
   const series = seriesById(ctx.seriesId);
-  const round = tx("roundOf", { round: ctx.roundIndex + 1, rounds: ctx.rounds });
+  const round = ctx.test ? tx("testDay") : tx("roundOf", { round: ctx.roundIndex + 1, rounds: ctx.rounds });
   return series ? `${seriesName(series, txCareer)} · ${round}` : round;
 }
 
@@ -199,15 +201,23 @@ const placeOf = (t: TrackInfo) => [t.city, t.country].filter(Boolean).join(", ")
 
 /** Scene 1: F1 Grand Prix Title Opener with volt corner-bracket frame and split volt/dark event ribbon */
 const TitleCard: React.FC<{ ctx: ShowContext | null; trackInfo: TrackInfo }> = ({ ctx, trackInfo }) => {
-  const round = useRoundLine(ctx);
-  const subtitle = [trackInfo.layout, placeOf(trackInfo)].filter(Boolean).join(" · ");
+  const tx = useTranslations("hud.preRace");
+  const txCareer = useTranslations("menu.career");
+  const roundLine = useRoundLine(ctx);
+  // A test day: "Test day" over its series, then its car at the circuit
+  const test = ctx?.test;
+  const testSeries = test ? seriesById(ctx.seriesId) : undefined;
+  const round = test ? (testSeries ? seriesName(testSeries, txCareer) : null) : roundLine;
+  const subtitle = test
+    ? `${carTitle(test.car as CarId)} · ${trackInfo.name}`
+    : [trackInfo.layout, placeOf(trackInfo)].filter(Boolean).join(" · ");
   return (
     <div className="flex h-full flex-col justify-end pb-[4vh] short:pb-1">
       <div className="max-w-[920px] rounded-tr-lc-card border-t-[3px] border-r-[3px] border-lc-volt pt-4 pr-5 sm:pt-5 sm:pr-8 short:pt-2.5">
         <div className="flex items-stretch gap-5 pl-2 sm:gap-7 sm:pl-3">
           <span aria-hidden className="lc-show-rise w-2.5 shrink-0 -skew-x-12 bg-lc-volt sm:w-3.5" />
           <h1 className="lc-show-title-wipe lc-disp min-w-0 pl-1 text-[36px] leading-[0.92] break-words sm:text-[82px] short:text-[34px]">
-            {trackInfo.name}
+            {test ? tx("testDay") : trackInfo.name}
           </h1>
         </div>
         <div className="mt-3 flex flex-wrap items-stretch gap-y-1.5 sm:mt-4 short:mt-2">
@@ -261,10 +271,11 @@ function useElevationM(): number {
   }, []);
 }
 
-/** The race's terms on one line: laps, stops, qualifying */
+/** The race's terms on one line: laps, stops, qualifying (a test day's: its target lap, once known) */
 function useTermsLine(ctx: ShowContext | null): string[] {
   const tx = useTranslations("hud.preRace");
   if (!ctx) return [];
+  if (ctx.test) return ctx.test.targetMs ? [tx("targetLap", { time: formatLapTime(ctx.test.targetMs) })] : [];
   return [
     tx("laps", { count: ctx.laps }),
     ctx.pitStops > 0 ? tx("stops", { count: ctx.pitStops }) : tx("noStops"),
@@ -662,6 +673,71 @@ const DriverCard: React.FC<{ ctx: ShowContext | null; row: ShowGridRow; position
   );
 };
 
+/** Test day: the season's car on its card (its class and year, weight, balance, drive, rev limit) as the camera circles it */
+const CarCard: React.FC<{ ctx: ShowContext | null; trackInfo: TrackInfo }> = ({ ctx, trackInfo }) => {
+  const tx = useTranslations("hud.preRace");
+  const format = useFormatter();
+  const units = useUnits();
+  const round = useRoundLine(ctx);
+  const test = ctx?.test;
+  if (!test) return null;
+  const car = anyCarById(test.car as CarId);
+  const carClass = car ? CAR_CLASSES.find((c) => c.id === car.classId)?.title : undefined;
+  const imperial = units.speed === "mph";
+  const specs = [
+    test.massKg !== null
+      ? imperial
+        ? tx("weightLb", { value: format.number(Math.round(test.massKg * 2.20462)) })
+        : tx("weightKg", { value: format.number(test.massKg) })
+      : null,
+    test.frontPct !== null ? tx("frontWeight", { value: format.number(test.frontPct, { maximumFractionDigits: 1 }) }) : null,
+    test.drivetrain ? tx(`drivetrain.${test.drivetrain}`) : null,
+    test.limiterRpm !== null ? tx("revLimit", { value: format.number(test.limiterRpm) }) : null,
+  ].filter((x): x is string => Boolean(x));
+  const target = test.targetMs ? tx("targetLap", { time: formatLapTime(test.targetMs) }) : null;
+
+  return (
+    <div className="flex h-full flex-col justify-between gap-2">
+      <SceneBug primary={trackInfo.name} accent={round} />
+      <section className="lc-show-from-left lc-show-stripes w-full max-w-[520px] overflow-hidden rounded-tr-lc-card border-t-[3px] border-r-[3px] border-lc-volt bg-lc-void/92 shadow-lc-sheet backdrop-blur-sm short:max-w-[420px]">
+        <div className="flex items-stretch gap-3 border-b border-lc-line/90 px-4 py-2.5 sm:px-5 sm:py-3 short:py-1.5">
+          <span aria-hidden className="w-1.5 shrink-0 -skew-x-14 bg-lc-volt" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h2 className="lc-disp truncate text-[24px] leading-tight text-lc-chalk sm:text-[32px] short:text-[20px]">
+              {carTitle(test.car as CarId)}
+            </h2>
+            {carClass || car ? (
+              <span className="lc-mono text-[12px] font-bold text-lc-fog sm:text-[13px]">
+                {[carClass, car?.year].filter(Boolean).join(" · ")}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-lc-line/70">
+          {specs.map((spec, i) => (
+            <div
+              key={i}
+              className="lc-show-in flex items-center px-3.5 py-2.5 sm:px-4 sm:py-3 short:px-3 short:py-1.5"
+              style={{ animationDelay: `${450 + i * 160}ms` }}
+            >
+              <span className="lc-mono text-[13px] font-bold tracking-[0.02em] text-lc-chalk sm:text-[15px] short:text-[12px]">{spec}</span>
+            </div>
+          ))}
+        </div>
+        {target ? (
+          <div
+            className="lc-show-in flex items-center gap-2.5 border-t border-lc-line/90 bg-lc-volt/10 px-4 py-2.5 sm:px-5 short:py-1.5"
+            style={{ animationDelay: `${450 + specs.length * 160}ms` }}
+          >
+            <span aria-hidden className="size-2 shrink-0 rounded-full bg-lc-volt" />
+            <span className="lc-mono text-[14px] font-extrabold text-lc-volt sm:text-[16px] short:text-[13px]">{target}</span>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+};
+
 /** Scene 7a: Qualifying Entry List Board (F1 bracketed broadcast dock) */
 const FieldCard: React.FC<{ ctx: ShowContext | null }> = ({ ctx }) => {
   const tx = useTranslations("hud.preRace");
@@ -741,6 +817,7 @@ const ReadyCard: React.FC<{
   const round = useRoundLine(ctx);
   const terms = useTermsLine(ctx);
   const qualifying = kind === "qualifying";
+  const test = kind === "test";
   // Not focused on arrival: a Space that skipped here would let go on the button and start the session (Enter starts)
   const compInfo = COMPOUNDS[compound];
   const compItem: InfoBarItem = { text: compInfo.name, dot: `var(--color-lc-${compInfo.color})`, tone: "chalk" };
@@ -764,7 +841,9 @@ const ReadyCard: React.FC<{
           items={
             qualifying
               ? [round, ctx ? tx("qualifyingMin", { minutes: ctx.qualifyingMin }) : null, compItem]
-              : [round, ...terms.slice(0, 2), compItem]
+              : test
+                ? [round, ...terms, compItem]
+                : [round, ...terms.slice(0, 2), compItem]
           }
           style={{ animationDelay: "180ms" }}
         />
@@ -774,7 +853,7 @@ const ReadyCard: React.FC<{
           className="lc-show-in mt-1 inline-flex h-13 items-center gap-3 rounded-full bg-lc-volt px-8 text-[16px] font-bold text-lc-void shadow-lc-pop transition-colors duration-200 ease-lc hover:bg-lc-volt-hi focus-visible:shadow-lc-focus focus-visible:outline-none sm:mt-2 sm:h-14 sm:px-9 sm:text-[18px] short:h-11 short:px-6 short:text-[15px]"
           style={{ animationDelay: "300ms" }}
         >
-          {qualifying ? tx("startQualifying") : tx("startRace")}
+          {qualifying ? tx("startQualifying") : test ? tx("go") : tx("startRace")}
           <KeyCap tone="ink" className="hidden sm:inline-flex">
             {tx("keyEnter")}
           </KeyCap>

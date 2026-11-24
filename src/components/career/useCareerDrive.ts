@@ -11,10 +11,15 @@
  * - The result is recorded once the classification closes (or when the player leaves after the flag): the rivals are
  *   credited by the codes the race used, laps led counted on the way. The last round closes the season.
  * - A restart costs a mulligan (none left: no restart); leaving before the flag asks for a mulligan or a retirement.
+ * - A test day is practice on the next round's circuit (the first before the season starts) in the season's car, dry,
+ *   at the round's time of day, with its own short show. Its target lap comes from a reference lap of the car there
+ *   (sim/reference-lap.ts); each lap completed is kept on the season at once (its laps and the player's best).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CarId } from "@/lib/cars/car-registry";
 import { CARS } from "@/lib/cars/car-registry";
+import { carPhysics } from "@/lib/cars/f1-mod-physics";
+import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import {
   EMPTY_SAVE,
   endSeason,
@@ -26,10 +31,14 @@ import {
   raceScore,
   roundConditions,
   recordRound,
+  recordTestDay,
   retireFromRound,
   seasonStandings,
+  seasonTest,
   storeCareerSave,
   spendMulligan,
+  testCircuit,
+  testTargetMs,
   withRun,
   type CareerRacePlan,
   type CareerRun,
@@ -37,7 +46,8 @@ import {
 } from "@/lib/career/career-state";
 import { seriesById, type CareerContent } from "@/lib/career/ladder";
 import { rivalAsDriver, rivalCode } from "@/lib/career/rivals";
-import type { ShowContext, ShowDriver } from "@/lib/show/show-context";
+import type { ShowContext, ShowDriver, ShowTestDay } from "@/lib/show/show-context";
+import { ReferenceLap } from "@/lib/sim/reference-lap";
 import { SHOW_CUE_MARKERS } from "@/lib/audio/music-catalog";
 import type { DriveSession, SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
@@ -63,7 +73,15 @@ let careerDrive: {
   lapsLed: number;
   lastLap: number;
   recorded: boolean;
+  /** A test day's: its circuit and car, the show told of it, and the reference lap its target comes from */
+  test: { trackId: string; car: CarId; show: ShowContext; ref: ReferenceLap; targetMs: number | null } | null;
 } | null = null;
+/**
+ * Page time per frame the test day's reference lap is driven for (ms): more while its show holds the car (a road car's
+ * lap is some 5 s of work on a desktop: the target is known by the show's car or soon after)
+ */
+const TEST_REF_BUDGET_MS = 2;
+const TEST_REF_SHOW_BUDGET_MS = 6;
 let queuedSummaries: CareerSummary[] = [];
 let queuedUnfinished: { runId: string; plan: CareerRacePlan } | null = null;
 
@@ -221,16 +239,32 @@ export function useCareerDrive(d: CareerDriveDeps) {
       const profile = d.settingsRef.current.profile;
       const plan = mode === "race" ? racePlan(run, lapLength, profile.code) : null;
       if (mode === "race" && (!plan || plan.trackId !== d.trackId)) return;
+      const testAt = mode === "test" ? testCircuit(season) : null;
+      if (mode === "test" && testAt?.trackId !== d.trackId) return;
       careerScreenResume = false;
       setOpen(false);
       const ownCar = careerDrive?.ownCar ?? d.carIdRef.current;
       d.startSession({ kind: "practice" });
       d.changeCar(season.settings.car, { remember: false });
-      const conditions = plan ? roundConditions(run, season.seriesId, plan.roundIndex, trackDefaultTimeOfDay(plan.trackId) === "night") : null;
+      const at = plan ?? testAt;
+      const round = at ? roundConditions(run, season.seriesId, at.roundIndex, trackDefaultTimeOfDay(at.trackId) === "night") : null;
+      // A test day runs dry (its target is a dry lap), at the time of day of the round there
+      const conditions = round && !plan ? { weather: "clear" as const, timeOfDay: round.timeOfDay } : round;
       if (conditions) d.applyConditions(conditions);
-      // The pre-race show for a round (none for a test day): the series, the round, the field's names, the table
-      session.preRaceShow.arm(plan && conditions ? showContextOf(run, plan, profile, conditions) : null, SHOW_CUE_MARKERS);
-      careerDrive = { runId, mode, plan, ownCar, lapsLed: 0, lastLap: 0, recorded: false };
+      // The pre-race show: for a round, the series, the round, the field's names, the table; for a test day, its car
+      let test: NonNullable<typeof careerDrive>["test"] = null;
+      if (testAt && conditions) {
+        const ref = new ReferenceLap(season.settings.car);
+        // Until its reference lap is driven, the target this test day had before (the field may have changed since)
+        const targetMs =
+          ref.lapMs !== null
+            ? testTargetMs(run, ref.lapMs, ref.base)
+            : (seasonTest(season, testAt.trackId, season.settings.car)?.targetMs ?? null);
+        const show = testShowContextOf(run, testAt.roundIndex, season.settings.car, targetMs, profile, conditions);
+        test = { trackId: testAt.trackId, car: season.settings.car, show, ref, targetMs };
+      }
+      session.preRaceShow.arm(plan && conditions ? showContextOf(run, plan, profile, conditions) : (test?.show ?? null), SHOW_CUE_MARKERS);
+      careerDrive = { runId, mode, plan, ownCar, lapsLed: 0, lastLap: 0, recorded: false, test };
       setDriving(true);
       setRoundRecorded(false);
       // Saved as under way: leaving it without a result later is settled, not forgotten
@@ -307,11 +341,11 @@ export function useCareerDrive(d: CareerDriveDeps) {
     [d.trackId, d.onSelectTrack, drive]
   );
 
-  /** A test day: practice at the season's first circuit in its car */
+  /** A test day: practice on the next round's circuit (the first before the season starts) in the season's car */
   const testDay = useCallback(
     (runId: string) => {
       const season = runOf(runId)?.season;
-      const circuit = season?.settings.circuits[0];
+      const circuit = season ? testCircuit(season)?.trackId : undefined;
       if (!circuit) return;
       if (circuit !== d.trackId) {
         if (!d.onSelectTrack) return;
@@ -341,6 +375,49 @@ export function useCareerDrive(d: CareerDriveDeps) {
     drive(asked.runId, asked.mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.assetsReady, d.session, drive]);
+
+  // A test day's target: its reference lap driven a slice per frame until known (the show told of it then)
+  useEffect(() => {
+    const session = d.session;
+    if (!driving || !session) return;
+    let raf = 0;
+    const tick = () => {
+      const cur = careerDrive;
+      const test = cur?.mode === "test" ? cur.test : null;
+      if (!cur || !test || test.ref.done) return;
+      raf = requestAnimationFrame(tick);
+      if (!test.ref.step(session.preRaceShow.playing ? TEST_REF_SHOW_BUDGET_MS : TEST_REF_BUDGET_MS)) return;
+      const run = runOf(cur.runId);
+      const targetMs = run && test.ref.lapMs !== null ? testTargetMs(run, test.ref.lapMs, test.ref.base) : null;
+      if (targetMs === null) return;
+      test.targetMs = targetMs;
+      test.show = { ...test.show, test: { ...test.show.test!, targetMs } };
+      session.preRaceShow.arm(test.show);
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driving, d.session]);
+
+  // A test day's laps: each one kept on the season as it is completed (its best only when the player drove it clean)
+  useEffect(() => {
+    const session = d.session;
+    if (!session) return;
+    return session.onLapCompleted((lap) => {
+      const cur = careerDrive;
+      const test = cur?.mode === "test" ? cur.test : null;
+      const run = cur ? runOf(cur.runId) : undefined;
+      if (!test || !run?.season || !(lap.lapTimeMs > 0)) return;
+      const own = lap.valid && !lap.autopilot && !lap.wallContact;
+      commit(
+        withRun(
+          saveRef.current,
+          recordTestDay(run, { trackId: test.trackId, car: test.car, laps: 1, bestMs: own ? lap.lapTimeMs : null, targetMs: test.targetMs })
+        )
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d.session, commit]);
 
   // On the way: laps led, and the result once the classification closes
   const race = d.race;
@@ -503,6 +580,55 @@ export function useCareerDrive(d: CareerDriveDeps) {
   };
 }
 
+/** The player as the show names them: the last word of their name as the surname (a name ending in a number, like a handle, stays whole) */
+function showPlayer(profile: PlayerSettings["profile"]): ShowDriver {
+  const words = profile.name.trim().split(/\s+/).filter(Boolean);
+  const split = words.length > 1 && /\p{L}/u.test(words[words.length - 1]);
+  const last = split ? words[words.length - 1] : words.join(" ") || profile.code;
+  const first = split ? words.slice(0, -1).join(" ") : "";
+  return { code: profile.code, first, last, number: null, color: profile.color, isPlayer: true };
+}
+
+/** What the car's card shows of a car: its vehicle model's weight, balance, driven axles and rev limit */
+function carCardOf(car: CarId, targetMs: number | null): ShowTestDay {
+  const model = vehicleModelSpec(carPhysics(car));
+  const chassis = model.rigConfig.chassis;
+  const rig = model.rigConfig;
+  return {
+    car,
+    massKg: chassis.totalMassKg > 0 ? Math.round(chassis.totalMassKg) : null,
+    frontPct: chassis.frontWeightFraction > 0 ? Math.round(chassis.frontWeightFraction * 1000) / 10 : null,
+    drivetrain: rig.awd ? "awd" : rig.drivenAxle === "front" ? "fwd" : "rwd",
+    limiterRpm: model.limiterRpm > 0 ? Math.round(model.limiterRpm) : null,
+    targetMs,
+  };
+}
+
+/** What a test day's show tells: the series, the car and its target; no field, terms or table */
+function testShowContextOf(
+  run: CareerRun,
+  roundIndex: number,
+  car: CarId,
+  targetMs: number | null,
+  profile: PlayerSettings["profile"],
+  conditions: { weather: WeatherPresetId; timeOfDay: TimeOfDayId }
+): ShowContext {
+  const season = run.season!;
+  return {
+    seriesId: season.seriesId,
+    roundIndex,
+    rounds: season.settings.circuits.length,
+    laps: 0,
+    pitStops: 0,
+    qualifyingMin: 0,
+    drivers: { [profile.code]: showPlayer(profile) },
+    standings: [],
+    weather: conditions.weather,
+    timeOfDay: conditions.timeOfDay,
+    test: carCardOf(car, targetMs),
+  };
+}
+
 /** What the pre-race show tells of a round: its series and number, the field by race code, the table before it */
 function showContextOf(
   run: CareerRun,
@@ -516,12 +642,7 @@ function showContextOf(
     const r = run.rivals.find((y) => y.id === x.id);
     if (r) drivers[x.code] = { code: x.code, first: r.first, last: r.last, number: r.number, color: r.color, isPlayer: false };
   }
-  // The player's own name, its last word as the surname (a name ending in a number, like a handle, stays whole)
-  const words = profile.name.trim().split(/\s+/).filter(Boolean);
-  const split = words.length > 1 && /\p{L}/u.test(words[words.length - 1]);
-  const last = split ? words[words.length - 1] : words.join(" ") || profile.code;
-  const first = split ? words.slice(0, -1).join(" ") : "";
-  drivers[profile.code] = { code: profile.code, first, last, number: null, color: profile.color, isPlayer: true };
+  drivers[profile.code] = showPlayer(profile);
   const codeOf = (who: string) => {
     if (who === "me") return profile.code;
     const r = run.rivals.find((y) => y.id === who);

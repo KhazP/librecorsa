@@ -1181,6 +1181,18 @@
     "field": "출전 드라이버",
     "startRace": "레이스 시작",
     "startQualifying": "예선 시작",
+    "testDay": "테스트 데이",
+    "targetLap": "목표 {time}",
+    "weightKg": "{value}kg",
+    "weightLb": "{value}lb",
+    "frontWeight": "앞쪽 {value}%",
+    "drivetrain": {
+      "rwd": "후륜구동",
+      "fwd": "전륜구동",
+      "awd": "사륜구동"
+    },
+    "revLimit": "레브 리밋 {value}rpm",
+    "go": "출발",
     "sector": "S{n}"
   }
 }

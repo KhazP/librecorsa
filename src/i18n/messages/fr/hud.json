@@ -1181,6 +1181,18 @@
     "field": "Le plateau",
     "startRace": "Lancer la course",
     "startQualifying": "Lancer les qualifications",
+    "testDay": "Journée d’essais",
+    "targetLap": "Objectif {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value} % sur l’avant",
+    "drivetrain": {
+      "rwd": "Propulsion",
+      "fwd": "Traction",
+      "awd": "Transmission intégrale"
+    },
+    "revLimit": "Rupteur à {value} tr/min",
+    "go": "C’est parti",
     "sector": "S{n}"
   }
 }

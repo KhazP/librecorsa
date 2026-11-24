@@ -1181,6 +1181,18 @@
     "field": "المشاركون",
     "startRace": "ابدأ السباق",
     "startQualifying": "ابدأ التصفيات",
+    "testDay": "يوم الاختبار",
+    "targetLap": "الهدف {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% على المحور الأمامي",
+    "drivetrain": {
+      "rwd": "دفع خلفي",
+      "fwd": "دفع أمامي",
+      "awd": "دفع رباعي"
+    },
+    "revLimit": "حد الدوران {value} rpm",
+    "go": "انطلق",
     "sector": "S{n}"
   }
 }

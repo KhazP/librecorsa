@@ -1181,6 +1181,18 @@
     "field": "Danh sách tay đua",
     "startRace": "Bắt đầu đua",
     "startQualifying": "Bắt đầu phân hạng",
+    "testDay": "Ngày chạy thử",
+    "targetLap": "Mục tiêu {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% ở cầu trước",
+    "drivetrain": {
+      "rwd": "Dẫn động cầu sau",
+      "fwd": "Dẫn động cầu trước",
+      "awd": "Dẫn động bốn bánh"
+    },
+    "revLimit": "Giới hạn vòng tua {value} rpm",
+    "go": "Đi",
     "sector": "S{n}"
   }
 }

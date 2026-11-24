@@ -1181,6 +1181,18 @@
     "field": "Os pilotos",
     "startRace": "Iniciar corrida",
     "startQualifying": "Iniciar classificação",
+    "testDay": "Dia de testes",
+    "targetLap": "Meta {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% na dianteira",
+    "drivetrain": {
+      "rwd": "Tração traseira",
+      "fwd": "Tração dianteira",
+      "awd": "Tração integral"
+    },
+    "revLimit": "Corte a {value} rpm",
+    "go": "Vai",
     "sector": "S{n}"
   }
 }

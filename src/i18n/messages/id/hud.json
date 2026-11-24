@@ -1181,6 +1181,18 @@
     "field": "Daftar pembalap",
     "startRace": "Mulai balapan",
     "startQualifying": "Mulai kualifikasi",
+    "testDay": "Hari tes",
+    "targetLap": "Target {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% di depan",
+    "drivetrain": {
+      "rwd": "Penggerak roda belakang",
+      "fwd": "Penggerak roda depan",
+      "awd": "Penggerak semua roda"
+    },
+    "revLimit": "Batas putaran {value} rpm",
+    "go": "Jalan",
     "sector": "S{n}"
   }
 }

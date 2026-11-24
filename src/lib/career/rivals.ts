@@ -111,12 +111,15 @@ export function makeRivals(seed: number): CareerRival[] {
 /** The code a rival races under against this player */
 export const rivalCode = (r: CareerRival, playerCode: string): string => (r.code === playerCode.toUpperCase() ? r.altCode : r.code);
 
+/** A rival's pace in the AI field: from the rating, in the band the field's own drivers run in */
+export const rivalPace = (r: Pick<CareerRival, "rating">): number => Math.round((0.934 + 0.042 * r.rating) * 1000) / 1000;
+
 /** A rival as the AI field's driver: pace from the rating, in the band the field's own drivers run in */
 export function rivalAsDriver(r: CareerRival, playerCode: string): AiDriverDef {
   return {
     code: rivalCode(r, playerCode),
     teamColorHex: r.color,
-    pace: Math.round((0.934 + 0.042 * r.rating) * 1000) / 1000,
+    pace: rivalPace(r),
     aggression: r.aggression,
     consistencyBias: r.consistency,
     name: `${r.first} ${r.last}`,

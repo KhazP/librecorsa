@@ -1181,6 +1181,18 @@
     "field": "Pilotlar",
     "startRace": "Yarışı başlat",
     "startQualifying": "Sıralamayı başlat",
+    "testDay": "Test günü",
+    "targetLap": "Hedef {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "Önde %{value}",
+    "drivetrain": {
+      "rwd": "Arkadan itiş",
+      "fwd": "Önden çekiş",
+      "awd": "Dört çeker"
+    },
+    "revLimit": "Devir sınırı {value} d/dk",
+    "go": "Başla",
     "sector": "S{n}"
   }
 }
