@@ -350,6 +350,41 @@ if (!ran) {
   check("the base data is fetched unless every include is where the trackdef says, and for a trackdef with none", inInstall && !missing && !none, JSON.stringify({ inInstall, missing, none }));
 }
 
+// --- Crafted trackdefs: includes and names that reach outside the circuit -------------------------------------------
+
+if (ran) {
+  /** The extractor on a circuit folder `name` holding `xml` (and `ac` as oval.ac); its result and its settings */
+  const extract = (name: string, xml: string, ac?: string) => {
+    const dir = join(tmp, "crafted", name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${name}.xml`), xml);
+    if (ac !== undefined) writeFileSync(join(dir, "oval.ac"), ac);
+    const out = join(tmp, "crafted", `${name}-out`);
+    const r = python(["scripts/tracks/extract_sd_track.py", dir, "--out-glb", `${out}.glb`, "--out-settings", `${out}.json`, "--geometry-json", `${out}.geom.json`])!;
+    const settings = r.ok ? (JSON.parse(readFileSync(`${out}.json`, "utf8")) as { description: string }) : null;
+    const geometry = r.ok ? (JSON.parse(readFileSync(`${out}.geom.json`, "utf8")) as { scenery?: unknown }) : null;
+    return { ...r, settings, geometry };
+  };
+  // A file outside the circuit's folder, which its trackdef tries to include and to load as its model
+  writeFileSync(join(tmp, "crafted-secret.xml"), "TOPSECRET");
+  mkdirSync(join(tmp, "crafted"), { recursive: true });
+  writeFileSync(join(tmp, "crafted", "secret.xml"), "TOPSECRET");
+  writeFileSync(join(tmp, "crafted", "outside.ac"), AC_MODEL);
+  const evilXml = TRACK_XML.replace(
+    '<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">',
+    `<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">\n<!ENTITY secret SYSTEM "${join(tmp, "crafted-secret.xml")}">\n<!ENTITY up SYSTEM "../secret.xml">`,
+  )
+    .replace('val="Two straights and two hairpins"', 'val="before &secret;&up; after"')
+    .replace('val="oval.ac"', 'val="../outside.ac"');
+  const evil = extract("evil", evilXml);
+  check(
+    "an <!ENTITY> naming a file outside the circuit's folder is not included",
+    evil.ok && !!evil.settings && !evil.settings.description.includes("TOPSECRET"),
+    evil.ok ? (evil.settings?.description ?? "") : evil.out.slice(-300),
+  );
+  check("a 3d description reaching outside the folder loads no model from there", evil.ok && !evil.geometry?.scenery, JSON.stringify(evil.geometry?.scenery ?? null));
+}
+
 rmSync(tmp, { recursive: true, force: true });
 if (failed) {
   console.error(`\n${failed} check(s) failed`);

@@ -138,10 +138,43 @@ def sd_data_file(sd_data, *names):
     return None
 
 
+# The shared files a trackdef may include (`<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">`):
+# Speed Dreams' default surfaces and objects, in its data/tracks/ (scripts/mods/lib/sd-fetch.ts SHARED_TRACK_FILES)
+SHARED_TRACK_FILES = ('surfaces.xml', 'objects.xml')
+
+
+def _inside(path, root):
+    """Whether `path` lies in `root`, links followed"""
+    path, root = os.path.realpath(path), os.path.realpath(root)
+    return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
+
+
+def include_path(rel, here, sd_data):
+    """The file an <!ENTITY … SYSTEM "rel"> of the trackdef in `here` may include, or None: an XML file of the circuit's
+    own folder, or one of Speed Dreams' shared track files (SHARED_TRACK_FILES) from the base data or from the install
+    the circuit sits in (data/tracks/<category>/<name>/ beside data/data/tracks/). Never another file, wherever the
+    entity points: a trackdef is the circuit author's, and an include outside these would put any file's text in the
+    converted circuit"""
+    base = os.path.basename(rel.replace('\\', '/'))
+    if not base.lower().endswith('.xml'):
+        return None
+    own = os.path.join(here, rel)
+    if _inside(own, here) and os.path.isfile(own):
+        return own
+    if base.lower() in SHARED_TRACK_FILES:
+        install = os.path.join(here, '..', '..', '..', 'data', 'tracks', base.lower())
+        for cand in (sd_data_file(sd_data, os.path.join('tracks', base.lower())), install):
+            if cand and os.path.isfile(cand):
+                return cand
+    own = os.path.join(here, base)
+    return own if _inside(own, here) and os.path.isfile(own) else None
+
+
 def read_params(path, sd_data=None, log=print):
     """A parameter file as nested Sections, with the files its DOCTYPE includes (`&default-surfaces;`) put in place.
-    An included file is looked for where the XML says, then in the base data by its name; one that isn't anywhere is
-    left out (the circuit then lacks Speed Dreams' default surfaces, and the generated road their textures)"""
+    An included file is taken only from the circuit's own folder or Speed Dreams' shared track files (include_path);
+    one that isn't there is left out (the circuit then lacks Speed Dreams' default surfaces, and the generated road
+    their textures)"""
     text = _decode(open(path, 'rb').read())
     here = os.path.dirname(os.path.abspath(path))
     entities = {}
@@ -151,17 +184,14 @@ def read_params(path, sd_data=None, log=print):
             entities[name] = rel
         text = text[:m.start()] + text[m.end():]
     for name, rel in entities.items():
-        found = os.path.join(here, rel)
-        if not (rel.lower().endswith('.xml') and os.path.isfile(found)):
-            base = os.path.basename(rel)
-            found = sd_data_file(sd_data, os.path.join('tracks', base)) or (
-                os.path.join(here, base) if os.path.isfile(os.path.join(here, base)) else None)
+        found = include_path(rel, here, sd_data)
         if found:
             inc = _decode(open(found, 'rb').read())
             inc = re.sub(r'<\?xml[^>]*\?>', '', inc)
             inc = re.sub(r'<!DOCTYPE[^\[>]*(?:\[.*?\])?\s*>', '', inc, flags=re.S)
         else:
-            log(f'  {rel} (&{name};) not found: give --sd-data, Speed Dreams\' base data')
+            log(f'  {rel} (&{name};) not included: it is neither in the circuit\'s folder nor one of Speed Dreams\' shared '
+                f'track files ({", ".join(SHARED_TRACK_FILES)}; give --sd-data, Speed Dreams\' base data)')
             inc = ''
         text = text.replace(f'&{name};', inc)
     text = re.sub(r'<\?xml[^>]*\?>', '', text, count=1)
@@ -1204,6 +1234,19 @@ def srgb_to_linear(c):
 
 # --------------------------------------------------------------------------------------------------------------------
 
+def model_file(folder, model):
+    """The AC3D model the trackdef names (Graphic > 3d description), in the circuit's folder by its file name alone (as
+    Speed Dreams looks for it), any case; None when the folder hasn't got it"""
+    if not model:
+        return None
+    name = os.path.basename(model.replace('\\', '/'))
+    if name in ('', '.', '..'):
+        return None
+    hits = [name] + [f for f in sorted(os.listdir(folder)) if f.lower() == name.lower() and f != name]
+    return next((os.path.join(folder, f) for f in hits if os.path.isfile(os.path.join(folder, f)) and
+                 _inside(os.path.join(folder, f), folder)), None)
+
+
 def find_xml(folder):
     """The circuit's trackdef: <folder name>.xml, else the one XML in the folder with a Main Track"""
     name = os.path.basename(os.path.normpath(folder))
@@ -1301,9 +1344,9 @@ def main():
     if args.needs_json:
         own = Textures([folder])
         names = {tex_params(surfaces, s)[0] for (_r, s) in gen.groups}
-        model = (P.sub('Graphic') or Section('')).str('3d description')
-        if model and not args.no_scenery and os.path.isfile(os.path.join(folder, model)):
-            names |= {t for p in read_ac(os.path.join(folder, model))[0] if not TRACKGEN_SURFACE_RE.match(p.name)
+        model_path = model_file(folder, (P.sub('Graphic') or Section('')).str('3d description'))
+        if model_path and not args.no_scenery:
+            names |= {t for p in read_ac(model_path)[0] if not TRACKGEN_SURFACE_RE.match(p.name)
                       for t in (p.texture, p.texture2)}
         needs = sorted(n for n in names if n and not own.find(n))
         with open(args.needs_json, 'w', encoding='utf-8') as f:
@@ -1383,10 +1426,7 @@ def main():
     geometry = {}
     graphic = P.sub('Graphic') or Section('')
     model = graphic.str('3d description')
-    model_path = os.path.join(folder, model) if model else None
-    if model and not os.path.isfile(model_path):
-        alt = [f for f in os.listdir(folder) if f.lower() == model.lower()]
-        model_path = os.path.join(folder, alt[0]) if alt else None
+    model_path = model_file(folder, model)
     if args.no_scenery:
         print('  scenery: left out (--no-scenery)')
     elif not model_path:
