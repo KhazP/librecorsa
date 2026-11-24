@@ -12,12 +12,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import { SdParams, sdUnitToSI } from "../lib/sd-params";
-import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
+import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdCarProblems, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
 import { findCarLicence, readLicenceEntry, readLicenceText, shareable } from "../cars/sd-licence";
-import { readPins, SD_CACHE_DIR } from "../cars/sd-fetch";
+import { readPins, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 import { fitAero, withAero } from "../mods/lib/aero-fit";
 import { driveSanity } from "../mods/lib/car-sanity";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../src/lib/mods/mod-physics";
+import sdCarImporter, { liveryLocalIds } from "../mods/importers/sd-car";
 import { VEHICLE_MODELS } from "../../src/lib/cars/vehicle-models";
 import type { VehicleModelId } from "../../src/types/f1";
 
@@ -126,6 +127,27 @@ check("a key only the category has is merged in", params.num("Front Right Wheel"
 check("a string the category doesn't list keeps the category's value", SdParams.parse(carXml({ drive: "FWD" })).mergeOver(cat).str("Drivetrain", "type") === "RWD");
 check("a string the category lists is the car's", SdParams.parse(carXml({ turbo: "true" })).mergeOver(cat).str("Engine", "turbo") === "true");
 check("a car's sections in order, a section path read", params.sections("Engine/data points").join() === "1,2,3,4,5" && params.num("Gearbox/gears/r", "ratio") === -2);
+{
+  const quoted = SdParams.parse(`<params name="q"><section name="Car"><attstr name="description" val="lift > drag, 'quoted'"/><attnum name="mass" val="900"/></section></params>`);
+  check("a value holding a > doesn't end its tag early", quoted.str("Car", "description") === "lift > drag, 'quoted'" && quoted.num("Car", "mass") === 900, quoted.str("Car", "description"));
+  const refused = ["1e500", "inf", "-Infinity", "nan"].filter((v) => {
+    try {
+      SdParams.parse(`<params name="n"><section name="Car"><attnum name="mass" val="${v}"/></section></params>`);
+      return false;
+    } catch (err) {
+      return /not a finite number/.test((err as Error).message);
+    }
+  });
+  check("a number that isn't finite (1e500, inf, nan) is refused", refused.length === 4, refused.join(", "));
+  check("…as is one a unit takes past a double's range", (() => {
+    try {
+      SdParams.parse(`<params name="n"><section name="Car"><attnum name="mass" unit="MPa" val="1e303"/></section></params>`);
+      return false;
+    } catch {
+      return true;
+    }
+  })());
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Physics
@@ -172,6 +194,43 @@ check("an open-wheeler of 2022 goes on the 2026 car, a 1936 GP car on a Chaparra
 const f1 = sdCarPhysics(params, { base: "f12026-car" }).patch as Record<string, any>;
 check("on the 2026 car: no hybrid, no DRS, no active aero", f1.hasErs === false && f1.hasDrs === false && f1.config.ers.ERS_MAX_DEPLOY === 0 && f1.config.aero.rhMap.activeAero.dCdA === 0);
 
+// Parameters the conversion can't take are refused, each named, rather than turned into NaN or a nonsense profile
+{
+  check("the made-up car's parameters all convert", sdCarProblems(car).length === 0, sdCarProblems(car).join("; "));
+  const refusedBy = (xml: string): string => {
+    try {
+      sdCarPhysics(SdParams.parse(xml).mergeOver(cat));
+      return "";
+    } catch (err) {
+      return (err as Error).message;
+    }
+  };
+  const xml = carXml();
+  const cases: [string, string, RegExp][] = [
+    ["no torque between tickover and the limiter", xml.replace(/<section name="data points">[\s\S]*?<\/section>\s*<\/section>/, '<section name="data points"><section name="1"><attnum name="rpm" unit="rpm" val="9500"/><attnum name="Tq" unit="N.m" val="300"/></section><section name="2"><attnum name="rpm" unit="rpm" val="9900"/><attnum name="Tq" unit="N.m" val="200"/></section></section>'), /no torque between the tickover and the limiter/],
+    ["a wheelbase of 0", xml.replace('<section name="Rear Axle"><attnum name="xpos" val="-1.4"/>', '<section name="Rear Axle"><attnum name="xpos" val="1.2"/>'), /wheelbase .* is 0/],
+    ["brakes with no pressure", xml.replace('<attnum name="max pressure" unit="kPa" val="20000"/>', '<attnum name="max pressure" unit="kPa" val="0"/>'), /brakes' torque/],
+    ["a bellcrank of 0", xml.replaceAll('<attnum name="bellcrank" val="1.5"/>', '<attnum name="bellcrank" val="0"/>'), /suspensions\/bellcrank is 0/],
+    ["a thin wing of aspect ratio 0", xml.replace('<section name="Front Wing"><attnum name="area" unit="m2" val="0.2"/>', '<section name="Front Wing"><attstr name="wing type" val="THIN"/><attnum name="aspect ratio" val="0"/><attnum name="area" unit="m2" val="0.2"/>'), /Front Wing\/aspect ratio is 0/],
+    ["a profile wing peaking at 0°", xml.replace('<section name="Rear Wing"><attnum name="area" unit="m2" val="0.25"/>', '<section name="Rear Wing"><attstr name="wing type" val="PROFILE"/><attnum name="aoa at max" val="0"/><attnum name="area" unit="m2" val="0.25"/>'), /aoa at max \+ aoa offset is 0/],
+    ["a dynamic friction of 100 %", xml.replaceAll('<attnum name="dynamic friction" unit="%" val="55"/>', '<attnum name="dynamic friction" unit="%" val="100"/>'), /dynamic friction is 1 \(under 99 %/],
+    ["a tyre stiffness of 0", xml.replaceAll('<attnum name="stiffness" val="21.5"/>', '<attnum name="stiffness" val="0"/>'), /wheels\/stiffness is 0/],
+  ];
+  for (const [what, x, want] of cases) {
+    const why = refusedBy(x);
+    check(`a car with ${what} is refused, the value named`, want.test(why), why.slice(0, 160) || "converted");
+  }
+  const soft = { ...car.tyres.front, stiffness: 2, dynamicFriction: 0.98 };
+  check("a tyre curve that doesn't peak below a slip of 2 has no peak (not 2.0)", sdTyreCurve(soft).peakSlip === Infinity && sdCarProblems({ ...car, tyres: { front: soft, rear: car.tyres.rear } }).some((p) => /peak slip/.test(p)));
+  let aeroErr = "";
+  try {
+    sdAeroTargets({ ...car, xFront: 0, xRear: 0 });
+  } catch (err) {
+    aeroErr = (err as Error).message;
+  }
+  check("the aero targets refuse a wheelbase of 0 rather than give NaN", /wheelbase of 0/.test(aeroErr), aeroErr);
+}
+
 // The aero fit and the drive, on the made-up GT car
 {
   const base = VEHICLE_MODELS[phys.base].simProfile!;
@@ -185,6 +244,35 @@ check("on the 2026 car: no hybrid, no DRS, no active aero", f1.hasErs === false 
   check("the aero fit makes Speed Dreams' downforce on each axle and its drag, within 6 %", err("front") < 0.06 && err("rear") < 0.06 && err("drag") < 0.06, `front ${fit.measured.front.toFixed(3)}/${targets.front.toFixed(3)} rear ${fit.measured.rear.toFixed(3)}/${targets.rear.toFixed(3)} drag ${fit.measured.drag.toFixed(3)}/${targets.drag.toFixed(3)}`);
   const s = driveSanity(prof(withAero(phys.patch, fit.aero)), { minTopSpeedKmh: 200, maxTopSpeedKmh: 330, maxStop100M: 45 });
   check("driven: no spin on the straight, a plausible top speed, it brakes", s.ok, `${s.topSpeedKmh.toFixed(0)} km/h, 100–0 in ${s.stop100M?.toFixed(1)} m ${s.problems.join("; ")}`);
+  // A profile whose simulation goes NaN, and a NaN limit: every comparison with NaN is false, so neither may pass
+  const broken = structuredClone(prof(withAero(phys.patch, fit.aero)));
+  broken.config.chassis.totalMassKg = Number.NaN;
+  const sb = driveSanity(broken, { minTopSpeedKmh: 200, maxTopSpeedKmh: 330, maxStop100M: 45 });
+  check("a car whose simulation goes NaN fails the drive", !sb.ok && sb.problems.some((p) => /NaN/.test(p)), sb.problems.join("; "));
+  let limitErr = "";
+  try {
+    driveSanity(prof(withAero(phys.patch, fit.aero)), { minTopSpeedKmh: Number.NaN, maxTopSpeedKmh: 330, maxStop100M: 45 });
+  } catch (err) {
+    limitErr = (err as Error).message;
+  }
+  check("a NaN limit is refused, not passed", /not a finite number/.test(limitErr), limitErr);
+
+  // On a ride-height map base (the 2026 car): a car that makes lift overall, and one that states negative drag
+  const mapBase = VEHICLE_MODELS["f12026-car"].simProfile!;
+  const f1Patch = sdCarPhysics(params, { base: "f12026-car" }).patch;
+  const mapProf = (patch: Record<string, unknown>) => {
+    const r = profileOf("f12026-car", patch);
+    if (!r.ok) throw new Error(r.errors.join("; "));
+    return r.profile;
+  };
+  const lift = fitAero(mapBase, f1Patch, { front: -0.05, rear: -0.05, drag: -0.2 }, mapProf);
+  const map = (lift.aero as { rhMap: { clA: number; cdA: number }; wings: { area: number }[] }).rhMap;
+  const wings = (lift.aero as { wings: { area: number }[] }).wings;
+  check(
+    "a car that makes lift overall gets none of the map's downforce, and a negative drag no negative drag",
+    map.clA === 0 && wings.every((w) => w.area === 0) && map.cdA === 0 && lift.notes.some((n) => /lift overall/.test(n)),
+    JSON.stringify({ clA: map.clA, cdA: map.cdA, notes: lift.notes }),
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -232,18 +320,22 @@ function acBox(name: string, c: number[], h: number[], texture = "test-car.png")
     "kids 0",
   ].join("\n");
 }
-/** A unit wheel (diameter 1, width 1 along z): a TIRE ring and a RIM disc, as the game's wheel0.acc has them */
-function acWheel(): string {
+/**
+ * A unit wheel (diameter 1, width 1 along z): a TIRE ring and a RIM disc, as the game's wheel0.acc has them; with
+ * `normals`, each vertex carries its normal, as an .acc may
+ */
+function acWheel(normals = false): string {
   const n = 16;
   const ring = (r: number) => Array.from({ length: n }, (_, i) => [Math.cos((2 * Math.PI * i) / n) * r, Math.sin((2 * Math.PI * i) / n) * r]);
   const outer = ring(0.5);
   const inner = ring(0.35);
   const tireV = [...outer.map(([x, y]) => [x, y, -0.5]), ...outer.map(([x, y]) => [x, y, 0.5])];
-  const tire = ["OBJECT poly", 'name "TIRE_s_1"', 'texture "wheel3d.png" base', `numvert ${tireV.length}`, ...tireV.map((p) => p.join(" ")), `numsurf ${n}`];
+  const vrow = (p: number[], nrm: number[]) => (normals ? [...p, ...nrm] : p).join(" ");
+  const tire = ["OBJECT poly", 'name "TIRE_s_1"', 'texture "wheel3d.png" base', `numvert ${tireV.length}`, ...tireV.map((p) => vrow(p, [p[0] / 0.5, p[1] / 0.5, 0])), `numsurf ${n}`];
   for (let i = 0; i < n; i++) tire.push("SURF 0x10", "mat 0", "refs 4", `${i} 0 0`, `${(i + 1) % n} 1 0`, `${n + ((i + 1) % n)} 1 1`, `${n + i} 0 1`);
   tire.push("kids 0");
   const rimV = [[0, 0, -0.4], ...inner.map(([x, y]) => [x, y, -0.4])];
-  const rim = ["OBJECT poly", 'name ":WI"', 'texture "wheel3d.png" base', `numvert ${rimV.length}`, ...rimV.map((p) => p.join(" ")), `numsurf ${n}`];
+  const rim = ["OBJECT poly", 'name ":WI"', 'texture "wheel3d.png" base', `numvert ${rimV.length}`, ...rimV.map((p) => vrow(p, [0, 0, -1])), `numsurf ${n}`];
   for (let i = 0; i < n; i++) rim.push("SURF 0x30", "mat 0", "refs 3", "0 0.5 0.5", `${1 + i} 0 0`, `${1 + ((i + 1) % n)} 1 0`);
   rim.push("kids 0");
   return `AC3Db\nMATERIAL "m" rgb 1 1 1 amb 0.5 0.5 0.5 emis 0 0 0 spec 0 0 0 shi 10 trans 0\nOBJECT world\nkids 2\n${tire.join("\n")}\n${rim.join("\n")}\n`;
@@ -332,7 +424,65 @@ else {
 
     const plan = JSON.parse(readFileSync(info, "utf8")).bodyPlan as number[][];
     check("the body's outline from nose to tail", plan.length >= 3 && plan[0][0] === 0 && plan[plan.length - 1][0] === 0 && near(Math.max(...plan.map((p) => p[0])), 0.95, 0.02), JSON.stringify(plan));
+
   }
+
+  // Broken or crafted models and names: a clean refusal, or the part left out, never a crash or a file outside the port's
+  const variant = (name: string, edit: (dir: string) => void, xmlEdit: (x: string) => string = (x) => x) => {
+    const dv = join(tmp, "variants", "cars", "models", "test-car");
+    rmSync(join(tmp, "variants"), { recursive: true, force: true });
+    mkdirSync(dv, { recursive: true });
+    for (const f of readdirSync(d)) writeFileSync(join(dv, f), readFileSync(join(d, f)));
+    edit(dv);
+    const x = xmlEdit(xml);
+    const secs: Record<string, Record<string, number | string>> = {};
+    for (const [path, key, a] of SdParams.parse(x).entries()) (secs[path] ??= {})[key] = a.val;
+    const pjv = join(tmp, "variants", "params.json");
+    writeFileSync(pjv, JSON.stringify({ sections: secs }));
+    const out = join(tmp, "variants", "out");
+    const rv = spawnSync(
+      "uv",
+      ["run", "--python", "3.14", "--no-project", "--with", "numpy==2.4.3", "--with", "pillow==13.0.0", "python", "-P", "scripts/cars/port_sd_car.py", dv, `${out}.glb`, "--params", pjv, "--skins-out", join(out, "skins"), "--info", `${out}.json`],
+      { encoding: "utf8" },
+    );
+    return { name, ok: rv.status === 0, out: `${rv.stdout}${rv.stderr}`, info: rv.status === 0 ? JSON.parse(readFileSync(`${out}.json`, "utf8")) : null, root: join(tmp, "variants"), glb: `${out}.glb` };
+  };
+  // A wheel model with normals of its own, scaled to each tyre's size: they must come out unit length again
+  const normalled = variant("wheel normals", (dv) => writeFileSync(join(dv, "wheel0.acc"), acWheel(true)));
+  if (!normalled.ok) check("a wheel model with normals converts", false, normalled.out.trim().split("\n").pop());
+  else {
+    const gj = readGlbJson(normalled.glb);
+    const bytes = readFileSync(normalled.glb);
+    const binAt = 20 + bytes.readUInt32LE(12) + 8;
+    const tyreNode = (gj.nodes as { name: string; mesh?: number }[]).find((n) => n.name === "WHEEL_LF_TYRE")!;
+    const acc = gj.accessors[gj.meshes[tyreNode.mesh!].primitives[0].attributes.NORMAL];
+    const view = gj.bufferViews[acc.bufferView];
+    const at = binAt + (view.byteOffset ?? 0) + (acc.byteOffset ?? 0);
+    const lengths = Array.from({ length: acc.count }, (_, k) => Math.hypot(...[0, 1, 2].map((c) => bytes.readFloatLE(at + (view.byteStride ?? 12) * k + 4 * c))));
+    check("a scaled wheel's own normals come out unit length", lengths.every((l) => Math.abs(l - 1) < 1e-3), `${Math.min(...lengths).toFixed(4)}..${Math.max(...lengths).toFixed(4)}`);
+  }
+  const bodyWith = (objects: string) => `AC3Db\nMATERIAL "m" rgb 1 1 1 amb 0.5 0.5 0.5 emis 0 0 0 spec 0.5 0.5 0.5 shi 50 trans 0\nOBJECT world\nkids 2\n${objects}\n`;
+  const box = acBox("BODY_s_0", [0, 0.45, 0], [2.2, 0.35, 0.95]);
+  const glass = acBox("GLASS_s_0", [-0.2, 0.95, 0], [0.6, 0.15, 0.8]);
+  // An object's `data` runs over two lines, the second of which reads like a keyword: the object must not end there
+  const withData = variant("data", (dv) => writeFileSync(join(dv, "test-car.acc"), bodyWith(`${box.replace('name "BODY_s_0"', 'name "BODY_s_0"\ndata 13\nhello\nkids 0')}\n${glass}`)));
+  check("an object's data over several lines is skipped whole", withData.ok && near(withData.info?.bodyBox.max[0], 0.95, 0.01), withData.ok ? JSON.stringify(withData.info?.bodyBox) : withData.out.trim().split("\n").pop());
+  const clean = (r: { ok: boolean; out: string }) => !r.ok && !/Traceback/.test(r.out) && r.out.trim().length > 0;
+  for (const r of [
+    variant("a negative vertex index", (dv) => writeFileSync(join(dv, "test-car.acc"), bodyWith(`${box.replace(/refs 4\n0 0 0/, "refs 4\n-1 0 0")}\n${glass}`))),
+    variant("a model cut short", (dv) => writeFileSync(join(dv, "test-car.acc"), bodyWith(box).slice(0, bodyWith(box).indexOf("numsurf") - 40))),
+    variant("a body with no geometry", (dv) => writeFileSync(join(dv, "test-car.acc"), "AC3Db\nOBJECT world\nkids 0\n")),
+    variant("a tyre 0 mm wide", () => undefined, (x) => x.replaceAll('<attnum name="tire width" unit="mm" val="275"/>', '<attnum name="tire width" unit="mm" val="0"/>')),
+  ]) {
+    check(`port_sd_car.py refuses a car with ${r.name} with a message, not a crash`, clean(r), r.out.trim().split("\n").pop()?.slice(0, 120));
+  }
+  const sneaky = variant("a livery named ..", (dv) => writeFileSync(join(dv, "test-car-...png"), readFileSync(join(d, "test-car-blue.png"))));
+  const outside = readdirSync(join(sneaky.root, "out")).filter((f) => f !== "skins");
+  check(
+    "a livery whose name is .. is left out, and writes nothing beside the liveries' folder",
+    sneaky.ok && !sneaky.info.skinIds.includes("..") && !outside.length,
+    sneaky.ok ? `${JSON.stringify(sneaky.info.skinIds)} ${outside.join(", ")}` : sneaky.out.trim().split("\n").pop(),
+  );
 }
 
 if (!hasUv || !hasFfmpeg) console.log("SKIP  the sound bank: uv or ffmpeg is not installed");
@@ -376,17 +526,36 @@ else {
     const offTop = m.engine.ext.find((e: any) => e.layer === "off" && e.rpm === 9000);
     check("off throttle at Speed Dreams' quieter curve", offTop.rms < on[on.length - 1].rms && near(offTop.rms / on[on.length - 1].rms, Math.exp(1.3 * (0.25 - 1)) / 1, 0.02));
   }
+  // Values that would divide by 0 or loop on nothing, and an ffmpeg that isn't there: a message, not a crash
+  const empty = join(tmp, "empty.wav");
+  // The tone's header with no samples after it
+  const header = Buffer.from(wav.subarray(0, 44));
+  header.writeUInt32LE(36, 4);
+  header.writeUInt32LE(0, 40);
+  writeFileSync(empty, header);
+  const soundRun = (args: string[]) =>
+    spawnSync("uv", ["run", "--python", "3.14", "--no-project", "--with", "numpy==2.4.3", "--with", "scipy==1.18.1", "--with", "fsb5", "python", "-P", "scripts/audio/port_sd_sound.py", ...args], { encoding: "utf8" });
+  for (const [what, args] of [
+    ["an rpm scale of 0", [wf, join(tmp, "a0"), "--rpm-scale", "0", "--limiter", "9000", "--idle", "1000"]],
+    ["a limiter of 0", [wf, join(tmp, "a1"), "--rpm-scale", "0.5", "--limiter", "0", "--idle", "1000"]],
+    ["a sample with no frames", [empty, join(tmp, "a2"), "--rpm-scale", "0.5", "--limiter", "9000", "--idle", "1000"]],
+    ["an ffmpeg that isn't there", [wf, join(tmp, "a3"), "--rpm-scale", "0.5", "--limiter", "9000", "--idle", "1000", "--ffmpeg", join(tmp, "no-ffmpeg")]],
+  ] as const) {
+    const r = soundRun([...args]);
+    const out = `${r.stdout}${r.stderr}`;
+    check(`port_sd_sound.py refuses ${what} with a message, not a crash`, r.status !== 0 && !/Traceback/.test(out) && out.trim().length > 0, out.trim().split("\n").pop()?.slice(0, 120));
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Cars fetched into the cache
 // ---------------------------------------------------------------------------------------------------------------------
-const models = join(SD_CACHE_DIR, "cars", "models");
+const models = join(SD_CACHE_DIR, "cars");
 const cached = existsSync(models) ? readdirSync(models).filter((c) => existsSync(join(models, c, `${c}.xml`))) : [];
 if (!cached.length) console.log("SKIP  fetched cars: none in scripts/mods/.cache/speed-dreams (npm run mod -- import sd-car --fetch <car>)");
 for (const c of cached) {
   const own = SdParams.read(join(models, c, `${c}.xml`));
-  const catFile = join(SD_CACHE_DIR, "cars", "categories", `${own.str("Car", "category")}.xml`);
+  const catFile = join(SD_DATA_DIR, "cars", "categories", `${own.str("Car", "category")}.xml`);
   const p = existsSync(catFile) ? own.mergeOver(SdParams.read(catFile)) : own;
   const ph = sdCarPhysics(p);
   const ok = profileOf(ph.base, ph.patch);
@@ -395,9 +564,51 @@ for (const c of cached) {
   check(`${c}: its licence is read (${lic.source})`, lic.reading.licences.length > 0 || lic.reading.problems.length > 0, `${lic.reading.licences.join(", ")} ${lic.reading.problems.join("; ")}`);
 }
 
-if (!process.env.SD_KEEP) rmSync(tmp, { recursive: true, force: true });
-if (failed) {
-  console.error(`\n${failed} check(s) failed`);
-  process.exit(1);
+// ---------------------------------------------------------------------------------------------------------------------
+// The importer's own checks, before anything is converted
+// ---------------------------------------------------------------------------------------------------------------------
+async function importerChecks(): Promise<void> {
+  const refusal = async (argv: string[]): Promise<string> => {
+    try {
+      await sdCarImporter.run(argv);
+      return "";
+    } catch (err) {
+      return (err as Error).message;
+    }
+  };
+  const carFolder = (root: string, name: string, xmlText: string) => {
+    const dir = join(tmp, root, "cars", "models", name);
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(tmp, root, "cars", "categories"), { recursive: true });
+    writeFileSync(join(tmp, root, "cars", "categories", "LS-GT2.xml"), CATEGORY);
+    writeFileSync(join(dir, `${name}.xml`), xmlText);
+    return dir;
+  };
+  const out = join(tmp, "imported");
+  const escaping = carFolder("escape-cat", "evil-car", carXml().replace('<attstr name="category" val="LS-GT2"/>', '<attstr name="category" val="../../../../../../etc/evil"/>'));
+  const why = await refusal([escaping, "--out", out]);
+  check("a car whose Car/category reaches outside is refused before it is looked for", /Car\/category is .* not a plain file name/.test(why), why);
+  const wheelDir = carFolder(
+    "escape-wheel",
+    "wheel-car",
+    carXml({ name: "Wheel Car" }).replace('<section name="Car">', '<section name="Graphic Objects"><attstr name="3d wheel" val="../../../../../../tmp/evil"/></section>\n  <section name="Car">'),
+  );
+  const whyWheel = await refusal([wheelDir, "--personal", "--no-lap", "--skip-drive-check", "--out", out]);
+  check("a car whose wheel model reaches outside is refused before it is looked for", /wheel model .* not a plain file name/.test(whyWheel), whyWheel);
+  check("--year must be a year", /--year must be a year/.test(await refusal([wheelDir, "--year", "abc", "--out", out])));
+  check("a car folder and --fetch together are refused", /not both/.test(await refusal([wheelDir, "--fetch", "ls2-cavallo-360r", "--out", out])));
+  check("nothing was packaged by the refused imports", !existsSync(out));
+  const ids = liveryLocalIds(["blue-very-long-name-1", "blue-very-long-name-2", "red"]);
+  check("two liveries whose package ids would collide get one each", new Set(ids.values()).size === 3 && [...ids.values()].every((v) => v.length <= 16), JSON.stringify([...ids]));
 }
-console.log("\nAll Speed Dreams car checks passed.");
+
+void importerChecks()
+  .catch((err) => check("the importer could be checked", false, err instanceof Error ? (err.stack ?? err.message) : String(err)))
+  .finally(() => {
+    if (!process.env.SD_KEEP) rmSync(tmp, { recursive: true, force: true });
+    if (failed) {
+      console.error(`\n${failed} check(s) failed`);
+      process.exit(1);
+    }
+    console.log("\nAll Speed Dreams car checks passed.");
+  });

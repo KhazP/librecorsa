@@ -75,7 +75,7 @@ export function withAero(patch: Record<string, unknown>, aero: Record<string, un
 
 /**
  * The aero changes that make the car (`patch` on `base`, made a profile by `profileOf`) meet `targets` at `speed`.
- * `profileOf` returns null for a patch the game would refuse
+ * `profileOf` throws for a patch the game would refuse
  */
 export function fitAero(
   base: CarSimProfile,
@@ -121,7 +121,8 @@ export function fitAero(
     const drag = m00.drag + kF * (m10.drag - m00.drag) + kR * (m01.drag - m00.drag);
     let body = a.drag + (targets.drag - drag) / q;
     if (body < 0) {
-      notes.push(`the base's wings drag more than the car does at its downforce: the body's drag at 0 (${((-body * q) / targets.drag * 100).toFixed(0)} % over)`);
+      const over = targets.drag > 0 ? ` (${(((-body * q) / targets.drag) * 100).toFixed(0)} % over)` : "";
+      notes.push(`the base's wings drag more than the car does at its downforce: the body's drag at 0${over}`);
       body = 0;
     }
     aero.drag = body;
@@ -132,9 +133,10 @@ export function fitAero(
   const map = a.rhMap;
   const total = targets.front + targets.rear;
   const share = total !== 0 ? targets.front / total : 0.5;
-  let k = 1;
+  // A car that makes lift overall gets none of the map's downforce (nor its wings'): the map holds no lift
+  let k = total > 0 ? 1 : 0;
   let shift = 0;
-  let kd = 1;
+  let kd = targets.drag > 0 ? 1 : 0;
   let aero: Record<string, unknown> = {};
   let m = run(aero);
   for (let i = 0; i < 4; i++) {
@@ -143,6 +145,7 @@ export function fitAero(
     if (got > 1e-6) shift += share - m.front / got;
     if (m.drag > 1e-6) kd *= targets.drag / m.drag;
     k = Math.max(0, k);
+    kd = Math.max(0, kd);
     aero = {
       wings: a.wings.map((w) => ({ area: w.area * k })),
       rhMap: {
@@ -154,5 +157,6 @@ export function fitAero(
     m = run(aero);
   }
   if (total <= 0) notes.push("the car makes lift overall: the map's downforce at 0");
+  if (targets.drag <= 0) notes.push("the car states no drag: the map's drag at 0");
   return { aero, measured: m, notes };
 }

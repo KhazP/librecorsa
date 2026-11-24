@@ -15,225 +15,18 @@
  * converted copy. A circuit fetched from Speed Dreams without such a file takes the asset database's word for it, when
  * the database also names its author. Anything else is refused, unless --personal converts it marked for personal use.
  */
-import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { isArchiveJunk, readZip } from "../../../src/lib/mods/zip-reader";
 import { packageCircuit } from "../lib/circuit-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
 import { copyrightHolders, decodeText, licenceText, recogniseLicence, statementFiles, type LicenceFinding } from "../lib/licences";
 import { localIdFrom, packageCredit, packageIdFrom, type SourceCredit } from "../lib/manifest-file";
 import { report } from "../lib/package-check";
-import { REPO_ROOT, runPython } from "../lib/toolchain";
+import { circuitCatalogue, fetchSdCircuit, fetchSdTextures, readSdSource, sdBaseData, type CircuitSource } from "../lib/sd-fetch";
+import { runPython } from "../lib/toolchain";
 
-/** Where fetched circuits and the base data are kept (gitignored) */
-export const SD_CACHE = join(REPO_ROOT, "scripts", "mods", ".cache", "speed-dreams");
-/** Speed Dreams' base data (default surfaces and textures, and the Jarama circuit): its repository and the pinned commit */
-export const SD_DATA_REPO = "https://forge.a-lec.org/speed-dreams/speed-dreams-data.git";
-export const SD_DATA_COMMIT = "ca89759acffc34ed457a587e94bd85ec17e25772";
-
-/** A circuit as Speed Dreams' asset database lists it (sd-track.circuits.json) */
-export interface CatalogueEntry {
-  directory: string;
-  name: string;
-  category: string;
-  author: string;
-  license: string;
-  revision: number;
-  archive: string;
-  sha256: string;
-  bytes: number;
-  page: string;
-}
-
-/** Where a fetched circuit came from, kept beside it (.source.json) */
-export interface CircuitSource {
-  from: "asset-database" | "speed-dreams-data";
-  directory: string;
-  /** The archive and its sha256, or the repository and its commit */
-  archive?: string;
-  sha256?: string;
-  revision?: number;
-  repository?: string;
-  commit?: string;
-  /** The circuit's page (its repository) */
-  page: string;
-  /** What the asset database says of it */
-  license?: string;
-  author?: string;
-}
-
-export const catalogue = (): CatalogueEntry[] =>
-  (JSON.parse(readFileSync(join(__dirname, "sd-track.circuits.json"), "utf8")) as { circuits: CatalogueEntry[] }).circuits;
-
-function git(args: string[], cwd: string): string {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
-  if (r.error) throw new Error(`git could not start (${r.error.message}): fetching from Speed Dreams' repository needs git`);
-  if (r.status !== 0) throw new Error(`git ${args.join(" ")} failed (exit ${r.status})`);
-  return r.stdout;
-}
-
-/** The base data repository at the pinned commit, its trees only (no file is downloaded until checked out) */
-function baseRepo(): string {
-  const repo = join(SD_CACHE, "speed-dreams-data");
-  const has = existsSync(join(repo, ".git")) && spawnSync("git", ["cat-file", "-e", `${SD_DATA_COMMIT}^{commit}`], { cwd: repo }).status === 0;
-  if (has) return repo;
-  rmSync(repo, { recursive: true, force: true });
-  mkdirSync(repo, { recursive: true });
-  git(["init", "-q"], repo);
-  git(["remote", "add", "origin", SD_DATA_REPO], repo);
-  git(["fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", SD_DATA_COMMIT], repo);
-  return repo;
-}
-
-/**
- * Speed Dreams' base data (its data/ folder) in the cache, with its default surfaces (data/tracks/surfaces.xml);
- * its textures are fetched as circuits need them (`baseTextures`): the repository serves them slowly, and a circuit
- * uses a few dozen of its 400
- */
-export function baseData(): string {
-  const repo = baseRepo();
-  if (!existsSync(join(repo, "data", "data", "tracks", "surfaces.xml"))) {
-    console.log(`      fetching Speed Dreams' default surfaces from ${SD_DATA_REPO} at ${SD_DATA_COMMIT.slice(0, 12)}…`);
-    git(["-c", "advice.detachedHead=false", "checkout", "-q", SD_DATA_COMMIT, "--", "data/data/tracks", "LICENSE", "README.md"], repo);
-  }
-  return join(repo, "data");
-}
-
-/** The base data's textures by these names (in whichever of Speed Dreams' formats it has them), fetched if missing */
-export function baseTextures(names: string[]): void {
-  const repo = baseRepo();
-  const stem = (n: string) => n.toLowerCase().replace(/\.[a-z0-9]+$/, "");
-  const formats = [".png", ".rgb", ".jpg", ".jpeg", ".sgi", ".bmp", ".tga"];
-  const listing = git(["ls-tree", "--name-only", SD_DATA_COMMIT, "data/data/textures/"], repo).split("\n").filter(Boolean);
-  // each name as it is named, else in the first of the formats Speed Dreams reads that the base data has it in
-  const paths = [
-    ...new Set(
-      names.flatMap((n) => {
-        const exact = listing.find((p) => basename(p).toLowerCase() === n.toLowerCase());
-        const other = formats.map((f) => listing.find((p) => basename(p).toLowerCase() === stem(n) + f)).find(Boolean);
-        return exact ?? other ?? [];
-      }),
-    ),
-  ].filter((p) => !existsSync(join(repo, p)));
-  if (!paths.length) return;
-  console.log(`      fetching ${paths.length} of Speed Dreams' shared textures…`);
-  git(["-c", "advice.detachedHead=false", "checkout", "-q", SD_DATA_COMMIT, "--", ...paths], repo);
-}
-
-/** A path in an archive as a safe relative path, or null (absolute, `..`, a drive) */
-const safeRelative = (p: string): string | null =>
-  p.startsWith("/") || p.includes("\\") || /^[a-z]:/i.test(p) || p.split("/").some((s) => s === ".." || s === "") ? null : p;
-
-/** The folder under `root` that holds a trackdef named <directory>.xml, or the only folder with a trackdef */
-function findCircuitFolder(root: string, directory: string): string | null {
-  const hits: string[] = [];
-  const walk = (dir: string) => {
-    for (const f of readdirSync(dir)) {
-      const p = join(dir, f);
-      if (statSync(p).isDirectory()) walk(p);
-      else if (f.toLowerCase() === `${directory.toLowerCase()}.xml`) hits.unshift(dir);
-      else if (f.toLowerCase().endsWith(".xml") && !f.toLowerCase().endsWith(".prj.xml") && /Track Segments/.test(readFileSync(p, "latin1"))) hits.push(dir);
-    }
-  };
-  walk(root);
-  return hits[0] ?? null;
-}
-
-/** A file's bytes, tried three times: Speed Dreams' servers drop out now and then for a minute or two */
-async function download(url: string): Promise<Uint8Array> {
-  let last = "";
-  for (const wait of [0, 10, 30]) {
-    if (wait) {
-      console.log(`      ${last}; trying again in ${wait} s…`);
-      await new Promise((r) => setTimeout(r, wait * 1000));
-    }
-    try {
-      const res = await fetch(url);
-      if (res.ok) return new Uint8Array(await res.arrayBuffer());
-      last = `${res.status} ${res.statusText}`;
-      if (res.status < 500 && res.status !== 429) break;
-    } catch (err) {
-      const cause = (err as { cause?: { code?: string } }).cause;
-      last = cause?.code ?? (err as Error).message;
-    }
-  }
-  throw new Error(`${url}: ${last}. Speed Dreams' server may be down for a while: try again later`);
-}
-
-/** One of Speed Dreams' circuits, by its folder name, in the cache: downloaded and checked when it isn't there yet */
-export async function fetchCircuit(name: string): Promise<string> {
-  const entry = catalogue().find((e) => e.directory.toLowerCase() === name.toLowerCase());
-  const dir = join(SD_CACHE, "circuits", entry?.directory ?? name);
-  const sourcePath = join(dir, ".source.json");
-  const cached = existsSync(sourcePath) ? (JSON.parse(readFileSync(sourcePath, "utf8")) as CircuitSource) : null;
-
-  if (!entry) {
-    // The base data's own circuits
-    if (cached?.commit === SD_DATA_COMMIT) return dir;
-    const repo = baseRepo();
-    const trees = git(["ls-tree", "-r", "-d", "--name-only", SD_DATA_COMMIT, "data/tracks"], repo).split("\n");
-    const path = trees.find((t) => t.split("/").length === 4 && t.split("/")[3].toLowerCase() === name.toLowerCase());
-    if (!path) {
-      const names = catalogue().map((e) => e.directory);
-      throw new Error(`no Speed Dreams circuit "${name}": the circuits are ${names.join(", ")}, and jarama`);
-    }
-    console.log(`      fetching ${path} from ${SD_DATA_REPO} at ${SD_DATA_COMMIT.slice(0, 12)}…`);
-    git(["-c", "advice.detachedHead=false", "checkout", "-q", SD_DATA_COMMIT, "--", path], repo);
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(dirname(dir), { recursive: true });
-    renameSync(join(repo, path), dir);
-    const source: CircuitSource = {
-      from: "speed-dreams-data",
-      directory: basename(path),
-      repository: SD_DATA_REPO,
-      commit: SD_DATA_COMMIT,
-      page: `https://forge.a-lec.org/speed-dreams/speed-dreams-data/src/commit/${SD_DATA_COMMIT}/${path}`,
-    };
-    writeFileSync(sourcePath, `${JSON.stringify(source, null, 2)}\n`);
-    return dir;
-  }
-
-  if (cached?.sha256 === entry.sha256 && existsSync(dir)) return dir;
-  console.log(`      fetching ${entry.name} (revision ${entry.revision}, ${(entry.bytes / 1e6).toFixed(1)} MB) from ${entry.archive}…`);
-  const data = await download(entry.archive);
-  const sha = createHash("sha256").update(data).digest("hex");
-  if (sha !== entry.sha256) {
-    throw new Error(
-      `${entry.archive} is not the archive this importer pins (sha256 ${sha}, not ${entry.sha256}): Speed Dreams may have published a new revision. Update scripts/mods/importers/sd-track.circuits.json from https://www.speed-dreams.net/assets.json`,
-    );
-  }
-  const part = `${dir}.part`;
-  rmSync(part, { recursive: true, force: true });
-  for (const e of await readZip(data)) {
-    if (isArchiveJunk(e.path)) continue;
-    const rel = safeRelative(e.path);
-    if (!rel) throw new Error(`${entry.archive}: unsafe path in the archive: ${e.path}`);
-    const out = join(part, rel);
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, await e.read());
-  }
-  const folder = findCircuitFolder(part, entry.directory);
-  if (!folder) throw new Error(`${entry.archive}: no trackdef XML in the archive`);
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dirname(dir), { recursive: true });
-  renameSync(folder, dir);
-  rmSync(part, { recursive: true, force: true });
-  const source: CircuitSource = {
-    from: "asset-database",
-    directory: entry.directory,
-    archive: entry.archive,
-    sha256: entry.sha256,
-    revision: entry.revision,
-    page: entry.page,
-    license: entry.license,
-    author: entry.author,
-  };
-  writeFileSync(sourcePath, `${JSON.stringify(source, null, 2)}\n`);
-  return dir;
-}
+export type { CircuitSource } from "../lib/sd-fetch";
 
 /** The circuit's trackdef: <folder>.xml, else the folder's one XML with track segments */
 export function trackdefOf(folder: string): string {
@@ -244,11 +37,15 @@ export function trackdefOf(folder: string): string {
   return join(folder, xml[0]);
 }
 
-/** Whether the trackdef's included files (Speed Dreams' default surfaces) are where it says, as in an install */
-function includesResolve(xml: string): boolean {
+/**
+ * Whether the trackdef includes files (Speed Dreams' default surfaces) and every one is where it says, as in an
+ * install. A trackdef that includes none still draws on the shared textures by its surfaces' names, so the base data is
+ * fetched for it too
+ */
+export function includesResolve(xml: string): boolean {
   const text = readFileSync(xml, "latin1");
   const files = [...text.matchAll(/<!ENTITY\s+[\w.-]+\s+SYSTEM\s+"([^"]+)"/g)].map((m) => m[1]);
-  return files.every((f) => existsSync(resolve(dirname(xml), f)));
+  return files.length > 0 && files.every((f) => existsSync(resolve(dirname(xml), f)));
 }
 
 /** The trackdef's Header: the circuit's name, author and description */
@@ -382,14 +179,13 @@ ${PACKAGE_USAGE}
       personal: { type: "boolean" },
     });
     if (values.fetch && positionals.length) throw new Error("give a circuit folder or --fetch <circuit>, not both");
-    const folder = values.fetch ? await fetchCircuit(values.fetch) : positionals[0] && resolve(positionals[0]);
+    const folder = values.fetch ? await fetchSdCircuit(values.fetch) : positionals[0] && resolve(positionals[0]);
     if (!folder || !existsSync(folder) || !statSync(folder).isDirectory()) throw new Error("name a Speed Dreams circuit's folder, or --fetch <circuit>");
     const xml = trackdefOf(folder);
-    const sourcePath = join(folder, ".source.json");
-    const source = existsSync(sourcePath) ? (JSON.parse(readFileSync(sourcePath, "utf8")) as CircuitSource) : null;
+    const source = readSdSource<CircuitSource>(folder);
     const header = trackHeader(xml);
     const directory = basename(folder);
-    const listed = catalogue().find((e) => e.directory === directory && source?.sha256 === e.sha256);
+    const listed = circuitCatalogue().find((e) => e.directory === directory && source?.sha256 === e.sha256);
     const title = displayName(listed?.name ?? header.name ?? directory);
 
     // The licence decides first: nothing is converted that can't be packaged
@@ -403,7 +199,7 @@ ${PACKAGE_USAGE}
     );
 
     const fetchBase = !values["sd-data"] && !includesResolve(xml);
-    const sdData = values["sd-data"] ? resolve(values["sd-data"]) : fetchBase ? baseData() : null;
+    const sdData = values["sd-data"] ? resolve(values["sd-data"]) : fetchBase ? sdBaseData() : null;
     const work = mkdtempSync(join(tmpdir(), "sd-track-"));
     try {
       const glb = join(work, `${localId}.glb`);
@@ -413,7 +209,7 @@ ${PACKAGE_USAGE}
         // the shared textures the circuit draws on and doesn't carry
         const needs = join(work, "needs.json");
         runPython("scripts/tracks/extract_sd_track.py", [...extract, "--needs-json", needs]);
-        baseTextures((JSON.parse(readFileSync(needs, "utf8")) as { textures: string[] }).textures);
+        fetchSdTextures((JSON.parse(readFileSync(needs, "utf8")) as { textures: string[] }).textures);
       }
       runPython("scripts/tracks/extract_sd_track.py", extract);
       const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;

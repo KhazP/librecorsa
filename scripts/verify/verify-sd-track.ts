@@ -20,9 +20,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { circuitLicence, SD_CACHE, type CircuitSource } from "../mods/importers/sd-track";
+import { circuitLicence, includesResolve, type CircuitSource } from "../mods/importers/sd-track";
 import { copyrightHolders, recogniseLicence } from "../mods/lib/licences";
 import { REPO_ROOT } from "../mods/lib/toolchain";
+import { readSdSource, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -306,15 +307,15 @@ if (!ran) {
   }
 
   // --- Speed Dreams' own circuits, when the cache has them ----------------------------------------------------------
-  const circuitsDir = join(SD_CACHE, "circuits");
-  const cached = existsSync(circuitsDir) ? readdirSync(circuitsDir).filter((d) => existsSync(join(circuitsDir, d, ".source.json"))) : [];
-  const baseDir = join(SD_CACHE, "speed-dreams-data", "data");
+  const circuitsDir = join(SD_CACHE_DIR, "circuits");
+  const cached = existsSync(circuitsDir) ? readdirSync(circuitsDir).filter((d) => readSdSource(join(circuitsDir, d))) : [];
+  const baseDir = SD_DATA_DIR;
   if (!cached.length) console.log("SKIP  Speed Dreams' own circuits: none in scripts/mods/.cache/speed-dreams (npm run mod -- import sd-track --fetch <circuit>)");
   for (const d of cached) {
     const dir = join(circuitsDir, d);
-    const source = JSON.parse(readFileSync(join(dir, ".source.json"), "utf8")) as CircuitSource;
+    const source = readSdSource<CircuitSource>(dir);
     const out = join(tmp, d);
-    const r = python(["scripts/tracks/extract_sd_track.py", dir, "--out-glb", `${out}.glb`, "--out-settings", `${out}.json`, "--geometry-json", `${out}.geom.json`, ...(existsSync(baseDir) ? ["--sd-data", baseDir] : [])])!;
+    const r = python(["scripts/tracks/extract_sd_track.py", dir, "--out-glb", `${out}.glb`, "--out-settings", `${out}.json`, "--geometry-json", `${out}.geom.json`, ...(existsSync(join(baseDir, "data", "tracks", "surfaces.xml")) ? ["--sd-data", baseDir] : [])])!;
     check(`${d}: converts`, r.ok, r.ok ? "" : r.out.slice(-800));
     if (!r.ok) continue;
     const g = JSON.parse(readFileSync(`${out}.geom.json`, "utf8")) as { lengthM: number; closureM: number; acRoadOffsetM?: { median: number; p95: number }; scenery?: { triangles: number } };
@@ -328,6 +329,79 @@ if (!ran) {
       lic = `refused: ${(err as Error).message.split("\n")[0]}`;
     }
     console.log(`INFO  ${d}: licence ${lic}`);
+  }
+}
+
+// --- Whether the base data is needed -----------------------------------------------------------------------------------
+
+{
+  const install = join(tmp, "install");
+  const circuit = join(install, "tracks", "circuit", "inc");
+  mkdirSync(join(install, "data", "tracks"), { recursive: true });
+  mkdirSync(circuit, { recursive: true });
+  writeFileSync(join(install, "data", "tracks", "surfaces.xml"), "<params/>");
+  const xml = (doctype: string) => {
+    writeFileSync(join(circuit, "inc.xml"), `<?xml version="1.0"?>\n${doctype}\n<params name="inc"/>`);
+    return join(circuit, "inc.xml");
+  };
+  const inInstall = includesResolve(xml('<!DOCTYPE params SYSTEM "x.dtd" [\n<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">\n]>'));
+  const missing = includesResolve(xml('<!DOCTYPE params SYSTEM "x.dtd" [\n<!ENTITY default-objects SYSTEM "../../../data/tracks/objects.xml">\n]>'));
+  const none = includesResolve(xml('<!DOCTYPE params SYSTEM "x.dtd">'));
+  check("the base data is fetched unless every include is where the trackdef says, and for a trackdef with none", inInstall && !missing && !none, JSON.stringify({ inInstall, missing, none }));
+}
+
+// --- Crafted trackdefs: includes and names that reach outside the circuit, and values that would break the build ----------
+
+if (ran) {
+  /** The extractor on a circuit folder `name` holding `xml` (and `ac` as oval.ac); its result and its settings */
+  const extract = (name: string, xml: string, ac?: string) => {
+    const dir = join(tmp, "crafted", name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${name}.xml`), xml);
+    if (ac !== undefined) writeFileSync(join(dir, "oval.ac"), ac);
+    const out = join(tmp, "crafted", `${name}-out`);
+    const r = python(["scripts/tracks/extract_sd_track.py", dir, "--out-glb", `${out}.glb`, "--out-settings", `${out}.json`, "--geometry-json", `${out}.geom.json`])!;
+    const settings = r.ok ? (JSON.parse(readFileSync(`${out}.json`, "utf8")) as { description: string }) : null;
+    const geometry = r.ok ? (JSON.parse(readFileSync(`${out}.geom.json`, "utf8")) as { scenery?: unknown }) : null;
+    return { ...r, settings, geometry };
+  };
+  // A file outside the circuit's folder, which its trackdef tries to include and to load as its model
+  writeFileSync(join(tmp, "crafted-secret.xml"), "TOPSECRET");
+  mkdirSync(join(tmp, "crafted"), { recursive: true });
+  writeFileSync(join(tmp, "crafted", "secret.xml"), "TOPSECRET");
+  writeFileSync(join(tmp, "crafted", "outside.ac"), AC_MODEL);
+  const evilXml = TRACK_XML.replace(
+    '<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">',
+    `<!ENTITY default-surfaces SYSTEM "../../../data/tracks/surfaces.xml">\n<!ENTITY secret SYSTEM "${join(tmp, "crafted-secret.xml")}">\n<!ENTITY up SYSTEM "../secret.xml">`,
+  )
+    .replace('val="Two straights and two hairpins"', 'val="before &secret;&up; after"')
+    .replace('val="oval.ac"', 'val="../outside.ac"');
+  const evil = extract("evil", evilXml);
+  check(
+    "an <!ENTITY> naming a file outside the circuit's folder is not included",
+    evil.ok && !!evil.settings && !evil.settings.description.includes("TOPSECRET"),
+    evil.ok ? (evil.settings?.description ?? "") : evil.out.slice(-300),
+  );
+  check("a 3d description reaching outside the folder loads no model from there", evil.ok && !evil.geometry?.scenery, JSON.stringify(evil.geometry?.scenery ?? null));
+
+  const segments = /<section name="Track Segments">[\s\S]*<\/section>\s*<\/section>\s*<\/params>/;
+  const bad: [string, string, string?][] = [
+    ["a length of nan", TRACK_XML.replace('<attnum name="lg" unit="m" val="200"/><attnum name="z start"', '<attnum name="lg" unit="m" val="nan"/><attnum name="z start"')],
+    ["a width of inf", TRACK_XML.replace('<attnum name="width" unit="m" val="12"/>', '<attnum name="width" unit="m" val="inf"/>')],
+    ["no segments", TRACK_XML.replace(segments, '<section name="Track Segments"></section>\n  </section>\n</params>')],
+    ["a turn of radius 0 widening to 50 m", TRACK_XML.replace('<attnum name="radius" unit="m" val="50"/>', '<attnum name="radius" unit="m" val="0"/><attnum name="end radius" unit="m" val="50"/>')],
+    ["pit boxes 0 m long", TRACK_XML.replace('<attnum name="length" unit="m" val="10"/>', '<attnum name="length" unit="m" val="0"/>')],
+    ["banking of 89°", TRACK_XML.replace('<attnum name="banking start" unit="deg" val="5"/>', '<attnum name="banking start" unit="deg" val="89"/>')],
+    ["a negative side width", TRACK_XML.replace('<section name="Right Side"><attnum name="width" unit="m" val="5"/><attstr name="surface" val="sand"/></section>\n    <section name="Left Side">', '<section name="Right Side"><attnum name="width" unit="m" val="-5"/><attstr name="surface" val="sand"/></section>\n    <section name="Left Side">')],
+    ["XML that isn't well-formed", TRACK_XML.replace("</params>", "")],
+    ["an AC3D model cut short", TRACK_XML, AC_MODEL.slice(0, AC_MODEL.indexOf("262 10 -25"))],
+    ["an AC3D model with a negative vertex index", TRACK_XML, AC_MODEL.replace("3 0 1\nkids 0", "-1 0 1\nkids 0")],
+    ["an AC3D model with a vertex of nan", TRACK_XML, AC_MODEL.replace("262 10 -13", "262 nan -13")],
+  ];
+  for (const [what, xml, ac] of bad) {
+    const r = extract(`bad-${what.replace(/\W+/g, "-")}`, xml.replace('val="oval.ac"', ac === undefined ? 'val="none.ac"' : 'val="oval.ac"'), ac);
+    const message = r.out.trim().split("\n").pop() ?? "";
+    check(`a trackdef with ${what} is refused with a message, not a crash`, !r.ok && !/Traceback/.test(r.out) && message.length > 0, message.slice(0, 120));
   }
 }
 

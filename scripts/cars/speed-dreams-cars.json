@@ -1,5 +1,5 @@
 {
-  "about": "Speed Dreams cars the sd-car importer fetches (npm run mod -- import sd-car --fetch <car>): every car in the official asset database at the pinned date, each at a fixed commit of its own repository on forge.a-lec.org, or for the few without one the database's zip and its sha256. name, category, author and license are the database's. Regenerate with scripts/cars/speed-dreams-pins.ts.",
+  "about": "Speed Dreams cars the sd-car importer fetches (npm run mod -- import sd-car --fetch <car>): every car in the official asset database at the pinned date, each at a fixed commit of its own repository on forge.a-lec.org, or for the few without one the database's zip and its sha256. name, category, author and license are the database's. data pins speed-dreams-data, which both Speed Dreams importers read (the circuits' default surfaces and textures, the cars' categories and shared files: scripts/mods/lib/sd-fetch.ts). Regenerate with scripts/cars/speed-dreams-pins.ts.",
   "pinned": "2026-11-24",
   "assetsDatabase": "https://www.speed-dreams.net/assets.json",
   "data": {

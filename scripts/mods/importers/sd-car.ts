@@ -2,10 +2,10 @@
  * A Speed Dreams car as a mod package: its folder (`…/cars/models/<car>/`: the XML, the AC3D models, textures and
  * engine sample) converted into the game's car rig, liveries, picture, sound bank and a physics patch on the closest of
  * the game's vehicle models. `--fetch <car>` downloads one of the cars the official asset database lists, at the
- * revision scripts/cars/speed-dreams-cars.json pins, into scripts/mods/.cache/speed-dreams/.
+ * revision scripts/cars/speed-dreams-cars.json pins, into scripts/mods/.cache/speed-dreams/ (lib/sd-fetch.ts).
  *
  *   1. its parameters: the car's XML merged over its category's (scripts/lib/sd-params.ts), the category found beside
- *      the car as in the game's data folder, else in the cache, else fetched;
+ *      the car as in the game's data folder, else taken from the pinned shared data;
  *   2. its licence (scripts/cars/sd-licence.ts): a car whose readme, or the official list, doesn't clearly let it be
  *      shared is refused, unless `--personal` (then the package says it is for personal use only); a livery with an
  *      unclear readme of its own is left out;
@@ -17,11 +17,13 @@
  *   5. the package (lib/car-package.ts), with the licence texts, the car's readme and a CONVERSION.md of what was
  *      mapped where and what was left out.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { packageCar, type CarSkinSource } from "../lib/car-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "../lib/importer";
-import { localIdFrom, packageCredit } from "../lib/manifest-file";
+import { localIdFrom, packageCredit, packageIdFrom } from "../lib/manifest-file";
 import { report } from "../lib/package-check";
 import { runPython, REPO_ROOT } from "../lib/toolchain";
 import { fitAero, withAero, type AeroFit } from "../lib/aero-fit";
@@ -29,7 +31,7 @@ import { driveSanity, type SanityResult } from "../lib/car-sanity";
 import { SdParams } from "../../lib/sd-params";
 import { sdAeroTargets, sdCarPhysics, PHYSICS_BASES, SD_KEYS_NOT_CARRIED, type SdCar, type SdPhysics } from "../../cars/sd-car-physics";
 import { findCarLicence, LICENCES, shareable, type CarLicence, type LicenceId } from "../../cars/sd-licence";
-import { fetchCategory, fetchedSource, fetchSdCar, fetchShared, readPins, SD_CACHE_DIR, type PinnedCar } from "../../cars/sd-fetch";
+import { fetchedSource, fetchSdCar, plainFileName, readPins, SD_DATA_DIR, sdCategoryFile, sdSharedFile, type PinnedCar } from "../lib/sd-fetch";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../../src/lib/mods/mod-physics";
 import { VEHICLE_MODELS } from "../../../src/lib/cars/vehicle-models";
 import type { CarSimProfile } from "../../../src/lib/sim/f12026-car/F12026CarSim";
@@ -44,9 +46,9 @@ const PERSONAL_NOTE = "For personal use only, not for sharing.";
 /** The game's car whose sound a class borrows when the car has no sample of its own */
 const SOUND_BY_CLASS: Record<ModCarClass, string> = { f1: "lc26", gt3: "amg-gt3", proto: "mtr-496r", classic: "porsche-934-rsr", road: "vw-scirocco-gtx" };
 
-/** The game's shared folders as a Speed Dreams install or a fetched cache lays them out beside `cars/models/<car>` */
+/** The game's shared folders: in the Speed Dreams install the car sits in (`cars/models/<car>`), then in the cache */
 function sharedDirs(carDir: string): { objects: string[]; textures: string[]; sound: string[] } {
-  const data = [join(carDir, "..", "..", "..", "data"), join(SD_CACHE_DIR, "data")];
+  const data = [join(carDir, "..", "..", "..", "data"), join(SD_DATA_DIR, "data")];
   return {
     objects: data.map((d) => join(d, "objects")).filter(existsSync),
     textures: data.map((d) => join(d, "textures")).filter(existsSync),
@@ -56,9 +58,18 @@ function sharedDirs(carDir: string): { objects: string[]; textures: string[]; so
 
 const findIn = (dirs: string[], file: string) => dirs.map((d) => join(d, file)).find((p) => existsSync(p));
 
-/** The liveries a car folder has: `<car>-<id>.<image>` that is no texture of its own */
+/**
+ * A file name the car's XML gives (its category, its wheel models, its engine sample), checked to be a plain one before
+ * it is looked for anywhere: `../../x.wav` would reach outside the car's folder and the shared data
+ */
+function plainName(name: string, where: string, car: string): string {
+  if (!plainFileName(name)) throw new Error(`${car}: ${where} is ${JSON.stringify(name)}, which is not a plain file name`);
+  return name;
+}
+
+/** The liveries a car folder has: `<car>-<id>.<image>` that is no texture of its own (the formats port_sd_car.py reads) */
 function liveryCandidates(carDir: string, car: string): string[] {
-  const re = new RegExp(`^${car.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(.+)\\.(png|jpe?g|rgb)$`, "i");
+  const re = new RegExp(`^${car.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(.+)\\.(png|jpe?g|rgb|bmp|tga)$`, "i");
   const ids = new Set<string>();
   for (const f of readdirSync(carDir)) {
     const m = re.exec(f);
@@ -85,6 +96,22 @@ function expectedTopSpeed(car: SdCar, drag: number): number {
   const top = car.gears.ratios[car.gears.ratios.length - 1] * car.diff.ratio;
   const byGearing = ((car.engine.limiterRpm * Math.PI) / 30 / top) * car.tyres.rear.radius;
   return Math.min(byPower, byGearing) * 3.6;
+}
+
+/**
+ * Each livery's id in the package (16 characters at most): its own made into one, and where two come out alike, the
+ * later one numbered
+ */
+export function liveryLocalIds(ids: string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const id of ids) {
+    let local = localIdFrom(id);
+    for (let n = 2; taken.has(local); n++) local = `${localIdFrom(id).slice(0, 16 - `-${n}`.length).replace(/[-_]+$/, "")}-${n}`;
+    taken.add(local);
+    out.set(id, local);
+  }
+  return out;
 }
 
 /** The car's id in the package: its folder's name, without its category's prefix when it is too long */
@@ -143,7 +170,7 @@ function conversionReport(o: {
   return `${lines.join("\n")}\n`;
 }
 
-const importer: Importer = {
+const importer: Importer & { convert(argv: string[], work: string): Promise<void> } = {
   summary: "a Speed Dreams car (its folder, or --fetch <car> from the official repositories)",
   usage: `<car folder> | --fetch <car> [--base <model>] [--id <car id>] [--class <class>] [--year <year>] [--personal]
   --fetch <car>            download the car (its folder's name, e.g. ls2-cavallo-360r) at its pinned revision first
@@ -158,6 +185,16 @@ const importer: Importer = {
 ${PACKAGE_USAGE}
   Default package id: sd.<car>.`,
   async run(argv) {
+    // The converters' working copy: removed after the import, failed or not, unless --keep-build keeps it
+    const work = mkdtempSync(join(tmpdir(), "sd-car-"));
+    try {
+      await importer.convert(argv, work);
+    } finally {
+      if (argv.includes("--keep-build")) console.log(`      the working copy is kept in ${work}`);
+      else rmSync(work, { recursive: true, force: true });
+    }
+  },
+  async convert(argv, work) {
     const { values, positionals } = parseImportArgs(argv, {
       fetch: { type: "string" },
       base: { type: "string" },
@@ -169,6 +206,7 @@ ${PACKAGE_USAGE}
       "no-lap": { type: "boolean" },
       "skip-drive-check": { type: "boolean" },
     });
+    if (values.fetch && positionals.length) throw new Error("give a car folder or --fetch <car>, not both");
     const carDir = values.fetch ? await fetchSdCar(values.fetch) : positionals[0] && resolve(positionals[0]);
     if (!carDir || !existsSync(carDir)) throw new Error("name the car's folder (…/cars/models/<car>), or --fetch <car>");
     const car = basename(carDir);
@@ -176,19 +214,22 @@ ${PACKAGE_USAGE}
     if (!existsSync(xml)) throw new Error(`${carDir}: no ${car}.xml (the folder must keep the car's own name)`);
     if (values.base && !PHYSICS_BASES.includes(values.base as VehicleModelId)) throw new Error(`--base must be one of ${PHYSICS_BASES.join(", ")}`);
     if (values.class && !CLASSES.includes(values.class as ModCarClass)) throw new Error(`--class must be one of ${CLASSES.join(", ")}`);
+    if (values.year !== undefined && !/^\d{4}$/.test(values.year)) throw new Error(`--year must be a year (1890 to 2100), not "${values.year}"`);
 
     // ---- 1. Parameters: the car over its category
     const own = SdParams.read(xml);
-    const category = own.str("Car", "category");
+    const ownCategory = own.str("Car", "category");
+    const category = ownCategory === undefined ? undefined : plainName(ownCategory, "Car/category", car);
     let params = own;
     let categoryFile = values.category && resolve(values.category);
     if (!categoryFile && category) {
-      categoryFile =
-        [join(carDir, "..", "..", "categories", `${category}.xml`), join(SD_CACHE_DIR, "cars", "categories", `${category}.xml`)].find((f) => existsSync(f)) ??
-        (await fetchCategory(category).catch((err: Error) => {
-          // Its defaults and limits are part of the car (a car may take its tyres' grip from them): no guessing
-          throw new Error(`${car}: its category ${category} is not beside it and could not be fetched (${err.message}); pass --category <file>`);
-        }));
+      const beside = join(carDir, "..", "..", "categories", `${category}.xml`);
+      try {
+        categoryFile = existsSync(beside) ? beside : sdCategoryFile(category);
+      } catch (err) {
+        // Its defaults and limits are part of the car (a car may take its tyres' grip from them): no guessing
+        throw new Error(`${car}: its category ${category} is not beside it and could not be fetched (${(err as Error).message}); pass --category <file>`);
+      }
     }
     if (categoryFile && existsSync(categoryFile)) params = own.mergeOver(SdParams.read(categoryFile));
     else if (category) throw new Error(`${car}: no category file ${categoryFile}`);
@@ -222,6 +263,7 @@ ${PACKAGE_USAGE}
     const phys = sdCarPhysics(params, { base: values.base as VehicleModelId | undefined });
     const classId = (values.class as ModCarClass | undefined) ?? phys.classId;
     const year = values.year ? Number(values.year) : phys.year;
+    if (!(year >= 1890 && year <= 2100)) throw new Error(`--year must be a year (1890 to 2100), not ${year}`);
     const baseProfile = VEHICLE_MODELS[phys.base].simProfile!;
     const pkgCarId = carLocalId(values.id ?? car);
     const profileOf = (patch: Record<string, unknown>): CarSimProfile => {
@@ -250,9 +292,6 @@ ${PACKAGE_USAGE}
     }
 
     // ---- 4. Model, liveries, picture; sound
-    const work = join(SD_CACHE_DIR, "build", car);
-    rmSync(work, { recursive: true, force: true });
-    mkdirSync(work, { recursive: true });
     const paramsJson = join(work, "params.json");
     const sections: Record<string, Record<string, number | string>> = {};
     for (const [path, key, a] of params.entries()) (sections[path] ??= {})[key] = a.val;
@@ -260,8 +299,8 @@ ${PACKAGE_USAGE}
     const shared = sharedDirs(carDir);
     const G = "Graphic Objects";
     for (const prefix of new Set([params.str(G, "3d front wheel"), params.str(G, "3d rear wheel"), params.str(G, "3d wheel") ?? "wheel"].filter(Boolean) as string[])) {
-      const f = `${prefix}0.acc`;
-      if (!existsSync(join(carDir, f)) && !findIn(shared.objects, f)) await fetchShared(`objects/${f}`);
+      const f = plainName(`${prefix}0.acc`, `its wheel model (${G}/3d … wheel "${prefix}")`, car);
+      if (!existsSync(join(carDir, f)) && !findIn(shared.objects, f)) sdSharedFile("objects", f);
     }
     const glb = join(work, `${pkgCarId}.glb`);
     const skinsOut = join(work, "skins");
@@ -280,24 +319,36 @@ ${PACKAGE_USAGE}
       warnings: string[];
     };
 
-    const sample = params.str("Sound", "engine sample") ?? "engine-1.wav";
+    const sample = plainName(params.str("Sound", "engine sample") ?? "engine-1.wav", "Sound/engine sample", car);
     let samplePath = existsSync(join(carDir, sample)) ? join(carDir, sample) : findIn(shared.sound, sample);
-    if (!samplePath) samplePath = await fetchShared(`sound/${sample}`).catch(() => undefined);
-    let sound: { dir: string; limiterRpm: number } | { car: string };
-    let soundNote: string;
+    if (!samplePath) {
+      try {
+        samplePath = sdSharedFile("sound", sample) ?? undefined;
+      } catch (err) {
+        console.log(`      its engine sample ${sample}: ${(err as Error).message}`);
+      }
+    }
+    let sound: { dir: string; limiterRpm: number } | { car: string } = { car: SOUND_BY_CLASS[classId] };
+    let soundNote = "";
     const rpmScale = params.num("Sound", "rpm scale") ?? 1;
-    if (samplePath) {
+    // The bank's Ogg loops are encoded with ffmpeg, from PATH (`ffmpeg -version` runs on every platform)
+    const ffmpeg = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0 ? "ffmpeg" : null;
+    if (!samplePath) soundNote = `the game's ${SOUND_BY_CLASS[classId]} (the engine sample ${sample} was not found)`;
+    else if (!ffmpeg) soundNote = `the game's ${SOUND_BY_CLASS[classId]} (ffmpeg isn't installed, so its engine sample ${sample} couldn't be converted)`;
+    else if (!(rpmScale > 0)) soundNote = `the game's ${SOUND_BY_CLASS[classId]} (Sound/rpm scale is ${rpmScale}, so its engine sample has no pitch)`;
+    else {
       const audio = join(work, "audio");
-      runPython(
-        "scripts/audio/port_sd_sound.py",
-        [samplePath, audio, "--rpm-scale", String(rpmScale), "--limiter", String(Math.round(phys.car.engine.limiterRpm)), "--idle", String(Math.round(phys.car.engine.idleRpm)), "--source", `Speed Dreams: ${car} (${sample})`],
-        { requirements: null, withPackages: ["numpy==2.4.3", "scipy==1.18.1", "fsb5"] }
-      );
-      sound = { dir: audio, limiterRpm: phys.car.engine.limiterRpm };
-      soundNote = `its own engine sample (${sample}), resampled to Speed Dreams' pitch at each rpm of the bank (rpm scale ${rpmScale}: the sample's own pitch at ${Math.round(5729.58 / rpmScale)} rpm), at Speed Dreams' loudness on and off throttle`;
-    } else {
-      sound = { car: SOUND_BY_CLASS[classId] };
-      soundNote = `the game's ${SOUND_BY_CLASS[classId]} (the engine sample ${sample} was not found)`;
+      try {
+        runPython(
+          "scripts/audio/port_sd_sound.py",
+          [samplePath, audio, "--rpm-scale", String(rpmScale), "--limiter", String(Math.round(phys.car.engine.limiterRpm)), "--idle", String(Math.round(phys.car.engine.idleRpm)), "--source", `Speed Dreams: ${car} (${sample})`, "--ffmpeg", ffmpeg],
+          { requirements: null, withPackages: ["numpy==2.4.3", "scipy==1.18.1", "fsb5"] }
+        );
+        sound = { dir: audio, limiterRpm: phys.car.engine.limiterRpm };
+        soundNote = `its own engine sample (${sample}), resampled to Speed Dreams' pitch at each rpm of the bank (rpm scale ${rpmScale}: the sample's own pitch at ${Math.round(5729.58 / rpmScale)} rpm), at Speed Dreams' loudness on and off throttle`;
+      } catch (err) {
+        soundNote = `the game's ${SOUND_BY_CLASS[classId]} (its engine sample ${sample} couldn't be converted: ${(err as Error).message})`;
+      }
     }
 
     // ---- 5. The package
@@ -323,7 +374,7 @@ ${PACKAGE_USAGE}
       { authorUrl: "https://www.speed-dreams.net/" }
     );
     const { info: pkgInfo, packageDir } = importTarget(
-      { ...values, package: values.package ?? `sd.${car.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 24).replace(/[-_]+$/, "")}` },
+      { ...values, package: values.package ?? packageIdFrom("sd", car) },
       {
         author: "sd",
         name: values.name ?? `${title} (Speed Dreams)`,
@@ -331,9 +382,9 @@ ${PACKAGE_USAGE}
         description: `${title}, a ${phys.car.category} car from Speed Dreams, converted with its liveries and sound; physics on the ${phys.base} model.`,
       }
     );
-    const skins: CarSkinSource[] = ported.liveries
-      .filter((l) => liveriesOk.includes(l.id))
-      .map((l) => ({ id: localIdFrom(l.id), name: l.name, swatch: l.swatch, dir: l.dir }));
+    const kept = ported.liveries.filter((l) => liveriesOk.includes(l.id));
+    const localIds = liveryLocalIds(kept.map((l) => l.id));
+    const skins: CarSkinSource[] = kept.map((l) => ({ id: localIds.get(l.id)!, name: l.name, swatch: l.swatch, dir: l.dir }));
     const extraFiles = [...licenceIds].map((id) => ({ from: LICENCES[id].textFile, to: `cars/${pkgCarId}/LICENSE-${id}.txt` }));
     for (const r of lic.readmes) extraFiles.push({ from: join(carDir, r), to: `cars/${pkgCarId}/speed-dreams-${r.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}${/\.(txt|md)$/i.test(r) ? "" : ".txt"}` });
     const conversion = join(work, "CONVERSION.md");
@@ -377,7 +428,6 @@ ${PACKAGE_USAGE}
       sound,
       extraFiles,
     });
-    if (!values["keep-build"]) rmSync(work, { recursive: true, force: true });
     report(packageDir, out.checked);
     for (const w of ported.warnings) console.log(`      note: ${w}`);
     for (const l of leftOutLiveries) console.log(`      left out: ${l}`);
