@@ -1147,16 +1147,17 @@ export interface DriveCheck {
   ok: boolean;
   problems: string[];
   /**
-   * 0–100 km/h (s), top speed (km/h) in 60 s flat out, and on it the most body slip (deg), the fastest yaw (rad/s) and
-   * how far it ran off its line (m: the wheel held straight, as no driver would)
+   * 0–100 km/h (s), top speed (km/h) flat out, and on it the most body slip (deg), the fastest yaw (rad/s) and how far
+   * it ran off its line (m: the wheel held straight, as no driver would)
    */
   t100: number;
   topKmh: number;
   straightSlipDeg: number;
   straightYawRadS: number;
   straightDriftM: number;
-  /** From `brakeFromKmh` to a stop with ABS: the distance (m), mean deceleration (g) and the most body slip (deg) */
+  /** From `brakeFromKmh` to a stop with ABS: whether it stopped, the distance (m), mean deceleration (g) and the most body slip (deg) */
   brakeFromKmh: number;
+  brakeStopped: boolean;
   brakeM: number;
   brakeG: number;
   brakeSlipDeg: number;
@@ -1164,11 +1165,16 @@ export interface DriveCheck {
   lap?: { done: boolean; lapS: number; maxSlipDeg: number; beyondM: number; topKmh: number };
 }
 
+/** Body slip past which the car has spun (deg): scripts/mods/lib/car-sanity.ts's, which the other importers drive to */
+const SPIN_DEG = 20;
+
 /**
- * The profile driven headless: flat out from rest on a flat pad for 60 s with the wheel held straight, the driver easing
- * off the throttle while the driven wheels spin past 15 % (no spin: under 6 deg of body slip and 0.3 rad/s of yaw, a
- * twitch at a shift but no more; a top speed of 80–450 km/h and 0–100 km/h in 1.5–30 s), braked to a stop with ABS
- * from 200 km/h or 90 % of its top speed (0.4–4 g, under 10 deg of slip), then, with `lap`, an autopilot lap of RISE
+ * The profile driven headless, to the limits every importer's drive has (scripts/mods/lib/car-sanity.ts): flat out from
+ * rest on a flat pad with the wheel held straight until its speed stops rising (at most 4 minutes), the driver easing
+ * off the throttle while the driven wheels spin past 15 %, as a driver of a car with no traction control would (no
+ * spin: under 20 deg of body slip; a top speed of 80–450 km/h; 0–100 km/h no quicker than 1.5 s); then braked to a stop
+ * with ABS from 200 km/h or 90 % of its top speed (stopped within a minute, at 0.4 g or more on average, under 20 deg of
+ * slip); then, with `lap`, two laps of RISE on the autopilot within 15 minutes
  */
 export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean } = {}): Promise<DriveCheck> {
   const { F12026CarSim } = await import('../../src/lib/sim/f12026-car/F12026CarSim');
@@ -1187,7 +1193,9 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
   let straightSlip = 0;
   let straightYaw = 0;
   let drift = 0;
-  for (let t = 0; t < 60; t += DT) {
+  let plateauV = 0;
+  let plateauT = 0;
+  for (let t = 0; t < 240; t += DT) {
     const spin = Math.max(...run.telemetry.wheelSlipRatios);
     pedal = Math.min(1, Math.max(0.25, pedal + (spin > 0.15 ? -6 : 3) * DT));
     run.step(DT, { throttle: pedal });
@@ -1199,6 +1207,12 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
       straightYaw = Math.max(straightYaw, Math.abs(run.yawRateRadS));
     }
     drift = Math.max(drift, Math.abs(run.lateralOffsetM));
+    if (straightSlip > SPIN_DEG) break;
+    // At its top speed: no faster by half a km/h in 8 s
+    if (v > plateauV + 0.5) {
+      plateauV = v;
+      plateauT = t;
+    } else if (t - plateauT > 8) break;
   }
   const from = Math.min(200, Math.round(0.9 * top));
   const stop = new F12026CarSim(pad, null, profile);
@@ -1207,21 +1221,22 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
   const s0 = stop.sMeters;
   let tStop = 0;
   let brakeSlip = 0;
-  for (; tStop < 20 && stop.telemetry.speedKmh > 1; tStop += DT) {
+  for (; tStop < 60 && stop.telemetry.speedKmh > 1; tStop += DT) {
     stop.step(DT, { brake: 1 });
     if (stop.telemetry.speedKmh > 10) brakeSlip = Math.max(brakeSlip, slipDeg(stop));
   }
+  const brakeStopped = stop.telemetry.speedKmh <= 1;
   const brakeM = stop.sMeters - s0;
-  const brakeG = (from / 3.6) ** 2 / (2 * Math.max(0.1, brakeM)) / G;
+  const brakeG = brakeStopped ? (from / 3.6) ** 2 / (2 * Math.max(0.1, brakeM)) / G : NaN;
   const problems: string[] = [];
-  if (straightSlip > 6) problems.push(`it slides ${straightSlip.toFixed(1)} deg sideways flat out on a straight`);
-  if (straightYaw > 0.3) problems.push(`it yaws at ${straightYaw.toFixed(2)} rad/s flat out on a straight`);
+  if (straightSlip > SPIN_DEG) problems.push(`it spun under power on a straight (${straightSlip.toFixed(1)} deg of body slip)`);
   if (!(top >= 80 && top <= 450)) problems.push(`a top speed of ${top.toFixed(0)} km/h`);
-  if (!(t100 >= 1.5 && t100 <= 30)) problems.push(Number.isNaN(t100) ? 'it never reaches 100 km/h' : `0–100 km/h in ${t100.toFixed(1)} s`);
-  if (!(brakeG >= 0.4 && brakeG <= 4)) problems.push(`it brakes from ${from} km/h at ${brakeG.toFixed(2)} g`);
-  if (brakeSlip > 10) problems.push(`it slides ${brakeSlip.toFixed(1)} deg sideways under braking`);
+  if (t100 < 1.5) problems.push(`0–100 km/h in ${t100.toFixed(2)} s`);
+  if (!brakeStopped) problems.push(`it didn't stop from ${from} km/h within a minute of full braking`);
+  else if (!(brakeG >= 0.4)) problems.push(`it brakes from ${from} km/h at ${brakeG.toFixed(2)} g`);
+  if (brakeSlip > SPIN_DEG) problems.push(`it spun under braking (${brakeSlip.toFixed(1)} deg of body slip)`);
 
-  const out: DriveCheck = { ok: false, problems, t100, topKmh: top, straightSlipDeg: straightSlip, straightYawRadS: straightYaw, straightDriftM: drift, brakeFromKmh: from, brakeM, brakeG, brakeSlipDeg: brakeSlip };
+  const out: DriveCheck = { ok: false, problems, t100, topKmh: top, straightSlipDeg: straightSlip, straightYawRadS: straightYaw, straightDriftM: drift, brakeFromKmh: from, brakeStopped, brakeM, brakeG, brakeSlipDeg: brakeSlip };
   const rise = join(__dirname, '..', '..', 'public', 'tracks', 'rwanda_official', 'rwanda_official.glb');
   if (opts.lap && existsSync(rise)) {
     const { getActiveTrackData } = await import('../../src/lib/track-data');
@@ -1234,14 +1249,14 @@ export async function driveCheck(profile: CarSimProfile, opts: { lap?: boolean }
     const lap0 = sim.telemetry.lapCount;
     let maxSlip = 0;
     let beyond = -Infinity;
-    for (let t = 0; t < 300 && sim.telemetry.lapCount < lap0 + 2; t += 1 / 60) {
+    for (let t = 0; t < 900 && sim.telemetry.lapCount < lap0 + 2; t += 1 / 60) {
       sim.step(1 / 60, {});
       if (sim.telemetry.speedKmh > 20) maxSlip = Math.max(maxSlip, slipDeg(sim));
       beyond = Math.max(beyond, Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
     }
     const done = sim.telemetry.lapCount >= lap0 + 2;
     out.lap = { done, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, maxSlipDeg: maxSlip, beyondM: Math.max(0, beyond), topKmh: sim.telemetry.allTimeTopSpeedKmh };
-    if (!done) problems.push('the autopilot did not finish a lap of RISE');
+    if (!done) problems.push("the autopilot didn't finish its laps of RISE within 15 minutes");
     else if (maxSlip > 25) problems.push(`it slid ${maxSlip.toFixed(0)} deg sideways on its autopilot lap of RISE`);
   }
   out.ok = problems.length === 0;

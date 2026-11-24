@@ -394,6 +394,9 @@ async function main(): Promise<void> {
 
     const drive = await driveCheck(p.profile);
     check('it drives: no spin flat out, a plausible top speed, braking', drive.ok, `0–100 ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h, ${drive.brakeFromKmh}→0 in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g) ${drive.problems.join('; ')}`);
+    const noBrakes = variant('nobrakes', { 'brakes.ini': (t) => t.replace('MAX_TORQUE=2600', 'MAX_TORQUE=1'), 'engine.ini': (t) => t.replace('TORQUE=100', 'TORQUE=0') });
+    const coasting = await driveCheck(acPhysicsPatch(noBrakes, { base: 'bmw-m1-procar' }).profile);
+    check("a car still moving when the braking ends fails, and isn't measured as stopped", !coasting.ok && !coasting.brakeStopped && coasting.problems.some((x) => /didn't stop/.test(x)) && Number.isNaN(coasting.brakeG), coasting.problems.join('; '));
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

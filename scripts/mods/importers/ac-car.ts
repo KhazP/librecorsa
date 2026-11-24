@@ -134,7 +134,7 @@ ${PACKAGE_USAGE}`,
       const drive = await driveCheck(physics.profile, { lap: true });
       console.log(
         `  driven: 0–100 km/h ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h flat out (${drive.straightSlipDeg.toFixed(1)}° of slip), ` +
-          `${drive.brakeFromKmh}→0 km/h in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g)` +
+          (drive.brakeStopped ? `${drive.brakeFromKmh}→0 km/h in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g)` : `no stop from ${drive.brakeFromKmh} km/h`) +
           (drive.lap ? `; a RISE lap on the autopilot ${drive.lap.done ? `${drive.lap.lapS.toFixed(2)} s` : 'not finished'}` : ''),
       );
       if (!drive.ok) {
