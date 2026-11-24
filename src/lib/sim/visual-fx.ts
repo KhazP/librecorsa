@@ -192,6 +192,8 @@ export class SimVisualFxManager {
       flash?: boolean;
       /** Current opponent mesh LOD (0 = full, 1 = simplified >48 m with 42 m exit hysteresis) */
       lod?: 0 | 1;
+      /** What the solid rig was painted from (liveryKeyOf): a peer that picks another livery is repainted */
+      liveryKey?: string;
     }
   >();
   /** Lights-only CarHeadlights (front/rear flares + cloned emissive lenses, zero SpotLights) attached to solid opponent rigs */
@@ -782,12 +784,14 @@ export class SimVisualFxManager {
     return liveryForDriverCode(code);
   }
 
+  /** The livery the peer picked, or the one its driver code gives (AI, older clients, a player on the default) */
+  private liveryOf(peer: InterpolatedPeerState): LiveryConfig {
+    return chosenLiveryId(peer) !== null ? resolveLivery(peer.liveryId, peer.customLivery) : this.mapDriverToLivery(liveryCodeOf(peer));
+  }
+
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
-    const livery =
-      typeof peer.liveryId === 'string' && peer.liveryId.length > 0
-        ? resolveLivery(peer.liveryId, peer.customLivery)
-        : this.mapDriverToLivery(liveryCodeOf(peer));
+    const livery = this.liveryOf(peer);
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
     const rig = pooled ?? buildOpponentRig(peer.vehicle, livery);
@@ -895,18 +899,15 @@ export class SimVisualFxManager {
         entry.ghostMats = undefined;
         entry.ghostCheckS = 0;
       }
-      const liveryKey =
-        peer.liveryId === 'custom' && peer.customLivery
-          ? `custom:${peer.customLivery.primary}:${peer.customLivery.secondary}:${peer.customLivery.accent}`
-          : (peer.liveryId ?? '');
+      const liveryKey = liveryKeyOf(peer);
       if (!entry) {
-        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, ghost, wheelRot: 0 };
-        (entry as { liveryKey?: string }).liveryKey = liveryKey;
+        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, ghost, wheelRot: 0, liveryKey };
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
-      } else if (!ghost && typeof peer.liveryId === 'string' && peer.liveryId.length > 0 && (entry as { liveryKey?: string }).liveryKey !== liveryKey) {
-        (entry as { liveryKey?: string }).liveryKey = liveryKey;
-        entry.rig.setLivery(resolveLivery(peer.liveryId, peer.customLivery));
+      } else if (!ghost && entry.liveryKey !== liveryKey) {
+        // Picked another livery mid-session, or went back to the default: a ghost keeps its look until it is solid again
+        entry.liveryKey = liveryKey;
+        entry.rig.setLivery(this.liveryOf(peer));
       }
       const carRig = entry.rig;
       // A late model load adds meshes to a ghost: look for them twice a second, not by walking the rig every frame
@@ -1223,6 +1224,19 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
  */
 function liveryCodeOf(peer: InterpolatedPeerState): string {
   return peer.isAiPeer && peer.peerId.startsWith('ai_') ? peer.peerId.slice(3) : peer.driverCode;
+}
+
+/** The livery the peer picked; null when it sent none (AI, older clients, the default) */
+function chosenLiveryId(peer: InterpolatedPeerState): string | null {
+  return typeof peer.liveryId === 'string' && peer.liveryId.length > 0 ? peer.liveryId : null;
+}
+
+/** Everything a peer's livery is made from, as one string: a change repaints its car */
+function liveryKeyOf(peer: InterpolatedPeerState): string {
+  const id = chosenLiveryId(peer);
+  if (id === null) return `code:${liveryCodeOf(peer)}`;
+  const c = peer.customLivery;
+  return id === 'custom' && c ? `custom:${c.primary}:${c.secondary}:${c.accent}` : id;
 }
 
 /**
