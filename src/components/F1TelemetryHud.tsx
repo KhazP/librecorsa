@@ -445,7 +445,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const partsKey = hudPartsKey(preset, phone);
   const savedParts = hud?.parts?.[partsKey];
   const layoutParts = editMode ? (draftParts ?? savedParts) : savedParts;
-  setActiveHudParts(layoutParts);
+  setActiveHudParts(layoutParts, editMode);
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
   // the results card owns the D-pad and keys while it is up
   const hudMode: HudMode = editMode || paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
@@ -650,12 +650,13 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       className={`lc-safe-frame pointer-events-none fixed z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""} ${skinRootClass(thirdPartySkin) ?? ""}`}
     >
       {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m (shown with a sample blip in HUD edit mode) */}
-      {hud?.radar !== false && !style?.ownRadar && !hudHidden && !lightsPhase && !phone ? (
+      {(hud?.radar !== false || editMode) && !style?.ownRadar && !hudHidden && !lightsPhase && !phone ? (
         <div
           className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2"
           style={anchor(undefined, "center")}
         >
           <ProximityRadar
+            forceVisible={editMode}
             blips={
               editMode && (!telemetry.radar || telemetry.radar.length === 0)
                 ? [{ x: 2.2, z: -1.2, yaw: 0, color: "#ef4444" }]

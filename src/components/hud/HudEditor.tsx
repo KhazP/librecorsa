@@ -240,6 +240,7 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
           const box = boxes[id];
           if (!box) return null;
           const part = parts[id] ?? NO_HUD_PART;
+          const isHidden = Boolean(part.hidden);
           const changed = parts[id] !== undefined;
           const h = HANDLE[id];
           const live = active === id;
@@ -254,9 +255,11 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
               className={`fixed cursor-move rounded-lc-row border-2 transition-colors duration-150 ${
                 live
                   ? "border-lc-volt bg-lc-volt/15"
-                  : changed
-                    ? "border-lc-cyan/80 bg-lc-cyan/10 hover:border-lc-volt hover:bg-lc-volt/10"
-                    : "border-lc-chalk/40 bg-lc-void/10 hover:border-lc-volt hover:bg-lc-volt/10"
+                  : isHidden
+                    ? "border-dashed border-amber-400/75 bg-lc-void/40 hover:border-lc-volt"
+                    : changed
+                      ? "border-lc-cyan/80 bg-lc-cyan/10 hover:border-lc-volt hover:bg-lc-volt/10"
+                      : "border-lc-chalk/40 bg-lc-void/10 hover:border-lc-volt hover:bg-lc-volt/10"
               }`}
             >
               <div
@@ -265,17 +268,47 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                 <Icon name="move" size="xs" className="text-lc-volt" />
                 <span>{tx(`parts.${id}`)}</span>
                 {part.scale !== 1 ? <span className="lc-data text-lc-fog">{Math.round(part.scale * 100)}%</span> : null}
+                {isHidden ? <span className="text-amber-400">Hidden</span> : null}
               </div>
-              {changed ? (
+              <div className="pointer-events-auto absolute end-1 top-1 flex items-center gap-1">
                 <button
                   type="button"
+                  title={isHidden ? "Show this panel" : "Hide this panel"}
+                  aria-label={isHidden ? `Show ${id}` : `Hide ${id}`}
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => setPart(id, NO_HUD_PART)}
-                  className={`absolute end-1 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk top-1`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPart(id, { ...part, hidden: !isHidden });
+                  }}
+                  className={`flex size-5 items-center justify-center rounded-lc-nub bg-lc-void/90 transition-colors ${
+                    isHidden ? "text-amber-400 hover:text-lc-chalk" : "text-lc-fog hover:text-lc-volt"
+                  }`}
                 >
-                  {tx("resetPart")}
+                  {isHidden ? (
+                    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M2 2l12 12M6.5 6.5a2 2 0 002.8 2.8M4.3 4.4C2.9 5.3 1.8 6.6 1.2 8c1.4 2.9 4 4.5 6.8 4.5 1.3 0 2.5-.3 3.6-1M9.9 3.8A7.6 7.6 0 008 3.5c-2.8 0-5.4 1.6-6.8 4.5" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M1.2 8C2.6 5.1 5.2 3.5 8 3.5s5.4 1.6 6.8 4.5c-1.4 2.9-4 4.5-6.8 4.5S2.6 10.9 1.2 8z" />
+                      <circle cx="8" cy="8" r="2.1" />
+                    </svg>
+                  )}
                 </button>
-              ) : null}
+                {changed ? (
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPart(id, NO_HUD_PART);
+                    }}
+                    className="rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk"
+                  >
+                    {tx("resetPart")}
+                  </button>
+                ) : null}
+              </div>
               <div
                 title={tx("resize")}
                 onPointerDown={(e) => startDrag(e, id, "scale")}
