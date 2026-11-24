@@ -39,6 +39,7 @@ import {
   LOGITECH_WEBHID_NAMES,
   logitechClassicModel,
   logitechHidppModel,
+  isThrustmasterBridgeOnly,
   THRUSTMASTER_NAMES,
   THRUSTMASTER_STARTUP_PRODUCT_IDS,
   THRUSTMASTER_VENDOR_ID,
@@ -1106,6 +1107,9 @@ function startLoopCount(layout: PidLayout, profile: PidProfile): number {
  * Damper condition effect. The wheel's {@link PidProfile} decides the values firmwares disagree on.
  */
 export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOptions = {}): Promise<PidSetupResult> {
+  if (isThrustmasterBridgeOnly(device.vendorId, device.productId)) {
+    return { ok: false, unsupported: true, message: thrustmasterRefusal(device) };
+  }
   const deps = options.deps ?? defaultFfbDeps;
   const profile = pidProfileFor(device);
   const layout = options.layout ?? parsePidLayout(device.collections);
@@ -1757,6 +1761,9 @@ export function describeHidDevice(device: HidDeviceLike): string {
     out.push(describeNonPid(device));
     return out.join("\n");
   }
+  if (isThrustmasterBridgeOnly(device.vendorId, device.productId)) {
+    out.push(`Refused for the bridge (HID PID ignored): ${thrustmasterRefusal(device)}`);
+  }
   out.push(`PID profile: ${pidProfileName(device)}`);
   out.push(
     platformUsageOrder() === "unordered"
@@ -1871,6 +1878,8 @@ type FfbPick =
  */
 function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
   for (const device of devices) {
+    // T150, TMX, T500RS and start-up ids stay on the bridge even if Windows exposes a HID PID collection for them (#189)
+    if (isThrustmasterBridgeOnly(device.vendorId, device.productId)) continue;
     const layout = parsePidLayout(device.collections);
     if (layout) return { kind: "pid", device, layout };
   }
