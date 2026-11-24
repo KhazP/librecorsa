@@ -104,7 +104,7 @@ function defaultRoomState(kind: RoomKind): RoomSessionState {
       withLobbyDefaults({
         trackId: FALLBACK_TRACK_ID,
         laps: 5,
-        collisions: "ghost_lap1",
+        collisions: "on",
         carClass: "any",
       }),
       kind,

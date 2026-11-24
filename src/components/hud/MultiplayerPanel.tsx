@@ -526,19 +526,35 @@ function LobbySettingsCards({
         />
       ),
     },
-    {
-      id: "collisions",
-      label: tx("collisions"),
-      read: collisionLabel(settings.collisions),
-      edit: (
-        <Select<CollisionMode>
-          value={settings.collisions}
-          options={COLLISION_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
-          onChange={(collisions) => set({ collisions })}
-        />
-      ),
-      hint: collisionHint(settings.collisions),
-    },
+    isPrivate
+      ? {
+          id: "ghostMode",
+          label: tx("ghostMode"),
+          read: settings.collisions === "off" ? tx("ghostModeOn") : tx("ghostModeOff"),
+          edit: (
+            <Toggle
+              checked={settings.collisions === "off"}
+              onChange={(ghost) => set({ collisions: ghost ? "off" : "on" })}
+            />
+          ),
+          hint: settings.collisions === "off" ? tx("ghostModeOnHint") : tx("ghostModeOffHint"),
+        }
+      : null,
+    !isPrivate || settings.collisions !== "off"
+      ? {
+          id: "collisions",
+          label: tx("collisions"),
+          read: collisionLabel(settings.collisions),
+          edit: (
+            <Select<CollisionMode>
+              value={settings.collisions}
+              options={COLLISION_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+              onChange={(collisions) => set({ collisions })}
+            />
+          ),
+          hint: collisionHint(settings.collisions),
+        }
+      : null,
   ];
 
   const lockedNote = isHost && locked ? (qualifyingActive ? tx("lockedQualifying") : tx("lockedRace")) : undefined;

@@ -68,6 +68,7 @@ import {
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
 import { carPhysicsVersion } from '@/lib/sim/lap-types';
+import { MP_HEAVY_JITTER_MS, MP_HEAVY_LOSS_PCT } from '@/lib/sim/mp-contact';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
@@ -126,6 +127,8 @@ export interface InterpolatedPeerState {
   contactReady?: boolean;
   /** Nothing heard from the car for a while (STALE_GHOST_MS): drawn see-through, and never touched */
   stale?: boolean;
+  /** Severe packet loss or arrival jitter: drawn see-through and never collides until the link recovers */
+  desync?: boolean;
   /** The car reports itself a hazard (an open race's fair-play rule, contact-guard.ts) */
   hazard?: boolean;
   /** The car is flashing its headlights */
@@ -495,7 +498,7 @@ export class MultiplayerSyncManager {
   private memberSeenMs = new Map<string, number>();
   /** Host: members dropped for silence, kept so their next packet puts them back (a guest only says hello once) */
   private lapsedMembers = new Map<string, LobbyPlayer>();
-  private lobbySettings: LobbySettings = withLobbyDefaults({ trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'ghost_lap1', carClass: 'any' });
+  private lobbySettings: LobbySettings = withLobbyDefaults({ trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'on', carClass: 'any' });
   private activeRace: RaceStartInfo | null = null;
   /** Active private-room qualifying session (on host and guests) */
   public activeQualifying: RoomSessionInfo | null = null;
@@ -2887,9 +2890,10 @@ export class MultiplayerSyncManager {
     out.brake = s1.brake;
     out.trackS = s1.trackS;
     out.speedKmh = s1.speedKmh;
-    // No news by arrival time, or only old news (the first of a burst held up by a stall): a guess, drawn as one
+    // No news by arrival time, only old news (held up by a stall), or heavy packet loss / jitter: ghost until stable
     out.stale = nowMs - buf.lastReceivedMs > STALE_GHOST_MS || ageS * 1000 > STALE_GHOST_MS;
-    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && !out.stale && nowMs >= p.graceUntilMs;
+    out.desync = buf.lossPct >= MP_HEAVY_LOSS_PCT || buf.jitterMs >= MP_HEAVY_JITTER_MS;
+    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && !out.stale && !out.desync && nowMs >= p.graceUntilMs;
   }
 
   /**
