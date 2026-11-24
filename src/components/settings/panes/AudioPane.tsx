@@ -6,9 +6,11 @@ import type { MusicPool } from "@/lib/audio/music-catalog";
 import { drsBeeps, kerbVolume, masterVolume, menuMusic, musicOn, musicTrackRows, mute, raceMusic, raceMusicOn, replayMusic, shiftBeep } from "../defs";
 import { SettingsCard } from "../fields";
 
-const POOLS: readonly MusicPool[] = ["menu", "race", "results"];
-const TRACK_ROWS = Object.fromEntries(POOLS.map((p) => [p, musicTrackRows(p)])) as Record<MusicPool, ReturnType<typeof musicTrackRows>>;
-const POOL_TITLE = { menu: "menuTracks", race: "raceTracks", results: "resultsTracks" } as const satisfies Record<MusicPool, string>;
+/** The pools listed track by track (the pre-race show's cue has the show's own switch in Display) */
+type ListedPool = Exclude<MusicPool, "show">;
+const POOLS: readonly ListedPool[] = ["menu", "race", "results"];
+const TRACK_ROWS = Object.fromEntries(POOLS.map((p) => [p, musicTrackRows(p)])) as Record<ListedPool, ReturnType<typeof musicTrackRows>>;
+const POOL_TITLE = { menu: "menuTracks", race: "raceTracks", results: "resultsTracks" } as const satisfies Record<ListedPool, string>;
 
 /**
  * Settings > Audio: one master volume for every sound, the kerbs' own level, a saved mute, the music's level in each
