@@ -136,6 +136,14 @@ export interface AudioSettings {
   musicOff: string[];
   /** The music alone is off (the title screen's music button), every other sound playing on */
   musicMuted: boolean;
+  /** Contextual iRacing-style spotter voice callouts */
+  spotter: boolean;
+  /** Spotter voice callout volume, 0 to 1 */
+  spotterVolume: number;
+  /** Spotter voice pack */
+  spotterVoice: "jim" | "clare" | "geoffrey";
+  /** Pit-wall radio bandpass filter & squelch */
+  spotterRadio: boolean;
 }
 
 export type SpeedUnit = "kmh" | "mph";
@@ -530,6 +538,10 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   raceMusicOn: false,
   musicOff: [],
   musicMuted: false,
+  spotter: true,
+  spotterVolume: 1,
+  spotterVoice: "jim",
+  spotterRadio: true,
 };
 
 export const DEFAULT_INTERFACE_SETTINGS: InterfaceSettings = {
@@ -922,6 +934,10 @@ function parseAudio(v: unknown): AudioSettings {
     raceMusicOn: bool(v.raceMusicOn, d.raceMusicOn),
     musicOff: Array.isArray(v.musicOff) ? [...new Set(v.musicOff.filter((id) => isStr(id) && MUSIC_TRACK_IDS.has(id)))] : [],
     musicMuted: bool(v.musicMuted, d.musicMuted),
+    spotter: bool(v.spotter, d.spotter),
+    spotterVolume: num(v.spotterVolume, 0, 1, d.spotterVolume),
+    spotterVoice: oneOf(v.spotterVoice, ["jim", "clare", "geoffrey"] as const, d.spotterVoice),
+    spotterRadio: bool(v.spotterRadio, d.spotterRadio),
   };
 }
 

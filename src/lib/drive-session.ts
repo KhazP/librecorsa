@@ -1,5 +1,6 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
+import { SpotterEngine } from "@/lib/sim/spotter";
 import { text as tx } from "@/lib/text";
 import { perLanguage } from "@/lib/per-language";
 import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
@@ -2755,6 +2756,7 @@ export class DriveSession {
     const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const radarInvQ = new THREE.Quaternion();
     // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
+    const spotter = new SpotterEngine();
     let cueDrsAvail = false;
     let cueDrsOpen = false;
     let cueShiftArmed = true;
@@ -4280,6 +4282,12 @@ export class DriveSession {
         );
       }
       if (driving) {
+        spotter.update(nowMs, physics.worldPosition, physics.worldQuaternion, physics.vxMs, drawnPeers, {
+          enabled: !settingsNow.audio.muted && settingsNow.audio.spotter,
+          volume: settingsNow.audio.volume * settingsNow.audio.spotterVolume,
+          voice: settingsNow.audio.spotterVoice,
+          radioFilter: settingsNow.audio.spotterRadio,
+        });
         audio?.update(physics.telemetry, dtSeconds);
         // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
         const tc = physics.telemetry;

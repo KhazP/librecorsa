@@ -855,6 +855,34 @@ export const palette = choice("select", {
 export const masterVolume = slider({ id: "volume", get label() { return rt("volume.label"); }, min: 0, max: 1, step: 0.05, format: pct, ...audio("volume") });
 // The kerbs go up to 150 %: the named 100 % keeps it from reading like Master volume, whose 100 % is the end
 export const kerbVolume = slider({ id: "kerbs", get label() { return rt("kerbs.label"); }, min: 0, max: 1.5, step: 0.05, format: pct, mark: 1, ...audio("kerbs") });
+export const spotterVolume = slider({
+  id: "spotterVolume",
+  label: "Spotter volume",
+  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  min: 0,
+  max: 1,
+  step: 0.05,
+  format: pctOrOff,
+  ...audio("spotterVolume"),
+});
+export const spotterOn = toggle({ id: "spotter", label: "Spotter", ...audio("spotter") });
+export const spotterVoice = choice("segmented", {
+  id: "spotterVoice",
+  label: "Spotter voice",
+  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  options: [
+    { id: "jim", label: "Jim (UK)" },
+    { id: "clare", label: "Clare (UK)" },
+    { id: "geoffrey", label: "Geoffrey (UK)" },
+  ],
+  ...audio("spotterVoice"),
+});
+export const spotterRadio = toggle({
+  id: "spotterRadio",
+  label: "Spotter pit-radio filter",
+  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  ...audio("spotterRadio"),
+});
 export const mute = toggle({
   id: "muted",
   get label() { return rt("muted.label"); },

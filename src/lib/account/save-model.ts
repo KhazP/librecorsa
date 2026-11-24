@@ -179,6 +179,10 @@ export const AUDIO_SPLIT = {
   raceMusicOn: "account",
   musicOff: "account",
   musicMuted: "account",
+  spotter: "account",
+  spotterVolume: "device",
+  spotterVoice: "account",
+  spotterRadio: "account",
 } as const satisfies Record<keyof AudioSettings, "account" | "device">;
 
 export const UI_SPLIT = {
