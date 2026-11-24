@@ -1224,7 +1224,9 @@ async function main(): Promise<void> {
   }
 }
 
-if (require.main === module) {
+// Run as a command (its source, or its bundle in the launcher's converter), not imported: `require.main` is CommonJS's
+// alone, and the converter's bundles are ES modules
+if (/[\\/]ac-physics-patch\.(ts|mjs)$/.test(process.argv[1] ?? "")) {
   void main().catch((err) => {
     console.error(err instanceof Error ? err.message : err);
     process.exit(1);

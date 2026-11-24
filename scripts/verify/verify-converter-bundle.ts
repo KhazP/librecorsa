@@ -61,10 +61,10 @@ try {
   check("the bundled mod tool loads every importer", listed.status === 0 && importers.every((n) => listed.stdout.includes(n)), listed.stderr.trim());
 
   // The optimiser reads the circuit from the converter's own public/tracks, not the repository's
-  const optimiser = node([join(out, "scripts", "optimize-racing-line.mjs"), "--track", "no_such_circuit", "--dry-run"]);
+  const optimiser = node([join(out, "scripts", "tracks", "optimize-racing-line.mjs"), "--track", "no_such_circuit", "--dry-run"]);
   const wanted = join(out, "public", "tracks", "no_such_circuit", "track_data.json");
   check("a bundled tool finds the converter's folders, not the repository's", optimiser.stderr.includes(wanted), optimiser.stderr.split("\n").find((l) => l.includes("ENOENT")) ?? "");
-  const compressor = node([join(out, "scripts", "compress-track-glb.mjs")]);
+  const compressor = node([join(out, "scripts", "tracks", "compress-track-glb.mjs")]);
   check("the GLB compressor runs from its bundle", /usage/i.test(compressor.stdout + compressor.stderr), (compressor.stdout + compressor.stderr).trim().slice(0, 80));
 } catch (err) {
   check("the converter could be checked", false, err instanceof Error ? err.message : String(err));
