@@ -20,6 +20,8 @@ lib/
   car-sanity.ts      a converted car driven headless: flat out on a straight, braking, a lap on the autopilot
   importer.ts        what an importer is, and the options every importer takes
   licences.ts        the one licence reader: a source's statements read whole, what may be shared, what a package carries
+  sd-fetch.ts        Speed Dreams' circuits, cars and shared data, fetched once into scripts/mods/.cache/speed-dreams/ and
+                     checked against their pins (scripts/cars/speed-dreams-cars.json, importers/sd-track.circuits.json)
   toolchain.ts       running the repository's Python (uv) and TypeScript (tsx) converters
 licences/            the full texts of the licences content may be shared under, which a package carries (`LICENSE-<id>.txt`)
 importers/
