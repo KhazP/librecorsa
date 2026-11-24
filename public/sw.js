@@ -4,7 +4,8 @@
  * - The game's pages and scripts for offline play ("the shell", below the files' code): a page always comes from the
  *   server when there is one, and from the shell only when there isn't.
  * - Mod packages the player imported (src/lib/mods/mod-store.ts), answered under /mods/ from the cache the page
- *   writes them to. Nothing here ever deletes them: only the player's Remove does.
+ *   writes them to. Nothing here ever deletes them: only the player's Remove does. A catalogue of packages and the
+ *   zips it offers (/mods/_catalogue/, src/lib/mods/mod-catalogue.ts) pass by untouched.
  *
  * Most of these files keep their name when they change: a circuit's GLB and track_data.json, a layout's file, car
  * models and sounds get replaced in place on R2. So a kept copy is only used once the server says it is current: the
@@ -85,6 +86,9 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // A catalogue and the zips it offers: straight from the server and never kept, since a zip is downloaded once, to
+  // be imported. Offline, the Mods panel says so
+  if (url.pathname.startsWith(`${BASE}mods/_catalogue/`)) return;
   // Imported mods: their own cache first, then the server (`public/mods/`, the launcher's folder)
   if (url.pathname.startsWith(`${BASE}mods/`)) {
     event.respondWith(serveMod(req, url));

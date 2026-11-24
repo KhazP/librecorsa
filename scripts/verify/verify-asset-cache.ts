@@ -4,8 +4,9 @@
  * new worker (a deploy); a file changed under the same name is downloaded and replaces the kept one; offline, a slow
  * server or a server error serves the kept copy; a 404 drops it; the kept files stay within the budget, least
  * recently used first, and files idle too long go; the earlier worker's per-build caches are deleted. Also its other
- * two jobs: imported mod packages served from their own cache and never swept, and the shell (the game's pages and
- * scripts) kept per build for offline play, a page served from it only when the server doesn't answer.
+ * two jobs: imported mod packages served from their own cache and never swept (a catalogue's zips passing by
+ * untouched), and the shell (the game's pages and scripts) kept per build for offline play, a page served from it only
+ * when the server doesn't answer.
  *
  *   npx tsx scripts/verify/verify-asset-cache.ts
  */
@@ -462,6 +463,13 @@ async function modChecks(): Promise<void> {
   mark = site.log.length;
   r = await sw.get("/mods/_index.json");
   check("A /mods/ file not imported comes from the server (public/mods/, the launcher)", r.res?.status === 200 && site.since(mark).requests === 1);
+  // A catalogue and its zips (src/lib/mods/mod-catalogue.ts): the browser fetches them itself, nothing kept
+  site.put("/mods/_catalogue/jdoe.pack.zip", 200 * KB, 60);
+  site.put("/packs/jdoe.pack.zip", 200 * KB, 61);
+  site.put("/tracks/a/jdoe.pack.zip", 200 * KB, 62);
+  check("A catalogue on this copy is left to the network", !(await sw.get("/mods/_catalogue/catalogue.json")).intercepted);
+  check("So is a zip it offers, however it is asked for", !(await sw.get("/mods/_catalogue/jdoe.pack.zip")).intercepted && !(await sw.get("/mods/_catalogue/jdoe.pack.zip", { init: { cache: "no-store" } })).intercepted);
+  check("A zip anywhere else on the site is never kept either", !(await sw.get("/packs/jdoe.pack.zip")).intercepted && !(await sw.get("/tracks/a/jdoe.pack.zip")).intercepted && !box.kept().some((k) => k.endsWith(".zip")));
   for (const [i, name] of ["a", "b", "c", "d"].entries()) {
     site.put(`/tracks/${name}/${name}.glb`, 300 * KB, 40 + i);
     clock.now += 20 * 60_000;

@@ -44,6 +44,12 @@ export interface InstalledPackage {
 
 export type InstallResult = { ok: true; manifest: ModManifest; replaced: boolean } | { ok: false; errors: string[] };
 
+/** What a package downloaded from a catalogue must turn out to be: the id and content hash the catalogue lists */
+export interface ExpectedPackage {
+  id: string;
+  hash: string;
+}
+
 /** What an import reads files from: a zip's entries or a picked folder's files */
 export interface PackageSource {
   paths: string[];
@@ -169,8 +175,10 @@ export function packageRoot(paths: readonly string[]): string | null {
  * check passes: its `mod.json`, that every file it names is there, every path being safe to serve, and its size. The
  * files wait aside until all of them are read and stored, so an update that fails (a damaged file, no space) leaves
  * the installed version as it was. `known` are the game's ids a package may name (mod-content.ts `modDefinitions`).
+ * `expected`, for a download from a catalogue (mod-catalogue.ts): anything but that package with that content is
+ * refused, before the installed version is touched.
  */
-export async function installPackage(source: PackageSource, known: ModKnownIds): Promise<InstallResult> {
+export async function installPackage(source: PackageSource, known: ModKnownIds, expected?: ExpectedPackage): Promise<InstallResult> {
   if (!modsStorageAvailable()) return { ok: false, errors: ["This browser has no storage for mods here (a private window, or the page is not served over https)"] };
   const root = packageRoot(source.paths);
   if (root === null) return { ok: false, errors: ["No mod.json at the top of the package (or in its one folder)"] };
@@ -185,6 +193,7 @@ export async function installPackage(source: PackageSource, known: ModKnownIds):
   const checked = validateModManifest(raw, known);
   if (!checked.ok) return checked;
   const manifest = checked.manifest;
+  if (expected && manifest.id !== expected.id) return { ok: false, errors: [`the download holds the package "${manifest.id}", not "${expected.id}" as the catalogue lists`] };
 
   const errors = packageFileProblems(files.map((f) => f.path));
   const present = new Set(files.map((f) => f.path));
@@ -228,6 +237,7 @@ export async function installPackage(source: PackageSource, known: ModKnownIds):
       bytes,
       installedAt: Date.now(),
     };
+    if (expected && entry.hash !== expected.hash) throw new Error("the download's content is not what the catalogue lists (its content hash differs)");
     // Every file is in: the new version takes the old one's place
     replacing = true;
     await deleteFiles(cache, manifest.id);

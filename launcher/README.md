@@ -84,6 +84,11 @@ the launcher makes on each request with each package's content hash (computed li
 name, size or time changes, so the list stays cheap. Reload the game after adding or changing a package. A package
 imported in the game's Mods panel with the same id wins over the folder's.
 
+A `_catalogue/` folder in `mods/` offers packed packages in the Mods panel, to install in a click
+(`npm run mod -- catalogue mods/_catalogue` writes its `catalogue.json` from the zips in it; docs/modding.md). The
+launcher serves only `catalogue.json`, `.zip` files and `.webp`, `.png` and `.jpg` previews from it, at
+`/mods/_catalogue/<name>`, with no subfolders.
+
 ## Building
 
 ```sh

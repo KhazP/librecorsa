@@ -4,6 +4,7 @@
  *   npm run mod -- check <folder>              checks a package as the game will: its mod.json, paths, every file it names
  *   npm run mod -- pack <folder> [out.zip]     checks it, then zips it the way the game's importer reads it
  *   npm run mod -- index [mods folder]         lists the packages in a folder (default public/mods) for the dev server
+ *   npm run mod -- catalogue <folder of zips>  writes a catalogue of packed packages the game's Mods panel offers
  *   npm run mod -- import                      lists the importers: content from other games and tools to packages
  *   npm run mod -- import <name> …             runs one (scripts/mods/importers/<name>.ts)
  *   npm run mod -- from-circuit <built id> …   packages a circuit the converters built in public/tracks/
@@ -13,6 +14,8 @@
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
+import { buildCatalogue, catalogueJson } from "./lib/catalogue";
 import { packageCar, type CarPackageOptions } from "./lib/car-package";
 import { packageCircuit, readCircuitEntry } from "./lib/circuit-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "./lib/importer";
@@ -66,6 +69,27 @@ async function main(): Promise<void> {
 
   if (command === "index") {
     await writeModsIndex(args[0] ?? DEFAULT_MODS_DIR);
+    return;
+  }
+
+  if (command === "catalogue" && args[0] && !args[0].startsWith("-")) {
+    const { values, positionals } = parseArgs({ args, allowPositionals: true, strict: true, options: { "base-url": { type: "string" }, out: { type: "string" } } });
+    const folder = resolve(positionals[0]);
+    const out = resolve(values.out ?? join(folder, "catalogue.json"));
+    const { catalogue, failures } = await buildCatalogue(folder, values["base-url"], (file, r) => {
+      if (r.ok) console.log(`OK    ${r.entry.id} ${r.entry.version} (${file}, ${(r.entry.bytes / 1024 / 1024).toFixed(1)} MB) content hash ${r.entry.hash}`);
+      else {
+        console.log(`FAIL  ${file}`);
+        for (const p of r.problems) console.log(`      ${p}`);
+      }
+    });
+    for (const f of failures.filter((f) => f.file === folder)) for (const p of f.problems) console.log(`FAIL  ${p}`);
+    if (failures.length) {
+      console.log(`nothing written: ${failures.length} problem(s) above. A catalogue is written only when every zip passes`);
+      process.exit(1);
+    }
+    writeFileSync(out, catalogueJson(catalogue));
+    console.log(`wrote ${out}: ${catalogue.packages.length} package(s)`);
     return;
   }
 
@@ -123,6 +147,9 @@ async function main(): Promise<void> {
   npm run mod -- check <folder>
   npm run mod -- pack <folder> [out.zip]
   npm run mod -- index [mods folder, default public/mods]
+  npm run mod -- catalogue <folder of zips> [--base-url <url>] [--out <file>]
+                                           (--base-url: where the zips are served, default beside the catalogue;
+                                            --out: default catalogue.json in the folder)
   npm run mod -- import [<name> …]          (no name: list the importers)
   npm run mod -- from-circuit <built id> [--id <circuit id>]
 ${PACKAGE_USAGE}
