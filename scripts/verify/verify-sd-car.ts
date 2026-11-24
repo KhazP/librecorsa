@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import { SdParams, sdUnitToSI } from "../lib/sd-params";
-import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
+import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdCarProblems, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
 import { findCarLicence, readLicenceEntry, readLicenceText, shareable } from "../cars/sd-licence";
 import { readPins, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 import { fitAero, withAero } from "../mods/lib/aero-fit";
@@ -192,6 +192,43 @@ check("a front-driven road car goes on a road base that drives its fronts", (fwd
 check("an open-wheeler of 2022 goes on the 2026 car, a 1936 GP car on a Chaparral", chooseBase({ ...car, category: "22MP1", massKg: 760, frontWeight: 0.45 }).base === "f12026-car" && chooseBase({ ...car, category: "36GP" }).base.startsWith("chaparral"));
 const f1 = sdCarPhysics(params, { base: "f12026-car" }).patch as Record<string, any>;
 check("on the 2026 car: no hybrid, no DRS, no active aero", f1.hasErs === false && f1.hasDrs === false && f1.config.ers.ERS_MAX_DEPLOY === 0 && f1.config.aero.rhMap.activeAero.dCdA === 0);
+
+// Parameters the conversion can't take are refused, each named, rather than turned into NaN or a nonsense profile
+{
+  check("the made-up car's parameters all convert", sdCarProblems(car).length === 0, sdCarProblems(car).join("; "));
+  const refusedBy = (xml: string): string => {
+    try {
+      sdCarPhysics(SdParams.parse(xml).mergeOver(cat));
+      return "";
+    } catch (err) {
+      return (err as Error).message;
+    }
+  };
+  const xml = carXml();
+  const cases: [string, string, RegExp][] = [
+    ["no torque between tickover and the limiter", xml.replace(/<section name="data points">[\s\S]*?<\/section>\s*<\/section>/, '<section name="data points"><section name="1"><attnum name="rpm" unit="rpm" val="9500"/><attnum name="Tq" unit="N.m" val="300"/></section><section name="2"><attnum name="rpm" unit="rpm" val="9900"/><attnum name="Tq" unit="N.m" val="200"/></section></section>'), /no torque between the tickover and the limiter/],
+    ["a wheelbase of 0", xml.replace('<section name="Rear Axle"><attnum name="xpos" val="-1.4"/>', '<section name="Rear Axle"><attnum name="xpos" val="1.2"/>'), /wheelbase .* is 0/],
+    ["brakes with no pressure", xml.replace('<attnum name="max pressure" unit="kPa" val="20000"/>', '<attnum name="max pressure" unit="kPa" val="0"/>'), /brakes' torque/],
+    ["a bellcrank of 0", xml.replaceAll('<attnum name="bellcrank" val="1.5"/>', '<attnum name="bellcrank" val="0"/>'), /suspensions\/bellcrank is 0/],
+    ["a thin wing of aspect ratio 0", xml.replace('<section name="Front Wing"><attnum name="area" unit="m2" val="0.2"/>', '<section name="Front Wing"><attstr name="wing type" val="THIN"/><attnum name="aspect ratio" val="0"/><attnum name="area" unit="m2" val="0.2"/>'), /Front Wing\/aspect ratio is 0/],
+    ["a profile wing peaking at 0°", xml.replace('<section name="Rear Wing"><attnum name="area" unit="m2" val="0.25"/>', '<section name="Rear Wing"><attstr name="wing type" val="PROFILE"/><attnum name="aoa at max" val="0"/><attnum name="area" unit="m2" val="0.25"/>'), /aoa at max \+ aoa offset is 0/],
+    ["a dynamic friction of 100 %", xml.replaceAll('<attnum name="dynamic friction" unit="%" val="55"/>', '<attnum name="dynamic friction" unit="%" val="100"/>'), /dynamic friction is 1 \(under 99 %/],
+    ["a tyre stiffness of 0", xml.replaceAll('<attnum name="stiffness" val="21.5"/>', '<attnum name="stiffness" val="0"/>'), /wheels\/stiffness is 0/],
+  ];
+  for (const [what, x, want] of cases) {
+    const why = refusedBy(x);
+    check(`a car with ${what} is refused, the value named`, want.test(why), why.slice(0, 160) || "converted");
+  }
+  const soft = { ...car.tyres.front, stiffness: 2, dynamicFriction: 0.98 };
+  check("a tyre curve that doesn't peak below a slip of 2 has no peak (not 2.0)", sdTyreCurve(soft).peakSlip === Infinity && sdCarProblems({ ...car, tyres: { front: soft, rear: car.tyres.rear } }).some((p) => /peak slip/.test(p)));
+  let aeroErr = "";
+  try {
+    sdAeroTargets({ ...car, xFront: 0, xRear: 0 });
+  } catch (err) {
+    aeroErr = (err as Error).message;
+  }
+  check("the aero targets refuse a wheelbase of 0 rather than give NaN", /wheelbase of 0/.test(aeroErr), aeroErr);
+}
 
 // The aero fit and the drive, on the made-up GT car
 {

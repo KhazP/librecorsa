@@ -153,8 +153,9 @@ function readTyre(p: SdParams, right: string, left: string, axle: string): SdTyr
     camberDeg: (both("camber", 0) * 180) / Math.PI,
     toeDeg: (both("toe", 0) * 180) / Math.PI,
     stiffness: both("stiffness", 30),
-    dynamicFriction: Math.min(1, Math.max(0.1, both("dynamic friction", 0.8))),
-    elasticity: Math.min(1, both("elasticity factor", 0.7)),
+    // Kept as read past 0.99 (sdCarProblems refuses it): at 100 % Speed Dreams' curve never peaks
+    dynamicFriction: Math.max(0.1, both("dynamic friction", 0.8)),
+    elasticity: both("elasticity factor", 0.7),
     // A raw number in N, whatever unit the file gives it (wheel.cpp); its default, 1.2 × the static corner load, below
     operatingLoadN: both("operating load", 0),
     lfMin,
@@ -333,22 +334,127 @@ export function sdTyreMu(t: SdTyre, mu: number, fz: number): number {
   return mu * (t.lfMin + (t.lfMax - t.lfMin) * Math.exp((k * fz) / t.operatingLoadN));
 }
 
-/** The magic formula's force over its peak at slip s, and the slip of the peak (s = |(slip ratio, sin slip angle)|) */
+/**
+ * The magic formula's force over its peak at slip s, and the slip of the peak (s = |(slip ratio, sin slip angle)|):
+ * Infinity when the curve doesn't peak below a slip of 2 (no stiffness, or a dynamic friction near 100 %)
+ */
 export function sdTyreCurve(t: SdTyre): { at: (s: number) => number; peakSlip: number } {
-  const C = 2 - (2 * Math.asin(t.dynamicFriction)) / Math.PI;
+  const C = 2 - (2 * Math.asin(Math.min(1, t.dynamicFriction))) / Math.PI;
   const B = t.stiffness / C;
   const E = t.elasticity;
   const at = (s: number) => Math.sin(C * Math.atan(B * s * (1 - E) + E * Math.atan(B * s)));
   // The peak: the argument of the sine reaches π / 2
+  const arg = (s: number) => B * s * (1 - E) + E * Math.atan(B * s);
   let lo = 0;
   let hi = 2;
   const target = Math.tan(Math.PI / (2 * C));
+  if (!(arg(hi) >= target)) return { at, peakSlip: Number.POSITIVE_INFINITY };
   for (let i = 0; i < 80; i++) {
     const m = (lo + hi) / 2;
-    if (B * m * (1 - E) + E * Math.atan(B * m) < target) lo = m;
+    if (arg(m) < target) lo = m;
     else hi = m;
   }
   return { at, peakSlip: (lo + hi) / 2 };
+}
+
+/** The slip past which a converted tyre's peak isn't one the game's tyre model can take */
+export const MAX_PEAK_SLIP = 1;
+
+/**
+ * What in the car's parameters the conversion can't take: a value that isn't finite, or one outside the range Speed
+ * Dreams' own simulation needs (a mass, wheelbase, spring or bellcrank of 0, brakes with no pressure, an engine with no
+ * torque between tickover and the limiter, a tyre whose curve never peaks). Each as "<what> is <value> (<rule>)"
+ */
+export function sdCarProblems(car: SdCar): string[] {
+  const out: string[] = [];
+  const need = (what: string, v: number, ok: (x: number) => boolean, rule: string) => {
+    if (!Number.isFinite(v) || !ok(v)) out.push(`${what} is ${Number.isFinite(v) ? Number(v.toPrecision(4)) : String(v)} (${rule})`);
+  };
+  const positive = (what: string, v: number) => need(what, v, (x) => x > 0, "it must be more than 0");
+  const nonNegative = (what: string, v: number) => need(what, v, (x) => x >= 0, "it must be 0 or more");
+  const finite = (what: string, v: number) => need(what, v, () => true, "it must be a finite number");
+  const share = (what: string, v: number) => need(what, v, (x) => x > 0 && x <= 1, "it must be more than 0 and at most 1");
+
+  positive("Car/mass", car.massKg);
+  need("Car/front-rear weight repartition", car.frontWeight, (x) => x > 0 && x < 1, "it must be between 0 and 1");
+  finite("Car/GC height", car.gcHeight);
+  positive("the wheelbase (Front Axle/xpos − Rear Axle/xpos)", car.xFront - car.xRear);
+  positive("the front track (Front Left − Front Right Wheel/ypos)", car.track.front);
+  positive("the rear track (Rear Left − Rear Right Wheel/ypos)", car.track.rear);
+  for (const k of ["roll", "pitch", "yaw"] as const) positive(`the ${k} inertia (Car/${k} rotational inertia, or the body's size and mass)`, car.inertia[k]);
+  positive("Steer/steer lock", car.steerLockDeg);
+
+  const e = car.engine;
+  for (const [rpm, nm] of e.torque) {
+    finite("Engine/data points/rpm", rpm);
+    finite("Engine/data points/Tq", nm);
+  }
+  positive("Engine/tickover", e.idleRpm);
+  need("Engine/revs limiter", e.limiterRpm, (x) => x > e.idleRpm, `it must be above the tickover, ${Math.round(e.idleRpm)} rpm`);
+  const pulling = e.torque.filter(([rpm, nm]) => rpm >= e.idleRpm && rpm <= e.limiterRpm && nm > 0);
+  if (e.torque.length >= 2 && !pulling.length) out.push(`Engine/data points has no torque between the tickover and the limiter (${Math.round(e.idleRpm)}–${Math.round(e.limiterRpm)} rpm)`);
+  positive("Engine/inertia", e.inertia);
+  nonNegative("Engine/brake linear coefficient", e.brakeLinear);
+  nonNegative("Engine/brake coefficient", e.brakeCoeff);
+  nonNegative("Engine/fuel cons factor", e.fuelFactor);
+
+  car.gears.ratios.forEach((r, i) => positive(`Gearbox/gears/${i + 1}/ratio`, r));
+  positive("Gearbox/gears/r/ratio", car.gears.reverse);
+  share("the driveline's efficiency (Gearbox/gears/*/efficiency × the differentials')", car.gears.efficiency);
+  nonNegative("Gearbox/shift time", car.gears.shiftTimeS);
+  positive("the driven differential's ratio", car.diff.ratio);
+
+  nonNegative("a front wheel's brake torque (Brake System/max pressure, the disc, piston area and mu)", car.brakes.frontWheelNm);
+  nonNegative("a rear wheel's brake torque (Brake System/max pressure, the disc, piston area and mu)", car.brakes.rearWheelNm);
+  positive("the brakes' torque, front and rear (Brake System/max pressure × the discs)", car.brakes.frontWheelNm + car.brakes.rearWheelNm);
+
+  for (const [A, t] of [["Front", car.tyres.front], ["Rear", car.tyres.rear]] as const) {
+    positive(`${A} wheels/rim diameter`, t.rimRadius);
+    positive(`${A} wheels/tire width`, t.width);
+    positive(`${A} wheels' tyre radius`, t.radius);
+    positive(`${A} wheels/inertia`, t.inertia);
+    finite(`${A} wheels/ride height`, t.rideHeight);
+    finite(`${A} wheels/camber`, t.camberDeg);
+    finite(`${A} wheels/toe`, t.toeDeg);
+    positive(`${A} wheels/stiffness`, t.stiffness);
+    need(`${A} wheels/dynamic friction`, t.dynamicFriction, (x) => x < 0.99, "under 99 %: at 100 % Speed Dreams' tyre never loses grip past its peak, which the game's tyres can't do");
+    need(`${A} wheels/elasticity factor`, t.elasticity, (x) => x >= 0 && x < 1, "it must be 0 or more and under 1");
+    positive(`${A} wheels/operating load`, t.operatingLoadN);
+    for (const [compound, mu] of Object.entries(t.mu)) positive(`${A} wheels${compound ? `/Compounds/${compound}` : ""}/mu`, mu);
+    if (out.length === 0) {
+      const peak = sdTyreCurve(t).peakSlip;
+      need(`${A} wheels' peak slip (stiffness, dynamic friction, elasticity factor)`, peak, (x) => x < MAX_PEAK_SLIP, `the curve must peak under a slip of ${MAX_PEAK_SLIP}`);
+    }
+  }
+
+  for (const [A, s] of [["Front", car.suspension.front], ["Rear", car.suspension.rear]] as const) {
+    positive(`${A} suspensions/spring`, s.spring);
+    positive(`${A} suspensions/bellcrank`, s.bellcrank);
+    positive(`${A} suspensions/suspension course`, s.course);
+    nonNegative(`${A} suspensions/packers`, s.packers);
+    for (const [k, v] of [["slow bump", s.slowBump], ["slow rebound", s.slowRebound], ["fast bump", s.fastBump], ["fast rebound", s.fastRebound]] as const) nonNegative(`${A} suspensions/${k}`, v);
+    positive(`${A} suspensions/bump limit velocity`, s.bumpKnee);
+    positive(`${A} suspensions/rebound limit velocity`, s.reboundKnee);
+    nonNegative(`${A} Anti-Roll Bar/spring`, s.arb);
+  }
+
+  nonNegative("Aerodynamics/Cx", car.aero.cx);
+  positive("Aerodynamics/front area", car.aero.area);
+  finite("Aerodynamics/front Clift", car.aero.cliftFront);
+  finite("Aerodynamics/rear Clift", car.aero.cliftRear);
+  for (const [A, w] of [["Front", car.aero.wings.front], ["Rear", car.aero.wings.rear]] as const) {
+    if (!w) continue;
+    positive(`${A} Wing/area`, w.area);
+    finite(`${A} Wing/angle`, w.angleRad);
+    finite(`${A} Wing/xpos`, w.xpos);
+    if (w.type === "THIN") {
+      positive(`${A} Wing/aspect ratio`, w.params["aspect ratio"] ?? 5);
+      positive(`${A} Wing/stall width`, w.params["stall width"] ?? 0.035);
+    } else if (w.type === "PROFILE") {
+      positive(`${A} Wing/aoa at max + aoa offset`, (w.params["aoa at max"] ?? 0.3) + (w.params["aoa offset"] ?? 0));
+    }
+  }
+  return out;
 }
 
 /** Downforce coefficient (N per (m/s)², + down) and drag (N per (m/s)²) of a wing at its static angle (aero.cpp) */
@@ -397,6 +503,7 @@ export function sdAeroTargets(car: SdCar): { front: number; rear: number; drag: 
   const xF = car.xFront - xCg;
   const xR = car.xRear - xCg;
   const wb = xF - xR;
+  if (!(wb > 0)) throw new Error(`${car.name}: a wheelbase of ${wb} m (Front Axle/xpos − Rear Axle/xpos must be more than 0)`);
   // A force at x (from the CG) shared onto the axles
   const split = (f: number, x: number) => ({ front: (f * (x - xR)) / wb, rear: (f * (xF - x)) / wb });
   const fw = car.aero.wings.front;
@@ -589,6 +696,8 @@ const sample = (a: number, b: number, n: number, f: (x: number) => number): [num
  */
 export function sdCarPhysics(params: SdParams, opts: { base?: VehicleModelId } = {}): SdPhysics {
   const car = readSdCar(params);
+  const problems = sdCarProblems(car);
+  if (problems.length) throw new Error(`${car.name || params.file}: its parameters can't be converted: ${problems.join("; ")}`);
   const choice = chooseBase(car, opts.base);
   const base = VEHICLE_MODELS[choice.base].simProfile!;
   const P = new PatchBuilder(base);
