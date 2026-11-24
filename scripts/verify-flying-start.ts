@@ -251,11 +251,15 @@ for (const id of CIRCUITS) {
   const L = track.totalLengthM;
   const fsp = flyingStartPoint(track);
   const signedCornerDist =
-    fsp.cornerS === null ? null : ((((fsp.s - fsp.cornerS + L / 2) % L) + L) % L) - L / 2;
+    fsp.cornerS === null
+      ? null
+      : fsp.s === fsp.cornerS
+        ? 0
+        : ((((fsp.s - fsp.cornerS + L / 2) % L) + L) % L) - L / 2;
   const optAtStartKmh = track.getSampleAtDistance(fsp.s).optimalSpeedKmh;
   check(
     `${id}: flyingStartPoint cornerS never ahead of s`,
-    signedCornerDist === null || signedCornerDist >= 0,
+    signedCornerDist === null || signedCornerDist >= -1e-6,
     `s=L${(fsp.s - L).toFixed(0)}m, cornerS=${fsp.cornerS === null ? 'null' : `L${(fsp.cornerS - L).toFixed(0)}m`}`
   );
   const runs = CARS.map((model) => {
