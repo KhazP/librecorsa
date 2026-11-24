@@ -155,9 +155,11 @@ export function revRangeOf(t: CarTelemetry): [number, number] {
 
 /** The layout's moved and resized parts, set by F1TelemetryHud on each render (the save, or the layout editor's copy) */
 let activeHudParts: HudLayoutParts = {};
+let activeHudEditMode = false;
 
-export function setActiveHudParts(parts: HudLayoutParts | undefined): void {
+export function setActiveHudParts(parts: HudLayoutParts | undefined, editMode = false): void {
   activeHudParts = parts ?? {};
+  activeHudEditMode = editMode;
 }
 
 /**
@@ -173,6 +175,7 @@ export const anchor = (scale: number | undefined, origin: string): React.CSSProp
     transformOrigin: origin,
     ...(id ? ({ "--lc-hud-part": id } as React.CSSProperties) : null),
     ...(move || s !== 1 ? { transform: `${move}scale(${s})` } : null),
+    ...(part?.hidden ? (activeHudEditMode ? { opacity: 0.28 } : { display: "none" }) : null),
   };
 };
 

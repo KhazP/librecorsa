@@ -34,7 +34,7 @@ import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow
 import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
 import { CarHeadlights, type HeadlightBeam } from '@/lib/render/car-headlights';
 import { disposeTree } from '@/lib/render/dispose-tree';
-import { LIVERIES, liveryForDriverCode } from '@/lib/track-data';
+import { LIVERIES, liveryForDriverCode, resolveLivery } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
 import { GHOST_OPACITY, ghostFade } from './ghost-align';
@@ -784,7 +784,10 @@ export class SimVisualFxManager {
 
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
-    const livery = this.mapDriverToLivery(liveryCodeOf(peer));
+    const livery =
+      typeof peer.liveryId === 'string' && peer.liveryId.length > 0
+        ? resolveLivery(peer.liveryId, peer.customLivery)
+        : this.mapDriverToLivery(liveryCodeOf(peer));
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
     const rig = pooled ?? buildOpponentRig(peer.vehicle, livery);
@@ -892,10 +895,18 @@ export class SimVisualFxManager {
         entry.ghostMats = undefined;
         entry.ghostCheckS = 0;
       }
+      const liveryKey =
+        peer.liveryId === 'custom' && peer.customLivery
+          ? `custom:${peer.customLivery.primary}:${peer.customLivery.secondary}:${peer.customLivery.accent}`
+          : (peer.liveryId ?? '');
       if (!entry) {
         entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, ghost, wheelRot: 0 };
+        (entry as { liveryKey?: string }).liveryKey = liveryKey;
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
+      } else if (!ghost && typeof peer.liveryId === 'string' && peer.liveryId.length > 0 && (entry as { liveryKey?: string }).liveryKey !== liveryKey) {
+        (entry as { liveryKey?: string }).liveryKey = liveryKey;
+        entry.rig.setLivery(resolveLivery(peer.liveryId, peer.customLivery));
       }
       const carRig = entry.rig;
       // A late model load adds meshes to a ghost: look for them twice a second, not by walking the rig every frame
