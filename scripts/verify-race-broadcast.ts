@@ -5,7 +5,7 @@
  * (one at a time, the most important first, a newer one of the same news replacing the waiting one, held while race
  * control speaks, old news dropped), the battle forecast (two laps of history, attacking, closing with the laps to
  * catch, pulling away, stable), the battle picked (the player's own first, else the closest in the top ten, on and off,
- * another one next, over when the two part), and the player's pit stop on their own line.
+ * another one next, over when the two part), the player's pit stop on their own line, and the towers' pit clock.
  * Run: npx tsx scripts/verify-race-broadcast.ts
  */
 import type { PitTelemetry, RaceStandingEntry, RaceStatus } from "../src/types/f1";
@@ -27,6 +27,7 @@ import {
   battleForecast,
 } from "../src/lib/broadcast/battle";
 import { withPlayerPit } from "../src/lib/broadcast/player-pit";
+import { pitGapText } from "../src/components/hud/pit-clock";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -315,6 +316,17 @@ console.log("player pit");
   d.update(withPlayerPit(race, pit({ phase: "servicing", serviceTotalS: 2.8, serviceLeftS: 0.4 }))!, 100);
   const ev = d.update(withPlayerPit(race, pit({ phase: "released", stopsMade: 1, serviceTotalS: 2.8 }))!, 200);
   check("the player's stop: its card, with the crew's time and the tyres fitted", kinds(ev) === "pitStop" && ev[0].isPlayer && ev[0].stationaryS === 2.8 && ev[0].compound === "hard", JSON.stringify(ev));
+}
+
+// --- The towers' pit clock ------------------------------------------------------------------------------------
+console.log("pit clock");
+{
+  const clock = (seconds: string) => `PIT ${seconds}`;
+  const row = (e: Partial<RaceStandingEntry>) => pitGapText(car({ driverCode: "AAA", ...e }), "PIT", clock);
+  check("in the box: the crew's live clock", row({ inPit: true, pitBox: { elapsedS: 2.34, totalS: 3 } }) === "PIT 2.3");
+  check("in the lane: the word alone", row({ inPit: true }) === "PIT");
+  check("on the track: the gap as ever", row({}) === null);
+  check("out of the race or past the flag: their own words", row({ inPit: true, retired: true }) === null && row({ inPit: true, finished: true }) === null);
 }
 
 console.log(`\n${passed} checks passed`);
