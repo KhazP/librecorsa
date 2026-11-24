@@ -10,12 +10,12 @@
  */
 import { text as t } from "@/lib/text";
 import {
-  BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_PEDAL_SOURCES,
   PAD_ACTIONS,
   PAD_BRAKE_BUTTON,
   PAD_PEDALS,
   PAD_THROTTLE_BUTTON,
+  WHEEL_FALLBACK_BUTTONS,
   type PadAction,
   type PadButtonBindings,
   type PadPedal,
@@ -181,6 +181,29 @@ export const WHEEL_TYPE_DEFAULTS: Record<WheelType, Pick<WheelSettings, "steerDe
 
 export const emptyWheelButtons = (): Record<PadAction, ButtonBinding | null> =>
   Object.fromEntries(PAD_ACTIONS.map((a) => [a.id, null])) as Record<PadAction, ButtonBinding | null>;
+
+/** Binds a wheel button; any other action already using that device and button is unbound so inputs never collide */
+export function rebindWheelButton(
+  buttons: Record<PadAction, ButtonBinding | null>,
+  action: PadAction,
+  binding: ButtonBinding,
+): Record<PadAction, ButtonBinding | null> {
+  const next = { ...buttons };
+  for (const k of Object.keys(next) as PadAction[]) {
+    const cur = next[k];
+    if (cur && cur.padId === binding.padId && cur.button === binding.button) next[k] = null;
+  }
+  next[action] = binding;
+  return next;
+}
+
+/** Removes the wheel button bound to `action` */
+export function clearWheelButton(
+  buttons: Record<PadAction, ButtonBinding | null>,
+  action: PadAction,
+): Record<PadAction, ButtonBinding | null> {
+  return buttons[action] === null ? buttons : { ...buttons, [action]: null };
+}
 
 /**
  * Default UDP port of telemetry out. Not 20777: that is the F1 games' binary telemetry port, and tools listening there
@@ -587,8 +610,8 @@ export class DeviceInputReader {
           frame.clutch = wheelClutch(pads, wheel.clutch);
           frame.wheelClutchConnected = Boolean(wheel.clutch && findPad(pads, wheel.clutch.padId));
         }
-        // A wheel not set up yet has its paddles where a pad has its bumpers: it shifts there whatever the pad layout
-        const map = isLikelyWheel(pad) ? BUMPER_SHIFT_BUTTONS : settings.padButtons;
+        // A wheel not set up yet shifts on bumpers and leaves MFD / TC dials unbound so wheel paddles never adjust TC
+        const map = isLikelyWheel(pad) ? WHEEL_FALLBACK_BUTTONS : settings.padButtons;
         for (const { id } of PAD_ACTIONS) {
           const button = map[id];
           if (button !== null && (pad.mapping === "standard" ? padButtonDown(pad, button) : buttonDown(pad, button))) held.add(id);

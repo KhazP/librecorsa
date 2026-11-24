@@ -2,9 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
-import { connectedPads } from "@/lib/input/device-input";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
-import { notePadInput } from "@/components/menu/input-mode";
 import type { CarTelemetry, DiffPhase, LiveTunerPatch, LiveTunerState } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
@@ -147,9 +145,6 @@ const FALLBACK_TUNER: LiveTunerState = {
   absCutPerWheel: [0, 0, 0, 0],
   mgukGearClipFraction: 1,
 };
-
-const REPEAT_DELAY_MS = 320;
-const REPEAT_RATE_MS = 95;
 
 const MFD_ROUND_BTN = `flex shrink-0 items-center justify-center rounded-full border ${HUD_CONTROL}`;
 const MFD_ROUND_IDLE = "border-lc-line bg-lc-carbon";
@@ -395,71 +390,37 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
     [activeDial.id, emit, triggerFlash, tuner]
   );
 
-  // Keep latest callbacks in a ref for the 60 Hz Gamepad D-Pad polling loop
+  // Keep latest callbacks in a ref for the keyboard and bound device MFD event listeners
   const actionsRef = useRef({ cycleDial, adjustActiveDial });
   useEffect(() => {
     actionsRef.current = { cycleDial, adjustActiveDial };
   }, [cycleDial, adjustActiveDial]);
 
-  // Controller D-Pad polling:
-  // Button 12 = D-Pad Up (+), 13 = D-Pad Down (-), 14 = D-Pad Left (prev dial / page), 15 = D-Pad Right (next dial / page)
+  // Bound controller / wheel MFD dial controls dispatched by drive-session via DeviceInputReader + MfdRepeatController.
+  // Never polls raw gamepad button indices directly, so wheel shift paddles on buttons 12–15 cannot touch TC / MFD dials.
   useEffect(() => {
-    let raf = 0;
-    let prev: [boolean, boolean, boolean, boolean] | null = null;
-    const repeatAt: [number, number, number, number] = [Infinity, Infinity, Infinity, Infinity];
-
-    /** Forget the buttons: the next frame only records them, so one held through a menu fires nothing */
-    const disarm = () => {
-      prev = null;
-      repeatAt.fill(Infinity);
+    const onUp = () => {
+      if (hudModeRef.current === "live") actionsRef.current.adjustActiveDial(1);
     };
-
-    const poll = (nowMs: number) => {
-      raf = requestAnimationFrame(poll);
-      // The pause menu, a replay and the results card own the D-pad (the HUD is only mounted while driving)
-      if (hudModeRef.current !== "live") {
-        disarm();
-        return;
-      }
-      const pads = connectedPads();
-      const pad = pads.find((p) => p.mapping === "standard") ?? pads[0];
-      if (!pad) {
-        disarm();
-        return;
-      }
-      const down = (btnIdx: number) => Boolean(pad.buttons[btnIdx]?.pressed);
-      const cur: [boolean, boolean, boolean, boolean] = [down(12), down(13), down(14), down(15)];
-
-      if (prev === null) {
-        prev = cur;
-        return;
-      }
-
-      const fire = (idx: number) => {
-        notePadInput(pad.id);
-        if (idx === 0) actionsRef.current.adjustActiveDial(1);
-        else if (idx === 1) actionsRef.current.adjustActiveDial(-1);
-        else if (idx === 2) actionsRef.current.cycleDial(-1);
-        else if (idx === 3) actionsRef.current.cycleDial(1);
-      };
-
-      for (let i = 0; i < 4; i++) {
-        if (cur[i] && !prev[i]) {
-          fire(i);
-          repeatAt[i] = nowMs + REPEAT_DELAY_MS;
-        } else if (cur[i] && nowMs >= repeatAt[i]) {
-          fire(i);
-          repeatAt[i] = nowMs + REPEAT_RATE_MS;
-        } else if (!cur[i]) {
-          repeatAt[i] = Infinity;
-        }
-      }
-
-      prev = cur;
+    const onDown = () => {
+      if (hudModeRef.current === "live") actionsRef.current.adjustActiveDial(-1);
     };
-
-    raf = requestAnimationFrame(poll);
-    return () => cancelAnimationFrame(raf);
+    const onPrev = () => {
+      if (hudModeRef.current === "live") actionsRef.current.cycleDial(-1);
+    };
+    const onNext = () => {
+      if (hudModeRef.current === "live") actionsRef.current.cycleDial(1);
+    };
+    window.addEventListener(HUD_TOGGLE_EVENT.mfdUp, onUp);
+    window.addEventListener(HUD_TOGGLE_EVENT.mfdDown, onDown);
+    window.addEventListener(HUD_TOGGLE_EVENT.mfdPrev, onPrev);
+    window.addEventListener(HUD_TOGGLE_EVENT.mfdNext, onNext);
+    return () => {
+      window.removeEventListener(HUD_TOGGLE_EVENT.mfdUp, onUp);
+      window.removeEventListener(HUD_TOGGLE_EVENT.mfdDown, onDown);
+      window.removeEventListener(HUD_TOGGLE_EVENT.mfdPrev, onPrev);
+      window.removeEventListener(HUD_TOGGLE_EVENT.mfdNext, onNext);
+    };
   }, [hudModeRef]);
 
   // Keyboard shortcuts: , / . cycle MFD dials; - / = adjust value ([ / ] belong to the cockpit FOV)

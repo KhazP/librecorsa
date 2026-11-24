@@ -146,6 +146,7 @@ import {
 } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad, isLikelyWheel } from "@/lib/input/device-input";
 import { MenuIdleWatch } from "@/lib/input/menu-idle";
+import { isMfdDialAction, MfdRepeatController } from "@/lib/input/mfd-input";
 import { AERIAL_IDLE_MS } from "@/lib/render/menu-aerial";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
@@ -1920,6 +1921,7 @@ export class DriveSession {
     /** The controller's headlight button (a tap flashes, a hold switches the lights) and the flash's least length */
     const headlightButton = new HeadlightButton();
     const flashTimer = new FlashTimer();
+    const mfdRepeat = new MfdRepeatController();
     let playerFlashing = false;
     const clearCameraOverride = () => {
       if (cameraOverride === null) return;
@@ -3069,8 +3071,8 @@ export class DriveSession {
             lightsPressed = true;
             continue;
           }
-          // Boost and the flash act while held (`boostHeld`, `device.held`); the MFD and HUD buttons go to the HUD
-          if (action !== "boost" && action !== "headlightFlash") runAction(action);
+          // Boost, flash and MFD dial controls act via held / repeat handlers below; the MFD and HUD toggles go to the HUD
+          if (action !== "boost" && action !== "headlightFlash" && !isMfdDialAction(action)) runAction(action);
         }
 
         if (padCameraHeldSinceMs !== null) {
@@ -3088,6 +3090,9 @@ export class DriveSession {
       // The flash: the high beam while the flash key or button is held, or the headlight button is still short of a
       // hold (which switches the lights instead); a tap still lights it for MIN_FLASH_MS
       const buttonsLive = driving && !inMenu && !gpuLost;
+      for (const mfdAction of mfdRepeat.update(device.pressed, device.held, nowMs, buttonsLive)) {
+        window.dispatchEvent(new Event(HUD_TOGGLE_EVENT[mfdAction]));
+      }
       const lightsButton = headlightButton.update(lightsPressed, device.held?.has("headlights") === true, nowMs, buttonsLive);
       if (lightsButton.toggle) runAction("headlights");
       // (an F1 car has no headlights to flash)
