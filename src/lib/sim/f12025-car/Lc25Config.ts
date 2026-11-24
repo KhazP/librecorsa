@@ -1,12 +1,17 @@
 /**
  * LC25 Prototype — 2025 Formula 1 car configuration for `VehiclePhysics`.
  *
- * Clean-room physics specification built strictly from:
+ * Physics specification built from:
  *  - [fia25]    2025 FIA Formula 1 Technical Regulations (Issue 3, 2025-04-07) & Sporting Regulations (Issue 5)
  *  - [pirelli]  2025 FIA / Pirelli Event Notes (Austria `25R11SPI` & Monaco `25R08MNC`)
  *  - [openf1]   2025 OpenF1 qualifying & race telemetry (#4 Norris, Austria Q 63.971 s & Monaco Q 69.954 s)
  *  - [model]    Measured hardpoints & outline of `public/cars/lc25/model/lc25.glb`
- *  - [est]      Engineering estimate for a 2025 ground-effect Formula 1 car (zero third-party mod data)
+ *  - [est]      Engineering estimate for a 2025 ground-effect Formula 1 car
+ *  - [ref]      the project's own 2025 reference set, used for the car's character where the values above were
+ *               estimates (tyre load sensitivity and compound spread, inertia, the corner / heave spring split, damping,
+ *               roll balance, aero balance and the shape of the ground-effect map, brake pad warm-up, shift times,
+ *               low-gear MGU-K deploy). Each value sits between the earlier estimate and the reference, and the
+ *               [fia25] / [pirelli] / [openf1] / [model] values stand
  *
  * No plank-wear disqualification / exponential plank-wear mechanic is modelled (standard stiff linear floor contact
  * for sparks only).
@@ -58,8 +63,11 @@ const CG_HEIGHT_M = 0.298;
 const STATIC_CG_RH_M = STATIC_RH.front * FRONT_WEIGHT_FRACTION + STATIC_RH.rear * (1 - FRONT_WEIGHT_FRACTION);
 const FLOOR_OFFSET_Y = Number((-(CG_HEIGHT_M - STATIC_CG_RH_M)).toFixed(4));
 
-/** Equivalent uniform-box dimensions W × H × L (m) for principal inertias about CG [est] */
-const INERTIA_BOX = { width: 0.92, height: 0.60, length: 3.75 } as const;
+/**
+ * Equivalent uniform-box dimensions W × H × L (m) for principal inertias about CG: ≈1,140 kg·m² yaw, between the old
+ * 3.75 m box (994) and the [ref] set's ≈1,320, for calmer yaw on corner exit [est, ref]
+ */
+const INERTIA_BOX = { width: 1.05, height: 0.60, length: 4.0 } as const;
 const boxInertia = (a: number, b: number) => Math.round((MASS_KG / 12) * (a * a + b * b));
 
 /** Unsprung mass per corner (18" rim + Pirelli slick + upright + carbon brake + half links, kg) [est] */
@@ -219,12 +227,15 @@ const ERS: ERSData = {
   liftThrottle: 0.05,
   topGearLiftHarvestW: 90_000,
   liftHarvestEveryGear: { maxAxleTorqueNm: 850 },
+  // MGU-K deploy held back in the low gears, where the rears are traction-limited, after the [ref] set's gear ramp
+  // (≈0 / 11 / 33 / 75 % in 1st–4th there; gentler here so corner exits keep their drive) [est, ref]
   deployVsGear: [
     [0, 0],
-    [1, 0.35],
-    [2, 0.65],
-    [3, 0.9],
-    [4, 1],
+    [1, 0.2],
+    [2, 0.45],
+    [3, 0.75],
+    [4, 0.95],
+    [5, 1],
     [8, 1],
   ],
   mguH: {
@@ -343,14 +354,21 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
 // Suspension (2025 ground-effect pushrod front / pullrod rear + heave packers)
 // ---------------------------------------------------------------------------
 
-/** Corner wheel rates (N/m): compliant for roll and single-wheel kerb absorption [est] */
-const WHEEL_RATE = { front: 115_000, rear: 82_000 } as const;
-/** Third (heave) springs (N/m): primary vertical aero platform support [est] */
-const HEAVE_RATE = { front: 265_000, rear: 280_000 } as const;
+/**
+ * Corner wheel rates (N/m). Stiffness moved from the heave springs into the corners, after the [ref] set's split
+ * (more of the platform carried by the corner springs, so more roll stiffness): the per-wheel heave rate
+ * (corner + heave / 2) stays at the old ≈248 / 222 kN/m, so the floor's ride heights at speed hold [est, ref]
+ */
+const WHEEL_RATE = { front: 138_000, rear: 102_000 } as const;
+/** Third (heave) springs (N/m): the rest of the vertical aero platform support [est] */
+const HEAVE_RATE = { front: 219_000, rear: 240_000 } as const;
 /** Heave packers: engage cleanly at ~150 km/h so front stays in 18–25 mm ground-effect window to 310 km/h [est] */
 const HEAVE_PACKER = { gap: { front: 0.0025, rear: 0.0045 }, rate: 1_250_000 } as const;
-/** Anti-roll bars (N/m at wheel): balanced front/rear roll stiffness for crisp turn-in and planted corner exit [est] */
-const ARB_RATE = { front: 58_000, rear: 24_000 } as const;
+/**
+ * Anti-roll bars (N/m at wheel, acting on the left − right travel): front-biased roll stiffness, front/rear wheel roll
+ * rate (corner + 2 × bar) ≈1.85 (the [ref] set's ≈1.86, the old 1.78) for a planted rear on corner exit [est, ref]
+ */
+const ARB_RATE = { front: 62_000, rear: 20_000 } as const;
 
 function cornerDamper(axle: 'front' | 'rear', zeta: number): DamperSettingsUnits {
   const sprungKg = MASS_KG - 2 * (UNSPRUNG_KG.front + UNSPRUNG_KG.rear);
@@ -358,7 +376,8 @@ function cornerDamper(axle: 'front' | 'rear', zeta: number): DamperSettingsUnits
   const critical = 2 * Math.sqrt((WHEEL_RATE[axle] + 2 * ARB_RATE[axle]) * cornerKg);
   const round = (c: number) => Math.round(c / 100) * 100;
   const slow_bump = round(zeta * critical);
-  const slow_rebound = round(1.45 * zeta * critical);
+  // Rebound ≈1.3× bump, as in the [ref] set (was 1.45×)
+  const slow_rebound = round(1.3 * zeta * critical);
   return {
     slow_bump,
     fast_bump: round(0.55 * slow_bump),
@@ -466,15 +485,17 @@ const SUSPENSIONS: SuspensionsData = {
   dampers_controller: {
     front: {
       base: cornerDamper('front', 0.42),
-      heave: { slow_bump: 8500, fast_bump: 5000, slow_rebound: 10500, fast_rebound: 6000 },
+      // Heave damping eased and the corners' raised, toward the [ref] set's split; the platform's total stays close
+      heave: { slow_bump: 6000, fast_bump: 3500, slow_rebound: 7500, fast_rebound: 4300 },
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
       fastThresholdMs: 0.05,
       fastReboundThresholdMs: 0.05,
     },
     rear: {
-      base: cornerDamper('rear', 0.42),
-      heave: { slow_bump: 9500, fast_bump: 5500, slow_rebound: 11500, fast_rebound: 6500 },
+      // Rear corners damped harder than the front (≈0.55 of critical), as the [ref] set's are
+      base: cornerDamper('rear', 0.55),
+      heave: { slow_bump: 7500, fast_bump: 4300, slow_rebound: 9500, fast_rebound: 5400 },
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
       fastThresholdMs: 0.05,
@@ -682,14 +703,18 @@ const AERO: AeroData = {
 // Brakes — Carbon-Carbon + Rear BBW + Dynamic Brake Migration ([fia25], [openf1])
 // ---------------------------------------------------------------------------
 
-/** Carbon-carbon pad μ(T): full grip 400–950 °C, softer bite when cold or overheated [est] */
+/**
+ * Carbon-carbon pad μ(T): full grip 450–950 °C. Flatter than before at both ends, toward the [ref] set's gentle
+ * curve (≈0.93 cold, ≈0.95 at 1,200 °C), but still a real cold-carbon dip [est, ref]
+ */
 const PAD_MU_CURVE: LutPoints = [
-  [0, 0.60],
-  [250, 0.85],
-  [400, 1.00],
+  [0, 0.72],
+  [200, 0.86],
+  [400, 0.98],
+  [450, 1.00],
   [950, 1.00],
-  [1150, 0.92],
-  [1300, 0.75],
+  [1150, 0.95],
+  [1300, 0.85],
 ];
 
 const BRAKES: BrakesData = {
@@ -702,8 +727,10 @@ const BRAKES: BrakesData = {
   padMuCurve: PAD_MU_CURVE,
   discStartTempC: 300,
   rearDuctShare: 0.25,
-  // Smooth forward migration (+5.5% by full pedal, linear from 0 -> 63.5% peak front) so both axles share braking while staying strictly front-limited
-  migration: { amount: 0.055, rampStart: 0 },
+  // Forward migration past 45% pedal (+4% by full pedal, 62% front), as an F1 brake-by-wire map does: a hard stop stays
+  // front-limited, while a light trail-braking pedal keeps the 58% base so the car rotates on entry. Ramping it from 0
+  // put ~60% on the fronts at trail pressure and the car would not turn in on the brakes [est, ref]
+  migration: { amount: 0.04, rampStart: 0.45 },
 };
 
 // ---------------------------------------------------------------------------
@@ -778,10 +805,13 @@ interface SlickSpec {
 function makeSlick(s: SlickSpec): TyresCompoundData {
   const fz0Front = 4000;
   const fz0Rear = 4200;
-  const lsExpYFront = 0.895;
-  const lsExpXFront = 0.925;
-  const lsExpYRear = 0.912;
-  const lsExpXRear = 0.942;
+  // Steeper load sensitivity, toward the [ref] set's: lateral peak μ now falls ≈0.83× from 4 to 8 kN (was ≈0.87×,
+  // the reference ≈0.77×). More grip on light loads and at low speed, less per newton once the floor is loaded; the
+  // peak μ values below are raised to hold high-speed grip
+  const lsExpYFront = 0.82;
+  const lsExpXFront = 0.87;
+  const lsExpYRear = 0.84;
+  const lsExpXRear = 0.885;
 
   const frontModel: TyresCompoundData['modelData'] = {
     Dy0: s.dyFront,
@@ -792,7 +822,8 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
     dyCurve: buildLoadCurve(s.dyFront, fz0Front, lsExpYFront),
     dxCurve: buildLoadCurve(s.dxFront, fz0Front, lsExpXFront),
     curve: 'brush',
-    friction_limit_angle: 6.6,
+    // Peak slip angles a touch sharper than before, toward the [ref] set's ≈6.1° F / 5.4° R
+    friction_limit_angle: 6.3,
     speedSensitivity: 0.002,
     pKy2: 4.2,
     slip_ratio_limit: 0.10,
@@ -820,9 +851,9 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
     Fz0: fz0Rear,
     dyCurve: buildLoadCurve(s.dyRear, fz0Rear, lsExpYRear),
     dxCurve: buildLoadCurve(s.dxRear, fz0Rear, lsExpXRear),
-    friction_limit_angle: 5.9,
-    relaxationLengthX: 0.12,
-    relaxationLengthY: 0.12,
+    friction_limit_angle: 5.6,
+    relaxationLengthX: 0.11,
+    relaxationLengthY: 0.11,
     verticalDamping: 700,
   };
 
@@ -881,14 +912,15 @@ function makeSlick(s: SlickSpec): TyresCompoundData {
   };
 }
 
+// Compound ladder: ≈1.6 % peak μ per step, between the old 2.4 % and the [ref] set's ≈1 %
 const SOFT = makeSlick({
   tyre_compound: 'PhysicsTyreCompound_F1_Soft',
   name: 'Soft',
   shortName: 'S',
-  dyFront: 1.86,
-  dxFront: 1.82,
-  dyRear: 1.94,
-  dxRear: 1.90,
+  dyFront: 1.935,
+  dxFront: 1.905,
+  dyRear: 2.015,
+  dxRear: 1.985,
   rateFront: 315_000,
   rateRear: 345_000,
   falloffLevel: 0.86,
@@ -900,10 +932,10 @@ const MEDIUM = makeSlick({
   tyre_compound: 'PhysicsTyreCompound_F1_Medium',
   name: 'Medium',
   shortName: 'M',
-  dyFront: 1.815,
-  dxFront: 1.775,
-  dyRear: 1.895,
-  dxRear: 1.855,
+  dyFront: 1.904,
+  dxFront: 1.874,
+  dyRear: 1.983,
+  dxRear: 1.953,
   rateFront: 325_000,
   rateRear: 350_000,
   falloffLevel: 0.85,
@@ -915,10 +947,10 @@ const HARD = makeSlick({
   tyre_compound: 'PhysicsTyreCompound_F1_Hard',
   name: 'Hard',
   shortName: 'H',
-  dyFront: 1.77,
-  dxFront: 1.73,
-  dyRear: 1.85,
-  dxRear: 1.81,
+  dyFront: 1.873,
+  dxFront: 1.844,
+  dyRear: 1.951,
+  dxRear: 1.921,
   rateFront: 332_000,
   rateRear: 355_000,
   falloffLevel: 0.84,
@@ -982,8 +1014,9 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     ratios: [2.780, 2.280, 1.920, 1.650, 1.430, 1.245, 1.100, 0.990],
     reverse: 3.6,
     finalDrive: 4.78,
-    shiftTimeS: 0.015,
-    downshiftTimeS: 0.025,
+    // Quicker seamless shifts, toward the [ref] set's 5 ms up / 16 ms down [est, ref]
+    shiftTimeS: 0.008,
+    downshiftTimeS: 0.018,
     shiftTorqueFraction: 0.88,
     upshiftCutS: 0.018,
     efficiency: 0.955,
