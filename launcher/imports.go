@@ -66,7 +66,7 @@ type importEntry struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 	// Source is what the importer is given, relative to the import folder: the folder, a folder inside it (a folder
-	// unzipped into a folder of the same name), or a file in it (a Blender export's .glb)
+	// unzipped into a folder of the same name), or a file in it (F1 25's .erp, a Blender export's .glb)
 	Source string `json:"source,omitempty"`
 	// Available is false when the release's converter has no importer for the kind
 	Available bool `json:"available"`
@@ -185,8 +185,8 @@ func readDir(root *os.Root, name string) []fs.DirEntry {
 	return entries
 }
 
-// detectFolder recognises a folder by its own files (and its ui/ and data/ folders): the importer's kind, and for a
-// Blender export the .glb file in it to give the importer
+// detectFolder recognises a folder by its own files (and its ui/ and data/ folders): the importer's kind, and for an
+// importer that takes a file rather than the folder (F1 25's .erp, a Blender export's .glb) that file
 func detectFolder(root *os.Root) (kind, file string) {
 	var files, dirs []string
 	for _, e := range readDir(root, ".") {
@@ -216,9 +216,10 @@ func detectFolder(root *os.Root) (kind, file string) {
 	}
 	kn5 := len(withExt(".kn5")) > 0
 
-	// F1 25: the circuit's .erp archive
-	if len(withExt(".erp")) > 0 {
-		return kindF1Track, ""
+	// F1 25: the circuit's .erp archive, which the importer is given (the first by name, when a mod has more)
+	if erps := withExt(".erp"); len(erps) > 0 {
+		slices.Sort(erps)
+		return kindF1Track, erps[0]
 	}
 	// Assetto Corsa car: its data (packed or not) and its model
 	if kn5 && (has("data.acd") || (hasDir("data") && regularIn(root, "data", "car.ini"))) {

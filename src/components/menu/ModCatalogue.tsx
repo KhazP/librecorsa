@@ -93,6 +93,7 @@ export const ModCatalogue: React.FC<ModCatalogueProps> = ({ installed, claim, bl
       offline: () => t("errorOffline"),
       network: () => t("errorNetwork"),
       http: () => t("errorHttp", { status: String(err.status ?? "") }),
+      insecure: () => t("errorInsecure"),
       size: () => t("errorSize"),
       checksum: () => t("errorChecksum"),
     }[err.failure]();

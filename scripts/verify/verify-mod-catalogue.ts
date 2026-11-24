@@ -26,8 +26,8 @@ import {
 } from "../../src/lib/mods/mod-catalogue";
 import { Sha256 } from "../../src/lib/mods/sha256-stream";
 import { modDefinitions } from "../../src/lib/mods/mod-content";
-import { installPackage, readInstalled, zipSource } from "../../src/lib/mods/mod-store";
-import { buildCatalogue, linkBase } from "../mods/lib/catalogue";
+import { holdModsStore, installPackage, modsStoreHeld, onModsStoreHold, readInstalled, removePackage, zipSource } from "../../src/lib/mods/mod-store";
+import { buildCatalogue, catalogueBytes, catalogueJson, linkBase, type CatalogueFile } from "../mods/lib/catalogue";
 import { checkPackage, hashFolder } from "../mods/lib/package-check";
 import { zipPackage } from "../mods/lib/zip-writer";
 
@@ -133,6 +133,15 @@ async function main(): Promise<void> {
   check("A path in the setting is on the game's site", sources[1]?.url === `${SITE}/packs/catalogue.json`);
   sources = catalogueSources("/mods/_catalogue/catalogue.json", page);
   check("A setting naming this copy's own catalogue reads it once, as named", sources.length === 1 && sources[0].named);
+  // librecorsa.org has no catalogue of its own: nothing is asked for there (no 404 each time the panel opens)
+  for (const live of ["https://librecorsa.org/play", "https://www.librecorsa.org/play", "https://LibreCorsa.org/"]) {
+    check(`On ${new URL(live).host}, no catalogue of its own is read`, catalogueSources("", live).length === 0, JSON.stringify(catalogueSources("", live)));
+  }
+  sources = catalogueSources("/mods/_catalogue/catalogue.json", "https://librecorsa.org/play");
+  check("…unless the build names it", sources.length === 1 && sources[0].url === "https://librecorsa.org/mods/_catalogue/catalogue.json" && sources[0].named);
+  sources = catalogueSources(`${CDN}/catalogue.json`, "https://librecorsa.org/play");
+  check("…and the one the build names elsewhere is still read", sources.length === 1 && sources[0].url === `${CDN}/catalogue.json`);
+  check("A host that only ends in librecorsa.org has its own", catalogueSources("", "https://notlibrecorsa.org/play").length === 1);
   const before = warnings.length;
   check(
     "An http://, protocol-relative or relative setting is left out, with a warning",
@@ -218,6 +227,15 @@ async function main(): Promise<void> {
   Object.defineProperty(redirected, "url", { value: `${CDN}/v2/catalogue.json` });
   read = await readCatalogue(`${CDN}/catalogue.json`, SITE, { fetch: fetchOf(() => redirected) });
   check("Links are read against where a redirect led", read.state === "ok" && read.catalogue.packages[0].url === `${CDN}/v2/jdoe.blue-gt.zip`);
+  // On the launcher's http page a redirect from https to plain http isn't stopped by the browser: the game stops it
+  const toHttp = json({ format: 1, packages: [entry({ url: "http://evil.example/x.zip" })] });
+  Object.defineProperty(toHttp, "url", { value: "http://evil.example/catalogue.json" });
+  read = await readCatalogue(`${CDN}/catalogue.json`, LAUNCHER, { fetch: fetchOf(() => toHttp) });
+  check("A catalogue a redirect took to plain http isn't read", read.state === "absent");
+  const toLauncher = json({ format: 1, packages: [entry()] });
+  Object.defineProperty(toLauncher, "url", { value: `${LAUNCHER}/mods/_catalogue/catalogue.json` });
+  read = await readCatalogue(`${LAUNCHER}/c.json`, LAUNCHER, { fetch: fetchOf(() => toLauncher) });
+  check("…one on the launcher's own http origin is", read.state === "ok");
 
   // --- Every catalogue at once ---
   const both = await loadCatalogues(`${CDN}/catalogue.json`, {
@@ -244,6 +262,17 @@ async function main(): Promise<void> {
     }),
   });
   check("This copy's own out of reach, none named: nothing to say", noneHere.packages.length === 0 && !noneHere.unreachable);
+  // The panel opening on librecorsa.org (a fake location: the page's address), with no catalogue named: no request
+  let asked: string[] = [];
+  const counting = fetchOf((url) => {
+    asked.push(url);
+    return new Response("", { status: 404 });
+  });
+  const live = await loadCatalogues("", { pageUrl: "https://librecorsa.org/play", fetch: counting });
+  check("On librecorsa.org with no catalogue named, nothing is fetched", asked.length === 0 && live.packages.length === 0 && !live.unreachable, asked.join(", "));
+  asked = [];
+  await loadCatalogues("", { pageUrl: `${LAUNCHER}/play`, fetch: counting });
+  check("…while the launcher's page asks for its own", asked.length === 1 && asked[0] === `${LAUNCHER}/mods/_catalogue/catalogue.json`, asked.join(", "));
   console.warn = warn;
 
   // --- Status against what is installed ---
@@ -275,6 +304,18 @@ async function main(): Promise<void> {
   check("Longer than stated: refused as soon as it passes the size", (await failure({}, () => long.res))?.failure === "size" && long.sent() < 60_000, `${long.sent()} bytes read`);
   check("Shorter than stated: refused", (await failure({}, () => served(zipBytes.slice(0, 1000)).res))?.failure === "size");
   check("A stated length that isn't the size: refused before reading", (await failure({}, () => served(zipBytes, { headers: { "Content-Length": "10" } }).res))?.failure === "size");
+  const downgraded = async () => {
+    const res = served(zipBytes).res;
+    Object.defineProperty(res, "url", { value: "http://evil.example/x.zip" });
+    return res;
+  };
+  let insecure: DownloadError | null = null;
+  try {
+    await downloadPackage(zipEntry, { fetch: fetchOf(downgraded), pageOrigin: LAUNCHER });
+  } catch (err) {
+    insecure = err instanceof DownloadError ? err : null;
+  }
+  check("A download a redirect took to plain http is refused before it is read", insecure?.failure === "insecure");
   const http = await failure({}, () => new Response("gone", { status: 404 }));
   check("A server error: refused, with its status", http?.failure === "http" && http.status === 404);
   check("No connection: a network failure", (await failure({}, () => Promise.reject(new TypeError("Failed to fetch"))))?.failure === "network");
@@ -329,6 +370,36 @@ async function main(): Promise<void> {
   result = await installPackage(await zipSource(blob), known, { id: "jdoe.blue-gt", hash: await hashOf(v1) });
   check("A package's zip downloaded and checked installs from what was read", result.ok && (await readInstalled())[0]?.version === "1.0.0");
 
+  // --- One change to the stored packages at a time ---
+  // A panel closed and opened mid-install used to let a second start beside the first: started together, installs and
+  // removals now run one after another, so none loses its line in _installed.json, nor its files to the other
+  const other = makePackage(join(tmp, "v3", "jdoe.other"), "1.0.0", "paint-three", "jdoe.other", "Other");
+  const together = await Promise.all([
+    installPackage(await zipSource(zipOf(other)), known),
+    installPackage(await zipSource(zipOf(v2)), known),
+    installPackage(await zipSource(zipOf(v1)), known),
+  ]);
+  installed = await readInstalled();
+  check(
+    "Three installs at once, two of one id: each in, the last of the id kept, the list whole",
+    together.every((r) => r.ok) && installed.map((p) => `${p.id}@${p.version}`).sort().join() === "jdoe.blue-gt@1.0.0,jdoe.other@1.0.0" && (await store.read(`${SITE}/mods/jdoe.blue-gt/skins/blue/paint.png`)) === "paint-one",
+    installed.map((p) => `${p.id}@${p.version}`).join(),
+  );
+  check("…and nothing left aside", !(await store.keys()).some((u) => u.includes("_staging")));
+  await Promise.all([removePackage("jdoe.other"), installPackage(await zipSource(zipOf(v2)), known)]);
+  installed = await readInstalled();
+  check("A removal and an install at once: both kept in the list", installed.length === 1 && installed[0].id === "jdoe.blue-gt" && installed[0].version === "2.0.0", installed.map((p) => `${p.id}@${p.version}`).join());
+  // The panel's hold lives in mod-store.ts, so a panel opened again finds it taken
+  let heard = 0;
+  const stop = onModsStoreHold(() => heard++);
+  const release = holdModsStore();
+  check("The hold, taken, is taken for everyone until let go", release !== null && holdModsStore() === null && modsStoreHeld());
+  release?.();
+  release?.();
+  check("Let go (once, however often asked), it can be taken again", !modsStoreHeld() && heard === 2);
+  stop();
+  holdModsStore()?.();
+
   await generatorChecks();
 
   rmSync(tmp, { recursive: true, force: true });
@@ -341,6 +412,17 @@ async function main(): Promise<void> {
 
 /** `npm run mod -- catalogue`: a catalogue written from packed zips, read back by the game */
 async function generatorChecks(): Promise<void> {
+  // --- The catalogue's size, as the game counts it ---
+  const wide: CatalogueFile = {
+    format: 1,
+    packages: Array.from({ length: 400 }, (_, i) => ({ ...(entry({ id: `jdoe.p${i}` }) as unknown as CatalogueFile["packages"][number]), description: "数".repeat(1000) })),
+  };
+  check(
+    "A catalogue is measured in UTF-8 bytes: three a character for these, over the limit its length is under",
+    catalogueJson(wide).length < CATALOGUE_MAX_BYTES && catalogueBytes(wide) > CATALOGUE_MAX_BYTES,
+    `${catalogueJson(wide).length} characters, ${catalogueBytes(wide)} bytes`,
+  );
+
   // --- Where the zips' links start ---
   check("Links: an https:// base, a path, a folder beside the catalogue, or none", linkBase("https://packs.example.org/v1") === "https://packs.example.org/v1/" && linkBase("/mods/_catalogue/") === "/mods/_catalogue/" && linkBase("packs") === "packs/" && linkBase(undefined) === "");
   check("http:// only on this machine (the launcher)", linkBase("http://127.0.0.1:47600/mods/_catalogue") === "http://127.0.0.1:47600/mods/_catalogue/");

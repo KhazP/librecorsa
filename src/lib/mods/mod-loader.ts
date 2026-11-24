@@ -2,7 +2,7 @@ import { withBasePath } from "@/lib/base-path";
 import { registerModTracks, type ModOrigin, type TrackInfo } from "@/lib/track-registry";
 import { modCarProfile, modDefinitions, registerModContent } from "@/lib/mods/mod-content";
 import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
-import { isModPackageId, isSha256Hex, modContentId, modFileUrl, validateModManifest, type ModManifest } from "./mod-manifest";
+import { hostMayServeMods, isModPackageId, isSha256Hex, modContentId, modFileUrl, validateModManifest, type ModManifest } from "./mod-manifest";
 import { disabledPackages, FOLDER_INDEX_PATH, modsStorageAvailable, readInstalled, readInstalledJson } from "./mod-store";
 
 /**
@@ -48,11 +48,8 @@ interface FolderEntry {
 /** How long the start waits for a folder of packages to answer before going on without it */
 const FOLDER_INDEX_TIMEOUT_MS = 1500;
 
-/**
- * Whether this copy of the game can have a folder of packages beside it: the launcher, a clone's dev server, a copy
- * served from anywhere else. librecorsa.org has none, so its players never wait on the question
- */
-const mayHaveModsFolder = (): boolean => !/(^|\.)librecorsa\.org$/i.test(window.location.hostname);
+/** Whether this copy of the game can have a folder of packages beside it (mod-manifest.ts `hostMayServeMods`) */
+const mayHaveModsFolder = (): boolean => hostMayServeMods(window.location.hostname);
 
 /** `?mods=off`: start without any package, to get past one that keeps the game from starting (the Mods panel can then remove it) */
 export const modsSwitchedOff = (): boolean => {

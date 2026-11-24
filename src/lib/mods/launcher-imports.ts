@@ -4,7 +4,8 @@
  * 127.0.0.1; the game served anywhere else never asks.
  *
  * Every call carries the launcher's header, which a page of another site can't send without a preflight the launcher
- * never answers: the launcher refuses a call without it.
+ * never answers, and the session cookie the launcher gave the window it opened (launcher/session.go), which the
+ * browser sends by itself: the launcher refuses a call without either.
  */
 
 const HEADER = { "X-LibreCorsa-Launcher": "1" } as const;
@@ -114,16 +115,30 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   return data;
 }
 
-/** Whether the game runs under a launcher that has the import folder (`GET /__launcher`) */
-export async function launcherHasImports(): Promise<boolean> {
-  if (!onLoopback()) return false;
+/**
+ * Whether the game runs under a launcher that has the import folder (`GET /__launcher`): "none" when it doesn't (or
+ * isn't a launcher), "session" in the window the launcher opened, "no-session" in any other, which may not convert
+ */
+export type LauncherPresence = "none" | "session" | "no-session";
+
+/** Asked once per page: the answer can't change while it is open, and a dev server would log a 404 at each ask */
+let presence: Promise<LauncherPresence> | null = null;
+
+export function launcherPresence(): Promise<LauncherPresence> {
+  presence ??= askLauncher();
+  return presence;
+}
+
+async function askLauncher(): Promise<LauncherPresence> {
+  if (!onLoopback()) return "none";
   try {
     const res = await fetch("/__launcher", { cache: "no-store" });
-    if (!res.ok) return false;
-    const id = (await res.json()) as { app?: string; imports?: boolean };
-    return id.app === "librecorsa-launcher" && id.imports === true;
+    if (!res.ok) return "none";
+    const id = (await res.json()) as { app?: string; imports?: boolean; session?: boolean };
+    if (id.app !== "librecorsa-launcher" || id.imports !== true) return "none";
+    return id.session === true ? "session" : "no-session";
   } catch {
-    return false;
+    return "none";
   }
 }
 

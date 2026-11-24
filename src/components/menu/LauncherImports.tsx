@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import {
   cancelJob,
-  launcherHasImports,
   LauncherError,
+  launcherPresence,
   readImports,
   readJob,
   startConvert,
@@ -19,6 +19,7 @@ import {
   type LauncherCredit,
   type LauncherImports as ImportsState,
   type LauncherJob,
+  type LauncherPresence,
 } from "@/lib/mods/launcher-imports";
 
 /** How often a running job's status is asked for */
@@ -27,8 +28,8 @@ const POLL_MS = 1000;
 const SHOWN_LOG = 80;
 
 /**
- * The jobs this page has seen running (kept while the page lives, across the panel closing and opening): only their
- * results are shown and reported, so the last job of a launcher that ran before a restart isn't announced again
+ * The jobs this page started or saw running (kept while the page lives, across the panel closing and opening): only
+ * their results are shown and reported, so the last job of a launcher that ran before a restart isn't announced again
  */
 const watchedJobs = new Set<number>();
 
@@ -91,6 +92,8 @@ const refusal = (tx: Tx, err: unknown): string => {
         return tx("hintUnknown");
       case "bad-folder":
         return tx("errorGone");
+      case "session":
+        return tx("noSession");
       default:
         return err.message;
     }
@@ -101,16 +104,22 @@ const refusal = (tx: Tx, err: unknown): string => {
 /** A download's program by the name players know it */
 const programName = (step: string | undefined): string => (step === "node" ? "Node.js" : (step ?? ""));
 
+/**
+ * A field of a converted package's credit as text, or undefined: the launcher passes text only, and the package's own
+ * mod.json is the importer's output, so anything else (a number, an object) is left out rather than rendered
+ */
+const text = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v : undefined);
+
 /** A credit as one line: who, and under what licence */
-const creditLine = (c: LauncherCredit | undefined): string => [c?.author, c?.license].filter(Boolean).join(" · ");
+const creditLine = (c: LauncherCredit | undefined): string => [text(c?.author), text(c?.license)].filter(Boolean).join(" · ");
 
 /** The licences a conversion brought in: the package's, and each circuit's or car's own when it differs */
 const LicenceNotes: React.FC<{ tx: Tx; packages: ConvertedPackage[]; notes: string[] }> = ({ tx, packages, notes }) => {
   const credits: { what: string; credit: LauncherCredit }[] = [];
   for (const p of packages) {
-    if (p.credit) credits.push({ what: p.name, credit: p.credit });
-    for (const c of p.content ?? []) {
-      if (c.credit && creditLine(c.credit) !== creditLine(p.credit)) credits.push({ what: c.name, credit: c.credit });
+    if (p.credit && typeof p.credit === "object") credits.push({ what: text(p.name) ?? text(p.id) ?? "?", credit: p.credit });
+    for (const c of Array.isArray(p.content) ? p.content : []) {
+      if (c.credit && typeof c.credit === "object" && creditLine(c.credit) !== creditLine(p.credit)) credits.push({ what: text(c.name) ?? text(c.id) ?? "?", credit: c.credit });
     }
   }
   if (!credits.length && !notes.length) return null;
@@ -125,8 +134,8 @@ const LicenceNotes: React.FC<{ tx: Tx; packages: ConvertedPackage[]; notes: stri
           <li key={i} className="lc-body m-0">
             <span className="font-semibold text-lc-chalk">{what}</span>
             {": "}
-            {tx("licenceLine", { author: credit.author ?? "?", licence: credit.license ?? "?" })}
-            {credit.note ? <span className="block text-lc-caution">{credit.note}</span> : null}
+            {tx("licenceLine", { author: text(credit.author) ?? "?", licence: text(credit.license) ?? "?" })}
+            {text(credit.note) ? <span className="block text-lc-caution">{text(credit.note)}</span> : null}
           </li>
         ))}
         {notes.map((n, i) => (
@@ -168,19 +177,24 @@ const JobProgress: React.FC<{ tx: Tx; job: LauncherJob; python?: string; onCance
   if (job.type === "toolchain") {
     label = job.step === "python" ? tx("fetchingPython", { version: python ?? "3" }) : tx("downloading", { name: programName(job.step) });
   } else {
-    label = job.step === "check" ? tx("checking", { name: job.folder ?? "" }) : tx("converting", { name: job.folder ?? "" });
+    const name = job.folder ?? "";
+    label = job.step === "check" ? tx("checking", { name }) : job.step === "copy" ? tx("copying", { name }) : tx("converting", { name });
   }
   const sized = job.total && job.total > 0;
   return (
-    <Well className="flex flex-col gap-2.5 px-3.5 py-3" role="status" aria-live="polite">
+    <Well className="flex flex-col gap-2.5 px-3.5 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="lc-body m-0 font-medium text-lc-chalk">{label}</p>
+        {/* Only the step is announced, when it changes: not the progress and log lines redrawn each second */}
+        <p className="lc-body m-0 font-medium text-lc-chalk" role="status" aria-live="polite">
+          {label}
+        </p>
         <Button size="sm" variant="ghost" icon={<Icon name="close" />} loading={cancelling} onClick={onCancel}>
           {tx("stop")}
         </Button>
       </div>
       {sized ? (
         <Meter
+          role="progressbar"
           stacked
           label={programName(job.step)}
           value={(job.done ?? 0) / (job.total ?? 1)}
@@ -208,7 +222,7 @@ const JobResult: React.FC<{ tx: Tx; job: LauncherJob; onRestart: () => void; onD
           ? tx("cancelled")
           : tx("toolsFailed")
       : ok
-        ? tx("converted", { name: packages.map((p) => p.name).join(", ") || (job.folder ?? "") })
+        ? tx("converted", { name: packages.map((p) => text(p.name) ?? p.id).join(", ") || (job.folder ?? "") })
         : job.state === "cancelled"
           ? tx("cancelled")
           : tx("failed", { name: job.folder ?? "" });
@@ -262,13 +276,17 @@ export interface LauncherImportsProps {
  */
 export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, onRestart }) => {
   const tx = useTranslations("menu.modConvert");
-  const [present, setPresent] = useState(false);
+  const [presence, setPresence] = useState<LauncherPresence>("none");
+  const present = presence === "session";
   const [state, setState] = useState<ImportsState | null>(null);
   const [job, setJob] = useState<LauncherJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** The tools' download asked for: the folder to convert once they are in */
   const [askTools, setAskTools] = useState<{ folder: string | null } | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  /** A start (a conversion, the tools' download) is on its way to the launcher: a second press would only be refused */
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   /** The last job's result was put away */
   const [dismissed, setDismissed] = useState<number | null>(null);
   const mounted = useRef(true);
@@ -292,10 +310,10 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
 
   useEffect(() => {
     mounted.current = true;
-    void launcherHasImports().then((yes) => {
-      if (!mounted.current || !yes) return;
-      setPresent(true);
-      void refresh();
+    void launcherPresence().then((p) => {
+      if (!mounted.current) return;
+      setPresence(p);
+      if (p === "session") void refresh();
     });
     return () => {
       mounted.current = false;
@@ -325,13 +343,32 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     return () => window.clearInterval(timer);
   }, [running]);
 
+  /**
+   * Starts a job, one start at a time: a start that is still on its way holds off a second (a double click), and the
+   * job started is watched whatever its answer says, so one that ended at once still shows how
+   */
+  const begin = useCallback(async (start: () => Promise<LauncherJob>): Promise<void> => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      const started = await start();
+      watchedJobs.add(started.id);
+      if (mounted.current) setJob(started);
+    } finally {
+      startingRef.current = false;
+      if (mounted.current) setStarting(false);
+    }
+  }, []);
+
   const convert = useCallback(
     async (folder: string) => {
       setError(null);
       setDismissed(null);
       try {
-        setJob(await startConvert(folder));
+        await begin(() => startConvert(folder));
       } catch (err) {
+        if (!mounted.current) return;
         if (err instanceof LauncherError && err.code === "not-ready") {
           setAskTools({ folder });
           return;
@@ -339,7 +376,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
         setError(refusal(tx, err));
       }
     },
-    [tx],
+    [tx, begin],
   );
 
   // A job ended: the folder list again, the panel told of a new package, and a conversion that waited on the tools
@@ -356,13 +393,26 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     }
   }, [job, refresh, onConverted, convert]);
 
-  if (!present) return null;
+  if (presence === "none") return null;
+  if (!present) {
+    return (
+      <section className="flex flex-col gap-3 border-t border-lc-line pt-4" aria-labelledby="lc-launcher-imports">
+        <h3 id="lc-launcher-imports" className="lc-h3 m-0">
+          {tx("title")}
+        </h3>
+        <Well className="px-3.5 py-2.5">
+          <p className="lc-body m-0 text-lc-caution">{tx("noSession")}</p>
+        </Well>
+      </section>
+    );
+  }
 
   const tools = state?.toolchain;
   const downloadBytes = (tools?.downloads ?? []).reduce((n, d) => n + d.bytes, 0);
   const totalBytes = downloadBytes + (tools?.pythonApproxBytes ?? 0);
 
   const onConvert = (folder: string) => {
+    if (startingRef.current) return;
     if (tools?.state === "missing") {
       setAskTools({ folder });
       return;
@@ -376,10 +426,10 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     setError(null);
     setDismissed(null);
     try {
-      setJob(await startToolchain());
+      await begin(startToolchain);
     } catch (err) {
       after.current = null;
-      setError(refusal(tx, err));
+      if (mounted.current) setError(refusal(tx, err));
     }
   };
 
@@ -426,7 +476,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
       ) : null}
 
       {askTools && tools && !running ? (
-        <Well className={cx("flex flex-col gap-2 px-3.5 py-3", TONE_HAIRLINE.info)} role="dialog" aria-labelledby="lc-tools-title">
+        <Well className={cx("flex flex-col gap-2 px-3.5 py-3", TONE_HAIRLINE.info)} role="region" aria-labelledby="lc-tools-title">
           <p id="lc-tools-title" className="lc-body m-0 font-semibold text-lc-chalk">
             {tx("toolsTitle")}
           </p>
@@ -448,7 +498,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
           </ul>
           <p className="lc-hint m-0 break-all">{tx("toolsWhere", { dir: tools.dir })}</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" icon={<Icon name="download" />} onClick={() => void onDownload()}>
+            <Button size="sm" variant="primary" icon={<Icon name="download" />} loading={starting} disabled={starting} onClick={() => void onDownload()}>
               {tx("toolsDownload", { size: mb(totalBytes) })}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setAskTools(null)}>
@@ -489,7 +539,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
                     variant="secondary"
                     aria-label={tx("convertNamed", { name: f.name })}
                     loading={running && job?.type === "convert" && job.folder === f.name}
-                    disabled={running}
+                    disabled={running || starting}
                     onClick={() => onConvert(f.name)}
                   >
                     {tx("convert")}

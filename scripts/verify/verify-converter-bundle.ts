@@ -10,6 +10,28 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { Document, NodeIO } from "@gltf-transform/core";
+
+/** A flat grid of n × n squares (2n² triangles) named as the F1 extractor names scenery */
+function sceneryGrid(n: number): Document {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const positions: number[] = [];
+  for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++) positions.push(x, Math.sin(x * 0.3) * 0.01, z);
+  const indices: number[] = [];
+  for (let z = 0; z < n; z++)
+    for (let x = 0; x < n; x++) {
+      const i = z * (n + 1) + x;
+      indices.push(i, i + n + 1, i + 1, i + 1, i + n + 1, i + n + 2);
+    }
+  const prim = doc
+    .createPrimitive()
+    .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(positions)).setBuffer(buffer))
+    .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(indices)).setBuffer(buffer));
+  const mesh = doc.createMesh("Scenery_flat_opaque").addPrimitive(prim);
+  doc.createScene().addChild(doc.createNode("Scenery_flat_opaque").setMesh(mesh));
+  return doc;
+}
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -26,51 +48,66 @@ const node = (args: string[]) =>
 const files = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [relative(out, join(dir, e.name)).split("\\").join("/")]));
 
-try {
-  const built = node([join(repo, "launcher", "converter", "build.mjs"), "--out", out]);
-  check("the converter builds", built.status === 0, (built.stderr || built.stdout).trim().split("\n").pop());
-  if (built.status !== 0) throw new Error("no converter to check");
+// The simplify step needs a GLB written first (asynchronously)
+async function main(): Promise<void> {
+  try {
+    const built = node([join(repo, "launcher", "converter", "build.mjs"), "--out", out]);
+    check("the converter builds", built.status === 0, (built.stderr || built.stdout).trim().split("\n").pop());
+    if (built.status !== 0) throw new Error("no converter to check");
 
-  const manifest = JSON.parse(readFileSync(join(out, "converter.json"), "utf8")) as {
-    modTool: string;
-    importers: string[];
-    python: { version: string; requirements: string[] };
-    work: string[];
-  };
-  const importers = readdirSync(join(repo, "scripts", "mods", "importers"))
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))
-    .map((f) => f.slice(0, -3))
-    .sort();
-  check("converter.json names every importer", JSON.stringify(manifest.importers) === JSON.stringify(importers), manifest.importers.join(", "));
-  check("the mod tool is bundled where converter.json says", existsSync(join(out, manifest.modTool)), manifest.modTool);
-  check(
-    "each importer is bundled beside it",
-    importers.every((n) => existsSync(join(out, "scripts", "mods", "importers", `${n}.mjs`))),
-  );
-  check("Python's requirements files are in it", manifest.python.requirements.every((r) => existsSync(join(out, r))), manifest.python.requirements.join(", "));
-  check("the working folder starts with an empty circuit list", manifest.work.every((w) => readFileSync(join(out, w, "index.json"), "utf8").trim() === "[]"));
+    const manifest = JSON.parse(readFileSync(join(out, "converter.json"), "utf8")) as {
+      modTool: string;
+      importers: string[];
+      python: { version: string; requirements: string[] };
+      work: string[];
+    };
+    const importers = readdirSync(join(repo, "scripts", "mods", "importers"))
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))
+      .map((f) => f.slice(0, -3))
+      .sort();
+    check("converter.json names every importer", JSON.stringify(manifest.importers) === JSON.stringify(importers), manifest.importers.join(", "));
+    check("the mod tool is bundled where converter.json says", existsSync(join(out, manifest.modTool)), manifest.modTool);
+    check(
+      "each importer is bundled beside it",
+      importers.every((n) => existsSync(join(out, "scripts", "mods", "importers", `${n}.mjs`))),
+    );
+    check("Python's requirements files are in it", manifest.python.requirements.every((r) => existsSync(join(out, r))), manifest.python.requirements.join(", "));
+    check("the working folder starts with an empty circuit list", manifest.work.every((w) => readFileSync(join(out, w, "index.json"), "utf8").trim() === "[]"));
 
-  const all = files(out);
-  check("no TypeScript source (runTsx and build_track.py then run the bundles)", !all.some((f) => /\.(ts|tsx)$/.test(f)), all.filter((f) => /\.tsx?$/.test(f)).join(", "));
-  check("no native module and no node_modules", !all.some((f) => f.endsWith(".node") || f.includes("node_modules/")));
-  check("no Python cache", !all.some((f) => f.includes("__pycache__")));
-  const size = all.reduce((n, f) => n + statSync(join(out, f)).size, 0);
-  check("it stays small (under 16 MB)", size < 16 * 1024 * 1024, `${(size / 1024 / 1024).toFixed(1)} MB`);
+    const all = files(out);
+    check("no TypeScript source (runTsx and build_track.py then run the bundles)", !all.some((f) => /\.(ts|tsx)$/.test(f)), all.filter((f) => /\.tsx?$/.test(f)).join(", "));
+    check("no native module and no node_modules", !all.some((f) => f.endsWith(".node") || f.includes("node_modules/")));
+    check("no Python cache", !all.some((f) => f.includes("__pycache__")));
+    const size = all.reduce((n, f) => n + statSync(join(out, f)).size, 0);
+    check("it stays small (under 16 MB)", size < 16 * 1024 * 1024, `${(size / 1024 / 1024).toFixed(1)} MB`);
 
-  const listed = node([join(out, manifest.modTool), "import"]);
-  check("the bundled mod tool loads every importer", listed.status === 0 && importers.every((n) => listed.stdout.includes(n)), listed.stderr.trim());
+    const listed = node([join(out, manifest.modTool), "import"]);
+    check("the bundled mod tool loads every importer", listed.status === 0 && importers.every((n) => listed.stdout.includes(n)), listed.stderr.trim());
 
-  // The optimiser reads the circuit from the converter's own public/tracks, not the repository's
-  const optimiser = node([join(out, "scripts", "tracks", "optimize-racing-line.mjs"), "--track", "no_such_circuit", "--dry-run"]);
-  const wanted = join(out, "public", "tracks", "no_such_circuit", "track_data.json");
-  check("a bundled tool finds the converter's folders, not the repository's", optimiser.stderr.includes(wanted), optimiser.stderr.split("\n").find((l) => l.includes("ENOENT")) ?? "");
-  const compressor = node([join(out, "scripts", "tracks", "compress-track-glb.mjs")]);
-  check("the GLB compressor runs from its bundle", /usage/i.test(compressor.stdout + compressor.stderr), (compressor.stdout + compressor.stderr).trim().slice(0, 80));
-} catch (err) {
-  check("the converter could be checked", false, err instanceof Error ? err.message : String(err));
-} finally {
-  rmSync(tmp, { recursive: true, force: true });
+    // The optimiser reads the circuit from the converter's own public/tracks, not the repository's
+    const optimiser = node([join(out, "scripts", "tracks", "optimize-racing-line.mjs"), "--track", "no_such_circuit", "--dry-run"]);
+    const wanted = join(out, "public", "tracks", "no_such_circuit", "track_data.json");
+    check("a bundled tool finds the converter's folders, not the repository's", optimiser.stderr.includes(wanted), optimiser.stderr.split("\n").find((l) => l.includes("ENOENT")) ?? "");
+    const compressor = node([join(out, "scripts", "tracks", "compress-track-glb.mjs")]);
+    check("the GLB compressor runs from its bundle", /usage/i.test(compressor.stdout + compressor.stderr), (compressor.stdout + compressor.stderr).trim().slice(0, 80));
+
+    // The F1 25 extractor's simplify step, on a scenery mesh heavy enough to be simplified: from its bundle, with
+    // gltf-transform and meshoptimizer inlined (no node_modules beside it), as extract_erp_track.py runs it
+    const glb = join(tmp, "scenery.glb");
+    await new NodeIO().write(glb, sceneryGrid(40));
+    const simplify = node([join(out, "scripts", "tracks", "simplify-erp-glb.mjs"), glb]);
+    check("the F1 extractor's simplify step runs from its bundle", simplify.status === 0 && /meshopt simplify: 3,200 ->/.test(simplify.stdout), (simplify.stdout + simplify.stderr).trim().slice(0, 120));
+    const pythonFiles = all.filter((f) => f.endsWith(".py"));
+    const evals = pythonFiles.filter((f) => /["']node["'][^\n\]]*["'](-e|--eval|-p|--print)["']/.test(readFileSync(join(out, f), "utf8")));
+    check("no Python converter hands Node code to run (node -e): a script of its own is bundled", evals.length === 0, evals.join(", "));
+  } catch (err) {
+    check("the converter could be checked", false, err instanceof Error ? err.message : String(err));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+
+  console.log(failed ? `\n${failed} converter bundle check(s) failed` : "\nAll converter bundle checks passed");
+  process.exit(failed ? 1 : 0);
 }
 
-console.log(failed ? `\n${failed} converter bundle check(s) failed` : "\nAll converter bundle checks passed");
-process.exit(failed ? 1 : 0);
+void main();

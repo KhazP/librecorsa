@@ -145,9 +145,15 @@ func run() int {
 	// Ctrl+C stops the server cleanly from here on, while a browser starts too
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, gameDir, modsDir, importDir, convNote, playURL)
+	// The address that opens the game with this run's session (session.go), good once: the window it opens may convert
+	openURL := s.session.openURL(origin)
+	shown := playURL
+	if *noBrowser {
+		shown = openURL + "\n        (once; then " + playURL + ")"
+	}
+	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, gameDir, modsDir, importDir, convNote, shown)
 	if !*noBrowser {
-		openGame(playURL)
+		openGame(openURL)
 	}
 	fmt.Println("Press Ctrl+C to stop.")
 	select {

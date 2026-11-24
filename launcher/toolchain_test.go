@@ -130,6 +130,7 @@ func TestInstallVerifiesBeforeExtracting(t *testing.T) {
 	srv, tc := downloadServer(t, map[string][]byte{"/uv.tar.gz": archive})
 	p := pinnedFile{Name: "uv", Version: "9.9.9", URL: srv.URL + "/uv.tar.gz", SHA256: sha(archive), Size: int64(len(archive)),
 		Format: "tar.gz", Member: "uv-test/uv", Program: "uv"}
+	pinProgram(&p, []byte("#!/bin/sh\necho uv\n"))
 
 	bad := p
 	bad.SHA256 = sha([]byte("something else"))
@@ -239,6 +240,9 @@ func TestPinsAreWellFormed(t *testing.T) {
 			if _, err := hex.DecodeString(p.SHA256); err != nil {
 				t.Errorf("%s %s: sha256 %v", platform, p.Name, err)
 			}
+			if b, err := hex.DecodeString(p.ProgramSHA256); err != nil || len(b) != sha256.Size || p.ProgramSize <= 0 || p.ProgramSize > maxProgramBytes {
+				t.Errorf("%s %s: the program's pin %q, %d bytes", platform, p.Name, p.ProgramSHA256, p.ProgramSize)
+			}
 			if strings.HasPrefix(platform, "windows") != strings.HasSuffix(p.Program, ".exe") {
 				t.Errorf("%s %s: program %s", platform, p.Name, p.Program)
 			}
@@ -257,6 +261,8 @@ func TestPinsAreWellFormed(t *testing.T) {
 
 func TestToolchainReady(t *testing.T) {
 	tc := newToolchain(t.TempDir(), "darwin", "arm64")
+	pinProgram(&tc.pins.UV, []byte("x"))
+	pinProgram(&tc.pins.Node, []byte("x"))
 	conv := &converterInfo{requirementsHash: "abc"}
 	conv.Python.Version = "3.14"
 	if tc.ready(conv) || tc.info(conv).State != "missing" || len(tc.info(conv).Downloads) != 2 {
@@ -283,5 +289,99 @@ func TestToolchainReady(t *testing.T) {
 	}
 	if newToolchain(t.TempDir(), "linux", "riscv64").info(conv).State != "unsupported" {
 		t.Error("a platform without pins isn't unsupported")
+	}
+}
+
+// A program changed, replaced or linked after it was installed is never taken for the pinned one: the toolchain isn't
+// ready, a run is refused, and installing again downloads it afresh
+func TestProgramIsCheckedAgain(t *testing.T) {
+	good := []byte("#!/bin/sh\necho uv\n")
+	archive := tarGz(t, [][2]string{{"uv-test/uv", string(good)}})
+	srv, tc := downloadServer(t, map[string][]byte{"/uv.tar.gz": archive})
+	p := pinnedFile{Name: "uv", Version: "9.9.9", URL: srv.URL + "/uv.tar.gz", SHA256: sha(archive), Size: int64(len(archive)),
+		Format: "tar.gz", Member: "uv-test/uv", Program: "uv"}
+	pinProgram(&p, good)
+	if err := tc.install(context.Background(), p, nil); err != nil {
+		t.Fatal(err)
+	}
+	prog := filepath.Join(tc.componentDir(p), "uv")
+	if err := tc.checkProgram(p, false); err != nil {
+		t.Fatalf("the program as installed: %v", err)
+	}
+	if runtime.GOOS != "windows" {
+		for _, dir := range []string{tc.dir, tc.componentDir(p)} {
+			if info, _ := os.Stat(dir); info.Mode().Perm() != 0o700 {
+				t.Errorf("%s is %v, not this user's alone", dir, info.Mode().Perm())
+			}
+		}
+	}
+
+	// The same size, other bytes, its time put back: the cached check still reads it again once the file differs
+	info, _ := os.Stat(prog)
+	evil := bytes.Replace(good, []byte("echo uv"), []byte("rm -rf "), 1)
+	os.WriteFile(prog, evil, 0o755)
+	os.Chtimes(prog, info.ModTime(), info.ModTime())
+	if err := tc.checkProgram(p, false); !errors.Is(err, errProgramChanged) {
+		t.Errorf("a changed program: %v", err)
+	}
+	// Installing again puts the pinned one back
+	if err := tc.install(context.Background(), p, nil); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(prog); !bytes.Equal(b, good) {
+		t.Errorf("not downloaded again: %q", b)
+	}
+
+	// A link to a copy of the very same program is refused too: what it leads to can change under it
+	elsewhere := filepath.Join(t.TempDir(), "uv")
+	os.WriteFile(elsewhere, good, 0o755)
+	os.Remove(prog)
+	if err := os.Symlink(elsewhere, prog); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	if err := tc.checkProgram(p, false); !errors.Is(err, errProgramChanged) {
+		t.Errorf("a link: %v", err)
+	}
+	if err := tc.install(context.Background(), p, nil); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(prog); err != nil || !info.Mode().IsRegular() {
+		t.Errorf("the link is still there: %v %v", info, err)
+	}
+
+	// And a linked folder on the way to it (Node's bin/)
+	node := pinnedFile{Name: "node", Version: "1", Program: "bin/node"}
+	pinProgram(&node, good)
+	realBin := filepath.Join(t.TempDir(), "bin")
+	writeFiles(t, realBin, map[string]string{"node": string(good)})
+	os.MkdirAll(tc.componentDir(node), 0o700)
+	os.Symlink(realBin, filepath.Join(tc.componentDir(node), "bin"))
+	if err := tc.checkProgram(node, false); !errors.Is(err, errProgramChanged) {
+		t.Errorf("a linked folder: %v", err)
+	}
+}
+
+// A run checks the programs afresh, whatever the panel's status found a moment before
+func TestRunRefusesAChangedProgram(t *testing.T) {
+	s, _ := convertFixture(t)
+	js := s.imports.jobs
+	if !js.tc.ready(js.conv) {
+		t.Fatal("not ready")
+	}
+	f, err := os.OpenFile(js.tc.nodePath(), os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write([]byte("tampered"))
+	f.Close()
+	if err := js.runTool(context.Background(), newRingLog(10), nil, js.tc.nodePath(), "--version"); !errors.Is(err, errProgramChanged) {
+		t.Errorf("ran a changed Node: %v", err)
+	}
+	if js.tc.ready(js.conv) {
+		t.Error("ready with a changed Node")
+	}
+	w := call(s, http.MethodPost, convertPath, `{"folder":"my_circuit"}`)
+	if w.Code != http.StatusConflict || decode[statusAnswer](t, w).Code != "not-ready" {
+		t.Errorf("%d %s", w.Code, w.Body.String())
 	}
 }

@@ -170,7 +170,7 @@ export async function buildCatalogue(
   packages.sort((a, b) => a.name.localeCompare(b.name, "en") || a.id.localeCompare(b.id));
   if (packages.length > CATALOGUE_MAX_PACKAGES) failures.push({ file: folder, problems: [`more than ${CATALOGUE_MAX_PACKAGES} packages: the game reads only the first ${CATALOGUE_MAX_PACKAGES}`] });
   const catalogue: CatalogueFile = { format: CATALOGUE_FORMAT, packages };
-  if (catalogueJson(catalogue).length > CATALOGUE_MAX_BYTES) failures.push({ file: folder, problems: [`the catalogue would be larger than ${CATALOGUE_MAX_BYTES} bytes, more than the game reads`] });
+  if (catalogueBytes(catalogue) > CATALOGUE_MAX_BYTES) failures.push({ file: folder, problems: [`the catalogue would be larger than ${CATALOGUE_MAX_BYTES} bytes, more than the game reads`] });
 
   // Read back as the game reads it: every entry must be one the game keeps
   const origin = link.startsWith("http://") ? new URL(link).origin : "https://catalogue.invalid";
@@ -180,3 +180,9 @@ export async function buildCatalogue(
 }
 
 export const catalogueJson = (catalogue: CatalogueFile): string => `${JSON.stringify(catalogue, null, 2)}\n`;
+
+/**
+ * The catalogue file's size in bytes, as the game counts it against CATALOGUE_MAX_BYTES: UTF-8, not the string's
+ * length (a name or description in Japanese or Arabic takes two or three bytes a character)
+ */
+export const catalogueBytes = (catalogue: CatalogueFile): number => Buffer.byteLength(catalogueJson(catalogue), "utf8");

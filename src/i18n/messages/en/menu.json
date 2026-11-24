@@ -676,7 +676,8 @@
     "errorNetwork": "The connection broke off. Try again.",
     "errorHttp": "The server answered with error {status}: the package may have moved since the list was made.",
     "errorSize": "The download isn't the size the list states: the package may have changed since the list was made. Nothing was installed.",
-    "errorChecksum": "The download doesn't match the list (its SHA-256 differs), so nothing was installed."
+    "errorChecksum": "The download doesn't match the list (its SHA-256 differs), so nothing was installed.",
+    "errorInsecure": "The download was sent on to an address that isn't secure (not https), so it wasn't read."
   },
   "mods": {
     "intro": "Mod packages add circuits, cars and liveries to the game. A package holds data only, never code, and stays in this browser until you remove it. Laps on a mod circuit or in a mod car are yours alone: they stay off the online boards and the weekly challenge.",
@@ -742,6 +743,7 @@
     "downloading": "Downloading {name}…",
     "fetchingPython": "Fetching Python {version} and its packages…",
     "fetchingHint": "This takes a few minutes the first time.",
+    "copying": "Copying {name}…",
     "converting": "Converting {name}…",
     "convertingHint": "A circuit takes a few minutes: its racing lines are worked out lap by lap.",
     "checking": "Checking the package from {name}…",
@@ -764,6 +766,7 @@
     "errorBusy": "Something is already converting or downloading: wait for it, or stop it.",
     "errorNotReady": "The converter's tools aren't downloaded yet.",
     "errorLink": "The folder holds a link to somewhere else: copy the files themselves into it.",
-    "errorGone": "That folder isn't in the import folder any more."
+    "errorGone": "That folder isn't in the import folder any more.",
+    "noSession": "Converting works only in the game window the launcher opened. Open the game from the launcher: start it again, or use the address it printed when it started."
   }
 }

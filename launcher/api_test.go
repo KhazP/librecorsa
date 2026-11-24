@@ -50,6 +50,7 @@ func fakeModTool(args []string) int {
 	kind, source, mods := args[1], args[2], args[4]
 	cwd, _ := os.Getwd()
 	fmt.Printf("importing %s from %s in %s\n", kind, filepath.Base(source), filepath.Base(cwd))
+	fmt.Printf("source path %s\n", source)
 	fmt.Printf("NODE_OPTIONS %s\n", map[bool]string{true: "set", false: "unset"}[os.Getenv("NODE_OPTIONS") != ""])
 	fmt.Printf("PATH starts with %s\n", strings.Split(os.Getenv("PATH"), string(os.PathListSeparator))[0])
 	name := filepath.Base(filepath.Dir(source))
@@ -141,10 +142,18 @@ func testToolchain(t *testing.T, dir string) *toolchain {
 			t.Fatal(err)
 		}
 	}
+	pinProgram(&tc.pins.UV, exe)
+	pinProgram(&tc.pins.Node, exe)
 	return tc
 }
 
-// call makes an API request as the game's page makes it, with changes: "-Header" leaves a header out
+// pinProgram pins b as p's program
+func pinProgram(p *pinnedFile, b []byte) {
+	p.ProgramSHA256, p.ProgramSize = sha(b), int64(len(b))
+}
+
+// call makes an API request as the game's page makes it, in the window the launcher opened (with its session
+// cookie), with changes: "-Header" leaves a header out ("-Cookie" the session)
 func call(s http.Handler, method, target, body string, header ...string) *httptest.ResponseRecorder {
 	var r *http.Request
 	if body != "" {
@@ -158,6 +167,9 @@ func call(s http.Handler, method, target, body string, header ...string) *httpte
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	if method == http.MethodPost {
 		r.Header.Set("Origin", fmt.Sprintf("http://127.0.0.1:%d", testPort))
+	}
+	if srv, ok := s.(*server); ok {
+		r.AddCookie(sessionCookie(srv))
 	}
 	for i := 0; i < len(header); i++ {
 		if name, ok := strings.CutPrefix(header[i], "-"); ok {
@@ -176,6 +188,19 @@ func call(s http.Handler, method, target, body string, header ...string) *httpte
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, r)
 	return w
+}
+
+// sessionCookie is the cookie a window the launcher opened holds
+func sessionCookie(s *server) *http.Cookie {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, s.session.openURL(fmt.Sprintf("http://127.0.0.1:%d", testPort)), nil)
+	s.session.serveOpen(w, r)
+	for _, c := range w.Result().Cookies() {
+		if c.Name == s.session.cookieName() {
+			return c
+		}
+	}
+	panic("no session cookie")
 }
 
 type statusAnswer struct {
@@ -218,6 +243,12 @@ func TestAPIRefusesOtherPages(t *testing.T) {
 		header       []string
 		want         int
 	}{
+		{"list without the session", http.MethodGet, importsPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"status without the session", http.MethodGet, convertPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"convert without the session", http.MethodPost, convertPath, convert, []string{"-Cookie"}, http.StatusForbidden},
+		{"toolchain without the session", http.MethodPost, toolchainPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"cancel without the session", http.MethodPost, cancelPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"convert with another session", http.MethodPost, convertPath, convert, []string{"Cookie", fmt.Sprintf("librecorsa_launcher_%d=%s", testPort, strings.Repeat("0", 64))}, http.StatusForbidden},
 		{"list without the header", http.MethodGet, importsPath, "", []string{"-" + apiHeader}, http.StatusForbidden},
 		{"status without the header", http.MethodGet, convertPath, "", []string{"-" + apiHeader}, http.StatusForbidden},
 		{"header with another value", http.MethodGet, importsPath, "", []string{apiHeader, "yes"}, http.StatusForbidden},
@@ -349,10 +380,10 @@ func TestConvert(t *testing.T) {
 	if !strings.Contains(log, "PATH starts with "+filepath.Dir(tc.nodePath())) {
 		t.Errorf("Node's folder isn't first on PATH:\n%s", log)
 	}
-	if len(job.Packages) != 1 || job.Packages[0].ID != "tests.my-circuit" || job.Packages[0].Credit["license"] != "Personal use only" {
+	if len(job.Packages) != 1 || job.Packages[0].ID != "tests.my-circuit" || job.Packages[0].Credit.License != "Personal use only" {
 		t.Fatalf("packages %+v", job.Packages)
 	}
-	if c := job.Packages[0].Content; len(c) != 1 || c[0].Credit["license"] != "All rights reserved" {
+	if c := job.Packages[0].Content; len(c) != 1 || c[0].Credit.License != "All rights reserved" {
 		t.Errorf("content %+v", c)
 	}
 	if len(job.Notes) == 0 || !strings.Contains(job.Notes[0], "personal use") {
@@ -360,6 +391,19 @@ func TestConvert(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(base, "mods", "tests.my-circuit", "mod.json")); err != nil {
 		t.Error("the package isn't in the mods folder")
+	}
+	// The importer was given a copy, in the toolchain's staging folder, which is gone once the job ends
+	var source string
+	for _, l := range job.Log {
+		if p, ok := strings.CutPrefix(l, "source path "); ok {
+			source = p
+		}
+	}
+	if !strings.HasPrefix(source, s.imports.jobs.stagingDir()+string(filepath.Separator)) || filepath.Base(source) != "my_circuit.glb" {
+		t.Errorf("converted %q, not a copy in %s", source, s.imports.jobs.stagingDir())
+	}
+	if _, err := os.Stat(source); !os.IsNotExist(err) {
+		t.Errorf("the copy is left: %v", err)
 	}
 	// The game lists it on its next start
 	if !strings.Contains(get(s, "/mods/_index.json").Body.String(), "tests.my-circuit") {
@@ -485,6 +529,8 @@ func TestToolchainJob(t *testing.T) {
 		UV:   pinnedFile{Name: "uv", Version: "1", URL: srv.URL + "/uv.tar.gz", SHA256: sha(uvArchive), Size: int64(len(uvArchive)), Format: "tar.gz", Member: "uv-test/uv", Program: "uv"},
 		Node: pinnedFile{Name: "node", Version: "1", URL: srv.URL + "/bad.tar.gz", SHA256: sha(nodeArchive), Size: int64(len(nodeArchive)), Format: "tar.gz", Member: "node-test/bin/node", Program: "bin/node"},
 	}
+	pinProgram(&tc.pins.UV, exe)
+	pinProgram(&tc.pins.Node, []byte("node"))
 	js.tc = tc
 
 	// Node's download doesn't match its pin: the setup stops there, and nothing of it is kept
@@ -495,11 +541,11 @@ func TestToolchainJob(t *testing.T) {
 	if job.State != jobFailed || !strings.Contains(job.Error, "node") {
 		t.Fatalf("%+v", job)
 	}
-	if isFile(tc.nodePath()) || tc.ready(js.conv) {
+	if tc.checkProgram(tc.pins.Node, false) == nil || tc.ready(js.conv) {
 		t.Fatal("a download that didn't verify was installed")
 	}
-	if !isFile(tc.uvPath()) {
-		t.Error("uv, which verified, wasn't kept")
+	if err := tc.checkProgram(tc.pins.UV, false); err != nil {
+		t.Errorf("uv, which verified, wasn't kept: %v", err)
 	}
 
 	tc.pins.Node.URL = srv.URL + "/node.tar.gz"
@@ -548,6 +594,10 @@ func TestCancelStopsTheToolchainDownload(t *testing.T) {
 			t.Fatal("no progress")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	// A conversion asked for meanwhile is told one runs, not that the tools aren't there yet
+	if w := call(s, http.MethodPost, convertPath, `{"folder":"my_circuit"}`); w.Code != http.StatusConflict || decode[statusAnswer](t, w).Code != "busy" {
+		t.Errorf("a conversion during the download: %d %s", w.Code, w.Body.String())
 	}
 	call(s, http.MethodPost, cancelPath, "")
 	if job := waitJob(t, s); job.State != jobCancelled || job.Step != "uv" || job.Total != 1000000 {

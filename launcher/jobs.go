@@ -86,6 +86,11 @@ func newJobs(importDir, modsDir string, conv *converterInfo, tc *toolchain) *job
 func (js *jobs) status() *jobStatus {
 	js.mu.Lock()
 	defer js.mu.Unlock()
+	return js.statusLocked()
+}
+
+// statusLocked is status, with js.mu held
+func (js *jobs) statusLocked() *jobStatus {
 	if js.last == nil {
 		return nil
 	}
@@ -118,6 +123,9 @@ func (js *jobs) start(typ, folder, kind string, work func(ctx context.Context, j
 		done:   make(chan struct{}),
 	}
 	js.last = j
+	// Its status as started, before the work can end it: the answer to the start says "running" whatever happens next,
+	// so the panel watches it and shows how it ended
+	started := js.statusLocked()
 	js.mu.Unlock()
 
 	go func() {
@@ -140,7 +148,14 @@ func (js *jobs) start(typ, folder, kind string, work func(ctx context.Context, j
 			j.status.Error = err.Error()
 		}
 	}()
-	return js.status(), nil
+	return started, nil
+}
+
+// running reports whether a job runs
+func (js *jobs) running() bool {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	return js.last != nil && js.last.status.State == jobRunning
 }
 
 // maxJobTime bounds a job: a large circuit's conversion, racing lines included, takes minutes, not hours
@@ -203,14 +218,14 @@ func (js *jobs) startToolchain() (*jobStatus, error) {
 		env := js.programEnv()
 		python := js.conv.Python.Version
 		// Only into the toolchain folder: no `python3.14` on the player's PATH, nothing in the Windows registry
-		if err := runProgram(ctx, j.log, js.conv.Dir, env, uv, "python", "install", "--no-bin", "--no-registry", python); err != nil {
+		if err := js.runTool(ctx, j.log, env, uv, "python", "install", "--no-bin", "--no-registry", python); err != nil {
 			return fmt.Errorf("uv python install %s: %w", python, err)
 		}
 		// The converters' packages, fetched into uv's cache the way runPython (scripts/mods/lib/toolchain.ts) asks for
 		// them, so the first conversion finds them there
 		for _, req := range js.conv.Python.Requirements {
 			argv := []string{uv, "run", "--python", python, "--no-project", "--with-requirements", req, "python", "-c", "pass"}
-			if err := runProgram(ctx, j.log, js.conv.Dir, env, argv...); err != nil {
+			if err := js.runTool(ctx, j.log, env, argv...); err != nil {
 				return fmt.Errorf("the packages in %s: %w", req, err)
 			}
 		}
@@ -230,10 +245,17 @@ var (
 	errBadImportArg = errors.New("not a folder in the import folder")
 )
 
-// startConvert converts one folder of the import folder (named as listed) into a package in the mods folder
+// startConvert converts one folder of the import folder (named as listed) into a package in the mods folder. The
+// folder is checked here, then copied (its plain files and folders only, through os.Root) into a folder of the
+// launcher's own that no one else can write to, and the copy is converted: what is in the import folder can change
+// while the converter runs, minutes later, without reaching it.
 func (js *jobs) startConvert(name string) (*jobStatus, error) {
 	if js.conv == nil {
 		return nil, errNoConverter
+	}
+	// A second press while one runs is told so, before anything else about it (the toolchain may be downloading)
+	if js.running() {
+		return nil, errBusy
 	}
 	if !validImportName(name) {
 		return nil, errBadImportArg
@@ -257,8 +279,25 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 	if !js.tc.ready(js.conv) {
 		return nil, errNotReady
 	}
-	source := filepath.Join(js.importDir, filepath.FromSlash(entry.Source))
 	return js.start("convert", name, entry.Kind, func(ctx context.Context, j *job) error {
+		js.update(j, func(s *jobStatus) { s.Step = "copy" })
+		staged, cleanup, err := js.stageImport(ctx, name)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		// Recognised again in the copy, which is what is converted
+		stagedRoot, err := os.OpenRoot(staged)
+		if err != nil {
+			return err
+		}
+		again := detectImport(stagedRoot, name)
+		stagedRoot.Close()
+		if again.Kind != entry.Kind || again.Source == "" {
+			return fmt.Errorf("%s changed while it was copied: convert it again", name)
+		}
+		source := filepath.Join(staged, filepath.FromSlash(again.Source))
+
 		js.update(j, func(s *jobStatus) { s.Step = "convert" })
 		// What a stopped conversion left, before and after
 		js.conv.clearWork()
@@ -266,7 +305,7 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 		before := snapshotPackages(js.modsDir)
 		modTool := filepath.Join(js.conv.Dir, filepath.FromSlash(js.conv.ModTool))
 		env := js.programEnv()
-		runErr := runProgram(ctx, j.log, js.conv.Dir, env, js.tc.nodePath(), modTool, "import", entry.Kind, source, "--out", js.modsDir)
+		runErr := js.runTool(ctx, j.log, env, js.tc.nodePath(), modTool, "import", entry.Kind, source, "--out", js.modsDir)
 		pkgs := changedPackages(js.modsDir, before)
 		lines, _ := j.log.tail(j.log.max)
 		notes := licenceLines(lines)
@@ -276,7 +315,7 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 			js.update(j, func(s *jobStatus) { s.Step = "check" })
 			for _, p := range pkgs {
 				check := newRingLog(500)
-				err := runProgram(ctx, check, js.conv.Dir, env, js.tc.nodePath(), modTool, "check", filepath.Join(js.modsDir, p.ID))
+				err := js.runTool(ctx, check, env, js.tc.nodePath(), modTool, "check", filepath.Join(js.modsDir, p.ID))
 				out, _ := check.tail(check.max)
 				for _, l := range out {
 					j.log.add(l)
@@ -305,6 +344,118 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 		}
 		return nil
 	})
+}
+
+// stagingDir holds the copies of import folders being converted, in the toolchain's folder (this user's alone, and
+// on a disk with room: a circuit can be gigabytes, more than a temporary folder held in memory may take)
+func (js *jobs) stagingDir() string { return filepath.Join(js.tc.dir, "staging") }
+
+// stageImport copies import/<name> into a new private folder, as <that folder>/<name>, and returns the folder and
+// what removes it. What an earlier launcher left there (one that stopped mid-copy) goes first.
+func (js *jobs) stageImport(ctx context.Context, name string) (string, func(), error) {
+	if err := js.tc.makeDir(); err != nil {
+		return "", nil, err
+	}
+	base := js.stagingDir()
+	os.RemoveAll(base)
+	if err := os.Mkdir(base, 0o700); err != nil {
+		return "", nil, err
+	}
+	// MkdirTemp makes it 0700
+	dir, err := os.MkdirTemp(base, "import-*")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(dir) }
+	if err := copyImportTree(ctx, js.importDir, name, dir); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	return dir, cleanup, nil
+}
+
+// errChangedWhileCopied is a file of the import folder that was replaced while it was copied
+var errChangedWhileCopied = errors.New("changed while it was copied: convert it again")
+
+// copyImportTree copies importDir/name into destDir/name: its folders and regular files only, each read through
+// os.Root (nothing outside the folder can be reached, whatever is swapped in) and refused when it isn't the file the
+// walk found (a file replaced by a link meanwhile). A link, a device or a pipe stops the copy, as checkImportTree does.
+func copyImportTree(ctx context.Context, importDir, name, destDir string) error {
+	src, err := os.OpenRoot(importDir)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	sub, err := src.OpenRoot(name)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+	dst, err := os.OpenRoot(destDir)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if err := dst.Mkdir(name, 0o700); err != nil {
+		return err
+	}
+	count := 0
+	buf := make([]byte, 1<<20)
+	return fs.WalkDir(sub.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		count++
+		if count > maxImportEntries {
+			return fmt.Errorf("%s holds more than %d files and folders", name, maxImportEntries)
+		}
+		if p == "." {
+			return nil
+		}
+		to := name + "/" + p
+		switch {
+		case d.Type()&fs.ModeSymlink != 0:
+			return fmt.Errorf("%s %w (%s): copy the files themselves", name, errLinkInImport, p)
+		case d.IsDir():
+			return dst.Mkdir(to, 0o700)
+		case !d.Type().IsRegular():
+			return fmt.Errorf("%s holds %s, which is not a file", name, p)
+		}
+		walked, err := sub.Lstat(p)
+		if err != nil || !walked.Mode().IsRegular() {
+			return fmt.Errorf("%s: %s %w", name, p, errChangedWhileCopied)
+		}
+		in, err := sub.Open(p)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		opened, err := in.Stat()
+		if err != nil || !opened.Mode().IsRegular() || !os.SameFile(walked, opened) {
+			return fmt.Errorf("%s: %s %w", name, p, errChangedWhileCopied)
+		}
+		out, err := dst.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		_, err = io.CopyBuffer(out, in, buf)
+		if cerr := out.Close(); err == nil {
+			err = cerr
+		}
+		return err
+	})
+}
+
+// runTool runs one of the toolchain's programs (or a program with them on PATH), once uv and Node are found to be
+// the pinned ones still
+func (js *jobs) runTool(ctx context.Context, log *ringLog, env []string, argv ...string) error {
+	if err := js.tc.verifyPrograms(); err != nil {
+		return err
+	}
+	return runProgram(ctx, log, js.conv.Dir, env, argv...)
 }
 
 // programEnv is the environment the converter's programs get: not the launcher's, so nothing of the player's
@@ -345,21 +496,26 @@ func runProgram(ctx context.Context, log *ringLog, dir string, env []string, arg
 	cmd.Stdin = nil
 	cmd.Stdout = log
 	cmd.Stderr = log
-	prepareTree(cmd)
 	log.add("$ " + strings.Join(displayArgv(argv), " "))
-	if err := cmd.Start(); err != nil {
+	tree, err := startTree(cmd)
+	if err != nil {
 		return err
 	}
-	waited := make(chan error, 1)
-	go func() { waited <- cmd.Wait() }()
+	exited := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		tree.release()
+		close(exited)
+	}()
 	select {
-	case err := <-waited:
+	case <-exited:
 		log.flush()
-		return exitError(err)
+		return exitError(waitErr)
 	case <-ctx.Done():
-		stopTree(cmd)
+		tree.stop(exited)
 		select {
-		case <-waited:
+		case <-exited:
 		case <-time.After(killGrace + 2*time.Second):
 		}
 		log.flush()
@@ -367,8 +523,8 @@ func runProgram(ctx context.Context, log *ringLog, dir string, env []string, arg
 	}
 }
 
-// killGrace is how long a stopped program has to finish before it is killed
-const killGrace = 5 * time.Second
+// killGrace is how long a stopped program has to finish before it is killed (a variable for the tests)
+var killGrace = 5 * time.Second
 
 func exitError(err error) error {
 	var exit *exec.ExitError
@@ -402,19 +558,56 @@ func snapshotPackages(modsDir string) map[string]string {
 
 // convertedPackage is a package a conversion wrote, with the credit and licence the Mods panel shows
 type convertedPackage struct {
-	ID      string         `json:"id"`
-	Name    string         `json:"name"`
-	Version string         `json:"version,omitempty"`
-	Credit  map[string]any `json:"credit,omitempty"`
+	ID      string           `json:"id"`
+	Name    string           `json:"name"`
+	Version string           `json:"version,omitempty"`
+	Credit  *convertedCredit `json:"credit,omitempty"`
 	// Content are its circuits and cars, each with its own credit when it has one
 	Content []convertedContent `json:"content,omitempty"`
 }
 
 type convertedContent struct {
-	Type   string         `json:"type"` // "circuit" or "car"
-	ID     string         `json:"id"`
-	Name   string         `json:"name"`
-	Credit map[string]any `json:"credit,omitempty"`
+	Type   string           `json:"type"` // "circuit" or "car"
+	ID     string           `json:"id"`
+	Name   string           `json:"name"`
+	Credit *convertedCredit `json:"credit,omitempty"`
+}
+
+// convertedCredit is a credit as the panel shows it: text fields only. A field that isn't text in the mod.json (which
+// the package check then reports) is left out rather than passed on, so the panel never gets one it can't show.
+type convertedCredit struct {
+	Author     string `json:"author,omitempty"`
+	License    string `json:"license,omitempty"`
+	LicenseURL string `json:"licenseUrl,omitempty"`
+	URL        string `json:"url,omitempty"`
+	AuthorURL  string `json:"authorUrl,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
+func (c *convertedCredit) UnmarshalJSON(b []byte) error {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(b, &fields) != nil {
+		// Not an object: no credit
+		return nil
+	}
+	text := func(key string) string {
+		var v string
+		if json.Unmarshal(fields[key], &v) != nil {
+			return ""
+		}
+		return v
+	}
+	*c = convertedCredit{Author: text("author"), License: text("license"), LicenseURL: text("licenseUrl"), URL: text("url"),
+		AuthorURL: text("authorUrl"), Note: text("note")}
+	return nil
+}
+
+// orNil is a credit, or nil when it has nothing to show
+func (c *convertedCredit) orNil() *convertedCredit {
+	if c == nil || *c == (convertedCredit{}) {
+		return nil
+	}
+	return c
 }
 
 // changedPackages lists the packages whose mod.json is new or changed since the snapshot
@@ -443,30 +636,30 @@ func readConvertedPackage(file string) (convertedPackage, bool) {
 		return convertedPackage{}, false
 	}
 	var m struct {
-		ID      string         `json:"id"`
-		Name    string         `json:"name"`
-		Version string         `json:"version"`
-		Credit  map[string]any `json:"credit"`
+		ID      string           `json:"id"`
+		Name    string           `json:"name"`
+		Version string           `json:"version"`
+		Credit  *convertedCredit `json:"credit"`
 		Tracks  []struct {
-			ID     string         `json:"id"`
-			Name   string         `json:"name"`
-			Credit map[string]any `json:"credit"`
+			ID     string           `json:"id"`
+			Name   string           `json:"name"`
+			Credit *convertedCredit `json:"credit"`
 		} `json:"tracks"`
 		Cars []struct {
-			ID     string         `json:"id"`
-			Title  string         `json:"title"`
-			Credit map[string]any `json:"credit"`
+			ID     string           `json:"id"`
+			Title  string           `json:"title"`
+			Credit *convertedCredit `json:"credit"`
 		} `json:"cars"`
 	}
 	if json.NewDecoder(bytes.NewReader(b)).Decode(&m) != nil {
 		return convertedPackage{}, false
 	}
-	p := convertedPackage{ID: m.ID, Name: m.Name, Version: m.Version, Credit: m.Credit}
+	p := convertedPackage{ID: m.ID, Name: m.Name, Version: m.Version, Credit: m.Credit.orNil()}
 	for _, t := range m.Tracks {
-		p.Content = append(p.Content, convertedContent{Type: "circuit", ID: t.ID, Name: t.Name, Credit: t.Credit})
+		p.Content = append(p.Content, convertedContent{Type: "circuit", ID: t.ID, Name: t.Name, Credit: t.Credit.orNil()})
 	}
 	for _, c := range m.Cars {
-		p.Content = append(p.Content, convertedContent{Type: "car", ID: c.ID, Name: c.Title, Credit: c.Credit})
+		p.Content = append(p.Content, convertedContent{Type: "car", ID: c.ID, Name: c.Title, Credit: c.Credit.orNil()})
 	}
 	return p, true
 }
