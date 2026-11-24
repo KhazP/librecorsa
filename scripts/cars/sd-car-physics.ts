@@ -538,6 +538,9 @@ const fmt = (v: unknown): string => {
   return JSON.stringify(v, (_k, x) => (typeof x === "number" ? Number(x.toPrecision(5)) : x));
 };
 
+/** Top-level profile values a patch may set though the base leaves them out (mods/mod-physics.ts) */
+const OPTIONAL_PROFILE_KEYS = new Set(["understeerRadPerMs2", "fuelFlowKgS", "fuelLPerS1000Rpm", "steerRatio", "setupPressureRefC", "aiMaxKerbRiseM"]);
+
 /** Builds a patch over a base profile, setting only what the base has */
 class PatchBuilder {
   readonly patch: Record<string, unknown> = {};
@@ -549,9 +552,12 @@ class PatchBuilder {
     return at(this.base, path) !== undefined;
   }
 
-  /** Sets `path` (dotted, from the profile's top) when the base has it; otherwise notes it */
+  /**
+   * Sets `path` (dotted, from the profile's top) when the base has it, or it is one of the profile's optional values a
+   * patch may add (mods/mod-physics.ts: `fuelLPerS1000Rpm`, `steerRatio`…); otherwise notes it
+   */
   set(path: string, value: unknown, from: string, why = "the base has no such value"): boolean {
-    if (!this.has(path)) {
+    if (!this.has(path) && !OPTIONAL_PROFILE_KEYS.has(path)) {
       this.leftOut.push(`${from} → ${path}: ${why}`);
       return false;
     }

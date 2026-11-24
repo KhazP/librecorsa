@@ -141,6 +141,7 @@ check("inertia: simuv5's box, m k² (a² + b²) / 12", near(C.chassis.inertia.ya
 const kw6000 = C.engine.powerCurve.find((p: number[]) => Math.abs(p[0] - 6000) < 1)?.[1];
 check("power = torque × ω at each point", near(kw6000, (400 * 6000 * RPM) / 1000, 1e-5), `${kw6000} kW at 6000 rpm`);
 check("limiter, idle and engine braking (bL ω + bC × max torque)", near(C.gearbox.gears.redline_rpm, 9000, 1e-5) && near(C.engine.idleRpm, 1000, 1e-5) && near(C.engine.coastCurve[C.engine.coastCurve.length - 1][1], 0.05 * 9000 * RPM + 0.05 * 400, 1e-4));
+check("fuel flow at peak power from the fuel cons factor, though the base names none", near(P.fuelLPerS1000Rpm, (0.75e-7 * 1000 * Math.max(...C.engine.powerCurve.map((p: number[]) => p[1])) * 0.0622) / (C.engine.powerCurve.reduce((a: number[], b: number[]) => (b[1] > a[1] ? b : a))[0] / 1000), 1e-6));
 check("gears, final drive (the driven differential's ratio), efficiency (gears × differential)", C.gearbox.ratios.join() === "3,2,1.5,1.2,1" && C.gearbox.finalDrive === 4 && near(C.gearbox.efficiency, 0.95 * 0.96) && C.gearbox.reverse === 2);
 const front = 0.19 * 0.005 * 0.3 * 2e7 * 0.55;
 const rear = 0.175 * 0.003 * 0.3 * 2e7 * 0.45;
