@@ -33,9 +33,11 @@ console.log('== Flat ground');
   // maps: both deploy in full to 285 km/h, so the run to 200 km/h is compared as it is, and the top speed on the engines
   // alone with the store empty (above 285 km/h the data's maps cut the motor, the FIA's curve holds it to 290)
   const [oldEngine, rigidEngine] = LC26_ENGINES.map(({ make }) => measureLc26(make, { engineOnly: true }));
-  // Off the line the rigid-body car holds its engine at 7000 rpm and is the quicker one by 0.7 s; the old engine holds
-  // 10 500 rpm for a second and lets the clutch home
-  for (const [kmh, tol] of [[100, 22], [200, 10]] as const)
+  // Off the line the rigid-body car holds its engine at 7000 rpm; the old engine holds 10 500 rpm for a second and lets
+  // the clutch home. Since the FIA PLP/PL rework of 24 Nov 2026 (5cd8d1d3) the rigid-body car is the quicker one by
+  // 0.9 s to 100 km/h and 0.7 s to 200 (2.84 / 4.92 s against 3.75 / 5.62 s). The car a driver gets stays held to the
+  // real car's launch by verify-lc26-tuned.ts
+  for (const [kmh, tol] of [[100, 28], [200, 15]] as const)
     check(`0–${kmh} km/h within ${tol} %`, within(rigid.accelS[kmh], old.accelS[kmh], tol), `${rigid.accelS[kmh]?.toFixed(2)} s vs ${old.accelS[kmh]?.toFixed(2)} s (${sign(pct(rigid.accelS[kmh], old.accelS[kmh]))})`);
   check('Top speed within 2 %, the engines alone', within(rigidEngine.topSpeedKmh, oldEngine.topSpeedKmh, 2), `${rigidEngine.topSpeedKmh.toFixed(0)} vs ${oldEngine.topSpeedKmh.toFixed(0)} km/h`);
   check('300–100 km/h within 8 %', within(rigid.brakeM, old.brakeM, 8), `${rigid.brakeM.toFixed(1)} m vs ${old.brakeM.toFixed(1)} m (${sign(pct(rigid.brakeM, old.brakeM))})`);

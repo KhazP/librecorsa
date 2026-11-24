@@ -209,7 +209,7 @@ const SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.06,
     // The uprights' ball joints inside the barrel raise the front roll centre from the reference's 24 mm [derived]
     rollCentreHeight: 0.049,
-    arb: 73_000, // [ref] slightly firmer front roll share (~63 %) for progressive GT3 turn-in
+    arb: 73_000, // [tuned] slightly firmer front roll share (~63 %, the reference's 68 400 gives 60 %) for progressive turn-in
     allowNoArb: true,
     // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
     // the reference car's: RC and camber gain above, ≈ 33 % anti-dive, near-parallel steering (−10 % Ackermann),
@@ -238,7 +238,7 @@ const SUSPENSIONS: SuspensionsData = {
     bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000, damper: 3200, risingDamper: 85_000, reboundElasticShare: 0.55 }, // [ref, est]
     droopTravel: 0.055,
     rollCentreHeight: 0.06,
-    arb: 36_000, // [ref]
+    arb: 36_000, // [tuned] the reference's 40 200 softened with the front's change
     allowNoArb: true,
     // As the front: RC and camber gain above, no anti-squat, ≈ 32 % anti-lift, ≈ 7 °/m toe-in in bump [derived, ref]
     hardpoints: [
@@ -580,14 +580,15 @@ function gt3Compound(
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       // A brush tyre: the brush curve to the peak slip angle [motec, with the steering compliance: understeer gradient
       // 1.43 °/g against the logs' 1.44], and the second reference set's shape data, the peak angle growing 4.3 % per
-      // Fz0 of load (3.5 % at the rear) and with a softer tyre, the friction circle, the longitudinal stiffness × 1.05
-      // and the grip lost to sliding speed [ref]
+      // Fz0 of load (3.5 % at the rear) and with a softer tyre, the friction circle and the grip lost to sliding speed
+      // [ref]; the longitudinal stiffness is tuned (below)
       curve: 'brush',
       friction_limit_angle: 6.7,
       peakSlipLoadGain: 0.043,
       peakSlipPressureGain: 0.05,
       combinedExponent: 2,
-      // Scaled with the wider lateral peak slip (6.7° vs 6.12°) so longitudinal braking slip stays matched to telemetry
+      // [tuned] the reference's 1.05 scaled with the wider lateral peak slip (6.7° vs 6.12°) so longitudinal braking
+      // slip stays matched to telemetry
       longStiffnessMult: 1.15,
       speedSensitivity: 0.000353,
       // Unused by a brush tyre (the magic-formula family's stiffness law)
@@ -681,6 +682,7 @@ function gt3Compound(
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.0,
         peakSlipLoadGain: 0.035,
+        // [tuned] the reference's 1.05, a touch lower at the rear with the front's change
         longStiffnessMult: 1.03,
         speedSensitivity: 0.000351,
         pKy2: 3.75,
