@@ -91,7 +91,7 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
+import { cockpitRainVolumeFor, createRainFx, RAIN_VISOR_LAYER, type CockpitRainVolume } from "@/lib/render/rain-fx";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
@@ -2746,6 +2746,15 @@ export class DriveSession {
     const rainCamPos = new THREE.Vector3();
     const rainCamPrev = new THREE.Vector3();
     const rainCamVel = new THREE.Vector3();
+    let rainCockpitCarId: CarId = carIdNow;
+    let rainCockpitChassis: THREE.Object3D = carRig.chassisGroup;
+    let rainCockpitEye: THREE.Vector3 | null = null;
+    let cachedCockpitCarId: CarId | null = null;
+    let cachedCockpitEyeX = NaN;
+    let cachedCockpitEyeY = NaN;
+    let cachedCockpitEyeZ = NaN;
+    let cachedCockpitHasEye = false;
+    let cachedCockpitVol: CockpitRainVolume | null = null;
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
     /** Other players on this circuit last frame (a room's lobby included): the mirror's auto mode shows for them */
@@ -4215,6 +4224,9 @@ export class DriveSession {
             camCarVel = replayPlayerVel;
           }
         }
+        rainCockpitCarId = camCarId;
+        rainCockpitChassis = camChassis;
+        rainCockpitEye = camAnchors?.cockpit.pos ?? null;
         if (!podium.placeCamera(camera)) cameraRig.update({
           dt: drawDtS,
           nowMs,
@@ -4390,6 +4402,30 @@ export class DriveSession {
         visualFx.setHeadlights(headlights.opponents, camera);
         if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
         visualFx.setLightLevel(skyLight);
+        const hasEye = rainCockpitEye !== null;
+        if (
+          rainCockpitCarId !== cachedCockpitCarId ||
+          hasEye !== cachedCockpitHasEye ||
+          (hasEye &&
+            (rainCockpitEye!.x !== cachedCockpitEyeX ||
+              rainCockpitEye!.y !== cachedCockpitEyeY ||
+              rainCockpitEye!.z !== cachedCockpitEyeZ))
+        ) {
+          cachedCockpitCarId = rainCockpitCarId;
+          cachedCockpitHasEye = hasEye;
+          if (hasEye) {
+            cachedCockpitEyeX = rainCockpitEye!.x;
+            cachedCockpitEyeY = rainCockpitEye!.y;
+            cachedCockpitEyeZ = rainCockpitEye!.z;
+          }
+          cachedCockpitVol = cockpitRainVolumeFor(rainCockpitCarId, rainCockpitEye);
+        }
+        if (cachedCockpitVol) {
+          rainCockpitChassis.updateWorldMatrix(true, false);
+          rainFx.setCockpitOcclusion(cachedCockpitVol, rainCockpitChassis.matrixWorld);
+        } else {
+          rainFx.setCockpitOcclusion(null, null);
+        }
         rainFx.update(
           drawDtS,
           wx.rainIntensity,
