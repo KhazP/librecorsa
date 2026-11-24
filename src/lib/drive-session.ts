@@ -65,7 +65,7 @@ import { buildSharedSetup, garageTunerFrom } from "@/lib/sim/setup-share";
 import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
-import { cornerLimitSide, stretchTimeS } from "@/lib/sim/course-limits";
+import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { resolveRaceRules } from "@/lib/sim/race-rules";
@@ -3619,12 +3619,6 @@ export class DriveSession {
             brake: t.brake,
             lateralM: physics.lateralOffsetM,
             curvature: here.curvature,
-            cornerSide: cornerLimitSide(
-              (s) => track.getSampleAtDistance(s).curvature,
-              physics.sMeters,
-              physics.lateralOffsetM,
-              track.totalLengthM
-            ),
             halfWidthM: here.width / 2,
             deltaS: lapDelta.delta(t),
             racePosition: raceNow?.position,

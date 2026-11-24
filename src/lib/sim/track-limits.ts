@@ -43,13 +43,11 @@
  */
 import { text as t } from "@/lib/text";
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
-import { CORNER_LIMIT_CURVATURE, CourseCutWatch, type CornerLimitSide } from "./course-limits";
+import { CourseCutWatch } from "./course-limits";
 import type { TrackLimitsScoring } from "./race-rules";
 
 /** Off for less than this is a touch, never judged (s) */
 const MIN_EXCURSION_S = 0.12;
-/** Inside corner cuts are judged from a tighter minimum duration so crisp chicane cuts are not ignored (s) */
-const INSIDE_CUT_MIN_EXCURSION_S = 0.05;
 /** Back on the asphalt this long before the excursion is over (debounces kerb bounces, s) */
 const REJOIN_S = 0.15;
 /** Settling time after the rejoin before the gain is measured (the exit's speed has to show up in the delta, s) */
@@ -57,9 +55,7 @@ const SETTLE_S = 1.0;
 /** Gained more than this over the reference lap (s) and it is an advantage */
 const GAIN_THRESHOLD_S = 0.1;
 /** Inside cuts count from a smaller gain */
-const CUT_GAIN_THRESHOLD_S = 0.01;
-/** Inside corner cuts that shorten the path by at least this much (m) count as a cut even without time gain */
-const INSIDE_SHORTCUT_MIN_M = 1.0;
+const CUT_GAIN_THRESHOLD_S = 0.03;
 /** Time allowed to give an advantage back (s) */
 const GIVE_BACK_WINDOW_S = 6;
 /** Time allowed to hand back a position gained off the track (s) */
@@ -74,7 +70,7 @@ const LIFT_PER_OFF_S = 1.0;
 const LIFT_MIN_S = 0.6;
 const LIFT_MAX_S = 2.0;
 /** Curvature from which a stretch is a corner with an inside (1/m) */
-const CORNER_CURVATURE = CORNER_LIMIT_CURVATURE;
+const CORNER_CURVATURE = 1 / 450;
 /** How long the banner message stays meaningful (ms) */
 const MESSAGE_HOLD_MS = 4200;
 /**
@@ -187,8 +183,6 @@ export interface TrackLimitsFrame {
   /** Signed offset from the centreline (m, + right) and the track's curvature here (1/m, + = right turn) */
   lateralM: number;
   curvature: number;
-  /** Optional corner-relative side from lookahead/lookbehind geometry (course-limits.ts); falls back to local curvature */
-  cornerSide?: CornerLimitSide;
   /** Live delta to the best lap (s, + = slower), null without one */
   deltaS: number | null;
   /** Current race position (1 = leader) when in a race; used to detect illegal off-track overtakes */
@@ -653,7 +647,7 @@ export class TrackLimitsMonitor {
     s.penaltyS = this.penaltyS;
     const e = this.exc;
     s.pending =
-      e && this.active && e.offS >= (e.insideCut ? INSIDE_CUT_MIN_EXCURSION_S : MIN_EXCURSION_S)
+      e && this.active && e.offS >= MIN_EXCURSION_S
         ? {
             stage: e.stage,
             gainS: e.gainS,
@@ -825,17 +819,13 @@ export class TrackLimitsMonitor {
       e.curvatureRad += Math.abs(f.curvature * this.lastDs);
       if (this.wallBreach) e.wallRiding = true;
       e.wallS += this.wallDeltaS;
-      // Inside of the corner: the side the track turns towards (with lookahead chicane context when provided)
-      const isInside =
-        f.cornerSide !== undefined
-          ? f.cornerSide === "inside"
-          : Math.abs(f.curvature) > CORNER_CURVATURE && Math.sign(f.lateralM) === Math.sign(f.curvature);
-      if (isInside) e.insideCut = true;
+      // Inside of the corner: the side the track turns towards
+      if (Math.abs(f.curvature) > CORNER_CURVATURE && Math.sign(f.lateralM) === Math.sign(f.curvature)) e.insideCut = true;
       return null;
     }
     e.onS += f.dtS;
     if (e.onS < REJOIN_S) return null;
-    if (e.offS < (e.insideCut ? INSIDE_CUT_MIN_EXCURSION_S : MIN_EXCURSION_S)) {
+    if (e.offS < MIN_EXCURSION_S) {
       this.exc = null;
       return null;
     }
@@ -889,12 +879,10 @@ export class TrackLimitsMonitor {
       shortcut = this.rules.scoring === "weighted_pts" && e.points >= 0.25 && shortcutM >= 1.5;
     }
 
-    const insideShortcut = e.insideCut && e.shortcutM >= INSIDE_SHORTCUT_MIN_M;
-
     if (hasRef) {
       e.gainS = gain;
       const threshold = e.insideCut ? CUT_GAIN_THRESHOLD_S : GAIN_THRESHOLD_S;
-      if ((gain as number) <= threshold) return shortcut || insideShortcut ? this.strike("corner_cut", f) : this.close("no_advantage", f);
+      if ((gain as number) <= threshold) return shortcut ? this.strike("corner_cut", f) : this.close("no_advantage", f);
       e.reason = e.insideCut ? "corner_cut" : "gained";
       // Give it back: get the delta back up to where it was at the entry
       e.giveBackTarget = e.deltaAtEntry;
