@@ -12,6 +12,11 @@ export interface ZipEntry {
   path: string;
   /** Uncompressed size (bytes), as the archive states it; `read` checks it */
   size: number;
+  /**
+   * Whether the archive marks it as a symbolic link (a Unix zip tool keeps the file's mode in the entry): its bytes are
+   * then the link's target, which a tool unpacking to a disk must not make a link
+   */
+  symlink: boolean;
   read(): Promise<Uint8Array>;
 }
 
@@ -130,6 +135,7 @@ export async function readZip(archive: Blob | Uint8Array): Promise<ZipEntry[]> {
   let at = 0;
   for (let n = 0; n < count; n++) {
     if (at + CENTRAL_SIZE > cd.length || view.getUint32(at, true) !== CENTRAL_SIG) throw new ZipError("the archive's directory is damaged");
+    const madeBy = view.getUint16(at + 4, true);
     const flags = view.getUint16(at + 8, true);
     const method = view.getUint16(at + 10, true);
     const crc = view.getUint32(at + 16, true);
@@ -138,6 +144,7 @@ export async function readZip(archive: Blob | Uint8Array): Promise<ZipEntry[]> {
     const nameLen = view.getUint16(at + 28, true);
     const extraLen = view.getUint16(at + 30, true);
     const commentLen = view.getUint16(at + 32, true);
+    const externalAttrs = view.getUint32(at + 38, true);
     const localOffset = view.getUint32(at + 42, true);
     const next = at + CENTRAL_SIZE + nameLen + extraLen + commentLen;
     if (next > cd.length) throw new ZipError("the archive's directory is damaged");
@@ -155,9 +162,12 @@ export async function readZip(archive: Blob | Uint8Array): Promise<ZipEntry[]> {
     seen.add(path);
     total += size;
     if (total > ZIP_MAX_TOTAL_BYTES) throw new ZipError("the package is larger than 2 GB uncompressed");
+    // Made on Unix (host 3): the upper half of the external attributes is the file's mode
+    const symlink = madeBy >>> 8 === 3 && ((externalAttrs >>> 16) & 0o170000) === 0o120000;
     entries.push({
       path,
       size,
+      symlink,
       read: async () => {
         if (localOffset + LOCAL_SIZE > cdOffset) throw new ZipError(`${path}: damaged entry`);
         const local = await bytesOf(blob, localOffset, localOffset + LOCAL_SIZE);
