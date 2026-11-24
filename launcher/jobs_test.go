@@ -10,6 +10,30 @@ import (
 	"testing"
 )
 
+// The answer to a start says the job runs, even when it ends at once: the panel watches the job by that answer
+func TestStartAnswersRunningEvenWhenTheJobEndsAtOnce(t *testing.T) {
+	js := newJobs(t.TempDir(), t.TempDir(), nil, newToolchain(t.TempDir(), "darwin", "arm64"))
+	for i := range 200 {
+		failed := i%2 == 1
+		st, err := js.start("convert", "x", kindBlenderTrack, func(context.Context, *job) error {
+			if failed {
+				return errors.New("at once")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.State != jobRunning || st.ID != i+1 {
+			t.Fatalf("start %d answered %+v", i, st)
+		}
+		<-js.last.done
+		if end := js.status(); end.ID != st.ID || (failed && end.State != jobFailed) || (!failed && end.State != jobDone) {
+			t.Fatalf("ended %+v", end)
+		}
+	}
+}
+
 func TestCopyImportTree(t *testing.T) {
 	base := t.TempDir()
 	importDir := filepath.Join(base, "import")

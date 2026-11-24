@@ -86,6 +86,11 @@ func newJobs(importDir, modsDir string, conv *converterInfo, tc *toolchain) *job
 func (js *jobs) status() *jobStatus {
 	js.mu.Lock()
 	defer js.mu.Unlock()
+	return js.statusLocked()
+}
+
+// statusLocked is status, with js.mu held
+func (js *jobs) statusLocked() *jobStatus {
 	if js.last == nil {
 		return nil
 	}
@@ -118,6 +123,9 @@ func (js *jobs) start(typ, folder, kind string, work func(ctx context.Context, j
 		done:   make(chan struct{}),
 	}
 	js.last = j
+	// Its status as started, before the work can end it: the answer to the start says "running" whatever happens next,
+	// so the panel watches it and shows how it ended
+	started := js.statusLocked()
 	js.mu.Unlock()
 
 	go func() {
@@ -140,7 +148,14 @@ func (js *jobs) start(typ, folder, kind string, work func(ctx context.Context, j
 			j.status.Error = err.Error()
 		}
 	}()
-	return js.status(), nil
+	return started, nil
+}
+
+// running reports whether a job runs
+func (js *jobs) running() bool {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	return js.last != nil && js.last.status.State == jobRunning
 }
 
 // maxJobTime bounds a job: a large circuit's conversion, racing lines included, takes minutes, not hours
@@ -237,6 +252,10 @@ var (
 func (js *jobs) startConvert(name string) (*jobStatus, error) {
 	if js.conv == nil {
 		return nil, errNoConverter
+	}
+	// A second press while one runs is told so, before anything else about it (the toolchain may be downloading)
+	if js.running() {
+		return nil, errBusy
 	}
 	if !validImportName(name) {
 		return nil, errBadImportArg

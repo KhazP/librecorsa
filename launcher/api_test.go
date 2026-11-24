@@ -572,6 +572,10 @@ func TestCancelStopsTheToolchainDownload(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	// A conversion asked for meanwhile is told one runs, not that the tools aren't there yet
+	if w := call(s, http.MethodPost, convertPath, `{"folder":"my_circuit"}`); w.Code != http.StatusConflict || decode[statusAnswer](t, w).Code != "busy" {
+		t.Errorf("a conversion during the download: %d %s", w.Code, w.Body.String())
+	}
 	call(s, http.MethodPost, cancelPath, "")
 	if job := waitJob(t, s); job.State != jobCancelled || job.Step != "uv" || job.Total != 1000000 {
 		t.Errorf("%+v", job)
