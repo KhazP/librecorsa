@@ -793,6 +793,7 @@ export type LiveTunerPatch = Partial<
  */
 export type VehicleModelId =
   | "lc26"
+  | "lc25"
   | "f12026-car"
   | "amg-gt3"
   | "liana"
@@ -809,6 +810,7 @@ export type VehicleModelId =
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
 const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
   lc26: true,
+  lc25: true,
   "f12026-car": true,
   "amg-gt3": true,
   liana: true,

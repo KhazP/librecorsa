@@ -654,5 +654,77 @@
     },
     "lift": { "popMinRpm": 4000, "crackleMinRpm": 4500, "downshiftPopChance": 0.5 },
     "limiterRetriggerS": 0.85
+  },
+  "lc25-v6": {
+    "outDir": "public/cars/lc25-v6/audio",
+    "limiterRpm": 13000,
+    "sourceDescription": "kyojinvan's 2025 F1 V6 sound for Assetto Corsa (overtake.gg/members/kyojinvan.2113755)",
+    "intBank": "kyojinvan_sound_rework/sfx/car.bank",
+    "rawPcm16": true,
+    "hideSampleNames": true,
+    "resampleRange": [0.5, 1.65],
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 4000, "rootRpm": 3505, "sample": 59 },
+          { "rpm": 5700, "rootRpm": 5700, "sample": 14 },
+          { "rpm": 7200, "rootRpm": 7220, "sample": 5 },
+          { "rpm": 10400, "rootRpm": 10410, "sample": 30 },
+          { "rpm": 11200, "rootRpm": 11190, "sample": 32 },
+          { "rpm": 13000, "rootRpm": 11190, "sample": 32 }
+        ],
+        "off": [
+          { "rpm": 4000, "rootRpm": 3505, "sample": 59 },
+          { "rpm": 6200, "rootRpm": 6385, "sample": 47 },
+          { "rpm": 7800, "rootRpm": 7840, "sample": 60 },
+          { "rpm": 10400, "rootRpm": 10430, "sample": 9 },
+          { "rpm": 11000, "rootRpm": 11010, "sample": 26 },
+          { "rpm": 13000, "rootRpm": 11010, "sample": 26 }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 4000, "rootRpm": 3540, "sample": 2 },
+          { "rpm": 7000, "rootRpm": 6965, "sample": 22 },
+          { "rpm": 9600, "rootRpm": 9380, "sample": 38 },
+          { "rpm": 11700, "rootRpm": 11330, "sample": 29 },
+          { "rpm": 12600, "rootRpm": 12610, "sample": 31 },
+          { "rpm": 13000, "rootRpm": 12610, "sample": 31 }
+        ],
+        "off": [
+          { "rpm": 4000, "rootRpm": 3540, "sample": 2 },
+          { "rpm": 5000, "rootRpm": 3980, "sample": 12 },
+          { "rpm": 8600, "rootRpm": 8665, "sample": 10 },
+          { "rpm": 12600, "rootRpm": 12590, "sample": 57 },
+          { "rpm": 13000, "rootRpm": 12590, "sample": 57 }
+        ]
+      }
+    },
+    "turbo": [
+      { "layer": "on", "boost": 2.0, "sample": 53, "rms": 0.07 },
+      { "layer": "off", "boost": 2.0, "sample": 53, "rms": 0.05 }
+    ],
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 150, "sample": 20, "rms": 0.05 },
+      { "layer": "off", "drivetrainSpeed": 150, "sample": 20, "rms": 0.035 }
+    ],
+    "skid": { "int": 11, "ext": 7 },
+    "tractionControl": 46,
+    "ambient": { "wind": 28, "tyreRolling": 16, "bodywork": 0 },
+    "oneshots": {
+      "backfire_int": [8, 52, 27, 42, 18],
+      "backfire_ext": [35, 55, 39, 51, 37, 48, 36, 21, 24],
+      "blowoff": [43]
+    },
+    "limiterFallbackSample": 33,
+    "limiterRootRpm": 12100,
+    "reuse": { "dir": "public/cars/lc25/audio", "sections": ["mgu", "driveline"], "oneshotRoles": ["gear_up", "gear_down"] },
+    "manifestExtras": { "shift": { "style": "sequential", "cutS": 0.025 } },
+    "throttleCurve": {
+      "ext": [[0, 0], [0.2, 0.15], [0.5, 0.6], [0.8, 0.92], [1, 1]],
+      "int": [[0, 0], [0.2, 0.12], [0.5, 0.55], [0.8, 0.9], [1, 1]]
+    },
+    "lift": { "popMinRpm": 8000, "crackleMinRpm": 8800, "downshiftPopChance": 0.55 },
+    "limiterRetriggerS": 0.8
   }
 }

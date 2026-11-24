@@ -10,6 +10,7 @@ import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type PortedSkin, type SimCarRig } from "@/lib/car-builder-2026";
+import { LC25_MODEL_URL, LC26_MODEL_URL } from "@/lib/lc26-car-model";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
 import { setKtx2Renderer } from "@/lib/render/ktx2";
@@ -1573,7 +1574,12 @@ export class DriveSession {
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
-          : createF1Car2026(livery, physics.tireCompound);
+          : createF1Car2026(
+              livery,
+              physics.tireCompound,
+              def.physics === "lc25" ? LC25_MODEL_URL : LC26_MODEL_URL,
+              def.physics === "lc25" ? { chassis: model.rigConfig.chassis } : undefined
+            );
       rig.setLivery(livery);
       rig.setTireCompound(physics.tireCompound);
       reflectionProbe.track(rig.root);
@@ -4167,7 +4173,7 @@ export class DriveSession {
           wingMirrors = new WingMirrors(renderer, scene, lc26Body);
         }
         if (!lc26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
-          portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
+          portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics), carRigCar);
         }
         // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
         // gets an empty display and no mirrors, so it is probed once

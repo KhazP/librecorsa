@@ -227,6 +227,7 @@ console.log("Fuel load");
   // trims' fixed sprint loads
   const LEGACY_FUEL_KG: Record<VehicleModelId, number> = {
     lc26: 40,
+    lc25: 35,
     "f12026-car": 35,
     "amg-gt3": 30,
     liana: 22,

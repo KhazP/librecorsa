@@ -9,6 +9,7 @@ import type { BuiltTrackData } from '../../../src/lib/track-data';
 import { F12026CarSim } from '../../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../../src/lib/sim/gt3/AmgGt3Sim';
 import { createLc26Sim } from '../../../src/lib/sim/f12026-car/Lc26Sim';
+import { createLc25Sim } from '../../../src/lib/sim/f12025-car/Lc25Sim';
 import { createSuzukiLianaSim } from '../../../src/lib/sim/road/SuzukiLianaSim';
 import { createMtr496rSim } from '../../../src/lib/sim/proto/Mtr496rSim';
 import { createLcLmdhSim } from '../../../src/lib/sim/proto/LcLmdhSim';
@@ -53,6 +54,8 @@ function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Obje
       return createAmgGt3Sim(track, root);
     case 'lc26':
       return createLc26Sim(track, root);
+    case 'lc25':
+      return createLc25Sim(track, root);
     case 'liana':
       return createSuzukiLianaSim(track, root);
     case 'mtr-496r':

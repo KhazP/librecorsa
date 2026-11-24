@@ -14,6 +14,7 @@ import { DEFAULT_SURFACE_TABLE } from '../../src/lib/sim/track-surfaces';
 import type { CarPhysicsConfig } from '../../src/lib/sim/f12026-car/F12026CarConfig';
 import { F12026_CAR_CONFIG } from '../../src/lib/sim/f12026-car/F12026CarConfig';
 import { LC26_CAR_CONFIG } from '../../src/lib/sim/f12026-car/Lc26Config';
+import { LC25_CAR_CONFIG } from '../../src/lib/sim/f12025-car/Lc25Config';
 import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
 import { LC_LMDH_CONFIG } from '../../src/lib/sim/proto/LcLmdhConfig';
 import { MTR_496R_CONFIG } from '../../src/lib/sim/proto/Mtr496rConfig';
@@ -28,6 +29,7 @@ import { PORSCHE_934_RSR_CONFIG } from '../../src/lib/sim/classic/Porsche934RsrC
 const CARS: Record<string, CarPhysicsConfig> = {
   'f12026-car': F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
   lc26: LC26_CAR_CONFIG as unknown as CarPhysicsConfig,
+  lc25: LC25_CAR_CONFIG as unknown as CarPhysicsConfig,
   'amg-gt3': AMG_GT3_CONFIG as unknown as CarPhysicsConfig,
   'lc-lmdh': LC_LMDH_CONFIG as unknown as CarPhysicsConfig,
   'mtr-496r': MTR_496R_CONFIG as unknown as CarPhysicsConfig,

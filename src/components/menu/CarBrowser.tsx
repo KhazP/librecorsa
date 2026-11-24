@@ -50,7 +50,7 @@ const SUB_SEP = " · ";
 /** Whether a piece of text names the car's year as a word ("2026 model", not "12026") */
 const saysYear = (text: string, year: string) => new RegExp(`(^|\\D)${year}(\\D|$)`).test(text);
 
-/** The card's line of facts: the class, then the year unless the title already says it ("2026 Prototype") */
+/** The card's line of facts: the class, then the year unless the title already says it */
 const cardFacts = (car: CarDefinition) => {
   const year = String(car.year);
   return [carClass(car.classId).title, saysYear(car.title, year) ? null : year].filter(Boolean).join(", ");

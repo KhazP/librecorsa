@@ -1,6 +1,7 @@
 /**
- * The 2026 car's tyres: Purple Sector's "2025 Pirelli tyres" wrapped round the whole tyre, both sidewalls and the
- * tread (used with permission, see CREDITS.md; textures ported by `scripts/cars/port_purple_sector_tyres.py`).
+ * The F1 cars' tyres: Purple Sector's "2025 Pirelli tyres" wrapped round the whole tyre, both sidewalls and the
+ * tread (used with permission, see CREDITS.md; textures ported by `scripts/cars/port_purple_sector_tyres.py`), plus
+ * Nuzzi's full-wet tread (`scripts/cars/port_nuzzi_wet_tyre.py`, used with permission) on the full-wet compound.
  *
  * The textures are strips: u runs once round the tyre, v crosses it from the outer bead over the outer sidewall, the
  * tread and the inner sidewall to the inner bead. The car's tyre mesh has no UVs, so the strip is laid on from the
@@ -9,8 +10,9 @@
  *    lettering reads from outside on both sides of the car;
  *  - across it: each vertex's distance along the tyre's cross-section (`tyreAcross`, worked out once per geometry),
  *    with the mesh's tread edges on the strip's.
- * The rubber comes from one texture (the slicks' and the wet's, or the intermediate's with its tread), the printed
- * art (stripe, PIRELLI, P ZERO or Cinturato) from a second one as coverage, printed in the compound's colour.
+ * The rubber comes from one texture (the slicks', the intermediate's tread, or the full-wet tread), the printed
+ * art (stripe, PIRELLI, P ZERO or Cinturato) from a second one as coverage, printed in the compound's colour. The pack
+ * prints the outer sidewall only; the inner one gets the same art mirrored, as the real tyre carries it on both.
  *
  * The textures are hosted on librecorsa.org only (`hosted-content.ts`). Without them the tyre keeps what it had: a
  * clone its plain rubber, and a copy that cannot fetch them the older sidewall (`pirelli-sidewall.ts`).
@@ -21,15 +23,17 @@ import { withBasePath } from "@/lib/base-path";
 import { HOSTED_CONTENT } from "@/lib/hosted-content";
 
 const TYRE_DIR = "/cars/shared/tyres/";
-type Rubber = "slick" | "intermediate";
+type Rubber = "slick" | "intermediate" | "wet";
 const RUBBER_URL: Readonly<Record<Rubber, string>> = {
   slick: `${TYRE_DIR}pirelli-2025-ps-slick.webp`,
   intermediate: `${TYRE_DIR}pirelli-2025-ps-intermediate.webp`,
+  wet: `${TYRE_DIR}pirelli-2025-wet-nuzzi.webp`,
 };
 const ART_URL = `${TYRE_DIR}pirelli-2025-ps-art.webp`;
 
-/** The pack's wet has the slick's tread; only the intermediate has its own */
-const rubberOf = (c: TireCompound): Rubber => (c === "intermediate" ? "intermediate" : "slick");
+/** Slicks share the smooth strip; intermediate and full wet carry their own treaded strips */
+const rubberOf = (c: TireCompound): Rubber =>
+  c === "intermediate" ? "intermediate" : c === "wet" ? "wet" : "slick";
 
 /** The art's colours as the pack prints them (sRGB) */
 const ART_COLORS: Readonly<Record<TireCompound, number>> = {
@@ -45,6 +49,8 @@ const V_TREAD_OUTER = 193 / 1024;
 const V_TREAD_INNER = 834 / 1024;
 const ART_V0 = 64 / 1024;
 const ART_V1 = 192 / 1024;
+/** The inner sidewall's strip rows onto the outer's: its bead to its tread edge on theirs */
+const INNER_TO_OUTER = V_TREAD_OUTER / (1 - V_TREAD_INNER);
 
 /** A tyre's surface counts as tread where its normal leans this far from the axle, or further */
 const TREAD_EDGE_AXLE_N = 0.6;
@@ -163,11 +169,16 @@ const FRAGMENT_BODY = /* glsl */ `
   vec2 twGradX = vec2(twTurn * (twP.x * twDx.y - twP.y * twDx.x) / twR2, dFdx(twV));
   vec2 twGradY = vec2(twTurn * (twP.x * twDy.y - twP.y * twDy.x) / twR2, dFdy(twV));
   vec3 twRubber = textureGrad(uTyreWrapRubber, vec2(twU, twV), twGradX, twGradY).rgb;
-  float twArtScale = 1.0 / ${(ART_V1 - ART_V0).toFixed(5)};
-  float twArtV = (twV - ${ART_V0.toFixed(5)}) * twArtScale;
+  // The print, on both sidewalls as on the real tyre: the pack's is the outer one's, so the inner sidewall takes it
+  // mirrored across the tread (bead to bead) and round the tyre, to read from the inside of the car
+  float twInner = step(${V_TREAD_INNER.toFixed(5)}, twV);
+  float twSideV = mix(twV, (1.0 - twV) * ${INNER_TO_OUTER.toFixed(5)}, twInner);
+  float twSideU = mix(twU, -twU, twInner);
+  float twArtScale = 1.0 / ${(ART_V1 - ART_V0).toFixed(5)} * mix(1.0, ${INNER_TO_OUTER.toFixed(5)}, twInner);
+  float twArtV = (twSideV - ${ART_V0.toFixed(5)}) / ${(ART_V1 - ART_V0).toFixed(5)};
   vec2 twArt = textureGrad(
     uTyreWrapArt,
-    vec2(twU, twArtV),
+    vec2(twSideU, twArtV),
     vec2(twGradX.x, twGradX.y * twArtScale),
     vec2(twGradY.x, twGradY.y * twArtScale)
   ).rg;
@@ -212,8 +223,13 @@ export function createTyreWrap(
     // Once the textures could not be fetched the tyre has gone over to the sidewall for good: no fetch on every change
     if (told || rubber === wanted || typeof window === "undefined" || !HOSTED_CONTENT) return;
     wanted = rubber;
-    // The tyre keeps the rubber it has until the new one is in
-    void Promise.all([loadTexture(RUBBER_URL[rubber], THREE.SRGBColorSpace), loadTexture(ART_URL, THREE.NoColorSpace)]).then(
+    // The tyre keeps the rubber it has until the new one is in; if the wet tread strip is not hosted yet, fall back to
+    // the slick rubber so the printed blue Cinturato sidewall still displays
+    const loadRubber = (r: Rubber): Promise<THREE.Texture | null> =>
+      loadTexture(RUBBER_URL[r], THREE.SRGBColorSpace).then((tex) =>
+        tex || r !== "wet" ? tex : loadTexture(RUBBER_URL.slick, THREE.SRGBColorSpace)
+      );
+    void Promise.all([loadRubber(rubber), loadTexture(ART_URL, THREE.NoColorSpace)]).then(
       ([rubberTex, artTex]) => {
         if (wanted !== rubber) return;
         if (!rubberTex || !artTex) {

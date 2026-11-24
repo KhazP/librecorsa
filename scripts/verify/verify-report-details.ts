@@ -97,7 +97,7 @@ const facts: ReportFacts = {
   drive: { mode: "Practice", lap: 2, totalLaps: null, distanceM: 950, lengthM: 5000, turn: "Turn 2", speedKmh: 140, surface: "dry", replay: false },
   driver: "Misk (MSK)",
 };
-const base = { circuit: "Red Bull Ring, Grand Prix layout", car: "2026 Prototype", input: "Keyboard", graphics: "Low · render 50%", browser: "Chrome 148 on Windows", screen: "1366×768 @1x", gpu: "Intel HD 520" };
+const base = { circuit: "Red Bull Ring, Grand Prix layout", car: "LC26 Prototype", input: "Keyboard", graphics: "Low · render 50%", browser: "Chrome 148 on Windows", screen: "1366×768 @1x", gpu: "Intel HD 520" };
 const rows = bugReportRows(base, facts);
 const ids = rows.map((r) => r.id).join(",");
 check("Bug rows, in order", ids === "circuit,car,input,devices,graphics,browser,screen,gpu,where,build,frames,drawn,app,settings,device,board,driver", ids);

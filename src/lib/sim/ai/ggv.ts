@@ -53,6 +53,15 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     compressionGain: 0.15,
     lockKappa: Math.tan((270 / 14) * (Math.PI / 180)) / 3.4,
   },
+  // Measured 2026-11-25 with `scripts/ai/measure-ggv.ts --car lc25` (warm tyres, default 35 kg fuel, balanced 2025 aero)
+  lc25: {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.83, 2.18, 2.58, 3.11, 3.74, 4.42, 5.13, 5.64],
+    brakeG: [2.08, 2.28, 2.6, 3.05, 3.61, 4.1, 4.6, 5.08],
+    accelG: [1.29, 1.39, 1.43, 1.22, 0.92, 0.65, 0.4, 0.14],
+    compressionGain: 0.2,
+    lockKappa: Math.tan((270 / 14) * (Math.PI / 180)) / 3.5684,
+  },
   // Measured 2026-11-08 to its 50 m/s top end (the road car's own grid)
   liana: {
     speedsMs: [10, 15, 20, 25, 30, 35, 40, 45, 50],

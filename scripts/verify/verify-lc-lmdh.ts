@@ -552,8 +552,38 @@ console.log('\n== Braking through the adapter');
   check('300–100 km/h in 105–130 m with the Assisted preset\'s ABS', abs.dist > 105 && abs.dist < 130, `${fmt(abs.dist, 1)} m in ${fmt(abs.time)} s from ${fmt(abs.v0, 0)} km/h`);
   check('Peak 3.2–3.8 g, 2.3–2.8 g over the stop', abs.peakG > 3.2 && abs.peakG < 3.8 && abs.meanG > 2.3 && abs.meanG < 2.8, `peak ${fmt(abs.peakG)} g, mean ${fmt(abs.meanG)} g`);
   check('A stamp locks the wheels without ABS, and stops later', raw.lockFront > 0.5 && raw.dist > abs.dist, `max lock ${fmt(raw.lockFront)}, ${fmt(raw.dist, 1)} m`);
-  // 56.4 % front: as the downforce bleeds off the fronts give first, which keeps the car straight
+  // 60 % front: as the downforce bleeds off the fronts give first, which keeps the car straight
   check('The fronts give before the rears', light.lockFront > light.lockRear && light.lockRear < 0.3, `at 60 % pedal: front ${fmt(light.lockFront)}, rear ${fmt(light.lockRear)}`);
+  // The rears keep a margin past the fronts' lock where they have least grip, slow and loaded off by the braking: at 80
+  // and 150 km/h they hold to ≥ 15 points of pedal past the least that locks a front (the brief's 56.4 % gave them 15
+  // at 80 and 8 at 150, and a stamp spun the car)
+  const lockPedal = (kmh: number, axle: 0 | 1) => {
+    const locks = (pedal: number) => {
+      const sim = createLcLmdhSim(pad);
+      sim.assistPreset = 'pro';
+      sim.teleportToDistance(1000, kmh / 3.6);
+      for (let t = 0; t < 0.4; t += DT) sim.step(DT, { throttle: 0.4 });
+      let lock = 0;
+      for (let t = 0; t < 0.6 && sim.telemetry.speedKmh > kmh * 0.8; t += DT) {
+        sim.step(DT, { brake: pedal });
+        const slip = sim.telemetry.wheelSlipRatios;
+        lock = Math.max(lock, -Math.min(slip[axle * 2], slip[axle * 2 + 1]));
+      }
+      return lock >= 0.25;
+    };
+    if (!locks(1)) return 1.01;
+    let lo = 0.1;
+    let hi = 1;
+    for (let i = 0; i < 8; i++) {
+      const mid = (lo + hi) / 2;
+      if (locks(mid)) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  };
+  const margins = [80, 150].map((kmh) => ({ kmh, front: lockPedal(kmh, 0), rear: lockPedal(kmh, 1) }));
+  check('The rears lock ≥ 15 points of pedal after the fronts at 80 and 150 km/h', margins.every((m) => m.rear - m.front >= 0.15),
+    margins.map((m) => `${m.kmh} km/h: front ${fmt(m.front * 100, 0)} %, rear ${m.rear > 1 ? 'none' : `${fmt(m.rear * 100, 0)} %`}`).join(', '));
   const pm = LC_LMDH_PROFILE_CAR;
   let planned = 0;
   for (let v = 300 / 3.6; v > 100 / 3.6; v -= 0.05) {

@@ -107,6 +107,7 @@ import { createKerbHitState, kerbHitLevel, stepKerbHit, type KerbHitState } from
 import {
   type AeroRideHeightMap,
   type AxleSuspensionData,
+  type BrakesData,
   type BumpStopSettingsUnits,
   type CarPhysicsConfig,
   blanketTempC,
@@ -824,7 +825,7 @@ const smoothstep = (x: number, min: number, max: number): number => {
   return t * t * (3 - 2 * t);
 };
 const ENGINE_MAP_TORQUE_SCALE = [1.0, 0.985, 0.96, 0.925, 0.87] as const;
-const DEFAULT_BRAKE_MIGRATION = { amount: 0.015, rampStart: 0 } as const;
+const DEFAULT_BRAKE_MIGRATION: Readonly<NonNullable<BrakesData['migration']>> = { amount: 0.015, rampStart: 0 };
 
 export function computeBandLoadShares(
   out: [number, number, number],
@@ -1337,6 +1338,14 @@ export class VehiclePhysics {
   public ersEnergyJ: number;
   public lapDeployJ = 0;
   public lapHarvestJ = 0;
+  /** Total electrical energy recovered by the MGU-H this lap (J; unrestricted by FIA 2025 Art. 5.3.2) */
+  public lapMguHHarvestJ = 0;
+  /** Electrical energy sent directly MGU-H → MGU-K this lap (J; bypasses the 4 MJ/lap ES → MGU-K limit) */
+  public lapDirectDeployJ = 0;
+  /** Instantaneous MGU-H electrical power (W, + harvesting exhaust enthalpy, − motoring turbo) */
+  public mguHPowerW = 0;
+  /** Latched true on a standing start until the car passes `ERSData.standingStartLockoutKmh` (FIA 2025 Art. 5.3.2) */
+  private standingStartLockout = false;
   /**
    * Of `lapHarvestJ`, what the brake pedal recovered, by stretch of the lap (`ERS_LAP_BINS` of them); and that on the
    * last whole lap, which the 2026 energy management keeps the recharge limit's room for
@@ -1480,6 +1489,10 @@ export class VehiclePhysics {
     /** Each mode's `energyManagement` (against charge), null for a mode without */
     management: Record<PerformanceModeName, ManagementLuts | null>;
     deployVsGear: Lut;
+    /** `EngineData.torqueByGear`: open-loop forward-gear ICE torque multiplier (gear → 0..1) */
+    torqueByGear: Lut | null;
+    /** `ERSData.mguH.harvestCurve`: MGU-H exhaust harvest fraction against engine speed (rpm → 0..1) */
+    mguHHarvest: Lut | null;
     /** `EngineData.outputPowerCap`: the limit at the driven shafts (rpm → kW) and its change with road speed */
     powerCap: Lut | null;
     powerCapVsSpeed: Lut | null;
@@ -1714,6 +1727,8 @@ export class VehiclePhysics {
       mgukDeploy: new Lut(cfg.ers.torqueLut),
       mgukHarvest: new Lut(cfg.ers.coastLut),
       deployVsGear: new Lut(cfg.ers.deployVsGear ?? [[0, 1], [1, 1]]),
+      torqueByGear: cfg.engine.torqueByGear ? new Lut(cfg.engine.torqueByGear) : null,
+      mguHHarvest: cfg.ers.mguH ? new Lut(cfg.ers.mguH.harvestCurve) : null,
       powerCap: cfg.engine.outputPowerCap ? new Lut(cfg.engine.outputPowerCap.curve) : null,
       powerCapVsSpeed: cfg.engine.outputPowerCap?.vsSpeedKmh ? new Lut(cfg.engine.outputPowerCap.vsSpeedKmh) : null,
       deployVsSpeed: {
@@ -2004,6 +2019,8 @@ export class VehiclePhysics {
     this.lapFromLine = atLine;
     this.lapDeployJ = 0;
     this.lapHarvestJ = 0;
+    this.lapMguHHarvestJ = 0;
+    this.lapDirectDeployJ = 0;
     this.lapBrakeHarvestJ.fill(0);
   }
 
@@ -2149,6 +2166,8 @@ export class VehiclePhysics {
     this.ers2026?.reset();
     // A placement starts a part lap: its braking is no lap's record
     this.lapFromLine = false;
+    this.standingStartLockout = speedMs <= 0.1 && (this.config.ers.standingStartLockoutKmh ?? 0) > 0;
+    this.mguHPowerW = 0;
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
     this.turboBoost = 0;
@@ -3023,12 +3042,31 @@ export class VehiclePhysics {
     this.sinceUpshiftS += dt;
     this.sinceDownshiftS += dt;
     this.limiterTimer = Math.max(0, this.limiterTimer - dt);
-    // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
+    // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly.
+    // With an MGU-H (`ERSData.mguH`), electric turbo assist holds boost on lift and spools the rotor almost instantly
+    // whenever the active performance mode deploys (off in CHR / Recharge to maximise ES recovery).
     const turbo = this.config.engine.turbo;
     if (turbo && this.turbocharged) {
-      const target = turboBoostAsked(turbo, this.rpm, Math.max(this.icePlate, this.iceArbPlate));
-      const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
-      this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
+      const mguH = this.config.ers.mguH;
+      const mode = this.config.performanceModes[this.performanceMode];
+      const baseTarget = turboBoostAsked(turbo, this.rpm, Math.max(this.icePlate, this.iceArbPlate));
+      if (mguH && this.ersEnergyJ > 0 && mode.deployFraction > 0) {
+        const rpmReady = smoothstep(this.rpm, this.config.engine.idleRpm + 500, 7500);
+        const liftFloor = turboSteadyBoost(turbo, this.rpm) * mguH.liftFloorBoostFraction * rpmReady;
+        const target = Math.max(baseTarget, liftFloor);
+        const tau = target > this.turboBoost ? mguH.spoolUpS : turbo.spoolDownS;
+        const deficit = Math.max(0, target - this.turboBoost);
+        this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
+        if (deficit > 1e-4 && turbo.maxBoost > 0) {
+          const motorW = clamp(deficit / turbo.maxBoost, 0, 1) * mguH.motorMaxW;
+          const eMotor = Math.min(this.ersEnergyJ, motorW * dt);
+          this.ersEnergyJ -= eMotor;
+          if (this.mguHPowerW <= 0) this.mguHPowerW = -motorW;
+        }
+      } else {
+        const tau = baseTarget > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
+        this.turboBoost += (baseTarget - this.turboBoost) * Math.min(1, dt / tau);
+      }
       this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
     } else {
       this.turboBoostBar = 1;
@@ -4111,8 +4149,9 @@ export class VehiclePhysics {
     // Combustion torque at the full spark, and what the traction cut leaves of it.
     // Under manual clutch, an engine dragged below stall speed chokes and loses torque; once stalled it produces none.
     const lugScale = this.stall.stalled ? 0 : manualClutch && rpm < stallRpm ? clamp(rpm / stallRpm, 0, 1) : 1;
+    const gearTorqueScale = this.luts.torqueByGear && this.gear > 0 ? this.luts.torqueByGear.evaluate(this.gear) : 1;
     const tCombustionMax =
-      (lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
+      (lugScale * gearTorqueScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     const tCombustionFull = plate * tCombustionMax;
     const tCombustion = tCombustionFull * sparkShare;
     const coastSpinScale = this.stall.stalled ? clamp(this.engineOmega / 30, 0, 1) : 1;
@@ -4149,10 +4188,16 @@ export class VehiclePhysics {
         : 0;
     const clutchCap = cl.maxTorqueNm * engage;
 
-    // ---- MGU-K (crank torque, + deploy / − harvest)
+    // ---- MGU-K (crank torque, + deploy / − harvest) & MGU-H (2025 exhaust harvest + direct MGU-H → MGU-K)
     const soc = this.ersEnergyJ / ers.ERS_MAX_CHARGE;
     const speedKmh = this.velocity.length() * 3.6;
     const topGear = this.gear === gb.ratios.length;
+    const f12025 = ers.regulations === 'f1-2025';
+    const lockoutKmh = ers.standingStartLockoutKmh ?? 0;
+    if (lockoutKmh > 0) {
+      if (speedKmh >= lockoutKmh) this.standingStartLockout = false;
+      else if (speedKmh < 1.5 && inp.brake > 0.2) this.standingStartLockout = true;
+    }
     let pK = 0;
     /** The ECU may deploy now: the MGU-K then also fills the torque the turbo lag costs */
     let deployAllowed = false;
@@ -4167,6 +4212,12 @@ export class VehiclePhysics {
     let brakeWantW = 0;
     const everyGear = ers.liftHarvestEveryGear;
     const coupled = engage > 0.9 && this.gear > 0 && !this.stall.stalled;
+    /** Instantaneous MGU-H electrical power harvested from exhaust enthalpy (W, FIA 2025 Art. 5.3.2 unlimited) */
+    let pMguH = 0;
+    if (ers.mguH && this.luts.mguHHarvest && coupled && !shiftCut && this.limiterTimer <= 0 && plate > 0.15) {
+      pMguH = ers.mguH.maxHarvestW * this.luts.mguHHarvest.evaluate(rpm) * clamp((plate - 0.15) / 0.85, 0, 1);
+    }
+    this.mguHPowerW = pMguH;
     if (coupled) {
       if (everyGear && inp.throttle < ers.liftThrottle) {
         liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
@@ -4230,7 +4281,23 @@ export class VehiclePhysics {
         } else if (dc < 0) {
           pK = dc / ers.harvestEfficiency;
         }
-      } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ) {
+      } else if (f12025 && inp.throttle > 0.05 && !this.standingStartLockout && mode.deployFraction > 0) {
+        const esCanDeploy = soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ;
+        const wantK =
+          ers.ERS_MAX_DEPLOY *
+          mode.deployFraction *
+          this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) *
+          this.luts.deployVsGear.evaluate(this.gear) *
+          inp.throttle;
+        if (esCanDeploy) {
+          deployAllowed = true;
+          pK = wantK;
+        } else if (pMguH > 0) {
+          // Even when the 4 MJ/lap ES → MGU-K cap or mode SOC floor is reached, direct MGU-H → MGU-K stays unrestricted
+          deployAllowed = true;
+          pK = Math.min(wantK, pMguH * ers.deployEfficiency);
+        }
+      } else if (!f12025 && inp.throttle > 0.05 && !this.standingStartLockout && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ) {
         deployAllowed = mode.deployFraction > 0;
         pK =
           ers.ERS_MAX_DEPLOY *
@@ -4256,7 +4323,7 @@ export class VehiclePhysics {
     const migAmount = this.liveBrakeMigrationAmount;
     this.dynamicBrakeBias =
       br.brakeByWire !== false || migAmount > 0
-        ? computeDynamicBrakeMigration(this.brakeBias, inp.brake, migAmount, mig.rampStart)
+        ? computeDynamicBrakeMigration(this.brakeBias, inp.brake, migAmount, mig.rampStart, mig.exponent ?? 1)
         : this.brakeBias;
     const bias = this.dynamicBrakeBias;
 
@@ -4615,22 +4682,51 @@ export class VehiclePhysics {
     // ---- energy store
     let pMech = tK * this.engineOmega;
     if (pMech > 0) {
-      // Never overrun the per-lap allowance or the store inside a sub-step (the 2026 rules have no deploy limit a lap)
-      const room = this.ers2026 ? this.ersEnergyJ : Math.min(ers.deployPerLapJ - this.lapDeployJ, this.ersEnergyJ);
-      const want = (pMech / ers.deployEfficiency) * h;
-      if (want > room) {
-        const scale = Math.max(0, room) / want;
-        pMech *= scale;
-        this.mgukTorque *= scale;
-        this.lastMotorDriveNm *= scale;
+      if (f12025 && pMguH > 0) {
+        // FIA 2025 Art. 5.3.2: direct MGU-H → MGU-K power bypasses both the ES and the 4 MJ/lap ES → MGU-K cap;
+        // only the excess above direct MGU-H supply draws from the Energy Store.
+        const pDirectMech = Math.min(pMech, pMguH * ers.deployEfficiency);
+        let pEsMech = Math.max(0, pMech - pDirectMech);
+        const room = Math.max(0, Math.min(ers.deployPerLapJ - this.lapDeployJ, this.ersEnergyJ));
+        const wantEs = (pEsMech / ers.deployEfficiency) * h;
+        if (wantEs > room) {
+          pEsMech = (room * ers.deployEfficiency) / h;
+          const totalMech = pDirectMech + pEsMech;
+          const scale = pMech > 0 ? totalMech / pMech : 0;
+          pMech = totalMech;
+          this.mgukTorque *= scale;
+          this.lastMotorDriveNm *= scale;
+        }
+        const eDirect = (pDirectMech / ers.deployEfficiency) * h;
+        const eEs = (pEsMech / ers.deployEfficiency) * h;
+        this.ersEnergyJ = Math.max(0, this.ersEnergyJ - eEs);
+        this.lapDeployJ += eEs;
+        this.lapDirectDeployJ += eDirect;
+        this.lapMguHHarvestJ += eDirect;
+        const pSurplus = Math.max(0, pMguH - pDirectMech / ers.deployEfficiency);
+        if (pSurplus > 0) {
+          const eSurplus = pSurplus * h;
+          this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + eSurplus);
+          this.lapMguHHarvestJ += eSurplus;
+        }
+      } else {
+        // Never overrun the per-lap allowance or the store inside a sub-step (the 2026 rules have no deploy limit a lap)
+        const room = this.ers2026 ? this.ersEnergyJ : Math.min(ers.deployPerLapJ - this.lapDeployJ, this.ersEnergyJ);
+        const want = (pMech / ers.deployEfficiency) * h;
+        if (want > room) {
+          const scale = Math.max(0, room) / want;
+          pMech *= scale;
+          this.mgukTorque *= scale;
+          this.lastMotorDriveNm *= scale;
+        }
+        const e = (pMech / ers.deployEfficiency) * h;
+        this.ersEnergyJ = Math.max(0, this.ersEnergyJ - e);
+        this.lapDeployJ += e;
       }
-      const e = (pMech / ers.deployEfficiency) * h;
-      this.ersEnergyJ = Math.max(0, this.ersEnergyJ - e);
-      this.lapDeployJ += e;
     } else if (pMech < 0) {
       let e = -pMech * ers.harvestEfficiency * h;
-      if (this.ers2026) {
-        // The lap's recharge limit is never overrun inside a sub-step (C5.2.10)
+      if (this.ers2026 || f12025) {
+        // The lap's MGU-K → ES recharge limit is never overrun inside a sub-step (2026 C5.2.10; 2025 Art. 5.3.2 2 MJ)
         const room = Math.max(0, this.ersRechargeLimitJ() - this.lapHarvestJ);
         if (e > room) {
           const scale = room / e;
@@ -4642,6 +4738,16 @@ export class VehiclePhysics {
       this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + e);
       // Counted on the store's side of the MGU-K, as deploy is, so both per-lap limits measure the same thing
       this.lapHarvestJ += e;
+      if (f12025 && pMguH > 0) {
+        const eH = pMguH * h;
+        this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + eH);
+        this.lapMguHHarvestJ += eH;
+      }
+    } else if (f12025 && pMguH > 0) {
+      // MGU-H → ES recovery when MGU-K is idle (e.g. CHR / Recharge mode on straights): unrestricted by 2 MJ/lap K→ES cap
+      const eH = pMguH * h;
+      this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + eH);
+      this.lapMguHHarvestJ += eH;
     }
     if (this.ers2026) {
       // Preserve pre-shift deployment across the brief 20 ms upshift torque cut so a cut starting right after a shift

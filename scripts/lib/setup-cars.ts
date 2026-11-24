@@ -6,6 +6,7 @@ import { DEFAULT_CHASSIS_SETUP, type ChassisSetup } from "../../src/lib/sim/car-
 import type { SimulatorCar } from "../../src/lib/sim/simulator-car";
 import type { VehicleModelId } from "../../src/types/f1";
 import { F12026CarSim } from "../../src/lib/sim/f12026-car/F12026CarSim";
+import { createLc25Sim } from "../../src/lib/sim/f12025-car/Lc25Sim";
 import { createAmgGt3Sim } from "../../src/lib/sim/gt3/AmgGt3Sim";
 import { createSuzukiLianaSim } from "../../src/lib/sim/road/SuzukiLianaSim";
 import { createMtr496rSim } from "../../src/lib/sim/proto/Mtr496rSim";
@@ -27,6 +28,7 @@ export type TestTrack = typeof track;
 
 export const makers: Record<VehicleModelId, (t: TestTrack) => SimulatorCar> = {
   lc26: (t) => new F1Physics2026(t),
+  lc25: (t) => createLc25Sim(t),
   "f12026-car": (t) => new F12026CarSim(t),
   "amg-gt3": (t) => createAmgGt3Sim(t),
   liana: (t) => createSuzukiLianaSim(t),

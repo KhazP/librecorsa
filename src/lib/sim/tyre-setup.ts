@@ -27,6 +27,7 @@ const limitsOf = (r: TyreSetupRanges): TyreSetupLimits => ({
 /** Slider ranges for the tyre setup per vehicle model, also used to check a saved setup */
 export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
   lc26: limitsOf(VEHICLE_MODELS.lc26.tyreSetupRanges),
+  lc25: limitsOf(VEHICLE_MODELS.lc25.tyreSetupRanges),
   "f12026-car": limitsOf(VEHICLE_MODELS["f12026-car"].tyreSetupRanges),
   "amg-gt3": limitsOf(VEHICLE_MODELS["amg-gt3"].tyreSetupRanges),
   liana: limitsOf(VEHICLE_MODELS.liana.tyreSetupRanges),
@@ -44,6 +45,7 @@ export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
 /** Tyre setups are saved per vehicle model (the LC26 keeps the original key) */
 const STORAGE_KEYS: Record<VehicleModelId, string> = {
   lc26: "bugesera.tyreSetup",
+  lc25: "bugesera.tyreSetup.lc25",
   "f12026-car": "bugesera.tyreSetup.f12026-car",
   "amg-gt3": "bugesera.tyreSetup.amg-gt3",
   liana: "bugesera.tyreSetup.liana",

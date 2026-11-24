@@ -49,6 +49,13 @@ import { createOpponentLodController } from "@/lib/render/car-lod";
  * without one gets a helmet at its extras' `helmet.pos`.
  */
 export const LC26_MODEL_URL = "/cars/f12026/model/f12026.glb";
+export const LC25_MODEL_URL = "/cars/lc25/model/lc25.glb";
+
+export interface Lc26RigChassis {
+  wheelbase: number;
+  frontWeightFraction: number;
+  steering?: { lockDeg: number; ratio: number };
+}
 
 export interface Lc26CameraAnchor {
   /** Rig-local position (m): +X left, +Y up, +Z forward */
@@ -173,7 +180,7 @@ export function attachLc26Model(
   template: THREE.Group,
   root: THREE.Group,
   chassisGroup: THREE.Group,
-  options: { opponent?: boolean } = {}
+  options: { opponent?: boolean; chassis?: Lc26RigChassis } = {}
 ): Lc26ModelInstance {
   const assets = templateAssets.get(template) ?? { tyreMaps: {}, animations: [] };
   const model = cloneSkinned(template) as THREE.Group;
@@ -191,7 +198,8 @@ export function attachLc26Model(
 
   // Align the model's front axle with the physics front axle (the rig origin is the CG projected on the
   // ground) and sit the tyres on the ground.
-  const cgToFront = LC26_CHASSIS.wheelbase * (1 - LC26_CHASSIS.frontWeightFraction);
+  const chassis = options.chassis ?? LC26_CHASSIS;
+  const cgToFront = chassis.wheelbase * (1 - chassis.frontWeightFraction);
   const lf = extras.wheelCentres?.WHEEL_LF ?? [0.731, 0.26, 1.521];
   const tyre = find("WHEEL_LF_TYRE") as THREE.Mesh | undefined;
   tyre?.geometry.computeBoundingBox();
@@ -319,8 +327,9 @@ export function attachLc26Model(
   // Steering wheel (STEER_BASE, bind rotation = identity): +rotation.z turns the rim clockwise as seen by
   // the driver (top of the rim moves to the right, -X), i.e. a right turn.
   const steerBase = bodyGroup.getObjectByName("STEER_BASE");
-  const lockRad = LC26_CHASSIS.steering.lockDeg * THREE.MathUtils.DEG2RAD;
-  const maxRoadWheelRad = lockRad / LC26_CHASSIS.steering.ratio;
+  const steerSpec = chassis.steering ?? LC26_CHASSIS.steering;
+  const lockRad = steerSpec.lockDeg * THREE.MathUtils.DEG2RAD;
+  const maxRoadWheelRad = lockRad / steerSpec.ratio;
 
   // Shift lights on the wheel rim (player car only: opponents hide the interior wheel assembly)
   const ledMats: THREE.MeshStandardMaterial[] = [];
@@ -548,7 +557,7 @@ export function attachLc26Model(
     if (!options.opponent && steerBase) steerBase.rotation.z = t.steering * lockRad;
     if (closeDetailsVisible) driverFigure?.update(t.steering * lockRad, dtSeconds);
     if (driverMixer && steerAction) {
-      steerAction.time = steerFrame(steerTable, t.steering * LC26_CHASSIS.steering.lockDeg) / driverFps;
+      steerAction.time = steerFrame(steerTable, t.steering * steerSpec.lockDeg) / driverFps;
       driverMixer.update(0);
     }
 

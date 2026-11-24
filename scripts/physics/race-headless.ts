@@ -30,6 +30,7 @@ import { loadGlbGeometry } from '../lib/glb-geometry';
 
 const CAR_KINDS = [
   'lc26',
+  'lc25',
   'f12026-car',
   'amg-gt3',
   'liana',

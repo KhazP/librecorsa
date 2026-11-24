@@ -23,6 +23,7 @@ import { createChaparral2d67Sim, createChaparral2dSim } from '../../src/lib/sim/
 import { createPorsche934RsrSim } from '../../src/lib/sim/classic/Porsche934RsrSim';
 import { createVwSciroccoSim } from '../../src/lib/sim/road/VwSciroccoSim';
 import { createLc26Sim } from '../../src/lib/sim/f12026-car/Lc26Sim';
+import { createLc25Sim } from '../../src/lib/sim/f12025-car/Lc25Sim';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { steadyRamp } from '../lib/handling-tests';
@@ -31,6 +32,7 @@ type CarId =
   | 'f12026-car'
   | 'amg-gt3'
   | 'lc26'
+  | 'lc25'
   | 'liana'
   | 'mtr-496r'
   | 'lc-lmdh'
@@ -56,6 +58,7 @@ const makers: Record<CarId, () => SimulatorCar> = {
   'amg-gt3': () => createAmgGt3Sim(pad),
   // The LC26 as it ships: on the rigid-body engine (`lc26-engine.ts`)
   lc26: () => createLc26Sim(pad),
+  lc25: () => createLc25Sim(pad),
   liana: () => createSuzukiLianaSim(pad),
   'mtr-496r': () => createMtr496rSim(pad),
   'lc-lmdh': () => createLcLmdhSim(pad),

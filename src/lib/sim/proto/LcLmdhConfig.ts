@@ -822,13 +822,16 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 34 },
     },
     // Carbon discs of up to 381 mm (Art. 11.3.2) [spec], with their weak cold bite: 35 °C out of the garage, 290 °C after
-    // a formation lap [est]. 6800 Nm an axle pair at full pedal, 56.4 % front in 0.2 % clicks, moving 0.5 % forward
-    // over the pedal's travel, most of it gone early in the release [bop]. The rear ducts get 55 % of the front's air.
+    // a formation lap [est]. 6400 Nm an axle pair at full pedal, 60 % front in 0.2 % clicks, moving 0.5 % forward over
+    // the pedal's travel, most of it gone early in the release [bop, est]. The brief's 56.4 % of 6800 Nm put 2960 Nm on
+    // each rear, past what the rears hold at low speed under braking: they locked at 70 % pedal at 80 km/h, a few tenths
+    // after the fronts, and a stamp spun the car. 60 % of 6400 keeps the fronts' 3840 Nm (the high-speed stop) and
+    // moves the rears' lock to 82 % (`scripts/verify-lc-lmdh.ts`). The rear ducts get 55 % of the front's air.
     // The rear circuit is brake-by-wire (Art. 5.3.9, 11.7) [spec]: the rear calipers give way to the motor's
     // regeneration and the engine's overrun, so the axle brakes what the pedal asks
     brakes: {
-      maxTorqueNm: 6800,
-      front_bias: 0.564,
+      maxTorqueNm: 6400,
+      front_bias: 0.6,
       ebbStep: 0.002,
       brakeByWire: true,
       discMaterial: 'endurance-carbon',

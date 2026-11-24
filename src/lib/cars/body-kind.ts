@@ -9,6 +9,7 @@ export type BodyKind = "f1" | "gt3" | "road" | "proto" | "lmdh" | "classic";
 
 export const BODY_KIND: Readonly<Record<VehicleModelId, BodyKind>> = {
   lc26: "f1",
+  lc25: "f1",
   "f12026-car": "f1",
   "amg-gt3": "gt3",
   liana: "road",

@@ -13,7 +13,7 @@
 
 import type { LutPoints } from '../lut';
 import type { EnergyManagementData } from './ers-2026';
-import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
+import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type RainTyreDesign, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -188,6 +188,11 @@ export interface EngineData {
    * before any output cap. Absent: none
    */
   ramAirGainPerKPa?: number;
+  /**
+   * Open-loop per-gear ICE torque multiplier (forward gear number → 0..1), modelling the gear-dependent boost /
+   * torque-demand maps F1 power units run in 1st and 2nd gear. Neutral, reverse and omitted configs default to 1.
+   */
+  torqueByGear?: LutPoints;
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;
@@ -236,6 +241,26 @@ export function turboBoostAsked(turbo: TurboData, rpm: number, plate: number): n
   return turbo.maxBoost * Math.min(1, Math.max(0, (plate * rpm) / turbo.referenceRpm)) ** turbo.gamma;
 }
 
+/**
+ * Motor Generator Unit – Heat (2014–2025 F1 Technical Regulations, Art. 5.3.2 & 5.3.4): coaxial with the
+ * turbocharger shaft (up to 125 000 rpm). Motors the compressor to eliminate turbo lag (while the active mode deploys
+ * and the store has charge), harvests unlimited electrical energy from exhaust enthalpy, transfers power directly to
+ * the MGU-K without counting against the 4 MJ/lap ES → MGU-K cap, and charges the store with any surplus without
+ * counting against the 2 MJ/lap MGU-K → ES cap.
+ */
+export interface MguHData {
+  /** Peak continuous electrical harvest from the exhaust turbine (W) */
+  maxHarvestW: number;
+  /** Fraction of `maxHarvestW` harvested against engine speed (rpm → 0..1) */
+  harvestCurve: LutPoints;
+  /** Peak electrical draw from the store to spool / hold the turbo (W) */
+  motorMaxW: number;
+  /** Turbo spool-up time constant while MGU-H anti-lag motoring is active (s) */
+  spoolUpS: number;
+  /** Minimum fraction of steady full-load boost held off-throttle at race revs (0..1) */
+  liftFloorBoostFraction: number;
+}
+
 export interface ERSData {
   /** Max MGU-K deploy torque at the crank (rpm → Nm) */
   torqueLut: LutPoints;
@@ -270,13 +295,19 @@ export interface ERSData {
   /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
   /**
-   * The rules the energy runs under (`ers-2026.ts`). 'f1-2026': the 2026 F1 car's, by the FIA's numbers: the ERS-K's
-   * power against road speed, with Overtake or not, in place of `ERS_MAX_DEPLOY`; no deploy limit a lap
-   * (`deployPerLapJ` is not read), the lap's recharge limit `harvestPerLapJ` plus Overtake's extra; the cuts with the
-   * driver flat out at the rules' rates; and each mode's `energyManagement` in place of its `socFloor`. Absent: the
-   * mode tables as they stand
+   * The rules the energy runs under:
+   * - `'f1-2026'` (`ers-2026.ts`): the 2026 F1 car's FIA numbers — ERS-K power vs road speed, no per-lap deploy limit,
+   *   `harvestPerLapJ` + Overtake extra, cuts at the rules' rates, and each mode's `energyManagement`.
+   * - `'f1-2025'` (FIA 2025 Art. 5.3.2–5.3.4): 120 kW / 200 Nm MGU-K, 4 MJ/lap ES → MGU-K, 2 MJ/lap MGU-K → ES,
+   *   unlimited MGU-H exhaust harvest + unlimited direct MGU-H → MGU-K transfer bypassing the 4 MJ ES cap, and
+   *   standing-start MGU-K lockout until `standingStartLockoutKmh` (100 km/h).
+   * - Absent: the mode tables as they stand.
    */
-  regulations?: 'f1-2026';
+  regulations?: 'f1-2026' | 'f1-2025';
+  /** Coaxial exhaust-turbine Motor Generator Unit – Heat (`regulations: 'f1-2025'`) */
+  mguH?: MguHData;
+  /** Standing-start MGU-K deploy lockout speed (km/h, FIA 2025 Art. 5.3.2: 100 km/h); absent: no lockout */
+  standingStartLockoutKmh?: number;
   /**
    * The motor's torque demand may not vary faster than `maxHz` below `belowKmh` with the driver on the throttle (over
    * 10 %), off the brake and out of a shift, the drive torque positive (the LMDh regulations, Art. 5.5.2): the
@@ -1216,12 +1247,21 @@ export function deriveRainCompound(
   kind: 'intermediate' | 'wet',
   tyre_compound: PhysicsTyreCompound,
   name: string,
-  f1Pack = false
+  f1Pack = false,
+  design?: RainTyreDesign
 ): TyresCompoundData {
   const unblanketed = !racesOnBlankets(base.pressureData);
   const th = base.thermalData;
   const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
-  const traits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
+  const baseTraits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
+  const traits: WetTyreTraits = design
+    ? {
+        ...baseTraits,
+        clearMm: design.clearMm,
+        treadDepthMm: design.treadDepthMm,
+        dryHeatScale: design.dryHeatScale,
+      }
+    : baseTraits;
   const k = traits.dryGrip;
   const tread = kind === 'wet' ? 1.10 : 1.05;
   const angle = kind === 'wet' ? 1.12 : 1.06;
@@ -1238,6 +1278,7 @@ export function deriveRainCompound(
     if (m.relaxationLengthY !== undefined) out.relaxationLengthY = m.relaxationLengthY * tread;
     if (m.friction_limit_angle) out.friction_limit_angle = m.friction_limit_angle * angle;
     if (m.slip_ratio_limit) out.slip_ratio_limit = m.slip_ratio_limit * slipRatioScale;
+    if (design && m.speedSensitivity !== undefined) out.speedSensitivity = m.speedSensitivity * design.speedSensitivityScale;
     return out;
   };
   const thermalPerformanceCurve: LutPoints = f1Pack
@@ -1250,6 +1291,23 @@ export function deriveRainCompound(
   const model = { ...base.modelData, ...scaleModel(base.modelData) } as TyresModelData;
   model.falloff_level = Math.min(0.95, base.modelData.falloff_level + (kind === 'wet' ? 0.06 : 0.04));
   model.falloff_slope = kind === 'wet' ? 1.5 : 1.8;
+  const camberData = design
+    ? { ...base.camberData, camberGain: base.camberData.camberGain * design.camberGainScale }
+    : base.camberData;
+  const thermalData: TyresThermalPatchData = {
+    ...th,
+    thermalPerformanceCurve,
+    optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
+    ...(design
+      ? {
+          slipHeatShare: Math.min(0.85, th.slipHeatShare * design.slipHeatScale),
+          hysteresis: th.hysteresis * design.hysteresisScale,
+          surfaceToCore: th.surfaceToCore * design.surfaceToCoreScale,
+          surfaceCooling: [th.surfaceCooling[0] * design.surfaceCoolingScale, th.surfaceCooling[1] * design.surfaceCoolingScale],
+          coreCooling: [th.coreCooling[0] * design.coreCoolingScale, th.coreCooling[1] * design.coreCoolingScale],
+        }
+      : {}),
+  };
   return {
     ...base,
     name,
@@ -1257,16 +1315,17 @@ export function deriveRainCompound(
     tyre_compound,
     wetTraits: traits,
     modelData: model,
-    thermalData: {
-      ...th,
-      thermalPerformanceCurve,
-      optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
-    },
+    camberData,
+    thermalData,
     pressureData: rainPressure(base.pressureData, traits.tempShiftC),
     rearOverride: base.rearOverride
       ? {
           ...base.rearOverride,
           modelData: scaleModel(base.rearOverride.modelData),
+          camberData:
+            design && base.rearOverride.camberData?.camberGain !== undefined
+              ? { ...base.rearOverride.camberData, camberGain: base.rearOverride.camberData.camberGain * design.camberGainScale }
+              : base.rearOverride.camberData,
           pressureData: base.rearOverride.pressureData && unblanketed ? { ...base.rearOverride.pressureData, setPsi: undefined } : base.rearOverride.pressureData,
         }
       : undefined,

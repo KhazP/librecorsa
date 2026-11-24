@@ -213,6 +213,7 @@ const CHALLENGE_TYRE_LABEL = {
  */
 const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound; tyres: keyof typeof CHALLENGE_TYRE_LABEL }>> = {
   lc26: { compound: "soft", tyres: "soft" },
+  lc25: { compound: "soft", tyres: "soft" },
   "f12026-car": { compound: "soft", tyres: "soft" },
   "amg-gt3": { compound: "soft", tyres: "soft" },
   "mtr-496r": { compound: "soft", tyres: "soft" },

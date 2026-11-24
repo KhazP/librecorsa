@@ -25,7 +25,7 @@ const track = createFlatTestTrack(30_000, 3000);
 const CARS: { name: string; make: () => F12026CarSim; redline: number }[] = [
   { name: 'BMW M1 Procar', make: () => createBmwM1ProcarSim(track), redline: 9200 },
   { name: 'Mercedes-AMG GT3', make: () => createAmgGt3Sim(track, null), redline: 7900 },
-  { name: '2026 Prototype', make: () => new F12026CarSim(track, null), redline: 15000 },
+  { name: 'LC26 Prototype', make: () => new F12026CarSim(track, null), redline: 15000 },
 ];
 
 function standing(make: () => F12026CarSim, autoGearbox: boolean): F12026CarSim {

@@ -62,6 +62,13 @@ export interface Lc26AudioManifest {
   skid?: { int?: RawLoopEntry; ext?: RawLoopEntry };
   /** Traction-control cut loop, played while `Lc26AudioInputs.tcActive` */
   tractionControl?: RawLoopEntry;
+  /**
+   * Ambient loops in place of CarAudio's procedural layers: the wind (by road speed), the tyres rolling (by road speed)
+   * and the bodywork's rattle (by `Lc26AudioInputs.bodywork`, heard in the cockpit only)
+   */
+  wind?: RawLoopEntry;
+  tyreRolling?: RawLoopEntry;
+  bodywork?: RawLoopEntry;
   /** Rev-limiter one-shot retrigger interval while held on the limiter (default 0.9 s) */
   limiterRetriggerS?: number;
   /**
@@ -180,6 +187,8 @@ export interface Lc26AudioInputs {
   skidRate?: number;
   /** Traction control is cutting the engine */
   tcActive?: boolean;
+  /** How hard the suspension is working, 0..1 (its travel speed): drives a bank's bodywork loop */
+  bodywork?: number;
   /** Engine is stalled (manual clutch): mute combustion & turbo loops while coasting/skid sounds continue */
   stalled?: boolean;
   /** Mean speed of the driven shafts (rad/s) and the torque they carry (Nm, negative on the overrun and under
@@ -364,6 +373,9 @@ export class Lc26SoundBank {
   private readonly oneshots = new Map<string, AudioBuffer[]>();
   private skidVoices: Partial<Record<Lc26View, LoopVoice>> = {};
   private tcVoice: LoopVoice | null = null;
+  private windVoice: LoopVoice | null = null;
+  private rollingVoice: LoopVoice | null = null;
+  private bodyworkVoice: LoopVoice | null = null;
   private tcLevel = 0;
   private mguVoice: LoopVoice | null = null;
   private readonly toneNodes: AudioNode[] = [];
@@ -473,6 +485,19 @@ export class Lc26SoundBank {
       this.tcVoice = new LoopVoice(ctx, this.bus, 0);
       rawLoops.push({ file: manifest.tractionControl.file, voice: this.tcVoice });
     }
+    // Ambient loops on the bank's bus, past the engine's load filter
+    if (manifest.wind) {
+      this.windVoice = new LoopVoice(ctx, this.bus, 0);
+      rawLoops.push({ file: manifest.wind.file, voice: this.windVoice });
+    }
+    if (manifest.tyreRolling) {
+      this.rollingVoice = new LoopVoice(ctx, this.bus, 0);
+      rawLoops.push({ file: manifest.tyreRolling.file, voice: this.rollingVoice });
+    }
+    if (manifest.bodywork) {
+      this.bodyworkVoice = new LoopVoice(ctx, this.bus, 0);
+      rawLoops.push({ file: manifest.bodywork.file, voice: this.bodyworkVoice });
+    }
     if (manifest.mgu?.file && manifest.mgu.baseRpm > 0 && manifest.mgu.fullKw > 0) {
       this.mguVoice = new LoopVoice(ctx, this.bus, 0);
       rawLoops.push({ file: manifest.mgu.file, voice: this.mguVoice });
@@ -579,6 +604,16 @@ export class Lc26SoundBank {
   /** The bank brings its own tyre skid (CarAudio then mutes its synthesised squeal) */
   public get hasSkid(): boolean {
     return Object.values(this.skidVoices).some((v) => v?.buffer);
+  }
+
+  /** The bank brings its own wind (CarAudio then mutes its procedural wind) */
+  public get hasWind(): boolean {
+    return !!this.windVoice?.buffer;
+  }
+
+  /** The bank brings its own tyre rolling noise (CarAudio then eases its road roar) */
+  public get hasTyreRolling(): boolean {
+    return !!this.rollingVoice?.buffer;
   }
 
   private playOneshot(role: string, gain: number, when = 0, rate = 1): void {
@@ -790,6 +825,21 @@ export class Lc26SoundBank {
     this.tcLevel += ((inp.tcActive ? 1 : 0) - this.tcLevel) * Math.min(1, dt / (inp.tcActive ? 0.03 : 0.12));
     this.tcVoice?.set(this.tcLevel * 0.35, 1, now, dt, 0.03);
 
+    // Ambient loops: the wind grows with the square of the speed and rises a little in pitch, louder in the open cockpit;
+    // the tyres' rolling noise comes in with speed and pitches with the wheels; the bodywork rattles in the cockpit as
+    // the suspension works
+    const speedShare = clamp01(inp.speedKmh / 300);
+    this.windVoice?.set(0.45 * speedShare * speedShare * (0.6 + 0.4 * this.viewMix), 0.8 + 0.35 * speedShare, now, dt, 0.08);
+    const rollShare = clamp01(inp.speedKmh / 200);
+    this.rollingVoice?.set(
+      0.3 * Math.pow(rollShare, 0.8) * (1 - 0.3 * this.viewMix),
+      Math.min(1.5, Math.max(0.5, 0.55 + 0.75 * (inp.speedKmh / 250))),
+      now,
+      dt,
+      0.08
+    );
+    this.bodyworkVoice?.set(0.5 * clamp01(inp.bodywork ?? 0) * this.viewMix, 1, now, dt, 0.05);
+
     // Rev limiter bounce (interior limiter recording), retriggered while held on the limiter
     this.limiterCooldown = Math.max(0, this.limiterCooldown - dt);
     if (rpm >= inp.limiterRpm - 60 && thr > 0.9 && this.limiterCooldown === 0) {
@@ -824,6 +874,9 @@ export class Lc26SoundBank {
     this.transOff?.stopAll();
     for (const v of Object.values(this.skidVoices)) v?.stop();
     this.tcVoice?.stop();
+    this.windVoice?.stop();
+    this.rollingVoice?.stop();
+    this.bodyworkVoice?.stop();
     this.mguVoice?.stop();
     for (const n of this.toneNodes) n.disconnect();
     this.engineFilter.disconnect();
@@ -893,6 +946,7 @@ export function prefetchSoundBank(assetDir: string): void {
         ...(m.oneshots ?? []).map((e) => e.file),
         ...Object.values(m.skid ?? {}).filter(Boolean).map((e) => (e as { file: string }).file),
         ...(m.tractionControl ? [m.tractionControl.file] : []),
+        ...[m.wind, m.tyreRolling, m.bodywork].filter((e): e is RawLoopEntry => !!e).map((e) => e.file),
         ...(m.mgu?.file ? [m.mgu.file] : []),
       ]);
       for (const f of files) {

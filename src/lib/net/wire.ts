@@ -359,6 +359,7 @@ const CAR_CLASSES = Object.keys(CAR_CLASS_RULE_IDS) as readonly CarClassRule[];
  */
 export const VEHICLE_CLASS_BY_MODEL: Readonly<Record<VehicleModelId, CarClassId>> = {
   lc26: 'f1',
+  lc25: 'f1',
   'f12026-car': 'f1',
   'amg-gt3': 'gt3',
   liana: 'road',

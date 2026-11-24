@@ -190,6 +190,7 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
 /** Element angle one wing step adds (deg): F1 cars on a 0–50 scale, the GT3 rear wing in its own clicks */
 export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: number }> = {
   lc26: { front: 0.1, rear: 0.14 },
+  lc25: { front: 0.12, rear: 0.16 },
   "f12026-car": { front: 0.2, rear: 0.2 },
   "amg-gt3": { front: 0.4, rear: 0.6 },
   // No wings
@@ -219,6 +220,7 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
  */
 export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: number; maxKg: number }> = {
   lc26: { defaultKg: LC26_CHASSIS.fuelKg, minKg: 5, maxKg: LC26_CHASSIS.fuelTankKg },
+  lc25: { defaultKg: 35, minKg: 5, maxKg: 110 },
   "f12026-car": { defaultKg: 35, minKg: 5, maxKg: 110 },
   // A sprint's fixed 30 kg (≈ 40 l) [est]
   "amg-gt3": { defaultKg: 30, minKg: 5, maxKg: 74 },
@@ -281,6 +283,7 @@ export const BRAKE_DUCT_STEP = 0.18;
 /** Steering ratio each car is built with (steering-wheel degrees per road-wheel degree) */
 export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   lc26: 11,
+  lc25: 11,
   "f12026-car": 11,
   "amg-gt3": 14.2,
   liana: 15,

@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -168,9 +169,10 @@ def inspect_fmod_pmlb(bank_path: str | Path) -> list[dict[str, Any]]:
 
     walk(pos, end)
 
-    inst_map: dict[bytes, tuple[float, list[str]]] = {}
-    for _, ldata in riff_chunks.get("LIST", []):
-        pass
+    # Newer banks link an interval to a waveform instrument (WAIB: its GUID, then the waveform's) and the waveform
+    # resource (WAV , 30 bytes: its GUID, then the subsound index at byte 22)
+    wav_index = {d[:16]: struct.unpack("<H", d[22:24])[0] for _, d in riff_chunks.get("WAV ", []) if len(d) >= 24}
+    waib_sample = {d[:16]: wav_index.get(d[16:32]) for _, d in riff_chunks.get("WAIB", []) if len(d) >= 32}
 
     # Scan raw for each PMLB entry's instrument GUID
     results: list[dict[str, Any]] = []
@@ -213,6 +215,9 @@ def inspect_fmod_pmlb(bank_path: str | Path) -> list[dict[str, Any]]:
                         sidx = struct.unpack("<H", window[w + 12 : w + 14])[0]
                         if sidx < len(names):
                             wav_names.append(f"{names[sidx]}#{sidx}")
+            if not wav_names and waib_sample.get(iguid) is not None and waib_sample[iguid] < len(names):
+                sidx = waib_sample[iguid]
+                wav_names.append(f"{names[sidx]}#{sidx}")
             entries.append(
                 {
                     "start": round(start, 1),
@@ -742,6 +747,20 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
             "rms": round(rms(loop), 4),
         }
 
+    # 5b. Ambient raw loops (optional): wind, tyre rolling and bodywork, played by speed and suspension activity in
+    # place of CarAudio's procedural layers
+    for key, (tag, level) in {"wind": ("wind", 0.16), "tyreRolling": ("tyre_rolling", 0.16), "bodywork": ("bodywork", 0.16)}.items():
+        spec = cfg.get("ambient", {}).get(key)
+        if spec is None:
+            continue
+        sname, raw_x = int_bank.get(spec)
+        used_samples.add(f"{tag}:{sname}")
+        loop = make_seamless_loop(raw_x, LOOP_S, XFADE_S, RATE)
+        loop = level_signal(loop, level)
+        fn = f"{tag}.ogg"
+        ch = encode_ogg(ffmpeg, loop, out_dir / fn, force_mono=True, quality=4)
+        manifest[key] = {"file": fn, "channels": ch, "rms": round(rms(loop), 4)}
+
     # 6. Oneshots
     oneshot_cfg = cfg.get("oneshots", {})
     for role, specs in oneshot_cfg.items():
@@ -871,6 +890,36 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
             }
         )
 
+    # Sections this bank lacks, taken from another LibreCorsa bank (`reuse`: its folder, the loops named in `sections`
+    # copied with their manifest entries, and its one-shots of the `oneshotRoles` this port did not make), and manifest
+    # sections passed through as they are (`manifestExtras`)
+    reuse = cfg.get("reuse")
+    if reuse:
+        src_dir = REPO_ROOT / reuse["dir"]
+        src_manifest = json.loads((src_dir / "manifest.json").read_text(encoding="utf-8"))
+        for section in reuse.get("sections", []):
+            entry = src_manifest.get(section)
+            if entry is None:
+                continue
+            manifest[section] = entry
+            if isinstance(entry, dict) and "file" in entry:
+                shutil.copyfile(src_dir / entry["file"], out_dir / entry["file"])
+        made = {o["role"] for o in manifest["oneshots"]}
+        for o in src_manifest.get("oneshots", []):
+            if o["role"] in reuse.get("oneshotRoles", []) and o["role"] not in made:
+                shutil.copyfile(src_dir / o["file"], out_dir / o["file"])
+                manifest["oneshots"].append(o)
+    for key, value in cfg.get("manifestExtras", {}).items():
+        manifest[key] = value
+    # Sample names stay out of the published manifest when they name a team or a car (`hideSampleNames`)
+    if cfg.get("hideSampleNames"):
+        for view in ("ext", "int"):
+            for e in manifest["engine"][view]:
+                e.pop("fsbName", None)
+        for group in ("turbo", "transmission", "oneshots"):
+            for e in manifest[group]:
+                e.pop("fsbName", None)
+
     # Remove any stale .ogg files in out_dir not referenced by this manifest
     referenced_files = {"manifest.json"}
     for view in ("ext", "int"):
@@ -887,6 +936,9 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
             referenced_files.add(e["file"])
     if "tractionControl" in manifest:
         referenced_files.add(manifest["tractionControl"]["file"])
+    for key in ("wind", "tyreRolling", "bodywork", "mgu"):
+        if isinstance(manifest.get(key), dict) and "file" in manifest[key]:
+            referenced_files.add(manifest[key]["file"])
 
     for existing in out_dir.glob("*.ogg"):
         if existing.name not in referenced_files:

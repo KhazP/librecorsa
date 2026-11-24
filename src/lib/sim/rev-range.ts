@@ -19,6 +19,8 @@ const F1_REV_RANGE: [number, number] = [10_500, LC26_ENGINE.limiterRpm - SHIFT_B
  * the Liana's 6500, the 496R's dash LEDs from 8000 to 9400)
  */
 export function revRangeFor(carId: string | undefined): [number, number] {
+  // 2025 F1 V6: fuel-flow cap starts at 10,500 rpm, auto upshift at 11,850, all 15 lights at 12,050 (< 13,000 limiter)
+  if (carId === "lc25") return [10_200, 12_050];
   if (carId === "liana") return [5200, 6500];
   if (carId === "mtr-496r") return [8000, 9400];
   // The LC-LMDH up to the engine speed its regulated power curve is set on (the lights' last stage) [claim]

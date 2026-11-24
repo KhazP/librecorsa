@@ -219,6 +219,17 @@ const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> =
     rearFlareSizeM: 0.18,
     measured: true,
   },
+  lc25: {
+    halfWidthM: 0.16,
+    heightM: 0.58,
+    frontZM: 2.38,
+    rearHalfWidthM: 0,
+    rearHeightM: 0.30,
+    rearZM: -2.42,
+    flareSizeM: 0.20,
+    rearFlareSizeM: 0.18,
+    measured: true,
+  },
   "amg-gt3": {
     halfWidthM: 0.74,
     heightM: 0.50,
@@ -499,8 +510,8 @@ const HEADLIGHT_MAT_RE = /(?:head_?light|front_?light|lamp_?front|hl_glass|light
 const TAILLIGHT_MAT_RE = /(?:tail_?light|rear_?light|brake_?light|stop_?light|lamp_?rear)/i;
 /** Generic light materials on ported/GT3 GLBs (e.g. `light_004`, `BMWMAT_Lights1`, `MI_..._Lights`) — gated by Z end */
 const GENERIC_LIGHT_MAT_RE = /(?:^|_)lights?(?:_?\d+)?$|interactive_lights/i;
-const EXCLUDED_FRONT_LIGHT_RE = /(?:tail|brake|reverse|indicator|dash|wheel|interior|clearled|glass|caliper|disc|drum|reflector)/i;
-const EXCLUDED_REAR_LIGHT_RE = /(?:head_?light|front_?light|reverse|indicator|amber|dash|wheel|interior|clearled|glass|caliper|disc|drum|reflector)/i;
+const EXCLUDED_FRONT_LIGHT_RE = /(?:tail|brake|reverse|indicator|dash|wheel|steer|interior|clearled|glass|caliper|disc|drum|reflector)/i;
+const EXCLUDED_REAR_LIGHT_RE = /(?:head_?light|front_?light|reverse|indicator|amber|dash|wheel|steer|interior|clearled|glass|caliper|disc|drum|reflector)/i;
 
 const _flarePos = new THREE.Vector3();
 const _carFwd = new THREE.Vector3();

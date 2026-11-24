@@ -36,6 +36,7 @@ export const BIG_JUMP_M = 2.5;
 export const LAUNCH_RPM: Readonly<Partial<Record<VehicleModelId, readonly [number, number]>>> = {
   'f12026-car': [9500, 11500],
   lc26: [7000, 8700],
+  lc25: [7200, 8800],
   'amg-gt3': [4800, 6000],
   'mtr-496r': [4000, 5000],
   'lc-lmdh': [5500, 7500],

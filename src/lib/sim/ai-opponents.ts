@@ -9,6 +9,7 @@
 import { steerAngleOf, wheelRpmOf } from './car-pose';
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
+import { LC25_CAR_CONFIG } from '@/lib/sim/f12025-car/Lc25Config';
 import { createTrackSampleBuffer, DEFAULT_TRACK_ID, getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
@@ -797,6 +798,7 @@ function remoteContactMass(vehicle: VehicleModelId | undefined): [number, number
   if (vehicle === 'chaparral-2d-67') return [CHAPARRAL_2D_67_CONFIG.chassis.totalMassKg, CHAPARRAL_2D_67_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'porsche-934-rsr') return [PORSCHE_934_RSR_CONFIG.chassis.totalMassKg, PORSCHE_934_RSR_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'f12026-car') return [F12026_CAR_CONFIG.chassis.totalMassKg, F12026_CAR_CONFIG.chassis.inertia.yaw];
+  if (vehicle === 'lc25') return [LC25_CAR_CONFIG.chassis.totalMassKg, LC25_CAR_CONFIG.chassis.inertia.yaw];
   return [CONTACT_MASS_KG, CONTACT_YAW_INERTIA_KGM2];
 }
 

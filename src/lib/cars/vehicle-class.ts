@@ -34,6 +34,7 @@ export const VEHICLE_CLASS_META: Readonly<Record<VehicleClassId, VehicleClassMet
 /** Typed over VehicleModelId so adding a new vehicle model fails to compile until its class is assigned */
 export const VEHICLE_CLASS_OF: Readonly<Record<VehicleModelId, VehicleClassId>> = {
   lc26: "f1",
+  lc25: "f1",
   "f12026-car": "f1",
   "amg-gt3": "gt3",
   "mtr-496r": "proto",
@@ -51,6 +52,7 @@ export const VEHICLE_CLASS_OF: Readonly<Record<VehicleModelId, VehicleClassId>> 
 /** Concise display name for each vehicle model, for badge tooltips, popovers and Hall of Fame */
 export const VEHICLE_DISPLAY_NAME: Readonly<Record<VehicleModelId, string>> = {
   lc26: "Proto 26",
+  lc25: "LC25 Proto",
   "f12026-car": "F1 Teams",
   "amg-gt3": "GT3",
   "mtr-496r": "MTRacing 496R",
