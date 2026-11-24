@@ -4000,6 +4000,9 @@ export class DriveSession {
         race: physics.telemetry.race,
         dt: frozen ? 0 : dtSeconds,
         allowed: !inMenu && !replaying && !renderer.xr.isPresenting,
+        // The full-screen podium after it: offline AI races only (a career round's names from its show context)
+        board: aiField !== null && mpRace === null && settingsNow.hud.fullPodium,
+        context: preRaceShow.context,
         peers: renderPeers,
         ground: physics.groundQuery ?? null,
       });
@@ -4442,7 +4445,8 @@ export class DriveSession {
             still: reducedMotion?.matches ?? false,
           });
         };
-        if (!placeShowCamera() && !podium.placeCamera(camera)) cameraRig.update({
+        const podiumView = { fogDensity: scene.fog instanceof THREE.FogExp2 ? scene.fog.density : 0.00035, still: reducedMotion?.matches ?? false };
+        if (!placeShowCamera() && !podium.placeCamera(camera, podiumView)) cameraRig.update({
           dt: drawDtS,
           nowMs,
           mode,

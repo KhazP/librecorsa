@@ -2441,6 +2441,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           raceEnd={{
             podium: podiumUi,
             onSkipPodium: () => session?.podium.skip(),
+            podiumTimeS: session?.podium.boardTimeS,
             history: raceHistory,
             nextRace: raceKind === "mp" && inScheduledRace && races.on ? { slotS: races.slotS, onJoin: handleJoinNextRace } : undefined,
           }}
