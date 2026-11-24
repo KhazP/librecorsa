@@ -477,21 +477,26 @@ func runProgram(ctx context.Context, log *ringLog, dir string, env []string, arg
 	cmd.Stdin = nil
 	cmd.Stdout = log
 	cmd.Stderr = log
-	prepareTree(cmd)
 	log.add("$ " + strings.Join(displayArgv(argv), " "))
-	if err := cmd.Start(); err != nil {
+	tree, err := startTree(cmd)
+	if err != nil {
 		return err
 	}
-	waited := make(chan error, 1)
-	go func() { waited <- cmd.Wait() }()
+	exited := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		tree.release()
+		close(exited)
+	}()
 	select {
-	case err := <-waited:
+	case <-exited:
 		log.flush()
-		return exitError(err)
+		return exitError(waitErr)
 	case <-ctx.Done():
-		stopTree(cmd)
+		tree.stop(exited)
 		select {
-		case <-waited:
+		case <-exited:
 		case <-time.After(killGrace + 2*time.Second):
 		}
 		log.flush()
@@ -499,8 +504,8 @@ func runProgram(ctx context.Context, log *ringLog, dir string, env []string, arg
 	}
 }
 
-// killGrace is how long a stopped program has to finish before it is killed
-const killGrace = 5 * time.Second
+// killGrace is how long a stopped program has to finish before it is killed (a variable for the tests)
+var killGrace = 5 * time.Second
 
 func exitError(err error) error {
 	var exit *exec.ExitError
