@@ -51,6 +51,7 @@ interface LapSummaryProps {
   summary: LapSummaryData;
   onClose: () => void;
   onSaveGhost?: () => void;
+  /** Opens this lap in the lap board's Analysis view (pausing the drive) */
   onAnalyze?: () => void;
   /** Uploads the lap by hand (automatic posting off, or a retry); without it the card only shows how the upload went */
   onSubmit?: () => void;
@@ -538,6 +539,7 @@ const LapCard: React.FC<
       queued: tx("queued"),
       close: tx("close"),
       saveGhost: tx("saveGhost"),
+      analyse: tx("analyse"),
       sectors: s.sectorTimesMs.map((ms, idx) => tx("sector", { n: idx + 1, mark: sectorMark(ms, s.bestSectorTimesMs[idx]).mark ?? "none" })),
     }),
     [tx, kind, s.lapNumber, s.sectorTimesMs, s.bestSectorTimesMs, rank, rankTotal, rankWeek, unit]
@@ -663,7 +665,7 @@ const LapCard: React.FC<
           {onSubmit && notRanked && submitState !== "sent" ? <span className={`me-auto text-[12px] ${skinCss.inkDim}`}>{notRanked}</span> : null}
           {onAnalyze ? (
             <SkinButton onClick={onAnalyze} className="h-8 px-3 text-[12px] font-semibold">
-              Analyze lap
+              {words.analyse}
             </SkinButton>
           ) : null}
           {onSaveGhost ? (
@@ -777,7 +779,7 @@ const LapCard: React.FC<
         {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint me-auto">{notRanked}</span> : null}
         {onAnalyze ? (
           <Button size="sm" variant="secondary" onClick={onAnalyze}>
-            Analyze lap
+            {words.analyse}
           </Button>
         ) : null}
         {onSaveGhost ? (

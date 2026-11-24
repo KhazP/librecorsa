@@ -217,7 +217,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   const guest = (mpRace || Boolean(props.lobby)) && props.isHost !== true;
   const canRestart = !guest;
   const canFly = !mpRace && !guest;
-  const [chosenPanel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
+  // The lap card's Analyse button opens the menu on the lap board (its Analysis view)
+  const [chosenPanel, setPanel] = useState<Panel>(
+    props.openMultiplayer ? "multiplayer" : leaderboardPanel?.analysis?.openOnAnalysis ? "leaderboard" : "settings"
+  );
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { mode, family } = useInputMode();
   // Restart, then close the menu, unless the restart already did: an online host's restart resumes everyone itself,
