@@ -76,6 +76,8 @@ const cases: [string | null, ReturnType<typeof classifyRenderer>][] = [
   ["NVIDIA GeForce RTX 3060/PCIe/SSE2", "ok"],
   ["AMD Radeon RX 6600 (radeonsi, navi23, LLVM 15.0.7, DRM 3.49, 6.1.0)", "ok"],
   ["Apple M2", "ok"],
+  ["Qualcomm, Qualcomm(R) Adreno(TM) X1-85 GPU (0x36334330) Direct3D11 vs_5_0 ps_5_0, D3D11", "weak"],
+  ["Qualcomm, Adreno (TM) 740, OpenGL ES 3.2", "ok"],
   ["Apple GPU", "unknown"],
   ["WebKit WebGL", "unknown"],
   ["", "unknown"],
