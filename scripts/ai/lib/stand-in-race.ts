@@ -18,7 +18,7 @@
  * player's car (held on the grid in the lights), then the field.
  */
 import { readFileSync } from 'node:fs';
-import { getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../../../src/lib/track-data';
+import { getActiveTrackData, setActiveTrack, type AiPlanCheck, type BuiltTrackData, type RawTrackJson, type TrackMetaExtras } from '../../../src/lib/track-data';
 import { vehicleModelSpec } from '../../../src/lib/cars/vehicle-models';
 import type { VehicleModelId } from '../../../src/types/f1';
 import { F12026CarSim } from '../../../src/lib/sim/f12026-car/F12026CarSim';
@@ -49,6 +49,11 @@ export interface StandInRaceOptions {
   localPlanner?: boolean;
   /** The session's weather (default clear) */
   weather?: WeatherPresetId;
+  /**
+   * Drive-plan checks to race with on top of the circuit's own, by line and car (`metadata.aiPlansByLine`): a plan A/B
+   * in one tree, e.g. `{ gt3: { liana: { ok: true, maxGrip: 1.08, ... } } }`
+   */
+  plans?: Record<string, Record<string, AiPlanCheck>>;
 }
 
 /** One kind of contact, counted once per pair per second */
@@ -177,8 +182,18 @@ class StandInDriver {
   }
 }
 
-export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
-  setActiveTrack(o.trackId, JSON.parse(readFileSync(`public/tracks/${o.trackId}/track_data.json`, 'utf8')) as RawTrackJson);
+export function runStandInRace(
+  o: StandInRaceOptions,
+  /** Called after every step (a probe: scripts/ai/race-probe.ts) */
+  onStep?: (field: AiOpponentField, timeS: number) => void
+): StandInRaceResult {
+  const raw = JSON.parse(readFileSync(`public/tracks/${o.trackId}/track_data.json`, 'utf8')) as RawTrackJson;
+  if (o.plans) {
+    const meta = raw.metadata as RawTrackJson['metadata'] & TrackMetaExtras;
+    const byLine = (meta.aiPlansByLine ??= {}) as Record<string, Record<string, AiPlanCheck>>;
+    for (const [line, cars] of Object.entries(o.plans)) byLine[line] = { ...(byLine[line] ?? {}), ...cars };
+  }
+  setActiveTrack(o.trackId, raw);
   const track = getActiveTrackData(1200);
   const L = track.totalLengthM;
   const player = makeTemplate(o.car, track);
@@ -255,6 +270,7 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     }
     field.update(DT);
     t += DT;
+    onStep?.(field, t);
     for (const inc of field.incidents) {
       if (inc.kind === 'contact') tally(inc);
       else if (inc.kind === 'spin') spinsAt.push([Math.round(inc.s), Math.round(t * 10) / 10]);
