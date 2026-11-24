@@ -129,6 +129,8 @@ export interface QualifyingGridInput {
    * which the field's quickest levels plan beyond) is a shade slower than such a driver, a lone autopilot lap is one
    */
   refBase: number;
+  /** The grid has been shown already (the career's pre-race show): the race goes to the lights without standing first */
+  gridShown?: boolean;
 }
 
 /** A line check's flying lap: the AI cars drive the plans its grip reach takes past it */

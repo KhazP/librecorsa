@@ -311,6 +311,8 @@ export interface HudSettings {
   boardWidget: BoardWidgetMode;
   /** Names over the other players' and AI cars, the top three in podium colours */
   showPlayerNames: boolean;
+  /** The career's pre-race show before each round (the circuit, the weather, the tyres, the grid) */
+  preRaceShow: boolean;
 }
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
@@ -472,6 +474,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   headMovement: "natural",
   boardWidget: "lapEnd",
   showPlayerNames: true,
+  preRaceShow: true,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -865,6 +868,7 @@ function parseHud(v: unknown): HudSettings {
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
+    preRaceShow: bool(v.preRaceShow, d.preRaceShow),
   };
 }
 

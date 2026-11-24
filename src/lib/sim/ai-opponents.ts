@@ -1486,8 +1486,9 @@ export class AiOpponentField implements AiRace {
     this.phase = standing ? 'lights' : 'racing';
     this.lightsOn = 0;
     this.lightsTimerS = 0;
-    // After qualifying the grid stands a few seconds before the lights, for its order to be read
-    this.preStartS = standing && this.qualiResults ? QUALIFYING_GRID_SHOW_S : 0;
+    // After qualifying the grid stands a few seconds before the lights, for its order to be read (unless a show has
+    // just gone down it pair by pair)
+    this.preStartS = standing && this.qualiResults && !this.qualifying?.gridShown ? QUALIFYING_GRID_SHOW_S : 0;
     this.holdS = 0.2 + this.rng() * 2.8;
     // Rolling start: hold the whole field at its spawn formation speed until the leader crosses Start/Finish
     const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
