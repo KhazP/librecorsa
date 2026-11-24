@@ -4,6 +4,7 @@
  * terminal; a failure throws with the command that failed.
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 /** The repository's root folder (tsx runs the scripts as CommonJS, as the other scripts use `__dirname`) */
@@ -34,7 +35,15 @@ export function runPython(script: string, args: string[], opts: { withPackages?:
   run("uv", uvArgs, script);
 }
 
-/** Runs a TypeScript script of the repository with tsx */
+/**
+ * Runs a TypeScript script of the repository with tsx; in the offline launcher's converter, where only its bundle is
+ * (the .mjs beside where its source would be, launcher/converter/build.mjs), that with Node
+ */
 export function runTsx(script: string, args: string[]): void {
+  const bundled = script.replace(/\.ts$/, ".mjs");
+  if (!existsSync(join(REPO_ROOT, script)) && bundled !== script && existsSync(join(REPO_ROOT, bundled))) {
+    run(process.execPath, [bundled, ...args], script);
+    return;
+  }
   run(process.execPath, ["--disable-warning=THREE_CJS_DEPRECATED", "--import", "tsx", script, ...args], script);
 }

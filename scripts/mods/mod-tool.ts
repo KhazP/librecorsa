@@ -16,6 +16,7 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { buildCatalogue, catalogueJson } from "./lib/catalogue";
+import { pathToFileURL } from "node:url";
 import { packageCar, type CarPackageOptions } from "./lib/car-package";
 import { packageCircuit, readCircuitEntry } from "./lib/circuit-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "./lib/importer";
@@ -27,16 +28,24 @@ import { zipPackage } from "./lib/zip-writer";
 
 const IMPORTERS_DIR = join(__dirname, "importers");
 
-/** The importers there are: one file each in importers/ */
-const importerNames = (): string[] =>
-  readdirSync(IMPORTERS_DIR)
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))
-    .map((f) => f.slice(0, -3))
-    .sort();
+/**
+ * The importers there are: one file each in importers/, its TypeScript source in a clone, or its bundle (.mjs) in the
+ * offline launcher's converter (launcher/converter/build.mjs)
+ */
+const importerFiles = (): Map<string, string> =>
+  new Map(
+    readdirSync(IMPORTERS_DIR)
+      .filter((f) => /\.(ts|mjs)$/.test(f) && !f.endsWith(".d.ts"))
+      .map((f) => [f.replace(/\.(ts|mjs)$/, ""), f] as const)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+const importerNames = (): string[] => [...importerFiles().keys()];
 
 async function loadImporter(name: string): Promise<Importer> {
-  if (!importerNames().includes(name)) throw new Error(`no importer "${name}"; the importers are: ${importerNames().join(", ")}`);
-  const mod = (await import(join(IMPORTERS_DIR, `${name}.ts`))) as { default: Importer };
+  const file = importerFiles().get(name);
+  if (!file) throw new Error(`no importer "${name}"; the importers are: ${importerNames().join(", ")}`);
+  // By URL: Node takes a Windows path (C:\…) for a URL scheme
+  const mod = (await import(pathToFileURL(join(IMPORTERS_DIR, file)).href)) as { default: Importer };
   return mod.default;
 }
 
@@ -106,8 +115,11 @@ async function main(): Promise<void> {
       return;
     }
     await importer.run(rest);
-    // The dev server's list of packages, so what was imported shows up there at once
-    await writeModsIndex(DEFAULT_MODS_DIR, true);
+    // The dev server's list of packages, so what was imported there shows up at once (the launcher lists its own
+    // mods folder as it serves it)
+    const outAt = rest.findIndex((a) => a === "--out" || a.startsWith("--out="));
+    const out = outAt < 0 ? undefined : rest[outAt].startsWith("--out=") ? rest[outAt].slice("--out=".length) : rest[outAt + 1];
+    if (!out || resolve(out) === resolve(DEFAULT_MODS_DIR)) await writeModsIndex(DEFAULT_MODS_DIR, true);
     return;
   }
 

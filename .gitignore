@@ -85,3 +85,6 @@ UI-RESEARCH-*.md
 
 # Source content an importer downloads (npm run mod -- import … --fetch)
 /scripts/mods/.cache/
+
+# The launcher's import folder when it runs in a clone (go run . in launcher/)
+/launcher/import/
