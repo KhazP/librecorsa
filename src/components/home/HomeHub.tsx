@@ -29,6 +29,7 @@ import { groupCoverage } from "@/lib/home/coverage";
 import { preloadVenueHero, VenueHero } from "./VenueHero";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
+import { APP_RELEASE } from "@/lib/downloads";
 import { HomeLapTimes } from "./HomeLapTimes";
 import { bestLapForCircuit } from "@/lib/sim/ghost-store";
 import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
@@ -139,11 +140,17 @@ const CAR_FILTERS: readonly { key: CarFilterKey; of: (c: HomeCar, text: HomeQual
 ];
 const NO_CAR_FILTERS: Record<CarFilterKey, string> = { class: "", physics: "", modder: "" };
 
+/** The prompt bar's links: TEXT_LINK in slate, so they stay as quiet as the bar's own words */
+const BAR_LINK =
+  "text-lc-slate underline decoration-lc-keyline decoration-1 underline-offset-4 transition-colors duration-200 ease-lc hover:text-lc-chalk hover:decoration-lc-chalk";
+
 export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
   // The Q / E caps name physical keys as printed on this keyboard
   useKeyLayout();
   const data = useLocalizedHome(built);
   const tx = useTranslations("home.hub");
+  const td = useTranslations("home.downloads");
+  const tm = useTranslations("menu.title");
   const tc = useTranslations("common");
   const [tab, setTab] = useState<Tab>("home");
   const [layoutId, setLayoutId] = useState(data.defaultTrackId);
@@ -1029,6 +1036,23 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
           className={`flex shrink-0 items-center justify-between gap-4 border-t border-lc-line pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] ${pad ? "" : "max-lg:hidden pointer-coarse:hidden"} ${GUTTER}`}
         >
           <PromptBar prompts={prompts} rule={false} />
+          {/* SignPath Foundation's terms want the words "Code signing policy" on the home page. The arrows and the pad
+              pass over these; Tab reaches them. GitHub and the policy open in a new tab */}
+          <div data-nav-skip="" className="flex shrink-0 items-center gap-x-5 text-[13px] font-semibold max-md:hidden">
+            {(
+              [
+                ["GitHub", data.repoUrl, true],
+                [td("signingPolicy"), APP_RELEASE.codeSigningPolicyUrl, true],
+                [tm("privacy"), withBasePath("/privacy"), false],
+                [tm("press"), withBasePath("/press"), false],
+              ] as const
+            ).map(([label, href, external]) => (
+              <a key={href} href={href} {...(external ? { target: "_blank", rel: "noopener" } : {})} className={BAR_LINK}>
+                {label}
+                {external ? <span className="sr-only"> {tc("newTab")}</span> : null}
+              </a>
+            ))}
+          </div>
           <span title={tx("footer", { venue: venue.name, car: car.title })} className="max-w-[34%] truncate text-[13px] font-semibold text-lc-slate max-md:hidden">
             {tx("footer", { venue: venue.name, car: car.title })}
           </span>
