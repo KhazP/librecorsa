@@ -286,8 +286,9 @@ export interface OfficialResultRow {
 export type ControlMessage =
   /** `proto`, `sim`: the sender's protocol version and physics revision (absent from older clients) */
   | { type: 'hello'; name: string; code: string; color: string; vehicle?: VehicleModelId; trackId?: string; proto?: number; sim?: number }
-  /** A room's host to a guest on another version of the game: not let in */
+  /** A room's host to a guest on another version of the game, or in a disallowed car class */
   | { type: 'refuse'; reason: 'version' }
+  | { type: 'refuse'; reason: 'car_class'; carClass?: CarClassRule; vehicle?: VehicleModelId }
   | { type: 'ping'; t0: number }
   | { type: 'pong'; t0: number; now: number }
   | { type: 'lobby'; lobby: LobbyState }
@@ -329,6 +330,60 @@ const version = (v: unknown): number | undefined => (typeof v === 'number' && Nu
 // the Worker loads this file without the car registry)
 const CAR_CLASS_RULE_IDS: Record<CarClassRule, true> = { any: true, f1: true, gt3: true, proto: true, classic: true, road: true };
 const CAR_CLASSES = Object.keys(CAR_CLASS_RULE_IDS) as readonly CarClassRule[];
+
+/**
+ * Vehicle model -> car class, kept by the compiler (every `VehicleModelId` must be listed here; mirrors
+ * `VEHICLE_MODELS[id].classId` without importing three.js so the Cloudflare Worker can enforce class locks).
+ */
+export const VEHICLE_CLASS_BY_MODEL: Readonly<Record<VehicleModelId, CarClassId>> = {
+  lc26: 'f1',
+  'f12026-car': 'f1',
+  'amg-gt3': 'gt3',
+  liana: 'road',
+  'mtr-496r': 'proto',
+  'lc-lmdh': 'proto',
+  'nissan-r33-jgtc': 'classic',
+  'nissan-r32-jtcc': 'classic',
+  'bmw-m1-procar': 'classic',
+  'vw-scirocco-gtx': 'road',
+  'chaparral-2d': 'classic',
+  'chaparral-2d-67': 'classic',
+  'porsche-934-rsr': 'classic',
+};
+
+/** The car class a vehicle model belongs to */
+export function vehicleClassOf(vehicle: VehicleModelId): CarClassId {
+  return VEHICLE_CLASS_BY_MODEL[vehicle];
+}
+
+/** A room or race's car restriction: either a single spec vehicle, a car class, or unrestricted (`any`) */
+export interface VehicleRule {
+  carClass: CarClassRule;
+  vehicle?: VehicleModelId;
+}
+
+/** True when the lobby/race restricts which car or class players may drive */
+export function isVehicleRestricted(rule: VehicleRule | null | undefined): boolean {
+  return Boolean(rule && (rule.vehicle !== undefined || rule.carClass !== 'any'));
+}
+
+/**
+ * True when `vehicle` is permitted under `rule`.
+ * - If `rule.vehicle` is set (spec/one-make lobby such as an open `lc-lmdh` race), only that exact vehicle is allowed.
+ * - Else if `rule.carClass !== 'any'`, only vehicles belonging to that class are allowed.
+ * - When `rule` is unrestricted (`carClass === 'any'` and no `vehicle`), every vehicle is allowed.
+ * - `allowUnspecified`: when true, an omitted `vehicle` (undefined) is treated as allowed (for legacy callers/tests).
+ */
+export function isVehicleAllowed(
+  vehicle: VehicleModelId | undefined,
+  rule: VehicleRule | null | undefined,
+  options?: { allowUnspecified?: boolean },
+): boolean {
+  if (!rule || !isVehicleRestricted(rule)) return true;
+  if (vehicle === undefined) return options?.allowUnspecified === true;
+  if (rule.vehicle !== undefined) return vehicle === rule.vehicle;
+  return VEHICLE_CLASS_BY_MODEL[vehicle] === rule.carClass;
+}
 
 export function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
   if (!v || typeof v !== 'object') return undefined;
@@ -702,7 +757,13 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
         sim: version(m.sim),
       };
     case 'refuse':
-      return m.reason === 'version' ? { type: 'refuse', reason: 'version' } : null;
+      if (m.reason === 'version') return { type: 'refuse', reason: 'version' };
+      if (m.reason === 'car_class') {
+        const carClass = CAR_CLASSES.includes(m.carClass as CarClassRule) ? (m.carClass as CarClassRule) : undefined;
+        const vehicle = asPeerVehicle(m.vehicle);
+        return { type: 'refuse', reason: 'car_class', ...(carClass ? { carClass } : {}), ...(vehicle ? { vehicle } : {}) };
+      }
+      return null;
     case 'ping': {
       const t0 = finite(m.t0, -1e15, 1e15);
       return t0 === null ? null : { type: 'ping', t0 };

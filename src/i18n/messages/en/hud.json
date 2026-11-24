@@ -203,6 +203,8 @@
       "switchCircuit": "Switch circuit",
       "wrongCar": "Your car isn't in this room's class ({class}).",
       "wrongCarSwitch": "Your car isn't in this room's class ({class}). Switch car:",
+      "wrongCarReadyBlocked": "Switch to an allowed car ({class}) before readying up",
+      "wrongCarStartBlocked": "Switch to an allowed car ({class}) before starting",
       "raceInProgress": "Race in progress",
       "startRaceNow": "Start race now",
       "startQualifying": "Start {minutes} min qualifying",
