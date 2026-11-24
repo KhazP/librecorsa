@@ -4,7 +4,7 @@
  * folders rather than the repository's. No conversion runs here (that needs Python); the launcher's Go tests and a
  * real conversion in a release cover the rest (launcher/README.md).
  *
- *   npx tsx scripts/verify-converter-bundle.ts
+ *   npx tsx scripts/verify/verify-converter-bundle.ts
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -17,7 +17,7 @@ function check(name: string, ok: boolean, detail = ""): void {
   if (!ok) failed++;
 }
 
-const repo = join(__dirname, "..");
+const repo = join(__dirname, "..", "..");
 const tmp = mkdtempSync(join(tmpdir(), "converter-"));
 const out = join(tmp, "converter");
 // Only PATH from this environment, as the launcher gives its converter
