@@ -3820,6 +3820,11 @@ export class AiOpponentField implements AiRace {
           penaltyS: p.penaltyS || undefined,
           inPit: c.pitRun !== null || Boolean(c.isPlayer && c.sim.telemetry.pitLane) || undefined,
           pitStops: c.pitStops || undefined,
+          // The crew's clock while it stands in its box (the towers' live pit clock, the pit stop's card)
+          pitBox:
+            c.pitRun?.phase === 'service'
+              ? { elapsedS: Math.round((c.pitRun.serviceTotalS - c.pitRun.serviceLeftS) * 100) / 100, totalS: c.pitRun.serviceTotalS }
+              : undefined,
         };
       }),
       // polish:B each row's place on the grid (classify keeps the order it is given)
