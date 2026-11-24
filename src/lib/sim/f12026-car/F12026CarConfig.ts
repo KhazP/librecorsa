@@ -188,6 +188,11 @@ export interface EngineData {
    * before any output cap. Absent: none
    */
   ramAirGainPerKPa?: number;
+  /**
+   * Open-loop per-gear ICE torque multiplier (forward gear number → 0..1), modelling the gear-dependent boost /
+   * torque-demand maps F1 power units run in 1st and 2nd gear. Neutral, reverse and omitted configs default to 1.
+   */
+  torqueByGear?: LutPoints;
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;

@@ -21,23 +21,23 @@ const C = LC25_CAR_CONFIG;
 
 /**
  * Planning model for the LC25 Prototype's braking line, braking urgency and HUD target speed.
- * Calibrated for 2025 ground-effect downforce (~5.45 m² CL·A, ~1.12 m² CD·A, 53.5% rear DF share) and ~724 kW
- * wheel power (638 kW ICE + 120 kW MGU-K through 95.5% drivetrain).
+ * Calibrated for 2025 ground-effect downforce (~5.85 m² CL·A, ~1.38 m² CD·A closed, 53% rear DF share) and ~695 kW
+ * wheel power (608 kW ICE + 120 kW MGU-K through 95.5% drivetrain).
  */
 export function lc25ProfileCar(airDensity = NOMINAL_AIR_DENSITY): SpeedProfileCarModel {
   const { maxTorqueNm, front_bias } = C.brakes;
   const soft = C.tyreCompounds[C.compoundSlots.soft]!;
   return {
     massKg: C.chassis.totalMassKg + 35,
-    downforceCoef: 0.5 * airDensity * 5.65,
+    downforceCoef: 0.5 * airDensity * 5.85,
     dragCoef: 0.5 * airDensity * 1.38,
-    rearDownforceShare: 0.535,
+    rearDownforceShare: 0.53,
     rearWeightFraction: 1 - C.chassis.frontWeightFraction,
     muLat: 1.66,
-    muLong: 1.50,
+    muLong: 1.48,
     maxBrakeForceN:
       0.92 * 2 * maxTorqueNm * (front_bias / soft.front.radius + (1 - front_bias) / soft.rear.radius),
-    maxDrivePowerW: 724_000,
+    maxDrivePowerW: 695_000,
     vMaxMs: 99,
   };
 }

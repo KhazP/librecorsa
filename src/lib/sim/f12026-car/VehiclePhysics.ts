@@ -1480,6 +1480,8 @@ export class VehiclePhysics {
     /** Each mode's `energyManagement` (against charge), null for a mode without */
     management: Record<PerformanceModeName, ManagementLuts | null>;
     deployVsGear: Lut;
+    /** `EngineData.torqueByGear`: open-loop forward-gear ICE torque multiplier (gear → 0..1) */
+    torqueByGear: Lut | null;
     /** `ERSData.mguH.harvestCurve`: MGU-H exhaust harvest fraction against engine speed (rpm → 0..1) */
     mguHHarvest: Lut | null;
     /** `EngineData.outputPowerCap`: the limit at the driven shafts (rpm → kW) and its change with road speed */
@@ -1710,6 +1712,7 @@ export class VehiclePhysics {
       mgukDeploy: new Lut(cfg.ers.torqueLut),
       mgukHarvest: new Lut(cfg.ers.coastLut),
       deployVsGear: new Lut(cfg.ers.deployVsGear ?? [[0, 1], [1, 1]]),
+      torqueByGear: cfg.engine.torqueByGear ? new Lut(cfg.engine.torqueByGear) : null,
       mguHHarvest: cfg.ers.mguH ? new Lut(cfg.ers.mguH.harvestCurve) : null,
       powerCap: cfg.engine.outputPowerCap ? new Lut(cfg.engine.outputPowerCap.curve) : null,
       powerCapVsSpeed: cfg.engine.outputPowerCap?.vsSpeedKmh ? new Lut(cfg.engine.outputPowerCap.vsSpeedKmh) : null,
@@ -4120,8 +4123,9 @@ export class VehiclePhysics {
     // Combustion torque at the full spark, and what the traction cut leaves of it.
     // Under manual clutch, an engine dragged below stall speed chokes and loses torque; once stalled it produces none.
     const lugScale = this.stall.stalled ? 0 : manualClutch && rpm < stallRpm ? clamp(rpm / stallRpm, 0, 1) : 1;
+    const gearTorqueScale = this.luts.torqueByGear && this.gear > 0 ? this.luts.torqueByGear.evaluate(this.gear) : 1;
     const tCombustionMax =
-      (lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
+      (lugScale * gearTorqueScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     const tCombustionFull = plate * tCombustionMax;
     const tCombustion = tCombustionFull * sparkShare;
     const coastSpinScale = this.stall.stalled ? clamp(this.engineOmega / 30, 0, 1) : 1;

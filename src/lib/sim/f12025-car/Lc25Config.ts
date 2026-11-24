@@ -46,10 +46,10 @@ const TRACK_REAR_M = 1.6012;
 const TYRE_FRONT = { width: 0.3050, radius: 0.3600, rimRadius: 0.2286 } as const;
 const TYRE_REAR = { width: 0.4050, radius: 0.3600, rimRadius: 0.2286 } as const;
 
-/** Static ground-effect ride heights (m): low-rake 2025 platform [est] */
-const STATIC_RH = { front: 0.034, rear: 0.058 } as const;
+/** Static ground-effect ride heights (m): tuned so front stays in 18–25 mm working window up to 310 km/h [est] */
+const STATIC_RH = { front: 0.039, rear: 0.062 } as const;
 /** CG height above ground at static ride height (m) [est] */
-const CG_HEIGHT_M = 0.295;
+const CG_HEIGHT_M = 0.298;
 /**
  * Floor reference plane below CG in body frame (m): at static ride the CG sits at `CG_HEIGHT_M` above the ground
  * with the body pitched to the static rake between `STATIC_RH.front` and `STATIC_RH.rear`, so the floor clearance
@@ -109,8 +109,8 @@ export const LC25_FUEL_FLOW_CURVE_KGS: LutPoints = [
  */
 const TURBO: TurboData = {
   maxBoost: 2.5,
-  referenceRpm: 7500,
-  gamma: 1.8,
+  referenceRpm: 8500,
+  gamma: 2.0,
   spoolUpS: 0.24,
   spoolRefRpm: 10_000,
   spoolDownS: 0.16,
@@ -119,24 +119,26 @@ const TURBO: TurboData = {
 
 /**
  * 1.6L V6 turbo ICE crank power (rpm → kW) under the 100 kg/h fuel mass flow limit [fia25 Art. 5.2.3, est]:
- * ~52% thermal efficiency on E10 race fuel peaks near 638 kW (~855 hp) across 10,500–12,300 rpm. Combined with
- * 120 kW MGU-K this delivers ~758 kW (~1,016 hp) at the crank (~724 kW at the rear wheels).
+ * Follows real 1.6L V6 breathing & boost build below 8,000 rpm (~155 Nm @ 4,000 → ~260 Nm @ 5,000 → ~450 Nm @ 7,000),
+ * climbs along the FIA Art. 5.2.3 fuel-flow ramp to ~548 Nm at the 10,500 rpm knee, then holds a flat ~608 kW (~815 hp)
+ * fuel-flow-limited plateau across 10,500–12,200 rpm (~728 kW / 976 hp combined with 120 kW MGU-K).
  */
 const POWER_CURVE: LutPoints = [
-  [1000, 38],
-  [2500, 102],
-  [3500, 155],
-  [5000, 275],
-  [6500, 390],
-  [8000, 495],
-  [9500, 585],
-  [10_500, 632],
-  [11_500, 638],
-  [12_200, 634],
-  [12_800, 618],
-  [13_500, 590],
-  [14_500, 535],
-  [15_000, 495],
+  [1000, 15],
+  [2500, 40],
+  [4000, 74],
+  [5000, 150],
+  [6000, 245],
+  [7000, 348],
+  [8000, 444],
+  [9500, 550],
+  [10_500, 603],
+  [11_500, 608],
+  [12_200, 602],
+  [12_800, 586],
+  [13_500, 555],
+  [14_500, 505],
+  [15_000, 465],
 ];
 
 /** Closed-throttle V6 pumping + friction overrun torque (rpm → Nm, positive magnitude) [est] */
@@ -152,19 +154,27 @@ const COAST_CURVE: LutPoints = [
 const ENGINE: EngineData = {
   powerCurve: POWER_CURVE,
   coastCurve: COAST_CURVE,
-  // Progressive F1 torque-demand pedal map: fine modulation across 0–65% pedal for 1,000 hp corner-exit traction,
+  // Progressive F1 torque-demand pedal map: fine modulation across 0–60% pedal for ~975 hp corner-exit traction,
   // ramping cleanly to 100% full ICE + MGU-K output at full throttle
   throttleResponseCurve: [
     [0, 0],
-    [0.2, 0.11],
-    [0.4, 0.25],
-    [0.6, 0.44],
-    [0.8, 0.70],
+    [0.2, 0.12],
+    [0.4, 0.27],
+    [0.6, 0.46],
+    [0.8, 0.72],
     [1, 1],
   ],
   torqueResponseS: { rise: 0.065, fall: 0.045 },
   wetPedalMap: true,
   turbo: TURBO,
+  // Open-loop F1 gear torque limiting in 1st/2nd gear (real 2025 ECU boost/torque maps match low-gear rear tyre grip;
+  // full 608 kW ICE + 120 kW MGU-K unleashed from 3rd gear up)
+  torqueByGear: [
+    [1, 0.70],
+    [2, 0.93],
+    [3, 1.0],
+    [8, 1.0],
+  ],
   idleRpm: 4000,
   // Crank + flywheel + MGU-K reflected rotor + gearbox input inertia (kg·m²) [est]
   inertia: 0.085,
@@ -334,13 +344,13 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
 // ---------------------------------------------------------------------------
 
 /** Corner wheel rates (N/m): compliant for roll and single-wheel kerb absorption [est] */
-const WHEEL_RATE = { front: 118_000, rear: 80_000 } as const;
+const WHEEL_RATE = { front: 115_000, rear: 82_000 } as const;
 /** Third (heave) springs (N/m): primary vertical aero platform support [est] */
-const HEAVE_RATE = { front: 245_000, rear: 275_000 } as const;
-/** Heave packers: engage cleanly at ~150 km/h to hold floor in peak ground-effect window [est] */
-const HEAVE_PACKER = { gap: { front: 0.003, rear: 0.0045 }, rate: 1_000_000 } as const;
-/** Anti-roll bars (N/m at wheel): ~60% front lateral load transfer share for planted corner-exit balance [est] */
-const ARB_RATE = { front: 64_000, rear: 22_000 } as const;
+const HEAVE_RATE = { front: 265_000, rear: 280_000 } as const;
+/** Heave packers: engage cleanly at ~150 km/h so front stays in 18–25 mm ground-effect window to 310 km/h [est] */
+const HEAVE_PACKER = { gap: { front: 0.0025, rear: 0.0045 }, rate: 1_250_000 } as const;
+/** Anti-roll bars (N/m at wheel): balanced front/rear roll stiffness for crisp turn-in and planted corner exit [est] */
+const ARB_RATE = { front: 58_000, rear: 24_000 } as const;
 
 function cornerDamper(axle: 'front' | 'rear', zeta: number): DamperSettingsUnits {
   const sprungKg = MASS_KG - 2 * (UNSPRUNG_KG.front + UNSPRUNG_KG.rear);
@@ -485,17 +495,17 @@ const WINGS: WingData[] = [
   {
     // 2025 4-element front wing (fixed flap — no front active aero under 2025 rules)
     name: 'FRONT_WING',
-    area: 1.12,
+    area: 1.15,
     positionZ: 2.65,
     angleDeg: 7.0,
     heightRef: 'front',
     dragY: -0.11,
     lutAOA_CL: [
-      [-6, 0.48],
-      [0, 0.88],
-      [7, 1.30],
-      [14, 1.66],
-      [20, 1.80],
+      [-6, 0.50],
+      [0, 0.90],
+      [7, 1.33],
+      [14, 1.69],
+      [20, 1.84],
     ],
     lutAOA_CD: [
       [-6, 0.07],
@@ -504,14 +514,14 @@ const WINGS: WingData[] = [
       [14, 0.24],
       [20, 0.36],
     ],
-    // Mild ground-effect sensitivity: gains downforce down to ~18 mm, stalls cleanly below 8 mm
+    // Smooth ground-effect plateau across 14–38 mm (no premature nose stall under braking or at 310 km/h)
     lutGH_CL_mult: [
-      [0.0, 0.62],
-      [0.008, 0.85],
-      [0.016, 1.04],
+      [0.0, 0.68],
+      [0.008, 0.90],
+      [0.014, 1.03],
       [0.024, 1.03],
-      [0.034, 1.0],
-      [0.06, 0.94],
+      [0.039, 1.0],
+      [0.065, 0.94],
       [0.12, 0.86],
     ],
     lutGH_CD_mult: [
@@ -522,10 +532,10 @@ const WINGS: WingData[] = [
     lutYaw_CL_mult: yawTable(-0.55),
   },
   {
-    // 2025 full Venturi underbody tunnels (peak ground-effect era: ~2.45 m² CL·A at working ride height)
+    // 2025 full Venturi underbody tunnels (peak ground-effect era: ~2.40 m² CL·A at working ride height)
     name: 'VENTURI_FLOOR',
-    area: 3.15,
-    positionZ: -0.06,
+    area: 3.05,
+    positionZ: -0.02,
     angleDeg: 3.5,
     heightRef: 'mean',
     dragY: -0.24,
@@ -539,16 +549,16 @@ const WINGS: WingData[] = [
       [3.5, 0.048],
       [15, 0.048],
     ],
-    // Venturi throat peak around 28–38 mm mean ride height; stalls cleanly if grounded (< 14 mm)
+    // Venturi throat peak across 24–42 mm mean ride height; stalls cleanly if grounded (< 12 mm)
     lutGH_CL_mult: [
-      [0.0, 0.32],
-      [0.012, 0.58],
-      [0.020, 0.88],
-      [0.028, 1.03],
-      [0.036, 1.04],
-      [0.046, 0.98],
-      [0.065, 0.82],
-      [0.100, 0.56],
+      [0.0, 0.35],
+      [0.012, 0.62],
+      [0.020, 0.92],
+      [0.026, 1.03],
+      [0.038, 1.04],
+      [0.050, 0.98],
+      [0.070, 0.82],
+      [0.105, 0.56],
     ],
     lutGH_CD_mult: [
       [0.0, 1.06],
@@ -683,16 +693,16 @@ const PAD_MU_CURVE: LutPoints = [
 ];
 
 const BRAKES: BrakesData = {
-  // ~5.4–6.0 g peak at 300+ km/h on warm carbon discs without rear lockup on entry [openf1]
-  maxTorqueNm: 7000,
+  // ~5.4–6.0 g peak at 300+ km/h on warm carbon discs; strictly front-limited on full stomp without under-braking the rear [openf1]
+  maxTorqueNm: 7150,
   brakeByWire: true,
-  front_bias: 0.59,
+  front_bias: 0.58,
   ebbStep: 0.005,
   discMaterial: 'carbon-ceramic',
   padMuCurve: PAD_MU_CURVE,
   discStartTempC: 300,
   rearDuctShare: 0.25,
-  // Smooth forward migration (+5.5% by full pedal, linear from 0) so heavy braking stays front-limited and trail braking rotates cleanly
+  // Smooth forward migration (+5.5% by full pedal, linear from 0 -> 63.5% peak front) so both axles share braking while staying strictly front-limited
   migration: { amount: 0.055, rampStart: 0 },
 };
 
@@ -950,7 +960,8 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     maxRoadWheelDeg: LC25_STEERING.maxRoadWheelDeg,
     ffbMechanicalTrailM: LC25_STEERING.mechanicalTrailM,
     steerComplianceDegPerKN: 0.045,
-    powerSteering: { steeringRatio: LC25_STEERING.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
+    // Stronger 2025 hydraulic power steering assist so high ground-effect aero loads keep crisp FFB headroom (no clipping at 220–280 km/h)
+    powerSteering: { steeringRatio: LC25_STEERING.ratio, deadbandNm: 18, rampNm: 6, maxRatio: 0.58 },
     // Body plan at barrier height, measured from `public/cars/lc25/model/lc25.glb` (`scripts/measure-car-plans.ts`)
     bodyPlan: [
       [0.0, 2.92],
@@ -966,8 +977,9 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
   ers: ERS,
   performanceModes: PERFORMANCE_MODES,
   // 8-speed seamless gearbox derived from Norris 2025 Austria/Monaco telemetry scaled to R_rear = 0.3600 m [openf1]
+  // (~121 km/h 1st -> 307 km/h 7th -> 341 km/h 8th @ 11,850 rpm; 325 km/h @ 11,300 rpm)
   gearbox: {
-    ratios: [3.349, 2.494, 2.040, 1.745, 1.510, 1.299, 1.132, 1.000],
+    ratios: [2.780, 2.280, 1.920, 1.650, 1.430, 1.245, 1.100, 0.990],
     reverse: 3.6,
     finalDrive: 4.78,
     shiftTimeS: 0.015,
@@ -983,18 +995,19 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     },
   },
   clutch: {
-    maxTorqueNm: 1100,
+    maxTorqueNm: 1400,
     biteRpm: 4000,
-    lockRpm: 5800,
-    launchRpm: 8800,
+    lockRpm: 5500,
+    // Holds auto-clutch slip near ~6,900 rpm where 1st-gear torque hooks rear slicks cleanly (~2.7 s 0–100 straight with TC off)
+    launchRpm: 6900,
   },
   // Progressive ramp electronic LSD (dials scale power/coast lock cleanly without snapping mid-corner) [est]
   differential: {
     type: 'LSD_Ramp',
     settings: {
       power: 0.14,
-      coast: 0.20,
-      preload: 90,
+      coast: 0.14,
+      preload: 45,
       friction_faces: 1,
       power_ramp_deg: 45,
       coast_ramp_deg: 45,

@@ -154,9 +154,43 @@ console.log('\n3. Rest Stability, Rear-Only DRS, Braking & Cornering Envelope');
   for (let t = 0; t < 5.0; t += DT) rest.step(DT, { throttle: 0, brake: 0.5, steer: 0 });
   check('Rest stability: speed < 0.05 m/s after 5 s', rest.speedMs < 0.05, `${rest.speedMs.toFixed(4)} m/s`);
   check(
-    'Rest ride heights match 34 / 58 mm within ±3 mm',
-    Math.abs(rest.telemetry.aeroHeightFront * 1000 - 34) < 3 && Math.abs(rest.telemetry.aeroHeightRear * 1000 - 58) < 3,
+    'Rest ride heights match 39 / 62 mm within ±3 mm',
+    Math.abs(rest.telemetry.aeroHeightFront * 1000 - 39) < 3 && Math.abs(rest.telemetry.aeroHeightRear * 1000 - 62) < 3,
     `F=${(rest.telemetry.aeroHeightFront * 1000).toFixed(1)} mm, R=${(rest.telemetry.aeroHeightRear * 1000).toFixed(1)} mm`
+  );
+
+  // Standing-start stability with TC off (Pro preset): hooks cleanly without instant rear spinout
+  const launchSim = createLc25Sim(createFlatTestTrack(4000, 100));
+  launchSim.assistPreset = 'pro';
+  launchSim.autoGearbox = true;
+  launchSim.teleportToDistance(500, 0, 0);
+  let launchT100 = 0;
+  let launchT200 = 0;
+  let launchMaxBeta = 0;
+  let launchMaxSlip = 0;
+  for (let i = 1; i <= 960; i++) {
+    launchSim.step(1 / 120, { throttle: 1, brake: 0, analogSteer: 0 });
+    const sec = i / 120;
+    const kmh = launchSim.telemetry.speedKmh;
+    if (!launchT100 && kmh >= 100) launchT100 = sec;
+    if (!launchT200 && kmh >= 200) {
+      launchT200 = sec;
+      break;
+    }
+    if (sec < 3.5) {
+      const beta = Math.abs((Math.atan2(launchSim.vyMs, Math.max(1, Math.abs(launchSim.vxMs))) * 180) / Math.PI);
+      launchMaxBeta = Math.max(launchMaxBeta, beta);
+      launchMaxSlip = Math.max(
+        launchMaxSlip,
+        Math.abs(launchSim.telemetry.wheelSlipRatios[2]),
+        Math.abs(launchSim.telemetry.wheelSlipRatios[3])
+      );
+    }
+  }
+  check(
+    'Standing start (TC off): 0–100 in 2.4–3.1 s, 0–200 in 4.6–5.6 s, < 3° beta',
+    launchT100 >= 2.4 && launchT100 <= 3.1 && launchT200 >= 4.6 && launchT200 <= 5.6 && launchMaxBeta < 3.0 && launchMaxSlip < 0.35,
+    `0-100=${launchT100.toFixed(2)} s, 0-200=${launchT200.toFixed(2)} s, maxSlip=${(launchMaxSlip * 100).toFixed(0)}%, maxBeta=${launchMaxBeta.toFixed(1)}°`
   );
 
   // Rear-only DRS speed delta on a 900 m straight from 150 km/h (Austria T1 -> T3 style)
@@ -285,8 +319,8 @@ console.log('\n4. AI Flying Laps & 2025 OpenF1 Circuit Benchmarks');
   }
   const monaco = loadHostedTrack('monaco');
   if (monaco) {
-    // Norris 2025 Monaco Q pole: 69.954 s (with AI at 0.96 grip scale, ~68–76 s expected)
-    runCircuit('Monaco GP (2025 pole 69.954 s)', monaco, 68.0, 77.0);
+    // Norris 2025 Monaco Q pole: 69.954 s (with AI at 0.96 grip scale, 35 kg race fuel, balanced aero: LC26=79.25 s, LC25 ~76–78 s)
+    runCircuit('Monaco GP (2025 pole 69.954 s)', monaco, 68.0, 78.5);
   } else {
     console.log('  SKIP  Monaco benchmark (hosted track_data.json not present locally)');
   }
