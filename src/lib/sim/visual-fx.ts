@@ -43,6 +43,11 @@ import { tyreMarkLevel, tyreSmokeLevel } from './tyre-slide-fx';
 
 const MAX_SKID_SEGMENTS = 900; // Ring buffer of 4-vertex quad segments across all 4 wheels
 const MAX_PARTICLES = 360;
+/** Quality-scaled active puff particle budgets (caps overdraw in heavy multi-car wet races) */
+export const PARTICLE_BUDGET = { low: 120, medium: 220, high: MAX_PARTICLES } as const;
+/** Maximum distance (m) from the player at which opponents emit rooster-tail spray puffs */
+export const OPPONENT_SPRAY_DIST_M = { low: 90, medium: 125, high: 165 } as const;
+const OPPONENT_SPRAY_RATE = { low: 0.45, medium: 0.72, high: 1.0 } as const;
 /** Tyre smoke puffs per second from one wheel at full smoke (`tyre-slide-fx.ts`) */
 const SMOKE_PUFFS_PER_S = 40;
 /** Smoke builds within a few hundredths of a second of a lock-up and clears a little slower once the tyre grips again */
@@ -85,7 +90,11 @@ uniform float uLight;
 varying vec2 vUv;
 varying float vAlpha;
 varying vec3 vColor;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float hash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
 float noise(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
@@ -95,6 +104,7 @@ float noise(vec2 p) {
 void main() {
   vec2 q = vUv - 0.5;
   float r = length(q) * 2.0;
+  if (r >= 1.0 || vAlpha < 0.003) discard;
   float body = 1.0 - smoothstep(0.15, 1.0, r);
   float wisp = 0.55 * noise(q * 5.0 + 3.1) + 0.45 * noise(q * 11.0 - 1.7);
   float a = body * body * (0.45 + 0.75 * wisp) * vAlpha;
@@ -127,16 +137,26 @@ export class SimVisualFxManager {
   private skidColors: Float32Array;
   private skidMesh: THREE.Mesh;
   private skidHead = 0;
-  private lastWheelSkidPos: Array<THREE.Vector3 | null> = [null, null, null, null];
+  private lastWheelSkidPos: readonly THREE.Vector3[] = [
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+  ];
+  private lastWheelSkidValid: [boolean, boolean, boolean, boolean] = [false, false, false, false];
+  private readonly skidContactScratch = new THREE.Vector3();
 
-  // Instanced smoke / gravel particle state
+  // Instanced smoke / gravel / spray particle state (densely compacted: active slots are always [0, activeParticles))
   private particleMesh: THREE.InstancedMesh;
   private particleMat: THREE.ShaderMaterial;
   private puffAttr: THREE.InstancedBufferAttribute;
   private particles: ParticleInstance[] = [];
+  private activeParticles = 0;
   private particleCursor = 0;
+  private particleColorDirty = false;
   private emitTimer = 0;
-  private dummy = new THREE.Object3D();
+  private readonly peerFwd = new THREE.Vector3();
+  private readonly peerUp = new THREE.Vector3();
   /** Road wetness under the player's car (0..1): rear-wheel spray at speed */
   private wetness = 0;
   /** Per wheel (FR, FL, RR, RL): smoothed smoke level 0..1, puffs owed, and the contact's world velocity (smoothed) */
@@ -184,6 +204,23 @@ export class SimVisualFxManager {
 
   public setGraphicsQuality(quality: 'low' | 'medium' | 'high'): void {
     this.graphicsQuality = quality;
+    const budget = PARTICLE_BUDGET[quality];
+    if (this.activeParticles > budget) {
+      for (let i = budget; i < this.activeParticles; i++) this.particles[i].active = false;
+      this.activeParticles = budget;
+      this.particleMesh.count = this.activeParticles;
+      this.particleMesh.visible = this.activeParticles > 0;
+    }
+  }
+
+  /** Number of active smoke/spray/dust particles currently simulated and submitted to the GPU */
+  public get activeParticleCount(): number {
+    return this.activeParticles;
+  }
+
+  /** Current InstancedMesh draw count submitted for puff particles */
+  public get particleDrawCount(): number {
+    return this.particleMesh.count;
   }
 
   /**
@@ -289,8 +326,13 @@ export class SimVisualFxManager {
     this.particleMesh = new THREE.InstancedMesh(puffGeom, this.particleMat, MAX_PARTICLES);
     this.particleMesh.frustumCulled = false;
     this.particleMesh.renderOrder = 2;
+    this.particleMesh.count = 0;
+    this.particleMesh.visible = false;
     this.particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
+    const initMat = new THREE.Matrix4().makeScale(0.001, 0.001, 0.001);
+    initMat.setPosition(0, -1000, 0);
+    const defaultColor = new THREE.Color(0xe2e8f0);
     for (let i = 0; i < MAX_PARTICLES; i++) {
       this.particles.push({
         active: false,
@@ -305,11 +347,8 @@ export class SimVisualFxManager {
         spinRate: 0,
         color: new THREE.Color(0xe2e8f0),
       });
-      this.dummy.position.set(0, -1000, 0);
-      this.dummy.scale.setScalar(0.001);
-      this.dummy.updateMatrix();
-      this.particleMesh.setMatrixAt(i, this.dummy.matrix);
-      this.particleMesh.setColorAt(i, new THREE.Color(0xe2e8f0));
+      this.particleMesh.setMatrixAt(i, initMat);
+      this.particleMesh.setColorAt(i, defaultColor);
     }
     this.group.add(this.particleMesh);
   }
@@ -367,7 +406,7 @@ export class SimVisualFxManager {
     if (emit) this.emitFromCar(dt, carWorldQuat, carSpeedMs, wheels);
     else {
       this.emitTimer = 0;
-      this.lastWheelSkidPos.fill(null);
+      this.lastWheelSkidValid.fill(false);
       this.smokeLevel.fill(0);
       this.markLevel.fill(0);
       this.smokeOwed.fill(0);
@@ -411,14 +450,16 @@ export class SimVisualFxManager {
       const isSkidding = carSpeedMs > 2.5 && w.fzN > 250 && (isGrass || markLevel > 0.04);
 
       if (isSkidding) {
-        const contactPt = new THREE.Vector3(
+        const contactPt = this.skidContactScratch.set(
           w.worldPos.x,
           w.zRoad + 0.035,
           w.worldPos.z
         );
         const prevPt = this.lastWheelSkidPos[wIdx];
+        const hasPrev = this.lastWheelSkidValid[wIdx];
+        const distSq = hasPrev ? prevPt.distanceToSquared(contactPt) : 0;
 
-        if (prevPt && prevPt.distanceToSquared(contactPt) > 0.12 && prevPt.distanceToSquared(contactPt) < 16.0) {
+        if (hasPrev && distSq > 0.12 && distSq < 16.0) {
           this.appendSkidQuad(
             prevPt,
             contactPt,
@@ -427,12 +468,13 @@ export class SimVisualFxManager {
             isGrass ? Math.min(0.85, (w.combinedSlipNorm - 0.62) * 1.1) : 0.12 + 0.73 * markLevel,
             isGrass
           );
-          this.lastWheelSkidPos[wIdx] = contactPt;
-        } else if (!prevPt || prevPt.distanceToSquared(contactPt) >= 16.0) {
-          this.lastWheelSkidPos[wIdx] = contactPt;
+          prevPt.copy(contactPt);
+        } else if (!hasPrev || distSq >= 16.0) {
+          prevPt.copy(contactPt);
+          this.lastWheelSkidValid[wIdx] = true;
         }
       } else {
-        this.lastWheelSkidPos[wIdx] = null;
+        this.lastWheelSkidValid[wIdx] = false;
       }
     }
 
@@ -647,8 +689,15 @@ export class SimVisualFxManager {
     colorHex: number,
     alpha: number
   ): void {
-    const p = this.particles[this.particleCursor % MAX_PARTICLES];
-    this.particleCursor++;
+    const budget = PARTICLE_BUDGET[this.graphicsQuality];
+    let idx: number;
+    if (this.activeParticles < budget) {
+      idx = this.activeParticles++;
+    } else {
+      idx = this.particleCursor % budget;
+      this.particleCursor++;
+    }
+    const p = this.particles[idx];
 
     p.active = true;
     p.age = 0;
@@ -665,48 +714,66 @@ export class SimVisualFxManager {
     p.spin = Math.random() * Math.PI * 2;
     p.spinRate = (Math.random() - 0.5) * 1.2;
     p.color.setHex(colorHex);
+    this.particleMesh.setColorAt(idx, p.color);
+    this.particleColorDirty = true;
   }
 
   private stepParticles(dt: number): void {
-    let anyUpdated = false;
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      const p = this.particles[i];
-      if (!p.active) continue;
-      anyUpdated = true;
+    const prevCount = this.particleMesh.count;
+    if (this.activeParticles === 0) {
+      if (prevCount !== 0) {
+        this.particleMesh.count = 0;
+        this.particleMesh.visible = false;
+      }
+      return;
+    }
 
+    const matArr = this.particleMesh.instanceMatrix.array as Float32Array;
+    const drag = Math.max(0, 1.0 - 2.2 * dt);
+    let i = 0;
+    while (i < this.activeParticles) {
+      const p = this.particles[i];
       p.age += dt;
       if (p.age >= p.maxAge) {
         p.active = false;
-        this.dummy.position.set(0, -1000, 0);
-        this.dummy.scale.setScalar(0.001);
-        this.dummy.updateMatrix();
-        this.particleMesh.setMatrixAt(i, this.dummy.matrix);
-        this.puffAttr.setX(i, 0);
+        const last = --this.activeParticles;
+        if (i < last) {
+          const moved = this.particles[last];
+          this.particles[i] = moved;
+          this.particles[last] = p;
+          this.particleMesh.setColorAt(i, moved.color);
+          this.particleColorDirty = true;
+        }
         continue;
       }
 
       const lifeT = p.age / p.maxAge;
       p.pos.addScaledVector(p.vel, dt);
-      p.vel.multiplyScalar(Math.max(0, 1.0 - 2.2 * dt));
+      p.vel.multiplyScalar(drag);
 
       // Grows fast and then drifts out; fades in over the first 12 % of its life and thins out to nothing
       const grow = 1 - (1 - lifeT) * (1 - lifeT);
-      const s = THREE.MathUtils.lerp(p.scale0, p.scale1, grow);
-      this.dummy.position.copy(p.pos);
-      this.dummy.rotation.set(0, 0, 0);
-      this.dummy.scale.setScalar(Math.max(0.01, s));
-      this.dummy.updateMatrix();
-      this.particleMesh.setMatrixAt(i, this.dummy.matrix);
-      this.particleMesh.setColorAt(i, p.color);
+      const s = Math.max(0.01, THREE.MathUtils.lerp(p.scale0, p.scale1, grow));
+      const off = i * 16;
+      matArr[off] = s;
+      matArr[off + 5] = s;
+      matArr[off + 10] = s;
+      matArr[off + 12] = p.pos.x;
+      matArr[off + 13] = p.pos.y;
+      matArr[off + 14] = p.pos.z;
       p.spin += p.spinRate * dt;
       this.puffAttr.setXY(i, p.alpha * THREE.MathUtils.smoothstep(lifeT, 0, 0.12) * Math.pow(1 - lifeT, 1.5), p.spin);
+      i++;
     }
 
-    if (anyUpdated) {
+    this.particleMesh.count = this.activeParticles;
+    this.particleMesh.visible = this.activeParticles > 0;
+    if (this.activeParticles > 0) {
       this.particleMesh.instanceMatrix.needsUpdate = true;
       this.puffAttr.needsUpdate = true;
-      if (this.particleMesh.instanceColor) {
+      if (this.particleColorDirty && this.particleMesh.instanceColor) {
         this.particleMesh.instanceColor.needsUpdate = true;
+        this.particleColorDirty = false;
       }
     }
   }
@@ -913,12 +980,14 @@ export class SimVisualFxManager {
       // On Low, wheels.ground is already null so seatContactShadow uses physics contact height with zero raycasts
       seatContactShadow(carRig.root, wheels);
 
-      // Opponent car rooster-tail water spray plume in wet conditions
+      // Opponent car rooster-tail water spray plume in wet conditions (distance-culled and quality-scaled)
       if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {
+        const maxDist = OPPONENT_SPRAY_DIST_M[this.graphicsQuality];
+        const nearEnough = !this.playerPosValid || peer.position.distanceToSquared(this.playerPos) <= maxDist * maxDist;
         const peerSpeedMs = peer.speedKmh / 3.6;
-        if (Math.random() < this.wetness * Math.min(1, peerSpeedMs / 48) * 0.65) {
-          const peerFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(peer.quaternion);
-          const peerUp = new THREE.Vector3(0, 1, 0).applyQuaternion(peer.quaternion);
+        if (nearEnough && Math.random() < this.wetness * Math.min(1, peerSpeedMs / 48) * 0.65 * OPPONENT_SPRAY_RATE[this.graphicsQuality]) {
+          const peerFwd = this.peerFwd.set(0, 0, 1).applyQuaternion(peer.quaternion);
+          const peerUp = this.peerUp.set(0, 1, 0).applyQuaternion(peer.quaternion);
           const sideJitter = (Math.random() - 0.5) * 1.3;
           this.spawnParticle(
             peer.position.x - peerFwd.x * 2.1 + peerFwd.z * sideJitter,

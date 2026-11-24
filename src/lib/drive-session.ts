@@ -1722,6 +1722,7 @@ export class DriveSession {
       applyGraphicsQuality(renderer, postFx, env, plan);
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
+      rainFx.setQuality(g.quality, plan.renderScale);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;

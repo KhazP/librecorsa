@@ -1,18 +1,38 @@
 import * as THREE from "three";
 import { anyCarById, type CarClassId, type CarId } from "@/lib/cars/car-registry";
+import type { GraphicsQuality } from "@/lib/settings/player-settings";
+import { DETAIL_LAYER } from "@/lib/render/layers";
 
 /**
- * Falling rain around the camera: one LineSegments draw call of up to 6000 streaks, animated entirely on the GPU
- * (each streak's position wraps through a box that follows the camera), so the CPU cost per frame is a few uniform
- * writes. The streak count follows the rain intensity (draw range), streaks lean against the camera's motion so rain
- * at 250 km/h comes at the screen, and closed-cockpit cars clip streaks against their cabin volume so rain never
- * falls inside enclosed interiors while remaining visible right outside the windscreen.
+ * Falling rain around the camera: one LineSegments draw call of up to 3200 streaks on `DETAIL_LAYER` (main view only,
+ * never redrawn into the car reflection cubemap or mirrors), animated entirely on the GPU (each streak wraps through a
+ * tight camera-following box so fewer streaks maintain high visual density). Streak count scales with rain intensity,
+ * graphics quality, and adaptive render-scale LOD; closed-cockpit cars clip streaks against their cabin volume so rain
+ * never falls inside enclosed interiors while remaining visible right outside the windscreen.
  */
 
-const MAX_STREAKS = 6000;
-/** Box of rain around the camera (m): wide enough for the chase cams, short enough to stay dense */
-const BOX = new THREE.Vector3(44, 22, 44);
+export const RAIN_STREAK_BUDGET: Readonly<Record<GraphicsQuality, number>> = {
+  low: 1000,
+  medium: 2000,
+  high: 3200,
+};
+const MAX_STREAKS = RAIN_STREAK_BUDGET.high;
+/** Box of rain around the camera (m): compact around the visible fade sphere so every streak counts */
+const BOX = new THREE.Vector3(34, 18, 34);
 const FALL_MS = 9;
+
+/** Computes the active rain streak count for an intensity (0..1), graphics quality tier, and adaptive LOD scale (0.5..1) */
+export function rainStreakCountFor(
+  effectiveIntensity: number,
+  quality: GraphicsQuality = "high",
+  lodScale = 1
+): number {
+  const r = THREE.MathUtils.clamp(effectiveIntensity, 0, 1);
+  if (r <= 0.001) return 0;
+  const budget = RAIN_STREAK_BUDGET[quality] ?? MAX_STREAKS;
+  const scale = THREE.MathUtils.clamp(Number.isFinite(lodScale) ? lodScale : 1, 0.5, 1);
+  return Math.min(MAX_STREAKS, Math.round(budget * scale * Math.pow(r, 0.8)));
+}
 
 /** Longest the rain clock runs before it must wrap (s): float32 time keeps sub-millisecond steps up to here */
 const RAIN_CLOCK_MAX_S = 4 * 3600;
@@ -247,6 +267,14 @@ void main() {
   vec3 dir = rel / speed;
   vec3 pTail = pHead + dir * uLength * clamp(speed / 20.0, 0.6, 3.0);
 
+  // Reject streaks whose entire span sits outside the outer fade sphere before rasterization (both vertices agree)
+  float midDist = length(0.5 * (pHead + pTail) - uCamPos);
+  if (midDist > 0.5 * uBox.x + 1.5) {
+    vAlpha = 0.0;
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+
   float t0 = 0.0;
   float t1 = 1.0;
   if (uCockpitEnabled > 0.5) {
@@ -314,7 +342,9 @@ uniform vec3 uColor;
 uniform float uOpacity;
 varying float vAlpha;
 void main() {
-  gl_FragColor = vec4(uColor, uOpacity * vAlpha);
+  float a = uOpacity * vAlpha;
+  if (a < 0.003) discard;
+  gl_FragColor = vec4(uColor, a);
 }
 `;
 
@@ -402,17 +432,23 @@ float hash21(vec2 p) {
 void main() {
   vec2 centered = vUv - 0.5;
   float dist = length(centered);
-  // Radial airflow blows droplets outward at speed; gravity pulls them down at low speed
-  vec2 radialDir = dist > 0.001 ? centered / dist : vec2(0.0, 1.0);
-  vec2 flowUv = vUv - radialDir * (uTime * 0.18 * uSpeedNorm) + vec2(0.0, uTime * 0.06 * (1.0 - 0.7 * uSpeedNorm));
-  vec2 cell = floor(flowUv * vec2(28.0, 18.0));
-  vec2 local = fract(flowUv * vec2(28.0, 18.0)) - 0.5;
-  float h = hash21(cell);
-  float bead = smoothstep(0.28, 0.06, length(local - vec2(h - 0.5, fract(h * 17.3) - 0.5) * 0.45));
-  float activeBead = bead * step(1.0 - uDroplets * 0.85, h);
+  float activeBead = 0.0;
+  if (uDroplets > 0.01) {
+    // Radial airflow blows droplets outward at speed; gravity pulls them down at low speed
+    vec2 radialDir = dist > 0.001 ? centered / dist : vec2(0.0, 1.0);
+    vec2 flowUv = vUv - radialDir * (uTime * 0.18 * uSpeedNorm) + vec2(0.0, uTime * 0.06 * (1.0 - 0.7 * uSpeedNorm));
+    vec2 grid = flowUv * vec2(28.0, 18.0);
+    vec2 cell = floor(grid);
+    vec2 local = fract(grid) - 0.5;
+    float h = hash21(cell);
+    if (h >= 1.0 - uDroplets * 0.85) {
+      activeBead = smoothstep(0.28, 0.06, length(local - vec2(h - 0.5, fract(h * 17.3) - 0.5) * 0.45));
+    }
+  }
   // Edge vignette mist from rooster-tail spray wake
   float mist = uSpray * smoothstep(0.18, 0.72, dist) * 0.22;
   float alpha = clamp(activeBead * 0.22 * uDroplets + mist, 0.0, 0.35);
+  if (alpha < 0.003) discard;
   gl_FragColor = vec4(uTint, alpha);
 }
 `;
@@ -420,6 +456,8 @@ void main() {
 export interface RainFx {
   readonly object: THREE.LineSegments;
   readonly windscreenState: WindscreenWetState;
+  /** Sets the graphics tier and adaptive render-scale LOD (0.5..1) that cap active rain streak draw count */
+  setQuality(quality: GraphicsQuality, lodScale?: number): void;
   /**
    * Configures enclosed-cockpit streak clipping for the focused car this frame.
    * Pass `null` for open-cockpit cars (F1) or when no car cabin should occlude rain.
@@ -497,6 +535,8 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   object.frustumCulled = false;
   object.renderOrder = 1001;
   object.visible = false;
+  // View-only detail layer: drawn by the main and XR cameras, skipped by the car reflection probe and mirrors
+  object.layers.set(DETAIL_LAYER);
   scene.add(object);
 
   const visorGeo = new THREE.PlaneGeometry(2, 2);
@@ -532,11 +572,17 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   const cockpitWindscreen = material.uniforms.uCockpitWindscreen.value as THREE.Vector4;
   const visorTint = visorMat.uniforms.uTint.value as THREE.Color;
   const baseColor = new THREE.Color(0xb8c2cc);
+  let qualityNow: GraphicsQuality = "high";
+  let lodScaleNow = 1;
   let time = 0;
 
   return {
     object,
     windscreenState,
+    setQuality(quality, lodScale = 1) {
+      qualityNow = quality;
+      lodScaleNow = THREE.MathUtils.clamp(Number.isFinite(lodScale) ? lodScale : 1, 0.5, 1);
+    },
     setCockpitOcclusion(volume, chassisMatrixWorld) {
       if (!volume || !chassisMatrixWorld || Math.abs(chassisMatrixWorld.determinant()) < 1e-12) {
         material.uniforms.uCockpitEnabled.value = 0;
@@ -563,7 +609,8 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       time += dt;
 
       const showVisor = windscreenState.dropletDensity > 0.015 || spray > 0.02;
-      const streaksShown = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8)) > 0;
+      const count = rainStreakCountFor(effectiveIntensity, qualityNow, lodScaleNow);
+      const streaksShown = count > 0;
       // The streak phase is time × a per-drop speed, so wrapping the clock moves every drop at once. Wrap it only
       // while nothing is drawn; the hard limit (float precision in the shader) is only reached by four hours of
       // unbroken rain
@@ -577,8 +624,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
         visorTint.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.45 + 0.55 * brightness, 0.25, 1));
       }
 
-      const count = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8));
-      object.visible = count > 0;
+      object.visible = streaksShown;
       if (!object.visible) return;
       material.uniforms.uTime.value = time;
       camera.getWorldPosition(camPos);
