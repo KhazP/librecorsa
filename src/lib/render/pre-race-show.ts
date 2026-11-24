@@ -197,6 +197,11 @@ export class PreRaceShowDirector {
     else if (race) this.start(this.played.has("qualifying") ? "grid" : "race", f, ctx);
   }
 
+  /** The career round armed (null outside the career), for what follows the race: the full-screen podium's names */
+  get context(): ShowContext | null {
+    return this.ctx;
+  }
+
   /** A race show is still to come this round: the drive builds the grid for it */
   get wantsGrid(): boolean {
     return this.ctx !== null && !this.played.has("race");
