@@ -241,6 +241,9 @@ console.log("Dampers");
     const rollShare = (pct: number) => {
       const car = withSetup(v, Object.fromEntries(DAMPER_IDS.map((id) => [id, pct])));
       car.resetToStartGrid(true);
+      // At 270 km/h for every car, the speed these margins were set at: a flying start now hands a car over at no
+      // more than its own top speed (the Scirocco at 212 km/h), where its roll differs by too little to read
+      car.teleportToDistance(1000, 270 / 3.6);
       for (let i = 0; i < 60; i++) car.step(1 / 120, { throttle: 0.25 });
       const r0 = frontRoll(car);
       let early = 0;
