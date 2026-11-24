@@ -391,6 +391,10 @@
       "label": "Avant-course en carrière",
       "hint": "Avant chaque manche de carrière : circuit, météo, pneus et grille en musique. Space passe, Enter lance."
     },
+    "fullPodium": {
+      "label": "Podium plein écran",
+      "hint": "Après une course contre l’IA : les trois premiers sur le podium, le top 10 et le tour le plus rapide, avant les résultats. Toute touche le ferme."
+    },
     "boardWidget": {
       "label": "Classement",
       "options": {

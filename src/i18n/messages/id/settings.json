@@ -391,6 +391,10 @@
       "label": "Tayangan prabalapan karier",
       "hint": "Sebelum tiap ronde karier: sirkuit, cuaca, ban, dan grid dengan musik. Space untuk lewati, Enter untuk mulai."
     },
+    "fullPodium": {
+      "label": "Podium layar penuh",
+      "hint": "Setelah balapan AI: tiga besar di podium, sepuluh besar, dan lap tercepat, sebelum hasil. Tombol apa pun menutupnya."
+    },
     "boardWidget": {
       "label": "Papan waktu lap",
       "options": {

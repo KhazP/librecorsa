@@ -391,6 +391,10 @@
       "label": "Previa en modo trayectoria",
       "hint": "Antes de cada ronda de trayectoria: circuito, clima, neumáticos y parrilla con música. Space la salta, Enter inicia."
     },
+    "fullPodium": {
+      "label": "Podio a pantalla completa",
+      "hint": "Tras una carrera con IA: los tres primeros en el podio, los diez primeros y la vuelta más rápida, antes de los resultados. Cualquier tecla lo cierra."
+    },
     "boardWidget": {
       "label": "Clasificación de vueltas",
       "options": {

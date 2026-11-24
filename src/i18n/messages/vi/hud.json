@@ -460,6 +460,20 @@
     "third": "Hạng 3",
     "skip": "Bỏ qua"
   },
+  "podiumBoard": {
+    "label": "Bục vinh quang",
+    "close": "Đóng",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Xếp hạng",
+    "pointsScored": "{count, plural, other {+# điểm}}",
+    "noPoints": "Không có điểm",
+    "championshipPlace": "Xếp hạng giải P{position}",
+    "placesUp": "{count, plural, other {Tăng # bậc}}",
+    "placesDown": "{count, plural, other {Tụt # bậc}}",
+    "pointsTotal": "{count, plural, other {Tổng # điểm}}"
+  },
   "qualifyingHud": {
     "clock": "Phân hạng",
     "lastLap": "Vòng cuối",

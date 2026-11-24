@@ -100,6 +100,7 @@ import type { BoardWidgetMode, HudPreset } from "@/lib/settings/player-settings"
 import { showsPhoneHud } from "@/lib/settings/hud-layouts";
 import { BoardWidget, useLargeScreen } from "./hud/BoardWidget";
 import { PodiumOverlay } from "./hud/PodiumOverlay";
+import { PodiumBoard } from "./hud/PodiumBoard";
 import type { NextRaceProps } from "./hud/RaceResults";
 import type { PodiumUi } from "@/lib/render/podium-shot";
 import type { PreRaceShowUi } from "@/lib/render/pre-race-show";
@@ -147,6 +148,7 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
 
 const noTelemetrySubscribe = () => () => {};
+const noPodiumTime = () => 0;
 
 export interface TelemetrySource {
   subscribe: (listener: () => void) => () => void;
@@ -267,7 +269,14 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onBackToLobby?: () => void;
   backToLobbyLabel?: string;
   /** polish:B after the flag: the podium shot (before the table), the player's last races, the next open race */
-  raceEnd?: { podium: PodiumUi; onSkipPodium: () => void; history: readonly RaceRecord[]; nextRace?: NextRaceProps };
+  raceEnd?: {
+    podium: PodiumUi;
+    onSkipPodium: () => void;
+    /** Seconds the full-screen podium has been up */
+    podiumTimeS?: () => number;
+    history: readonly RaceRecord[];
+    nextRace?: NextRaceProps;
+  };
   /** The career's pre-race show: its scenes, its clock, Skip and Start */
   preRaceShow?: { ui: PreRaceShowUi; timeS: () => number; onSkip: () => void; onStart: () => void };
   /** Instant replay in progress: only the transport bar shows */
@@ -442,7 +451,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const uiZoom = useUiZoom();
   // polish:B the podium shot comes first: the table waits for it, and the HUD gives it the screen
   const podiumStage = props.raceEnd?.podium.stage;
-  const podiumUp = podiumStage === "playing";
+  // … then, after an offline AI race, the full-screen podium
+  const podiumUp = podiumStage === "playing" || podiumStage === "board";
   // The pre-race show has the whole screen while it plays
   const showUp = props.preRaceShow?.ui.stage === "playing";
   const showResults = raceState(race).classified && !props.resultsClosed && podiumStage !== "waiting" && !podiumUp;
@@ -1073,8 +1083,17 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         trackInfo={trackInfo}
       />
     ) : null}
-    {podiumUp && !paused && props.raceEnd ? (
+    {podiumStage === "playing" && !paused && props.raceEnd ? (
       <PodiumOverlay rows={props.raceEnd.podium.rows} trackName={trackInfo.name} onSkip={props.raceEnd.onSkipPodium} />
+    ) : null}
+    {podiumStage === "board" && !paused && props.raceEnd && race ? (
+      <PodiumBoard
+        race={race}
+        context={props.raceEnd.podium.context ?? null}
+        trackName={trackInfo.name}
+        timeS={props.raceEnd.podiumTimeS ?? noPodiumTime}
+        onClose={props.raceEnd.onSkipPodium}
+      />
     ) : null}
 
     <CameraToast

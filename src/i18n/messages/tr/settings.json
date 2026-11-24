@@ -391,6 +391,10 @@
       "label": "Kariyer yarış öncesi yayını",
       "hint": "Her kariyer ayağından önce müzik eşliğinde pist, hava durumu, lastikler ve grid. Space atlar, Enter başlatır."
     },
+    "fullPodium": {
+      "label": "Tam ekran podyum",
+      "hint": "Yapay zeka yarışından sonra, sonuçlardan önce: podyumdaki ilk üç, ilk on ve en hızlı tur. Herhangi bir tuş kapatır."
+    },
     "boardWidget": {
       "label": "Tur tablosu",
       "options": {

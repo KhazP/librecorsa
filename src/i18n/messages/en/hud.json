@@ -460,6 +460,20 @@
     "third": "3rd",
     "skip": "Skip"
   },
+  "podiumBoard": {
+    "label": "Podium",
+    "close": "Close",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Classification",
+    "pointsScored": "{count, plural, one {+# pt} other {+# pts}}",
+    "noPoints": "No points",
+    "championshipPlace": "Championship P{position}",
+    "placesUp": "{count, plural, one {Up # place} other {Up # places}}",
+    "placesDown": "{count, plural, one {Down # place} other {Down # places}}",
+    "pointsTotal": "{count, plural, one {# pt in total} other {# pts in total}}"
+  },
   "qualifyingHud": {
     "clock": "Qualifying",
     "lastLap": "Last lap",

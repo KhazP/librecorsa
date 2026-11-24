@@ -391,6 +391,10 @@
       "label": "Pré-corrida da carreira",
       "hint": "Antes de cada etapa da carreira: circuito, clima, pneus e grid com música. Space pula, Enter inicia."
     },
+    "fullPodium": {
+      "label": "Pódio em tela cheia",
+      "hint": "Depois de uma corrida com IA: os três primeiros no pódio, os dez primeiros e a volta mais rápida, antes dos resultados. Qualquer tecla fecha."
+    },
     "boardWidget": {
       "label": "Ranking de tempos",
       "options": {

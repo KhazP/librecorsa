@@ -460,6 +460,20 @@
     "third": "3°",
     "skip": "Salta"
   },
+  "podiumBoard": {
+    "label": "Podio",
+    "close": "Chiudi",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Classifica",
+    "pointsScored": "{count, plural, one {+# pt} other {+# pt}}",
+    "noPoints": "Nessun punto",
+    "championshipPlace": "Campionato P{position}",
+    "placesUp": "{count, plural, one {# posizione guadagnata} other {# posizioni guadagnate}}",
+    "placesDown": "{count, plural, one {# posizione persa} other {# posizioni perse}}",
+    "pointsTotal": "{count, plural, one {# pt in totale} other {# pt in totale}}"
+  },
   "qualifyingHud": {
     "clock": "Qualifica",
     "lastLap": "Ultimo giro",
