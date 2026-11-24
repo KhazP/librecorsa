@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import { SdParams, sdUnitToSI } from "../lib/sd-params";
 import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
-import { findCarLicence, readLicenceEntry, readLicenceText, shareable } from "../cars/sd-licence";
+import { carLicence, pinnedCar } from "../mods/importers/sd-car";
+import { isShareable, readLicenceEntry } from "../mods/lib/licences";
 import { readPins, SD_CACHE_DIR } from "../cars/sd-fetch";
 import { fitAero, withAero } from "../mods/lib/aero-fit";
 import { driveSanity } from "../mods/lib/car-sanity";
@@ -190,22 +191,60 @@ check("on the 2026 car: no hybrid, no DRS, no active aero", f1.hasErs === false 
 // ---------------------------------------------------------------------------------------------------------------------
 // Licences
 // ---------------------------------------------------------------------------------------------------------------------
+// (the reader itself: verify-licences.ts)
 const FAL = "Copyleft: this work of art is free, you can redistribute it and/or modify it according to terms of the Free Art license.\nYou will find a specimen of this license on the site Copyleft Attitude http://artlibre.org";
-check("Speed Dreams' readme: the Free Art License", readLicenceText(FAL).licences.join() === "FAL-1.3" && shareable(readLicenceText(FAL)));
-check("the XML's header: GPL-2.0-or-later", readLicenceText("either version 2 of the License, or (at your option) any later version. GNU General Public License").licences.join() === "GPL-2.0-or-later");
-check('"Creative Commons" with no licence named, or parts owned by others: unclear', !shareable(readLicenceText("Everything is available through Creative Commons license. The logos are property of their owners.")));
-check("all rights reserved, personal use, no derivatives: refused", !shareable(readLicenceText("All rights reserved")) && !shareable(readLicenceText("For personal use only")) && !shareable(readLicenceText("CC BY-ND 4.0")));
-check("the official list: FAL clear; \"GNU Public License (v2?)\" and an asterisk unclear", shareable(readLicenceEntry("Free Art License")) && !shareable(readLicenceEntry("GNU Public License (v2?)")) && !shareable(readLicenceEntry("GPL 2.0, CC-BY-SA 3.0, Free Art License*")) && shareable(readLicenceEntry("Free Art License, CC-BY 4.0")));
+check("the official list: FAL clear; \"GNU Public License (v2?)\", \"CC-BY\" and an asterisk unclear", isShareable(readLicenceEntry("Free Art License")) && !isShareable(readLicenceEntry("GNU Public License (v2?)")) && !isShareable(readLicenceEntry("CC-BY, Free Art License")) && !isShareable(readLicenceEntry("GPL 2.0, CC-BY-SA 3.0, Free Art License*")) && isShareable(readLicenceEntry("Free Art License, CC-BY 4.0")));
 {
-  const d = join(tmp, "licence", "test-car");
-  mkdirSync(d, { recursive: true });
-  writeFileSync(join(d, "test-car.xml"), carXml());
-  check("no readme and not in the official list: no licence, refused", !shareable(findCarLicence(d, "test-car", []).reading) && findCarLicence(d, "test-car", []).source === "none");
-  check("no readme, in the official list: the list's licence", findCarLicence(d, "test-car", [], "Free Art License").source === "database" && shareable(findCarLicence(d, "test-car", [], "Free Art License").reading));
-  writeFileSync(join(d, "readme.txt"), `Copyright 2020 A. Modeller\n\n${FAL}`);
-  writeFileSync(join(d, "test-car-blue-readme.txt"), "My livery, available through Creative Commons license.");
-  const l = findCarLicence(d, "test-car", ["blue"], "GNU Public License (v2?)");
-  check("the car's readme before the list; its data's GPL header; a livery's own readme", l.source === "readme" && shareable(l.reading) && l.data?.licences.join() === "GPL-2.0-or-later" && !!l.liveries.blue && !shareable(l.liveries.blue.reading));
+  const pinned = Object.entries(readPins().cars).find(([, p]) => p.commit && p.license === "Free Art License")!;
+  const [pinName, pin] = pinned;
+  const carDir = (name: string, files: Record<string, string> = {}) => {
+    const d = join(tmp, "licence", Math.random().toString(36).slice(2), name);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, `${name}.xml`), carXml());
+    for (const [f, t] of Object.entries(files)) writeFileSync(join(d, f), t);
+    return d;
+  };
+  const record = (d: string, car: string, over: Partial<typeof pin> = {}) => writeFileSync(join(d, ".sd-source.json"), JSON.stringify({ car, pinned: { ...pin, ...over }, url: "x" }));
+
+  const none = carDir("test-car");
+  check("no readme, not fetched: no licence, refused", !isShareable(carLicence(none, "test-car", [], { pin: pinnedCar(none, "test-car") }).reading));
+  const local = carDir(pinName);
+  check("a local folder named after a pinned car takes nothing from the list", pinnedCar(local, pinName) === null && !isShareable(carLicence(local, pinName, [], { pin: pinnedCar(local, pinName) }).reading));
+  const fetched = carDir(pinName);
+  record(fetched, pinName);
+  const viaList = carLicence(fetched, pinName, [], { pin: pinnedCar(fetched, pinName) });
+  check("fetched at its pin, no readme: the list's licence", viaList.fromList && isShareable(viaList.reading) && viaList.reading.licences.includes("FAL-1.3"), viaList.reading.problems.join("; "));
+  const moved = carDir(pinName);
+  record(moved, pinName, { commit: "0".repeat(40) });
+  check("…not when its record names another revision", pinnedCar(moved, pinName) === null);
+  const ownReadme = carDir(pinName, { "readme.txt": "Have fun with it!" });
+  record(ownReadme, pinName);
+  check("…nor beside a statement file of its own, whatever it says", !isShareable(carLicence(ownReadme, pinName, [], { pin: pinnedCar(ownReadme, pinName) }).reading));
+
+  const ids = ["blue", "red", "red-stripe", "test"];
+  const d = carDir("test-car", {
+    "readme.txt": `Copyright 2020 A. Modeller\n\n${FAL}`,
+    "test-car-readme.txt": "Copyright 2021 B. Modeller\nFree Art License 1.3",
+    CREDITS: "Copyright 2022 C. Modeller",
+    "AUTHORS.md": "Copyright 2022 D. Modeller",
+    "test-car-blue-readme.txt": "My livery, available through Creative Commons license.",
+    "Test_Blue_licence.txt": "Copyright 2019 E. Painter, CC BY 4.0",
+    "test-car-red-readme.txt": "Copyright 2019 F. Painter\nCC BY 4.0",
+    "test-car-red-stripe-readme.txt": "CC BY-NC 4.0",
+    "test-car-test-readme.txt": "CC BY-SA 4.0",
+  });
+  const l = carLicence(d, "test-car", ids, { pin: null });
+  check("the car's statements: readme, <car>-readme, CREDITS, AUTHORS", l.statements.map((s) => s.file).sort().join() === "AUTHORS.md,CREDITS,readme.txt,test-car-readme.txt" && isShareable(l.reading) && !l.fromList, l.statements.map((s) => s.file).join());
+  check("its XML's GPL header: the data's licence, beside the art's", l.reading.licences.includes("GPL-2.0-or-later") && l.reading.licences.includes("FAL-1.3"));
+  check("both of a livery's readmes are kept, and one unclear makes it unclear", l.liveries.blue?.files.length === 2 && !isShareable(l.liveries.blue.reading));
+  check('"red" and "red-stripe" each have their own readme', l.liveries.red?.files.map((f) => f.file).join() === "test-car-red-readme.txt" && isShareable(l.liveries.red.reading) && l.liveries["red-stripe"]?.files.map((f) => f.file).join() === "test-car-red-stripe-readme.txt" && !isShareable(l.liveries["red-stripe"].reading));
+  check("a livery whose id is part of the car's still has its readme", l.liveries.test?.files.map((f) => f.file).join() === "test-car-test-readme.txt");
+  const header = carDir("hdr-car", { "readme.txt": FAL });
+  writeFileSync(join(header, "hdr-car.xml"), carXml().replace("(at your option) any later version.", "(at your option) any later version. All rights reserved for the logos."));
+  check("a restriction in the car's XML header is read", !isShareable(carLicence(header, "hdr-car", [], { pin: null }).reading));
+  const category = join(tmp, "licence", "Restricted.xml");
+  writeFileSync(category, "<?xml version=\"1.0\"?>\n<!-- Copyright 2010 X. Do not redistribute. -->\n<params name=\"cat\"/>");
+  check("…and one in its category's", !isShareable(carLicence(carDir("cat-car", { "readme.txt": FAL }), "cat-car", [], { pin: null, category }).reading));
 }
 const pins = readPins();
 check("the pinned cars: every one at a commit or a sha256-checked zip", Object.values(pins.cars).every((c) => (c.repo && /^[0-9a-f]{40}$/.test(c.commit ?? "")) || (c.zip && /^[0-9a-f]{64}$/.test(c.sha256 ?? ""))) && /^[0-9a-f]{40}$/.test(pins.data.commit), `${Object.keys(pins.cars).length} cars`);
@@ -391,8 +430,10 @@ for (const c of cached) {
   const ph = sdCarPhysics(p);
   const ok = profileOf(ph.base, ph.patch);
   check(`${c}: its physics on ${ph.base} passes the game's rules`, ok.ok, ok.ok ? `${ph.rows.length} values mapped` : ok.errors.slice(0, 2).join("; "));
-  const lic = findCarLicence(join(models, c), c, [], pins.cars[c]?.license);
-  check(`${c}: its licence is read (${lic.source})`, lic.reading.licences.length > 0 || lic.reading.problems.length > 0, `${lic.reading.licences.join(", ")} ${lic.reading.problems.join("; ")}`);
+  const liveries = c === "ls2-cavallo-360r" ? ["roxfall", "ryou", "ryou2"] : [];
+  const lic = carLicence(join(models, c), c, liveries, { pin: pinnedCar(join(models, c), c), category: existsSync(catFile) ? catFile : undefined });
+  check(`${c}: shareable under its readme's Free Art License and its XML's GPL`, isShareable(lic.reading) && lic.reading.licences.join() === "FAL-1.3,GPL-2.0-or-later" && !lic.fromList, `${lic.reading.licences.join(", ")} ${lic.reading.problems.join("; ")}`);
+  if (c === "ls2-cavallo-360r") check(`${c}: its Roxfall livery's two readmes, unclear ("Creative Commons", logos owned by others)`, lic.liveries.roxfall?.files.length === 2 && !isShareable(lic.liveries.roxfall.reading));
 }
 
 if (!process.env.SD_KEEP) rmSync(tmp, { recursive: true, force: true });

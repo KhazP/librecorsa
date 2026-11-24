@@ -6,19 +6,21 @@
  *
  *   1. its parameters: the car's XML merged over its category's (scripts/lib/sd-params.ts), the category found beside
  *      the car as in the game's data folder, else in the cache, else fetched;
- *   2. its licence (scripts/cars/sd-licence.ts): a car whose readme, or the official list, doesn't clearly let it be
- *      shared is refused, unless `--personal` (then the package says it is for personal use only); a livery with an
- *      unclear readme of its own is left out;
+ *   2. its licence (lib/licences.ts): every statement file in its folder, each a livery's when its name names one, and
+ *      the headers of its XML and its category's; the official list's entry only for a car fetched at the revision it
+ *      pins and with no statement file of its own. A car that isn't clearly shareable is refused, unless `--personal`;
+ *      a livery whose own statement isn't is left out; a shared wheel or engine sample is checked against Speed Dreams'
+ *      own terms for its data. Anything packaged that isn't shareable makes the package for personal use only;
  *   3. its physics (scripts/cars/sd-car-physics.ts) on the closest base, the aero matched by driving it
  *      (lib/aero-fit.ts), checked as the game checks a physics file, then driven headless (lib/car-sanity.ts): flat out
  *      on a straight to its top speed, braking, and a lap of the bundled circuit on the autopilot;
  *   4. its model (scripts/cars/port_sd_car.py) and sound (scripts/audio/port_sd_sound.py: Speed Dreams' one engine
  *      sample resampled to its pitch at each rpm of the bank);
- *   5. the package (lib/car-package.ts), with the licence texts, the car's readme and a CONVERSION.md of what was
- *      mapped where and what was left out.
+ *   5. the package (lib/car-package.ts), with the licence texts (when shareable), the car's and its liveries'
+ *      statements and a CONVERSION.md of what was mapped where and what was left out.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { packageCar, type CarSkinSource } from "../lib/car-package";
 import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "../lib/importer";
 import { localIdFrom, packageCredit } from "../lib/manifest-file";
@@ -28,7 +30,23 @@ import { fitAero, withAero, type AeroFit } from "../lib/aero-fit";
 import { driveSanity, type SanityResult } from "../lib/car-sanity";
 import { SdParams } from "../../lib/sd-params";
 import { sdAeroTargets, sdCarPhysics, PHYSICS_BASES, SD_KEYS_NOT_CARRIED, type SdCar, type SdPhysics } from "../../cars/sd-car-physics";
-import { findCarLicence, LICENCES, shareable, type CarLicence, type LicenceId } from "../../cars/sd-licence";
+import {
+  authorLine,
+  carriedName,
+  creditLicence,
+  decodeText,
+  isShareable,
+  licenceTextFiles,
+  mergeNames,
+  mergeReadings,
+  readLicenceEntry,
+  readLicenceText,
+  statementFiles,
+  statementParts,
+  xmlLeadingComments,
+  type LicenceReading,
+  type Statement,
+} from "../lib/licences";
 import { fetchCategory, fetchedSource, fetchSdCar, fetchShared, readPins, SD_CACHE_DIR, type PinnedCar } from "../../cars/sd-fetch";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../../src/lib/mods/mod-physics";
 import { VEHICLE_MODELS } from "../../../src/lib/cars/vehicle-models";
@@ -39,7 +57,6 @@ import { getActiveTrackData } from "../../../src/lib/track-data";
 import { loadGlbGeometry } from "../../lib/glb-geometry";
 
 const CLASSES: ModCarClass[] = ["f1", "gt3", "proto", "classic", "road"];
-const PERSONAL_NOTE = "For personal use only, not for sharing.";
 
 /** The game's car whose sound a class borrows when the car has no sample of its own */
 const SOUND_BY_CLASS: Record<ModCarClass, string> = { f1: "lc26", gt3: "amg-gt3", proto: "mtr-496r", classic: "porsche-934-rsr", road: "vw-scirocco-gtx" };
@@ -91,6 +108,107 @@ function expectedTopSpeed(car: SdCar, drag: number): number {
 function carLocalId(car: string): string {
   if (car.length <= 16) return localIdFrom(car);
   return localIdFrom(car.replace(/^[a-z0-9]+-/i, ""));
+}
+
+/**
+ * The official list's entry for a car fetched at the revision it pins: the folder is named for the car and its record
+ * (.sd-source.json) names this car and the repository and commit, or zip and sha256, speed-dreams-cars.json pins. Null
+ * for anything else: a folder from an install or elsewhere, a record that doesn't match its pin. The fetcher writes the
+ * record; this is the check before the list's licence and authors are taken for the car's
+ */
+export function pinnedCar(carDir: string, car: string): PinnedCar | null {
+  let recorded: ReturnType<typeof fetchedSource> = null;
+  try {
+    recorded = fetchedSource(carDir);
+  } catch {
+    return null;
+  }
+  const pin = readPins().cars[car];
+  if (!recorded || !pin || recorded.car !== car || basename(carDir) !== car) return null;
+  const same = pin.commit ? recorded.pinned.repo === pin.repo && recorded.pinned.commit === pin.commit : recorded.pinned.zip === pin.zip && recorded.pinned.sha256 === pin.sha256;
+  return same ? pin : null;
+}
+
+/** A car's licence statements, read */
+export interface CarLicence {
+  /** The car's own statement files: those whose names name no livery */
+  statements: Statement[];
+  /** The car's licence came from the official list (fetched at its pin, with no statement file of its own) */
+  fromList: boolean;
+  /** The car's statements (or the list's entry), with the headers of its XML and its category's */
+  reading: LicenceReading;
+  /** Each livery with statements of its own, and what they say */
+  liveries: Record<string, { files: Statement[]; reading: LicenceReading }>;
+}
+
+/** An XML file's header notice, read (its copyright holders are the file's, not the car's authors) */
+function headerReading(file: string | undefined): LicenceReading | null {
+  if (!file || !existsSync(file)) return null;
+  const notice = xmlLeadingComments(decodeText(readFileSync(file)));
+  return notice.trim() ? { ...readLicenceText(notice), holders: [] } : null;
+}
+
+/** A reading that must name a licence: one that names none gets that as its problem */
+const namingOne = (r: LicenceReading, what: string): LicenceReading => (r.licences.length ? r : { ...r, problems: [...r.problems, `${what} name no licence this tool knows`] });
+
+/**
+ * The licence statements of the car in `carDir` (named `car`): every statement file in its folder, a livery's when its
+ * name names one of `liveryIds` (`<car>-<livery>-readme.txt`, `Cavallo_Roxfall_readme.txt`), else the car's; the
+ * official list's entry (`pin`, from pinnedCar) only when the car has none of its own; and the header notices of its
+ * XML and of its category's (`category`)
+ */
+export function carLicence(carDir: string, car: string, liveryIds: readonly string[], opts: { pin: PinnedCar | null; category?: string }): CarLicence {
+  const statements: Statement[] = [];
+  const byLivery: Record<string, Statement[]> = {};
+  for (const s of statementFiles(carDir)) {
+    const parts = statementParts(s.file, car, liveryIds);
+    if (!parts.length) statements.push(s);
+    for (const id of parts) (byLivery[id] ??= []).push(s);
+  }
+  const liveries: CarLicence["liveries"] = {};
+  for (const [id, files] of Object.entries(byLivery)) {
+    liveries[id] = { files, reading: namingOne(mergeReadings(files.map((f) => f.reading)), files.map((f) => f.file).join(", ")) };
+  }
+  const fromList = !statements.length && !!opts.pin;
+  const art = statements.length
+    ? namingOne(mergeReadings(statements.map((s) => s.reading)), statements.map((s) => s.file).join(", "))
+    : opts.pin
+      ? readLicenceEntry(opts.pin.license)
+      : { licences: [], problems: ["no readme or licence file in the car's folder, and it wasn't fetched at the revision the official list pins"], holders: [] };
+  const headers = [headerReading(join(carDir, `${car}.xml`)), headerReading(opts.category)].filter((r): r is LicenceReading => !!r);
+  return { statements, fromList, reading: mergeReadings([art, ...headers]), liveries };
+}
+
+/**
+ * Speed Dreams' terms for its shared data (speed-dreams-data's README at the pinned commit): "non-functional data is
+ * licensed under the Free Art License by default", and the folders with other terms say so in a credits file
+ */
+const SD_DATA_DEFAULT: LicenceReading = { licences: ["FAL-1.3"], problems: [], holders: [] };
+/** The shared data's folders that carry credits of their own, at the pinned commit */
+const SD_DATA_CREDITS: Record<string, string> = { sound: "sound/SoundCredits.txt" };
+
+/**
+ * The licence of one of Speed Dreams' shared files a car uses (`rel`: `objects/wheel0.acc`, `sound/engine-1.wav`, found
+ * at `path`): the entry that names it in its folder's credits (data/sound/SoundCredits.txt lists each sample's), else
+ * Speed Dreams' default for its data
+ */
+async function sharedFileReading(path: string, rel: string): Promise<{ reading: LicenceReading; from: string }> {
+  const statements = statementFiles(dirname(path));
+  const credits = SD_DATA_CREDITS[rel.split("/")[0]];
+  if (credits) {
+    try {
+      const pinned = await fetchShared(credits);
+      if (!statements.some((s) => s.path === pinned)) statements.push(...statementFiles(dirname(pinned)).filter((s) => s.path === pinned));
+    } catch (err) {
+      return { reading: { licences: [], problems: [`Speed Dreams' credits for it (${credits}) could not be fetched: ${(err as Error).message}`], holders: [] }, from: credits };
+    }
+  }
+  const stem = basename(rel).replace(/\.[^.]+$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const s of statements) {
+    const entry = s.text.replace(/\r/g, "").split(/\n\s*\n/).find((b) => new RegExp(`(?<![a-z0-9_-])${stem}(?![a-z0-9_-])`, "i").test(b));
+    if (entry) return { reading: namingOne(readLicenceText(entry), `${s.file}'s entry for ${basename(rel)}`), from: s.file };
+  }
+  return { reading: SD_DATA_DEFAULT, from: "Speed Dreams' default for its data" };
 }
 
 const md = (s: string) => s.replace(/\|/g, "\\|");
@@ -194,29 +312,25 @@ ${PACKAGE_USAGE}
     else if (category) throw new Error(`${car}: no category file ${categoryFile}`);
 
     // ---- 2. Licence
-    const pinned: PinnedCar | undefined = fetchedSource(carDir)?.pinned ?? readPins().cars[car];
+    const pinned = pinnedCar(carDir, car);
     const liveryIds = liveryCandidates(carDir, car);
-    const lic: CarLicence = findCarLicence(carDir, car, liveryIds, pinned?.license);
+    const lic: CarLicence = carLicence(carDir, car, liveryIds, { pin: pinned, category: categoryFile });
     const personal = !!values.personal;
-    if (!shareable(lic.reading) && !personal) {
+    if (!isShareable(lic.reading) && !personal) {
       throw new Error(
         `${car}: not converted, its licence doesn't clearly let it be shared (${lic.reading.problems.join("; ")}). ` +
           `Ask its authors, or convert it for yourself with --personal (the package then says it is for personal use only).`
       );
     }
-    const licenceIds = new Set<LicenceId>(lic.reading.licences);
-    if (lic.data && shareable(lic.data)) for (const l of lic.data.licences) licenceIds.add(l);
     const leftOutLiveries: string[] = [];
     const liveriesOk = liveryIds.filter((id) => {
       const own = lic.liveries[id];
-      if (!own || shareable(own.reading) || personal) {
-        if (own && shareable(own.reading)) for (const l of own.reading.licences) licenceIds.add(l);
-        return true;
-      }
-      leftOutLiveries.push(`livery ${id}: its readme (${own.readme}) doesn't clearly let it be shared (${own.reading.problems.join("; ")})`);
+      if (!own || isShareable(own.reading) || personal) return true;
+      leftOutLiveries.push(`livery ${id}: its statement (${own.files.map((f) => f.file).join(", ")}) doesn't clearly let it be shared (${own.reading.problems.join("; ")})`);
       return false;
     });
-    const licenceText = [...licenceIds].map((id) => LICENCES[id].name).join(", ") || (personal ? "Unknown" : "");
+    /** What the package holds besides the car and its liveries (shared wheels, a shared sample), and their terms */
+    const sharedParts: { what: string; reading: LicenceReading; from: string }[] = [];
 
     // ---- 3. Physics
     const phys = sdCarPhysics(params, { base: values.base as VehicleModelId | undefined });
@@ -262,6 +376,13 @@ ${PACKAGE_USAGE}
     for (const prefix of new Set([params.str(G, "3d front wheel"), params.str(G, "3d rear wheel"), params.str(G, "3d wheel") ?? "wheel"].filter(Boolean) as string[])) {
       const f = `${prefix}0.acc`;
       if (!existsSync(join(carDir, f)) && !findIn(shared.objects, f)) await fetchShared(`objects/${f}`);
+      // A wheel the car doesn't carry is Speed Dreams' shared one: its terms are the shared data's
+      const sharedWheel = existsSync(join(carDir, f)) ? undefined : findIn(sharedDirs(carDir).objects, f);
+      if (sharedWheel) {
+        const w = await sharedFileReading(sharedWheel, `objects/${f}`);
+        if (!isShareable(w.reading) && !personal) throw new Error(`${car}: its wheels are Speed Dreams' shared ${f}, which can't be shared (${w.reading.problems.join("; ")}, ${w.from}); --personal converts it for you alone`);
+        sharedParts.push({ what: `the shared wheel ${f}`, ...w });
+      }
     }
     const glb = join(work, `${pkgCarId}.glb`);
     const skinsOut = join(work, "skins");
@@ -283,6 +404,16 @@ ${PACKAGE_USAGE}
     const sample = params.str("Sound", "engine sample") ?? "engine-1.wav";
     let samplePath = existsSync(join(carDir, sample)) ? join(carDir, sample) : findIn(shared.sound, sample);
     if (!samplePath) samplePath = await fetchShared(`sound/${sample}`).catch(() => undefined);
+    // A sample the car doesn't carry is Speed Dreams' shared one: one that can't be shared isn't used, unless --personal
+    let sampleLeftOut = "";
+    if (samplePath && !samplePath.startsWith(carDir + sep)) {
+      const smp = await sharedFileReading(samplePath, `sound/${sample}`);
+      if (isShareable(smp.reading) || personal) sharedParts.push({ what: `the shared engine sample ${sample}`, ...smp });
+      else {
+        sampleLeftOut = `Speed Dreams' shared engine sample ${sample} (${smp.reading.problems.join("; ")}, ${smp.from})`;
+        samplePath = undefined;
+      }
+    }
     let sound: { dir: string; limiterRpm: number } | { car: string };
     let soundNote: string;
     const rpmScale = params.num("Sound", "rpm scale") ?? 1;
@@ -297,28 +428,30 @@ ${PACKAGE_USAGE}
       soundNote = `its own engine sample (${sample}), resampled to Speed Dreams' pitch at each rpm of the bank (rpm scale ${rpmScale}: the sample's own pitch at ${Math.round(5729.58 / rpmScale)} rpm), at Speed Dreams' loudness on and off throttle`;
     } else {
       sound = { car: SOUND_BY_CLASS[classId] };
-      soundNote = `the game's ${SOUND_BY_CLASS[classId]} (the engine sample ${sample} was not found)`;
+      soundNote = `the game's ${SOUND_BY_CLASS[classId]} (${sampleLeftOut ? `${sampleLeftOut} can't be shared` : `the engine sample ${sample} was not found`})`;
     }
 
     // ---- 5. The package
     const title = (phys.car.name || car).trim();
     const sourceUrl = pinned?.commit ? `${pinned.repo!.replace(/\.git$/, "")}/src/commit/${pinned.commit}` : pinned?.zip;
-    // The car's own readme names its authors best (the official list's copy has typos); the credit holds 80 characters
-    const authorList = mergeNames(uniqueNames(lic.readmes.length ? readmeAuthors(join(carDir, lic.readmes[0])) : ""), uniqueNames(pinned?.author ?? ""));
-    const authors = shortList(authorList, 80);
-    const firstLicence = [...licenceIds][0];
+    // Everything the package holds: the car, the liveries it keeps (with statements of their own), the shared parts.
+    // One part that can't be shared makes the whole package for personal use only
+    const keptLiveries = ported.liveries.filter((l) => liveriesOk.includes(l.id)).map((l) => lic.liveries[l.id]).filter((l) => !!l);
+    const held = mergeReadings([lic.reading, ...keptLiveries.map((l) => l.reading), ...sharedParts.map((p) => p.reading)]);
+    const terms = creditLicence(held);
+    // The statements name the authors best (the official list's copy has typos); the credit holds 80 characters
+    const authorList = mergeNames(
+      mergeReadings([...lic.statements, ...keptLiveries.flatMap((l) => l.files)].map((s) => s.reading)).holders,
+      (pinned?.author ?? "").split(/\s*,\s*|\s+and\s+/).filter(Boolean),
+    );
+    const authors = authorLine(authorList);
     const credit: ModCredit = packageCredit(
       {
         author: authors || "Speed Dreams contributors",
-        license: personal && !shareable(lic.reading) ? `${licenceText || "Unknown"} (personal use only)` : licenceText,
+        license: terms.license,
         url: sourceUrl ?? "https://www.speed-dreams.net/",
-        licenseUrl: firstLicence ? LICENCES[firstLicence].url : undefined,
-        note: [
-          `Speed Dreams' ${title}, converted to LibreCorsa (model, liveries, sound and physics on the ${phys.base} model).`,
-          personal && !shareable(lic.reading) ? PERSONAL_NOTE : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
+        licenseUrl: terms.licenseUrl,
+        note: terms.note ?? `Speed Dreams' ${title}, converted to LibreCorsa (model, liveries, sound and physics on the ${phys.base} model).`,
       },
       { authorUrl: "https://www.speed-dreams.net/" }
     );
@@ -334,8 +467,10 @@ ${PACKAGE_USAGE}
     const skins: CarSkinSource[] = ported.liveries
       .filter((l) => liveriesOk.includes(l.id))
       .map((l) => ({ id: localIdFrom(l.id), name: l.name, swatch: l.swatch, dir: l.dir }));
-    const extraFiles = [...licenceIds].map((id) => ({ from: LICENCES[id].textFile, to: `cars/${pkgCarId}/LICENSE-${id}.txt` }));
-    for (const r of lic.readmes) extraFiles.push({ from: join(carDir, r), to: `cars/${pkgCarId}/speed-dreams-${r.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}${/\.(txt|md)$/i.test(r) ? "" : ".txt"}` });
+    // The licences' texts when it may be shared; the car's and its liveries' own statements, always
+    const extraFiles = licenceTextFiles(held).map((f) => ({ from: f.from, to: `cars/${pkgCarId}/${f.name}` }));
+    const statements = [...new Map([...lic.statements, ...keptLiveries.flatMap((l) => l.files)].map((s) => [s.path, s])).values()];
+    for (const s of statements) extraFiles.push({ from: s.path, to: `cars/${pkgCarId}/${carriedName("speed-dreams", s.file)}` });
     const conversion = join(work, "CONVERSION.md");
     writeFileSync(
       conversion,
@@ -349,8 +484,11 @@ ${PACKAGE_USAGE}
         sanity,
         sound: soundNote,
         authors: authorList.join(", ") || "Speed Dreams contributors",
-        licence: `${credit.license}${lic.source === "database" ? " (from Speed Dreams' official asset list: the car's folder has no licence file)" : ""}`,
-        leftOutLiveries,
+        licence: [
+          `${credit.license}${lic.fromList ? " (from Speed Dreams' official asset list: the car's folder has no licence file)" : ""}${terms.personal ? `. ${terms.note}: ${held.problems.join("; ")}` : ""}`,
+          ...sharedParts.map((p) => `${p.what}: ${p.reading.licences.join(", ") || "no licence"} (${p.from})`),
+        ].join("; "),
+        leftOutLiveries: [...leftOutLiveries, ...(sampleLeftOut ? [`${sampleLeftOut}: the game's ${SOUND_BY_CLASS[classId]} sound instead`] : [])],
       })
     );
     extraFiles.push({ from: conversion, to: `cars/${pkgCarId}/CONVERSION.md` });
@@ -382,7 +520,7 @@ ${PACKAGE_USAGE}
     for (const w of ported.warnings) console.log(`      note: ${w}`);
     for (const l of leftOutLiveries) console.log(`      left out: ${l}`);
     if (out.skipped.length) console.log(`      left out: ${out.skipped.join(", ")}`);
-    console.log(`      licence: ${credit.license}${lic.source === "database" ? " (from the official asset list)" : ""}`);
+    console.log(`      licence: ${credit.license}${lic.fromList ? " (from the official asset list)" : ""}${terms.personal ? `. ${terms.note} (${held.problems.join("; ")})` : ""}`);
     console.log(`      sound: ${soundNote}`);
     console.log(`      ${out.contentId} in ${packageDir}`);
     if (!out.checked.ok) throw new Error(`${packageDir}: the package fails the game's checks`);
@@ -394,52 +532,6 @@ function bundledCircuit(): { track: ReturnType<typeof getActiveTrackData>; root:
   const track = getActiveTrackData(1200);
   const file = track.meshUrl && join(REPO_ROOT, "public", track.meshUrl.replace(/^\//, ""));
   return file && existsSync(file) ? { track, root: loadGlbGeometry(file) } : undefined;
-}
-
-/** Names once each, in order */
-function uniqueNames(list: string): string[] {
-  const seen = new Set<string>();
-  return list
-    .split(/,|\band\b/)
-    .map((n) => n.trim())
-    .filter((n) => n && !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
-}
-
-/**
- * The readme's names, then the official list's that aren't among them: a name counts as there when one has the same
- * first name and a surname that starts alike (the list spells some with typos, "Olaf Sa'ick" for "Olaf Saßnick")
- */
-function mergeNames(own: string[], listed: string[]): string[] {
-  const key = (n: string) => {
-    const w = n.toLowerCase().split(/\s+/);
-    return `${w[0]}|${(w[w.length - 1] ?? "").slice(0, 2)}`;
-  };
-  const have = new Set(own.map(key));
-  return [...own, ...listed.filter((n) => !have.has(key(n)))];
-}
-
-/** As many names as fit in `max` characters, then "and others" */
-function shortList(names: string[], max: number): string {
-  const all = names.join(", ");
-  if (all.length <= max) return all;
-  const out: string[] = [];
-  for (const n of names) {
-    if ([...out, n].join(", ").length + ", and others".length > max) break;
-    out.push(n);
-  }
-  return `${out.join(", ")}, and others`;
-}
-
-/** The names a readme's "Copyright <year> <names>" lines give */
-function readmeAuthors(file: string): string {
-  const names = new Set<string>();
-  for (const m of readFileSync(file, "utf8").matchAll(/copyright\s*(?:\(c\)|©)?\s*\d{4}(?:\s*[-–]\s*\d{4})?\s+([^\n(]+)/gi)) {
-    for (const n of m[1].split(/,|\band\b/)) {
-      const t = n.trim();
-      if (t && t.length < 60) names.add(t);
-    }
-  }
-  return [...names].join(", ");
 }
 
 export default importer;
