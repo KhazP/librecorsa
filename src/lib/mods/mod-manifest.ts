@@ -22,6 +22,13 @@ export const MOD_ID_PREFIX = "mod:";
 export const MODS_PATH = "/mods";
 
 /**
+ * Whether a copy of the game served from this host can have files of its own under MODS_PATH (a folder of packages, a
+ * catalogue): the launcher, a clone's dev server, a copy served from anywhere else. librecorsa.org has none, so its
+ * players never wait on the question or see a 404 for it
+ */
+export const hostMayServeMods = (hostname: string): boolean => !/(^|\.)librecorsa\.org$/i.test(hostname);
+
+/**
  * `author.name`: lowercase, the author's name first so two modders' packages never share an id. With a local id, a
  * content id (`mod:` + package + `/` + local) stays within 62 characters: the room protocol carries ids of up to 64
  * (net/wire.ts). Its `:` and `/` are outside the lap board's id grammar (`[A-Za-z0-9_-]`, cloudflare/api/lap-check.ts),

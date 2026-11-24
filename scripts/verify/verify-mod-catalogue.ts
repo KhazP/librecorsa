@@ -133,6 +133,15 @@ async function main(): Promise<void> {
   check("A path in the setting is on the game's site", sources[1]?.url === `${SITE}/packs/catalogue.json`);
   sources = catalogueSources("/mods/_catalogue/catalogue.json", page);
   check("A setting naming this copy's own catalogue reads it once, as named", sources.length === 1 && sources[0].named);
+  // librecorsa.org has no catalogue of its own: nothing is asked for there (no 404 each time the panel opens)
+  for (const live of ["https://librecorsa.org/play", "https://www.librecorsa.org/play", "https://LibreCorsa.org/"]) {
+    check(`On ${new URL(live).host}, no catalogue of its own is read`, catalogueSources("", live).length === 0, JSON.stringify(catalogueSources("", live)));
+  }
+  sources = catalogueSources("/mods/_catalogue/catalogue.json", "https://librecorsa.org/play");
+  check("…unless the build names it", sources.length === 1 && sources[0].url === "https://librecorsa.org/mods/_catalogue/catalogue.json" && sources[0].named);
+  sources = catalogueSources(`${CDN}/catalogue.json`, "https://librecorsa.org/play");
+  check("…and the one the build names elsewhere is still read", sources.length === 1 && sources[0].url === `${CDN}/catalogue.json`);
+  check("A host that only ends in librecorsa.org has its own", catalogueSources("", "https://notlibrecorsa.org/play").length === 1);
   const before = warnings.length;
   check(
     "An http://, protocol-relative or relative setting is left out, with a warning",
@@ -254,6 +263,17 @@ async function main(): Promise<void> {
     }),
   });
   check("This copy's own out of reach, none named: nothing to say", noneHere.packages.length === 0 && !noneHere.unreachable);
+  // The panel opening on librecorsa.org (a fake location: the page's address), with no catalogue named: no request
+  let asked: string[] = [];
+  const counting = fetchOf((url) => {
+    asked.push(url);
+    return new Response("", { status: 404 });
+  });
+  const live = await loadCatalogues("", { pageUrl: "https://librecorsa.org/play", fetch: counting });
+  check("On librecorsa.org with no catalogue named, nothing is fetched", asked.length === 0 && live.packages.length === 0 && !live.unreachable, asked.join(", "));
+  asked = [];
+  await loadCatalogues("", { pageUrl: `${LAUNCHER}/play`, fetch: counting });
+  check("…while the launcher's page asks for its own", asked.length === 1 && asked[0] === `${LAUNCHER}/mods/_catalogue/catalogue.json`, asked.join(", "));
   console.warn = warn;
 
   // --- Status against what is installed ---
