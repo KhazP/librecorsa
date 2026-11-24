@@ -341,6 +341,48 @@ async function main(): Promise<void> {
     const ld = lmdh.profile.config.differential.settings;
     check("the LMDh's differential as AC's: one friction face, 45° ramps", ld.friction_faces === 1 && ld.power_ramp_deg === 45 && ld.coast_ramp_deg === 45 && ld.power === 0.4, JSON.stringify(ld));
 
+    // A variant of the data folder: each file's text changed by its function
+    const variant = (name: string, edits: Record<string, (text: string) => string>) => {
+      const dir = join(tmp, `synthetic-${name}`, 'data');
+      for (const [f, text] of Object.entries(INI)) write(join(dir, f), edits[f] ? edits[f](text) : text);
+      return dir;
+    };
+
+    // No ers.ini on a hybrid base: no motor, no harvest, not only no HUD
+    for (const model of ['f12026-car', 'lc-lmdh'] as const) {
+      const e = acPhysicsPatch(dataDir, { base: model }).profile;
+      const modes = Object.values(e.config.performanceModes);
+      check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
+    }
+
+    // The base's balance of performance and its differential are the base's, not the car's
+    const lmdh = acPhysicsPatch(dataDir, { base: 'lc-lmdh' });
+    const ownPeak = Math.max(...lmdh.profile.config.engine.powerCurve.map(([, kw]) => kw));
+    const cap = lmdh.profile.config.engine.outputPowerCap!;
+    check("the base's power cap lifted over the car's peak, the same at every speed", cap.curve.every(([, kw]) => kw >= 2 * ownPeak) && (cap.vsSpeedKmh ?? []).every(([, k]) => k === 1), `${JSON.stringify(cap.curve)} for ${ownPeak.toFixed(0)} kW`);
+    const gt3 = acPhysicsPatch(dataDir, { base: 'amg-gt3' }).profile.config.engine.outputPowerCap!;
+    check("... the GT3's too", gt3.curve.every(([, kw]) => kw >= 2 * ownPeak), JSON.stringify(gt3.curve));
+    const ld = lmdh.profile.config.differential.settings;
+    check("the LMDh's differential as AC's: one friction face, 45° ramps", ld.friction_faces === 1 && ld.power_ramp_deg === 45 && ld.coast_ramp_deg === 45 && ld.power === 0.4, JSON.stringify(ld));
+
+    // Aero: wings alone, net lift, a wing of one value
+    const wingsOnly = variant('wings', { 'aero.ini': (t) => t.slice(t.indexOf('[WING_1]')) });
+    const m1Wings = acPhysicsPatch(wingsOnly, { base: 'bmw-m1-procar' }).profile.config.aero;
+    check("wings alone: the body makes no lift or drag of the base's", m1Wings.front_lift === 0 && m1Wings.rear_lift === 0 && m1Wings.drag === 0 && m1Wings.wings[1].area === 0.64, `${m1Wings.front_lift} ${m1Wings.rear_lift} ${m1Wings.drag}`);
+    const r33Wings = acPhysicsPatch(wingsOnly, { base: 'nissan-r33-jgtc' }).profile.config.aero.rhMap!;
+    check('... nor the ride-height map\'s', r33Wings.clA === 0 && r33Wings.cdA === 0, `${r33Wings.clA} ${r33Wings.cdA}`);
+    const lift = variant('lift', {
+      'aero.ini': () =>
+        '[WING_0]\nNAME=NOSE\nCHORD=1\nSPAN=1\nPOSITION=0,0,1.5\nLUT_AOA_CL=(-10=-0.3|10=-0.3)\nLUT_AOA_CD=(-10=0.1|10=0.1)\nANGLE=0\n' +
+        '[WING_1]\nNAME=TAIL\nCHORD=1\nSPAN=1\nPOSITION=0,0,-1.5\nLUT_AOA_CL=(-10=-0.1|10=-0.1)\nLUT_AOA_CD=(-10=0.1|10=0.1)\nANGLE=0\n',
+    });
+    const r33Lift = acPhysicsPatch(lift, { base: 'nissan-r33-jgtc' }).profile.config.aero.rhMap!;
+    const share = r33Lift.balance[0][0];
+    check("net lift: the front's share of it, not half", r33Lift.clA < 0 && share > 0.6 && share < 1, `clA ${r33Lift.clA}, balance ${share}`);
+    const oneValue = variant('one', { 'aero.ini': (t) => t.replace('LUT_AOA_CL=(-5=0|0=0.3|10=0.8|15=0.9)', 'LUT_AOA_CL=(0=0.5)') });
+    const one = acPhysicsPatch(oneValue, { base: 'bmw-m1-procar' });
+    check("a wing of one lift value: a constant in the body, not the base's wing left in its place", one.profile.config.aero.wings[1].area === 0 && near(one.profile.config.aero.rear_lift + one.profile.config.aero.front_lift, 1.4 * 0.1 + 0.64 * 0.5, 1e-4) && !one.unmapped.some((u) => /refused/.test(u.why)), one.unmapped.filter((u) => /refused/.test(u.why)).map((u) => u.why).join('; '));
+
     const drive = await driveCheck(p.profile);
     check('it drives: no spin flat out, a plausible top speed, braking', drive.ok, `0–100 ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h, ${drive.brakeFromKmh}→0 in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g) ${drive.problems.join('; ')}`);
   }

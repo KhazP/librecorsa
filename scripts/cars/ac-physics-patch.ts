@@ -928,7 +928,8 @@ function mapAero(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnType<
     const z = e.position[2] ?? 0;
     const want = /wing|spoiler|flap/i.test(e.name) && !/diff|floor|under|body/i.test(e.name) ? (z >= 0 ? 'FRONT_WING' : 'REAR_WING') : null;
     const i = want ? slot(want) : -1;
-    if (i < 0 || used.has(i) || !e.cl.length) {
+    // A wing slot takes a lift table the game can look up (two points or more); one of a single value is a constant
+    if (i < 0 || used.has(i) || rising(e.cl).length < 2) {
       folded.push(e);
       continue;
     }
@@ -965,9 +966,10 @@ function mapAero(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnType<
     cdA += e.cdA;
     cdAy += e.cdA * (e.position[1] ?? 0);
   }
-  const names = folded.map((e) => `[${e.section}] ${e.name}`).join(', ');
-  if (!folded.length) return;
-  const from = `aero.ini ${names} (at the static ride, its tables read once)`;
+  // No element left for the body (wings alone): the body makes no lift or drag of its own, not the base's
+  const from = folded.length
+    ? `aero.ini ${folded.map((e) => `[${e.section}] ${e.name}`).join(', ')} (at the static ride, its tables read once)`
+    : 'aero.ini (its elements are all wings: no lift or drag of the body)';
   const map = base.config.aero.rhMap;
   if (map) {
     const total = front + rear;
@@ -976,7 +978,8 @@ function mapAero(mod: ModData, m: Mapper, base: CarSimProfile, ride: ReturnType<
     const grid = (v: number) => map.rearRh.map(() => map.frontRh.map(() => v));
     m.set('config.aero.rhMap.cl', grid(1), `${from} (no ride-height map)`);
     m.set('config.aero.rhMap.cd', grid(1), `${from} (no ride-height map)`);
-    m.set('config.aero.rhMap.balance', grid(total > 1e-6 ? front / total : 0.5), `${from}: the front's share`);
+    // The front's share of the total, net lift too (the game holds it between 0 and 1); half and half when there is none
+    m.set('config.aero.rhMap.balance', grid(Math.abs(total) > 1e-6 ? Math.min(1, Math.max(0, front / total)) : 0.5), `${from}: the front's share`);
     for (const k of ['rollCl', 'rollCd', 'yawCl', 'yawCd'] as const) m.quiet(`config.aero.rhMap.${k}`, [[-30, 1], [30, 1]], `${from} (no roll or yaw tables)`);
     for (const k of ['rollBalance', 'yawBalance'] as const) m.quiet(`config.aero.rhMap.${k}`, [[-30, 0], [30, 0]], `${from} (no roll or yaw tables)`);
     m.quiet('config.aero.rhMap.activeAero', { dClAFront: 0, dClARear: 0, dCdA: 0 }, 'aero.ini (no active aero)');
