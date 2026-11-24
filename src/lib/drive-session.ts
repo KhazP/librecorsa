@@ -2788,11 +2788,14 @@ export class DriveSession {
     const isInPitlaneAt = (x: number, z: number, y: number): boolean =>
       Boolean(physics.groundQuery?.query(x, z, y + 0.5, pitProbeHit) && pitProbeHit.surface === "pitlane");
     const radarInvQ = new THREE.Quaternion();
-    // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
+    // Audio cue edges: DRS available / open last frame, shift beep armed for this gear, rolling-start 3-2-1-GREEN
     let cueDrsAvail = false;
     let cueDrsOpen = false;
     let cueShiftArmed = true;
     let cueGear = 0;
+    let cueRollingRunId = -1;
+    let cueRollingActive = false;
+    let cueRollingCountdown: number | undefined = undefined;
     const radarRel = new THREE.Vector3();
     const radarFwd = new THREE.Vector3();
     const ghostQuat = new THREE.Quaternion();
@@ -3394,7 +3397,14 @@ export class DriveSession {
         const gridHeld = raceInWorker
           ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
           : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && mpManualStart);
-        if (!raceInWorker) physics.gridHold = gridHeld;
+        if (!raceInWorker) {
+          physics.gridHold = gridHeld;
+          if (mpRace) {
+            physics.speedLimiterMs = mpFrame?.phase === "racing" ? mpRace.rollingLimiterMs : undefined;
+          } else if (!aiField) {
+            physics.speedLimiterMs = undefined;
+          }
+        }
         // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
         // ledger and feed; an online race serves it with the player's own penalties below
         const startCall = jumpWatch.update(
@@ -4407,6 +4417,22 @@ export class DriveSession {
         if (cues.shiftBeep && cueShiftArmed && tc.gear > 0 && tc.rpm >= limiter - SHIFT_BEEP_BELOW_LIMITER_RPM) {
           audio?.cue("shift");
           cueShiftArmed = false;
+        }
+        // Rolling-start 3-2-1-GREEN audio cues (reset cleanly across restarts / new runs)
+        const raceStatus = tc.race;
+        const rolling = raceStatus?.phase === "racing" ? raceStatus.rollingFormation : undefined;
+        if (cueRollingRunId !== runId || !raceStatus) {
+          cueRollingRunId = runId;
+          cueRollingActive = Boolean(rolling);
+          cueRollingCountdown = rolling?.countdown;
+        } else {
+          if (rolling?.countdown !== undefined && rolling.countdown !== cueRollingCountdown) {
+            audio?.cue("rolling_countdown");
+          } else if (cueRollingActive && !rolling && raceStatus.phase === "racing") {
+            audio?.cue("rolling_green");
+          }
+          cueRollingActive = Boolean(rolling);
+          cueRollingCountdown = rolling?.countdown;
         }
       }
 
