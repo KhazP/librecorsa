@@ -147,6 +147,7 @@ import {
   wallSweep,
   writeOutlineEdges,
 } from './TrackColliderQuery';
+import { bodyOutline } from './body-outline';
 import { queryContactPatch } from './ContactPatch';
 import { Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
 import { type EnergySession, type F1EnergyCircuit, inStretch } from '../f1-energy-circuits';
@@ -1849,42 +1850,9 @@ export class VehiclePhysics {
     this.wheels = [mkWheel(0), mkWheel(1), mkWheel(2), mkWheel(3)];
 
     // Barrier probes (body frame, x left, z forward): the body's measured plan and the tyres' corners round it; without
-    // a plan, nose, front wheels, sidepods, rear wheels, tail
-    const geo = this.tyres[0].data;
-    const halfF = tf + 0.5 * geo.front.width;
-    const halfR = tr + 0.5 * geo.rear.width;
+    // a plan, nose, front wheels, sidepods, rear wheels, tail (`bodyOutline`, which the car's contact box is cut round)
     const py = cfg.aero.floorOffsetY + 0.2;
-    this.wallProbePoints = [];
-    const plan = options.bodyPlan ?? ch.bodyPlan;
-    if (plan?.length) {
-      // The plan's z is from the axles' midpoint, which is 0.5 (a - b) ahead of the CG
-      const mid = 0.5 * (a - b);
-      const pts: { x: number; z: number }[] = [];
-      for (const [x, z] of plan) {
-        pts.push({ x, z: z + mid });
-        if (x > 0) pts.push({ x: -x, z: z + mid });
-      }
-      for (const side of [1, -1]) {
-        pts.push({ x: side * halfF, z: a + geo.front.radius }, { x: side * halfF, z: a - geo.front.radius });
-        pts.push({ x: side * halfR, z: -b + geo.rear.radius }, { x: side * halfR, z: -b - geo.rear.radius });
-      }
-      for (const i of convexHullIndices(pts)) this.wallProbePoints.push(new THREE.Vector3(pts[i].x, py, pts[i].z));
-    } else {
-      const wingZ = cfg.aero.wings.map((wg) => wg.positionZ);
-      const noseZ = Math.max(a, ...wingZ) + 0.3;
-      const tailZ = Math.min(-b, ...wingZ) - 0.3;
-      for (const side of [1, -1]) {
-        for (const [x, z] of [
-          [halfF, noseZ],
-          [halfF, a],
-          [0.85, 0],
-          [halfR, -b],
-          [0.5, tailZ],
-        ] as const) {
-          this.wallProbePoints.push(new THREE.Vector3(side * x, py, z));
-        }
-      }
-    }
+    this.wallProbePoints = bodyOutline(cfg, this.tyres[0].data, options.bodyPlan ?? ch.bodyPlan).map((p) => new THREE.Vector3(p.x, py, p.z));
     this.wallOutlineRadius = Math.max(...this.wallProbePoints.map((p) => Math.hypot(p.x, p.z)));
     this.wallQueryRadius = this.wallOutlineRadius + 0.5;
     this.wallOutline = convexHullIndices(this.wallProbePoints);
