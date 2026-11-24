@@ -151,7 +151,13 @@ import {
 } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
-import { CourseCutWatch, isCourseHop } from './sim/course-limits';
+import {
+  cornerLimitSide,
+  CourseCutWatch,
+  EXIT_OUTER_MARGIN_M,
+  INSIDE_OFF_WHEELS_CUT,
+  isCourseHop,
+} from './sim/course-limits';
 import {
   type RaceGymObservation,
   computeLookaheadVectors,
@@ -3318,13 +3324,52 @@ export class F1Physics2026 {
     return p;
   }
 
+  private readonly sampleCurvatureAt = (s: number): number => {
+    const S = this.track.samples;
+    const n = S.length;
+    if (n === 0) return 0;
+    const L = this.track.totalLengthM;
+    const wrapped = ((s % L) + L) % L;
+    return S[Math.floor((wrapped / L) * n) % n].curvature;
+  };
+
   private buildObservation(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): RaceGymObservation {
     const { lookaheadCurvatures, lookaheadTargetSpeedsMs } = computeLookaheadVectors(this.track, this.sMeters);
     const racelineOffsetM = aiLineOffsetM(sample);
     const gapToRacingLineM = this.lateralOffsetM - racelineOffsetM;
+    const cornerSide = cornerLimitSide(this.sampleCurvatureAt, this.sMeters, this.lateralOffsetM, this.track.totalLengthM);
     let wheelsOut = 0;
+    let asphaltWheels = 0;
     for (const w of this.wheels) {
-      if (w.surfaceType === 'runoff' || w.surfaceType === 'grass') wheelsOut++;
+      if (w.surfaceType === 'asphalt') asphaltWheels++;
+      else if (w.surfaceType === 'runoff' || w.surfaceType === 'grass') wheelsOut++;
+    }
+    let outOfTrack: boolean;
+    if (cornerSide === 'inside') {
+      // Inside of a corner/chicane: white-line rule (all wheels off asphalt, or 3+ wheels on runoff/grass)
+      outOfTrack = asphaltWheels === 0 || wheelsOut >= INSIDE_OFF_WHEELS_CUT;
+    } else if (cornerSide === 'outside') {
+      outOfTrack = wheelsOut >= 4;
+      if (outOfTrack) {
+        const bl = Math.hypot(sample.binormal.x, sample.binormal.z) || 1;
+        const outSign = Math.sign(this.lateralOffsetM);
+        const stepX = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.x) / bl;
+        const stepZ = -(outSign * EXIT_OUTER_MARGIN_M * sample.binormal.z) / bl;
+        const speed = Math.abs(this.vxMs);
+        for (const w of this.wheels) {
+          const px = w.worldPos.x + stepX;
+          const pz = w.worldPos.z + stepZ;
+          const approxS = this.sMeters + w.staticPos.x;
+          const c = queryWheelGroundContact(this.track, px, pz, approxS, speed);
+          const onValidKerb = this.meshKerbBumpAt(px, pz, c.zRoad, approxS, speed) !== null;
+          if (onValidKerb || c.surfaceType === 'asphalt' || c.surfaceType === 'kerb') {
+            outOfTrack = false;
+            break;
+          }
+        }
+      }
+    } else {
+      outOfTrack = wheelsOut >= 4;
     }
     const W = this.wheels;
     return {
@@ -3354,7 +3399,7 @@ export class F1Physics2026 {
       lookaheadCurvatures,
       lookaheadTargetSpeedsMs,
       wheelsOutOfTrack: wheelsOut,
-      outOfTrack: wheelsOut >= 3,
+      outOfTrack,
     };
   }
 

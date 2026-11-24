@@ -124,3 +124,75 @@ export function beyondLayoutEdge(sample: LayoutEdgeSample, x: number, z: number)
   const half = sample.width / 2 + LAYOUT_EDGE_SLACK_M;
   return lat >= 0 ? lat > half + (sample.kerbRight ? LAYOUT_KERB_M : 0) : -lat > half + (sample.kerbLeft ? LAYOUT_KERB_M : 0);
 }
+
+/**
+ * Corner-relative side of the track for track-limits judging:
+ *  - "inside": the apex side of a corner or approaching chicane (strict white-line cut enforcement)
+ *  - "outside": the outer edge of a corner or its exit straight (small realistic outer exit margin)
+ *  - "neutral": straight sections away from corner apexes/exits (standard 4-wheels-off check)
+ */
+export type CornerLimitSide = 'inside' | 'outside' | 'neutral';
+
+/** Curvature from which a stretch is a corner with an inside and an outside (1/m; R ≤ 450 m) */
+export const CORNER_LIMIT_CURVATURE = 1 / 450;
+/** Curvature threshold for an approaching chicane/corner apex within lookahead (1/m; R ≤ 250 m) */
+export const CHICANE_APEX_CURVATURE = 1 / 250;
+/** Curvature threshold for a recently exited corner within lookbehind (1/m; R ≤ 350 m) */
+export const EXIT_CORNER_CURVATURE = 1 / 350;
+/** Lookahead steps for approaching chicane/corner apexes (m) */
+const CHICANE_LOOKAHEAD_STEPS_M = [8, 16] as const;
+/** Lookbehind steps for corner exits onto the following straight (m) */
+const EXIT_LOOKBEHIND_STEPS_M = [12, 24, 36] as const;
+/** Minimum lateral offset from centreline before classifying inside vs outside (m) */
+const CORNER_SIDE_MIN_LAT_M = 0.25;
+/**
+ * Small, realistic outer margin on corner exits past the outer road/kerb edge (m, measured at the wheel centre).
+ * Wheel centres sit ~0.17 m outboard of the tyre's inner tread edge, so 0.55 m allows ~0.38 m of marginal exit
+ * run-wide past the outer edge/kerb while still catching genuine off-track excursions.
+ */
+export const EXIT_OUTER_MARGIN_M = 0.55;
+/** Grounded wheels on invalid off-track surfaces that count as an inside corner cut even if 1 wheel drags on road */
+export const INSIDE_OFF_WHEELS_CUT = 3;
+
+/**
+ * Classifies whether a car at `(s, lateralM)` is on the inside of a corner/chicane, the outside/exit of a corner,
+ * or a neutral straight. Inside apexes always take priority over an outgoing corner's outside in alternating chicanes.
+ */
+export function cornerLimitSide(
+  curvatureAt: (s: number) => number,
+  s: number,
+  lateralM: number,
+  totalLengthM: number
+): CornerLimitSide {
+  if (Math.abs(lateralM) < CORNER_SIDE_MIN_LAT_M || !(totalLengthM > 0)) return 'neutral';
+  const latSign = Math.sign(lateralM);
+  const kNow = curvatureAt(s);
+
+  // 1. Active corner inside (strict)
+  if (Math.abs(kNow) >= CORNER_LIMIT_CURVATURE && Math.sign(kNow) === latSign) return 'inside';
+
+  // 2. Approaching tight corner / chicane apex inside (takes priority over an outgoing turn's exit)
+  for (let i = 0; i < CHICANE_LOOKAHEAD_STEPS_M.length; i++) {
+    const kAhead = curvatureAt(s + CHICANE_LOOKAHEAD_STEPS_M[i]);
+    if (Math.abs(kAhead) >= CHICANE_APEX_CURVATURE && Math.sign(kAhead) === latSign) return 'inside';
+  }
+
+  // 3. Active corner outside
+  if (Math.abs(kNow) >= CORNER_LIMIT_CURVATURE && Math.sign(kNow) === -latSign) return 'outside';
+
+  // 4. Corner exit straight outside (car unwinding past the apex onto the exit)
+  for (let i = 0; i < EXIT_LOOKBEHIND_STEPS_M.length; i++) {
+    const kBehind = curvatureAt(s - EXIT_LOOKBEHIND_STEPS_M[i]);
+    if (Math.abs(kBehind) >= EXIT_CORNER_CURVATURE && Math.sign(kBehind) === -latSign) return 'outside';
+  }
+
+  return 'neutral';
+}
+
+/**
+ * On the inside of a corner/chicane, only genuine racing asphalt (`road` or `pitlane`) keeps a wheel inside track
+ * limits: riding all four wheels over the white line onto the inside kerb is an inside corner cut.
+ */
+export function isInsideCornerSurfaceValid(kind: string): boolean {
+  return kind === 'road' || kind === 'pitlane';
+}
