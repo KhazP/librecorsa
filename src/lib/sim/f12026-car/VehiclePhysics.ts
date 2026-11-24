@@ -148,7 +148,7 @@ import {
   writeOutlineEdges,
 } from './TrackColliderQuery';
 import { queryContactPatch } from './ContactPatch';
-import { Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
+import { BOOST_RACE_FLOOR_W, cutEnergyJ, Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
 import { type EnergySession, type F1EnergyCircuit, inStretch } from '../f1-energy-circuits';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 import {
@@ -2040,6 +2040,15 @@ export class VehiclePhysics {
   /** Under the 2026 F1 rules: a power-limited period under way (deployment cut, or harvesting flat out) */
   public get ersClipping(): boolean {
     return this.ers2026?.clipping ?? false;
+  }
+
+  /** Whether the Boost button can actually deploy (or hold in Low Grip) energy right now */
+  public get ersCanBoost(): boolean {
+    if (!this.ers2026) return this.ersEnergyJ > 0;
+    if (this.ers2026.isStandingStart) return false;
+    if (this.ersEnergyJ <= cutEnergyJ(BOOST_RACE_FLOOR_W)) return false;
+    if (this.ersLowGrip) return this.config.performanceModes[this.performanceMode].deployFraction > 0;
+    return true;
   }
 
   /**
@@ -4150,7 +4159,7 @@ export class VehiclePhysics {
         pK = -ers.topGearLiftHarvestW * mode.liftHarvestScale;
       } else if (topGear && inp.throttle > 0.95 && mode.topGearClipHarvestW > 0) {
         pK = -mode.topGearClipHarvestW;
-      } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
+      } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0 && !(this.ers2026 && this.ersBoost && !this.ersLowGrip)) {
         pK = -mode.partThrottleHarvestW;
       } else if (this.ers2026 && inp.throttle > 0.05) {
         // The 2026 F1 rules (ers-2026.ts): the ERS-K's power against road speed, the control unit's cuts flat out at
@@ -4160,6 +4169,7 @@ export class VehiclePhysics {
         const circuit = this.ersCircuit;
         const lapS = Number.isFinite(this.trackProgress) && this.lapLengthM > 0 ? this.trackProgress * this.lapLengthM : -1;
         const bigCutW = circuit && lapS >= 0 ? this.ersBigCutW(circuit, lapS) : 0;
+        const boostDeployFrac = this.ersBoost && !this.ersLowGrip ? 1 : mode.deployFraction;
         const dc = this.ers2026.step({
           h,
           speedKmh,
@@ -4176,8 +4186,8 @@ export class VehiclePhysics {
           cutStepW: Math.max(F1_2026_ERS.limitStepW, bigCutW),
           cutRateWps: circuit?.cutRateWps ?? F1_2026_ERS.limitRateWps,
           resetSector: !!circuit && lapS >= 0 && this.ersResetSector(circuit, lapS),
-          share: mode.deployFraction * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
-          fillShare: mode.deployFraction * this.luts.deployVsGear.evaluate(this.gear),
+          share: boostDeployFrac * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
+          fillShare: boostDeployFrac * this.luts.deployVsGear.evaluate(this.gear),
           valueSPerMJ: ersValueSPerMJ(speedKmh / 3.6, this.ersBrakeAheadM(), this.totalMassKg),
           deployAboveSPerMJ: em ? em.deployAbove.evaluate(socN) : Number.NaN,
           superclipBelowSPerMJ: em ? em.superclipBelow.evaluate(socN) : 0,
@@ -4545,7 +4555,9 @@ export class VehiclePhysics {
       this.lapHarvestJ += e;
     }
     if (this.ers2026) {
-      this.ers2026.lastDcW = pMech > 0 ? pMech / ers.deployEfficiency : 0;
+      // Preserve pre-shift deployment across the brief 20 ms upshift torque cut so a cut starting right after a shift
+      // steps down from the actual power rather than snapping to 0
+      if (!shiftCut) this.ers2026.lastDcW = pMech > 0 ? pMech / ers.deployEfficiency : 0;
       this.ersOmegaStep = this.engineOmega - omegaAtStart;
       // What the brakes could have recovered here, the recharge limit aside: the room the next lap keeps for them
       if (brakeWantW > 0 && Number.isFinite(this.trackProgress)) {
