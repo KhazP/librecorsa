@@ -4054,7 +4054,7 @@ export class DriveSession {
           wingMirrors = new WingMirrors(renderer, scene, lc26Body);
         }
         if (!lc26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
-          portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
+          portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics), carRigCar);
         }
         // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
         // gets an empty display and no mirrors, so it is probed once

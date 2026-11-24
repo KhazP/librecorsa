@@ -91,9 +91,30 @@ function formatLap(ms: number): string {
   return `${min}:${sec < 10 ? "0" : ""}${sec}.${milli < 100 ? (milli < 10 ? "00" : "0") : ""}${milli}`;
 }
 
-/** The display mesh with its own UVs onto the canvas' display box (driver's left is model +X: u runs from xMax) */
-function buildDisplayGeometry(src: THREE.BufferGeometry): THREE.BufferGeometry | null {
-  return planarUvGeometry(src, { flipX: true, map: (u, v) => [(BOX_X + u * BOX_W) / CANVAS_W, v] });
+/**
+ * The display mesh with its own UVs onto the canvas' display box (driver's left is model +X: u runs from xMax). With
+ * `keepAspect` the box keeps its proportions on a screen of another shape: a squarer screen shows the canvas' black
+ * above and below it (the texture clamps at its edges), a wider one beside it
+ */
+function buildDisplayGeometry(src: THREE.BufferGeometry, keepAspect = false): THREE.BufferGeometry | null {
+  return planarUvGeometry(src, {
+    flipX: true,
+    map: (u, v, w, h) => {
+      if (!keepAspect) return [(BOX_X + u * BOX_W) / CANVAS_W, v];
+      const k = w / h / (BOX_W / CANVAS_H);
+      const bu = k > 1 ? 0.5 + (u - 0.5) * k : u;
+      const bv = k < 1 ? 0.5 + (v - 0.5) / k : v;
+      return [(BOX_X + bu * BOX_W) / CANVAS_W, bv];
+    },
+  });
+}
+
+/** Where a wheel's screen is, for a model whose screen is not an `INT_DISPLAY` mesh */
+export interface WheelScreenSpec {
+  /** The screen's material, under the steering wheel */
+  material: string;
+  /** Keep the page's proportions on the screen (for a screen not of the LC26's 1.72 : 1) */
+  keepAspect?: boolean;
 }
 
 /**
@@ -115,20 +136,21 @@ export class SteeringWheelDisplay {
   /** The LED bar's first LED and shift point (rpm); unset, the bar follows `revRangeFor` the telemetry's car, as the HUD */
   private readonly revRange: readonly [number, number] | null;
 
-  constructor(steerRoot: THREE.Object3D, revRange?: readonly [number, number]) {
+  constructor(steerRoot: THREE.Object3D, revRange?: readonly [number, number], screen?: WheelScreenSpec) {
     this.revRange = revRange ?? null;
+    const materialName = screen?.material ?? DISPLAY_MATERIAL;
     let target: THREE.Mesh | null = null;
     steerRoot.traverse((obj) => {
       if (target) return;
       const m = obj as THREE.Mesh;
       if (!m.isMesh || Array.isArray(m.material)) return;
-      if (m.material.name === DISPLAY_MATERIAL) target = m;
+      if (m.material.name === materialName) target = m;
     });
 
     const mesh = target as THREE.Mesh | null;
     const src = mesh?.material as THREE.MeshStandardMaterial | undefined;
     const srcGeo = mesh?.geometry as THREE.BufferGeometry | undefined;
-    const ownGeo = mesh && srcGeo ? buildDisplayGeometry(srcGeo) : null;
+    const ownGeo = mesh && srcGeo ? buildDisplayGeometry(srcGeo, screen?.keepAspect) : null;
     if (!mesh || !src || !srcGeo || !ownGeo || !src.isMeshStandardMaterial) {
       this.found = false;
       return;
@@ -157,6 +179,9 @@ export class SteeringWheelDisplay {
 
     // Clone so the shared template material (and every other car's wheel) keeps its dark base
     const mat = src.clone();
+    // A screen borrowed from a generic material (a ported body's `light_004`) is named as a dash, so the headlights,
+    // which light the models' generic light materials, leave it alone
+    if (screen) mat.name = "wheel_display";
     mat.emissive.set(0xffffff);
     mat.emissiveIntensity = 1.6;
     mat.emissiveMap = tex;
