@@ -140,9 +140,14 @@ type toolchain struct {
 
 func newToolchain(dir, goos, goarch string) *toolchain {
 	pins, ok := toolchainPins[goos+"/"+goarch]
-	client := &http.Client{
-		// Long enough for a slow line; each read is bounded by the transport's timeouts
-		Timeout: 30 * time.Minute,
+	// Long enough for a slow line; each read is bounded by the transport's timeouts
+	return &toolchain{dir: dir, pins: pins, ok: ok, client: httpsClient(30 * time.Minute), checked: map[string]os.FileInfo{}}
+}
+
+// httpsClient fetches over HTTPS only: a redirect is followed only to another https:// address
+func httpsClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Scheme != "https" {
 				return fmt.Errorf("refused a redirect to %s: only https", req.URL.Redacted())
@@ -153,7 +158,6 @@ func newToolchain(dir, goos, goarch string) *toolchain {
 			return nil
 		},
 	}
-	return &toolchain{dir: dir, pins: pins, ok: ok, client: client, checked: map[string]os.FileInfo{}}
 }
 
 // defaultToolchainDir is the per-user folder the toolchain is downloaded into, beside the browser profile
@@ -313,6 +317,12 @@ var errHashMismatch = errors.New("the download's SHA-256 is not the pinned one")
 // fetchVerified downloads p into a file in dir, checks its size and SHA-256 against the pins, and returns the file's
 // path. progress is told the bytes so far. A download that doesn't match is deleted.
 func (t *toolchain) fetchVerified(ctx context.Context, p pinnedFile, dir string, progress func(done int64)) (string, error) {
+	return fetchVerified(ctx, t.client, p, dir, progress)
+}
+
+// fetchVerified downloads p with client (an httpsClient) into a file in dir, checks its size and SHA-256 against
+// the pins, and returns the file's path. The launcher's update is fetched this way too (update.go).
+func fetchVerified(ctx context.Context, client *http.Client, p pinnedFile, dir string, progress func(done int64)) (string, error) {
 	if !strings.HasPrefix(p.URL, "https://") {
 		return "", fmt.Errorf("%s: only https downloads", p.URL)
 	}
@@ -325,7 +335,7 @@ func (t *toolchain) fetchVerified(ctx context.Context, p pinnedFile, dir string,
 		return "", err
 	}
 	req.Header.Set("User-Agent", "librecorsa-launcher/"+version)
-	res, err := t.client.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", p.Name, err)
 	}

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"os/exec"
 	"syscall"
 	"time"
 )
@@ -26,3 +27,9 @@ func watchPID(pid int) *browserProcess {
 
 // endBrowser asks a browser to end as when it is quit from its menu (SIGTERM: it closes its windows and saves)
 func endBrowser(pid int) error { return syscall.Kill(pid, syscall.SIGTERM) }
+
+// detach starts the launcher after an update in a process group of its own, so it outlives this one and a terminal's
+// Ctrl+C meant for this one
+func detach(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+}

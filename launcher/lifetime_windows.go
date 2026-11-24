@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"os/exec"
 	"syscall"
 )
 
@@ -31,3 +32,8 @@ func watchPID(pid int) *browserProcess {
 
 // endBrowser is for macOS, whose browser stays open with no window; on Windows the browser ends with its last window
 func endBrowser(int) error { return errors.New("not on Windows") }
+
+// detach starts the launcher after an update in a process group of its own, with no console
+func detach(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNewProcessGroup | createNoWindow}
+}

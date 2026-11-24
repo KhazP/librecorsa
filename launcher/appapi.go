@@ -13,6 +13,8 @@ import (
 //
 //	POST /__launcher/open-folder      { "folder": "mods" | "import" }: open it in Finder, Explorer or the file manager
 //	POST /__launcher/alive            { "page": "<id>", "closing": false }: a page of the game is open (lifetime.go)
+//	GET  /__launcher/update           the update's state (update.go)
+//	POST /__launcher/update/restart   put the downloaded update in place and start it, keeping the game's window
 //
 // The alive call alone doesn't need the session: any window of the game keeps the launcher running, even one opened
 // by typing the address (it still needs the header, the Origin and a same-origin fetch, so no other site can).
@@ -20,12 +22,16 @@ import (
 const (
 	openFolderPath = identityPath + "/open-folder"
 	alivePath      = identityPath + "/alive"
+	updatePath     = identityPath + "/update"
+	restartPath    = identityPath + "/update/restart"
 )
 
 // appMethods are the methods each of these paths takes
 var appMethods = map[string]string{
 	openFolderPath: "POST",
 	alivePath:      "POST",
+	updatePath:     "GET",
+	restartPath:    "POST",
 }
 
 // isAppPath reports whether p is one of these paths
@@ -39,6 +45,9 @@ type appAPI struct {
 	// folders are the ones the game may have opened, by name
 	folders map[string]string
 	life    *lifetime
+	updates *updater
+	// busy says a conversion or download runs (an update waits for it)
+	busy func() bool
 	// open opens a folder in the system's file manager (a variable so the tests can see what is opened)
 	open func(dir string) error
 }
@@ -89,6 +98,22 @@ func (a *appAPI) serve(w http.ResponseWriter, r *http.Request, p string) {
 			a.life.beat(body.Page, body.Closing)
 		}
 		w.WriteHeader(http.StatusNoContent)
+	case updatePath:
+		writeAPI(w, http.StatusOK, a.updates.info())
+	case restartPath:
+		if !readJSONBody(w, r, nil) {
+			return
+		}
+		if a.busy != nil && a.busy() {
+			writeAPIError(w, http.StatusConflict, "busy", errBusy.Error())
+			return
+		}
+		if a.updates.pending() == nil {
+			writeAPIError(w, http.StatusConflict, "not-ready", "no update is ready to install")
+			return
+		}
+		a.updates.requestRestart()
+		writeAPI(w, http.StatusAccepted, map[string]any{"restarting": true})
 	}
 }
 

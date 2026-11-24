@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // appFixture is a launcher with the import folder's API and the app's, its folders opened into a list
@@ -15,9 +16,12 @@ func appFixture(t *testing.T) (*server, *appAPI, *[]string) {
 	t.Helper()
 	s, base := convertFixture(t)
 	opened := &[]string{}
+	f := newUpdateFixture(t, "0.2.0")
 	a := &appAPI{
 		folders: map[string]string{"mods": filepath.Join(base, "mods"), "import": filepath.Join(base, "import")},
 		life:    newLifetime(false, nil, nil),
+		updates: f.u,
+		busy:    func() bool { return s.imports.jobs.running() },
 		open: func(dir string) error {
 			*opened = append(*opened, dir)
 			return nil
@@ -117,6 +121,60 @@ func TestAliveKeepsTheLauncher(t *testing.T) {
 	}
 	if len(a.life.pages) != 1 {
 		t.Errorf("a refused call counted: %v", a.life.pages)
+	}
+}
+
+func TestUpdateAPI(t *testing.T) {
+	s, a, _ := appFixture(t)
+	info := decode[updateInfo](t, call(s, http.MethodGet, updatePath, ""))
+	if info.Version != "0.2.0" || info.State != updateNone || info.Run == "" || !strings.HasPrefix(info.ReleaseURL, releasesPage) {
+		t.Errorf("info %+v", info)
+	}
+	if w := call(s, http.MethodGet, updatePath, "", "-Cookie"); w.Code != http.StatusForbidden {
+		t.Errorf("without the session: %d", w.Code)
+	}
+	// Nothing to restart for
+	w := call(s, http.MethodPost, restartPath, "")
+	if w.Code != http.StatusConflict || decode[map[string]string](t, w)["code"] != "not-ready" {
+		t.Errorf("restart with nothing staged: %d %s", w.Code, w.Body)
+	}
+	// Staged
+	u := a.updates
+	writeFiles(t, filepath.Join(u.stagedDir(), "LibreCorsa"), map[string]string{"librecorsa": "x", "game/index.html": "x"})
+	writeFiles(t, u.dir, map[string]string{"staged.json": `{"version":"0.3.0","platform":"linux/amd64"}`})
+	if info := decode[updateInfo](t, call(s, http.MethodGet, updatePath, "")); info.State != updateReady || info.Latest != "0.3.0" {
+		t.Errorf("staged: %+v", info)
+	}
+	for name, c := range map[string][]string{
+		"no session":     {"-Cookie"},
+		"another origin": {"Origin", "http://evil.example"},
+		"no header":      {"-" + apiHeader},
+	} {
+		if w := call(s, http.MethodPost, restartPath, "", c...); w.Code != http.StatusForbidden {
+			t.Errorf("%s: %d", name, w.Code)
+		}
+	}
+	select {
+	case <-u.restartRequested():
+		t.Fatal("a refused call asked for the restart")
+	default:
+	}
+	// Not under a conversion
+	if w := call(s, http.MethodPost, convertPath, `{"folder":"slow_circuit"}`); w.Code != http.StatusAccepted {
+		t.Fatalf("convert: %d %s", w.Code, w.Body)
+	}
+	if w := call(s, http.MethodPost, restartPath, ""); w.Code != http.StatusConflict {
+		t.Errorf("restart under a conversion: %d", w.Code)
+	}
+	call(s, http.MethodPost, cancelPath, "")
+	waitJob(t, s)
+	if w := call(s, http.MethodPost, restartPath, ""); w.Code != http.StatusAccepted {
+		t.Fatalf("restart: %d %s", w.Code, w.Body)
+	}
+	select {
+	case <-u.restartRequested():
+	case <-time.After(time.Second):
+		t.Fatal("the restart wasn't asked for")
 	}
 }
 
