@@ -714,6 +714,12 @@ export const preRaceShow = toggle({
   hint: () => rt("preRaceShow.hint"),
   ...hud("preRaceShow"),
 });
+export const fullPodium = toggle({
+  id: "fullPodium",
+  get label() { return rt("fullPodium.label"); },
+  hint: () => rt("fullPodium.hint"),
+  ...hud("fullPodium"),
+});
 export const boardWidget = choice("segmented", {
   id: "boardWidget",
   get label() { return rt("boardWidget.label"); },

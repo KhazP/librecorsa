@@ -391,6 +391,10 @@
       "label": "Career pre-race show",
       "hint": "Before each career round: the circuit, the weather, the tyres and the grid, set to music. Space skips it, Enter starts."
     },
+    "fullPodium": {
+      "label": "Full-screen podium",
+      "hint": "After an AI race: the top three on the podium, the top ten and the fastest lap, before the results. Any key closes it."
+    },
     "boardWidget": {
       "label": "Lap board",
       "options": {

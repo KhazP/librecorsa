@@ -313,6 +313,8 @@ export interface HudSettings {
   showPlayerNames: boolean;
   /** The career's pre-race show before each round (the circuit, the weather, the tyres, the grid) */
   preRaceShow: boolean;
+  /** After an offline AI race, the full-screen podium (the top three, the top ten, the fastest lap) before the table */
+  fullPodium: boolean;
 }
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
@@ -475,6 +477,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   boardWidget: "lapEnd",
   showPlayerNames: true,
   preRaceShow: true,
+  fullPodium: true,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -869,6 +872,7 @@ function parseHud(v: unknown): HudSettings {
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
     preRaceShow: bool(v.preRaceShow, d.preRaceShow),
+    fullPodium: bool(v.fullPodium, d.fullPodium),
   };
 }
 
