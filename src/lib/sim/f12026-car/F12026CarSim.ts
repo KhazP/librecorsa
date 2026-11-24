@@ -90,6 +90,8 @@ import {
 import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './TrackColliderQuery';
 import { trackColliders } from '../track-colliders';
 import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
+import type { ContactBox } from '../contact-box';
+import { contactBoxOfBody } from './body-outline';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
@@ -1122,6 +1124,8 @@ export class F12026CarSim implements SimulatorCar {
     const ch = this.config.chassis;
     return (ch.inertia.yaw * this.vehicle.totalMassKg) / ch.totalMassKg;
   }
+  /** The box round the outline its barrier probes follow (its own body's, or the one it wears), for car-to-car contact */
+  public readonly contactBox: ContactBox;
   public readonly cgToFrontAxleM: number;
   public readonly cgToRearAxleM: number;
   // The rig's extra pitch / roll / heave (SimulatorCar): none, since the rigid body's pose already carries them.
@@ -1447,6 +1451,7 @@ export class F12026CarSim implements SimulatorCar {
     this.wheelbaseM = v.wheelbaseM;
     this.cgToFrontAxleM = v.cgToFrontM;
     this.cgToRearAxleM = v.cgToRearM;
+    this.contactBox = contactBoxOfBody(v.wallProbePoints, profile.bodyPlan ?? this.config.chassis.bodyPlan);
     const mkWheel = (): AdapterWheel => ({
       worldPos: { x: 0, y: 0, z: 0 },
       zRoad: 0,

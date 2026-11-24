@@ -125,7 +125,9 @@ export class CarDamage {
     private readonly halfLengthM = 2.5,
     private readonly halfWidthM = 0.975,
     /** Dice for punctures and which way a bent corner toes (a race reseeds it from its own seed) */
-    public rng: () => number = Math.random
+    public rng: () => number = Math.random,
+    /** How far the box above is centred ahead of the centre of gravity, which impacts are placed from (m) */
+    private readonly centreAheadM = 0
   ) {}
 
   public reset(): void {
@@ -190,13 +192,14 @@ export class CarDamage {
     const L = LEVEL[this.level];
     if (L.scale === 0 || this.terminal || !(hit.speedMs > AERO_FROM_MS)) return null;
     const v = hit.speedMs * (hit.source === 'wall' ? WALL_SEVERITY : 1);
-    const zone = zoneOf(hit.localX, hit.localZ, this.halfLengthM, this.halfWidthM);
+    const boxZ = hit.localZ - this.centreAheadM;
+    const zone = zoneOf(hit.localX, boxZ, this.halfLengthM, this.halfWidthM);
     const aero = L.scale * Math.pow(Math.min(1, (v - AERO_FROM_MS) / (AERO_FULL_MS - AERO_FROM_MS)), 1.3);
     let severity = aero;
     this[zone] = Math.min(1, this[zone] + aero);
 
     // A corner: within the outer 40 % of the length and the outer half of the width (wheels stick out on an open-wheeler)
-    const corner = cornerOf(hit.localX, hit.localZ, this.halfLengthM, this.halfWidthM);
+    const corner = cornerOf(hit.localX, boxZ, this.halfLengthM, this.halfWidthM);
     let puncture = false;
     if (corner >= 0) {
       if (v > SUSPENSION_FROM_MS) {

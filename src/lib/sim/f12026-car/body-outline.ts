@@ -1,5 +1,9 @@
-/** A car's outline at barrier height, from its config alone: what its barrier probes follow (`VehiclePhysics`) */
-import type { CarPhysicsConfig, TyresCompoundData } from './F12026CarConfig';
+/**
+ * A car's outline at barrier height, from its config alone: what its barrier probes follow (`VehiclePhysics`) and what
+ * its box for car-to-car contact is cut round (`contact-box.ts`).
+ */
+import { contactBoxOfOutline, DEFAULT_CONTACT_BOX, type ContactBox } from '../contact-box';
+import { compoundData, type CarPhysicsConfig, type TyresCompoundData } from './F12026CarConfig';
 import { convexHullIndices } from './TrackColliderQuery';
 
 /** A body's plan (`ChassisData.bodyPlan`): its right half, [half width, z from the axles' midpoint] (m) */
@@ -46,4 +50,22 @@ export function bodyOutline(cfg: CarPhysicsConfig, tyres: TyresCompoundData, pla
     }
   }
   return out;
+}
+
+/**
+ * A car's box for car-to-car contact from its barrier outline (`bodyOutline`'s points), when that outline follows a
+ * measured body plan. Without one the outline is the axles and wings, ~0.25 m short of an F1 body at either end, so
+ * such a car keeps `DEFAULT_CONTACT_BOX`
+ */
+export function contactBoxOfBody(outline: readonly { readonly x: number; readonly z: number }[], plan: BodyPlan | undefined): ContactBox {
+  return plan?.length ? contactBoxOfOutline(outline) : DEFAULT_CONTACT_BOX;
+}
+
+/**
+ * The contact box of a car on `cfg` wearing `plan` (its own body's when absent), on the tyres it is built on (the
+ * soft slot's, as `F12026CarSim` starts): the same box its simulation gives itself, for a car known only by its model
+ */
+export function contactBoxOfConfig(cfg: CarPhysicsConfig, plan?: BodyPlan): ContactBox {
+  const body = plan ?? cfg.chassis.bodyPlan;
+  return contactBoxOfBody(bodyOutline(cfg, compoundData(cfg, cfg.compoundSlots.soft), body), body);
 }
