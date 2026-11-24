@@ -14,6 +14,7 @@ import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/s
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { AI_PIT_MOVE_OVER_M, AI_PIT_TAKEOVER_BEFORE_M, AiPitRun, ownStopWanted, pitBoxIndex, plannedStopLaps, type AiPitOrder } from '@/lib/sim/pit/ai-pit';
 import { repairS } from '@/lib/sim/pit/pit-stop';
+import { AiWeatherTyres } from '@/lib/sim/pit/ai-weather-tyres';
 import type { PitLaneModel } from '@/lib/sim/pit/pit-lane';
 import { text as tx } from '@/lib/text';
 import { aiLineOffsetM, computeSpeedProfile, createLc26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
@@ -671,6 +672,8 @@ const BLUE_FLAG_M = 90;
 
 /** A retired car stopped this long is taken away by the marshals (s): long enough to be a yellow-flag hazard */
 const RETIRED_REMOVE_S = 20;
+/** The weather's tyre calls are made this often (s of race time) */
+const WEATHER_CALL_EVERY_S = 0.25;
 
 /** What happened on track this frame, for race control (`race-incidents.ts`) and the HUD */
 export type FieldIncident =
@@ -879,6 +882,9 @@ export class AiOpponentField implements AiRace {
   public pitStopsRequired = 0;
   /** The circuit's pit lane (null: none, and no stops) */
   private readonly pitLane: PitLaneModel | null;
+  /** The weather's tyre calls and the pit entry the cars share (pit/ai-weather-tyres.ts); made a few times a second */
+  private readonly weatherTyres = new AiWeatherTyres();
+  private weatherCallAtS = 0;
   public lightsOn = 0;
   /** Track evolution and aero wake shared by every car on the track */
   public readonly environment: TrackEnvironment;
@@ -1460,8 +1466,10 @@ export class AiOpponentField implements AiRace {
     if (this.pitLane) {
       let slot = 1;
       for (const c of this.cars) c.pitBox = pitBoxIndex(this.pitLane, c.isPlayer ? 0 : slot++, this.cars.length);
-      this.environment.aiTyrePit = (sim, compound) => this.tyreStop(sim, compound);
+      this.environment.aiTyresByField = (sim) => this.callsTyres(sim);
     }
+    this.weatherTyres.reset(this.seed + this.raceCount * 0x9e37);
+    this.weatherCallAtS = 0;
     this.playerPenaltyS = 0;
     this.playerDq = false;
     this.raceTimeS = 0;
@@ -1578,6 +1586,7 @@ export class AiOpponentField implements AiRace {
     this.incidents.length = 0;
     this.updateRollingFormation(dt);
     if (this.ownsEnvironment) this.environment.update(dt, this.allSims);
+    this.callWeatherStops();
     this.updateYellows(dt);
     this.updateVsc(dt);
     this.planTraffic(dt);
@@ -3214,9 +3223,14 @@ export class AiOpponentField implements AiRace {
     return this.raceLaps - car.clock.lapsDone;
   }
 
-  /** The tyres for a stop: rain tyres stay on, a slick goes to the next harder one with most of the race left, else softer */
+  /**
+   * The tyres for a stop: the kind the weather calls for when it calls for another (pit/ai-weather-tyres.ts); else rain
+   * tyres stay on, a slick goes to the next harder one with most of the race left, else softer
+   */
   private stopCompound(car: FieldCar): TireCompound {
     const now = car.sim.tireCompound;
+    const weather = this.pitLane ? this.weatherTyres.stopCompound(car.code, now) : null;
+    if (weather) return weather;
     if (now === 'intermediate' || now === 'wet') return now;
     const longStint = this.lapsLeft(car) > this.raceLaps * 0.4;
     if (now === 'soft') return 'medium';
@@ -3243,16 +3257,46 @@ export class AiOpponentField implements AiRace {
     }
   }
 
-  /** The weather calls for other tyres (TrackEnvironment): they go on at a stop; false: no stop to be made, change now */
-  private tyreStop(sim: SimulatorCar, compound: TireCompound): boolean {
+  /**
+   * Whether the field makes this car's tyre calls itself (`TrackEnvironment.aiTyresByField`): its own AI cars in a race
+   * with a pit lane, from the lights to their flag (`callWeatherStops`); the others keep the environment's instant change
+   */
+  private callsTyres(sim: SimulatorCar): boolean {
+    if (!this.pitLane || this.phase === 'lights') return false;
     const car = this.cars.find((c) => c.ai === sim);
-    if (!car || !this.pitLane || this.phase === 'lights' || car.finishTimeS !== null || this.lapsLeft(car) < 1) return false;
-    if (car.pitRun) {
-      if (car.pitRun.phase === 'in') car.pitRun.order.compound = compound;
-      return true;
+    return car !== undefined && car.finishTimeS === null;
+  }
+
+  /**
+   * The weather's tyre calls (pit/ai-weather-tyres.ts), a few times a second of race time: in running order, a car told
+   * to come in for other tyres; a stop it makes anyway takes them; a stop for the weather alone is called off once the
+   * conditions no longer ask for it
+   */
+  private callWeatherStops(): void {
+    if (!this.pitLane || this.raceTimeS < this.weatherCallAtS) return;
+    this.weatherCallAtS = this.raceTimeS + WEATHER_CALL_EVERY_S;
+    const water = this.environment.weather.lineWaterMm;
+    const order = raceOrder(this.cars.map((c) => this.progressOf(c)), this.track.totalLengthM);
+    for (let rank = 0; rank < order.length; rank++) {
+      const car = this.cars.find((c) => c.id === order[rank].id);
+      if (!car?.ai || car.retired || car.removed || car.finishTimeS !== null) continue;
+      const call = this.weatherTyres.update(this.raceTimeS, water, {
+        id: car.code,
+        compound: car.sim.tireCompound,
+        rank,
+        lapsDone: car.clock.lapsDone,
+        lapsLeft: this.lapsLeft(car),
+        racing: car.pitRun === null && car.control?.mode === 'racing',
+      });
+      const run = car.pitRun;
+      if (run) {
+        // On its way to the box: the tyres the conditions ask for now (a stop for the weather alone, its own slick)
+        if (run.phase === 'in' && (call.change || run.order.weather)) run.order.compound = call.compound;
+      } else if (!call.change) {
+        if (car.pitWant?.weather) car.pitWant = null;
+      } else if (car.pitWant) car.pitWant.compound = call.compound;
+      else if (call.due) car.pitWant = { compound: call.compound, repairS: 0, weather: true };
     }
-    car.pitWant = { compound, repairS: car.pitWant?.repairS ?? 0 };
-    return true;
   }
 
   /**
@@ -3265,6 +3309,8 @@ export class AiOpponentField implements AiRace {
     const L = this.track.totalLengthM;
     const toTurn = ((((lane.entryTrackS(AI_PIT_TAKEOVER_BEFORE_M) - me.sMeters) % L) + L) % L);
     if (toTurn > AI_PIT_MOVE_OVER_M) return null;
+    // Not when it will reach the turn-off too soon after the last car in (`turnIntoPits`): it stays on its line
+    if (!this.weatherTyres.entryOpen(car.code, this.raceTimeS + toTurn / Math.max(10, me.vxMs), this.lapsLeft(car) <= 1)) return null;
     const sample = this.track.getSampleAtDistance(me.sMeters);
     const edge = lane.side * Math.max(0, sample.width / 2 - 1.6);
     const want = edge - aiLineOffsetM(sample, me.racingLineId);
@@ -3285,6 +3331,12 @@ export class AiOpponentField implements AiRace {
     const L = this.track.totalLengthM;
     const past = ((((sim.sMeters - lane.entryTrackS(AI_PIT_TAKEOVER_BEFORE_M)) % L) + L) % L);
     if (past > 40) return false;
+    // One car at a time into the lane: one too soon after the last car in stays out a lap, unless this lap is its last
+    if (!this.weatherTyres.entryOpen(car.code, this.raceTimeS, this.lapsLeft(car) <= 1)) {
+      this.weatherTyres.turnedAway(car.code, this.raceTimeS);
+      return false;
+    }
+    this.weatherTyres.noteEntry(car.code, this.raceTimeS);
     const box = lane.boxes[car.pitBox] ?? null;
     car.pitRun = new AiPitRun(lane, box, { x: sim.worldPosition.x, z: sim.worldPosition.z, speedMs: sim.vxMs }, car.pitWant, car.rng);
     car.pitWant = null;
@@ -3321,6 +3373,9 @@ export class AiOpponentField implements AiRace {
         sim.setDamageEffects?.(null);
       }
       car.pitStops++;
+      // A stop for the weather counts as one of the race's required stops: the next planned one is not made
+      if (run.order.weather) car.pitLaps.shift();
+      this.weatherTyres.noteStop(car.code, this.raceTimeS, car.clock.lapsDone, run.order.compound);
     }
     if (r.release) {
       car.pitRun = null;
@@ -3520,6 +3575,8 @@ export class AiOpponentField implements AiRace {
     this.gapTimer.reset();
     this.splitTimer.reset();
     this.yellowPasses.rewind(rewindS);
+    this.weatherTyres.rewind(this.raceTimeS);
+    this.weatherCallAtS = this.raceTimeS;
     this.blueFlags.reset();
     this.vsc.reset();
 
