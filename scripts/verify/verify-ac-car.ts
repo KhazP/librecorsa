@@ -317,6 +317,13 @@ async function main(): Promise<void> {
     const r33 = acPhysicsPatch(dataDir, { base: 'nissan-r33-jgtc' });
     check("a base with a ride-height map: the body in the map's coefficients, flat grids", near(valueAt(r33.file.profile, 'config.aero.rhMap.cdA'), 1.4 * 0.32, 1e-5) && (valueAt(r33.file.profile, 'config.aero.rhMap.cl') as number[][]).every((row) => row.every((x) => x === 1)));
     check('a turbo on a base with one: its own boost law', valueAt(r33.file.profile, 'config.engine.turbo.maxBoost') === 0.8 && valueAt(r33.file.profile, 'turbo') === true);
+    // No ers.ini on a hybrid base: no motor, no harvest, not only no HUD
+    for (const model of ['f12026-car', 'lc-lmdh'] as const) {
+      const e = acPhysicsPatch(dataDir, { base: model }).profile;
+      const modes = Object.values(e.config.performanceModes);
+      check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
+    }
+
     const drive = await driveCheck(p.profile);
     check('it drives: no spin flat out, a plausible top speed, braking', drive.ok, `0–100 ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h, ${drive.brakeFromKmh}→0 in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g) ${drive.problems.join('; ')}`);
   }

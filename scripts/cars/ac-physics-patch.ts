@@ -711,7 +711,18 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
       if (own < lo || own > hi) m.set(key, [Math.min(lo, own), Math.max(hi, own)], `suspensions.ini [${ax}] STATIC_CAMBER (the base's range, widened to it)`);
     }
   }
-  if (base.hasErs && !mod.has('ers.ini')) m.set('hasErs', false, 'no ers.ini: no hybrid');
+  if (base.hasErs && !mod.has('ers.ini')) {
+    // `hasErs` only hides the HUD's energy: the motor's deploy, its harvests and the modes' own harvests go too, or a
+    // car with no hybrid would drive with the base's
+    const from = 'no ers.ini: no hybrid';
+    m.set('hasErs', false, from);
+    for (const k of ['ERS_MAX_DEPLOY', 'maxHarvestW', 'topGearLiftHarvestW'] as const) if (bc.ers[k] > 0) m.set(`config.ers.${k}`, 0, from);
+    if (bc.ers.liftHarvestEveryGear) m.set('config.ers.liftHarvestEveryGear.maxAxleTorqueNm', 0, from);
+    for (const [name, mode] of Object.entries(bc.performanceModes)) {
+      if (mode.topGearClipHarvestW > 0) m.set(`config.performanceModes.${name}.topGearClipHarvestW`, 0, from);
+      if (mode.partThrottleHarvestW > 0) m.set(`config.performanceModes.${name}.partThrottleHarvestW`, 0, from);
+    }
+  }
   if (base.hasDrs && !/\bDRS\b/i.test(JSON.stringify(mod.sections('aero.ini')))) m.set('hasDrs', false, 'aero.ini (no DRS)');
   mapPlanning(mod, m, base, ride);
   return m;
