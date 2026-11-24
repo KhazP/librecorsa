@@ -46,9 +46,12 @@ func randomToken() string {
 	return hex.EncodeToString(b)
 }
 
+// sessionCookiePrefix starts the session cookie's name, which never goes on to the site (apiproxy.go)
+const sessionCookiePrefix = "librecorsa_launcher_"
+
 // cookieName is per port: a browser sends a host's cookies to each of its ports, and another launcher (--port) has
 // its own
-func (s *session) cookieName() string { return fmt.Sprintf("librecorsa_launcher_%d", s.port) }
+func (s *session) cookieName() string { return fmt.Sprintf("%s%d", sessionCookiePrefix, s.port) }
 
 // openURL is an address that opens the game with this run's session, good once
 func (s *session) openURL(origin string) string {

@@ -296,6 +296,7 @@ func TestMirrorOfflineFallback(t *testing.T) {
 func TestMirrorOfflineFlag(t *testing.T) {
 	site := newFakeSite(t)
 	site.set("/tracks/ring/track.glb", "ring-v1", `"v1"`)
+	site.set("/api/config", `{"rooms":true}`, "")
 	s, cacheDir := mirrorFixture(t, site)
 	expect(t, get(s, "/tracks/ring/track.glb"), "online", 200, "ring-v1")
 	before := len(site.requests(""))
@@ -304,6 +305,9 @@ func TestMirrorOfflineFlag(t *testing.T) {
 	expect(t, get(s, "/tracks/ring/track.glb"), "kept", 200, "ring-v1")
 	expect(t, get(s, "/cars/car.glb"), "seed", 200, "glTF")
 	expect(t, get(s, "/tracks/missing.glb"), "missing", 404, "<h1>lost</h1>")
+	if w := get(s, "/api/config"); w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), `"ok":false`) {
+		t.Errorf("/api offline: got %d %q", w.Code, w.Body.String())
+	}
 	if n := len(site.requests("")); n != before {
 		t.Errorf("--offline asked the site %d times", n-before)
 	}
@@ -593,7 +597,7 @@ func TestMirrorHostCheck(t *testing.T) {
 	site := newFakeSite(t)
 	site.set("/tracks/ring/track.glb", "ring", `"r"`)
 	s, _ := mirrorFixture(t, site)
-	for _, p := range []string{"/tracks/ring/track.glb", "/play"} {
+	for _, p := range []string{"/tracks/ring/track.glb", "/api/config", "/play"} {
 		if w := get(s, p, "Host", "evil.example:47826"); w.Code != http.StatusForbidden {
 			t.Errorf("%s with another Host: got %d, want 403", p, w.Code)
 		}

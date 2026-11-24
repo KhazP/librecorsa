@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"path"
 	"strings"
@@ -26,8 +27,9 @@ type server struct {
 	game *os.Root
 	mods *modsFolder
 	port int
-	// site is the live site's mirror, when there is an upstream (mirror.go)
+	// site is the live site's mirror, when there is an upstream (mirror.go); api passes /api on to it (apiproxy.go)
 	site *mirror
+	api  *httputil.ReverseProxy
 	// imports is the import folder's API (api.go), when the launcher has one
 	imports *importsAPI
 	// session tells the window the launcher opened from other programs (session.go)
@@ -83,6 +85,11 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 		s.imports.serve(s, w, r, p)
+		return
+	}
+	// The game's online side, on the live site, every method and WebSockets too (apiproxy.go)
+	if s.site != nil && isOnlinePath(p) {
+		s.serveOnline(w, r)
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

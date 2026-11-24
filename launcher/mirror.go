@@ -20,7 +20,7 @@ import (
 )
 
 // The site mirror. With an upstream (--site; https://librecorsa.org in a release), every page and file outside
-// /mods/ and /__launcher comes from the live site, as the website would serve it, and is kept on disk: online
+// /mods/, /__launcher and /api comes from the live site, as the website would serve it, and is kept on disk: online
 // the game is the live one, hosted cars and circuits included (they live in the site's R2 bucket, not in the export),
 // and offline it is what was kept, else the export bundled with the launcher (the seed), else the export's 404 page.
 //
@@ -99,9 +99,10 @@ func newMirror(site string, cache *siteCache, offline bool) (*mirror, error) {
 	}, nil
 }
 
-// enableSite turns the mirror on: from now on the site's paths come from it
+// enableSite turns the mirror on: from now on the site's paths come from it, and /api goes to it (apiproxy.go)
 func (s *server) enableSite(m *mirror) {
 	s.site = m
+	s.api = newAPIProxy(s, m)
 }
 
 // parseSite checks a --site value and returns its origin ("https://librecorsa.org"): http or https, a host, nothing
@@ -225,7 +226,7 @@ func cacheName(segs []string, trailing bool) string {
 	return name
 }
 
-// serveSite answers a GET or HEAD for one of the site's paths (not /mods/ or /__launcher) from the site, the
+// serveSite answers a GET or HEAD for one of the site's paths (not /mods/, /__launcher or /api) from the site, the
 // cache, the seed or the export's 404 page, as the rules at the top say
 func (s *server) serveSite(w http.ResponseWriter, r *http.Request, urlPath string) {
 	m := s.site
