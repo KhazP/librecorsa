@@ -13,6 +13,12 @@ import { LAP_SAMPLE_STRIDE } from "./lap-types";
 
 /** The first and last samples are both at the line; further apart than this (m), the lap is not closed */
 export const MAX_LAP_GAP_M = 150;
+/**
+ * Fastest start-line crossing speed (km/h) for a point-to-point standing-start run (#191): launching full-throttle
+ * from the back of the 10 m standing-start box puts the 2026 F1 car at ~55 km/h across the line (~66 km/h after the
+ * 250 ms start-grace window), while reversing down the run-up for a flying start puts GT3s > 100 km/h and F1 > 130 km/h
+ */
+export const MAX_OPEN_START_KMH = 80;
 /** Distance from the speed channel vs from the positions: allowed mismatch (share of the lap, plus a margin in m) */
 export const MAX_SPEED_PATH_MISMATCH = 0.03;
 export const SPEED_PATH_MARGIN_M = 50;
@@ -32,6 +38,7 @@ export function lapPlausibilityProblem(data: readonly number[], opts: { open?: b
   const last = (n - 1) * S;
   const gap = Math.hypot(data[last + 2] - data[2], data[last + 3] - data[3], data[last + 4] - data[4]);
   if (!opts.open && gap > MAX_LAP_GAP_M) return "The lap does not end where it started";
+  if (opts.open && data[9] > MAX_OPEN_START_KMH) return "A point-to-point run must begin from a standing start";
 
   let path = 0;
   let speedPath = 0;

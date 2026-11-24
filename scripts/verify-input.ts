@@ -764,6 +764,27 @@ check('a listed Logitech wheel without "wheel" in its name is recognised by its 
   }
   assert.equal(autoConfigureWheel([pad('Logitech Dual Action (Vendor: 046d Product: c216)', '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'a Logitech gamepad is not a wheel');
 });
+check('#189: Thrustmaster TMX / T150 / T500RS are recognised by USB id (e.g. Windows "B67F") as belt wheels on the bridge', () => {
+  for (const id of [
+    'B67F (Vendor: 044f Product: b67f)',
+    '044f-b67f-B67F',
+    'Thrustmaster TMX Racing Wheel',
+    'Thrustmaster T150 (Vendor: 044f Product: b677)',
+    'Thrustmaster T500RS (Vendor: 044f Product: b65e)',
+    'Thrustmaster FFB Wheel (Vendor: 044f Product: b65d)',
+  ]) {
+    const patch = autoConfigureWheel([pad(id, '', [0])], DEFAULT_WHEEL_SETTINGS);
+    assert.ok(patch, id);
+    assert.equal(patch.steer?.padId, id, id);
+    assert.equal(patch.type, 'belt_gear', id);
+    assert.equal(patch.rotationDeg, 900, id);
+    assert.equal(patch.hidFfb, false, `${id} starts on the bridge`);
+  }
+  const t300 = autoConfigureWheel([pad('B66E (Vendor: 044f Product: b66e)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(t300?.type, 'belt_gear');
+  assert.equal(t300?.hidFfb, true, 'a WebHID-supported Thrustmaster base (T300RS) still starts on WebHID');
+  assert.equal(autoConfigureWheel([pad('T-LCM Pedals (Vendor: 044f Product: b371)', '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'pedals are not a wheel');
+});
 check('FFB gain and minimum force: continuous through zero, monotonic, sign kept', () => {
   const w = { ffbGain: 1.5, ffbMinForce: 0.1 };
   near(shapeFfbForce(0, w), 0);

@@ -23,7 +23,12 @@ import {
   type PadPedalSources,
 } from "./bindings";
 import { shapeStick } from "./stick-shape";
-import { logitechClassicModel, logitechHidppModel } from "./wheel-support";
+import {
+  isThrustmasterBridgeOnly,
+  isThrustmasterWheel,
+  logitechClassicModel,
+  logitechHidppModel,
+} from "./wheel-support";
 import { isDualSensePadId } from "./dualsense-protocol";
 import { isDualShock4PadId } from "./dualshock4-protocol";
 import { isGyroPadId } from "./gyro-source";
@@ -344,7 +349,20 @@ function isLogitechHidppPad(id: string): boolean {
   return ids !== null && logitechHidppModel(ids.vendorId, ids.productId) !== null;
 }
 
-const isWheelId = (id: string) => WHEEL_ID.test(id) || isLogitechClassicPad(id) || isLogitechHidppPad(id);
+/** One of the known Thrustmaster belt / gear wheels (wheel-support.ts), by its USB ids (e.g. Windows "B67F" for TMX) */
+function isThrustmasterWheelPad(id: string): boolean {
+  const ids = padUsbIds(id);
+  return ids !== null && isThrustmasterWheel(ids.vendorId, ids.productId);
+}
+
+/** A Thrustmaster wheel WebHID refuses and leaves to the native bridge (T150, TMX, T500RS, start-up ids) */
+function isThrustmasterBridgeOnlyPad(id: string): boolean {
+  const ids = padUsbIds(id);
+  return ids !== null && isThrustmasterBridgeOnly(ids.vendorId, ids.productId);
+}
+
+const isWheelId = (id: string) =>
+  WHEEL_ID.test(id) || isLogitechClassicPad(id) || isLogitechHidppPad(id) || isThrustmasterWheelPad(id);
 
 /** Sim wheels rarely report the standard mapping; names (or a listed Logitech's USB ids) give the rest away */
 export function isLikelyWheel(pad: Pick<PadLike, "id" | "mapping">): boolean {
@@ -596,7 +614,7 @@ export class DeviceInputReader {
 }
 
 /** Belt / gear-driven bases (the rest are taken as direct drive); the CSL Elite is belt-driven, the CSL DD is not */
-const BELT_GEAR_ID = /pxn|v99|g25|g27|g29|g920|g923|t150|t248|t300|tmx|csl elite/i;
+const BELT_GEAR_ID = /pxn|v99|g25|g27|g29|g920|g923|t150|t248|t300|t500|tmx|csl elite/i;
 /** Logitech devices, by name or by the vendor id Chrome puts in Gamepad.id ("Vendor: 046d") */
 const LOGITECH_ID = /logitech|\b046d\b/i;
 /** Pedal sets, shifters and handbrakes share the wheel brands' names but never steer */
@@ -605,23 +623,32 @@ const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
 export const isVirtualPad = (padId: string): boolean => /vjoy|virtual joystick/i.test(padId);
 
 /**
- * Steering binding for a wheel recognised by name (or a listed Logitech by its USB ids) that has none yet: axis 0,
- * centred where it rests, with the base type's rotation / filter defaults. Null when there is nothing to bind (already
- * bound, or no named wheel: an unknown non-standard device may be pedals or a button box, so it is never bound blindly).
+ * Steering binding for a wheel recognised by name (or a listed Logitech / Thrustmaster by its USB ids) that has none
+ * yet: axis 0, centred where it rests, with the base type's rotation / filter defaults. Null when there is nothing to
+ * bind (already bound, or no named wheel: an unknown non-standard device may be pedals or a button box, so it is never
+ * bound blindly).
  */
 export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSettings): Partial<WheelSettings> | null {
   if (current.steer) return null;
   const wheelPad = pads.find((p) => isWheelId(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
   if (!wheelPad) return null;
   const type: WheelType =
-    BELT_GEAR_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id) || isLogitechHidppPad(wheelPad.id) ? "belt_gear" : "direct_drive";
+    BELT_GEAR_ID.test(wheelPad.id) ||
+    isLogitechClassicPad(wheelPad.id) ||
+    isLogitechHidppPad(wheelPad.id) ||
+    isThrustmasterWheelPad(wheelPad.id)
+      ? "belt_gear"
+      : "direct_drive";
   const rest = wheelPad.axes[0] ?? 0;
+  // WebHID unless it is a wheel WebHID refuses (unlisted Logitech like PS G923 / G PRO, or bridge-only Thrustmaster
+  // like T150 / TMX / T500RS): those start on the local bridge
+  const bridgeOnlyLogitech = LOGITECH_ID.test(wheelPad.id) && !isLogitechClassicPad(wheelPad.id) && !isLogitechHidppPad(wheelPad.id);
+  const bridgeOnlyThrustmaster = isThrustmasterBridgeOnlyPad(wheelPad.id) || /\b(t150|tmx|t500(?:rs)?)\b/i.test(wheelPad.id);
   return {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
-    // WebHID unless it is a Logitech wheel WebHID cannot drive (G923 for PlayStation, G PRO): those start on the local bridge
-    hidFfb: !LOGITECH_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id) || isLogitechHidppPad(wheelPad.id),
+    hidFfb: !bridgeOnlyLogitech && !bridgeOnlyThrustmaster,
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }
