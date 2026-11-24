@@ -18,8 +18,13 @@ export interface CarSkinSource {
   id: string;
   name: string;
   swatch: ModSkin["swatch"];
-  /** A folder of the livery's files, named as the model's own textures (port_ac_car.py --skins-out writes them) */
+  /**
+   * A folder of the livery's files, named as the model's own textures (port_ac_car.py --skins-out writes them), and its
+   * picture in the picker (thumb.webp)
+   */
   dir: string;
+  /** The files it changes, when only some of the model's livery files (each in `dir`). Absent: all of them */
+  files?: string[];
   variant?: string;
 }
 
@@ -93,7 +98,7 @@ export function packageCar(opts: CarPackageOptions): PackagedCar {
   const skins: ModSkin[] = [{ id: opts.paint.id, name: opts.paint.name, swatch: opts.paint.swatch }];
   for (const s of opts.skins ?? []) {
     copyFolder(s.dir, join(target, "skins", s.id), SKIN_FILE, skipped);
-    skins.push({ id: s.id, name: s.name, swatch: s.swatch, ...(s.variant ? { variant: s.variant } : {}) });
+    skins.push({ id: s.id, name: s.name, swatch: s.swatch, ...(s.files ? { files: s.files } : {}), ...(s.variant ? { variant: s.variant } : {}) });
   }
   let sound: ModCar["sound"];
   if ("dir" in opts.sound) {
