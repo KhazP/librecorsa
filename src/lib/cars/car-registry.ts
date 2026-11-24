@@ -21,7 +21,7 @@ import { LC_LMDH_SKINS } from "./lmdh-skins";
 import { LIANA_SKINS } from "./liana-skins";
 import type { PortedSkin } from "@/lib/car-builder-2026";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
-import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
+import { carListed, HOSTED_CONTENT, REPO_CAR_IDS } from "@/lib/hosted-content";
 
 /**
  * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
@@ -261,6 +261,8 @@ export interface CarDefinition {
   credit: CarCredit;
   /** Who made its tyre textures, when they are someone else's work than the body's (the car card links them) */
   tyreCredit?: { author: string; url: string };
+  /** Who made its sound, when it is someone else's work than the body's (the Credits panel lists them) */
+  soundCredit?: { author: string; url: string };
   /** Where its 3D body comes from, when the credit names someone else (its modder); absent: the credit */
   modelSource?: CarCredit;
   /** The vehicle model that drives it */
@@ -324,6 +326,8 @@ const ALL_CARS: readonly CarDefinition[] = [
     quality: "own",
     credit: SHUNQI_F1_2025,
     tyreCredit: { author: "Purple Sector", url: "https://www.patreon.com/cw/PurpleSector" },
+    // kyojinvan's sound plays where the hosted files are listed (LC25_SOUND); a plain copy plays the project's own
+    ...(HOSTED_CONTENT ? { soundCredit: { author: "kyojinvan", url: "https://www.overtake.gg/members/kyojinvan.2113755/" } } : {}),
     physics: "lc25",
     year: 2025,
     sound: LC25_SOUND,

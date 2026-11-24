@@ -6,14 +6,19 @@ import type { BuiltTrackData } from '@/lib/track-data';
 import type * as THREE from 'three';
 import { OPEN_WHEEL_KEYBOARD_STEER } from '@/lib/input/keyboard-steer';
 import type { CarSoundSource } from '../CarAudio';
+import { HOSTED_CONTENT } from '../../hosted-content';
 import { NOMINAL_AIR_DENSITY, type SpeedProfileCarModel } from '../speed-profile';
 import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS, F1_ASSIST_DIALS } from '../f12026-car/F12026CarSim';
 import { LC25_CAR_CONFIG, LC25_FUEL_FLOW_CURVE_KGS, LC25_STEERING, LC25_TYRE_SETUP_RANGES } from './Lc25Config';
 
-/** Synthesised 2025 1.6L V6 turbo-hybrid + MGU-H sound bank (`scripts/audio/synth_f1_2025_bank.py`) */
+/**
+ * kyojinvan's 2025 F1 V6 sound (an Assetto Corsa bank, `scripts/audio/car_configs.json` "lc25-v6") where the hosted
+ * files are listed, on librecorsa.org; a plain copy of the repository plays the synthesised 2025 1.6L V6 turbo-hybrid +
+ * MGU-H bank (`scripts/audio/synth_f1_2025_bank.py`) that ships with it
+ */
 export const LC25_SOUND: CarSoundSource = {
   id: 'lc25',
-  assetDir: '/cars/lc25/audio/',
+  assetDir: HOSTED_CONTENT ? '/cars/lc25-v6/audio/' : '/cars/lc25/audio/',
   limiterRpm: LC25_CAR_CONFIG.gearbox.gears.redline_rpm,
 };
 
