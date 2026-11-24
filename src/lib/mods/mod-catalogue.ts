@@ -72,7 +72,8 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 /**
  * A link in a catalogue as an absolute URL, or null when the game may not follow it. A relative link is read against
  * the catalogue's own address, so a catalogue and its zips can sit in one folder anywhere. What it leads to must be
- * https://, or on the game's own site (the launcher serves http://127.0.0.1). No user name or password in it.
+ * https://, or on the game's own site (the launcher serves http://127.0.0.1). No user name or password in it. Where
+ * a fetch of it ends up after redirects is held to the same rules (`landedSafely`).
  */
 export function catalogueLink(value: unknown, base: string, pageOrigin: string): string | null {
   // Whitespace, control characters and backslashes are refused rather than read the lenient way a browser reads them
@@ -86,6 +87,15 @@ export function catalogueLink(value: unknown, base: string, pageOrigin: string):
   if (url.username || url.password) return null;
   if (url.protocol === "https:") return url.href;
   return url.protocol === "http:" && url.origin === pageOrigin ? url.href : null;
+}
+
+/**
+ * Whether a response came from an address the game may read: a fetch follows redirects, and on the launcher's http
+ * page nothing stops one from an https address to plain http, where anyone on the way could change the answer. A
+ * response with no address (a test's) is taken as from the one asked for.
+ */
+export function landedSafely(res: Response, pageOrigin: string): boolean {
+  return !res.url || catalogueLink(res.url, res.url, pageOrigin) !== null;
 }
 
 /** A catalogue to read, and whether the build names it (one it names is expected to answer; this copy's own may not be there) */
@@ -228,6 +238,11 @@ export async function readCatalogue(
   const timer = setTimeout(stop, opts.timeoutMs ?? CATALOGUE_TIMEOUT_MS);
   try {
     const res = await (opts.fetch ?? fetch)(url, { cache: "no-cache", signal: abort.signal, headers: { Accept: "application/json" } });
+    if (!landedSafely(res, pageOrigin)) {
+      void res.body?.cancel().catch(() => {});
+      console.warn(`Mod catalogue ${url}: redirected to ${res.url}, which isn't https:// or this site: not read`);
+      return { state: "absent" };
+    }
     if (!res.ok) {
       void res.body?.cancel().catch(() => {});
       return { state: "absent" };
@@ -314,6 +329,8 @@ export type DownloadFailure =
   | "network"
   /** The server answered with an error (`status`) */
   | "http"
+  /** A redirect led to an address that isn't https:// or the game's own site */
+  | "insecure"
   /** It isn't the size the catalogue states */
   | "size"
   /** Its SHA-256 isn't the one the catalogue states */
@@ -335,12 +352,13 @@ const BLOB_PART_BYTES = 8 * 1024 * 1024;
 
 /**
  * Downloads a package's zip, streamed, hashing each piece as it arrives: it must be exactly `entry.bytes` long, and
- * its SHA-256 `entry.sha256`, or it is refused with a `DownloadError`. `onProgress` hears the bytes so far. Never
- * kept by the service worker or the browser's cache: the zip is wanted once, to install.
+ * its SHA-256 `entry.sha256`, or it is refused with a `DownloadError`. One a redirect took off https:// (or the game's
+ * own site, `pageOrigin`) is refused before it is read. `onProgress` hears the bytes so far. Never kept by the service
+ * worker or the browser's cache: the zip is wanted once, to install.
  */
 export async function downloadPackage(
   entry: Pick<CatalogueEntry, "url" | "bytes" | "sha256">,
-  opts: { signal?: AbortSignal; onProgress?: (received: number, total: number) => void; fetch?: typeof fetch } = {},
+  opts: { signal?: AbortSignal; onProgress?: (received: number, total: number) => void; fetch?: typeof fetch; pageOrigin?: string } = {},
 ): Promise<Blob> {
   const offline = () => typeof navigator !== "undefined" && navigator.onLine === false;
   let res: Response;
@@ -348,6 +366,11 @@ export async function downloadPackage(
     res = await (opts.fetch ?? fetch)(entry.url, { cache: "no-store", signal: opts.signal });
   } catch {
     throw new DownloadError(opts.signal?.aborted ? "aborted" : offline() ? "offline" : "network");
+  }
+  const pageOrigin = opts.pageOrigin ?? (typeof window !== "undefined" ? window.location.origin : "");
+  if (!landedSafely(res, pageOrigin)) {
+    void res.body?.cancel().catch(() => {});
+    throw new DownloadError("insecure");
   }
   if (!res.ok || !res.body) {
     void res.body?.cancel().catch(() => {});

@@ -454,5 +454,6 @@
   "carBrowser.headingPopular": "Heading over the list sorted by Most driven. {days}: how many days are counted (30).",
   "upNext.personalBest": "Row on the title screen's Up next sheet: the player's best lap for this circuit and car.",
   "upNext.oldPhysics": "Tag beside a best lap set before the current physics. Short.",
-  "upNext.noTimeYet": "Shown when the player has no lap for this circuit and car."
+  "upNext.noTimeYet": "Shown when the player has no lap for this circuit and car.",
+  "modCatalogue.errorInsecure": "A redirect took the download from a secure (https) address to one that isn't. https is a protocol name: keep it as it is."
 }

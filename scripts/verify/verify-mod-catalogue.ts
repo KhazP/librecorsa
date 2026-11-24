@@ -219,6 +219,16 @@ async function main(): Promise<void> {
   read = await readCatalogue(`${CDN}/catalogue.json`, SITE, { fetch: fetchOf(() => redirected) });
   check("Links are read against where a redirect led", read.state === "ok" && read.catalogue.packages[0].url === `${CDN}/v2/jdoe.blue-gt.zip`);
 
+  // On the launcher's http page a redirect from https to plain http isn't stopped by the browser: the game stops it
+  const toHttp = json({ format: 1, packages: [entry({ url: "http://evil.example/x.zip" })] });
+  Object.defineProperty(toHttp, "url", { value: "http://evil.example/catalogue.json" });
+  read = await readCatalogue(`${CDN}/catalogue.json`, LAUNCHER, { fetch: fetchOf(() => toHttp) });
+  check("A catalogue a redirect took to plain http isn't read", read.state === "absent");
+  const toLauncher = json({ format: 1, packages: [entry()] });
+  Object.defineProperty(toLauncher, "url", { value: `${LAUNCHER}/mods/_catalogue/catalogue.json` });
+  read = await readCatalogue(`${LAUNCHER}/c.json`, LAUNCHER, { fetch: fetchOf(() => toLauncher) });
+  check("…one on the launcher's own http origin is", read.state === "ok");
+
   // --- Every catalogue at once ---
   const both = await loadCatalogues(`${CDN}/catalogue.json`, {
     pageUrl: page,
@@ -275,6 +285,18 @@ async function main(): Promise<void> {
   check("Longer than stated: refused as soon as it passes the size", (await failure({}, () => long.res))?.failure === "size" && long.sent() < 60_000, `${long.sent()} bytes read`);
   check("Shorter than stated: refused", (await failure({}, () => served(zipBytes.slice(0, 1000)).res))?.failure === "size");
   check("A stated length that isn't the size: refused before reading", (await failure({}, () => served(zipBytes, { headers: { "Content-Length": "10" } }).res))?.failure === "size");
+  const downgraded = async () => {
+    const res = served(zipBytes).res;
+    Object.defineProperty(res, "url", { value: "http://evil.example/x.zip" });
+    return res;
+  };
+  let insecure: DownloadError | null = null;
+  try {
+    await downloadPackage(zipEntry, { fetch: fetchOf(downgraded), pageOrigin: LAUNCHER });
+  } catch (err) {
+    insecure = err instanceof DownloadError ? err : null;
+  }
+  check("A download a redirect took to plain http is refused before it is read", insecure?.failure === "insecure");
   const http = await failure({}, () => new Response("gone", { status: 404 }));
   check("A server error: refused, with its status", http?.failure === "http" && http.status === 404);
   check("No connection: a network failure", (await failure({}, () => Promise.reject(new TypeError("Failed to fetch"))))?.failure === "network");
