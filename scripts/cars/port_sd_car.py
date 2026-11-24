@@ -80,14 +80,32 @@ def sd_to_rig(p):
 # ---------------------------------------------------------------------------------------------------------------------
 
 
+def _floats(tok, n, what):
+    """`n` finite numbers from tokens"""
+    if len(tok) < n:
+        raise ValueError(f'{what} needs {n} numbers')
+    v = [float(t) for t in tok[:n]]
+    if not all(math.isfinite(x) for x in v):
+        raise ValueError(f'{what} is not finite')
+    return v
+
+
 def read_ac(path):
     """Every object with geometry in `path` as a mesh in the AC frame, its transforms baked:
     dict(name, texture, pos (n,3), nrm (n,3) or None, uv (n,2), tris (m,3), mats (m,) material index, two (m,) bool)
-    plus the file's materials [dict(name, rgb, spec, shi, trans)]"""
+    plus the file's materials [dict(name, rgb, spec, shi, trans)]. A model cut short, with a vertex index or a
+    material outside its lists, or with numbers that aren't finite is refused"""
     with open(path, 'r', encoding='latin-1') as f:
         lines = f.read().splitlines()
     if not lines or not lines[0].startswith('AC3D'):
-        raise ValueError(f'{path}: not an AC3D file')
+        sys.exit(f'{path}: not an AC3D file')
+    try:
+        return _read_ac(lines)
+    except (ValueError, IndexError, RecursionError) as e:
+        sys.exit(f'{path}: not a well-formed AC3D model ({e})')
+
+
+def _read_ac(lines):
     materials = []
     meshes = []
     i = 1
@@ -97,6 +115,12 @@ def read_ac(path):
             return shlex.split(line, posix=True)
         except ValueError:
             return line.split()
+
+    def rows(n, what):
+        """The `n` lines from line i, which the file must have"""
+        if n < 0 or i + n > len(lines):
+            raise ValueError(f'{what}: {n} lines from line {i + 1}, past the end of the file')
+        return lines[i:i + n]
 
     def parse_object(R, t):
         nonlocal i
@@ -114,7 +138,11 @@ def read_ac(path):
             if k == 'name':
                 name = tk[1] if len(tk) > 1 else ''
             elif k == 'data':
-                i += 1
+                # Its text runs over the next line(s): as many characters as it says, line breaks counted
+                n, got = int(tk[1]), 0
+                while got < n and i < len(lines):
+                    got += len(lines[i]) + 1
+                    i += 1
             elif k == 'texture':
                 # The first texture is the colour map; the others (tiled, skids, shad) are for the track shaders
                 if texture is None:
@@ -122,21 +150,25 @@ def read_ac(path):
                     if texture == 'empty_texture_no_mapping':
                         texture = ''
             elif k == 'texrep':
-                rep = np.array([float(tk[1]), float(tk[2])])
+                rep = np.array(_floats(tk[1:], 2, f'object {name}: texrep'))
             elif k == 'texoff':
-                off = np.array([float(tk[1]), float(tk[2])])
+                off = np.array(_floats(tk[1:], 2, f'object {name}: texoff'))
             elif k == 'rot':
-                rot = np.array([float(v) for v in tk[1:10]]).reshape(3, 3)
+                rot = np.array(_floats(tk[1:], 9, f'object {name}: rot')).reshape(3, 3)
             elif k == 'loc':
-                loc = np.array([float(v) for v in tk[1:4]])
+                loc = np.array(_floats(tk[1:], 3, f'object {name}: loc'))
             elif k == 'numvert':
                 n = int(tk[1])
-                rows = [lines[i + j].split() for j in range(n)]
+                raw = [r.split() for r in rows(n, f'object {name}: numvert')]
                 i += n
-                verts = np.array([[float(v) for v in r[:6]] + [math.nan] * (6 - len(r[:6])) for r in rows], np.float64) \
-                    if n else np.zeros((0, 6))
+                # a position, and the normal when the file gives one (NaN marks none)
+                verts = np.array([_floats(r, 3, f'object {name}: a vertex') + (_floats(r[3:], 3, f'object {name}: a normal')
+                                  if len(r) >= 6 else [math.nan] * 3) for r in raw], np.float64) if n else np.zeros((0, 6))
             elif k == 'numsurf':
-                for _ in range(int(tk[1])):
+                ns = int(tk[1])
+                for _ in range(ns):
+                    if i >= len(lines):
+                        raise ValueError(f'object {name}: {ns} surfaces, the file ends first')
                     flags, mat, refs = 0, 0, []
                     while i < len(lines):
                         st = lines[i].split()
@@ -147,11 +179,16 @@ def read_ac(path):
                             flags = int(st[1], 0)
                         elif st[0] == 'mat':
                             mat = int(st[1])
+                            if mat < 0:
+                                raise ValueError(f'object {name}: material {mat}')
                         elif st[0] == 'refs':
                             n = int(st[1])
-                            for j in range(n):
-                                r = lines[i + j].split()
-                                refs.append((int(r[0]), float(r[1]) if len(r) > 2 else 0.0, float(r[2]) if len(r) > 2 else 0.0))
+                            for line in rows(n, f'object {name}: refs'):
+                                r = line.split()
+                                if not r:
+                                    raise ValueError(f'object {name}: an empty ref')
+                                uv = _floats(r[1:3], 2, f'object {name}: a ref') if len(r) > 2 else [0.0, 0.0]
+                                refs.append((int(r[0]), uv[0], uv[1]))
                             i += n
                             break
                     surfs.append((flags, mat, refs))
@@ -167,6 +204,8 @@ def read_ac(path):
                     # Each kid starts with its OBJECT line
                     while i < len(lines) and not lines[i].startswith('OBJECT'):
                         i += 1
+                    if i >= len(lines):
+                        break
                     i += 1
                     parse_object(Rw, tw)
                 return
@@ -180,8 +219,11 @@ def read_ac(path):
             def after(key, n):
                 j = tk.index(key) if key in tk else -1
                 return [float(v) for v in tk[j + 1:j + 1 + n]] if j >= 0 else [0.0] * n
-            materials.append(dict(name=tk[1], rgb=after('rgb', 3), spec=after('spec', 3), shi=after('shi', 1)[0],
-                                  trans=after('trans', 1)[0]))
+            m = dict(name=tk[1] if len(tk) > 1 else '', rgb=after('rgb', 3), spec=after('spec', 3), shi=after('shi', 1)[0],
+                     trans=after('trans', 1)[0])
+            if not all(math.isfinite(v) for v in [*m['rgb'], *m['spec'], m['shi'], m['trans']]):
+                raise ValueError(f'material {m["name"]}: a number that is not finite')
+            materials.append(m)
         elif tk[0] == 'OBJECT':
             parse_object(np.eye(3), np.zeros(3))
     return meshes, materials
@@ -220,11 +262,19 @@ def build_mesh(name, texture, verts, surfs, R, t, rep, off):
     if not tris:
         return None
     pos_i = np.array(pos_i)
+    bad = pos_i[(pos_i < 0) | (pos_i >= len(verts))]
+    if len(bad):
+        raise ValueError(f'object {name} refers to vertex {int(bad[0])} of {len(verts)}')
     pos = verts[pos_i, :3] @ R.T + t
     has_n = not np.isnan(verts[:, 3:6]).any()
     nrm = verts[pos_i, 3:6] @ R.T if has_n else None
     return dict(name=name, texture=texture, pos=pos, nrm=nrm, uv=np.array(uvs, np.float64), tris=np.array(tris, np.int64),
                 mats=np.array(mats), two=np.array(two))
+
+
+def unit(v):
+    """Rows made unit length (a zero row stays zero)"""
+    return v / np.maximum(np.linalg.norm(v, axis=-1, keepdims=True), 1e-12)
 
 
 def smooth_normals(pos, tris):
@@ -391,6 +441,8 @@ def main():
     parts = []  # (part, corner, mesh) with geometry in the XML frame's AC axes, converted below
 
     body_meshes, body_mats = read_ac(body_path)
+    if not body_meshes:
+        sys.exit(f'{car}: its body model {os.path.basename(body_path)} has no geometry')
     for m in body_meshes:
         parts.append(('body', None, m, body_mats, np.zeros(3)))
 
@@ -417,6 +469,9 @@ def main():
         height = P.num(sec, 'tire height', 0.0) or width * P.num(sec, 'tire height-width ratio', 0.75)
         rh = P.num(sec, 'ride height', 0.2)
         radius = rim_r + height
+        if not (rim_r > 0 and width > 0 and radius > 0):
+            sys.exit(f'{car}: {sec} is {2 * rim_r:g} m across the rim, its tyre {width:g} m wide and {radius:g} m in radius '
+                     '(each must be more than 0)')
         wheels[c] = dict(x=xF if c[1] == 'F' else xR, y=P.num(sec, 'ypos', 0.8 if c[0] == 'L' else -0.8), rim=rim_r,
                          radius=radius, width=width, rh=rh)
     # The body's reference plane level, at the mean ride height: Speed Dreams rakes the body by the front and rear ride
@@ -438,7 +493,8 @@ def main():
         rim_frac = w['rim'] / w['radius']
         for m in wmeshes:
             pos = m['pos'] * np.array([2 * w['radius'], 2 * w['radius'], w['width']])
-            nrm = None if m['nrm'] is None else m['nrm'] / np.array([2 * w['radius'], 2 * w['radius'], w['width']])
+            # A scaled model's normals scale by the inverse, then are made unit length again
+            nrm = None if m['nrm'] is None else unit(m['nrm'] / np.array([2 * w['radius'], 2 * w['radius'], w['width']]))
             if c[0] == 'R':
                 # The right wheels turned half a turn about the vertical: AC x -> -x, z -> -z
                 pos = pos * np.array([-1, 1, -1])
@@ -542,6 +598,10 @@ def main():
             continue
         if sid.lower() in ('int', 'rpm', 'speed', 'src', 'template'):
             continue
+        # A livery's id names its folder under --skins-out: a plain name only
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9 ._-]*', sid) or '..' in sid:
+            warnings.append(f'livery {f} left out: its name is not a plain one')
+            continue
         skin_ids.add(sid)
     skin_ids = sorted(skin_ids)
 
@@ -565,7 +625,7 @@ def main():
     missing_tex = set()
 
     def material(p, acmat_i):
-        acm = p['acmats'][acmat_i] if acmat_i < len(p['acmats']) else dict(name='', rgb=[1, 1, 1], spec=[0, 0, 0], shi=20, trans=0)
+        acm = p['acmats'][acmat_i] if 0 <= acmat_i < len(p['acmats']) else dict(name='', rgb=[1, 1, 1], spec=[0, 0, 0], shi=20, trans=0)
         blended = bool(TRANSPARENT_NAME.match(p['name'] or '')) or acm['trans'] > 0
         cls = object_class(p['name'], p['texture'], p['kind'])
         key = (p['texture'], cls, blended, tuple(np.round(acm['rgb'], 3)), round(acm['trans'], 3), round(acm['shi']))
@@ -855,6 +915,8 @@ def body_plan(pts, mid_z):
         chain.append(q)
         if q[0] == 0:
             break
+    if len(chain) < 2:
+        return None
     if chain[1][0] == 0:
         chain.reverse()
 

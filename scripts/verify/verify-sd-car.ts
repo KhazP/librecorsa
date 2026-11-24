@@ -319,18 +319,22 @@ function acBox(name: string, c: number[], h: number[], texture = "test-car.png")
     "kids 0",
   ].join("\n");
 }
-/** A unit wheel (diameter 1, width 1 along z): a TIRE ring and a RIM disc, as the game's wheel0.acc has them */
-function acWheel(): string {
+/**
+ * A unit wheel (diameter 1, width 1 along z): a TIRE ring and a RIM disc, as the game's wheel0.acc has them; with
+ * `normals`, each vertex carries its normal, as an .acc may
+ */
+function acWheel(normals = false): string {
   const n = 16;
   const ring = (r: number) => Array.from({ length: n }, (_, i) => [Math.cos((2 * Math.PI * i) / n) * r, Math.sin((2 * Math.PI * i) / n) * r]);
   const outer = ring(0.5);
   const inner = ring(0.35);
   const tireV = [...outer.map(([x, y]) => [x, y, -0.5]), ...outer.map(([x, y]) => [x, y, 0.5])];
-  const tire = ["OBJECT poly", 'name "TIRE_s_1"', 'texture "wheel3d.png" base', `numvert ${tireV.length}`, ...tireV.map((p) => p.join(" ")), `numsurf ${n}`];
+  const vrow = (p: number[], nrm: number[]) => (normals ? [...p, ...nrm] : p).join(" ");
+  const tire = ["OBJECT poly", 'name "TIRE_s_1"', 'texture "wheel3d.png" base', `numvert ${tireV.length}`, ...tireV.map((p) => vrow(p, [p[0] / 0.5, p[1] / 0.5, 0])), `numsurf ${n}`];
   for (let i = 0; i < n; i++) tire.push("SURF 0x10", "mat 0", "refs 4", `${i} 0 0`, `${(i + 1) % n} 1 0`, `${n + ((i + 1) % n)} 1 1`, `${n + i} 0 1`);
   tire.push("kids 0");
   const rimV = [[0, 0, -0.4], ...inner.map(([x, y]) => [x, y, -0.4])];
-  const rim = ["OBJECT poly", 'name ":WI"', 'texture "wheel3d.png" base', `numvert ${rimV.length}`, ...rimV.map((p) => p.join(" ")), `numsurf ${n}`];
+  const rim = ["OBJECT poly", 'name ":WI"', 'texture "wheel3d.png" base', `numvert ${rimV.length}`, ...rimV.map((p) => vrow(p, [0, 0, -1])), `numsurf ${n}`];
   for (let i = 0; i < n; i++) rim.push("SURF 0x30", "mat 0", "refs 3", "0 0.5 0.5", `${1 + i} 0 0`, `${1 + ((i + 1) % n)} 1 0`);
   rim.push("kids 0");
   return `AC3Db\nMATERIAL "m" rgb 1 1 1 amb 0.5 0.5 0.5 emis 0 0 0 spec 0 0 0 shi 10 trans 0\nOBJECT world\nkids 2\n${tire.join("\n")}\n${rim.join("\n")}\n`;
@@ -419,7 +423,65 @@ else {
 
     const plan = JSON.parse(readFileSync(info, "utf8")).bodyPlan as number[][];
     check("the body's outline from nose to tail", plan.length >= 3 && plan[0][0] === 0 && plan[plan.length - 1][0] === 0 && near(Math.max(...plan.map((p) => p[0])), 0.95, 0.02), JSON.stringify(plan));
+
   }
+
+  // Broken or crafted models and names: a clean refusal, or the part left out, never a crash or a file outside the port's
+  const variant = (name: string, edit: (dir: string) => void, xmlEdit: (x: string) => string = (x) => x) => {
+    const dv = join(tmp, "variants", "cars", "models", "test-car");
+    rmSync(join(tmp, "variants"), { recursive: true, force: true });
+    mkdirSync(dv, { recursive: true });
+    for (const f of readdirSync(d)) writeFileSync(join(dv, f), readFileSync(join(d, f)));
+    edit(dv);
+    const x = xmlEdit(xml);
+    const secs: Record<string, Record<string, number | string>> = {};
+    for (const [path, key, a] of SdParams.parse(x).entries()) (secs[path] ??= {})[key] = a.val;
+    const pjv = join(tmp, "variants", "params.json");
+    writeFileSync(pjv, JSON.stringify({ sections: secs }));
+    const out = join(tmp, "variants", "out");
+    const rv = spawnSync(
+      "uv",
+      ["run", "--python", "3.14", "--no-project", "--with", "numpy==2.4.3", "--with", "pillow==13.0.0", "python", "-P", "scripts/cars/port_sd_car.py", dv, `${out}.glb`, "--params", pjv, "--skins-out", join(out, "skins"), "--info", `${out}.json`],
+      { encoding: "utf8" },
+    );
+    return { name, ok: rv.status === 0, out: `${rv.stdout}${rv.stderr}`, info: rv.status === 0 ? JSON.parse(readFileSync(`${out}.json`, "utf8")) : null, root: join(tmp, "variants"), glb: `${out}.glb` };
+  };
+  // A wheel model with normals of its own, scaled to each tyre's size: they must come out unit length again
+  const normalled = variant("wheel normals", (dv) => writeFileSync(join(dv, "wheel0.acc"), acWheel(true)));
+  if (!normalled.ok) check("a wheel model with normals converts", false, normalled.out.trim().split("\n").pop());
+  else {
+    const gj = readGlbJson(normalled.glb);
+    const bytes = readFileSync(normalled.glb);
+    const binAt = 20 + bytes.readUInt32LE(12) + 8;
+    const tyreNode = (gj.nodes as { name: string; mesh?: number }[]).find((n) => n.name === "WHEEL_LF_TYRE")!;
+    const acc = gj.accessors[gj.meshes[tyreNode.mesh!].primitives[0].attributes.NORMAL];
+    const view = gj.bufferViews[acc.bufferView];
+    const at = binAt + (view.byteOffset ?? 0) + (acc.byteOffset ?? 0);
+    const lengths = Array.from({ length: acc.count }, (_, k) => Math.hypot(...[0, 1, 2].map((c) => bytes.readFloatLE(at + (view.byteStride ?? 12) * k + 4 * c))));
+    check("a scaled wheel's own normals come out unit length", lengths.every((l) => Math.abs(l - 1) < 1e-3), `${Math.min(...lengths).toFixed(4)}..${Math.max(...lengths).toFixed(4)}`);
+  }
+  const bodyWith = (objects: string) => `AC3Db\nMATERIAL "m" rgb 1 1 1 amb 0.5 0.5 0.5 emis 0 0 0 spec 0.5 0.5 0.5 shi 50 trans 0\nOBJECT world\nkids 2\n${objects}\n`;
+  const box = acBox("BODY_s_0", [0, 0.45, 0], [2.2, 0.35, 0.95]);
+  const glass = acBox("GLASS_s_0", [-0.2, 0.95, 0], [0.6, 0.15, 0.8]);
+  // An object's `data` runs over two lines, the second of which reads like a keyword: the object must not end there
+  const withData = variant("data", (dv) => writeFileSync(join(dv, "test-car.acc"), bodyWith(`${box.replace('name "BODY_s_0"', 'name "BODY_s_0"\ndata 13\nhello\nkids 0')}\n${glass}`)));
+  check("an object's data over several lines is skipped whole", withData.ok && near(withData.info?.bodyBox.max[0], 0.95, 0.01), withData.ok ? JSON.stringify(withData.info?.bodyBox) : withData.out.trim().split("\n").pop());
+  const clean = (r: { ok: boolean; out: string }) => !r.ok && !/Traceback/.test(r.out) && r.out.trim().length > 0;
+  for (const r of [
+    variant("a negative vertex index", (dv) => writeFileSync(join(dv, "test-car.acc"), bodyWith(`${box.replace(/refs 4\n0 0 0/, "refs 4\n-1 0 0")}\n${glass}`))),
+    variant("a model cut short", (dv) => writeFileSync(join(dv, "test-car.acc"), bodyWith(box).slice(0, bodyWith(box).indexOf("numsurf") - 40))),
+    variant("a body with no geometry", (dv) => writeFileSync(join(dv, "test-car.acc"), "AC3Db\nOBJECT world\nkids 0\n")),
+    variant("a tyre 0 mm wide", () => undefined, (x) => x.replaceAll('<attnum name="tire width" unit="mm" val="275"/>', '<attnum name="tire width" unit="mm" val="0"/>')),
+  ]) {
+    check(`port_sd_car.py refuses a car with ${r.name} with a message, not a crash`, clean(r), r.out.trim().split("\n").pop()?.slice(0, 120));
+  }
+  const sneaky = variant("a livery named ..", (dv) => writeFileSync(join(dv, "test-car-...png"), readFileSync(join(d, "test-car-blue.png"))));
+  const outside = readdirSync(join(sneaky.root, "out")).filter((f) => f !== "skins");
+  check(
+    "a livery whose name is .. is left out, and writes nothing beside the liveries' folder",
+    sneaky.ok && !sneaky.info.skinIds.includes("..") && !outside.length,
+    sneaky.ok ? `${JSON.stringify(sneaky.info.skinIds)} ${outside.join(", ")}` : sneaky.out.trim().split("\n").pop(),
+  );
 }
 
 if (!hasUv || !hasFfmpeg) console.log("SKIP  the sound bank: uv or ffmpeg is not installed");
