@@ -216,7 +216,12 @@ export class DualSenseFeedback {
     const lightbar =
       settings.lightbar === "revs" ? revLightbar(t.rpm, range, nowMs) : settings.lightbar === "driver" ? driverRgb : ([0, 0, 0] as const);
     const playerLeds = settings.revLeds ? revPlayerLeds(t.rpm, range, nowMs) : 0;
-    const micLed: MicLed = t.manualOverrideActive ? "on" : t.overtakeAvailable ? "pulse" : "off";
+    const extraActive = t.ersBoostActive !== undefined ? Boolean(t.ersBoostActive || t.overtakeInUse) : Boolean(t.manualOverrideActive);
+    const overtakeReady =
+      t.ersBoostActive !== undefined
+        ? Boolean(t.overtakeRace && !t.lowGrip && t.overtakeAvailable && !t.overtakeInUse)
+        : Boolean(t.overtakeAvailable);
+    const micLed: MicLed = extraActive ? "on" : overtakeReady ? "pulse" : "off";
 
     const gear = t.gear;
     const shift = Number.isFinite(this.lastGear) && gear !== this.lastGear && t.speedKmh > 2;
