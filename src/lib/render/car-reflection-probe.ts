@@ -50,10 +50,12 @@ export class CarReflectionProbe {
   /** Car roots whose materials take the probe (the player's car, the opponents) */
   private readonly roots = new Set<THREE.Object3D>();
   private readonly assigned = new WeakSet<THREE.Material>();
+  private rootsDirty = false;
   private primed = false;
   /** The visible sky's sun-disc switch: hidden while the probe films (as the sky's own environment bake does) */
   private sunDisc: { value: number } | null = null;
   private readonly skyPosScratch = new THREE.Vector3();
+  private readonly lastFilterPos = new THREE.Vector3(Infinity, Infinity, Infinity);
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
@@ -96,6 +98,7 @@ export class CarReflectionProbe {
   /** A car whose materials should reflect the probe (call again after its model swaps in: new materials are caught) */
   track(root: THREE.Object3D): void {
     this.roots.add(root);
+    this.rootsDirty = true;
   }
 
   untrack(root: THREE.Object3D): void {
@@ -111,6 +114,7 @@ export class CarReflectionProbe {
     this.frame++;
     const stride = this.isMobile ? (this.quality === "medium" ? 4 : 2) : this.quality === "medium" ? 3 : 1;
     if (this.primed && this.frame % stride !== 0) return;
+    if (this.primed && this.face === 0 && this.lastFilterPos.distanceToSquared(carPos) < 64) return;
     this.cubeCamera.position.set(carPos.x, carPos.y + PROBE_HEIGHT_M, carPos.z);
     this.cubeCamera.updateMatrixWorld();
 
@@ -168,6 +172,7 @@ export class CarReflectionProbe {
       } else {
         // Dedicated 7th slot: run the 42-draw PMREM prefilter without stacking a scene cube-face render in the same frame
         this.filter();
+        this.lastFilterPos.copy(carPos);
         this.face = 0;
         filtered = true;
       }
@@ -183,8 +188,11 @@ export class CarReflectionProbe {
       if (this.sunDisc) this.sunDisc.value = disc;
       if (hide) hide.visible = hidden;
     }
-    // New materials (a model that swapped in, a new opponent) are caught within half a second
-    if (filtered || this.frame % 30 === 0) this.applyTo(this.envTarget?.texture ?? null, envIntensity * PROBE_INTENSITY);
+    // New materials (a model that swapped in, a new opponent) are caught when roots change or after a filter
+    if (filtered || this.rootsDirty) {
+      this.rootsDirty = false;
+      this.applyTo(this.envTarget?.texture ?? null, envIntensity * PROBE_INTENSITY);
+    }
   }
 
   private filter(): void {

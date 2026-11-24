@@ -175,9 +175,9 @@ export const STEP_DOWN = {
   /** A window with fewer drawn frames is not judged (a stall, the tab hidden) */
   minFrames: 5,
   /** Nothing is judged this long after driving first starts in a session (ms): shaders and textures still warming */
-  startGraceMs: 20_000,
+  startGraceMs: 8_000,
   /** ...after a step (ms): the step's own hitch, and time for the frames to settle */
-  stepGraceMs: 5_000,
+  stepGraceMs: 3_000,
   /** ...after a pause, a menu, a replay or a hidden tab (ms) */
   resumeGraceMs: 3_000,
   /** A session starting this soon after the last one stepped down (ms) starts one rung better than it ended */

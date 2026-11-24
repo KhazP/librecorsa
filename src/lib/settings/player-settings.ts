@@ -38,6 +38,7 @@ import {
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
 import { GYRO_LOCK_MAX_DEG, GYRO_LOCK_MIN_DEG, GYRO_SENSITIVITY_MAX, GYRO_SENSITIVITY_MIN } from "@/lib/input/gyro-steer";
 import { isTouchDevice } from "@/lib/input/touch-input";
+import { isWindowsArm } from "@/lib/render/gpu-health";
 import { isDrivingCameraMode } from "@/lib/render/camera-modes";
 import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
 import { resolveCarId, type CarId } from "@/lib/cars/car-registry";
@@ -508,12 +509,12 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
  * heat; 30 fps is the player's choice for long sessions.
  */
 export function defaultGraphicsSettings(): GraphicsSettings {
-  const touch = isTouchDevice();
+  const constrained = isTouchDevice() || isWindowsArm();
   return {
     ...DEFAULT_GRAPHICS_SETTINGS,
-    quality: touch ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality,
-    autoQuality: touch,
-    sharpen: touch,
+    quality: constrained ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality,
+    autoQuality: constrained,
+    sharpen: constrained,
   };
 }
 

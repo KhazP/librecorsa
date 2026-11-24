@@ -87,14 +87,25 @@ const SOFTWARE = /swiftshader|llvmpipe|softpipe|lavapipe|software (rasterizer|re
  */
 const WEAK_INTEL =
   /intel.*\b(u?hd graphics|hd \d{3,4}\b|gma\b|iris(\((r|tm)\))?\s*(pro|plus)|iris(\((r|tm)\))?\s*graphics\s*[56]\d\d)|mesa dri intel|\b(ivybridge|haswell|broadwell|skylake|kabylake|(kbl|skl|cfl|whl|cml|bxt|glk|apl) gt\d?)\b/i;
+/** Mobile / Windows ARM tile-based GPUs (Qualcomm Adreno / Snapdragon, Mali, PowerVR) */
+const WEAK_ARM_MOBILE = /adreno|qualcomm|snapdragon|mali|powervr|tegra/i;
 
-/** What a renderer string says about the GPU: a CPU rasteriser, an older Intel chip, anything else, or nothing */
+/** What a renderer string says about the GPU: a CPU rasteriser, an older Intel or ARM/mobile chip, anything else, or nothing */
 export function classifyRenderer(name: string | null | undefined): GpuClass {
   const n = (name ?? "").trim();
   if (!n || MASKED.test(n)) return "unknown";
   if (SOFTWARE.test(n)) return "software";
-  if (WEAK_INTEL.test(n)) return "weak";
+  if (WEAK_INTEL.test(n) || WEAK_ARM_MOBILE.test(n)) return "weak";
   return "ok";
+}
+
+/** True on Windows ARM64 devices (Snapdragon X / Adreno) where tile-based GPU budgets benefit from Medium + auto-quality */
+export function isWindowsArm(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/Windows/i.test(ua) && /\b(ARM64|aarch64|WOA)\b/i.test(ua)) return true;
+  const uaData = (navigator as Navigator & { userAgentData?: { platform?: string; architecture?: string } }).userAgentData;
+  return Boolean(uaData?.platform === "Windows" && uaData?.architecture === "arm");
 }
 
 /** The renderer this page's session drew with, and whether its context was lost since the page loaded */
