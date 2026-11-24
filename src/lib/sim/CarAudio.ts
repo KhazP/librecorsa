@@ -560,6 +560,17 @@ export class CarAudioEngine {
     this.fallbackDestination = engineSampleBus;
   }
 
+  /** Smoothed suspension activity for a bank's bodywork loop: the dampers' mean travel speed, full at 0.35 m/s */
+  private bodyworkSmoothed = 0;
+  private bodyworkLevel(t: TelemetryData, dt: number): number {
+    const v = t.suspensionVelocityMs;
+    let sum = 0;
+    if (v) for (let i = 0; i < 4; i++) sum += Math.abs(Number.isFinite(v[i]) ? v[i] : 0);
+    const target = THREE.MathUtils.clamp(sum / 4 / 0.35, 0, 1);
+    this.bodyworkSmoothed += (target - this.bodyworkSmoothed) * Math.min(1, dt / 0.08);
+    return this.bodyworkSmoothed;
+  }
+
   /** The car whose sound bank plays; swaps the bank when the car changes */
   public setCar(sound: CarSoundSource): void {
     // Also when the sound stays: the lc26 and f12026-car physics share one
@@ -853,6 +864,7 @@ export class CarAudioEngine {
           skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
           skidRate: 0.85 + 0.25 * squeal.pitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
+          bodywork: this.bodyworkLevel(telemetry, legacyDt),
           stalled: telemetry.engineStalled === true,
           // Heard only by banks that carry a driveline section or an electric machine loop
           driveshaftRadS: telemetry.driveshaftRadS,
@@ -968,8 +980,8 @@ export class CarAudioEngine {
     }
 
     if (this.windFilter && this.windGain) {
-      // aero.a = min(u2 * 0.0001 + 0.1, 1.0) * 0.6
-      const aeroGain = THREE.MathUtils.clamp(u2 * 0.000012, 0, 0.075);
+      // aero.a = min(u2 * 0.0001 + 0.1, 1.0) * 0.6; silent when the bank plays its own wind
+      const aeroGain = lc26?.hasWind ? 0 : THREE.MathUtils.clamp(u2 * 0.000012, 0, 0.075);
       const aeroCutoff = 260 + speedMs * 14;
       this.windFilter.frequency.setTargetAtTime(aeroCutoff, now, 0.04);
       this.windGain.gain.setTargetAtTime(aeroGain, now, 0.04);
@@ -1013,6 +1025,8 @@ export class CarAudioEngine {
       this.gravelGain.gain.setTargetAtTime(gravelAmp, now, 0.025);
     }
 
+    // A bank with its own tyre rolling noise carries most of the road's sound: the procedural roar under it at half
+    if (this.contactAcoustics) this.contactAcoustics.roarScale = lc26?.hasTyreRolling ? 0.5 : 1;
     this.contactAcoustics?.update(telemetry, legacyDt, CAMERA_MODES[this.cameraMode].interiorAudio);
   }
 

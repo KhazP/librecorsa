@@ -131,6 +131,9 @@ export class ContactAcousticsRig {
     this.brakeHarmonicOsc.start();
   }
 
+  /** Share of the rolling roar to play (CarAudio eases it under a sound bank's own tyre rolling loop) */
+  public roarScale = 1;
+
   /** Drop the history, for the breaks `update` cannot see itself (another car, a suspended context) */
   public reset(): void {
     this.fresh = true;
@@ -233,7 +236,7 @@ export class ContactAcousticsRig {
     setTarget(this.out.frequency, !interior ? 14000 : gt ? 3800 : 11960, now, 0.03);
 
     setTarget(this.roarFilter.frequency, 244 + 70 * (roarTone / 4), now, 0.03);
-    setTarget(this.roarGain.gain, 0.25 * roar * (interior ? 0.65 : 1) * 0.042, now, 0.025);
+    setTarget(this.roarGain.gain, 0.25 * roar * (interior ? 0.65 : 1) * 0.042 * this.roarScale, now, 0.025);
 
     // 57–73 Hz by corner, so the four dampers are told apart
     setTarget(this.thumpOsc.frequency, 52 * (1.1 + 0.1 * thumpWheel), now, 0.018);
