@@ -255,6 +255,23 @@ check("on the 2026 car: no hybrid, no DRS, no active aero", f1.hasErs === false 
     limitErr = (err as Error).message;
   }
   check("a NaN limit is refused, not passed", /not a finite number/.test(limitErr), limitErr);
+
+  // On a ride-height map base (the 2026 car): a car that makes lift overall, and one that states negative drag
+  const mapBase = VEHICLE_MODELS["f12026-car"].simProfile!;
+  const f1Patch = sdCarPhysics(params, { base: "f12026-car" }).patch;
+  const mapProf = (patch: Record<string, unknown>) => {
+    const r = profileOf("f12026-car", patch);
+    if (!r.ok) throw new Error(r.errors.join("; "));
+    return r.profile;
+  };
+  const lift = fitAero(mapBase, f1Patch, { front: -0.05, rear: -0.05, drag: -0.2 }, mapProf);
+  const map = (lift.aero as { rhMap: { clA: number; cdA: number }; wings: { area: number }[] }).rhMap;
+  const wings = (lift.aero as { wings: { area: number }[] }).wings;
+  check(
+    "a car that makes lift overall gets none of the map's downforce, and a negative drag no negative drag",
+    map.clA === 0 && wings.every((w) => w.area === 0) && map.cdA === 0 && lift.notes.some((n) => /lift overall/.test(n)),
+    JSON.stringify({ clA: map.clA, cdA: map.cdA, notes: lift.notes }),
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
