@@ -339,6 +339,9 @@ const PROTOTYPE = /\blmp\d?\b|\blmdh\b|\blmh\b|hypercar|prototype|group ?c\b|\bg
 const MODERN_GT = /\bgt3\b|\bgt-3\b|\bgtd\b|\bgte\b|\bgtlm\b|\bgt2\b|\bgt4\b|lmgt3|\bgt300\b|\bgt500\b|super ?gt|\bdtm\b|\bgt1\b|\bjgtc\b/;
 const CLASSIC = /vintage|classic|historic|retro|group ?[245b]\b|\bdrm\b|\bimsa\b|touring|\bjtcc\b|\bbtcc\b|\bdtm\b/;
 const ROAD = /\bstreet\b|\broad\b|\bstock\b|\bhatch|\bsaloon\b|\bsedan\b|\bcoupe\b|\bdaily\b/;
+const RACE = /\brace\b|\bracing\b|\brace ?car\b|\bcup\b|\bmotorsport\b/;
+/** What makes a street car's tags a racer's: a race class (a road "hypercar" is no prototype) */
+const RACER_TAG = new RegExp([RACE, OPEN_WHEEL, MODERN_GT, PROTOTYPE].map((r) => r.source.replace('hypercar|', '')).join('|'));
 
 /** Power to weight (W/kg) */
 const ptw = (id: VehicleModelId): number => {
@@ -347,45 +350,49 @@ const ptw = (id: VehicleModelId): number => {
 };
 
 /**
- * The base model for a car, and why: open-wheelers on the 2026 F1 car; prototypes on the LMDh or the 496R, whichever's
- * power to weight is nearer; a modern GT (GT3, GTE, GT1…) on the AMG GT3, a 1990s one (JGTC, GT500 before 2000) on the
- * R33 JGTC; a four-wheel-drive car on the R32 (the one base with a centre coupling); a front-driven one on the Liana or
- * the Scirocco, by power (the bases that can drive their front wheels); classic racers on the 934 (turbo) or the M1
- * (atmospheric); road cars on the Liana or the Scirocco, by power; any other race car on the GT3, or the 496R when it
- * makes real downforce for its weight
+ * The base model for a car, and why. The drivetrain first, as no other base can carry it: a four-wheel-drive car on the
+ * R32 (the one base with a centre coupling), a front-driven one on the Liana or the Scirocco, by power (the bases that
+ * can drive their front wheels). Then a street car (AC's class "street") whose tags name no race class is a road car,
+ * whatever its name says (a McLaren F1, a 911 GT3 RS, a road "hypercar"): on the Liana or the Scirocco, by power. Then
+ * open-wheelers on the 2026 F1 car (by class or tags; by name only when they name no GT or prototype); prototypes on
+ * the LMDh or the 496R, whichever's power to weight is nearer; a modern GT (GT3, GTE, GT1…) on the AMG GT3, a 1990s
+ * one (JGTC, GT500 before 2000) on the R33 JGTC; classic racers on the 934 (turbo) or the M1 (atmospheric); road cars
+ * on the Liana or the Scirocco, by power; any other race car on the GT3, or the 496R when it makes real downforce for
+ * its weight
  */
 export function chooseBaseModel(f: AcCarFacts): { base: VehicleModelId; why: string } {
+  const classTags = [f.className, ...f.tags].join(' ').toLowerCase();
   const words = [f.className, ...f.tags, f.name].join(' ').toLowerCase();
   const nearer = (a: VehicleModelId, b: VehicleModelId) => {
     const own = (f.peakKw * 1000) / f.massKg;
     return Math.abs(ptw(a) - own) <= Math.abs(ptw(b) - own) ? a : b;
   };
+  const roadBase = (): VehicleModelId => (f.peakKw < 95 ? 'liana' : 'vw-scirocco-gtx');
   const awd = f.traction === 'AWD' || f.traction === 'AWD2';
   const classic = CLASSIC.test(words) || (f.year !== undefined && f.year < 2000);
-  if (OPEN_WHEEL.test(words)) return { base: 'f12026-car', why: 'an open-wheeler (its class, tags or name)' };
+  if (awd) return { base: 'nissan-r32-jtcc', why: `four-wheel drive (${f.traction}): the R32 is the one base with a centre coupling` };
+  // The front-driven bases are the two with the switch for it: any other drives its rear wheels
+  if (f.traction === 'FWD') return { base: roadBase(), why: `front-wheel drive, ${Math.round(f.peakKw)} kW: the front-driven bases are the Liana and the Scirocco` };
+  if (f.className === 'street' && !RACER_TAG.test(f.tags.join(' ').toLowerCase())) {
+    return { base: roadBase(), why: `a street car of ${Math.round(f.peakKw)} kW (its class), its tags naming no race class` };
+  }
+  if (OPEN_WHEEL.test(classTags) || (OPEN_WHEEL.test(words) && !MODERN_GT.test(classTags) && !PROTOTYPE.test(classTags))) {
+    return { base: 'f12026-car', why: 'an open-wheeler (its class, tags or name)' };
+  }
   if (PROTOTYPE.test(words)) {
     const base = nearer('lc-lmdh', 'mtr-496r');
     return { base, why: `a prototype (its class, tags or name), nearer the ${base === 'lc-lmdh' ? 'LMDh' : '496R'} in power to weight` };
-  }
-  if (awd) return { base: 'nissan-r32-jtcc', why: `four-wheel drive (${f.traction}): the R32 is the one base with a centre coupling` };
-  // The front-driven bases are the two with the switch for it: any other drives its rear wheels
-  if (f.traction === 'FWD') {
-    const base: VehicleModelId = f.peakKw < 95 ? 'liana' : 'vw-scirocco-gtx';
-    return { base, why: `front-wheel drive, ${Math.round(f.peakKw)} kW: the front-driven bases are the Liana and the Scirocco` };
   }
   if (MODERN_GT.test(words)) {
     if ((f.year !== undefined && f.year < 2000) || /\bjgtc\b|vintage|classic|historic/.test(words)) return { base: 'nissan-r33-jgtc', why: 'a 1990s GT racer (JGTC, GT500, GT1 before 2000)' };
     return { base: 'amg-gt3', why: 'a modern GT racer (GT3, GTE, GT2, GT4, GT500, DTM)' };
   }
-  const race = /\brace\b|\bracing\b|\brace ?car\b|\bcup\b|\bmotorsport\b/.test(words) || f.clA > 0.4;
+  const race = RACE.test(words) || f.clA > 0.4;
   if (classic && (race || !ROAD.test(words))) {
     if (f.turbo) return { base: 'porsche-934-rsr', why: 'a classic racer with a turbo' };
     return { base: 'bmw-m1-procar', why: 'an atmospheric classic racer' };
   }
-  if (!race || ROAD.test(words)) {
-    const base: VehicleModelId = f.peakKw < 95 ? 'liana' : 'vw-scirocco-gtx';
-    return { base, why: `a road car of ${Math.round(f.peakKw)} kW` };
-  }
+  if (!race || ROAD.test(words)) return { base: roadBase(), why: `a road car of ${Math.round(f.peakKw)} kW` };
   if (f.clA / Math.max(1, f.massKg) > 0.0015) return { base: 'mtr-496r', why: 'a modern race car with real downforce for its weight' };
   return { base: 'amg-gt3', why: 'a modern race car' };
 }

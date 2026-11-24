@@ -261,6 +261,13 @@ async function main(): Promise<void> {
       ['a quicker road car', { className: 'street', tags: [], peakKw: 150, massKg: 1150 }, 'vw-scirocco-gtx'],
       ['a modern race car making real downforce', { year: 2015, massKg: 900, peakKw: 300, clA: 2.5 }, 'mtr-496r'],
       ['any other modern race car', { year: 2015, massKg: 1250, peakKw: 400, clA: 0.6 }, 'amg-gt3'],
+      // Street cars whose names or tags read as a race class's, and four-wheel-drive hypercars
+      ['a McLaren F1 (a street car named "F1")', { name: 'McLaren F1', className: 'street', tags: ['supercar', 'rwd'], year: 1994, massKg: 1140, peakKw: 461 }, 'vw-scirocco-gtx'],
+      ['a 911 GT3 RS (a street car named "GT3")', { name: 'Porsche 911 GT3 RS', className: 'street', tags: ['street', 'semislicks'], year: 2016, massKg: 1420, peakKw: 368 }, 'vw-scirocco-gtx'],
+      ['a 918 Spyder (a four-wheel-drive hypercar)', { name: 'Porsche 918 Spyder', className: 'street', tags: ['hypercar', 'hybrid'], traction: 'AWD', year: 2013, massKg: 1640, peakKw: 652 }, 'nissan-r32-jtcc'],
+      ['a McLaren P1 (a road "hypercar" named "P1")', { name: 'McLaren P1', className: 'street', tags: ['hypercar', 'hybrid'], year: 2013, massKg: 1450, peakKw: 673 }, 'vw-scirocco-gtx'],
+      ['a street car tagged with a race class is a racer', { name: 'Some GT3', className: 'street', tags: ['gt3'], year: 2018 }, 'amg-gt3'],
+      ['a McLaren F1 GTR (a GT1 named "F1")', { name: 'McLaren F1 GTR', className: 'race', tags: ['gt1'], year: 1995, massKg: 1050, peakKw: 450 }, 'nissan-r33-jgtc'],
     ];
     for (const [label, f, want] of cases) {
       const got = chooseBaseModel(facts(f));
