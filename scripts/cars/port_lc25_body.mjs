@@ -295,6 +295,7 @@ const NOSE_Z = 1.25;
 const BODY_ZONE_LINES = [
   { f: (p, n) => n[1] - UNDERCUT, where: (p) => p[1] < 0.5 && p[2] < 1.7 },
   { f: (p) => p[1] - 0.145, where: (p) => p[1] > 0.08 && p[1] < 0.25 },
+  { f: (p) => p[1] - 0.50, where: (p) => Math.abs(p[0]) < 0.26 && p[2] > -0.25 && p[2] < 0.64 },
   { f: (p) => p[1] - splitY(p[2]), where: (p) => p[1] > 0.2 && p[1] < 0.55 && p[2] < NOSE_Z + 0.05 },
   { f: (p) => p[1] - splitY(p[2]) - STRIPE, where: (p) => p[1] > 0.2 && p[1] < 0.6 && p[2] < NOSE_Z + 0.05 },
   { f: (p) => p[2] - NOSE_Z, where: (p) => p[1] > 0.2 && p[1] < 0.6 && Math.abs(p[0]) < 0.45 },
@@ -364,8 +365,8 @@ function mainBodyZone(c, n) {
   if (y < 0.145) return ZONE.carbon;
   if (z < -2.02 && y < 0.37 && ax < 0.62) return ZONE.carbon;
   if (n[1] < UNDERCUT && y < 0.5 && z < 1.7) return ZONE.carbon;
-  // Cockpit interior tub
-  if (ax < 0.25 && z > -0.25 && z < 0.62 && y < 0.68 && y > 0.16) return ZONE.interior;
+  // Cockpit interior tub (stay strictly below the painted coaming lip at y=0.50 so T-cam shows a clean edge)
+  if (ax < 0.24 && z > -0.25 && z < 0.60 && y < 0.50 && y > 0.16) return ZONE.interior;
   // Nose tip accent
   if (z > 2.38) return ZONE.accent;
   // Forward nose ahead of front bulkhead: primary
@@ -532,7 +533,7 @@ async function main() {
   for (const [name, m] of rawByMat) byMat.set(name, shift(m, offset));
   console.log(`Loaded shunqi GLB: groundY=${groundY.toFixed(4)}, wheelbase=${wheelbase.toFixed(4)} m`);
 
-  // --- 1. Wheels (split L/R and F/R) ---
+  // --- 1. Wheels (split L/R and F/R, extract baked camber/toe onto WHEEL_* node so spinning mesh is 100% true) ---
   const wheelDefs = [
     { corner: "LF", node: "WHEEL_LF", isFront: true, isLeft: true },
     { corner: "RF", node: "WHEEL_RF", isFront: true, isLeft: false },
@@ -549,12 +550,151 @@ async function main() {
     { name: "wheel_screw.001", budgetPerWheel: 250 },
   ];
 
+  /** Rotate a mesh about origin by row-major 3x3 matrix `R` (applied to both positions and normals). */
+  function rotateMesh(mesh, R) {
+    const pos = new Float32Array(mesh.pos.length);
+    const nrm = new Float32Array(mesh.nrm.length);
+    for (let i = 0; i < mesh.pos.length; i += 3) {
+      const x = mesh.pos[i], y = mesh.pos[i + 1], z = mesh.pos[i + 2];
+      pos[i] = R[0][0] * x + R[0][1] * y + R[0][2] * z;
+      pos[i + 1] = R[1][0] * x + R[1][1] * y + R[1][2] * z;
+      pos[i + 2] = R[2][0] * x + R[2][1] * y + R[2][2] * z;
+      const nx = mesh.nrm[i], ny = mesh.nrm[i + 1], nz = mesh.nrm[i + 2];
+      const rnx = R[0][0] * nx + R[0][1] * ny + R[0][2] * nz;
+      const rny = R[1][0] * nx + R[1][1] * ny + R[1][2] * nz;
+      const rnz = R[2][0] * nx + R[2][1] * ny + R[2][2] * nz;
+      const l = Math.hypot(rnx, rny, rnz) || 1;
+      nrm[i] = rnx / l;
+      nrm[i + 1] = rny / l;
+      nrm[i + 2] = rnz / l;
+    }
+    return { pos, nrm, idx: mesh.idx };
+  }
+
+  /** Transpose of 3x3 matrix */
+  const mat3T = (R) => [
+    [R[0][0], R[1][0], R[2][0]],
+    [R[0][1], R[1][1], R[2][1]],
+    [R[0][2], R[1][2], R[2][2]],
+  ];
+
+  /** Convert a right-handed 3x3 rotation matrix to glTF quaternion [x, y, z, w]. */
+  function mat3ToQuat(R) {
+    const tr = R[0][0] + R[1][1] + R[2][2];
+    let x, y, z, w;
+    if (tr > 0) {
+      const s = Math.sqrt(tr + 1.0) * 2;
+      w = 0.25 * s;
+      x = (R[2][1] - R[1][2]) / s;
+      y = (R[0][2] - R[2][0]) / s;
+      z = (R[1][0] - R[0][1]) / s;
+    } else if (R[0][0] > R[1][1] && R[0][0] > R[2][2]) {
+      const s = Math.sqrt(1.0 + R[0][0] - R[1][1] - R[2][2]) * 2;
+      w = (R[2][1] - R[1][2]) / s;
+      x = 0.25 * s;
+      y = (R[0][1] + R[1][0]) / s;
+      z = (R[0][2] + R[2][0]) / s;
+    } else if (R[1][1] > R[2][2]) {
+      const s = Math.sqrt(1.0 + R[1][1] - R[0][0] - R[2][2]) * 2;
+      w = (R[0][2] - R[2][0]) / s;
+      x = (R[0][1] + R[1][0]) / s;
+      y = 0.25 * s;
+      z = (R[1][2] + R[2][1]) / s;
+    } else {
+      const s = Math.sqrt(1.0 + R[2][2] - R[0][0] - R[1][1]) * 2;
+      w = (R[1][0] - R[0][1]) / s;
+      x = (R[0][2] + R[2][0]) / s;
+      y = (R[1][2] + R[2][1]) / s;
+      z = 0.25 * s;
+    }
+    const l = Math.hypot(x, y, z, w) || 1;
+    return [x / l, y / l, z / l, w / l];
+  }
+
+  /**
+   * Fit the exact revolution axis (unit vector near +X) and centre of a tyre mesh.
+   * For any cylinder/torus of revolution, projecting along its true symmetry axis `u` yields the unique global
+   * minimum of axial span `max(u·p) - min(u·p)` (free of mesh-density or shoulder-curvature bias).
+   * Returns `{ centre, R_wheel, R_inv, quat, camberDeg, toeDeg }` where `R_wheel` maps local `[1, 0, 0]` to the
+   * wheel's true world axle, so `rotateMesh(shift(mesh, centre), R_inv)` aligns the spin axis to `[1, 0, 0]`.
+   */
+  function fitWheelFrame(tyreWorld) {
+    const nVerts = tyreWorld.pos.length / 3;
+    const spanAlong = (camberRad, toeRad) => {
+      const ux = Math.cos(camberRad) * Math.cos(toeRad);
+      const uy = Math.sin(camberRad);
+      const uz = Math.cos(camberRad) * Math.sin(toeRad);
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 0; i < nVerts; i++) {
+        const d = ux * tyreWorld.pos[3 * i] + uy * tyreWorld.pos[3 * i + 1] + uz * tyreWorld.pos[3 * i + 2];
+        if (d < lo) lo = d;
+        if (d > hi) hi = d;
+      }
+      return hi - lo;
+    };
+
+    // Coordinate search over camber & toe (from ±8 deg down to 0.001 deg precision)
+    let camber = 0;
+    let toe = 0;
+    let bestSpan = spanAlong(0, 0);
+    for (let step = (4 * Math.PI) / 180; step > (0.0005 * Math.PI) / 180; step *= 0.5) {
+      let improved = true;
+      while (improved) {
+        improved = false;
+        for (const [dc, dt] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+          const s = spanAlong(camber + dc, toe + dt);
+          if (s < bestSpan - 1e-9) {
+            bestSpan = s;
+            camber += dc;
+            toe += dt;
+            improved = true;
+          }
+        }
+      }
+    }
+
+    const axis = unit([Math.cos(camber) * Math.cos(toe), Math.sin(camber), Math.cos(camber) * Math.sin(toe)]);
+    const ez = unit([0 - axis[0] * axis[2], 0 - axis[1] * axis[2], 1 - axis[2] * axis[2]]);
+    const ey = unit(cross3(ez, axis));
+    const R_wheel = [
+      [axis[0], ey[0], ez[0]],
+      [axis[1], ey[1], ez[1]],
+      [axis[2], ey[2], ez[2]],
+    ];
+    const R_inv = mat3T(R_wheel);
+
+    // Exact geometric centre in the aligned frame -> transform back to world
+    let lxMin = Infinity, lxMax = -Infinity, lyMin = Infinity, lyMax = -Infinity, lzMin = Infinity, lzMax = -Infinity;
+    for (let i = 0; i < nVerts; i++) {
+      const x = tyreWorld.pos[3 * i], y = tyreWorld.pos[3 * i + 1], z = tyreWorld.pos[3 * i + 2];
+      const lx = R_inv[0][0] * x + R_inv[0][1] * y + R_inv[0][2] * z;
+      const ly = R_inv[1][0] * x + R_inv[1][1] * y + R_inv[1][2] * z;
+      const lz = R_inv[2][0] * x + R_inv[2][1] * y + R_inv[2][2] * z;
+      if (lx < lxMin) lxMin = lx; if (lx > lxMax) lxMax = lx;
+      if (ly < lyMin) lyMin = ly; if (ly > lyMax) lyMax = ly;
+      if (lz < lzMin) lzMin = lz; if (lz > lzMax) lzMax = lz;
+    }
+    const lc = [0.5 * (lxMin + lxMax), 0.5 * (lyMin + lyMax), 0.5 * (lzMin + lzMax)];
+    const centre = [
+      R_wheel[0][0] * lc[0] + R_wheel[0][1] * lc[1] + R_wheel[0][2] * lc[2],
+      R_wheel[1][0] * lc[0] + R_wheel[1][1] * lc[1] + R_wheel[1][2] * lc[2],
+      R_wheel[2][0] * lc[0] + R_wheel[2][1] * lc[1] + R_wheel[2][2] * lc[2],
+    ];
+
+    const camberDeg = (Math.atan2(axis[1], axis[0]) * 180) / Math.PI;
+    const toeDeg = (Math.atan2(axis[2], axis[0]) * 180) / Math.PI;
+    return { centre, R_wheel, R_inv, quat: mat3ToQuat(R_wheel), camberDeg, toeDeg };
+  }
+
   const wheels = [];
   for (const wd of wheelDefs) {
     const tyreSrc = byMat.get(wd.isFront ? "front_tire" : "rear_tire");
     const [tyreWorld] = splitByPredicate(tyreSrc, (c) => (wd.isLeft ? c[0] > 0 : c[0] < 0));
-    const tb = bounds(tyreWorld);
-    const centre = [(tb.min[0] + tb.max[0]) / 2, (tb.min[1] + tb.max[1]) / 2, (tb.min[2] + tb.max[2]) / 2];
+    const frame = fitWheelFrame(tyreWorld);
+    const { centre, R_wheel, R_inv, quat, camberDeg, toeDeg } = frame;
+
+    const tyreAligned = rotateMesh(shift(tyreWorld, centre), R_inv);
+    const tb = bounds(tyreAligned);
     const tyreRadius = (tb.max[1] - tb.min[1]) / 2;
     const tyreHalfWidth = (tb.max[0] - tb.min[0]) / 2;
 
@@ -563,12 +703,18 @@ async function main() {
       const m = byMat.get(rp.name);
       if (!m) continue;
       const [piece] = splitByPredicate(m, (c) => (wd.isFront ? c[2] > 0 : c[2] < 0) && (wd.isLeft ? c[0] > 0 : c[0] < 0));
-      if (piece.idx.length > 0) rimPieces.push(simplify(shift(piece, centre), rp.budgetPerWheel, { error: 0.02 }));
+      if (piece.idx.length > 0) {
+        const aligned = rotateMesh(shift(piece, centre), R_inv);
+        rimPieces.push(simplify(aligned, rp.budgetPerWheel, { error: 0.02 }));
+      }
     }
 
-    const tyreLocal = simplify(shift(tyreWorld, centre), 4500, { error: 0.01 });
+    const tyreLocal = simplify(tyreAligned, 4500, { error: 0.01 });
     const rimLocal = merge(rimPieces);
-    wheels.push({ ...wd, centre, tyreRadius, tyreHalfWidth, tyreLocal, rimLocal });
+    console.log(
+      `  ${wd.node}: true-axis camber=${camberDeg.toFixed(2)}° toe=${toeDeg.toFixed(2)}° r=${tyreRadius.toFixed(4)}m halfW=${tyreHalfWidth.toFixed(4)}m`
+    );
+    wheels.push({ ...wd, centre, R_wheel, quat, tyreRadius, tyreHalfWidth, tyreLocal, rimLocal });
   }
 
   // --- 2. Front wheel winglets -> SUSP_LF / SUSP_RF (steer with front hubs) ---
@@ -746,11 +892,14 @@ async function main() {
     wheelCentres[w.node] = w.centre;
     tyreRadius[w.corner] = Number(w.tyreRadius.toFixed(4));
     tyreHalfWidth[w.corner] = Number(w.tyreHalfWidth.toFixed(4));
-    const wn = doc.createNode(w.node).setTranslation(w.centre);
+    const wn = doc.createNode(w.node).setTranslation(w.centre).setRotation(w.quat);
     wn.addChild(doc.createNode(`${w.node}_RIM`).setMesh(addMesh(doc, buffer, `${w.node}_RIM`, [{ geo: w.rimLocal, mat: mats.rim }])));
     wn.addChild(doc.createNode(`${w.node}_TYRE`).setMesh(addMesh(doc, buffer, `${w.node}_TYRE`, [{ geo: w.tyreLocal, mat: mats.tyre }])));
     root.addChild(wn);
-    wheelsAtRest.push(shift(w.rimLocal, w.centre.map((v) => -v)), shift(w.tyreLocal, w.centre.map((v) => -v)));
+    wheelsAtRest.push(
+      shift(rotateMesh(w.rimLocal, w.R_wheel), w.centre.map((v) => -v)),
+      shift(rotateMesh(w.tyreLocal, w.R_wheel), w.centre.map((v) => -v))
+    );
   }
 
   // --- 6. Bake _OCCLUSION vertex AO ---
