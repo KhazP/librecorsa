@@ -82,6 +82,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   maxSteerAngleRad: "local",
   contactMassKg: "local",
   contactYawInertiaKgM2: "local",
+  contactBox: "local",
   brakingGuide: "local",
   vehicleId: "local",
   racingLineId: "local",

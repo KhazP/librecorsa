@@ -82,6 +82,10 @@ import { BMW_M1_PROCAR_CONFIG } from '@/lib/sim/classic/BmwM1ProcarConfig';
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from '@/lib/sim/classic/Chaparral2dConfig';
 import { PORSCHE_934_RSR_CONFIG } from '@/lib/sim/classic/Porsche934RsrConfig';
 import { VW_SCIROCCO_CONFIG } from '@/lib/sim/road/VwSciroccoConfig';
+import { LC26_TUNED_CONFIG } from '@/lib/sim/f12026-car/Lc26Tune';
+import type { CarPhysicsConfig } from '@/lib/sim/f12026-car/F12026CarConfig';
+import { contactBoxOfConfig } from '@/lib/sim/f12026-car/body-outline';
+import { DEFAULT_CONTACT_BOX, type ContactBox } from '@/lib/sim/contact-box';
 import {
   classificationClosed,
   classifiedTimeS,
@@ -156,7 +160,10 @@ export function aiRaceCodes(aiCodes: readonly string[], playerCode: string): str
 /** The player's car in the field: its code (the field's key for it) and, without a driver of their own, what it shows */
 const PLAYER_CODE = 'YOU';
 const PLAYER_COLOR = '#E10600';
-/** Car footprint used for contact (m): length, width */
+/**
+ * Car footprint the racecraft keeps its spacing by (m): length, width. Contact itself uses each car's own box
+ * (`SimulatorCar.contactBox`)
+ */
 const CAR_LEN_M = 5.0;
 const CAR_WID_M = 1.95;
 /** Lateral spacing a passing car keeps from the car it passes (m) */
@@ -649,8 +656,8 @@ const CONTACT_MAX_DYAW_RADS = 0.25;
  */
 const fieldContactYawCap = (impactMs: number) => clamp(0.25 + 0.09 * impactMs, CONTACT_MAX_DYAW_RADS, 2.5);
 const fieldContactDvCap = (impactMs: number) => Math.max(CONTACT_MAX_DV_MS, 2 + 1.3 * impactMs);
-/** Two boxes can only overlap with their centres within a full diagonal (m, squared) */
-const CONTACT_BROAD_M2 = CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M;
+/** A car's contact box (`DEFAULT_CONTACT_BOX` for a car without one of its own) */
+const contactBoxOf = (sim: SimulatorCar): ContactBox => sim.contactBox ?? DEFAULT_CONTACT_BOX;
 /** After qualifying, the grid stands this long before the first red light, for its order to be read (s) */
 export const QUALIFYING_GRID_SHOW_S = 8;
 
@@ -726,8 +733,10 @@ function fillObb(sim: SimulatorCar, out: RigidBodyCollisionCar): void {
   out.vz = sim.vxMs * fz - sim.vyMs * fx;
   // OBB yaw rate is + counter-clockwise (turning left), the car's + turning right
   out.yawRateRadS = -sim.yawRateRadS;
-  out.halfLengthM = CAR_LEN_M * 0.5;
-  out.halfWidthM = CAR_WID_M * 0.5;
+  const box = contactBoxOf(sim);
+  out.halfLengthM = box.halfLengthM;
+  out.halfWidthM = box.halfWidthM;
+  out.centreAheadM = box.centreAheadM;
   out.massKg = sim.contactMassKg ?? CONTACT_MASS_KG;
   out.yawInertiaKgM2 = sim.contactYawInertiaKgM2 ?? CONTACT_YAW_INERTIA_KGM2;
 }
@@ -786,6 +795,32 @@ function remoteContactMass(vehicle: VehicleModelId | undefined): [number, number
   return [CONTACT_MASS_KG, CONTACT_YAW_INERTIA_KGM2];
 }
 
+/** Each vehicle model's own physics, whose body outline another player's car of that model is boxed by */
+const MODEL_CONFIGS: Readonly<Record<VehicleModelId, CarPhysicsConfig>> = {
+  lc26: LC26_TUNED_CONFIG,
+  'f12026-car': F12026_CAR_CONFIG,
+  'amg-gt3': AMG_GT3_CONFIG,
+  liana: SUZUKI_LIANA_CONFIG,
+  'mtr-496r': MTR_496R_CONFIG,
+  'lc-lmdh': LC_LMDH_CONFIG,
+  'nissan-r33-jgtc': NISSAN_R33_CONFIG,
+  'nissan-r32-jtcc': NISSAN_R32_CONFIG,
+  'bmw-m1-procar': BMW_M1_PROCAR_CONFIG,
+  'vw-scirocco-gtx': VW_SCIROCCO_CONFIG,
+  'chaparral-2d': CHAPARRAL_2D_CONFIG,
+  'chaparral-2d-67': CHAPARRAL_2D_67_CONFIG,
+  'porsche-934-rsr': PORSCHE_934_RSR_CONFIG,
+};
+const _remoteBoxes = new Map<VehicleModelId, ContactBox>();
+
+/** Contact box of another player's car: its model's own body's (`DEFAULT_CONTACT_BOX` for an unknown model) */
+export function remoteContactBox(vehicle: VehicleModelId | undefined): ContactBox {
+  if (vehicle === undefined || !Object.hasOwn(MODEL_CONFIGS, vehicle)) return DEFAULT_CONTACT_BOX;
+  let box = _remoteBoxes.get(vehicle);
+  if (!box) _remoteBoxes.set(vehicle, (box = contactBoxOfConfig(MODEL_CONFIGS[vehicle])));
+  return box;
+}
+
 /**
  * Contact between the player and another human's car (multiplayer). Each client resolves only its own car against
  * the other's state predicted to the present (`MultiplayerSyncManager.predictPeer`); both sides do the same, so the
@@ -797,8 +832,10 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   const dx = remote.position.x - player.worldPosition.x;
   const dz = remote.position.z - player.worldPosition.z;
   const dy = remote.position.y - player.worldPosition.y;
-  // Broad phase: two boxes can overlap with their centres up to a full diagonal apart (√(L² + W²) ≈ 5.4 m)
-  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M || Math.abs(dy) > 2) return false;
+  // Broad phase: two boxes can only overlap with their centres of mass within both boxes' reach from them
+  const remoteBox = remoteContactBox(remote.vehicle);
+  const reach = contactBoxOf(player).reachM + remoteBox.reachM;
+  if (dx * dx + dz * dz > reach * reach || Math.abs(dy) > 2) return false;
   fillObb(player, _obbA);
   const q = remote.quaternion;
   let fx = 2 * (q.x * q.z + q.w * q.y);
@@ -815,8 +852,9 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   _obbB.vz = remote.linearVelocity.z;
   // + counter-clockwise for the solver, + turning right on the wire
   _obbB.yawRateRadS = -(remote.yawRateRadS ?? 0);
-  _obbB.halfLengthM = CAR_LEN_M * 0.5;
-  _obbB.halfWidthM = CAR_WID_M * 0.5;
+  _obbB.halfLengthM = remoteBox.halfLengthM;
+  _obbB.halfWidthM = remoteBox.halfWidthM;
+  _obbB.centreAheadM = remoteBox.centreAheadM;
   [_obbB.massKg, _obbB.yawInertiaKgM2] = remoteContactMass(remote.vehicle);
   const hit = resolveCarToCarObbCollision(_obbA, _obbB, REMOTE_RESTITUTION);
   // The remote box is a prediction, good to about a decimetre: an overlap within the slop is not contact. This,
@@ -1259,6 +1297,7 @@ export class AiOpponentField implements AiRace {
     pace: number
   ): FieldCar {
     const clock = new LapClock(this.track.totalLengthM);
+    const box = contactBoxOf(sim);
     return {
       clock,
       get distM() {
@@ -1300,7 +1339,7 @@ export class AiOpponentField implements AiRace {
       inWallHit: false,
       contact: false,
       control: ai ? new AiCarControl() : null,
-      damage: new CarDamage(this.damageLevel, CAR_LEN_M / 2, CAR_WID_M / 2, seededRng(hashString(code) ^ 0x5bd1e995)),
+      damage: new CarDamage(this.damageLevel, box.halfLengthM, box.halfWidthM, seededRng(hashString(code) ^ 0x5bd1e995), box.centreAheadM),
       retired: false,
       retiredAtS: null,
       removed: false,
@@ -3068,7 +3107,8 @@ export class AiOpponentField implements AiRace {
           // Broad phase in the world, not along the track: a car spun across the road is ~5 m wide in track terms
           const dx = B.worldPosition.x - A.worldPosition.x;
           const dz = B.worldPosition.z - A.worldPosition.z;
-          if (dx * dx + dz * dz > CONTACT_BROAD_M2 || Math.abs(B.worldPosition.y - A.worldPosition.y) > 2) continue;
+          const reach = contactBoxOf(A).reachM + contactBoxOf(B).reachM;
+          if (dx * dx + dz * dz > reach * reach || Math.abs(B.worldPosition.y - A.worldPosition.y) > 2) continue;
           // 3D OBB SAT contact with the off-centre yaw moment and energy loss
           fillObb(A, _obbA);
           fillObb(B, _obbB);

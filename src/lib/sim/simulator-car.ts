@@ -20,6 +20,7 @@ import type { VehicleWheelState } from './vehicle-types';
 import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './f12026-car/TrackColliderQuery';
 import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
+import type { ContactBox } from './contact-box';
 
 /** Per-wheel state used by the skid marks / smoke, multiplayer and AI peers. Order FR, FL, RR, RL. */
 export type SimulatorWheel = Pick<
@@ -89,6 +90,8 @@ export interface SimulatorCar {
   /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
   readonly contactMassKg?: number;
   readonly contactYawInertiaKgM2?: number;
+  /** The car's box for car-to-car contact, round its body's outline (absent: `DEFAULT_CONTACT_BOX`, an F1 car's) */
+  readonly contactBox?: ContactBox;
   /** The car's own braking guidance for the braking line (absent / null: the circuit's LC26 profile) */
   readonly brakingGuide?: BrakingGuide | null;
 
