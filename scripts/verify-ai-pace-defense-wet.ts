@@ -19,6 +19,7 @@ import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
 import { TrackEnvironment } from '../src/lib/sim/track-environment';
 import { DEFAULT_SESSION_CONDITIONS } from '../src/lib/sim/weather';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import type { VehicleModelId } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { noteSkip } from './lib/hosted-files';
 
@@ -150,7 +151,7 @@ console.log('\n== Defensive line');
 // ---------------------------------------------------------------------------------------------------------------
 console.log('\n== Heavy-rain race starts');
 {
-  const cases: [string, string, number, boolean][] = [
+  const cases: [string, VehicleModelId, number, boolean][] = [
     ['rwanda_official_short', 'lc26', 10, true],
     ['rwanda_official_short', 'amg-gt3', 10, true],
     ['rwanda_official_short', 'lc26', 10, false],
