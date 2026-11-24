@@ -1167,6 +1167,18 @@
     "field": "Starterfeld",
     "startRace": "Rennen starten",
     "startQualifying": "Qualifying starten",
+    "testDay": "Testtag",
+    "targetLap": "Ziel {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value} % vorne",
+    "drivetrain": {
+      "rwd": "Heckantrieb",
+      "fwd": "Frontantrieb",
+      "awd": "Allradantrieb"
+    },
+    "revLimit": "Begrenzer bei {value} U/min",
+    "go": "Los",
     "sector": "S{n}"
   }
 }

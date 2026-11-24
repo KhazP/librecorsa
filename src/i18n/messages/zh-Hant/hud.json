@@ -1167,6 +1167,18 @@
     "field": "參賽陣容",
     "startRace": "開始賽事",
     "startQualifying": "開始排位賽",
+    "testDay": "測試日",
+    "targetLap": "目標 {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "前軸 {value}%",
+    "drivetrain": {
+      "rwd": "後輪驅動",
+      "fwd": "前輪驅動",
+      "awd": "四輪驅動"
+    },
+    "revLimit": "斷油轉速 {value} rpm",
+    "go": "出發",
     "sector": "S{n}"
   }
 }

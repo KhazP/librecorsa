@@ -1167,6 +1167,18 @@
     "field": "Lo schieramento",
     "startRace": "Avvia gara",
     "startQualifying": "Avvia qualifica",
+    "testDay": "Giornata di test",
+    "targetLap": "Obiettivo {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% all’anteriore",
+    "drivetrain": {
+      "rwd": "Trazione posteriore",
+      "fwd": "Trazione anteriore",
+      "awd": "Trazione integrale"
+    },
+    "revLimit": "Limitatore a {value} giri/min",
+    "go": "Vai",
     "sector": "S{n}"
   }
 }
