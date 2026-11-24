@@ -6,7 +6,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 People whose pull requests are in the game (the list the home page's About section shows is `src/lib/contributors.ts`):
 
-* **[adamikoo](https://github.com/adamikoo)**: the Grand Prix HUD layout ([#162](https://github.com/librecorsa/librecorsa/pull/162)), and the live HUD layout editor and start reaction timer ([#182](https://github.com/librecorsa/librecorsa/pull/182)).
+* **[adamikoo](https://github.com/adamikoo)**: the Grand Prix HUD layout ([#162](https://github.com/librecorsa/librecorsa/pull/162)), the live HUD layout editor and start reaction timer ([#182](https://github.com/librecorsa/librecorsa/pull/182)), and frame-loop scratch reuse and Windows ARM GPU detection ([#192](https://github.com/librecorsa/librecorsa/pull/192)).
 * **[dardalo-si](https://github.com/dardalo-si)**: absolute pressure in the tyre gas law ([#17](https://github.com/librecorsa/librecorsa/pull/17)).
 * **[Ravi Giri](https://github.com/Ravigiri2022)**: the verify runner that runs the suites several at once and reports every failure ([#130](https://github.com/librecorsa/librecorsa/pull/130)).
 

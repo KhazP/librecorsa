@@ -20,6 +20,6 @@ export const CODE_CONTRIBUTORS: readonly CodeContributor[] = [
   { name: "dardalo-si", url: "https://github.com/dardalo-si", pulls: [17] },
   // The verify runner: suites run several at once and every failure is reported
   { name: "Ravi Giri", url: "https://github.com/Ravigiri2022", pulls: [130] },
-  // The Grand Prix HUD layout, then the live HUD layout editor and the start reaction timer
-  { name: "adamikoo", url: "https://github.com/adamikoo", pulls: [162, 182] },
+  // The Grand Prix HUD layout, the live HUD layout editor and start reaction timer, and frame-loop scratches + Windows ARM GPU detection
+  { name: "adamikoo", url: "https://github.com/adamikoo", pulls: [162, 182, 192] },
 ];
