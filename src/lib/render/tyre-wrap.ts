@@ -10,7 +10,8 @@
  *  - across it: each vertex's distance along the tyre's cross-section (`tyreAcross`, worked out once per geometry),
  *    with the mesh's tread edges on the strip's.
  * The rubber comes from one texture (the slicks' and the wet's, or the intermediate's with its tread), the printed
- * art (stripe, PIRELLI, P ZERO or Cinturato) from a second one as coverage, printed in the compound's colour.
+ * art (stripe, PIRELLI, P ZERO or Cinturato) from a second one as coverage, printed in the compound's colour. The pack
+ * prints the outer sidewall only; the inner one gets the same art mirrored, as the real tyre carries it on both.
  *
  * The textures are hosted on librecorsa.org only (`hosted-content.ts`). Without them the tyre keeps what it had: a
  * clone its plain rubber, and a copy that cannot fetch them the older sidewall (`pirelli-sidewall.ts`).
@@ -45,6 +46,8 @@ const V_TREAD_OUTER = 193 / 1024;
 const V_TREAD_INNER = 834 / 1024;
 const ART_V0 = 64 / 1024;
 const ART_V1 = 192 / 1024;
+/** The inner sidewall's strip rows onto the outer's: its bead to its tread edge on theirs */
+const INNER_TO_OUTER = V_TREAD_OUTER / (1 - V_TREAD_INNER);
 
 /** A tyre's surface counts as tread where its normal leans this far from the axle, or further */
 const TREAD_EDGE_AXLE_N = 0.6;
@@ -163,11 +166,16 @@ const FRAGMENT_BODY = /* glsl */ `
   vec2 twGradX = vec2(twTurn * (twP.x * twDx.y - twP.y * twDx.x) / twR2, dFdx(twV));
   vec2 twGradY = vec2(twTurn * (twP.x * twDy.y - twP.y * twDy.x) / twR2, dFdy(twV));
   vec3 twRubber = textureGrad(uTyreWrapRubber, vec2(twU, twV), twGradX, twGradY).rgb;
-  float twArtScale = 1.0 / ${(ART_V1 - ART_V0).toFixed(5)};
-  float twArtV = (twV - ${ART_V0.toFixed(5)}) * twArtScale;
+  // The print, on both sidewalls as on the real tyre: the pack's is the outer one's, so the inner sidewall takes it
+  // mirrored across the tread (bead to bead) and round the tyre, to read from the inside of the car
+  float twInner = step(${V_TREAD_INNER.toFixed(5)}, twV);
+  float twSideV = mix(twV, (1.0 - twV) * ${INNER_TO_OUTER.toFixed(5)}, twInner);
+  float twSideU = mix(twU, -twU, twInner);
+  float twArtScale = 1.0 / ${(ART_V1 - ART_V0).toFixed(5)} * mix(1.0, ${INNER_TO_OUTER.toFixed(5)}, twInner);
+  float twArtV = (twSideV - ${ART_V0.toFixed(5)}) / ${(ART_V1 - ART_V0).toFixed(5)};
   vec2 twArt = textureGrad(
     uTyreWrapArt,
-    vec2(twU, twArtV),
+    vec2(twSideU, twArtV),
     vec2(twGradX.x, twGradX.y * twArtScale),
     vec2(twGradY.x, twGradY.y * twArtScale)
   ).rg;
