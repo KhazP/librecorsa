@@ -5,7 +5,8 @@
  */
 import type { DnfReason, RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
-import type { SimulatorCar } from "@/lib/sim/simulator-car";
+import { ROLLING_SLOT_SPACING_M, ROLLING_START_PACE_MS, type SimulatorCar } from "@/lib/sim/simulator-car";
+import { rollingFormationStep } from "@/lib/sim/race-start";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
 import { CarDamage } from "@/lib/sim/car-damage";
 import { damageStatusOf, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
@@ -454,6 +455,12 @@ export class MultiplayerRace {
   readonly damage: CarDamage | null;
   /** The qualifying classification the race started from, formatted for the HUD */
   private readonly qualifyingRows?: { code: string; isPlayer: boolean; lapMs: number | null }[];
+  /** Rolling-start formation state (multiplayer rolling starts only; standing starts leave this false) */
+  private rollingFormation = false;
+  private rollingPaceMs = 0;
+  private rollingStageOrder = 0;
+  private rollingDistanceToLineM = 0;
+  private rollingMaxWaitS = 0;
 
   constructor(
     readonly start: RaceStartInfo,
@@ -506,6 +513,37 @@ export class MultiplayerRace {
   get gridSlot(): number {
     const slot = this.start.grid.indexOf(this.localPeerId);
     return slot >= 0 ? slot : this.start.grid.length;
+  }
+
+  /** Arms the Nuzzi-style rolling-start formation limiter and 3-2-1 countdown after placing the car on its rolling slot */
+  startRollingFormation(paceMs: number): void {
+    const clamped = Math.min(ROLLING_START_PACE_MS, Math.max(0, paceMs));
+    if (this.start.startType !== "rolling" || clamped <= 5) {
+      this.rollingFormation = false;
+      this.rollingPaceMs = 0;
+      this.rollingStageOrder = 0;
+      this.rollingDistanceToLineM = 0;
+      return;
+    }
+    const poleDistM =
+      this.gridSlot === 0
+        ? this.lapClock.distM
+        : Math.min(-5, this.lapClock.distM + this.gridSlot * ROLLING_SLOT_SPACING_M);
+    if (poleDistM >= -5) {
+      this.rollingFormation = false;
+      this.rollingPaceMs = 0;
+      return;
+    }
+    this.rollingFormation = true;
+    this.rollingPaceMs = clamped;
+    this.rollingDistanceToLineM = Math.max(0, -poleDistM);
+    this.rollingStageOrder = rollingFormationStep(this.rollingDistanceToLineM, clamped, clamped, 0).stageOrder;
+    this.rollingMaxWaitS = Math.max(12, this.rollingDistanceToLineM / Math.max(5, clamped) + 8);
+  }
+
+  /** Active formation speed limit (m/s) for the local car while rolling to Start/Finish; undefined once green */
+  get rollingLimiterMs(): number | undefined {
+    return this.rollingFormation && this.latestFrame?.phase === "racing" ? this.rollingPaceMs : undefined;
   }
 
   /** Someone has taken the chequered flag: every car still running finishes on its next line crossing */
@@ -852,10 +890,32 @@ export class MultiplayerRace {
     const officialResults = official && (playerFinished || official.final) ? this.officialResults(field, official) : null;
     const officialPlace = officialResults?.findIndex((r) => r.isPlayer) ?? -1;
     const damageStatus = damageStatusOf(this.damage);
+    let rollingStatus: RaceStatus["rollingFormation"] = undefined;
+    if (frame.phase === "racing" && this.rollingFormation) {
+      const poleId = this.start.grid[0];
+      const pole = poleId === this.localPeerId ? me : (remote.find((r) => r.id === poleId) ?? ordered[0]);
+      if (!pole || pole.dnf || pole.distM >= 0 || frame.raceTimeS >= this.rollingMaxWaitS) {
+        this.rollingFormation = false;
+        this.rollingStageOrder = 0;
+        this.rollingDistanceToLineM = 0;
+      } else {
+        this.rollingDistanceToLineM = Math.max(0, -pole.distM);
+        const step = rollingFormationStep(this.rollingDistanceToLineM, pole.speedMs, this.rollingPaceMs, this.rollingStageOrder);
+        this.rollingStageOrder = step.stageOrder;
+        rollingStatus = {
+          paceMs: this.rollingPaceMs,
+          stage: step.stage,
+          countdown: step.countdown,
+          limiterActive: true,
+          distanceToLineM: Math.round(this.rollingDistanceToLineM),
+        };
+      }
+    }
     return {
       phase: frame.phase === "racing" ? (playerFinished ? "finished" : "racing") : "lights",
       lightsOn: frame.lightsOn,
       countdownS: frame.phase === "countdown" ? frame.countdownS : undefined,
+      rollingFormation: rollingStatus,
       qualifying: this.qualifyingRows,
       position: officialPlace >= 0 && playerFinished ? officialPlace + 1 : ordered.indexOf(me) + 1,
       fieldSize: ordered.length,

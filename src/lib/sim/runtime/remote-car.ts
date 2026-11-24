@@ -74,6 +74,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   trackLimitsMode: "config",
   trackLimitsHold: "config",
   gridHold: "config",
+  speedLimiterMs: "config",
   aiSelfRecovery: "config",
 
   groundQuery: "local",

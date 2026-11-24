@@ -192,6 +192,8 @@ export interface SimulatorCar {
   trackLimitsHold?: boolean;
   /** A manual start's lights: the car held on the grid, its engine live (`race-start.ts`) */
   gridHold?: boolean;
+  /** Rolling-start formation speed limiter (m/s): clamps driver speed smoothly until green flag; undefined = off */
+  speedLimiterMs?: number;
   /** Race control deleted the running lap */
   invalidateLap?(): void;
   /** Garage chassis setup (wing trim, ride height, springs, bars, dampers) as offsets from the car's baseline */
@@ -536,8 +538,14 @@ export function startPose(
 /** Gap between grid slots in a flying start's queue (m); the slots alternate sides */
 export const FLYING_SLOT_SPACING_M = 28;
 
-/** A race's rolling start never runs faster than this (m/s): a formation pace, not racing speed */
-export const ROLLING_START_PACE_MS = 120 / 3.6;
+/** Tighter staggered spacing between slots in a rolling-start formation (m) */
+export const ROLLING_SLOT_SPACING_M = 14;
+
+/** Target formation speed for a rolling start (m/s): 65 km/h (Nuzzi-style rolling start) */
+export const ROLLING_START_PACE_MS = 65 / 3.6;
+
+/** Maximum lead distance before Start/Finish for pole in a rolling start (m): ~9 s formation approach at 65 km/h */
+export const ROLLING_START_MAX_LEAD_M = 165;
 /** No rolling-start slot where the road within 10 m curves tighter than this (1/m: a 33 m radius, a hairpin) */
 const ROLLING_SLOT_MAX_CURVATURE = 0.03;
 /** The most cornering a car placed with no yaw rate is asked for at the field's speed (g) */
@@ -549,11 +557,11 @@ interface RollingStartTrack {
 }
 
 /**
- * Where the first `count` grid slots of a race's rolling start line up (m along the lap): from the flying start's
- * point back, each 28 m behind the one ahead, or up to 120 m further back past a hairpin, so no car is dropped onto
- * one's apex with no yaw rate (it spun before it had turned in: where the final straight is short the queue runs
- * back through the last corner). Gentler corners keep their slots, at the speed `rollingStartSpeedMs` allows there.
- * The queue skips only within half a lap of the front: on a short, twisty layout it otherwise ran round onto itself
+ * Where the first `count` grid slots of a race's rolling start line up (m along the lap): pole starts no further than
+ * `ROLLING_START_MAX_LEAD_M` (~165 m, ~9 s at 65 km/h) before Start/Finish (or closer where the final straight is
+ * shorter), with each subsequent slot `ROLLING_SLOT_SPACING_M` (14 m) behind on alternating sides, skipping hairpins
+ * up to 120 m further back so no car is dropped onto an apex with no yaw rate.
+ * The queue skips only within half a lap of the front: on a short, twisty layout it otherwise ran round onto itself.
  */
 export function rollingStartSlots(track: RollingStartTrack, start: { s: number }, count: number): number[] {
   const L = track.totalLengthM;
@@ -562,12 +570,15 @@ export function rollingStartSlots(track: RollingStartTrack, start: { s: number }
     for (let d = -10; d <= 10; d += 5) if (Math.abs(track.getSampleAtDistance(wrap(s + d)).curvature) > ROLLING_SLOT_MAX_CURVATURE) return true;
     return false;
   };
+  const distToLine = (((L - start.s) % L) + L) % L;
+  const leadDist = Math.min(distToLine > 0 ? distToLine : ROLLING_START_MAX_LEAD_M, ROLLING_START_MAX_LEAD_M);
+  const leadStartS = L - leadDist;
   const slots: number[] = [];
-  let s = start.s;
+  let s = leadStartS;
   for (let slot = 0; slot < count; slot++) {
     if (slot > 0) {
-      s -= FLYING_SLOT_SPACING_M;
-      for (let back = 0; back < 120 && start.s - s < L / 2 && curved(s); back += 5) s -= 5;
+      s -= ROLLING_SLOT_SPACING_M;
+      for (let back = 0; back < 120 && leadStartS - s < L / 2 && curved(s); back += 5) s -= 5;
     }
     slots.push(wrap(s));
   }

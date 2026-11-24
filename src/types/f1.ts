@@ -332,6 +332,23 @@ export interface RaceResultEntry {
   gridPosition?: number;
 }
 
+/** Stage of a Nuzzi-style rolling-start approach before Start/Finish */
+export type RollingFormationStage = 'formation' | 'ready' | 'countdown';
+
+/** Live state of a rolling-start formation approach, driving the HUD prompt, 3-2-1 countdown and speed limiter */
+export interface RollingFormationStatus {
+  /** Target formation speed (m/s), enforced on AI cars and the player's formation speed limiter */
+  paceMs: number;
+  /** Current formation stage: holding pace -> get ready -> 3-2-1 countdown */
+  stage: RollingFormationStage;
+  /** Whole-second countdown (3, 2, 1) during the 'countdown' stage; absent earlier */
+  countdown?: 3 | 2 | 1;
+  /** True while the formation speed limiter is engaged on the player's car */
+  limiterActive: boolean;
+  /** Approximate distance remaining for P1 to reach Start/Finish (m) */
+  distanceToLineM: number;
+}
+
 /** A race (AI opponents or multiplayer): start procedure, live order and the result */
 export interface RaceStatus {
   /** 'finished': the player has taken the flag */
@@ -340,8 +357,8 @@ export interface RaceStatus {
   lightsOn: number;
   /** Seconds until the light sequence starts (multiplayer countdown, an AI race's grid after qualifying); absent otherwise */
   countdownS?: number;
-  /** Rolling-start formation approach: the field holds this pace (m/s) until the leader crosses Start/Finish */
-  rollingFormation?: { paceMs: number };
+  /** Rolling-start formation approach: the field holds this pace (m/s) with speed limiter and 3-2-1 countdown until the leader crosses Start/Finish */
+  rollingFormation?: RollingFormationStatus;
   /** The qualifying classification the race lined up in (AI race with qualifying): code, player, best clean lap (ms) */
   qualifying?: { code: string; isPlayer: boolean; lapMs: number | null }[];
   /** Race length (laps) */

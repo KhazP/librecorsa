@@ -149,6 +149,7 @@ import {
   startPose,
   type TyreVisualState,
 } from './sim/simulator-car';
+import { applySpeedLimiter } from './sim/race-start';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
 import {
@@ -594,6 +595,8 @@ export class F1Physics2026 {
   public aiAutopilot = false;
   /** Held on a manual-start grid through the lights (`SimulatorCar.gridHold`) */
   public gridHold = false;
+  /** Rolling-start formation speed limiter (m/s); undefined when inactive */
+  public speedLimiterMs: number | undefined = undefined;
   /** AI driver pace (fraction of the car's limit), line shift (m, + right) and speed ceiling (m/s) */
   public aiPaceScale = 1;
   public aiLineBiasM = 0;
@@ -1060,6 +1063,7 @@ export class F1Physics2026 {
     if (pointToPoint) flyingStart = false;
     this.runActive = false;
     this.atRestOnLine = false;
+    this.speedLimiterMs = undefined;
     const lapLen = this.track.totalLengthM;
     let flyingGear = 7;
     if (flyingStart) {
@@ -1822,14 +1826,22 @@ export class F1Physics2026 {
       if (drv.boostRemainingS <= 0) drv.ersMode = aiOvertake ? 'OVERRIDE' : ai.ersMode;
     } else {
       steerNorm = this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, dt);
+      const lim = !this.gridHold ? applySpeedLimiter(this.vxMs, this.speedLimiterMs, throttle, brake) : null;
+      const limited = lim?.active === true;
+      if (limited && lim) {
+        throttle = lim.throttle;
+        brake = lim.brake;
+      }
 
-      if (inputs.manualOverride && drv.ersEnergyJ > 0) {
+      if (!limited && inputs.manualOverride && drv.ersEnergyJ > 0) {
         drv.ersMode = 'OVERRIDE';
       } else if (drv.boostRemainingS <= 0 && drv.ersMode === 'OVERRIDE') {
         drv.ersMode = this.userErsMode;
       }
 
-      if (this.autoXMode) {
+      if (limited) {
+        this.activeAeroMode = 'Z_MODE';
+      } else if (this.autoXMode) {
         const canXMode =
           sample.drsZone &&
           isRearFlapAllowedInWet(this.weatherSample.wetness) &&

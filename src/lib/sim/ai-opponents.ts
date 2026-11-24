@@ -35,6 +35,7 @@ import { AI_TUNING_LIBRARY } from '@/lib/sim/ai-tuning-data';
 import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedCorner } from '@/lib/sim/ai-learning';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import { ROLLING_START_PACE_MS, type SimulatorCar } from '@/lib/sim/simulator-car';
+import { rollingFormationStep } from '@/lib/sim/race-start';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
 import type { DnfReason, RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
 import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
@@ -898,6 +899,10 @@ export class AiOpponentField implements AiRace {
   private rollingLeaderStallS = 0;
   /** Maximum race time (s) for a rolling formation before safety green-flag release */
   private rollingMaxWaitS = 0;
+  /** Monotonic stage order of the Nuzzi-style rolling start (0=formation, 1=ready, 2=3, 3=2, 4=1) */
+  private rollingStageOrder = 0;
+  /** Approximate distance remaining for P1 to reach Start/Finish during rolling formation (m) */
+  private rollingDistanceToLineM = 0;
   /** Race time at which the first car reached each distance bucket (gap timing) */
   /** Time gaps to the leader at the same point of the track (finer buckets than a multiplayer race's) */
   private readonly gapTimer = new GapTimer(GAP_BUCKET_M);
@@ -1371,6 +1376,11 @@ export class AiOpponentField implements AiRace {
     return this.rollingFormation;
   }
 
+  /** Compact key of the active rolling-start stage/countdown for immediate worker-to-page status push */
+  get rollingCueKey(): string {
+    return this.rollingFormation ? String(this.rollingStageOrder) : '';
+  }
+
   /**
    * Lines the field up: AI cars in grid order, the player behind them. A standing start runs the
    * light sequence (five reds one second apart, then a random 0.2–3 s hold); a rolling start
@@ -1468,7 +1478,7 @@ export class AiOpponentField implements AiRace {
     // After qualifying the grid stands a few seconds before the lights, for its order to be read
     this.preStartS = standing && this.qualiResults ? QUALIFYING_GRID_SHOW_S : 0;
     this.holdS = 0.2 + this.rng() * 2.8;
-    // Rolling start: hold the whole field at its spawn formation speed until the leader crosses Start/Finish
+    // Rolling start: hold the whole field at ~65 km/h formation pace with player speed limiter until P1 crosses Start/Finish
     const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
     const spawnSpeeds = this.cars.map((c) => c.sim.vxMs).filter((v) => v > 5);
     const paceMs = spawnSpeeds.length > 0 ? Math.min(ROLLING_START_PACE_MS, Math.min(...spawnSpeeds)) : 0;
@@ -1477,9 +1487,14 @@ export class AiOpponentField implements AiRace {
     this.rollingPaceMs = this.rollingFormation ? paceMs : 0;
     this.rollingGreenAtS = 0;
     this.rollingLeaderStallS = 0;
-    this.rollingMaxWaitS = this.rollingFormation
-      ? Math.max(12, Math.max(0, -(leader?.clock.distM ?? 0)) / Math.max(5, paceMs) + 8)
+    this.rollingDistanceToLineM = this.rollingFormation ? Math.max(0, -(leader?.clock.distM ?? 0)) : 0;
+    this.rollingStageOrder = this.rollingFormation
+      ? rollingFormationStep(this.rollingDistanceToLineM, leader?.sim.vxMs ?? paceMs, this.rollingPaceMs, 0).stageOrder
       : 0;
+    this.rollingMaxWaitS = this.rollingFormation
+      ? Math.max(12, this.rollingDistanceToLineM / Math.max(5, paceMs) + 8)
+      : 0;
+    this.player.speedLimiterMs = this.rollingFormation ? this.rollingPaceMs : undefined;
     if (this.rollingFormation) {
       for (const car of this.cars) {
         if (car.ai) {
@@ -1612,14 +1627,18 @@ export class AiOpponentField implements AiRace {
   }
 
   /**
-   * Monitors a rolling-start formation approach and drops the green flag when:
+   * Monitors a rolling-start formation approach (Nuzzi AC style), advances the monotonic 3-2-1 countdown as P1
+   * approaches Start/Finish, keeps the player's formation speed limiter engaged, and drops the green flag when:
    *  1. The P1 leader (AI or player) crosses Start/Finish (`distM >= 0`),
-   *  2. A human player on pole deliberately accelerates well above formation pace in the final ~55 m acceleration zone,
-   *  3. Safety fallback: P1 stalls for > 6 s or the overall formation exceeds `rollingMaxWaitS`.
+   *  2. Safety fallback: P1 stalls for > 6 s or the overall formation exceeds `rollingMaxWaitS`.
    * Also silently releases if a car was teleported mid-lap (headless test setups).
    */
   private updateRollingFormation(dt: number): void {
-    if (!this.rollingFormation) return;
+    if (!this.rollingFormation) {
+      if (this.player.speedLimiterMs !== undefined) this.player.speedLimiterMs = undefined;
+      return;
+    }
+    this.player.speedLimiterMs = this.rollingPaceMs;
     const L = this.track.totalLengthM;
     for (const car of this.cars) {
       if (!car.removed && Math.abs(wrapHalf(car.sim.sMeters - car.prevS, L)) > 40) {
@@ -1633,20 +1652,17 @@ export class AiOpponentField implements AiRace {
       return;
     }
     const leaderDistNow = leader.distM + wrapHalf(leader.sim.sMeters - leader.prevS, L);
+    this.rollingDistanceToLineM = Math.max(0, -leaderDistNow);
     if (leaderDistNow >= 0) {
       this.releaseRollingStart();
       return;
     }
-    if (
-      leader.isPlayer &&
-      !leader.sim.aiAutopilot &&
-      leaderDistNow >= -55 &&
-      leader.sim.vxMs > this.rollingPaceMs + 5 &&
-      leader.sim.telemetry.throttle > 0.65
-    ) {
-      this.releaseRollingStart();
-      return;
-    }
+    this.rollingStageOrder = rollingFormationStep(
+      this.rollingDistanceToLineM,
+      leader.sim.vxMs,
+      this.rollingPaceMs,
+      this.rollingStageOrder
+    ).stageOrder;
     if (dt > 0) {
       if (leader.sim.vxMs < Math.max(4, 0.35 * this.rollingPaceMs)) {
         this.rollingLeaderStallS += dt;
@@ -1664,6 +1680,9 @@ export class AiOpponentField implements AiRace {
     this.rollingFormation = false;
     this.rollingGreenAtS = this.raceTimeS;
     this.rollingLeaderStallS = 0;
+    this.rollingStageOrder = 0;
+    this.rollingDistanceToLineM = 0;
+    this.player.speedLimiterMs = undefined;
     for (const car of this.cars) {
       if (!car.ai) continue;
       car.startLaneM = silent ? null : car.sim.lateralOffsetM;
@@ -3471,6 +3490,11 @@ export class AiOpponentField implements AiRace {
       const rewoundBeforeGreen = this.rollingFormation || (this.rollingGreenAtS > 0 && this.raceTimeS < this.rollingGreenAtS);
       this.rollingFormation = Boolean(rewoundBeforeGreen && leader && leader.distM < -5);
       this.rollingLeaderStallS = 0;
+      this.rollingDistanceToLineM = this.rollingFormation ? Math.max(0, -(leader?.distM ?? 0)) : 0;
+      this.rollingStageOrder = this.rollingFormation
+        ? rollingFormationStep(this.rollingDistanceToLineM, leader?.sim.vxMs ?? this.rollingPaceMs, this.rollingPaceMs, 0).stageOrder
+        : 0;
+      this.player.speedLimiterMs = this.rollingFormation ? this.rollingPaceMs : undefined;
     }
   }
 
@@ -3644,6 +3668,18 @@ export class AiOpponentField implements AiRace {
     this.raceControl.announce(this.raceTimeS, 'penalty', `${car.label} disqualified`, 'Track limits');
   }
 
+  private rollingFormationStatus(): RaceStatus['rollingFormation'] {
+    if (!this.rollingFormation) return undefined;
+    const step = rollingFormationStep(this.rollingDistanceToLineM, this.rollingPaceMs, this.rollingPaceMs, this.rollingStageOrder);
+    return {
+      paceMs: this.rollingPaceMs,
+      stage: step.stage,
+      countdown: step.countdown,
+      limiterActive: !this.player.aiAutopilot && (this.player.speedLimiterMs ?? 0) > 0,
+      distanceToLineM: Math.round(this.rollingDistanceToLineM),
+    };
+  }
+
   public status(): RaceStatus {
     const L = this.track.totalLengthM;
     const progress = new Map<FieldCar, RacerProgress>();
@@ -3666,7 +3702,7 @@ export class AiOpponentField implements AiRace {
       phase: this.phase,
       lightsOn: this.lightsOn,
       countdownS: this.phase === 'lights' && this.preStartS > 0 ? this.preStartS : undefined,
-      rollingFormation: this.rollingFormation ? { paceMs: this.rollingPaceMs } : undefined,
+      rollingFormation: this.rollingFormationStatus(),
       qualifying: this.qualiResults ?? undefined,
       position: playerIdx + 1,
       fieldSize: order.length,

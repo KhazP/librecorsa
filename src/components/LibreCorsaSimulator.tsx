@@ -977,6 +977,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         const rolling = start.startType === "rolling";
         physics.resetToStartGrid(rolling, race.gridSlot, rolling ? start.grid.length : undefined, true);
         race.lapClock.reset(physics.sMeters);
+        if (rolling) race.startRollingFormation(physics.vxMs);
       }
     },
     [session, track, changeCar, startSession, applyWeekRules, getTrackEnv]
