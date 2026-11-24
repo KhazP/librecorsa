@@ -1366,6 +1366,9 @@ export class F12026CarSim implements SimulatorCar {
     opts?: { aiLite?: boolean }
   ) {
     this.track = track;
+    // The circuit's pit lane is built on first use (10-16 ms on a long lane): with the car, while the circuit loads, not
+    // in its first step on the road
+    void track.pitLane;
     this.profile = profile;
     this.line = profile.racingLine ?? 'f1';
     this.brakingGuide = profile.speedProfile
