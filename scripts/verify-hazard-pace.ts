@@ -4,7 +4,8 @@
  *
  * A car is a hazard when it crawls for itself: well under the speed its own model carries there, not under the
  * circuit's speed profile, which is the LC26's. A road car at its normal pace through a hairpin or up a climb is none;
- * the same car at half its corner speed, or stopped, is. A queue braking early into a corner is still racing.
+ * the same car at half its corner speed, or stopped, is. A queue braking early into a corner is still racing, and a car
+ * held up close behind a car no faster is queuing: the car holding the jam up is the hazard.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
@@ -90,6 +91,7 @@ console.log('\n== AiOpponentField on RISE short (road cars)');
     f.phase = 'racing';
     f.raceTimeS = 90;
     const ai = f.cars.find((c) => !c.isPlayer) as Car;
+    const me = f.cars.find((c) => c.isPlayer) as Car;
     // The T3 hairpin at the top of the climb (~1,310 m), where the leading road car brakes to ~9 m/s every lap
     const probe = { sim: { vehicleId: ai.sim.vehicleId, racingLineId: ai.sim.racingLineId, sMeters: 0 } } as unknown as Car;
     const ownAt = (s: number) => ((probe.sim as { sMeters: number }).sMeters = s, f.ownSpeedMs(probe, true));
@@ -117,6 +119,17 @@ console.log('\n== AiOpponentField on RISE short (road cars)');
     check('up the climb at its normal 25 m/s: no hazard', !f.isHazard(ai), `own ${f1(f.ownSpeedMs(ai, true))}, circuit ${f1(track.getSampleAtDistance(1150).optimalSpeedKmh / 3.6)} m/s`);
     place(ai, 1150, 5);
     check('crawling up the climb at 5 m/s: a hazard', f.isHazard(ai));
+    // A jam: a slow car close behind a car no faster is queuing, not crawling; the car holding it up is the hazard
+    place(me, 1160, 5);
+    check('crawling up the climb close behind a car no faster (a jam): no hazard', !f.isHazard(ai));
+    check('…the car holding it up, with the road clear ahead: a hazard', f.isHazard(me));
+    place(me, 1151, 5);
+    check('…nor beside a car no faster, a metre ahead or behind', !f.isHazard(ai) && (place(me, 1149, 5), !f.isHazard(ai)));
+    place(me, 1160, 0.5);
+    check('rolling behind a stopped car: no hazard, the stopped car is', !f.isHazard(ai) && f.isHazard(me));
+    place(ai, 1150, 0.5);
+    check('stopped behind it: a hazard too', f.isHazard(ai));
+    place(me, 5000, 40);
     place(ai, 1150, 25);
     ai.retired = true;
     check('a retired car there, whatever its speed: a hazard', f.isHazard(ai));

@@ -689,6 +689,13 @@ interface OwnPace {
   ds: number;
 }
 const ownPaces = new WeakMap<BuiltTrackData, Map<string, OwnPace>>();
+/**
+ * Queuing, not crawling: a car alongside or this close ahead (m centre to centre, plus s of its speed), no faster by
+ * this (m/s)
+ */
+const QUEUE_GAP_M = 12;
+const QUEUE_GAP_S = 1;
+const QUEUE_DV_MS = 3;
 const DOUBLE_CLUSTER_M = 250;
 const DOUBLE_ON_S = 0.5;
 const DOUBLE_OFF_S = 2;
@@ -2883,11 +2890,30 @@ export class AiOpponentField implements AiRace {
       if (hasLaunched(Math.abs(car.sim.vxMs), road) || this.raceTimeS > HAZARD_LAUNCH_MAX_S) car.launched = true;
       else if (!(Math.abs(car.sim.vxMs) < DOUBLE_STOPPED_MS && this.raceTimeS > HAZARD_STALL_AFTER_S)) return false;
     }
-    const now = isHazardSpeed(Math.abs(car.sim.vxMs), road) || Math.abs(this.headingErr(car.sim)) > (early ? 0.6 : 1.2);
+    const crawling = isHazardSpeed(Math.abs(car.sim.vxMs), road) && !this.queuing(car);
+    const now = crawling || Math.abs(this.headingErr(car.sim)) > (early ? 0.6 : 1.2);
     if (!early) return now;
     // (simplix keeps a dangerous car flagged for 2 s: a car sliding back to straight is still where it went wrong)
     if (now) car.hazardUntilS = this.raceTimeS + 2;
     return now || this.raceTimeS < car.hazardUntilS;
+  }
+
+  /**
+   * A slow car close behind or alongside a car no faster, still rolling: held up in a queue (a lap-1 jam into a
+   * corner), not crawling for itself. The car holding the queue up is judged as any, and a stopped one is a hazard
+   * wherever it is (the jam behind a car stopped is under its yellow). Each car of a jam was a hazard, two of them a
+   * double yellow (and one alongside flickered in and out of it as the two swapped a metre)
+   */
+  private queuing(car: FieldCar): boolean {
+    const v = car.sim.vxMs;
+    if (v < DOUBLE_STOPPED_MS) return false;
+    const L = this.track.totalLengthM;
+    for (const o of this.cars) {
+      if (o === car || this.offRoad(o)) continue;
+      const ds = wrapHalf(o.sim.sMeters - car.sim.sMeters, L);
+      if (ds > -CAR_LEN_M / 2 && ds < QUEUE_GAP_M + QUEUE_GAP_S * v && o.sim.vxMs < v + QUEUE_DV_MS) return true;
+    }
+    return false;
   }
 
   /** Each car's own pace (`ownPace`), looked up once per car (a car's model and line never change) */
