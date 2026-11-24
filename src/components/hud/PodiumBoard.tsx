@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "use-intl/react";
 import type { RaceStatus } from "@/types/f1";
 import type { ShowContext, ShowDriver } from "@/lib/show/show-context";
-import { podiumBoard, type BoardChampionship, type BoardEntry, type BoardGap } from "@/lib/show/podium-board";
+import { podiumBoard, type BoardChampionship, type BoardEntry, type BoardGap, type PodiumBoardData } from "@/lib/show/podium-board";
 import { PODIUM_BOARD_S } from "@/lib/render/podium-shot";
 import { seriesById } from "@/lib/career/ladder";
 import { seriesName } from "@/components/career/career-ui";
@@ -52,24 +52,25 @@ export const PodiumBoard: React.FC<{
         {board ? (
           <>
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 lg:flex-row lg:items-end lg:gap-8 short:flex-row short:items-end short:gap-3">
-              {/* P2 | P1 | P3 on their steps */}
-              <div className="flex w-full max-w-[860px] min-w-0 items-end justify-center gap-2 sm:gap-3 lg:flex-1 short:max-w-[460px]">
-                {[2, 1, 3].map((p, i) => {
-                  const e = byPlace(p);
-                  return e ? (
-                    <PodiumCard key={p} entry={e} mirror={i === 2} delayMs={p === 1 ? 120 : p === 2 ? 320 : 480} />
-                  ) : (
-                    <span key={p} aria-hidden className="min-w-0 flex-1" />
-                  );
-                })}
+              <div className="flex w-full min-w-0 flex-col items-center gap-3 lg:flex-1 short:flex-1 short:gap-2">
+                {/* P2 | P1 | P3 on their steps */}
+                <div className="flex w-full max-w-[860px] min-w-0 items-end justify-center gap-2 sm:gap-3 short:max-w-[460px]">
+                  {[2, 1, 3].map((p, i) => {
+                    const e = byPlace(p);
+                    return e ? (
+                      <PodiumCard key={p} entry={e} mirror={i === 2} delayMs={p === 1 ? 120 : p === 2 ? 320 : 480} />
+                    ) : (
+                      <span key={p} aria-hidden className="min-w-0 flex-1" />
+                    );
+                  })}
+                </div>
+                {/* Beside the tower on a wide or short screen: under the podium */}
+                <BoardExtras board={board} display="hidden lg:flex short:flex" />
               </div>
               {board.rest.length > 0 ? <ClassificationTower rows={board.rest} playerApart={board.playerApart} /> : null}
             </div>
-
-            <div className="flex flex-wrap items-stretch gap-2 sm:gap-3">
-              {board.fastest ? <FastestLapBar driver={board.fastest.driver} ms={board.fastest.ms} /> : null}
-              {board.championship ? <ChampionshipBar c={board.championship} /> : null}
-            </div>
+            {/* Under the tower on a phone held upright */}
+            <BoardExtras board={board} display="flex lg:hidden short:hidden" />
           </>
         ) : null}
       </div>
@@ -93,6 +94,15 @@ export const PodiumBoard: React.FC<{
     </div>
   );
 };
+
+/** The fastest lap and (career) the championship line; `display` says where this copy shows */
+const BoardExtras: React.FC<{ board: PodiumBoardData; display: string }> = ({ board, display }) =>
+  board.fastest || board.championship ? (
+    <div className={`${display} flex-wrap items-stretch justify-center gap-2 sm:gap-3 short:gap-1.5`}>
+      {board.fastest ? <FastestLapBar driver={board.fastest.driver} ms={board.fastest.ms} /> : null}
+      {board.championship ? <ChampionshipBar c={board.championship} /> : null}
+    </div>
+  ) : null;
 
 /** First name (fog) and LAST NAME, or the whole name on one line when the last word is a number (a handle) */
 function nameParts(d: ShowDriver): { first: string; main: string } {
@@ -265,7 +275,7 @@ const ClassificationTower: React.FC<{ rows: readonly BoardEntry[]; playerApart: 
 };
 
 const BAR = "lc-show-wipe lc-show-chamfer-sm inline-flex max-w-full items-stretch overflow-hidden border-t-2 bg-lc-void/92 shadow-lc-pop";
-const CELL = "lc-mono inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-bold tracking-[0.04em] sm:px-3.5 sm:text-[14px] short:py-1.5";
+const CELL = "lc-mono inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-bold tracking-[0.04em] sm:px-3.5 sm:text-[14px] short:px-2.5 short:py-1 short:text-[12px]";
 
 /** The race's fastest lap: who, and the time in the best colour (beside the lap-time mark and its word) */
 const FastestLapBar: React.FC<{ driver: ShowDriver; ms: number }> = ({ driver, ms }) => {
@@ -293,7 +303,7 @@ const ChampionshipBar: React.FC<{ c: BoardChampionship }> = ({ c }) => {
   const moved = c.position !== null && c.was !== null ? c.was - c.position : null;
   return (
     <div className={`${BAR} border-lc-volt`} style={{ animationDelay: "840ms" }}>
-      <span className={`${CELL} bg-lc-volt font-extrabold text-lc-void`}>{c.points > 0 ? tx("pointsScored", { count: c.points }) : tx("noPoints")}</span>
+      <span className={`${CELL} bg-lc-volt font-extrabold whitespace-nowrap text-lc-void`}>{c.points > 0 ? tx("pointsScored", { count: c.points }) : tx("noPoints")}</span>
       {c.position !== null ? (
         <span className={`${CELL} border-l border-lc-line/85 text-lc-chalk`}>
           {tx("championshipPlace", { position: c.position })}
