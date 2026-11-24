@@ -142,6 +142,8 @@ export interface StatePacketFields {
   fl?: boolean;
   driverCode: string;
   teamColorHex: string;
+  liveryId?: string | null;
+  customLivery?: { primary: string; secondary: string; accent: string };
   name?: string;
   vehicle?: string;
   trackId?: string;
@@ -154,7 +156,16 @@ const decoder = new TextDecoder();
 /** The slow fields, as they go in the packet's tail (and as a receiver remembers them) */
 export function stateInfoJson(p: StatePacketFields): string {
   const race = p.race ? { ...p.race, dist: undefined } : undefined;
-  return JSON.stringify({ driverCode: p.driverCode, teamColorHex: p.teamColorHex, name: p.name, vehicle: p.vehicle, trackId: p.trackId, race });
+  return JSON.stringify({
+    driverCode: p.driverCode,
+    teamColorHex: p.teamColorHex,
+    liveryId: p.liveryId,
+    customLivery: p.customLivery,
+    name: p.name,
+    vehicle: p.vehicle,
+    trackId: p.trackId,
+    race,
+  });
 }
 
 const clamp = (v: number, lo: number, hi: number) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
@@ -268,6 +279,8 @@ export function decodeState(data: ArrayBuffer | ArrayBufferView, memory: StateIn
     packet: {
       driverCode: info.driverCode,
       teamColorHex: info.teamColorHex,
+      liveryId: info.liveryId as string | null | undefined,
+      customLivery: info.customLivery as StatePacketFields['customLivery'],
       name: info.name,
       vehicle: info.vehicle,
       trackId: info.trackId,

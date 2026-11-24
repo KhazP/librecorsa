@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import { text as tx } from '@/lib/text';
 import { DEFAULT_TRACK_ID } from '@/lib/track-data';
-import type { VehicleModelId } from '@/types/f1';
+import type { CustomLiveryColors, VehicleModelId } from '@/types/f1';
 import type { WeatherSyncState } from './weather';
 import type { TyreVisualState } from './simulator-car';
 import type { GroundQuery } from './f12026-car/TrackColliderQuery';
@@ -91,6 +91,10 @@ export interface InterpolatedPeerState {
   peerId: string;
   driverCode: string;
   teamColorHex: string;
+  /** Selected livery id (absent from older clients: falls back to driverCode) */
+  liveryId?: string | null;
+  /** Custom livery colours when liveryId === "custom" */
+  customLivery?: CustomLiveryColors;
   /** Car model to render (undefined: the AMR / F1Physics2026 car, as the AI field drives) */
   vehicle?: VehicleModelId;
   /** Sender's circuit, when it reports one */
@@ -2527,6 +2531,8 @@ export class MultiplayerSyncManager {
     buffer.teamColorHex = pkt.teamColorHex;
     buffer.renderedState.driverCode = buffer.driverCode;
     buffer.renderedState.teamColorHex = buffer.teamColorHex;
+    buffer.renderedState.liveryId = pkt.liveryId;
+    buffer.renderedState.customLivery = pkt.customLivery;
     buffer.renderedState.name = pkt.name;
     buffer.renderedState.race = pkt.race;
     buffer.renderedState.hazard = pkt.hz === true;
