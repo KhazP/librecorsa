@@ -675,7 +675,10 @@ export const carLiveryThumbUrl = (id: CarId, liveryId: string): string => `${car
  * package's livery has its picture in its own folder (`thumb.webp`)
  */
 export const carSkinThumbUrl = (id: CarId, skinId: string): string => {
-  const own = carById(id).skins?.find((s) => s.id === skinId)?.baseUrl;
+  const car = carById(id);
+  // A mod car's first livery is the paint its model is made in, with no folder: its picture is the car's own
+  if (car.mod && car.skins?.[0]?.id === skinId) return carThumbUrl(id);
+  const own = car.skins?.find((s) => s.id === skinId)?.baseUrl;
   return own ? `${own}/thumb.webp` : `${carThumbDir(id)}/thumbs/${skinId}.webp`;
 };
 

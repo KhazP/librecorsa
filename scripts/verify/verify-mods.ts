@@ -327,6 +327,8 @@ function registryChecks(): void {
   check("its first livery keeps the model's paint", skins.length === 2 && portedSkinFor(carId, skins[0]) === null);
   const red = portedSkinFor(carId, skins[1]);
   check("its other liveries load from the package", red?.baseUrl === "/mods/jdoe.test-pack/cars/gt-x/skins/red", red?.baseUrl);
+  check("its first livery's picture is the car's own (the model's paint has no folder)", carSkinThumbUrl(carId, skins[0].id) === carThumbUrl(carId), carSkinThumbUrl(carId, skins[0].id));
+  check("another livery's picture is in its folder", carSkinThumbUrl(carId, skins[1].id) === "/mods/jdoe.test-pack/cars/gt-x/skins/red/thumb.webp");
   const gt3Skins = carById("amg-gt3").skins ?? [];
   const added = gt3Skins.find((s) => s.id === "mod:jdoe.test-pack/blue");
   check("a package livery joins the game car's liveries after its own", gt3Skins.length === gt3SkinsBefore + 1 && gt3Skins[gt3Skins.length - 1] === added);
