@@ -27,7 +27,7 @@ import {
 import { Sha256 } from "../../src/lib/mods/sha256-stream";
 import { modDefinitions } from "../../src/lib/mods/mod-content";
 import { holdModsStore, installPackage, modsStoreHeld, onModsStoreHold, readInstalled, removePackage, zipSource } from "../../src/lib/mods/mod-store";
-import { buildCatalogue, linkBase } from "../mods/lib/catalogue";
+import { buildCatalogue, catalogueBytes, catalogueJson, linkBase, type CatalogueFile } from "../mods/lib/catalogue";
 import { checkPackage, hashFolder } from "../mods/lib/package-check";
 import { zipPackage } from "../mods/lib/zip-writer";
 
@@ -227,7 +227,6 @@ async function main(): Promise<void> {
   Object.defineProperty(redirected, "url", { value: `${CDN}/v2/catalogue.json` });
   read = await readCatalogue(`${CDN}/catalogue.json`, SITE, { fetch: fetchOf(() => redirected) });
   check("Links are read against where a redirect led", read.state === "ok" && read.catalogue.packages[0].url === `${CDN}/v2/jdoe.blue-gt.zip`);
-
   // On the launcher's http page a redirect from https to plain http isn't stopped by the browser: the game stops it
   const toHttp = json({ format: 1, packages: [entry({ url: "http://evil.example/x.zip" })] });
   Object.defineProperty(toHttp, "url", { value: "http://evil.example/catalogue.json" });
@@ -413,6 +412,17 @@ async function main(): Promise<void> {
 
 /** `npm run mod -- catalogue`: a catalogue written from packed zips, read back by the game */
 async function generatorChecks(): Promise<void> {
+  // --- The catalogue's size, as the game counts it ---
+  const wide: CatalogueFile = {
+    format: 1,
+    packages: Array.from({ length: 400 }, (_, i) => ({ ...(entry({ id: `jdoe.p${i}` }) as unknown as CatalogueFile["packages"][number]), description: "数".repeat(1000) })),
+  };
+  check(
+    "A catalogue is measured in UTF-8 bytes: three a character for these, over the limit its length is under",
+    catalogueJson(wide).length < CATALOGUE_MAX_BYTES && catalogueBytes(wide) > CATALOGUE_MAX_BYTES,
+    `${catalogueJson(wide).length} characters, ${catalogueBytes(wide)} bytes`,
+  );
+
   // --- Where the zips' links start ---
   check("Links: an https:// base, a path, a folder beside the catalogue, or none", linkBase("https://packs.example.org/v1") === "https://packs.example.org/v1/" && linkBase("/mods/_catalogue/") === "/mods/_catalogue/" && linkBase("packs") === "packs/" && linkBase(undefined) === "");
   check("http:// only on this machine (the launcher)", linkBase("http://127.0.0.1:47600/mods/_catalogue") === "http://127.0.0.1:47600/mods/_catalogue/");
