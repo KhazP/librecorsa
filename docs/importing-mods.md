@@ -21,7 +21,7 @@ The offline launcher converts a circuit or a car from another game into a mod pa
    Unzip archives first: a folder is converted, not a zip.
 2. Open the game's **Mods** panel, in the window the launcher opened (another window, or another browser, can't convert). Under **Convert from another game** each folder is listed with what it was recognised as. Press **Convert**.
 3. The first time, the panel asks to download the converter's tools: uv and Node.js (pinned versions, each checked against a SHA-256 built into the launcher, and checked again before every run), then Python 3.14 and its packages through uv. That is about 200 MB, once, into the launcher's own folder beside its browser profile. Nothing is downloaded until you agree.
-4. The conversion shows its progress and, under **Show the log**, the converter's output. A circuit takes a few minutes: its racing lines are worked out lap by lap.
+4. The conversion shows its progress and, under **Show the log**, the converter's output. A car takes about a minute. A circuit takes longer, typically 10 to 20 minutes: the AI's racing lines are worked out on full physics laps.
 5. The package goes into the launcher's `mods/` folder and is checked as the game will load it. Press **Restart now** and it is in the game.
 
 A converted package keeps its source's credit and licence, which the panel shows when it is done. Nothing in the import folder is ever run; the converter only reads a copy of it, which the launcher makes first and removes afterwards. A folder holding a link to somewhere else is refused: copy the files themselves. How the launcher keeps this safe is in [launcher/README.md](../launcher/README.md).
@@ -49,6 +49,15 @@ Every importer also takes:
 - `--package <author.name>`, `--name` and `--version`: the package's id, name and version (each has a default made from the source).
 - `--out <folder>`: where the package goes. The default is `public/mods/`, which the dev server and the launcher serve: run `npm run dev` and the package is in the game.
 - `--keep-build`: keep the converter's working files, for debugging: a circuit's build in `public/tracks/`, a car's working folder.
+
+### Racing lines
+
+A circuit's import works out the AI's racing lines for the F1 cars and the GT3s by driving candidate lines on full physics laps. By default it runs the optimiser lightly: one sweep, without the optimal-control start the game's own circuits get. On E-track-4 that was about a third of the time of the full run, with the AI about two seconds a lap slower.
+
+- `--best-lines`: the full optimiser, as the game's own circuits get. Expect half an hour or more for a long circuit.
+- `--no-line-opt`: no optimiser. The import takes about a minute, and the AI drives the minimum-curvature line, clearly slower.
+
+The launcher's **Convert** always uses the light run.
 
 The import never touches the game's own circuits or cars. To share a package, `npm run mod -- pack public/mods/<package>` writes its zip; [a catalogue](modding.md#sharing-packages-through-a-catalogue) can offer it in the Mods panel.
 
@@ -111,7 +120,7 @@ Most Assetto Corsa mods don't allow redistribution, and a converted circuit or c
 npm run mod -- import ac-track <track folder> [--layout <name>] [--settings <overrides.json>]
 ```
 
-The track folder is the circuit's folder in Assetto Corsa's `content/tracks`: the one with the `.kn5` models, `ui/`, and `data/` or the layout folders. An import takes a few minutes, most of it the racing-line optimiser (`--no-line-opt` skips it).
+The track folder is the circuit's folder in Assetto Corsa's `content/tracks`: the one with the `.kn5` models, `ui/`, and `data/` or the layout folders. An import takes 10 to 20 minutes, most of it the racing-line optimiser (see [Racing lines](#racing-lines)).
 
 There is nothing to set up. The importer reads the circuit's settings from the mod and prints each one with where it came from:
 

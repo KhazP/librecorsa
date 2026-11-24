@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { packageCircuit } from "../lib/circuit-package";
 import { localIdFrom, packageCredit, type SourceCredit } from "../lib/manifest-file";
-import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
+import { importTarget, LINE_OPTIONS, LINE_USAGE, lineArgs, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
 import { report } from "../lib/package-check";
 import { runPython } from "../lib/toolchain";
 
@@ -17,9 +17,10 @@ const importer: Importer = {
   usage: `<circuit.glb> [--settings <circuit.json>] [--id <circuit id>]
   --settings <file>        the circuit's settings (default: the GLB's name with .json), as build_blender_track.py reads them
   --id <id>                the circuit's id in the package (default: made from the GLB's name)
+${LINE_USAGE}
 ${PACKAGE_USAGE}`,
   async run(argv) {
-    const { values, positionals } = parseImportArgs(argv, { settings: { type: "string" }, id: { type: "string" } });
+    const { values, positionals } = parseImportArgs(argv, { settings: { type: "string" }, id: { type: "string" }, ...LINE_OPTIONS });
     const glb = positionals[0] && resolve(positionals[0]);
     if (!glb || !existsSync(glb)) throw new Error("name the circuit's .glb (Blender: File > Export > glTF 2.0, .glb)");
     const settingsPath = resolve(values.settings ?? glb.replace(/\.glb$/i, ".json"));
@@ -35,7 +36,7 @@ ${PACKAGE_USAGE}`,
     });
 
     const builtId = workingTrackId(info.id, localId);
-    runPython("scripts/tracks/build_blender_track.py", [builtId, "--glb", glb, "--settings", settingsPath, "--no-register"]);
+    runPython("scripts/tracks/build_blender_track.py", [builtId, "--glb", glb, "--settings", settingsPath, "--no-register", ...lineArgs(values)]);
     const out = packageCircuit({ builtId, packageDir, info, localId, removeBuild: !values["keep-build"] });
     report(packageDir, out.checked);
     if (out.skipped.length) console.log(`      left out (the track data doesn't name them): ${out.skipped.join(", ")}`);

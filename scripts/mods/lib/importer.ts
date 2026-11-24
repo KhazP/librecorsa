@@ -37,6 +37,24 @@ export const PACKAGE_USAGE = `${PACKAGE_ONLY_USAGE}
   --keep-build             keep the converter's working files, for debugging (a circuit's build in public/tracks/, a
                            car's working folder)`;
 
+/** The racing-line options every circuit importer takes */
+export const LINE_OPTIONS = {
+  "best-lines": { type: "boolean" },
+  "no-line-opt": { type: "boolean" },
+} as const satisfies ParseArgsConfig["options"];
+
+/** Those options, as a circuit importer's `--help` lists them */
+export const LINE_USAGE = `  --best-lines             the full racing-line optimiser, as the game's own circuits get: the AI a second or two a lap
+                           quicker, the import about three times as long (half an hour or more for a long circuit)
+  --no-line-opt            no racing-line optimiser: the AI drives the minimum-curvature line, clearly slower`;
+
+/**
+ * What a circuit builder (build_blender_track.py, port_ac_track.py) is given for the racing lines: by default a light
+ * optimiser run (one sweep, no optimal-control start: build_track.py optimise_lines), the full one with --best-lines
+ */
+export const lineArgs = (values: { "best-lines"?: boolean; "no-line-opt"?: boolean }): string[] =>
+  values["no-line-opt"] ? ["--no-line-opt"] : values["best-lines"] ? [] : ["--light-lines"];
+
 /** Parses a tool's arguments: the package options plus its own */
 export function parsePackageArgs<O extends NonNullable<ParseArgsConfig["options"]>>(argv: string[], own: O) {
   return parseArgs({ args: argv, options: { ...PACKAGE_OPTIONS, ...own }, allowPositionals: true, strict: true });

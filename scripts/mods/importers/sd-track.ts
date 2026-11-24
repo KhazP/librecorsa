@@ -21,7 +21,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, w
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { packageCircuit } from "../lib/circuit-package";
-import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
+import { importTarget, LINE_OPTIONS, LINE_USAGE, lineArgs, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
 import {
   authorLine,
   carriedName,
@@ -175,6 +175,7 @@ const importer: Importer = {
   --country <name>         where it is (default: its weather station's country, or one its description names, else Speed Dreams)
   --city <name>            (default: Speed Dreams; a trackdef names none)
   --personal               convert a circuit whose licence doesn't allow sharing, its credit marked "${PERSONAL_USE_NOTE}"
+${LINE_USAGE}
 ${PACKAGE_USAGE}
   The package id defaults to sd.<circuit>.`,
   async run(argv) {
@@ -185,6 +186,7 @@ ${PACKAGE_USAGE}
       country: { type: "string" },
       city: { type: "string" },
       personal: { type: "boolean" },
+      ...LINE_OPTIONS,
     });
     if (values.fetch && positionals.length) throw new Error("give a circuit folder or --fetch <circuit>, not both");
     const folder = values.fetch ? await fetchSdCircuit(values.fetch) : positionals[0] && resolve(positionals[0]);
@@ -228,7 +230,7 @@ ${PACKAGE_USAGE}
       writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 
       const builtId = workingTrackId(info.id, localId);
-      runPython("scripts/tracks/build_blender_track.py", [builtId, "--glb", glb, "--settings", settingsPath, "--no-register"]);
+      runPython("scripts/tracks/build_blender_track.py", [builtId, "--glb", glb, "--settings", settingsPath, "--no-register", ...lineArgs(values)]);
       const out = packageCircuit({
         builtId,
         packageDir,

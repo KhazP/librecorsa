@@ -2,7 +2,7 @@
 Assetto Corsa circuit mod (KN5 + AI + INI data) → LibreCorsa track
 (public/tracks/<id>/track_data.json + public/tracks/<id>/<id>.glb).
 
-    python -P scripts/tracks/port_ac_track.py <id|id,id|all> [--src DIR] [--no-glb] [--no-line-opt] [--no-compress]
+    python -P scripts/tracks/port_ac_track.py <id|id,id|all> [--src DIR] [--no-glb] [--no-line-opt | --light-lines] [--no-compress]
                                               [--extras-only] [--no-register]
     python -P scripts/tracks/port_ac_track.py <new id> --src DIR [--layout NAME] [--settings overrides.json]
                                               [--entry-only FILE] ...
@@ -4257,6 +4257,8 @@ def main():
     ap.add_argument('--src', help="the mod's track folder (the one holding models*.ini, data/ and the layouts)")
     ap.add_argument('--no-glb', action='store_true')
     ap.add_argument('--no-line-opt', action='store_true')
+    ap.add_argument('--light-lines', action='store_true',
+                    help="one optimiser sweep, no optimal-control start: a mod's import (build_track.py optimise_lines)")
     ap.add_argument('--no-compress', action='store_true')
     ap.add_argument('--extras-only', action='store_true',
                     help="graft just the circuit's extraModels and driftingObjects into its existing GLB")
@@ -4307,7 +4309,7 @@ def main():
         for tid in ids:
             log(f'  optimising F1 and GT3 racing lines for {tid}...')
             # A hill climb's run is timed from rest at the start line to the finish (the optimiser reads pointToPoint)
-            bt.optimise_lines(tid, entries[tid].get('lineMarginM'))
+            bt.optimise_lines(tid, entries[tid].get('lineMarginM'), light=args.light_lines)
             apply_street_hairpin_margin(tid, entries[tid])
 
 

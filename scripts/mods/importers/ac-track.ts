@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 import { packageCircuit, readCircuitEntry } from "../lib/circuit-package";
 import { carriedName, creditLicence, licenceTextFiles, mergeReadings, PERSONAL_USE_NOTE, readLicenceText, statementFiles, type LicenceReading, type Statement } from "../lib/licences";
 import { localIdFrom, packageCredit, type SourceCredit } from "../lib/manifest-file";
-import { importTarget, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
+import { importTarget, LINE_OPTIONS, LINE_USAGE, lineArgs, PACKAGE_USAGE, parseImportArgs, workingTrackId, type Importer } from "../lib/importer";
 import { report } from "../lib/package-check";
 import { BUILT_TRACKS_DIR, runPython } from "../lib/toolchain";
 
@@ -141,14 +141,14 @@ const importer: Importer = {
   --settings <file>        values to use over the ones read from the mod (the keys AC_TRACKS entries take in
                            scripts/tracks/port_ac_track.py: name, layout, country, city, baseAltitudeM, credit…)
   --id <id>                the circuit's id in the package (default: made from the layout's folder)
-  --no-line-opt            skip the racing-line optimiser (a few minutes): the circuit keeps the minimum-curvature line
+${LINE_USAGE}
 ${PACKAGE_USAGE}`,
   async run(argv) {
     const { values, positionals } = parseImportArgs(argv, {
       layout: { type: "string" },
       settings: { type: "string" },
       id: { type: "string" },
-      "no-line-opt": { type: "boolean" },
+      ...LINE_OPTIONS,
     });
     const folder = positionals[0] && resolve(positionals[0]);
     if (!folder || !existsSync(folder)) throw new Error("name the mod's track folder (Assetto Corsa's content/tracks/<circuit>)");
@@ -168,7 +168,7 @@ ${PACKAGE_USAGE}`,
 
     // 2. Built under a working id, off the game's lists
     const builtId = workingTrackId(info.id, localId);
-    runPython(PORTER, [builtId, ...sourceArgs(folder, values), "--no-register", ...(values["no-line-opt"] ? ["--no-line-opt"] : [])]);
+    runPython(PORTER, [builtId, ...sourceArgs(folder, values), "--no-register", ...lineArgs(values)]);
     const built = readCircuitEntry(join(BUILT_TRACKS_DIR, builtId), builtId);
 
     // 3. Packaged

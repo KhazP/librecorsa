@@ -2,7 +2,7 @@
 A circuit modelled in Blender → LibreCorsa track (public/tracks/<id>/track_data.json + <id>.glb), without Assetto Corsa.
 
     python -P scripts/tracks/build_blender_track.py <id> --glb path/to/circuit.glb [--settings circuit.json]
-        [--no-glb] [--no-line-opt] [--no-compress]
+        [--no-glb] [--no-line-opt | --light-lines] [--no-compress]
 
 The GLB is Blender's glTF export (File > Export > glTF 2.0, format .glb) with Data > Mesh > Loose Edges on and Draco
 and Meshopt compression off. It needs:
@@ -283,6 +283,8 @@ def main():
     ap.add_argument('--settings', help='settings JSON (default: the GLB path with .json)')
     ap.add_argument('--no-glb', action='store_true')
     ap.add_argument('--no-line-opt', action='store_true')
+    ap.add_argument('--light-lines', action='store_true',
+                    help="one optimiser sweep, no optimal-control start: a mod's import (build_track.py optimise_lines)")
     ap.add_argument('--no-compress', action='store_true')
     ap.add_argument('--no-register', action='store_true',
                     help="leave the game's circuit list alone: write public/tracks/<id>/circuit.json for a mod package")
@@ -303,7 +305,7 @@ def main():
         update_index(args.id, cfg, data)
     if not args.no_glb and not args.no_line_opt:
         log(f'  optimising F1 and GT3 racing lines for {args.id}...')
-        bt.optimise_lines(args.id, cfg.get('lineMarginM'))
+        bt.optimise_lines(args.id, cfg.get('lineMarginM'), light=args.light_lines)
     if cfg.get('gridBoxes') or cfg.get('nightLighting') is not None:
         finish_track_data(args.id, cfg, args.glb)
 
