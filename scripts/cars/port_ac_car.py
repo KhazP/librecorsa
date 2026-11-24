@@ -9,7 +9,8 @@ usage: python -P scripts/cars/port_ac_car.py <ac car folder> <out.glb> [--car li
 
 Each car has a preset (`PRESETS`): its material table, the nodes and materials it leaves out, the skin files that
 override the kn5's, how its tyres and spinning parts are named, and its windscreen. `--car` picks one; by default the
-car folder's name does. The reader, the hierarchy split, the multi-map paint bake and the camera reads are generic AC.
+car folder's name does, and a car with none gets an automatic one (`auto_preset`: found in the model, see there). The
+reader, the hierarchy split, the multi-map paint bake and the camera reads are generic AC.
 The car folder is read only. Its LODs (`<car>_B/C/D.kn5`), `collider.kn5`, damage, dirt and blur textures and the
 blurred rims (`RIM_BLUR_*`) are left out.
 
@@ -866,7 +867,8 @@ def auto_spec(m, stats, preset, by_name=None):
         spec['tex'] = 'bakemean:' + name if det else diff
         spec.pop('detail', None)
         spec.update(color=(255, 255, 255), scale=1.0, mode='OPAQUE', alpha=1.0)
-    elif shader == 'ksTyres':
+    elif shader == 'ksTyres' or name in preset.get('tyre_class', ()):
+        # AC's tyre shader, or a tyre an automatic preset found by its name or shape
         cls = 'tyre'
     elif glass:
         cls = 'glass'
@@ -1002,16 +1004,21 @@ def export_skins(car_dir, preset, textures, materials, out_dir, max_tex, small_t
     return listing
 
 
-def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir, max_tex, jpeg_quality, default_skin):
+def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir, max_tex, jpeg_quality, default_skin,
+                      only=None):
     """Every skin's livery files (an `auto` preset's: each colour map made from a texture a livery replaces) into
     <out_dir>/<skin>/, and skins.json listing them (its name, number, two main colours from its paint, and `files`).
     A skin gets only the files whose textures differ from the default skin's, the one the GLB is painted in: the rest
-    stay as the model has them (CarSkin.files). The default skin is listed first."""
+    stay as the model has them (CarSkin.files). The default skin is listed first. `only`: the skin folders to export
+    (by folder name or id), the default skin always among them."""
     by_name = {m['name']: m for m in materials}
     names = {n.lower() for n in preset.get('skin_textures', ())}
     files = sorted({(f, key) for f, key in skin_files.values()})
-    paint_file = next(f for f, key in files if key.split(':', 1)[-1] in preset['paint'] or
-                      any(key == (by_name[p]['maps'].get('txDiffuse') or '') for p in preset['paint']))
+    paint_file = next((f for f, key in files if key.split(':', 1)[-1] in preset['paint'] or
+                       any(key == (by_name[p]['maps'].get('txDiffuse') or '') for p in preset['paint'])), None)
+    if paint_file is None:
+        # An automatic preset whose paint no skin repaints: each livery's colours from its first file
+        paint_file = files[0][0]
 
     def sources(key):
         if key.startswith(('bake:', 'bakemean:')):
@@ -1028,6 +1035,8 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
 
     base = {**textures, **skin_overrides(car_dir, default_skin, textures, names)}
     skins = sorted(d for d in os.listdir(os.path.join(car_dir, 'skins')) if os.path.isdir(os.path.join(car_dir, 'skins', d)))
+    if only is not None:
+        skins = [d for d in skins if d == default_skin or d in only or skin_id(preset, d) in only]
     skins.sort(key=lambda d: d != default_skin)
     listing = []
     written = 0
@@ -1057,6 +1066,9 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
                 ui = {}
         entry = {'id': sid, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
                  'swatch': paint_swatch(paint), 'files': own}
+        if preset.get('generated'):
+            # The skin's own folder, for its preview picture (scripts/mods/importers/ac-car.ts)
+            entry['folder'] = skin
         if skin in preset.get('skin_variants', {}):
             entry['variant'] = preset['skin_variants'][skin]
         listing.append(entry)
@@ -1106,6 +1118,9 @@ def classify(nodes, i, preset, mat):
         return 'skip', None
     for a in anc:
         if a.startswith('WHEEL_') and a[6:] in CORNERS:
+            # An automatic preset names the tyre meshes it found (`detect_tyres`)
+            if preset.get('tyre_nodes') is not None:
+                return ('tyre' if i in preset['tyre_nodes'] else 'rim'), a[6:]
             if preset.get('tyre_materials'):
                 return ('tyre' if mat in preset['tyre_materials'] else 'rim'), a[6:]
             return ('tyre' if n['name'].startswith(preset['tyre_prefix']) else 'rim'), a[6:]
@@ -1216,10 +1231,342 @@ def add_extension_parts(car_dir, preset, textures, materials, nodes):
     return part_of
 
 
-def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg_quality):
+# ---------------------------------------------------------------------------------------------------------------------
+# Automatic presets: a car with no preset of its own. AC cars keep a few conventions the rig relies on (the WHEEL_xx
+# hubs, STEER_HR, car.ini's DRIVEREYES); the rest of a preset is found in the model. The tyres are the meshes under each
+# WHEEL_xx that AC's tyre shader draws or that are named as tyres, else the outermost ring round the hub; the paint is
+# the body material named as paint, covering the most of the body and repainted by the most skins; the windscreen is the
+# glass in front of the driver's eyes. The materials come from their shader values (`auto`), and every texture a skin
+# replaces is a livery file. ui/ui_car.json names the car.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# The low-detail cockpit AC swaps in at a distance, and the belts drawn fastened round a driver the car doesn't carry
+AUTO_SKIP_NODES = ('COCKPIT_LR', 'CINTURE_ON')
+_TYRE_WORD = re.compile(r'tyre|tire|gomma|pneu|reifen|rubber', re.I)
+_NOT_TYRE = re.compile(r'rim|blur|brake|disc|disk|calip|hub|nut|bolt|valve|spoke|lug', re.I)
+_PAINT_WORD = re.compile(r'paint|livery', re.I)
+_BODY_WORD = re.compile(r'body|skin|ext_?main|exterior|shell|carroz', re.I)
+_NOT_PAINT = re.compile(r'glass|window|light|lamp|lens|tyre|tire|rim|brake|disc|chrome|mirror|interior|(^|_)int_|cockpit|'
+                        r'seat|dash|carbon|decal|logo|number|badge|plate|grill|black|rubber|exhaust|engine|shadow|wheel',
+                        re.I)
+_BROKEN_GLASS = re.compile(r'damage.?glass|glass.?damage|broken.?glass', re.I)
+_BLUR = re.compile(r'blur', re.I)
+
+
+def read_loose_json(path):
+    """A JSON file as mods write them: a byte-order mark, raw line breaks in strings and trailing commas are let pass
+    ({} when it still can't be read)"""
+    if not os.path.isfile(path):
+        return {}
+    text = open(path, 'rb').read().decode('utf-8-sig', 'replace')
+    for attempt in (text, re.sub(r',\s*([}\]])', r'\1', text)):
+        try:
+            out = json.loads(attempt, strict=False)
+            return out if isinstance(out, dict) else {}
+        except ValueError:
+            continue
+    return {}
+
+
+def find_kn5(car_dir, data=None):
+    """The car's main model: <folder name>.kn5, else the file lods.ini names for LOD_0, else the largest kn5 in the folder
+    that is neither its collider nor a lower LOD"""
+    folder = os.path.basename(os.path.normpath(car_dir))
+    if os.path.isfile(os.path.join(car_dir, f'{folder}.kn5')):
+        return f'{folder}.kn5'
+    data = read_car_data(car_dir) if data is None else data
+    lods = next((v for k, v in data.items() if k.lower() == 'lods.ini'), None)
+    if lods:
+        cp = ini(lods)
+        sec = next((s for s in cp.sections() if s.upper() == 'LOD_0'), None)
+        name = cp[sec].get('FILE', '').strip() if sec else ''
+        if name and os.path.isfile(os.path.join(car_dir, name)):
+            return name
+    lower = re.compile(r'(^collider|_lod_?[b-z]|_[b-z])\.kn5$', re.I)
+    found = [f for f in os.listdir(car_dir) if f.lower().endswith('.kn5') and not lower.search(f)]
+    if not found:
+        raise SystemExit(f'{car_dir}: no .kn5 model in the folder')
+    return max(found, key=lambda f: os.path.getsize(os.path.join(car_dir, f)))
+
+
+def skin_folders(car_dir):
+    sdir = os.path.join(car_dir, 'skins')
+    return sorted(d for d in os.listdir(sdir) if os.path.isdir(os.path.join(sdir, d))) if os.path.isdir(sdir) else []
+
+
+def skin_override_counts(car_dir, textures):
+    """{kn5 texture name (lower case): how many skins replace it}"""
+    lower = {t.lower() for t in textures}
+    counts = {}
+    for skin in skin_folders(car_dir):
+        for f in os.listdir(os.path.join(car_dir, 'skins', skin)):
+            if f.lower() in lower:
+                counts[f.lower()] = counts.get(f.lower(), 0) + 1
+    return counts
+
+
+def visible_meshes(nodes):
+    """Indices of the nodes with a mesh AC draws"""
+    return [i for i, n in enumerate(nodes)
+            if n['mesh'] is not None and n['active'] and n['mesh']['visible'] and n['mesh']['renderable']]
+
+
+def wheel_corner(nodes, i):
+    """The corner of the nearest WHEEL_xx above node `i` (as `classify` reads it), or None"""
+    for a in ancestors(nodes, i):
+        if a.startswith('WHEEL_') and a[6:] in CORNERS:
+            return a[6:]
+    return None
+
+
+def detect_tyres(nodes, materials):
+    """The tyre meshes under each WHEEL_xx: {'nodes': their indices, 'materials': their kn5 materials (the first names
+    the merged tyre: AC's tyre shader first, then the most vertices), 'how': {corner: how it was found}}. A tyre is drawn
+    by AC's tyre shader or named as one (its material, else its node), and reaches the wheel's outer edge; failing
+    those, it is the outermost ring round the hub: the meshes reaching within 3 % of the wheel's largest radius, about
+    the spin axis (X), whose own hole is at least 40 % of their radius"""
+    found, how = [], {}
+    for c in CORNERS:
+        meshes = [i for i in visible_meshes(nodes) if wheel_corner(nodes, i) == c
+                  and not any(a.startswith('RIM_BLUR_') for a in ancestors(nodes, i))
+                  and not nodes[i]['name'].startswith('RIM_BLUR_')
+                  and not _BLUR.search(materials[nodes[i]['mesh']['mat']]['name'])]
+        if not meshes:
+            raise SystemExit(f'nothing drawn under WHEEL_{c}: not an Assetto Corsa car model laid out for the game')
+        pts = {i: world_mesh(nodes[i])[0] for i in meshes}
+        allp = np.vstack(list(pts.values()))
+        centre = 0.5 * (allp.min(0) + allp.max(0))
+        radii = {}
+        for i, p in pts.items():
+            r = np.hypot(p[:, 1] - centre[1], p[:, 2] - centre[2])
+            radii[i] = (float(r.min()), float(r.max()))
+        outer = max(r[1] for r in radii.values())
+
+        def named(i):
+            m = materials[nodes[i]['mesh']['mat']]
+            if m['shader'] == 'ksTyres':
+                return 'tyre shader'
+            if _TYRE_WORD.search(m['name']) and not _NOT_TYRE.search(m['name']):
+                return 'material name'
+            if _TYRE_WORD.search(nodes[i]['name']) and not _NOT_TYRE.search(nodes[i]['name']):
+                return 'node name'
+            return None
+
+        by_name = [i for i in meshes if named(i) and radii[i][1] >= 0.9 * outer]
+        if by_name:
+            found += by_name
+            how[c] = named(by_name[0])
+            continue
+        ring = [i for i in meshes if radii[i][1] >= 0.97 * outer and radii[i][0] >= 0.4 * radii[i][1]]
+        if not ring:
+            raise SystemExit(f'no tyre under WHEEL_{c}: no mesh is named as a tyre, and none is a ring at the wheel\'s '
+                             f'outer edge (its tyre and rim are one mesh?)')
+        found += ring
+        how[c] = 'outermost ring'
+    verts = {}
+    for i in found:
+        name = materials[nodes[i]['mesh']['mat']]['name']
+        verts[name] = verts.get(name, 0) + len(nodes[i]['mesh']['pos'])
+    by_mat = {m['name']: m for m in materials}
+    order = sorted(verts, key=lambda n: (by_mat[n]['shader'] != 'ksTyres', -verts[n], n))
+    return {'nodes': set(found), 'materials': tuple(order), 'how': how}
+
+
+def detect_paint(nodes, materials, overrides, n_skins):
+    """The body's paint material and every candidate's score: the share of the body it covers (against the largest),
+    the share of the skins that repaint one of its maps, a paint's name, and a part's name against it"""
+    by_name = {m['name']: m for m in materials}
+    area = {}
+    for i in visible_meshes(nodes):
+        if wheel_corner(nodes, i) or any(a.startswith('STEER_HR') for a in ancestors(nodes, i)):
+            continue
+        m = materials[nodes[i]['mesh']['mat']]
+        if m['blend'] == 1 or m['shader'] == 'ksTyres':
+            continue
+        pos, _, _, tris = world_mesh(nodes[i])
+        if not len(tris):
+            continue
+        e1, e2 = pos[tris[:, 1]] - pos[tris[:, 0]], pos[tris[:, 2]] - pos[tris[:, 0]]
+        area[m['name']] = area.get(m['name'], 0.0) + float(0.5 * np.linalg.norm(np.cross(e1, e2), axis=1).sum())
+    if not area:
+        return None, {}
+    top = max(area.values()) or 1.0
+    scores = {}
+    for name, a in area.items():
+        maps = [by_name[name]['maps'].get(s) for s in ('txDiffuse', 'txDetail')]
+        repainted = max((overrides.get(t.lower(), 0) for t in maps if t), default=0) / max(1, n_skins)
+        s = 3.0 * a / top + 3.0 * repainted
+        if _PAINT_WORD.search(name):
+            s += 3.0
+        elif _BODY_WORD.search(name):
+            s += 1.0
+        if _NOT_PAINT.search(name) and not _PAINT_WORD.search(name):
+            s -= 2.0
+        if 'MultiMap' in by_name[name]['shader']:
+            s += 0.5
+        scores[name] = round(s, 3)
+    return max(scores, key=lambda n: (scores[n], area[n])), scores
+
+
+_OUTER_GLASS = re.compile(r'ext|out|wind|front|screen|_ex($|_)', re.I)
+_INNER_GLASS = re.compile(r'(^|[_\s])int|interior|inner|inside|_in($|_)|gauge|dash|instrument|lcd|display|visor|helmet',
+                          re.I)
+
+
+def _ray_hits(origin, dirs, pos, tris):
+    """Which of the rays from `origin` along `dirs` (n x 3) cross any of the triangles, 30 cm to 3 m out"""
+    v0, v1, v2 = pos[tris[:, 0]], pos[tris[:, 1]], pos[tris[:, 2]]
+    e1, e2 = v1 - v0, v2 - v0
+    hits = np.zeros(len(dirs), bool)
+    for k, d in enumerate(dirs):
+        pv = np.cross(d, e2)
+        det = (e1 * pv).sum(1)
+        ok = np.abs(det) > 1e-9
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        tv = origin - v0
+        u = (tv * pv).sum(1) * inv
+        qv = np.cross(tv, e1)
+        v = (qv @ d) * inv
+        t = (e2 * qv).sum(1) * inv
+        hits[k] = bool((ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0.3) & (t < 3.0)).any())
+    return hits
+
+
+def detect_windscreen(nodes, materials, eyes):
+    """The glass in front of the driver's eyes (the dash camera is fitted to it), or None: of the glass materials (by
+    name, or AC's windscreen shader), the one the most sight lines from the eyes pass through (40 deg either side,
+    8 deg down to 12 up), an outer layer's name counting for more and an inner layer's or a gauge's for less"""
+    dirs = np.array([[math.sin(math.radians(y)) * math.cos(math.radians(p)), math.sin(math.radians(p)),
+                      math.cos(math.radians(y)) * math.cos(math.radians(p))]
+                     for y in range(-40, 41, 5) for p in range(-8, 13, 4)])
+    meshes = {}
+    for i in visible_meshes(nodes):
+        if wheel_corner(nodes, i):
+            continue
+        m = materials[nodes[i]['mesh']['mat']]
+        if _BROKEN_GLASS.search(m['name']) or not (m['shader'] == 'ksWindscreen' or _GLASSISH.search(m['name'])):
+            continue
+        pos, _, _, tris = world_mesh(nodes[i])
+        if len(tris):
+            meshes.setdefault(m['name'], []).append((pos, tris))
+    score = {}
+    for name, parts in meshes.items():
+        hit = np.zeros(len(dirs), bool)
+        for pos, tris in parts:
+            hit |= _ray_hits(np.asarray(eyes, float), dirs, pos, tris)
+        weight = (1.5 if _OUTER_GLASS.search(name) else 1.0) * (0.25 if _INNER_GLASS.search(name) else 1.0)
+        score[name] = weight * int(hit.sum())
+    best = max(score, key=lambda n: (score[n], n), default=None)
+    return best if best is not None and score[best] >= 2 else None
+
+
+def driver_eyes(nodes, data):
+    """car.ini's DRIVEREYES (the kn5's frame), else 27 cm over and 47 cm behind STEER_HR; None without either"""
+    car_ini = next((v for k, v in data.items() if k.lower() == 'car.ini'), None)
+    if car_ini:
+        cp = ini(car_ini)
+        if cp.has_section('GRAPHICS') and cp['GRAPHICS'].get('DRIVEREYES'):
+            return np.array(vec3(cp['GRAPHICS']['DRIVEREYES']))
+    steer = next((n for n in nodes if n['name'] == 'STEER_HR' and n['kind'] == 1), None)
+    return steer['world'][:3, 3] + [0, 0.27, -0.47] if steer is not None else None
+
+
+def auto_preset(car_dir, loaded, data, kn5_name, title=None, overrides=None, n_skins=None):
+    """A preset for a car with none (see above), with `detected`: what was found and how. `overrides` and `n_skins`
+    (the skins' replaced textures) default to the car folder's skins"""
+    textures, materials, nodes = loaded
+    skins = skin_folders(car_dir) if car_dir else []
+    if overrides is None:
+        overrides = skin_override_counts(car_dir, textures)
+    n_skins = len(skins) if n_skins is None else n_skins
+    tyres = detect_tyres(nodes, materials)
+    paint, paint_scores = detect_paint(nodes, materials, overrides, n_skins)
+    eyes = driver_eyes(nodes, data)
+    windscreen = detect_windscreen(nodes, materials, eyes) if eyes is not None else None
+    names = {n['name'] for n in nodes}
+    spinning = ('DISC_',) if all(f'DISC_{c}' in names for c in CORNERS) else ()
+    skip_materials = {m['name'] for m in materials if _BROKEN_GLASS.search(m['name']) or _BLUR.search(m['name'])}
+    by_lower = {t.lower(): t for t in textures}
+    skin_textures = tuple(sorted(by_lower.get(t, t) for t in overrides))
+    preset = dict(
+        title=title or os.path.basename(os.path.normpath(car_dir or 'car')),
+        kn5=kn5_name,
+        auto=True,
+        materials={},
+        paint=(paint,) if paint else (),
+        skip_materials=skip_materials,
+        skip_node_prefixes=('RIM_BLUR_',),
+        skip_nodes=AUTO_SKIP_NODES,
+        default_skin=skins[0] if skins else None,
+        steer_nodes=(),
+        tyre_nodes=tyres['nodes'],
+        tyre_materials=tyres['materials'],
+        tyre_class=set(tyres['materials']),
+        tyre_prefix=None,
+        spinning=spinning,
+        windscreen=(windscreen,) if windscreen else (),
+        skin_textures=skin_textures,
+        generated=True,
+    )
+    preset['detected'] = {
+        'tyres': tyres['how'],
+        'tyreMaterials': list(tyres['materials']),
+        'tyreNodes': sorted({nodes[i]['name'] for i in tyres['nodes']}),
+        'paint': paint,
+        'paintScores': dict(sorted(paint_scores.items(), key=lambda kv: -kv[1])[:5]),
+        'windscreen': windscreen,
+        'spinning': list(spinning),
+        'skipMaterials': sorted(skip_materials),
+        'skinTextures': list(skin_textures),
+        'defaultSkin': preset['default_skin'],
+        'skins': len(skins),
+    }
+    return preset
+
+
+def synthetic_model(spec):
+    """Materials and nodes (as `read_kn5` gives them) of a model described in JSON, for testing the detection without a
+    car: nodes [{name, parent, t: [x, y, z] (a transform), or mat + shape: ring (r, r0, w) / disc (r, w) / box (size)}]"""
+    materials = [{'name': m['name'], 'shader': m.get('shader', 'ksPerPixel'), 'blend': m.get('blend', 0),
+                  'alpha_tested': False, 'props': m.get('props', {}), 'maps': m.get('maps', {})}
+                 for m in spec['materials']]
+    nodes = []
+    seg = 24
+    ang = np.linspace(0, 2 * np.pi, seg, endpoint=False)
+    for n in spec['nodes']:
+        parent = n.get('parent')
+        world = (nodes[parent]['world'] if parent is not None else np.eye(4)).copy()
+        mesh = None
+        if 'mat' in n:
+            shape, w = n.get('shape', 'box'), n.get('w', 0.25)
+            if shape in ('ring', 'disc'):
+                r, r0 = n['r'], (n.get('r0', 0.65 * n['r']) if shape == 'ring' else 0.0)
+                pos = [[x, rr * math.sin(a), rr * math.cos(a)] for x in (-w / 2, w / 2) for rr in (r0, r) for a in ang]
+                tris = []
+                for k in range(seg):
+                    q = (k + 1) % seg
+                    for b0, b1 in ((seg, 3 * seg), (0, seg), (2 * seg, 3 * seg)):
+                        tris += [(b0 + k, b0 + q, b1 + k), (b1 + k, b0 + q, b1 + q)]
+            else:
+                sx, sy, sz = n.get('size', (1, 1, 1))
+                pos = [[x * sx / 2, y * sy / 2, z * sz / 2] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+                tris = [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1), (2, 3, 7), (2, 7, 6),
+                        (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)]
+            pos = np.asarray(pos, np.float32) + np.asarray(n.get('at', (0, 0, 0)), np.float32)
+            mesh = {'pos': pos, 'nrm': np.zeros_like(pos), 'uv': np.zeros((len(pos), 2), np.float32),
+                    'idx': np.asarray(tris, np.uint16).reshape(-1), 'mat': n['mat'], 'visible': True,
+                    'transparent': False, 'renderable': True}
+        else:
+            world[:3, 3] += n.get('t', (0, 0, 0))
+        nodes.append({'name': n['name'], 'kind': 2 if mesh else 1, 'active': n.get('active', True), 'world': world,
+                      'mesh': mesh, 'parent': parent})
+    return materials, nodes
+
+
+def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg_quality, loaded=None):
     MATERIALS = preset['materials']
-    kn5_path = os.path.join(car_dir, kn5_name or f'{os.path.basename(os.path.normpath(car_dir))}.kn5')
-    textures, materials, nodes = read_kn5(kn5_path)
+    kn5_path = os.path.join(car_dir, kn5_name or preset.get('kn5') or f'{os.path.basename(os.path.normpath(car_dir))}.kn5')
+    textures, materials, nodes = loaded if loaded is not None else read_kn5(kn5_path)
     pose_nodes(car_dir, preset, nodes)
     part_of = add_extension_parts(car_dir, preset, textures, materials, nodes)
     part_variants = preset.get('part_variants', {})
@@ -1311,16 +1658,27 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             tyre_half_width[side + axle] = round(float(hw), 5)
 
     # Steering wheel frame: AC's STEER_HR (local Z down the column into the dash, as the rig turns it)
-    steer_node = next(n for n in nodes if n['name'] == 'STEER_HR' and n['kind'] == 1)
-    pivot = steer_node['world'][:3, 3] + shift
-    column = steer_node['world'][:3, 2] / np.linalg.norm(steer_node['world'][:3, 2])
-    if column[2] < 0:
-        column = -column
+    steer_node = next((n for n in nodes if n['name'] == 'STEER_HR' and n['kind'] == 1), None)
+    if steer_node is not None:
+        pivot = steer_node['world'][:3, 3] + shift
+        column = steer_node['world'][:3, 2] / np.linalg.norm(steer_node['world'][:3, 2])
+        if column[2] < 0:
+            column = -column
+    else:
+        # A model without STEER_HR (an automatic preset's car): a column 20 deg down into the dash, where the driver's
+        # eyes put the wheel (the cameras' rule below, the other way round)
+        eyes0 = driver_eyes(nodes, data)
+        if eyes0 is None:
+            raise SystemExit('the model has no STEER_HR and car.ini no DRIVEREYES: nothing places the cockpit')
+        pivot = eyes0 + shift + [0, -0.27, 0.47]
+        column = np.array([0.0, -math.sin(math.radians(20)), math.cos(math.radians(20))])
     M_steer = make_steer_frame(pivot, column)
     steer_parts = [p for p in parts if p[0] == 'steer']
-    rim_pts = np.vstack([p[3] for p in steer_parts])
-    normal_axis = np.linalg.svd(rim_pts - rim_pts.mean(0), full_matrices=False)[2][2]
-    steer_tilt_err = math.degrees(math.acos(min(1.0, abs(float(normal_axis @ column)))))
+    steer_tilt_err = 0.0
+    if steer_parts:
+        rim_pts = np.vstack([p[3] for p in steer_parts])
+        normal_axis = np.linalg.svd(rim_pts - rim_pts.mean(0), full_matrices=False)[2][2]
+        steer_tilt_err = math.degrees(math.acos(min(1.0, abs(float(normal_axis @ column)))))
 
     writer = GlbWriter(use_quantization=False)
     writer.j['asset']['generator'] = 'scripts/cars/port_ac_car.py'
@@ -1554,26 +1912,35 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     car_ini = ini(data['car.ini']) if 'car.ini' in data else None
     eyes = np.array(vec3(car_ini['GRAPHICS']['DRIVEREYES'])) + shift if car_ini else pivot + [0, 0.27, -0.47]
     solid = np.vstack([p[3] for p in body_parts if spec_of(p[2]).get('mode', 'OPAQUE') == 'OPAQUE'])
-    glass = np.vstack([p[3] for p in body_parts if p[2] in preset['windscreen']])
+    windscreen = [p[3] for p in body_parts if p[2] in preset['windscreen']]
+    glass = np.vstack(windscreen) if windscreen else np.zeros((0, 3))
 
-    def top_y(x, z, below, half=0.06):
+    def top_y(x, z, below, half=0.06, fallback=None):
         m = (np.abs(solid[:, 0] - x) < half) & (np.abs(solid[:, 2] - z) < half) & (solid[:, 1] < below)
+        # Nothing there (an open cockpit, an automatic preset's guess): the caller's fallback
+        if not m.any() and fallback is not None:
+            return fallback
         return float(solid[m, 1].max())
 
     # dash: over the instrument binnacle, 8 cm under the windscreen (a straight fit through its glass in front of the
     # driver) and clear of the dash top
     dash_z = float(pivot[2] + 0.30)
     near = glass[(np.abs(glass[:, 0] - eyes[0]) < 0.15) & (glass[:, 1] > eyes[1] - 0.4) & (glass[:, 2] > 0.2)]
-    slope, icpt = np.polyfit(near[:, 2], near[:, 1], 1)
-    glass_y = float(slope * dash_z + icpt)
-    dash_y = max(glass_y - 0.08, top_y(eyes[0], dash_z, glass_y) + 0.05)
+    if len(near) >= 3:
+        slope, icpt = np.polyfit(near[:, 2], near[:, 1], 1)
+        glass_y = float(slope * dash_z + icpt)
+        dash_y = max(glass_y - 0.08, top_y(eyes[0], dash_z, glass_y) + 0.05)
+    else:
+        # No windscreen in front of the driver (an open car, or none found): over the dash top, under the eyes
+        dash_y = max(top_y(eyes[0], dash_z, float(eyes[1]), fallback=float(eyes[1]) - 0.2) + 0.05, float(eyes[1]) - 0.15)
     # bumper: centre line, just above the front bumper's top, at its nose
     front = solid[(np.abs(solid[:, 0]) < 0.15) & (solid[:, 1] > 0.3) & (solid[:, 1] < 0.9)]
-    nose_z = float(front[:, 2].max())
-    bumper_y = top_y(0.0, nose_z - 0.08, 1.0, half=0.1) + 0.06
+    nose_z = float(front[:, 2].max()) if len(front) else float(solid[:, 2].max())
+    bumper_y = top_y(0.0, nose_z - 0.08, 1.0, half=0.1, fallback=0.5) + 0.06
     # tcam: over the roof above the driver's head, as high over it as the GT3 ports' (cameras.ini's roof camera,
     # 12 cm over it at -15.5 deg, filled half the frame with roof)
-    roof_y = float(solid[(np.abs(solid[:, 0]) < 0.2) & (np.abs(solid[:, 2] - eyes[2]) < 0.2), 1].max())
+    over = (np.abs(solid[:, 0]) < 0.2) & (np.abs(solid[:, 2] - eyes[2]) < 0.2)
+    roof_y = float(solid[over, 1].max()) if over.any() else float(eyes[1]) + 0.1
     tcam_pos, tcam_pitch = [0.0, roof_y + 0.22, float(eyes[2] - 0.13)], -8.0
     r3 = lambda v: [round(float(x), 3) for x in v]  # noqa: E731
     cameras = {
@@ -1640,38 +2007,104 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('car_dir', help='the AC car folder (content/cars/<id>)')
-    ap.add_argument('out', help='output .glb')
-    ap.add_argument('--car', default=None, choices=sorted(PRESETS), help='car preset (default: by the folder name)')
+    ap.add_argument('car_dir', nargs='?', help='the AC car folder (content/cars/<id>)')
+    ap.add_argument('out', nargs='?', help='output .glb')
+    ap.add_argument('--car', default=None, choices=sorted(PRESETS) + ['auto'],
+                    help="car preset (default: by the folder name; a folder with none, or 'auto', gets an automatic one)")
     ap.add_argument('--skin', default=None, help="skin folder whose maps override the kn5 (default: the preset's)")
-    ap.add_argument('--kn5', default=None, help='kn5 file in the car folder (default <folder name>.kn5)')
+    ap.add_argument('--kn5', default=None,
+                    help='kn5 file in the car folder (default <folder name>.kn5; an automatic preset finds the model)')
     ap.add_argument('--max-tex', type=int, default=2048, help='paint texture size cap (px)')
     ap.add_argument('--small-tex', type=int, default=1024, help='other colour textures size cap (px)')
     ap.add_argument('--normal-tex', type=int, default=512, help='normal map size cap (px)')
     ap.add_argument('--jpeg-quality', type=int, default=88)
     ap.add_argument('--skins-out', default=None,
                     help="also write every skin's livery files (the preset's skin_maps) into this folder")
+    ap.add_argument('--skins-only', default=None,
+                    help="with --skins-out and an automatic preset: the skin folders to export, comma-separated")
+    ap.add_argument('--report', default=None,
+                    help='also write what was made as JSON: the preset (and what an automatic one found), the rig '
+                         'measurements and the skins')
+    ap.add_argument('--detect', default=None, metavar='MODEL.json|CAR',
+                    help="run an automatic preset's detection on a model described in JSON (`synthetic_model`), or on a "
+                         "car folder (beside its own preset's choices, when it has one), and print what it finds")
     a = ap.parse_args()
+    if a.detect and os.path.isdir(a.detect):
+        data = read_car_data(a.detect)
+        kn5_name = a.kn5 or find_kn5(a.detect, data)
+        preset = auto_preset(a.detect, read_kn5(os.path.join(a.detect, kn5_name)), data, kn5_name)
+        own = PRESETS.get(a.car or PRESET_BY_FOLDER.get(os.path.basename(os.path.normpath(a.detect)), ''))
+        out = {'kn5': kn5_name, 'detected': preset['detected']}
+        if own:
+            out['preset'] = {'paint': list(own.get('paint', ())), 'windscreen': list(own['windscreen']),
+                             'tyreMaterials': list(own.get('tyre_materials') or ()), 'tyrePrefix': own.get('tyre_prefix'),
+                             # A material table's paint: the kn5 materials it names as paint
+                             'paintByTable': sorted(k for k, v in own['materials'].items() if 'paint' in v.get('name', ''))}
+        print(json.dumps(out, indent=1))
+        return
+    if a.detect:
+        spec = json.load(open(a.detect))
+        materials, nodes = synthetic_model(spec)
+        data = {'car.ini': f"[GRAPHICS]\nDRIVEREYES={','.join(str(v) for v in spec['eyes'])}\n"} if 'eyes' in spec else {}
+        overrides = {k.lower(): v for k, v in spec.get('overrides', {}).items()}
+        preset = auto_preset(None, ({}, materials, nodes), data, None, overrides=overrides, n_skins=spec.get('skins', 0))
+        print(json.dumps(preset['detected'], indent=1))
+        return
+    if not (a.car_dir and a.out):
+        ap.error('name the car folder and the output .glb')
     car = a.car or PRESET_BY_FOLDER.get(os.path.basename(os.path.normpath(a.car_dir)))
-    if car is None:
-        ap.error(f'no preset for {a.car_dir}: pass --car')
-    preset = PRESETS[car]
+    loaded = None
+    if car is None or car == 'auto':
+        data = read_car_data(a.car_dir)
+        kn5_name = a.kn5 or find_kn5(a.car_dir, data)
+        loaded = read_kn5(os.path.join(a.car_dir, kn5_name))
+        ui = read_loose_json(os.path.join(a.car_dir, 'ui', 'ui_car.json'))
+        title = str(ui.get('name') or '').strip() or None
+        preset = auto_preset(a.car_dir, loaded, data, kn5_name, title=title)
+        car = 'auto'
+        print(f'automatic preset for {a.car_dir} ({kn5_name}):')
+        print('  ' + json.dumps(preset['detected']))
+    else:
+        preset = PRESETS[car]
+    listing = None
     with np.errstate(all='ignore'):
-        _, skin_files = port(a.car_dir, a.out, preset, a.skin or preset['default_skin'], a.kn5, a.max_tex, a.small_tex,
-                             a.normal_tex, a.jpeg_quality)
+        extras, skin_files = port(a.car_dir, a.out, preset, a.skin or preset['default_skin'], a.kn5, a.max_tex,
+                                  a.small_tex, a.normal_tex, a.jpeg_quality, loaded=loaded)
         if a.skins_out:
-            kn5 = os.path.join(a.car_dir, a.kn5 or f'{os.path.basename(os.path.normpath(a.car_dir))}.kn5')
+            kn5 = os.path.join(a.car_dir, a.kn5 or preset.get('kn5') or
+                               f'{os.path.basename(os.path.normpath(a.car_dir))}.kn5')
             textures, materials, _ = read_kn5(kn5)
             if preset.get('auto'):
-                if not skin_files:
+                if not skin_files and preset.get('generated'):
+                    # Nothing a skin repaints: the model's own paint is the one livery
+                    listing = []
+                    print('  no livery files: the skins repaint nothing the model shows')
+                elif not skin_files and a.report:
+                    listing = []
+                elif not skin_files:
                     ap.error(f'{car} has no livery files to export')
-                export_auto_skins(a.car_dir, preset, textures, materials, skin_files, a.skins_out, a.max_tex,
-                                  a.jpeg_quality, a.skin or preset['default_skin'])
+                else:
+                    only = set(a.skins_only.split(',')) if a.skins_only else None
+                    listing = export_auto_skins(a.car_dir, preset, textures, materials, skin_files, a.skins_out,
+                                                a.max_tex, a.jpeg_quality, a.skin or preset['default_skin'], only)
+            elif not preset['skin_maps'] and a.report:
+                # The importer's run: the model's own paint is the one livery
+                listing = []
             else:
                 if not preset['skin_maps']:
                     ap.error(f'{car} has no skin_maps to export')
-                export_skins(a.car_dir, preset, textures, materials, a.skins_out, a.max_tex, a.small_tex,
-                             a.jpeg_quality)
+                listing = export_skins(a.car_dir, preset, textures, materials, a.skins_out, a.max_tex, a.small_tex,
+                                       a.jpeg_quality)
+    if a.report:
+        def plain(v):
+            return sorted(v) if isinstance(v, (set, frozenset)) else list(v) if isinstance(v, tuple) else v
+
+        kept = ('title', 'kn5', 'paint', 'windscreen', 'spinning', 'default_skin', 'skin_textures', 'generated')
+        report = {'car': car, 'preset': {k: plain(preset[k]) for k in kept if k in preset},
+                  'detected': preset.get('detected'), 'skin': a.skin or preset['default_skin'], 'extras': extras,
+                  'skins': listing}
+        with open(a.report, 'w') as fh:
+            json.dump(report, fh, indent=1, ensure_ascii=False)
 
 
 if __name__ == '__main__':

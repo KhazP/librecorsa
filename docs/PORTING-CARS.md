@@ -46,15 +46,26 @@ uv run --python 3.14 --no-project --with numpy --with pillow \
 
 Useful options:
 
-- `--car <preset>`: Override the preset (defaults to matching the folder name in `PRESET_BY_FOLDER`).
+- `--car <preset>`: Override the preset (defaults to matching the folder name in `PRESET_BY_FOLDER`; `auto` builds an automatic one).
 - `--kn5 <file>`: Specify the `.kn5` filename (defaults to `<folder name>.kn5`).
 - `--max-tex`, `--small-tex`, `--normal-tex`: Texture resolution caps in pixels (defaults: `2048`, `1024`, `512`).
 - `--jpeg-quality`: Texture compression quality (default: `88`).
 - `--skins-out <folder>`: Export texture overrides for every skin in the mod folder.
+- `--skins-only <a,b>`: Export only the skins named.
+- `--report <file.json>`: Write what the porter made and what it found.
+
+A car with no preset gets an automatic one, and the porter prints what it found:
+
+- **Model:** `<folder name>.kn5`, else the file `lods.ini` names for LOD_0, else the largest `.kn5` that is neither a lower LOD nor the collider.
+- **Tyres** under each `WHEEL_xx`: the meshes AC's tyre shader (`ksTyres`) draws, else those named as tyres (`tyre`, `tire`, `gomma`, `rubber`… on the material, then the node), else by shape (the outermost ring round the hub).
+- **Paint:** the body material named as paint that covers the most of the body and is repainted by the most skins.
+- **Windscreen:** the glass most of the driver's sight lines pass through (from `DRIVEREYES`), an outer layer before an inner one or a gauge's glass.
+- **Discs** beside the wheels (`DISC_xx` at all four corners) spin with them. Broken glass, blurred rims, the low-detail cockpit and fastened belts are left out.
+- **Materials** come from their shader values (as with `auto=True`), every texture a skin replaces becomes a livery file, and the name comes from `ui/ui_car.json`.
 
 > Keep the mod's original folder name intact—`data.acd` decryption derives its key from the folder name.
 
-`port_ac_car.py` requires a matching entry in `PRESETS` and exits if none exists. Copy the closest preset and configure:
+The automatic choices are guesses. When one is wrong, a preset of the car's own in `PRESETS` fixes it; copy the closest and configure:
 
 - **`materials`:** Maps source material names to glTF names and PBR properties. Unlisted materials fall back to a plain diffuse surface. Setting `auto=True` leaves `materials` empty and derives PBR parameters automatically from the mod's shader values, requiring only `paint` to be named. Material names matter: `src/lib/render/ported-car-materials.ts` assigns paint, rubber, metal, glass, and mirror shaders based on them.
 - **`tyre_prefix` or `tyre_materials`:** Identifies the tyre mesh under each `WHEEL_xx` node (for example, `object__90` on the Liana). One of the two is required, or the script aborts with `"expected one tyre under each WHEEL_xx"`. When using `tyre_prefix`, each tyre must use a single material.
@@ -79,7 +90,7 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
   python -P scripts/audio/port_ac_bank.py --car <id>
 ```
 
-Add an entry for your car in `scripts/audio/car_configs.json` (copying `f12026` as a template):
+Add an entry for your car in `scripts/audio/car_configs.json` (copying `f12026` as a template). For a quick start, `--auto <bank> --out <folder> --limiter <rpm> --idle <rpm>` makes one from the bank's sample names instead (interior or exterior, on or off the throttle, and an rpm or a word such as `onlow`, `offmedhigh` or `idle`, spread over the car's own idle-to-limiter range); check it by ear. An entry holds:
 
 - `outDir`: Target directory, e.g., `public/cars/<id>/audio`.
 - `intBank` (and optional `extBank` when interior/exterior banks are separate): Absolute path or path relative to `$AC_BANKS_DIR` / `~/Downloads`.

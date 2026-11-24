@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -907,9 +908,188 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
     }
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# An automatic config: a car whose bank has no entry in car_configs.json (scripts/mods/importers/ac-car.ts). AC banks
+# name their samples by what they are: inside or outside the car ("int", "ext", "aft", "rear"), on or off the throttle,
+# and the engine speed, as an rpm ("int_on_6000") or a word ("onlow", "offmedhigh", "idle"). The engine loops are those
+# samples, their anchors spread over the car's own idle-to-limiter range; the one-shots, turbo, skid, traction-control
+# and gearbox sounds are found by their names too, and what isn't there is derived as for the hand-made configs.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Engine speed words, as a share of the range from idle to the limiter
+_LEVELS = (
+    ("veryhigh", 0.95), ("vhigh", 0.95), ("medhigh", 0.65), ("midhigh", 0.65), ("highmed", 0.65), ("highmid", 0.65),
+    ("lowmed", 0.38), ("medlow", 0.38), ("lowmid", 0.38), ("midlow", 0.38), ("verylow", 0.12), ("vlow", 0.12),
+    ("medium", 0.5), ("med", 0.5), ("mid", 0.5), ("high", 0.8), ("low", 0.25), ("max", 1.0), ("redline", 1.0),
+)
+_NOT_ENGINE = (
+    "shift", "gear", "backfire", "bov", "blowoff", "blow_off", "flutter", "turbo", "skid", "tyre", "tire", "wind", "door",
+    "horn", "limit", "brake", "body", "traction", "trans", "whine", "crash", "scrape", "explosion", "unused", "gravel",
+    "dirt", "bump", "kerb", "rolling", "pop", "crackle", "starter", "start", "pit", "click", "horn", "rain",
+)
+
+
+def _tokens(name: str) -> list[str]:
+    return [t for t in re.split(r"[^a-z0-9]+", name.lower()) if t]
+
+
+def classify_engine_sample(name: str) -> dict[str, Any] | None:
+    """What an engine loop's name says: {view: int / ext / None, layer: on / off / idle, share or rpm, rear: an
+    exhaust-side recording}; None for a sample that isn't an engine loop"""
+    low = name.lower()
+    if any(w in low for w in _NOT_ENGINE) or re.search(r"(^|[^a-z])bf\d*($|[^a-z])", low):
+        return None
+    toks = _tokens(name)
+    view = None
+    if any(t in ("int", "interior", "inside", "cockpit", "onboard", "incar") or t.startswith("int") for t in toks):
+        view = "int"
+    elif any(t in ("ext", "exterior", "outside", "aft", "rear", "front", "exhaust") or t.endswith("ext") for t in toks):
+        view = "ext"
+    rear = any(t in ("aft", "rear", "exhaust") for t in toks)
+    layer, rest = None, []
+    for t in toks:
+        for prefix, lay in (("off", "off"), ("on", "on"), ("coast", "off"), ("decel", "off"), ("power", "on"), ("acc", "on")):
+            if t.startswith(prefix):
+                layer = layer or lay
+                rest.append(t[len(prefix):])
+                break
+        else:
+            rest.append(t)
+    # "idol": a spelling AC banks use
+    if any(t.endswith(("idle", "idol")) for t in toks):
+        return {"view": view, "layer": "idle", "share": 0.0, "rear": rear}
+    if layer is None:
+        return None
+    for word in rest:
+        for key, share in _LEVELS:
+            if word == key or word.startswith(key) and len(word) <= len(key) + 1:
+                return {"view": view, "layer": layer, "share": share, "rear": rear}
+    rpms = [int(t) for t in rest if t.isdigit() and 800 <= int(t) <= 20000]
+    if rpms:
+        return {"view": view, "layer": layer, "rpm": rpms[0], "rear": rear}
+    return None
+
+
+def auto_config(samples: list[dict[str, Any]], limiter_rpm: float, idle_rpm: float, boost: float = 0.0,
+                source: str = "") -> dict[str, Any]:
+    """A car_configs.json entry for a bank (`samples`: list_bank_samples' list) and the car's limiter and idle rpm.
+    Raises ValueError when the bank names no engine loops"""
+    span = max(1000.0, limiter_rpm - idle_rpm)
+    # view, layer -> speed band (250 rpm) -> (the recording's rpm, sample, its score)
+    found: dict[tuple[str, str], dict[int, tuple[int, str, tuple[bool, bool, float]]]] = {}
+    # view -> the idle loop (sample, its score)
+    idles: dict[str, tuple[str, tuple[bool, bool, float]]] = {}
+    for s in samples:
+        if s["seconds"] < 0.6:
+            continue
+        c = classify_engine_sample(s["name"])
+        if c is None:
+            continue
+        rpm = int(round(c["rpm"] if "rpm" in c else idle_rpm + c["share"] * span))
+        spec = f"{s['name']}#{s['index']}"
+        for view in ((c["view"],) if c["view"] else ("int", "ext")):
+            if c["layer"] == "idle":
+                score = (c["view"] == view, c["rear"] if view == "ext" else False, s["seconds"])
+                if view not in idles or score > idles[view][1]:
+                    idles[view] = (spec, score)
+                continue
+            for layer in (c["layer"],):
+                slot = found.setdefault((view, layer), {})
+                # One per 250 rpm: one named for this view, then an exhaust-side recording outside, then the longest
+                score = (c["view"] == view, c["rear"] if view == "ext" else False, s["seconds"])
+                band = int(round(rpm / 250))
+                if band not in slot or score > slot[band][2]:
+                    slot[band] = (rpm, spec, score)
+    if not found:
+        raise ValueError("the bank names no engine loops (no int/ext on/off samples)")
+    other_view = {"int": "ext", "ext": "int"}
+
+    def anchors(view: str, layer: str) -> list[dict[str, Any]]:
+        # A layer the bank has no loops for borrows the other layer's (a bank without overrun recordings), then the
+        # other view's
+        slot = found.get((view, layer)) or found.get((view, "off" if layer == "on" else "on")) or \
+            found.get((other_view[view], layer)) or next(iter(found.values()))
+        rows = sorted(slot.values())
+        out = [{"rpm": rpm, "rootRpm": rpm, "sample": spec} for rpm, spec, _score in rows]
+        # The idle loop under them, where none of them is down there already
+        idle = idles.get(view) or idles.get(other_view[view])
+        if idle and out[0]["rpm"] > idle_rpm + 250:
+            out.insert(0, {"rpm": int(idle_rpm), "rootRpm": int(idle_rpm), "sample": idle[0]})
+        # The highest loop plays at the limiter, the lowest no higher than idle: the bank sweeps the car's own range,
+        # each recording pitched from the speed it was made at (`rootRpm`)
+        if len(out) == 1:
+            out = [dict(out[0], rpm=int(idle_rpm)), dict(out[0], rpm=int(limiter_rpm))]
+        out[-1]["rpm"] = max(out[-1]["rpm"], int(limiter_rpm))
+        out[0]["rpm"] = min(out[0]["rpm"], int(idle_rpm))
+        return out
+
+    def named(pattern: str, exclude: str = r"^$") -> list[dict[str, Any]]:
+        return [s for s in samples if re.search(pattern, s["name"], re.I) and not re.search(exclude, s["name"], re.I)]
+
+    spec = lambda s: f"{s['name']}#{s['index']}"  # noqa: E731
+    is_int = lambda s: any(t.startswith("int") for t in _tokens(s["name"]))  # noqa: E731
+    cfg: dict[str, Any] = {
+        "sourceDescription": source,
+        "rawPcm16": True,
+        "engine": {v: {lay: anchors(v, lay) for lay in ("on", "off")} for v in ("int", "ext")},
+        "throttleCurve": {
+            "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.8], [0.75, 0.94], [1.0, 1.0]],
+            "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.82], [0.75, 0.95], [1.0, 1.0]],
+        },
+        "lift": {"popMinRpm": int(idle_rpm + 0.7 * span), "crackleMinRpm": int(idle_rpm + 0.8 * span), "downshiftPopChance": 0.3},
+    }
+    oneshots: dict[str, list[str]] = {}
+    shifts = named(r"shift|gear.?(up|dn|down)|(up|down)shift", r"miss")
+    ups = [s for s in shifts if re.search(r"up", s["name"], re.I)] or shifts
+    downs = [s for s in shifts if re.search(r"d(ow)?n", s["name"], re.I)] or shifts
+    if ups:
+        oneshots["gear_up"] = [spec(s) for s in ups[:4]]
+    if downs:
+        oneshots["gear_down"] = [spec(s) for s in downs[:4]]
+    fires = [s for s in named(r"backfire|(^|[^a-z])bf\d*($|[^a-z])|_bf|crackle|pop", r"loop") if s["seconds"] < 3]
+    if [s for s in fires if is_int(s)]:
+        oneshots["backfire_int"] = [spec(s) for s in fires if is_int(s)][:6]
+    if [s for s in fires if not is_int(s)]:
+        oneshots["backfire_ext"] = [spec(s) for s in fires if not is_int(s)][:8]
+        cfg["shiftFallbackSample"] = oneshots["backfire_ext"][0]
+    bov = named(r"bov|blow.?off|flutter")
+    if bov:
+        oneshots["blowoff"] = [spec(bov[0])]
+    if oneshots:
+        cfg["oneshots"] = oneshots
+    limiter = [s for s in named(r"limit") if s["seconds"] >= 0.5]
+    if limiter:
+        cfg["limiterFallbackSample"] = spec(max(limiter, key=lambda s: s["seconds"]))
+    turbo = [s for s in named(r"turbo", r"bov|blow|flutter") if s["seconds"] >= 0.6]
+    if turbo and boost > 0:
+        t = spec(max(turbo, key=lambda s: s["seconds"]))
+        cfg["turbo"] = [{"layer": "on", "boost": round(boost, 2), "sample": t}, {"layer": "off", "boost": round(boost, 2), "sample": t}]
+    trans = [s for s in named(r"trans|whine|gearbox", r"traction") if s["seconds"] >= 0.6]
+    if trans:
+        t = spec(trans[0])
+        cfg["transmission"] = [{"layer": "on", "drivetrainSpeed": 160, "sample": t, "rms": 0.03},
+                               {"layer": "off", "drivetrainSpeed": 160, "sample": t, "rms": 0.022}]
+    skid = [s for s in named(r"skid") if s["seconds"] >= 0.6]
+    if skid:
+        cfg["skid"] = {"int": spec(skid[0]), "ext": spec(skid[-1])}
+    tc = [s for s in named(r"traction") if s["seconds"] >= 0.6]
+    if tc:
+        cfg["tractionControl"] = spec(tc[0])
+    return cfg
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", metavar="BANK", help="List all FSB5 samples inside an FMOD .bank file")
+    ap.add_argument("--auto", metavar="BANK", help="Port a bank with no car_configs.json entry, by its sample names "
+                    "(with --out, --limiter and --idle)")
+    ap.add_argument("--out", type=Path, help="--auto: the folder to write the sound bank into")
+    ap.add_argument("--limiter", type=float, help="--auto: the car's limiter (rpm)")
+    ap.add_argument("--idle", type=float, default=1000.0, help="--auto: the car's idle (rpm, default 1000)")
+    ap.add_argument("--boost", type=float, default=0.0, help="--auto: the turbo's full boost (bar), 0 for none")
+    ap.add_argument("--source", default="", help="--auto: where the sound came from, for the manifest")
+    ap.add_argument("--auto-plan", metavar="SAMPLES.json", help="Print the config --auto would make from a sample list "
+                    "(as --list prints it), with --limiter and --idle, without porting anything")
     ap.add_argument("--inspect", metavar="BANK", help="Inspect FMOD PMLB RPM intervals and autopitch roots")
     ap.add_argument("--car", help="Port a single car ID from car_configs.json")
     ap.add_argument("--all", action="store_true", help="Port all configured cars in car_configs.json")
@@ -925,6 +1105,29 @@ def main() -> None:
     if args.inspect:
         pmlb = inspect_fmod_pmlb(args.inspect)
         print(json.dumps(pmlb, indent=2))
+        return
+
+    if args.auto_plan:
+        samples = json.loads(Path(args.auto_plan).read_text(encoding="utf-8"))
+        print(json.dumps(auto_config(samples, args.limiter or 8000, args.idle, args.boost), indent=1))
+        return
+
+    if args.auto:
+        if not args.out or not args.limiter:
+            raise SystemExit("--auto needs --out <folder> and --limiter <rpm>")
+        bank = Path(args.auto).resolve()
+        try:
+            cfg = auto_config(list_bank_samples(bank), args.limiter, args.idle, args.boost, args.source or bank.name)
+        except ValueError as err:
+            raise SystemExit(f"{bank.name}: {err}")
+        cfg.update(outDir=str(args.out.resolve()), intBank=str(bank))
+        print(f"[port_ac_bank] automatic config for {bank.name}:", file=sys.stderr)
+        for view in ("int", "ext"):
+            for layer in ("on", "off"):
+                rows = ", ".join(f"{a['rpm']} {a['sample']}" for a in cfg["engine"][view][layer])
+                print(f"  {view} {layer}: {rows}", file=sys.stderr)
+        summary = port_car("auto", cfg, args.ffmpeg, args.banks_dir)
+        print(json.dumps(summary, indent=2))
         return
 
     configs: dict[str, Any] = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
