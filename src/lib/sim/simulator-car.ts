@@ -335,6 +335,51 @@ export function flyingStartSpeedMs(
 }
 
 /**
+ * A solo flying lap's start as the boards' lap times were set on it: where it begins and how fast, as before the rework
+ * above. Where, how fast or which way a timed lap begins moves the boards' times, so a solo flying lap keeps this start,
+ * checked as it was (`startPose` with no barriers, over `START_HANDS_OFF_S` of travel), until the boards are reset for
+ * another reason; the rework (`flyingStartPoint` with `flyingStartSpeedMs`, the barrier clearance and
+ * `startHandsOffRunM`) waits for that reset, and a race's rolling start already starts from `flyingStartPoint`. Known:
+ * it hands a car the circuit car's (the LC26's) speed, up to 270 km/h on a full 450 m run-up even out of a slow corner
+ * (Chang, Le Mans 1982) and ~188 km/h after a short one, more than a slower car earns there; fair between players, as
+ * every player of a car and circuit gets the same start. On a few layouts it starts the car into a wall or off the road
+ * (Spielberg Inner, VIR Patriot and its reverse, Watkins Glen short, Riverside), which the rework fixes.
+ *
+ * 450 m before the line, or 20 m past the exit of the last corner (`cornerS`: the last point of the speed profile under
+ * 200 km/h) where the final straight is shorter, never closer than 40 m to the line; `cornerS` is null on a full run-up.
+ */
+export function boardFlyingStartPoint(track: {
+  totalLengthM: number;
+  getSampleAtDistance(s: number): { optimalSpeedKmh: number };
+}): { s: number; cornerS: number | null } {
+  const L = track.totalLengthM;
+  let straight = 0;
+  for (let d = 5; d <= FLYING_RUN_UP_M; d += 5) {
+    if (track.getSampleAtDistance(L - d).optimalSpeedKmh < FLYING_CORNER_KMH) break;
+    straight = d;
+  }
+  if (straight >= FLYING_RUN_UP_M) return { s: L - FLYING_RUN_UP_M, cornerS: null };
+  return { s: L - Math.max(40, straight - 20), cornerS: L - straight - 5 };
+}
+
+/**
+ * A solo flying lap's speed at `s` (m/s), as the boards' laps were set on it (`boardFlyingStartPoint`): the spot's
+ * speed, and no more than the car carries from the last corner's exit (distance counted forward round the lap)
+ */
+export function boardFlyingStartSpeedMs(
+  lapLengthM: number,
+  start: { s: number; cornerS: number | null },
+  s: number,
+  spotSpeedMs: (at: number) => number,
+  cornerExitMs: number
+): number {
+  const speed = spotSpeedMs(s);
+  if (start.cornerS === null) return speed;
+  const d = (((s - start.cornerS) % lapLengthM) + lapLengthM) % lapLengthM;
+  return Math.min(speed, flyingExitSpeedMs(cornerExitMs, d));
+}
+
+/**
  * A car put down at speed for a flying lap has no yaw rate and its wheel straight, so it runs straight on until its
  * driver reacts: for this long (s) its tyres must stay on the asphalt with no help (`startPose`)
  */
@@ -505,7 +550,9 @@ export function startPose(
   const run = (pose: StartPose) => straightRunOnAsphaltM(track, ground, walls, hit, s, pose, footprint, runM);
   const alongClean = run(alongRoad);
   if (alongClean >= runM) return alongRoad;
-  const aimTargets = [aimLateral(s + runM), 0];
+  // The centreline is the fallback for a line ahead that crowds a barrier: with no barriers to keep clear of, the
+  // search is the one a solo flying lap's start has always made (`boardFlyingStartPoint`), and the boards with it
+  const aimTargets = walls ? [aimLateral(s + runM), 0] : [aimLateral(s + runM)];
   const toCentre = lateral > 0 ? -1 : 1;
   // Allow shifting all the way to the centreline when moving away from a close barrier, otherwise cap at START_MAX_SHIFT_M
   const maxShift = Math.max(START_MAX_SHIFT_M, walls ? Math.abs(lateral) : 0);

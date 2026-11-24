@@ -63,12 +63,13 @@ import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import {
+  boardFlyingStartPoint,
+  boardFlyingStartSpeedMs,
   FLYING_SLOT_SPACING_M,
   flyingStartPoint,
-  flyingStartSpeedMs,
   rollingStartSlots,
   rollingStartSpeedMs,
-  startHandsOffRunM,
+  START_HANDS_OFF_S,
   type SimulatorCar,
   type SimulatorWheel,
   type StartFootprint,
@@ -2095,9 +2096,11 @@ export class F12026CarSim implements SimulatorCar {
     this.fillFuel();
     const L = this.track.totalLengthM;
     if (flyingStart) {
-      // From the final straight (`flyingStartPoint`), on this car's line, kept on the asphalt, and no faster than
-      // 90 % of the speed this car's autopilot plans there, nor than it can carry out of the last corner
-      const start = flyingStartPoint(this.track);
+      // From the final straight, on this car's line, kept on the asphalt, and no faster than 90 % of the speed this
+      // car's autopilot plans there, nor than it can carry out of the last corner. A solo flying lap starts where and
+      // as fast as the boards' laps did (`boardFlyingStartPoint`); a race's rolling start from `flyingStartPoint`
+      const rolling = fieldSize !== undefined;
+      const start = rolling ? flyingStartPoint(this.track) : boardFlyingStartPoint(this.track);
       const s =
         fieldSize !== undefined
           ? rollingStartSlots(this.track, start, gridSlot + 1)[gridSlot]
@@ -2112,7 +2115,8 @@ export class F12026CarSim implements SimulatorCar {
       const [lo, hi] = rangeAt(s);
       const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
       const ownAt = (at: number) => prof[Math.floor(wrap(at, L) / (L / prof.length)) % prof.length];
-      const maxStartMs = Math.min(75, this.profile.speedProfile?.vMaxMs ?? 75);
+      // The car's top speed caps a rolling start; a solo flying lap keeps the boards' 75 m/s cap
+      const maxStartMs = rolling ? Math.min(75, this.profile.speedProfile?.vMaxMs ?? 75) : 75;
       const spotSpeed = (at: number) => {
         const sample = this.track.getSampleAtDistance(at);
         return Math.min(maxStartMs, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
@@ -2124,10 +2128,12 @@ export class F12026CarSim implements SimulatorCar {
       const speed =
         fieldSize !== undefined
           ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
-          : flyingStartSpeedMs(this.track, start, s, spotSpeed, cornerExit);
+          : boardFlyingStartSpeedMs(L, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
-        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt and
-        // clear of barriers for its first second (`startPose`)
+        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
+        // first second (`startPose`), checked as the boards' laps were (`boardFlyingStartPoint`): the barrier
+        // clearance and the longer `startHandsOffRunM` go with the reworked start, and alone they turn the car on 15
+        // layouts whose start was clean
         const pose = startPose(
           this.track,
           this.collider,
@@ -2137,8 +2143,8 @@ export class F12026CarSim implements SimulatorCar {
           lo,
           hi,
           this.startFootprint(),
-          startHandsOffRunM(speed),
-          this.walls
+          speed * START_HANDS_OFF_S,
+          null
         );
         this.progressHintS = this.poseHintS = s;
         this.resetVehicle(pose.x, pose.z, pose.yawRad, speed);

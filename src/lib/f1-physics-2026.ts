@@ -140,12 +140,13 @@ import {
 import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import {
+  boardFlyingStartPoint,
+  boardFlyingStartSpeedMs,
   FLYING_SLOT_SPACING_M,
   flyingStartPoint,
-  flyingStartSpeedMs,
   rollingStartSlots,
   rollingStartSpeedMs,
-  startHandsOffRunM,
+  START_HANDS_OFF_S,
   startPose,
   type TyreVisualState,
 } from './sim/simulator-car';
@@ -1070,7 +1071,9 @@ export class F1Physics2026 {
       // Run-up from the final straight (`flyingStartPoint`) on the racing line; timing starts at the line. It starts
       // no faster than 90 % of the speed the circuit's braking profile allows there, nor than it carries out of the
       // last corner, in the gear for that speed
-      const start = flyingStartPoint(this.track);
+      // A solo flying lap starts where and as fast as the boards' laps did (`boardFlyingStartPoint`); a race's
+      // rolling start from `flyingStartPoint`
+      const start = fieldSize !== undefined ? flyingStartPoint(this.track) : boardFlyingStartPoint(this.track);
       const s =
         fieldSize !== undefined
           ? rollingStartSlots(this.track, start, gridSlot + 1)[gridSlot]
@@ -1090,11 +1093,11 @@ export class F1Physics2026 {
       const speed =
         fieldSize !== undefined
           ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
-          : flyingStartSpeedMs(this.track, start, s, spotSpeed, cornerExit);
+          : boardFlyingStartSpeedMs(lapLen, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
-        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt and
-        // clear of barriers for its first second (`startPose`; a race's rolling start is left on its line along the
-        // road, as `F12026CarSim` does)
+        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
+        // first second (`startPose`, checked as the boards' laps were: `F12026CarSim`); a race's rolling start is left
+        // on its line along the road, as `F12026CarSim` does
         const footprint = {
           halfWidthM: Math.max(...this.wheels.map((w) => Math.abs(w.staticPos.y) + 0.5 * w.tyre.spec.width)),
           frontM: this.cgToFrontAxleM,
@@ -1109,8 +1112,8 @@ export class F1Physics2026 {
           -edge,
           edge,
           footprint,
-          startHandsOffRunM(speed),
-          this.walls ?? null
+          speed * START_HANDS_OFF_S,
+          null
         );
         this.placeCar(s, speed, pose.lateral);
         // + = nose right of the road's tangent
