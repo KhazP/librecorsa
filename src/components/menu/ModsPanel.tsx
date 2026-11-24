@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl/react";
 import { Button, ConfirmDialog, EmptyState, Toggle, Well, cx } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
@@ -11,8 +11,11 @@ import { modDefinitions } from "@/lib/mods/mod-content";
 import { modsState, modsSwitchedOff, readPackages, type LoadedPackage } from "@/lib/mods/mod-loader";
 import {
   filesSource,
+  holdModsStore,
   installPackage,
   modsStorageAvailable,
+  modsStoreHeld,
+  onModsStoreHold,
   removePackage,
   setPackageEnabled,
   zipSource,
@@ -69,11 +72,11 @@ export const ModsPanel: React.FC = () => {
   const [changed, setChanged] = useState(false);
   const [removing, setRemoving] = useState<LoadedPackage | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
-  const [catalogueBusy, setCatalogueBusy] = useState(false);
   const zipInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
-  // One import or removal at a time, held from the click (state alone lets a quick second click through)
-  const working = useRef(false);
+  // One import, removal or download at a time, held from the click (state alone lets a quick second click through),
+  // and kept in mod-store.ts, so a panel closed and opened again while one runs keeps its buttons off too
+  const held = useSyncExternalStore(onModsStoreHold, modsStoreHeld, () => false);
   // Only the latest list read may land, and none after the panel closes
   const listReq = useRef(0);
   const mounted = useRef(true);
@@ -89,30 +92,26 @@ export const ModsPanel: React.FC = () => {
   }, []);
   useEffect(() => {
     mounted.current = true;
-    refresh();
     return () => {
       mounted.current = false;
     };
-  }, [refresh]);
+  }, []);
+  // The list when the panel opens, and again whenever the hold is let go: what a job started before the panel was last
+  // closed changed shows up when it ends
+  useEffect(() => {
+    if (!held) refresh();
+  }, [held, refresh]);
 
   // A download from a catalogue (ModCatalogue.tsx) takes the same hold as an import
-  const claim = useCallback((): (() => void) | null => {
-    if (working.current) return null;
-    working.current = true;
-    setCatalogueBusy(true);
-    return () => {
-      working.current = false;
-      if (mounted.current) setCatalogueBusy(false);
-    };
-  }, []);
-  const catalogueInstalled = useCallback(() => {
+  const claim = holdModsStore;
+  const packageAdded = useCallback(() => {
     setChanged(true);
     refresh();
   }, [refresh]);
 
   const install = async (next: Busy, source: () => PackageSource | Promise<PackageSource>) => {
-    if (working.current) return;
-    working.current = true;
+    const release = holdModsStore();
+    if (!release) return;
     setBusy(next);
     setNote(null);
     const name = next.name;
@@ -128,7 +127,7 @@ export const ModsPanel: React.FC = () => {
     } catch (err) {
       setNote({ tone: "bad", text: tx("importFailed", { name }), errors: [err instanceof ZipError || err instanceof Error ? err.message : String(err)] });
     } finally {
-      working.current = false;
+      release();
       if (mounted.current) setBusy(null);
       refresh();
     }
@@ -158,8 +157,8 @@ export const ModsPanel: React.FC = () => {
   };
 
   const remove = async (p: LoadedPackage) => {
-    if (working.current) return;
-    working.current = true;
+    const release = holdModsStore();
+    if (!release) return;
     setRemoveBusy(true);
     try {
       await removePackage(p.id);
@@ -169,7 +168,7 @@ export const ModsPanel: React.FC = () => {
     } catch (err) {
       if (mounted.current) setNote({ tone: "bad", text: tx("removeFailed", { name: p.name }), errors: [err instanceof Error ? err.message : String(err)] });
     } finally {
-      working.current = false;
+      release();
       if (mounted.current) {
         setRemoveBusy(false);
         setRemoving(null);
@@ -199,7 +198,7 @@ export const ModsPanel: React.FC = () => {
             size="sm"
             icon={<Icon name="mods" />}
             loading={busy?.kind === "zip"}
-            disabled={busy !== null || removeBusy || catalogueBusy}
+            disabled={held}
             onClick={() => zipInput.current?.click()}
           >
             {tx("importZip")}
@@ -208,7 +207,7 @@ export const ModsPanel: React.FC = () => {
             variant="secondary"
             size="sm"
             loading={busy?.kind === "folder"}
-            disabled={busy !== null || removeBusy || catalogueBusy}
+            disabled={held}
             onClick={() => folderInput.current?.click()}
           >
             {tx("importFolder")}
@@ -285,7 +284,7 @@ export const ModsPanel: React.FC = () => {
                     variant="ghost"
                     icon={<Icon name="delete" />}
                     aria-label={tx("removeNamed", { name: p.name })}
-                    disabled={busy !== null || removeBusy || catalogueBusy}
+                    disabled={held}
                     onClick={() => setRemoving(p)}
                   >
                     {tx("remove")}
@@ -304,14 +303,8 @@ export const ModsPanel: React.FC = () => {
       )}
       {packages.some((p) => p.source === "folder") ? <p className="lc-hint m-0">{tx("folderNote")}</p> : null}
 
-      <ModCatalogue installed={packages} claim={claim} blocked={busy !== null || removeBusy} onInstalled={catalogueInstalled} />
-      <LauncherImports
-        onConverted={() => {
-          setChanged(true);
-          refresh();
-        }}
-        onRestart={restart}
-      />
+      <ModCatalogue installed={packages} claim={claim} blocked={held} onInstalled={packageAdded} />
+      <LauncherImports onConverted={packageAdded} onRestart={restart} />
 
       <ConfirmDialog
         open={removing !== null}

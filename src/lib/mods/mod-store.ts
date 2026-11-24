@@ -170,6 +170,56 @@ export function packageRoot(paths: readonly string[]): string | null {
   return paths.every((p) => p.startsWith(roots[0])) ? roots[0] : null;
 }
 
+// --- One change to the stored packages at a time ---
+
+/**
+ * An install or a removal reads `_installed.json`, changes the cache and writes the list back: two at once would lose
+ * one's change to the list, and two installs of one id would mix their files in `_staging/<id>/`. So they run one
+ * after another, whoever calls them (the Mods panel, its catalogue, a panel closed and opened again mid-install).
+ */
+let storeQueue: Promise<unknown> = Promise.resolve();
+
+function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
+  const run = storeQueue.then(task, task);
+  storeQueue = run.catch(() => {});
+  return run;
+}
+
+/**
+ * What holds the panel's one job at a time (an import, a removal, a catalogue's download and install), kept here
+ * rather than in the panel, so a panel closed and opened again while one runs knows and keeps its buttons off.
+ */
+let held = 0;
+const holdListeners = new Set<() => void>();
+
+const tellHolders = () => holdListeners.forEach((listener) => listener());
+
+/**
+ * Takes the hold for an import, a removal or a download: hands back what lets it go (once), or null while another
+ * has it. Taken in the click, before anything is awaited, so a quick second click finds it taken.
+ */
+export function holdModsStore(): (() => void) | null {
+  if (held > 0) return null;
+  held++;
+  tellHolders();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    held--;
+    tellHolders();
+  };
+}
+
+/** Whether an import, a removal or a download holds the stored packages */
+export const modsStoreHeld = (): boolean => held > 0;
+
+/** Hears the hold being taken and let go (for useSyncExternalStore); returns what stops it */
+export function onModsStoreHold(listener: () => void): () => void {
+  holdListeners.add(listener);
+  return () => void holdListeners.delete(listener);
+}
+
 /**
  * Checks a package and stores it, in place of an installed package with the same id. Nothing is stored unless every
  * check passes: its `mod.json`, that every file it names is there, every path being safe to serve, and its size. The
@@ -178,7 +228,11 @@ export function packageRoot(paths: readonly string[]): string | null {
  * `expected`, for a download from a catalogue (mod-catalogue.ts): anything but that package with that content is
  * refused, before the installed version is touched.
  */
-export async function installPackage(source: PackageSource, known: ModKnownIds, expected?: ExpectedPackage): Promise<InstallResult> {
+export function installPackage(source: PackageSource, known: ModKnownIds, expected?: ExpectedPackage): Promise<InstallResult> {
+  return oneAtATime(() => installNow(source, known, expected));
+}
+
+async function installNow(source: PackageSource, known: ModKnownIds, expected?: ExpectedPackage): Promise<InstallResult> {
   if (!modsStorageAvailable()) return { ok: false, errors: ["This browser has no storage for mods here (a private window, or the page is not served over https)"] };
   const root = packageRoot(source.paths);
   if (root === null) return { ok: false, errors: ["No mod.json at the top of the package (or in its one folder)"] };
@@ -268,7 +322,12 @@ async function deletePrefix(cache: Cache, path: string): Promise<void> {
 
 const deleteFiles = (cache: Cache, id: string): Promise<void> => deletePrefix(cache, `${MODS_PATH}/${id}/`);
 
-export async function removePackage(id: string): Promise<void> {
+/** Removes an installed package, after any install or removal under way */
+export function removePackage(id: string): Promise<void> {
+  return oneAtATime(() => removeNow(id));
+}
+
+async function removeNow(id: string): Promise<void> {
   if (!modsStorageAvailable()) return;
   const cache = await caches.open(MODS_CACHE);
   await deleteFiles(cache, id);

@@ -26,7 +26,7 @@ import {
 } from "../../src/lib/mods/mod-catalogue";
 import { Sha256 } from "../../src/lib/mods/sha256-stream";
 import { modDefinitions } from "../../src/lib/mods/mod-content";
-import { installPackage, readInstalled, zipSource } from "../../src/lib/mods/mod-store";
+import { holdModsStore, installPackage, modsStoreHeld, onModsStoreHold, readInstalled, removePackage, zipSource } from "../../src/lib/mods/mod-store";
 import { buildCatalogue, linkBase } from "../mods/lib/catalogue";
 import { checkPackage, hashFolder } from "../mods/lib/package-check";
 import { zipPackage } from "../mods/lib/zip-writer";
@@ -370,6 +370,36 @@ async function main(): Promise<void> {
   blob = await downloadPackage({ url: `${CDN}/v1.zip`, bytes: packed.length, sha256: createHash("sha256").update(packed).digest("hex") }, { fetch: fetchOf(() => served(packed).res) });
   result = await installPackage(await zipSource(blob), known, { id: "jdoe.blue-gt", hash: await hashOf(v1) });
   check("A package's zip downloaded and checked installs from what was read", result.ok && (await readInstalled())[0]?.version === "1.0.0");
+
+  // --- One change to the stored packages at a time ---
+  // A panel closed and opened mid-install used to let a second start beside the first: started together, installs and
+  // removals now run one after another, so none loses its line in _installed.json, nor its files to the other
+  const other = makePackage(join(tmp, "v3", "jdoe.other"), "1.0.0", "paint-three", "jdoe.other", "Other");
+  const together = await Promise.all([
+    installPackage(await zipSource(zipOf(other)), known),
+    installPackage(await zipSource(zipOf(v2)), known),
+    installPackage(await zipSource(zipOf(v1)), known),
+  ]);
+  installed = await readInstalled();
+  check(
+    "Three installs at once, two of one id: each in, the last of the id kept, the list whole",
+    together.every((r) => r.ok) && installed.map((p) => `${p.id}@${p.version}`).sort().join() === "jdoe.blue-gt@1.0.0,jdoe.other@1.0.0" && (await store.read(`${SITE}/mods/jdoe.blue-gt/skins/blue/paint.png`)) === "paint-one",
+    installed.map((p) => `${p.id}@${p.version}`).join(),
+  );
+  check("…and nothing left aside", !(await store.keys()).some((u) => u.includes("_staging")));
+  await Promise.all([removePackage("jdoe.other"), installPackage(await zipSource(zipOf(v2)), known)]);
+  installed = await readInstalled();
+  check("A removal and an install at once: both kept in the list", installed.length === 1 && installed[0].id === "jdoe.blue-gt" && installed[0].version === "2.0.0", installed.map((p) => `${p.id}@${p.version}`).join());
+  // The panel's hold lives in mod-store.ts, so a panel opened again finds it taken
+  let heard = 0;
+  const stop = onModsStoreHold(() => heard++);
+  const release = holdModsStore();
+  check("The hold, taken, is taken for everyone until let go", release !== null && holdModsStore() === null && modsStoreHeld());
+  release?.();
+  release?.();
+  check("Let go (once, however often asked), it can be taken again", !modsStoreHeld() && heard === 2);
+  stop();
+  holdModsStore()?.();
 
   await generatorChecks();
 
