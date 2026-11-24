@@ -164,11 +164,16 @@ export class TrackEnvironment {
     const sample = this.track.getSampleAtDistance(sim.sMeters);
     const water = w.waterAt(sim.sMeters, sim.lateralOffsetM, aiLineOffsetM(sample));
     const traits = WET_TYRE_TRAITS[sim.tireCompound];
-    const grip = traits.dryGrip * wetGripFactor(traits, water, AI_PACE_REF_MS, this.realism.wetSeverity);
+    const gripCorner = traits.dryGrip * wetGripFactor(traits, water, AI_PACE_REF_MS, this.realism.wetSeverity);
+    // In standing water (> 1 mm), also account for high-speed aquaplaning into heavy braking zones
+    const gripFast = water > 1.0 ? traits.dryGrip * wetGripFactor(traits, water, 65, this.realism.wetSeverity) : gripCorner;
+    const grip = Math.min(gripCorner, 0.5 * (gripCorner + gripFast));
+    const wet = wetnessFromWater(water);
+    const standingMargin = water > 1.2 ? 0.05 * Math.min(1, (water - 1.2) / 1.4) : 0;
     // A car planning on its wet grip already corners and brakes for it
     // (A car that has the method plans on its own wet grip, whatever it returns right now)
-    if (typeof sim.aiPlanGrip === 'function') return 1 - 0.03 * wetnessFromWater(water);
-    return Math.min(1, Math.pow(Math.max(0.1, grip), 0.65) * (1 - 0.03 * wetnessFromWater(water)));
+    if (typeof sim.aiPlanGrip === 'function') return 1 - 0.03 * wet - standingMargin;
+    return Math.min(1, Math.pow(Math.max(0.1, grip), 0.65) * (1 - 0.03 * wet - standingMargin));
   }
 
   /**

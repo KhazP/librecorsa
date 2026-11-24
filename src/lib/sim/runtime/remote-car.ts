@@ -93,6 +93,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   aiTargetSpeedMs: "local",
   aiPlan: "local",
   aiAutoTyres: "local",
+  aiSkill: "local",
 
   setTyreSetup: "call",
   applyChassisSetup: "call",

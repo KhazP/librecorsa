@@ -1171,6 +1171,10 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /** AI driver skill level (0..100, default 70 = Pro) */
+  public aiSkill = 70;
+  /** Strategic FIA-2026 Boost latch for high-skill AI on long acceleration zones */
+  private aiBoostLatched = false;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -2285,6 +2289,19 @@ export class F12026CarSim implements SimulatorCar {
     v.flapsLowGrip = straight2026 ? this.lowGrip : null;
     v.ersLowGrip = lowGrip;
     const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
+    // High-skill AI (above Pro) also deploys FIA-legal Boost strategically on straights/exits when battery SoC has
+    // surplus, using the exact same `ersCanBoost`, 4 MJ store, and 8.5 MJ/lap recharge cap as a human driver
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const ersCapJ = Math.max(1, this.config.ers.ERS_MAX_CHARGE);
+    const soc = v.ersEnergyJ / ersCapJ;
+    const straightExit = this.apThrottle > 0.92 && Math.abs(this.steerCmd) < 0.14 && v.speedMs > 30 && v.speedMs < 95;
+    if (this.aiAutopilot && straight2026 && racing && !lowGrip && alienShare > 0.15 && v.ersCanBoost) {
+      if (!this.aiBoostLatched && straightExit && soc >= 0.58 - 0.14 * alienShare) this.aiBoostLatched = true;
+      else if (this.aiBoostLatched && (!straightExit || soc < 0.22)) this.aiBoostLatched = false;
+    } else {
+      this.aiBoostLatched = false;
+    }
+    const aiStrategicBoost = this.aiBoostLatched;
     v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
     if (this.config.ers.regulations === 'f1-2026') {
@@ -2301,7 +2318,7 @@ export class F12026CarSim implements SimulatorCar {
       const autoOt =
         straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
         zoneNow && inputs.throttle >= 0.98;
-      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersCanBoost;
+      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake || aiStrategicBoost) && v.ersCanBoost;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;
       v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);
@@ -2475,7 +2492,36 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilotDials(): AidDials {
     const d = this.profile.assistDials.semi_pro;
-    return d.absLevel > 0 || this.profile.absAllowed !== false ? d : { ...d, absLevel: this.profile.assistDials.assisted.absLevel };
+    const assisted = this.profile.assistDials.assisted;
+    const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
+    const wet = clamp(this.vehicle.wetness, 0, 1);
+    if (wet <= 0.15) {
+      const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+      if (alienShare <= 0) return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+      // Above Pro on a dry road, ease TC/ABS intervention slightly toward the tyres' true peak slip for stronger exits & braking
+      return {
+        ...d,
+        tcLevel: d.tcLevel,
+        tc2Level: d.tc2Level,
+        absLevel: baseAbs > 0 ? Math.max(3, Math.round(baseAbs - 1 * alienShare)) : 0,
+      };
+    }
+    if (wet <= 0.2) {
+      return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+    }
+    // On wet / flooded roads step AI TC and ABS smoothly toward the wet-safe assisted calibration
+    const u = clamp((wet - 0.2) / 0.6, 0, 1);
+    const lerpInt = (a: number, b: number) => Math.round(a + (Math.max(a, b) - a) * u);
+    return {
+      ...d,
+      tcLevel: lerpInt(d.tcLevel, assisted.tcLevel),
+      tc2Level: lerpInt(d.tc2Level, assisted.tc2Level),
+      absLevel: lerpInt(baseAbs, assisted.absLevel),
+      tcSlipAngleLevel:
+        d.tcSlipAngleLevel !== undefined && assisted.tcSlipAngleLevel !== undefined
+          ? lerpInt(d.tcSlipAngleLevel, assisted.tcSlipAngleLevel)
+          : d.tcSlipAngleLevel,
+    };
   }
 
   /**
@@ -2682,7 +2728,9 @@ export class F12026CarSim implements SimulatorCar {
         : kF > 0
           ? clamp((v.totalMassKg * speed * speed * kappa * this.cgToRearAxleM) / (v.wheelbaseM * kF), -peak, peak)
           : 0;
-    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
+    const wet = clamp(v.wetness, 0, 1);
+    const betaGain = 0.8 + 0.45 * wet;
+    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + betaGain * beta + kYawP * kYaw * yawErr + this.apYawI;
     const delta = clamp(raw, betaF - peak, betaF + peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
@@ -2692,6 +2740,15 @@ export class F12026CarSim implements SimulatorCar {
     const lead = Math.max(5, speed * 0.2);
     const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
     const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
+    const wetBrakeScale =
+      v.waterMm > 0
+        ? clamp(
+            wetGripFactor(this.compoundData.wetTraits ?? SLICK_TRAITS, v.waterMm, Math.max(30, speed), v.realism.wetSeverity, 0) *
+              (this.compoundData.wetTraits?.dryGrip ?? 1),
+            0.35,
+            1
+          )
+        : 1;
     let vTarget = this.aiSpeedCapMs;
     let pedalFF = 0;
     if (plan) {
@@ -2708,7 +2765,10 @@ export class F12026CarSim implements SimulatorCar {
       const own = tab[Math.floor(((p.s + lead + d) % L) / (L / tab.length)) % tab.length];
       const vC = Math.min((smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6, own) * this.aiPaceScale;
       if (vC >= vTarget) continue;
-      const a = 0.5 * (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * d))));
+      const a =
+        0.5 *
+        (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * wetBrakeScale * d)))) *
+        wetBrakeScale;
       vTarget = Math.min(vTarget, Math.sqrt(vC * vC + 2 * a * d));
     }
     // Off the line the corner is tighter than planned: give speed away for it
@@ -2726,16 +2786,26 @@ export class F12026CarSim implements SimulatorCar {
     const pedal = clamp(this.apPedal + pedalP + pedalFF, -1, 1);
     const W = v.wheels;
     // The rear stepping out (on a trail-braked entry, or on the power): ease both pedals as the rears' slip angle
-    // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
+    // passes the rear guard of their peak, so they regain grip to hold the car with rather than spinning it
     const rearSlip = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / peak;
-    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - AP_REAR_GUARD), 0.15, 1);
+    const rearGuard = AP_REAR_GUARD - 0.22 * wet;
+    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - rearGuard), 0.15, 1);
     // squeezed on rather than stabbed: at most full throttle in 0.4 s. Off the line (from rest until 72 km/h) it goes
-    // down at once, the traction control metering the wheelspin as on a player's launch (the squeeze cost the AI a car
-    // length to 100 km/h). Only from rest: a quick pedal out of a slow corner put the car in the barrier at Sepang
+    // down at once in the dry, the traction control metering the wheelspin; in wet conditions, feed power progressively
+    // and trim low-speed rear wheelspin even below the car's TC min speed so GT3/F1 never spin up on a flooded grid
     if (speed < 1) this.apLaunch = true;
     else if (speed > 20) this.apLaunch = false;
-    const squeeze = this.apLaunch ? 12 : 2.5;
-    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const dryExitSqueeze = 2.5 + 0.8 * alienShare;
+    const squeeze = this.apLaunch ? Math.max(2.2, 12 - 9.5 * wet) : Math.max(1.2, dryExitSqueeze * (1 - 0.55 * wet));
+    let wetLaunchTrim = 1;
+    if (wet > 0.15 && speed < 25) {
+      const [dl, dr] = v.drivenWheels;
+      const driveSpin = Math.max(0, W[dl].slipRatio, W[dr].slipRatio);
+      const spinLimit = 0.22 - 0.08 * wet;
+      if (driveSpin > spinLimit) wetLaunchTrim = clamp(1 - (driveSpin - spinLimit) * 3.5, 0.2, 1);
+    }
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut * wetLaunchTrim;
     this.apThrottle = throttle;
     // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
     // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
@@ -2858,9 +2928,14 @@ export class F12026CarSim implements SimulatorCar {
     // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
     // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
     // only cut the corners further
+    const wet = clamp(v.wetness, 0, 1);
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
+    // On wet roads lengthen the look-ahead and soften rejoin lateral acceleration so lane shifts never excite a tank-slapper
+    const lookMin = TRACK_LOOK_MIN_M * (1 + 0.8 * wet);
+    const lookS = TRACK_LOOK_S * (1 + 0.9 * wet);
+    const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.5 * wet);
+    const ld = Math.max(lookMin, speed * lookS, Math.sqrt((2 * speed * speed * eFar) / rejoinMs2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);
@@ -2884,6 +2959,11 @@ export class F12026CarSim implements SimulatorCar {
       this.trackI = clamp(this.trackI + TRACK_KI * errLeft * CONTROL_DT_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
       kappa += this.trackI / Math.max(100, speed * speed);
     }
+    if (wet > 0.15) {
+      const ayWetCap = plan.limits.lateral(speed) * (1.2 - 0.1 * wet);
+      const kappaCap = ayWetCap / Math.max(25, speed * speed);
+      kappa = clamp(kappa, -kappaCap, kappaCap);
+    }
     return kappa;
   }
 
@@ -2895,6 +2975,7 @@ export class F12026CarSim implements SimulatorCar {
   private planSpeedTarget(plan: AiDrivePlan, s: number, speed: number, prof: Float32Array): { v: number; pedalFF: number } {
     const t = plan.track;
     const L = this.track.totalLengthM;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
     const lead = Math.max(3, speed * 0.15);
     // Racing, the plan's top speed is no limit: a car in a tow runs past it, held by its own drag, and brakes from there
     // on the open envelope. Held at the plan's top speed, the tow was worth nothing and a quicker car sat behind a slower
@@ -2919,9 +3000,11 @@ export class F12026CarSim implements SimulatorCar {
     const aFF = (v1 * v1 - v0 * v0) / 12;
     if (aFF >= -0.5 && speed < v0) {
       // Still cornering hard (a corner exit): the full plan's acceleration, which shares the tyres between the corner
-      // and the throttle; flooring it there ran the car wide on the power. Near straight: as hard as it can
+      // and the throttle; flooring it there ran the car wide on the power. Above Pro on a dry road, delay this cap
+      // until higher lateral utilisation so Alien drivers stay flat out through gentle sweeps and open throttle earlier.
       const ayShare = (Math.abs(sampleGrid(plan.kappa, s + lead, t.ds)) * speed * speed) / plan.limits.lateral(speed);
-      if (ayShare > 0.3) {
+      const ayThreshold = this.vehicle.wetness < 0.15 ? 0.3 + 0.07 * alienShare : 0.3;
+      if (ayShare > ayThreshold) {
         const vExp = sampleGrid(plan.vExpected, s + lead, t.ds) * pace;
         const vExp1 = sampleGrid(plan.vExpected, s + lead + 6, t.ds) * pace;
         const aExp = (vExp1 * vExp1 - vExp * vExp) / 12;

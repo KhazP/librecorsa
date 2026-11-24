@@ -219,6 +219,8 @@ export interface SimulatorCar {
   setEnergySession?(timeTrial: boolean): void;
   /** An AI car that fits the tyres the weather calls for (`TrackEnvironment` swaps them) */
   aiAutoTyres?: boolean;
+  /** AI driver skill level (0..100, default 70 = Pro); informs autopilot exit throttle, TC/ABS dials and ERS strategy */
+  aiSkill?: number;
   /**
    * Apply a car-to-car contact resolved by `resolveCarToCarObbCollision` (Three.js world, Y up), as deltas:
    * `posDeltaX/Z` move the car (m), `velDeltaX/Z` change its world horizontal velocity (m/s) and `yawRateDeltaRadS`
