@@ -4,7 +4,7 @@
  * earlier, the car goes, and moving off its spot before the lights go out is a jump start, served as time at the flag.
  * Assisted starts keep the car frozen until the lights go out, as before.
  */
-import type { VehicleModelId } from '@/types/f1';
+import type { RollingFormationStage, VehicleModelId } from '@/types/f1';
 import { text as t } from '@/lib/text';
 
 export type RaceStartMode = 'assisted' | 'manual';
@@ -230,4 +230,74 @@ export class ReactionWatch {
       this.sinceS = null;
     }
   }
+}
+
+/** Seconds before P1 reaches Start/Finish when "GET READY" appears */
+export const ROLLING_READY_WINDOW_S = 4.2;
+/** Seconds before P1 reaches Start/Finish when the 3-2-1 countdown begins */
+export const ROLLING_COUNTDOWN_S = 3;
+
+/**
+ * Rolling-start formation speed limiter (Nuzzi AC style): lets the driver hold throttle and steer cleanly at formation
+ * pace (~65 km/h) without jumping the start or surging, while preserving full driver braking. Smoothly tapers throttle
+ * into the speed ceiling, cuts ignition/throttle slightly past it, and applies light proportional braking on downhill
+ * overspeed so every car class (100 hp road car to 1000 hp F1) holds steady right at `limitMs`.
+ */
+export function applySpeedLimiter(
+  speedMs: number,
+  limitMs: number | undefined,
+  throttle: number,
+  brake: number
+): { throttle: number; brake: number; ignitionCut: number; active: boolean } {
+  if (limitMs === undefined || !Number.isFinite(limitMs) || limitMs <= 0) {
+    return { throttle, brake, ignitionCut: 1, active: false };
+  }
+  const v = Number.isFinite(speedMs) ? speedMs : 0;
+  // Taper throttle smoothly from 100 % at (limit - 1.35 m/s) down to 0 % at (limit + 0.45 m/s)
+  const throttleCap = Math.max(0, Math.min(1, (limitMs + 0.45 - v) / 1.8));
+  const outThrottle = Math.min(throttle, throttleCap);
+  const overspeed = v - (limitMs + 0.45);
+  const ignitionCut = overspeed >= 0 ? 0 : 1;
+  // Gentle downhill / overspeed braking cap so the car never coasts past formation speed without locking wheels
+  const limiterBrake = overspeed > 0 ? Math.min(0.5, overspeed * 0.25) : 0;
+  return {
+    throttle: outThrottle,
+    brake: Math.max(brake, limiterBrake),
+    ignitionCut,
+    active: true,
+  };
+}
+
+/**
+ * Advances a rolling start's Nuzzi-style countdown state monotonically as P1 approaches Start/Finish:
+ *   stageOrder 0: 'formation' (hold formation speed)
+ *   stageOrder 1: 'ready'     ("GET READY", ~4.2–3.0 s out)
+ *   stageOrder 2: 'countdown' (3, ~3.0–2.0 s out)
+ *   stageOrder 3: 'countdown' (2, ~2.0–1.0 s out)
+ *   stageOrder 4: 'countdown' (1, <= 1.0 s out until P1 crosses S/F)
+ *
+ * Clamping the approach speed around `paceMs` and latching `stageOrder >= prevStageOrder` ensures the countdown never
+ * flickers backwards due to minor speed ripples.
+ */
+export function rollingFormationStep(
+  distanceToLineM: number,
+  leaderSpeedMs: number,
+  paceMs: number,
+  prevStageOrder = 0
+): { stageOrder: number; stage: RollingFormationStage; countdown?: 3 | 2 | 1 } {
+  const distM = Math.max(0, Number.isFinite(distanceToLineM) ? distanceToLineM : 0);
+  const nominalPace = Math.max(6, Number.isFinite(paceMs) && paceMs > 0 ? paceMs : 65 / 3.6);
+  const effSpeed = Math.max(nominalPace * 0.85, Math.min(nominalPace * 1.08, Number.isFinite(leaderSpeedMs) && leaderSpeedMs > 1 ? leaderSpeedMs : nominalPace));
+  const etaS = distM / effSpeed;
+  let desired = 0;
+  if (etaS <= 1.0) desired = 4;
+  else if (etaS <= 2.0) desired = 3;
+  else if (etaS <= ROLLING_COUNTDOWN_S) desired = 2;
+  else if (etaS <= ROLLING_READY_WINDOW_S) desired = 1;
+  const stageOrder = Math.max(Math.max(0, Math.min(4, prevStageOrder)), desired);
+  if (stageOrder >= 2) {
+    const countdown = (5 - stageOrder) as 3 | 2 | 1;
+    return { stageOrder, stage: 'countdown', countdown };
+  }
+  return { stageOrder, stage: stageOrder === 1 ? 'ready' : 'formation' };
 }
