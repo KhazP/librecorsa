@@ -47,8 +47,6 @@ const kindLabel = (tx: Tx, kind: ImportKind): string => {
       return tx("kindSdTrack");
     case "sd-car":
       return tx("kindSdCar");
-    case "f1-track":
-      return tx("kindF1Track");
     case "blender-track":
       return tx("kindBlenderTrack");
     case "archive":

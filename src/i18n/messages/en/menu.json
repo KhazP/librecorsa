@@ -710,7 +710,7 @@
   },
   "modConvert": {
     "title": "Convert from another game",
-    "intro": "Copy a circuit's or a car's folder from Assetto Corsa, Speed Dreams or F1 25 into the launcher's import folder, then convert it here into a mod package. A circuit you modelled in Blender works too: its .glb export beside its settings .json.",
+    "intro": "Copy a circuit's or a car's folder from Assetto Corsa or Speed Dreams into the launcher's import folder, then convert it here into a mod package. A circuit you modelled in Blender works too: its .glb export beside its settings .json.",
     "folder": "Import folder",
     "refresh": "Refresh",
     "empty": "Nothing in the import folder yet. Copy a circuit's or a car's folder there, then refresh.",
@@ -718,7 +718,6 @@
     "kindAcCar": "Assetto Corsa car",
     "kindSdTrack": "Speed Dreams circuit",
     "kindSdCar": "Speed Dreams car",
-    "kindF1Track": "F1 25 circuit",
     "kindBlenderTrack": "Blender circuit",
     "kindArchive": "Archive",
     "kindFile": "File",

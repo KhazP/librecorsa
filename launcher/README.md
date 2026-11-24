@@ -112,7 +112,6 @@ run from the converter bundle. The game lists the package when it restarts; the 
 | `ac-track`      | a `.kn5` or `models*.ini`, and `ui/ui_track.json` or `ui/<layout>/ui_track.json` |
 | `sd-track`      | an `.xml` whose `<params>` says `type="trackdef"`                             |
 | `sd-car`        | an `.xml` with a `<section name="Car">`, and an `.acc` or `.ac` model           |
-| `f1-track`      | an `.erp` (the importer is given the file; the first by name if there are more) |
 | `blender-track` | a `.glb` beside a `.json` of the same name (its settings)                     |
 
 Anything else is listed as unknown (a zip as "unzip it first"), and a kind is only offered when the release's

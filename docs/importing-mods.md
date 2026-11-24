@@ -1,6 +1,6 @@
 # Importing mods from other games
 
-LibreCorsa can turn a circuit or a car from another game into a [mod package](modding.md): Speed Dreams, Assetto Corsa and F1 25 content, and circuits you model yourself in Blender. An import converts the source, builds what the game needs (racing lines, AI plans, surfaces, the car's rig), checks the result as the game will load it, and writes a package you drive at once.
+LibreCorsa can turn a circuit or a car from another game into a [mod package](modding.md): Speed Dreams and Assetto Corsa content, and circuits you model yourself in Blender. An import converts the source, builds what the game needs (racing lines, AI plans, surfaces, the car's rig), checks the result as the game will load it, and writes a package you drive at once.
 
 There are two ways to run one:
 
@@ -16,7 +16,6 @@ The offline launcher converts a circuit or a car from another game into a mod pa
 1. Copy the circuit's or the car's folder into `import/`, beside the launcher (it has a README on what goes there):
    - Assetto Corsa: `content/tracks/<name>` or `content/cars/<name>`
    - Speed Dreams: `data/tracks/<category>/<name>` or `data/cars/models/<name>`
-   - F1 25: a folder holding the circuit's `.erp`
    - your own Blender circuit: a folder with the `.glb` export and its settings `.json`
 
    Unzip archives first: a folder is converted, not a zip.
@@ -43,7 +42,6 @@ npm run mod -- import <name> <folder>     # convert and package
 | `sd-car`        | a Speed Dreams car (its folder, or `--fetch <car>`)              |
 | `ac-track`      | an Assetto Corsa circuit mod (its track folder)                  |
 | `ac-car`        | an Assetto Corsa car mod (its `content/cars/<car>` folder)        |
-| `f1-track`      | an F1 25 circuit mod (its `.erp`), for personal use only          |
 | `blender-track` | a circuit you modelled in Blender (its `.glb` and settings JSON) |
 
 Every importer also takes:
@@ -157,16 +155,6 @@ One command makes the whole package:
 - The mod's own readme and licence files go in the package either way.
 - LibreCorsa hosts some Assetto Corsa circuits with their authors' permission. That permission is the game's and doesn't cover your copy; the import tells you when you import one of them.
 
-## From F1 25
-
-```bash
-npm run mod -- import f1-track <mod.erp> [--track <code>] [--mat-prefix <prefix>] [--settings <overrides.json>]
-```
-
-This runs the extractor Qiddiya Speed Park was ported with ([Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md)) and builds the circuit from what it extracts. Its tables (surfaces, lights, branding) and its settings are Qiddiya's, so another mod needs `--track`, `--mat-prefix` and a settings file with its name, place and credit, and may need the tables edited. `npm run mod -- import f1-track --help` lists the extractor's options.
-
-A circuit from an F1 25 mod is **always for personal use only**, whatever the settings say: an `.erp` carries the base game's files beside the mod's, and a mod author's permission covers their own copy, not yours. The package's licence is "unknown" and its credit carries the personal-use note.
-
 ## Your own circuit from Blender
 
 ```bash
@@ -181,7 +169,6 @@ Model the circuit as [Porting circuits](PORTING-TRACKS.md) describes (surface me
 | ------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | Speed Dreams              | Converts only content under a licence that allows sharing a changed copy; `--personal` converts the rest       | Yes, with the credit and licence the package carries    |
 | Assetto Corsa             | Always converts (Kunos content refused), marking anything without a sharing licence "for personal use only"   | Only when the package names a licence that allows it    |
-| F1 25                     | Always converts, always "for personal use only"                                                               | No                                                      |
 | Your own Blender circuit  | Converts with the licence your settings give                                                                  | Your call                                               |
 
 ### What counts as shareable

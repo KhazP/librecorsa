@@ -176,7 +176,7 @@ npm run mod -- from-circuit <built-id> [--id <circuit-id>] [--package <author.na
 # Package a converted car from a CarPackageOptions JSON spec
 npm run mod -- from-car path/to/spec.json
 
-# List the importers, or run one (Speed Dreams, Assetto Corsa, F1 25, Blender)
+# List the importers, or run one (Speed Dreams, Assetto Corsa, Blender)
 npm run mod -- import
 npm run mod -- import sd-track --fetch brno
 

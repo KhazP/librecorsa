@@ -13,7 +13,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { circuitIdFrom, licenceNotice, packageVersion, trackLicence, type AutoEntry } from "../mods/importers/ac-track";
-import { f1Settings } from "../mods/importers/f1-track";
 import { PERSONAL_USE_NOTE } from "../mods/lib/licences";
 import { packageCredit, packageIdFrom } from "../mods/lib/manifest-file";
 import { REPO_ROOT } from "../mods/lib/toolchain";
@@ -77,13 +76,6 @@ const shared = trackLicence(parkMod, "gp", undefined);
 check("a licence in the mod: shared under it, no note, its statements and the layout's read", !shared.personal && shared.license === "CC BY-SA 4.0" && !shared.note && shared.statements.map((x) => x.file).join() === "LICENSE.txt,gp/readme.txt", shared.statements.map((x) => x.file).join());
 check("…and a statement in the layout's folder can take it back", trackLicence(statementsOf("park2", { "LICENSE.txt": "CC BY-SA 4.0", "gp/terms.txt": "All rights reserved." }), "gp", undefined).personal);
 check("a NoDerivatives licence in the mod: personal use only", trackLicence(statementsOf("nd", { "LICENSE.txt": "Licensed CC BY-NC-ND 4.0.\n" }), "", undefined).personal);
-const f1 = f1Settings(
-  { name: "Qiddiya Speed Park", credit: { author: "Maxim555", license: "Used with permission", note: "Used with permission." } },
-  { layout: "Short", credit: { license: "CC BY-NC 4.0", note: "Thanks to Maxim555." } },
-);
-check("an F1 25 mod: the modder's settings over the extractor's", f1.name === "Qiddiya Speed Park" && f1.layout === "Short" && f1.credit?.author === "Maxim555");
-check('an F1 25 mod is always for personal use: "unknown", the note word for word, whatever the settings say', f1.credit?.note === PERSONAL_USE_NOTE && f1.credit?.license === "unknown" && !f1.credit.licenseUrl);
-check("the game's permission for Qiddiya is never the package's licence", f1Settings({ credit: { author: "A", license: "Used with permission" } }, {}).credit?.license === "unknown");
 
 // --- The entry read from made-up mods (Python) ---
 const uv = spawnSync("uv", ["--version"], { encoding: "utf8" });

@@ -10,28 +10,6 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { Document, NodeIO } from "@gltf-transform/core";
-
-/** A flat grid of n × n squares (2n² triangles) named as the F1 extractor names scenery */
-function sceneryGrid(n: number): Document {
-  const doc = new Document();
-  const buffer = doc.createBuffer();
-  const positions: number[] = [];
-  for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++) positions.push(x, Math.sin(x * 0.3) * 0.01, z);
-  const indices: number[] = [];
-  for (let z = 0; z < n; z++)
-    for (let x = 0; x < n; x++) {
-      const i = z * (n + 1) + x;
-      indices.push(i, i + n + 1, i + 1, i + 1, i + n + 1, i + n + 2);
-    }
-  const prim = doc
-    .createPrimitive()
-    .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(positions)).setBuffer(buffer))
-    .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(indices)).setBuffer(buffer));
-  const mesh = doc.createMesh("Scenery_flat_opaque").addPrimitive(prim);
-  doc.createScene().addChild(doc.createNode("Scenery_flat_opaque").setMesh(mesh));
-  return doc;
-}
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -92,12 +70,6 @@ async function main(): Promise<void> {
     const compressor = node([join(out, "scripts", "tracks", "compress-track-glb.mjs")]);
     check("the GLB compressor runs from its bundle", /usage/i.test(compressor.stdout + compressor.stderr), (compressor.stdout + compressor.stderr).trim().slice(0, 80));
 
-    // The F1 25 extractor's simplify step, on a scenery mesh heavy enough to be simplified: from its bundle, with
-    // gltf-transform and meshoptimizer inlined (no node_modules beside it), as extract_erp_track.py runs it
-    const glb = join(tmp, "scenery.glb");
-    await new NodeIO().write(glb, sceneryGrid(40));
-    const simplify = node([join(out, "scripts", "tracks", "simplify-erp-glb.mjs"), glb]);
-    check("the F1 extractor's simplify step runs from its bundle", simplify.status === 0 && /meshopt simplify: 3,200 ->/.test(simplify.stdout), (simplify.stdout + simplify.stderr).trim().slice(0, 120));
     const pythonFiles = all.filter((f) => f.endsWith(".py"));
     const evals = pythonFiles.filter((f) => /["']node["'][^\n\]]*["'](-e|--eval|-p|--print)["']/.test(readFileSync(join(out, f), "utf8")));
     check("no Python converter hands Node code to run (node -e): a script of its own is bundled", evals.length === 0, evals.join(", "));

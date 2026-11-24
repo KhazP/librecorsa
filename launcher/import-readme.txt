@@ -8,7 +8,6 @@ with what it is, and converts one into a mod package (into the mods folder) when
   Assetto Corsa car       content/cars/<name>            (data.acd or data/car.ini, and a .kn5)
   Speed Dreams circuit    data/tracks/<category>/<name>  (its <name>.xml track definition)
   Speed Dreams car        data/cars/models/<name>        (its <name>.xml and its model)
-  F1 25 circuit           a folder holding the circuit's .erp
   Your own circuit        a folder holding Blender's .glb export and its settings .json
 
 Unzip archives first: a folder is converted, not a zip. Nothing in these folders is ever run; the converter reads

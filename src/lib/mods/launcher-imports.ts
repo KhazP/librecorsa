@@ -11,7 +11,7 @@
 const HEADER = { "X-LibreCorsa-Launcher": "1" } as const;
 
 /** The importers a folder can be recognised for (scripts/mods/importers/<kind>.ts), and what isn't one */
-export type ImportKind = "ac-track" | "ac-car" | "sd-track" | "sd-car" | "f1-track" | "blender-track" | "unknown" | "archive" | "file" | "link";
+export type ImportKind = "ac-track" | "ac-car" | "sd-track" | "sd-car" | "blender-track" | "unknown" | "archive" | "file" | "link";
 
 export interface ImportFolder {
   name: string;

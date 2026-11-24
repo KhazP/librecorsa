@@ -51,7 +51,6 @@ const TOOLS = [
   "scripts/tracks/compress-track-glb.mjs",
   "scripts/cars/compress-car-glb.mjs",
   "scripts/tracks/graft-track-extras.mjs",
-  "scripts/tracks/simplify-erp-glb.mjs",
   "scripts/cars/mod-physics-import.ts",
 ];
 

@@ -88,8 +88,7 @@ converts, calls a packager, and returns the package's folder. `npm run mod -- im
     word counts only for a copy fetched at the revision it pins (`pinnedCircuit`, `pinnedCar`) and with no statement
     file of its own. `--personal` converts the rest, marked for personal use.
   - Most Assetto Corsa mods can't be shared, so `ac-track` and `ac-car` always package them, for the player's own use
-    unless the mod's statements, or a licence in the modder's settings, allow sharing. An F1 25 mod (`f1-track`) is
-    always for personal use.
+    unless the mod's statements, or a licence in the modder's settings, allow sharing.
 - Give it a suite (`scripts/verify/verify-<name>.ts`) that runs on a small sample, skipped when the sample isn't there.
 - A source it downloads (`--fetch`) goes in `scripts/mods/.cache/<source>/`, which git ignores, at a pinned revision.
 - A car with physics of its own: match its aero with `fitAero` and drive it with `driveSanity` before packaging it, so

@@ -16,7 +16,7 @@ Everything here is maintained alongside the source code and published at [docs.l
 ## Modding
 
 - **[Making mods](modding.md)** — Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, and custom physics patches.
-- **[Importing mods from other games](importing-mods.md)** — Converting Speed Dreams, Assetto Corsa and F1 25 circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
+- **[Importing mods from other games](importing-mods.md)** — Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
 
 ## Porting
 
