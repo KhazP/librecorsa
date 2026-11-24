@@ -169,8 +169,10 @@ func defaultBrowserCommand(goos, url string) (string, []string) {
 }
 
 // openGame opens url in a Chromium app window, trying each browser found in turn, else in the default browser with a
-// note on what that loses
-func openGame(url string) {
+// note on what that loses. It returns the browser it started, which ends with the game's window, or nil: the default
+// browser, or a Chromium that handed the window to a copy of itself already running, leave nothing of the launcher's
+// to watch.
+func openGame(url string) *browserProcess {
 	home, _ := os.UserHomeDir()
 	root := profileRoot(runtime.GOOS, home)
 	browsers := findChromiums()
@@ -181,12 +183,13 @@ func openGame(url string) {
 			fmt.Fprintf(os.Stderr, "Couldn't create the browser profile %s for %s: %v\n", profile, browser, err)
 			continue
 		}
-		if err := start(browser, chromiumArgs(url, profile)...); err != nil {
+		proc, err := start(browser, chromiumArgs(url, profile)...)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Couldn't start %s: %v\n", browser, err)
 			continue
 		}
 		fmt.Printf("Opened in %s\n", browser)
-		return
+		return proc
 	}
 	if len(browsers) == 0 {
 		fmt.Println("No Chrome, Edge, Brave or Chromium found: opening your default browser.")
@@ -195,9 +198,11 @@ func openGame(url string) {
 	}
 	fmt.Println("Wheels, pedals and pads need one of those (WebHID); install one for force feedback.")
 	name, args := defaultBrowserCommand(runtime.GOOS, url)
-	if err := start(name, args...); err != nil {
+	if _, err := start(name, args...); err != nil {
 		fmt.Fprintf(os.Stderr, "Couldn't open a browser (%v). Open %s yourself.\n", err, url)
 	}
+	// Whatever it started (xdg-open may become the player's own browser) is not the launcher's to watch
+	return nil
 }
 
 // startGrace is how long a program that fails at once (a sandboxed browser refused its profile folder) takes to say so
@@ -205,20 +210,25 @@ const startGrace = 2 * time.Second
 
 // start runs a program without blocking on it: the browser lives on its own (its exit is collected in the background).
 // One that quits with an error within startGrace didn't start; one that quits cleanly handed the window to a copy
-// already running.
-func start(name string, args ...string) error {
+// already running, and leaves nothing to watch (nil). One still running is returned, to be watched.
+func start(name string, args ...string) (*browserProcess, error) {
 	cmd := exec.Command(name, args...)
 	if err := cmd.Start(); err != nil {
-		return err
+		return nil, err
 	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	exited := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		close(exited)
+	}()
 	select {
-	case err := <-done:
-		if err != nil {
-			return fmt.Errorf("it quit at once (%w)", err)
+	case <-exited:
+		if waitErr != nil {
+			return nil, fmt.Errorf("it quit at once (%w)", waitErr)
 		}
+		return nil, nil
 	case <-time.After(startGrace):
 	}
-	return nil
+	return &browserProcess{pid: cmd.Process.Pid, exited: exited}, nil
 }

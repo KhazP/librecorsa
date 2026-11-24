@@ -141,9 +141,9 @@ func run() int {
 	}
 	if err := makeImportDir(importDir); err != nil {
 		fmt.Fprintf(os.Stderr, "can't create the import folder %s: %v\n", importDir, err)
-	} else {
-		s.enableImports(importDir, newJobs(importDir, modsDir, conv, newToolchain(toolchainDir, runtime.GOOS, runtime.GOARCH)))
 	}
+	// The API answers even without the folder (the panel lists it empty): the app's calls (appapi.go) go through it
+	s.enableImports(importDir, newJobs(importDir, modsDir, conv, newToolchain(toolchainDir, runtime.GOOS, runtime.GOARCH)))
 	srv := &http.Server{Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
@@ -151,6 +151,14 @@ func run() int {
 	// Ctrl+C stops the server cleanly from here on, while a browser starts too
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// The app around the game (appapi.go, lifetime.go): it quits with the game's window, and opens the player's folders
+	converting := func() bool { return s.imports != nil && s.imports.jobs.running() }
+	var endsBrowser func(int) error
+	if runtime.GOOS == "darwin" {
+		endsBrowser = endBrowser
+	}
+	life := newLifetime(*noBrowser, converting, endsBrowser)
+	s.enableApp(&appAPI{folders: map[string]string{"mods": modsDir, "import": importDir}, life: life, open: openFolder})
 	if runtime.GOOS == "linux" && !clone {
 		installDesktopEntry(exeDir)
 	}
@@ -163,14 +171,21 @@ func run() int {
 	}
 	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, gameDir, modsDir, importDir, convNote, shown)
 	if !*noBrowser {
-		openGame(openURL)
+		life.watch(openGame(openURL))
 	}
-	fmt.Println("Press Ctrl+C to stop.")
+	go life.run(ctx)
+	if *noBrowser {
+		fmt.Println("Press Ctrl+C to stop.")
+	} else {
+		fmt.Println("Close the game's window to quit.")
+	}
 	select {
 	case err := <-served:
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	case <-ctx.Done():
+	case <-life.Done():
+		fmt.Printf("Quitting: %s\n", life.Reason())
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
