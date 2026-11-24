@@ -104,16 +104,22 @@ const refusal = (tx: Tx, err: unknown): string => {
 /** A download's program by the name players know it */
 const programName = (step: string | undefined): string => (step === "node" ? "Node.js" : (step ?? ""));
 
+/**
+ * A field of a converted package's credit as text, or undefined: the launcher passes text only, and the package's own
+ * mod.json is the importer's output, so anything else (a number, an object) is left out rather than rendered
+ */
+const text = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v : undefined);
+
 /** A credit as one line: who, and under what licence */
-const creditLine = (c: LauncherCredit | undefined): string => [c?.author, c?.license].filter(Boolean).join(" · ");
+const creditLine = (c: LauncherCredit | undefined): string => [text(c?.author), text(c?.license)].filter(Boolean).join(" · ");
 
 /** The licences a conversion brought in: the package's, and each circuit's or car's own when it differs */
 const LicenceNotes: React.FC<{ tx: Tx; packages: ConvertedPackage[]; notes: string[] }> = ({ tx, packages, notes }) => {
   const credits: { what: string; credit: LauncherCredit }[] = [];
   for (const p of packages) {
-    if (p.credit) credits.push({ what: p.name, credit: p.credit });
-    for (const c of p.content ?? []) {
-      if (c.credit && creditLine(c.credit) !== creditLine(p.credit)) credits.push({ what: c.name, credit: c.credit });
+    if (p.credit && typeof p.credit === "object") credits.push({ what: text(p.name) ?? text(p.id) ?? "?", credit: p.credit });
+    for (const c of Array.isArray(p.content) ? p.content : []) {
+      if (c.credit && typeof c.credit === "object" && creditLine(c.credit) !== creditLine(p.credit)) credits.push({ what: text(c.name) ?? text(c.id) ?? "?", credit: c.credit });
     }
   }
   if (!credits.length && !notes.length) return null;
@@ -128,8 +134,8 @@ const LicenceNotes: React.FC<{ tx: Tx; packages: ConvertedPackage[]; notes: stri
           <li key={i} className="lc-body m-0">
             <span className="font-semibold text-lc-chalk">{what}</span>
             {": "}
-            {tx("licenceLine", { author: credit.author ?? "?", licence: credit.license ?? "?" })}
-            {credit.note ? <span className="block text-lc-caution">{credit.note}</span> : null}
+            {tx("licenceLine", { author: text(credit.author) ?? "?", licence: text(credit.license) ?? "?" })}
+            {text(credit.note) ? <span className="block text-lc-caution">{text(credit.note)}</span> : null}
           </li>
         ))}
         {notes.map((n, i) => (
@@ -176,15 +182,19 @@ const JobProgress: React.FC<{ tx: Tx; job: LauncherJob; python?: string; onCance
   }
   const sized = job.total && job.total > 0;
   return (
-    <Well className="flex flex-col gap-2.5 px-3.5 py-3" role="status" aria-live="polite">
+    <Well className="flex flex-col gap-2.5 px-3.5 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="lc-body m-0 font-medium text-lc-chalk">{label}</p>
+        {/* Only the step is announced, when it changes: not the progress and log lines redrawn each second */}
+        <p className="lc-body m-0 font-medium text-lc-chalk" role="status" aria-live="polite">
+          {label}
+        </p>
         <Button size="sm" variant="ghost" icon={<Icon name="close" />} loading={cancelling} onClick={onCancel}>
           {tx("stop")}
         </Button>
       </div>
       {sized ? (
         <Meter
+          role="progressbar"
           stacked
           label={programName(job.step)}
           value={(job.done ?? 0) / (job.total ?? 1)}
@@ -212,7 +222,7 @@ const JobResult: React.FC<{ tx: Tx; job: LauncherJob; onRestart: () => void; onD
           ? tx("cancelled")
           : tx("toolsFailed")
       : ok
-        ? tx("converted", { name: packages.map((p) => p.name).join(", ") || (job.folder ?? "") })
+        ? tx("converted", { name: packages.map((p) => text(p.name) ?? p.id).join(", ") || (job.folder ?? "") })
         : job.state === "cancelled"
           ? tx("cancelled")
           : tx("failed", { name: job.folder ?? "" });
@@ -466,7 +476,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
       ) : null}
 
       {askTools && tools && !running ? (
-        <Well className={cx("flex flex-col gap-2 px-3.5 py-3", TONE_HAIRLINE.info)} role="dialog" aria-labelledby="lc-tools-title">
+        <Well className={cx("flex flex-col gap-2 px-3.5 py-3", TONE_HAIRLINE.info)} role="region" aria-labelledby="lc-tools-title">
           <p id="lc-tools-title" className="lc-body m-0 font-semibold text-lc-chalk">
             {tx("toolsTitle")}
           </p>
