@@ -218,7 +218,7 @@ It reads each zip with the game's own zip reader, unpacks it into a temporary fo
 
 The game reads catalogues from two places, only when the Mods panel opens, and gives each 6 seconds:
 
-1. **This copy's own**, `/mods/_catalogue/catalogue.json` (under the site's base path). The launcher serves its `mods/_catalogue/` folder there (only `catalogue.json`, zips and preview pictures, no subfolders). A clone's dev server and build serve `public/mods/_catalogue/`. Any other host serves that path.
+1. **This copy's own**, `/mods/_catalogue/catalogue.json` (under the site's base path). The launcher serves its `mods/_catalogue/` folder there (only `catalogue.json`, zips and preview pictures, no subfolders). A clone's dev server and build serve `public/mods/_catalogue/`. Any other host serves that path. librecorsa.org has none, so the game there doesn't ask for it (unless the build names that path).
 2. **The one the build names**: set `NEXT_PUBLIC_MOD_CATALOGUE_URL` at build time to an `https://` address or a path on the site.
 
 If neither answers, or a catalogue lists nothing, the panel shows nothing about catalogues. If the one the build names can't be reached (the player is offline), the panel says so and offers **Try again**. A package listed in both is taken from this copy's own.
@@ -246,9 +246,9 @@ If neither answers, or a catalogue lists nothing, the panel shows nothing about 
 }
 ```
 
-- **`format`** must be `1`; the game refuses any other whole. **`packages`** holds at most 500 entries, and the file at most 1 MB.
+- **`format`** must be `1`; the game refuses any other whole. **`packages`** holds at most 500 entries, and the file at most 1 MB (counted in UTF-8 bytes).
 - **`id`**, **`name`** (80 characters), **`version`** (32), **`author`** (80), **`license`** (120): as in the package's `mod.json`. **`description`** (1000) and **`licenseUrl`** (`https://`) are optional.
-- **`url`**: the zip. **`preview`** (optional): a picture. A relative link is read against the catalogue's own address. Either must lead to an `https://` address or to the game's own site (the launcher's `http://127.0.0.1`), with no user name or password in it.
+- **`url`**: the zip. **`preview`** (optional): a picture. A relative link is read against the catalogue's own address. Either must lead to an `https://` address or to the game's own site (the launcher's `http://127.0.0.1`), with no user name or password in it. A redirect is held to the same rule: a catalogue or a zip that a redirect takes anywhere else (plain `http://` on another host) is refused.
 - **`bytes`** and **`sha256`**: the zip's exact size (at most 2 GB) and its SHA-256 in lowercase hex. **`hash`**: the package's content hash, the one online rooms compare. The game installs a download only when all three match, and when the zip holds that package id.
 - **`circuits`**, **`cars`**, **`liveries`** (optional): how many of each it adds, shown in the list.
 
