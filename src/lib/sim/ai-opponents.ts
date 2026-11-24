@@ -2551,6 +2551,10 @@ export class AiOpponentField implements AiRace {
     }
     const targetLat = line + (sim.aiLineBiasM ?? 0);
     const corridor = CAR_WID_M + 0.55;
+    // Under the VSC or a yellow the autopilot holds its place as the player must: it follows the car ahead wherever it
+    // is on the road (race control doesn't judge the autopilot, so it must not pass). A stopped or crashed car (the
+    // incident itself) may still be passed
+    const noPassing = this.vsc.active || this.playerYellowLevel() > 0;
     for (const other of this.cars) {
       if (other === me || this.offRoad(other)) continue;
       const ds = wrapHalf(other.sim.sMeters - sim.sMeters, L);
@@ -2561,7 +2565,8 @@ export class AiOpponentField implements AiRace {
       const crossingPath =
         (otherLat - sim.lateralOffsetM) * (otherLat - targetLat) <= 0 &&
         Math.abs(targetLat - sim.lateralOffsetM) > 0.25;
-      if (inCurrentLane || inTargetLane || crossingPath) {
+      const holdBehind = noPassing && !other.retired && other.finishTimeS === null && !this.isHazard(other);
+      if (inCurrentLane || inTargetLane || crossingPath || holdBehind) {
         const gapM = ds - CAR_LEN_M;
         const follow = gapM <= 2.0 ? Math.max(0, other.sim.vxMs - 1) : followCapMs(other.sim, gapM, this.rc, this.followDecelMs2);
         cap = Math.min(cap, follow);
