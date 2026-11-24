@@ -435,7 +435,20 @@
     "yourRace": "Your race",
     "position": "P{position}",
     "disqualified": "Disqualified",
+    "disqualifiedReason": "Disqualified · {reason}",
     "retired": "Retired",
+    "retiredReason": "Retired · {reason}",
+    "dnfBadge": "DNF · {reason}",
+    "dsqBadge": "DSQ · {reason}",
+    "dnfReasons": {
+      "track_limits": "Track limits",
+      "collision": "Collision damage",
+      "wall_impact": "Barrier impact",
+      "suspension": "Suspension failure",
+      "damage": "Terminal damage",
+      "disconnected": "Disconnected",
+      "time_limit": "Time expired"
+    },
     "ofField": "of {count}",
     "gridUnknown": "Grid unknown",
     "started": "Started P{position}",
@@ -849,6 +862,8 @@
     "greenFlag": "Green flag",
     "lightsOut": "Lights out",
     "chequeredFlag": "Chequered flag",
+    "retired": "Retired · DNF",
+    "disqualified": "Disqualified",
     "reaction": "Reaction <n>{ms}</n> ms"
   },
   "launchCue": {

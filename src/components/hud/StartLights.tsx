@@ -6,7 +6,7 @@ import type { RaceStatus } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { currentUnits } from "@/lib/settings/ui-prefs";
 import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
-import { HUD_GLASS, HUD_RED, raceState } from "./hud-format";
+import { dnfReasonLabel, HUD_GLASS, HUD_RED, raceState } from "./hud-format";
 import { SkinBanner, skinCss, SkinPanel, SkinTag, useHudSkin } from "./styles/third-party-skin";
 
 const LIGHT_COLUMNS = [0, 1, 2, 3, 4];
@@ -47,6 +47,8 @@ export const StartLights: React.FC<{
       greenFlag: tx("greenFlag"),
       lightsOut: tx("lightsOut"),
       chequeredFlag: tx("chequeredFlag"),
+      retired: tx("retired"),
+      disqualified: tx("disqualified"),
     }),
     [tx]
   );
@@ -263,6 +265,42 @@ export const StartLights: React.FC<{
   }
   if (flags > 0 && flagged) {
     if (faded === `flag${flags}`) return null;
+    const me = race?.results?.find((r) => r.isPlayer);
+    const out = Boolean(me && (me.dq || me.dnf));
+    const outReason = out ? dnfReasonLabel(me?.dnfReason, me?.dq) : null;
+    if (out) {
+      const heading = me?.dq ? L.disqualified : L.retired;
+      if (skin !== null) {
+        return (
+          <div key={flags} onAnimationEnd={fadeEnd(`flag${flags}`)} className="hud-fade-out flex flex-col items-center gap-3.5">
+            <SkinPanel cut="lg" tone="loss" innerClassName="flex flex-col items-center gap-2 px-8 py-4 sm:px-13 sm:py-5.5">
+              <span className="block text-center text-[34px] leading-none font-bold whitespace-nowrap uppercase sm:text-[56px]">
+                {heading}
+              </span>
+              {outReason ? (
+                <span className="block text-center text-[15px] leading-tight font-semibold tracking-[0.06em] uppercase sm:text-[18px]">
+                  {outReason}
+                </span>
+              ) : null}
+            </SkinPanel>
+          </div>
+        );
+      }
+      return (
+        <div key={flags} onAnimationEnd={fadeEnd(`flag${flags}`)} className="hud-fade-out flex flex-col items-center gap-3.5">
+          <div className="flex flex-col items-center gap-1.5 rounded-lc-tile border-2 border-lc-loss/70 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:px-12 sm:py-5">
+            <span className="lc-disp block text-center text-[36px] whitespace-nowrap text-lc-loss sm:text-[58px]">
+              {heading}
+            </span>
+            {outReason ? (
+              <span className="lc-title block text-center text-[15px] tracking-[0.06em] text-lc-chalk uppercase sm:text-[18px]">
+                {outReason}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
     if (skin !== null) {
       return (
         <div key={flags} onAnimationEnd={fadeEnd(`flag${flags}`)} className="hud-fade-out flex flex-col items-center gap-3.5">

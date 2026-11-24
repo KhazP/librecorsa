@@ -287,9 +287,21 @@ export interface RaceStandingEntry {
   retired?: boolean;
   /** Disqualified by race control */
   dq?: boolean;
+  /** Specific cause when retired or disqualified */
+  dnfReason?: DnfReason;
   /** Damage 0..1 (absent: none) */
   damage?: number;
 }
+
+/** Specific cause of a DNF or disqualification, shown on the finish banner and race results screen */
+export type DnfReason =
+  | "track_limits"
+  | "collision"
+  | "wall_impact"
+  | "suspension"
+  | "damage"
+  | "disconnected"
+  | "time_limit";
 
 /** One line of the final classification */
 export interface RaceResultEntry {
@@ -310,6 +322,8 @@ export interface RaceResultEntry {
   dnf: boolean;
   /** Disqualified (shown in place of the DNF) */
   dq?: boolean;
+  /** Specific cause when `dnf` or `dq` is true */
+  dnfReason?: DnfReason;
   /** Time penalties added to the race time (s), already included in `finishTimeS` and `gapS` */
   penaltyS?: number;
   /** Track-limits warnings received (the player's own) */
