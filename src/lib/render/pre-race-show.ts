@@ -67,7 +67,7 @@ export interface ShowFrame {
   suppressed: boolean;
   /** The career round's qualifying session has just formed (its clock not yet started) */
   qualifying: boolean;
-  /** The career round's AI race stands at the lights, none lit yet */
+  /** The career round's AI race stands at the lights (before lights out; some may be lit already) */
   atLights: boolean;
   /** The grid at the lights (pole first); asked for only while a race show is still to come (`wantsGrid`) */
   grid: readonly ShowGridRow[];

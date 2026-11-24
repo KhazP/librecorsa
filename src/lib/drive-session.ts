@@ -4011,7 +4011,9 @@ export class DriveSession {
       // The career's pre-race show: on its round's qualifying, or its grid at the lights (never online or in VR)
       {
         const raceStatus = physics.telemetry.race;
-        const atLights = aiField !== null && raceStatus?.phase === "lights" && (raceStatus.lightsOn ?? 0) === 0;
+        // Any frame before lights out: a slow page (the race in the worker runs on while frames are seconds apart) may
+        // never see the lights with none lit; under the show the lit ones simply wait
+        const atLights = aiField !== null && raceStatus?.phase === "lights";
         const musicPos = music.showPositionS();
         const musicFromS = preRaceShow.getSnapshot().timeline?.musicFromS ?? 0;
         preRaceShow.update({
