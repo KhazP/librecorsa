@@ -258,6 +258,7 @@ IS_PITLANE=1
   check("an encrypted model is refused", refusedAs(encrypted, /"my_circuit3\.kn5" is encrypted/), encrypted.error.split("\n").at(-1));
   const modders = kunosMod("my_circuit4", { "my_circuit4.kn5": "sc6969" }, { author: "J. Doe" });
   check("a modder's circuit is not Kunos's", !!modders.entry, modders.error.slice(-200));
+  check("no country or city in ui_track.json: \"Unknown\", guessed, and left out of the description", modders.entry?.country === "Unknown" && modders.entry.city === "Unknown" && guessed(modders.entry, "country") && guessed(modders.entry, "city") && !/Unknown/.test(modders.entry.description ?? ""), `${modders.entry?.country}/${modders.entry?.city}: ${modders.entry?.description}`);
 
   // --- The mods on this machine, against their hand-written entries ---
   const sourcesPath = join(REPO_ROOT, "scripts", "tracks", "sources.local.json");

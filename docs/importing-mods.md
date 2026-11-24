@@ -119,7 +119,7 @@ There is nothing to set up. The importer reads the circuit's settings from the m
 - **Surfaces**: the mod's own surface names in `data/surfaces.ini`, read from their grip, whether they count as track, their sound and the pit-lane flag.
 - **Author and licence**: from `ui_track.json`, else the readme.
 
-Some values are guessed, and marked GUESSED: the altitude (0 m; it sets the air density), a layout name when the mod has one layout, and a description when the mod's is only its name. To change any value, write it in a JSON file and pass it with `--settings`. It takes the keys of the game's own circuit entries in `scripts/tracks/port_ac_track.py`:
+Some values are guessed, and marked GUESSED: the altitude (0 m; it sets the air density), a layout name when the mod has one layout, a country or city the mod doesn't give ("Unknown"), and a description when the mod's is only its name. To change any value, write it in a JSON file and pass it with `--settings`. It takes the keys of the game's own circuit entries in `scripts/tracks/port_ac_track.py`:
 
 ```json
 { "name": "Motorsport Arena Oschersleben", "layout": "Grand Prix layout", "baseAltitudeM": 88,

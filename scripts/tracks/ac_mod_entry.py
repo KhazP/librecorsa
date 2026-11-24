@@ -253,6 +253,8 @@ def models(src, layout):
     return every, None, notes
 
 
+# A circuit's country or city when the mod doesn't say
+UNKNOWN_PLACE = 'Unknown'
 # The base game's own circuits, by folder: Kunos's original release (its packs' circuits all start with "ks_")
 KUNOS_TRACKS = {'drift', 'imola', 'magione', 'monza', 'mugello', 'spa', 'trento-bondone'}
 
@@ -491,8 +493,11 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
                          else note('layout', 'Full circuit', 'guessed: the mod has one layout'))
     country = text(ui.get('country'), 60)
     country = COUNTRIES.get(country.lower(), country)
-    cfg['country'] = note('country', country, ui_rel) if country else note('country', '', 'guessed: the mod doesn\'t say')
-    cfg['city'] = from_ui('city', 'city', '', 'the mod doesn\'t say', lambda v: text(v, 60))
+    # A package's circuit must name both (mod-manifest.ts): "Unknown" when the mod doesn't, rather than a refusal at the
+    # end of a build of several minutes
+    cfg['country'] = (note('country', country, ui_rel) if country
+                      else note('country', UNKNOWN_PLACE, 'guessed: the mod doesn\'t say'))
+    cfg['city'] = from_ui('city', 'city', UNKNOWN_PLACE, 'the mod doesn\'t say', lambda v: text(v, 60))
     cfg['baseAltitudeM'] = note('baseAltitudeM', 0, 'guessed: the mod doesn\'t say (it sets the air density)')
     cfg['pitboxes'] = from_ui('pitboxes', 'pitboxes', DEFAULT_PITBOXES, 'the mod doesn\'t say', as_int)
 
@@ -544,7 +549,7 @@ def auto_entry(tid, src, layout=None, settings=None, classify=lambda name: None)
     if len(desc.split()) >= 6 and desc.lower() != own_name.lower():
         cfg['description'] = note('description', desc, ui_rel)
     else:
-        where = ', '.join(x for x in (cfg['city'], cfg['country']) if x)
+        where = ', '.join(x for x in (cfg['city'], cfg['country']) if x and x != UNKNOWN_PLACE)
         by = f"{author}'s" if author != 'Unknown' else 'an'
         cfg['description'] = note('description', f"{cfg['name']}, {cfg['layout']}{f' ({where})' if where else ''}, "
                                                  f'converted from {by} Assetto Corsa mod.', 'guessed: the mod\'s is only its name')
