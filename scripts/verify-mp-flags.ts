@@ -10,7 +10,10 @@
  *  3. No flicker: a one-frame cause raises nothing, a cause that comes and goes keeps one steady flag
  *  4. The start: a whole grid crawling away from the lights raises no flag; nor does a player who has finished
  *  5. The remote cars placed from their pose (a straight test track): along-track speed from the velocity
+ *  6. Slow for the car itself (RISE short): a road car at its normal hairpin speed is no incident, nor flagged by the
+ *     fair-play rule; stopped or crawling it is; a model this client doesn't know keeps the fixed 9 m/s
  */
+import { existsSync, readFileSync } from 'node:fs';
 import {
   CAR_OFF_S,
   CAR_ON_S,
@@ -26,6 +29,9 @@ import {
   type FlagTrack,
 } from '../src/lib/sim/mp-flags';
 import type { InterpolatedPeerState } from '../src/lib/sim/multiplayer-sync';
+import { HazardState, SLOW_MS } from '../src/lib/sim/contact-guard';
+import { vehicleOwnSpeedMs } from '../src/lib/sim/own-pace';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -246,6 +252,62 @@ const kinds = (f: MultiplayerFlags, t: number) => (f.feed(t) ?? []).map((m) => m
   const done = status('finished');
   flagMultiplayerRace(raceA, done, track, stoppedPeer, DT, 21, 1000);
   check('the player\'s flag: no yellow on the status', done.yellow === undefined);
+
+  // Each car's own speed is asked by its model and place, and only for a car under the fixed speed
+  const asked: string[] = [];
+  const own = (v: string | undefined, s: number) => (asked.push(`${v}@${s}`), 10.6);
+  const withModel = (id: string, z: number, vz: number) => ({ ...peer(id, { z, vz, race: race(3000) }), vehicle: 'liana' }) as unknown as InterpolatedPeerState;
+  const judged = flagCarsOf(track, [withModel('fast', 1200, 40), withModel('slow', 1300, 7.8)], 'race7', own);
+  check('a car\'s own speed asked only under the fixed speed, by its model', asked.join(',') === 'liana@1300' && judged[1].ownMs === 10.6 && judged[0].ownMs === undefined, asked.join(','));
+}
+
+// ---- 6. Slow for the car itself -------------------------------------------------------------------------------------
+{
+  const id = 'rwanda_official_short';
+  const file = `public/tracks/${id}/track_data.json`;
+  if (!existsSync(file)) {
+    console.log(`SKIP  ${file} is not here (hosted asset)`);
+  } else {
+    setActiveTrack(id, JSON.parse(readFileSync(file, 'utf8')) as RawTrackJson);
+    const rise = getActiveTrackData(1200);
+    // RISE short's Turn 3 hairpin: a road car (the Liana) on its own autopilot is at 7.8 m/s there every lap, the
+    // LC26 at 12.3; a straight (~400 m) for both
+    const T3 = 1316;
+    const liana = vehicleOwnSpeedMs(rise, 'liana', T3);
+    const lc26 = vehicleOwnSpeedMs(rise, 'lc26', T3);
+    const at = (v: number, ownMs: number | undefined) => causeOf(car({ s: T3, speedMs: v, alongMs: v, ownMs }));
+    check('a road car at its normal hairpin speed (7.8 m/s) is no incident', liana !== undefined && at(7.8, liana) === null, `own ${liana?.toFixed(1)} m/s`);
+    check('…which the fixed 9 m/s made a slow car', at(7.8, undefined) === 'slow');
+    check('the same car crawling there (5 m/s) is slow', at(5, liana) === 'slow');
+    check('stopped there it is stopped', at(0.5, liana) === 'stopped');
+    check('an LC26 there is judged as before (9 m/s)', lc26 !== undefined && at(8.8, lc26) === 'slow' && at(9.2, lc26) === null, `own ${lc26?.toFixed(1)} m/s`);
+    check('a road car on a straight is judged as before (9 m/s)', at(8.8, vehicleOwnSpeedMs(rise, 'liana', 400)) === 'slow');
+    check('a model this client doesn\'t know keeps the fixed 9 m/s', at(8.8, vehicleOwnSpeedMs(rise, 'some-mod-car', T3)) === 'slow');
+
+    // The flag over two seconds of it: a road car through the hairpin raises none, a car stopped there does
+    const flagsFor = (speedMs: number) => {
+      const f = new MultiplayerFlags();
+      for (let t = 30; t < 32; t += DT) f.update(DT, t, T3 - 100, LAP, [car({ s: T3, speedMs, alongMs: speedMs, ownMs: liana })]);
+      return f.yellow;
+    };
+    check('the player\'s flag: none for a road car through its hairpin, up for one stopped there', !flagsFor(7.8) && flagsFor(0.5));
+
+    // The fair-play rule: the car judges itself by its own pace too, so it neither flags itself (`hz`) nor is passed
+    // through at its normal hairpin speed
+    const self = (speedMs: number, ownMs?: () => number | undefined) => {
+      const h = new HazardState();
+      let s = T3 - 30;
+      for (let t = 0; t < 2; t += DT) h.update(DT, { speedMs, trackS: (s += speedMs * DT), lapLengthM: rise.totalLengthM, offTrack: false, ownMs });
+      return h;
+    };
+    const ownLiana = () => vehicleOwnSpeedMs(rise, 'liana', T3);
+    check('fair play: a road car at its hairpin speed neither flags itself nor ghosts', !self(7.8, ownLiana).flag && !self(7.8, ownLiana).ghost);
+    check('…which it did at the fixed 9 m/s', self(7.8).flag && self(7.8).ghost);
+    check('…and still does crawling there', self(4, ownLiana).flag);
+    let calls = 0;
+    self(30, () => (calls++, liana));
+    check('its own speed is not asked at racing speed', calls === 0 && SLOW_MS === 9);
+  }
 }
 
 console.log(failures.length ? `\n${failures.length} FAILED: ${failures.join('; ')}` : '\nAll mp-flags checks passed.');

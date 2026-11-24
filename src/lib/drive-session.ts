@@ -74,6 +74,7 @@ import { DualSenseDriver } from "@/lib/input/dualsense-driver";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
+import { vehicleOwnSpeedMs } from "@/lib/sim/own-pace";
 import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { CarDamage } from "@/lib/sim/car-damage";
 import { damageStatusOf, PlayerDamageFeed, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
@@ -3874,6 +3875,8 @@ export class DriveSession {
         trackS: physics.sMeters,
         lapLengthM: track.totalLengthM,
         offTrack: physics.telemetry.offTrack,
+        // Standing judged by the car's own pace, as the others judge it from its model (own-pace.ts)
+        ownMs: () => vehicleOwnSpeedMs(track, physics.vehicleId, physics.sMeters),
       });
       // With the GPU lost no state goes out: the others see this car go, not parked where it stopped
       const interpolatedPeers = multiplayerSync.update(
@@ -3960,7 +3963,7 @@ export class DriveSession {
         if (mpRace.damage && driving && mpFrame.phase === "racing") damageFeed.update(mpRace.damage, physics);
         // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
         if (physics.telemetry.race && mpFrame.phase === "racing") {
-          flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters);
+          flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters, (v, s) => vehicleOwnSpeedMs(track, v, s));
         }
       } else {
         for (const p of samePeers) p.passThrough = false;

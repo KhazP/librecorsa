@@ -74,7 +74,7 @@ export function passFeasible(opts: {
 const HAZARD_PACE_SHARE = 0.35;
 /** …or, in a slow corner, under this speed (m/s), but never more than this share of its own speed there */
 const HAZARD_FLOOR_MS = 8;
-const HAZARD_FLOOR_SHARE = 0.55;
+export const HAZARD_FLOOR_SHARE = 0.55;
 /** A car braking into a corner at this share of its braking is still racing (lap 1, a queue braking early) */
 const HAZARD_EASY_BRAKING = 0.35;
 
