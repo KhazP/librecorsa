@@ -558,19 +558,56 @@ func snapshotPackages(modsDir string) map[string]string {
 
 // convertedPackage is a package a conversion wrote, with the credit and licence the Mods panel shows
 type convertedPackage struct {
-	ID      string         `json:"id"`
-	Name    string         `json:"name"`
-	Version string         `json:"version,omitempty"`
-	Credit  map[string]any `json:"credit,omitempty"`
+	ID      string           `json:"id"`
+	Name    string           `json:"name"`
+	Version string           `json:"version,omitempty"`
+	Credit  *convertedCredit `json:"credit,omitempty"`
 	// Content are its circuits and cars, each with its own credit when it has one
 	Content []convertedContent `json:"content,omitempty"`
 }
 
 type convertedContent struct {
-	Type   string         `json:"type"` // "circuit" or "car"
-	ID     string         `json:"id"`
-	Name   string         `json:"name"`
-	Credit map[string]any `json:"credit,omitempty"`
+	Type   string           `json:"type"` // "circuit" or "car"
+	ID     string           `json:"id"`
+	Name   string           `json:"name"`
+	Credit *convertedCredit `json:"credit,omitempty"`
+}
+
+// convertedCredit is a credit as the panel shows it: text fields only. A field that isn't text in the mod.json (which
+// the package check then reports) is left out rather than passed on, so the panel never gets one it can't show.
+type convertedCredit struct {
+	Author     string `json:"author,omitempty"`
+	License    string `json:"license,omitempty"`
+	LicenseURL string `json:"licenseUrl,omitempty"`
+	URL        string `json:"url,omitempty"`
+	AuthorURL  string `json:"authorUrl,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
+func (c *convertedCredit) UnmarshalJSON(b []byte) error {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(b, &fields) != nil {
+		// Not an object: no credit
+		return nil
+	}
+	text := func(key string) string {
+		var v string
+		if json.Unmarshal(fields[key], &v) != nil {
+			return ""
+		}
+		return v
+	}
+	*c = convertedCredit{Author: text("author"), License: text("license"), LicenseURL: text("licenseUrl"), URL: text("url"),
+		AuthorURL: text("authorUrl"), Note: text("note")}
+	return nil
+}
+
+// orNil is a credit, or nil when it has nothing to show
+func (c *convertedCredit) orNil() *convertedCredit {
+	if c == nil || *c == (convertedCredit{}) {
+		return nil
+	}
+	return c
 }
 
 // changedPackages lists the packages whose mod.json is new or changed since the snapshot
@@ -599,30 +636,30 @@ func readConvertedPackage(file string) (convertedPackage, bool) {
 		return convertedPackage{}, false
 	}
 	var m struct {
-		ID      string         `json:"id"`
-		Name    string         `json:"name"`
-		Version string         `json:"version"`
-		Credit  map[string]any `json:"credit"`
+		ID      string           `json:"id"`
+		Name    string           `json:"name"`
+		Version string           `json:"version"`
+		Credit  *convertedCredit `json:"credit"`
 		Tracks  []struct {
-			ID     string         `json:"id"`
-			Name   string         `json:"name"`
-			Credit map[string]any `json:"credit"`
+			ID     string           `json:"id"`
+			Name   string           `json:"name"`
+			Credit *convertedCredit `json:"credit"`
 		} `json:"tracks"`
 		Cars []struct {
-			ID     string         `json:"id"`
-			Title  string         `json:"title"`
-			Credit map[string]any `json:"credit"`
+			ID     string           `json:"id"`
+			Title  string           `json:"title"`
+			Credit *convertedCredit `json:"credit"`
 		} `json:"cars"`
 	}
 	if json.NewDecoder(bytes.NewReader(b)).Decode(&m) != nil {
 		return convertedPackage{}, false
 	}
-	p := convertedPackage{ID: m.ID, Name: m.Name, Version: m.Version, Credit: m.Credit}
+	p := convertedPackage{ID: m.ID, Name: m.Name, Version: m.Version, Credit: m.Credit.orNil()}
 	for _, t := range m.Tracks {
-		p.Content = append(p.Content, convertedContent{Type: "circuit", ID: t.ID, Name: t.Name, Credit: t.Credit})
+		p.Content = append(p.Content, convertedContent{Type: "circuit", ID: t.ID, Name: t.Name, Credit: t.Credit.orNil()})
 	}
 	for _, c := range m.Cars {
-		p.Content = append(p.Content, convertedContent{Type: "car", ID: c.ID, Name: c.Title, Credit: c.Credit})
+		p.Content = append(p.Content, convertedContent{Type: "car", ID: c.ID, Name: c.Title, Credit: c.Credit.orNil()})
 	}
 	return p, true
 }

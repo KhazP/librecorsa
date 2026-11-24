@@ -95,3 +95,24 @@ func TestCopyImportTree(t *testing.T) {
 		t.Errorf("cancelled: %v", err)
 	}
 }
+
+// A credit field that isn't text is left out, never passed to the panel as something else
+func TestConvertedCreditIsText(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "mod.json")
+	os.WriteFile(file, []byte(`{"id":"a.b","name":"B","credit":{"author":"Someone","license":"CC-BY-4.0","note":{"html":"<b>x</b>"}},
+		"tracks":[{"id":"t","name":"T","credit":{"author":7,"license":["x"],"note":"ok"}},{"id":"u","name":"U","credit":"nope"}],
+		"cars":[{"id":"c","title":"C","credit":null}]}`), 0o644)
+	p, ok := readConvertedPackage(file)
+	if !ok {
+		t.Fatal("not read")
+	}
+	if p.Credit == nil || *p.Credit != (convertedCredit{Author: "Someone", License: "CC-BY-4.0"}) {
+		t.Errorf("credit %+v", p.Credit)
+	}
+	if len(p.Content) != 3 || p.Content[0].Credit == nil || *p.Content[0].Credit != (convertedCredit{Note: "ok"}) {
+		t.Fatalf("content %+v", p.Content)
+	}
+	if p.Content[1].Credit != nil || p.Content[2].Credit != nil {
+		t.Errorf("a credit from no object: %+v %+v", p.Content[1].Credit, p.Content[2].Credit)
+	}
+}

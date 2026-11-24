@@ -357,10 +357,10 @@ func TestConvert(t *testing.T) {
 	if !strings.Contains(log, "PATH starts with "+filepath.Dir(tc.nodePath())) {
 		t.Errorf("Node's folder isn't first on PATH:\n%s", log)
 	}
-	if len(job.Packages) != 1 || job.Packages[0].ID != "tests.my-circuit" || job.Packages[0].Credit["license"] != "Personal use only" {
+	if len(job.Packages) != 1 || job.Packages[0].ID != "tests.my-circuit" || job.Packages[0].Credit.License != "Personal use only" {
 		t.Fatalf("packages %+v", job.Packages)
 	}
-	if c := job.Packages[0].Content; len(c) != 1 || c[0].Credit["license"] != "All rights reserved" {
+	if c := job.Packages[0].Content; len(c) != 1 || c[0].Credit.License != "All rights reserved" {
 		t.Errorf("content %+v", c)
 	}
 	if len(job.Notes) == 0 || !strings.Contains(job.Notes[0], "personal use") {
