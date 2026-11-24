@@ -50,6 +50,7 @@ import {
 import { revLights, useFuelPerLap, useLapHistory, useSessionClock } from "./third-party-parts";
 import { anchor, formatOnce, gearLabel, type HudDesignProps } from "./hud-style-parts";
 import palette from "./racevision.module.css";
+import { usePitGap } from "../pit-clock";
 
 /** A lap time as the source prints it: minutes padded to two digits ("01:23.312"), dashes without one */
 const lapTime = (ms: number | null | undefined) => {
@@ -167,9 +168,11 @@ const StandingRow: React.FC<{
   sessionBest: number | null;
   narrow: boolean;
   w: RaceVisionWords;
-}> = ({ e, pos, gaps, sessionBest, narrow, w }) => {
+  /** Its pit clock (`usePitGap`) */
+  pit: string | null;
+}> = ({ e, pos, gaps, sessionBest, narrow, w, pit }) => {
   const gapS = gaps === "leader" ? e.gapToLeaderS : e.intervalS;
-  const gap = e.retired ? w.out : e.finished ? w.finished : pos === 1 || gapS === undefined ? "-" : formatGap(gapS);
+  const gap = e.retired ? w.out : e.finished ? w.finished : (pit ?? (pos === 1 || gapS === undefined ? "-" : formatGap(gapS)));
   return (
     <div className="flex h-6 items-stretch">
       <PosBox user={e.isPlayer}>{pos}</PosBox>
@@ -206,6 +209,7 @@ const Standings: React.FC<{
   const clock = useSessionClock();
   const sessionBest = sessionBestLapMs(t);
   const w = useRaceVisionWords();
+  const pitGap = usePitGap();
   const cls = w.carClass[carClass(t.f12026?.carId)];
   const field = race ? race.standings.length : 1 + (t.peers?.length ?? 0);
   const rows = race ? leaderboardWindow(race.standings, short ? 7 : 12) : [];
@@ -233,7 +237,7 @@ const Standings: React.FC<{
       {race ? (
         <div className="flex flex-col gap-0.5">
           {rows.map((e) => (
-            <StandingRow key={e.driverCode + (e.name ?? "")} e={e} pos={race.standings.indexOf(e) + 1} gaps={gaps} sessionBest={sessionBest} narrow={narrow} w={w} />
+            <StandingRow key={e.driverCode + (e.name ?? "")} e={e} pos={race.standings.indexOf(e) + 1} gaps={gaps} sessionBest={sessionBest} narrow={narrow} w={w} pit={pitGap(e)} />
           ))}
         </div>
       ) : (
@@ -276,6 +280,7 @@ const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }
   const race = t.race;
   const perLap = useFuelPerLap();
   const w = useRaceVisionWords();
+  const pitGap = usePitGap();
   if (!race) return null;
   const cars = relativeCars(t, lengthM, 3);
   const fuelLaps = fuelLapsLeft(t.fuelKg, perLap);
@@ -304,7 +309,7 @@ const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }
                 {driverLabel(e)}
               </span>
               <span className="w-16 shrink-0 self-center pr-2.5 text-right" style={{ color: tone }}>
-                {c.gapS.toFixed(1)}
+                {pitGap(e) ?? c.gapS.toFixed(1)}
               </span>
             </div>
           );

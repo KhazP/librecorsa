@@ -39,6 +39,7 @@ import { driverLabel, fuelLapsLeft, sessionBestLapMs } from "../third-party-data
 import { revLights, useFuelPerLap, useStartFuel } from "./third-party-parts";
 import { AeroBadge, anchor, formatOnce, gearLabel, HUD_GLASS, HUD_LBL, InvalidTag, MiniMap, raceNeighbours, type HudDesignProps } from "./hud-style-parts";
 import { TopDownCar, arcPath, carClassCode, fastestLap, onFinalLap, polar, useErsState, useGearHint, type ErsState } from "./game-style-parts";
+import { usePitGap } from "../pit-clock";
 
 /**
  * F1-Like: the race screen laid out the way a Formula game lays it out, in LibreCorsa's visual language.
@@ -178,6 +179,7 @@ const RaceState: React.FC<{ t: CarTelemetry; w: Words }> = ({ t, w }) => {
 
 const Tower: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t, w, lapInvalid }) => {
   const race = t.race;
+  const pitGap = usePitGap();
   if (!race) {
     const kind = getActivePointToPoint() ? "run" : "lap";
     return (
@@ -252,6 +254,8 @@ const Tower: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t
                     w.out
                   ) : e.finished ? (
                     <Icon name="chequered" size="xs" className="ml-auto size-3.5" />
+                  ) : pitGap(e) ? (
+                    pitGap(e)
                   ) : gap === null ? (
                     "-.---"
                   ) : (

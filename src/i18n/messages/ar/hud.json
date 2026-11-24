@@ -783,7 +783,8 @@
       "lastVsBestTitle": "اللفة الأخيرة مقارنة بأفضل لفة لك",
       "lastVsTheirsTitle": "آخر لفة لهم مقارنة بلفتك",
       "personalBest": "PB",
-      "pit": "صيانة"
+      "pit": "صيانة",
+      "pitClock": "صيانة {seconds}"
     },
     "lap": {
       "region": "اللفة",

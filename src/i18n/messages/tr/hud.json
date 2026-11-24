@@ -783,7 +783,8 @@
       "lastVsBestTitle": "Son tur, en iyine göre",
       "lastVsTheirsTitle": "Onun son turu, seninkine göre",
       "personalBest": "PB",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Tur",

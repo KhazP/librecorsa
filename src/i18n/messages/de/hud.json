@@ -783,7 +783,8 @@
       "lastVsBestTitle": "Letzte Runde gegen deine Bestzeit",
       "lastVsTheirsTitle": "Deren letzte Runde gegen deine",
       "personalBest": "PB",
-      "pit": "BOX"
+      "pit": "BOX",
+      "pitClock": "BOX {seconds}"
     },
     "lap": {
       "region": "Runde",

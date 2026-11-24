@@ -783,7 +783,8 @@
       "lastVsBestTitle": "上一圈與個人最佳相比",
       "lastVsTheirsTitle": "對方上一圈與你相比",
       "personalBest": "PB",
-      "pit": "進站"
+      "pit": "進站",
+      "pitClock": "進站 {seconds}"
     },
     "lap": {
       "region": "單圈計時",

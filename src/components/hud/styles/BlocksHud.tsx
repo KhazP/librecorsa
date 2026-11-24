@@ -72,6 +72,7 @@ import {
 } from "../third-party-data";
 import { revLedBand } from "@/lib/sim/rev-range";
 import palette from "./blocks.module.css";
+import { usePitGap } from "../pit-clock";
 
 /** The corner groups' distance from the screen edge (the game's other layouts use the same) */
 const EDGE = "clamp(14px,2.2vw,24px)";
@@ -192,9 +193,12 @@ const Leaderboard: React.FC<{ t: CarTelemetry; gaps: "interval" | "leader" }> = 
   const best = sessionBestLapMs(t);
   const leaderLap = standings[0]?.lap ?? 0;
   const w = useBlocksWords();
+  const pitGap = usePitGap();
   const gapText = (e: RaceStandingEntry, pos: number): string => {
     if (e.retired) return w.out;
     if (e.finished) return w.finished;
+    const pit = pitGap(e);
+    if (pit) return pit;
     if (pos === 1) return w.leader;
     const lapsDown = leaderLap - e.lap;
     if (gaps === "leader" && lapsDown >= 1 && e.gapToLeaderS > 60) return w.lapsDown(lapsDown);

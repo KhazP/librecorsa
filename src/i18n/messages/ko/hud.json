@@ -783,7 +783,8 @@
       "lastVsBestTitle": "내 베스트 대비 이전 랩",
       "lastVsTheirsTitle": "내 랩 대비 상대 이전 랩",
       "personalBest": "PB",
-      "pit": "피트"
+      "pit": "피트",
+      "pitClock": "피트 {seconds}"
     },
     "lap": {
       "region": "랩",

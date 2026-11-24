@@ -783,7 +783,8 @@
       "lastVsBestTitle": "Vòng trước so với vòng tốt nhất của bạn",
       "lastVsTheirsTitle": "Vòng trước của họ so với bạn",
       "personalBest": "PB",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Vòng đua",

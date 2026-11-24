@@ -783,7 +783,8 @@
       "lastVsBestTitle": "Última vuelta frente a tu mejor",
       "lastVsTheirsTitle": "Su última vuelta frente a la tuya",
       "personalBest": "MP",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Vuelta",

@@ -783,7 +783,8 @@
       "lastVsBestTitle": "Última volta contra a sua melhor",
       "lastVsTheirsTitle": "Última volta deles contra a sua",
       "personalBest": "RP",
-      "pit": "PIT"
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Volta",

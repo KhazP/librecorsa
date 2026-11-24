@@ -783,7 +783,8 @@
       "lastVsBestTitle": "Ultimo giro rispetto al tuo migliore",
       "lastVsTheirsTitle": "Il suo ultimo giro rispetto al tuo",
       "personalBest": "RP",
-      "pit": "BOX"
+      "pit": "BOX",
+      "pitClock": "BOX {seconds}"
     },
     "lap": {
       "region": "Giro",
