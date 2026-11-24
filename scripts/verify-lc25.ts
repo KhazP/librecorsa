@@ -298,7 +298,7 @@ console.log('\n5. 3D Model Rig & Compression Invariants (public/cars/lc25/model/
   check('lc25.glb exists and is <= 2.5 MB', existsSync(glbPath) && statSync(glbPath).size <= 2.5 * 1024 * 1024, `${(statSync(glbPath).size / (1024 * 1024)).toFixed(2)} MB`);
   const buf = readFileSync(glbPath);
   const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as {
-    nodes: { name?: string; mesh?: number; extras?: Record<string, unknown> }[];
+    nodes: { name?: string; mesh?: number; rotation?: number[]; extras?: Record<string, unknown> }[];
     meshes: { primitives: unknown[] }[];
     materials: { name?: string; pbrMetallicRoughness?: { baseColorTexture?: unknown } }[];
     images?: unknown[];
@@ -324,6 +324,14 @@ console.log('\n5. 3D Model Rig & Compression Invariants (public/cars/lc25/model/
     `extTextured=${exteriorTextured.length}, totalImages=${json.images?.length ?? 0}`
   );
   check('GLB wheelbase matches LC25_CAR_CONFIG within 1 mm', Math.abs(glbWheelbase - LC25_CAR_CONFIG.chassis.wheelbase) < 0.001, `glb=${glbWheelbase.toFixed(4)} m vs cfg=${LC25_CAR_CONFIG.chassis.wheelbase.toFixed(4)} m`);
+  const lfRot = json.nodes.find((n) => n.name === 'WHEEL_LF')?.rotation ?? [0, 0, 0, 1];
+  const rfRot = json.nodes.find((n) => n.name === 'WHEEL_RF')?.rotation ?? [0, 0, 0, 1];
+  const thw = (root?.extras?.tyreHalfWidth ?? {}) as Record<string, number>;
+  check(
+    'Front wheels carry symmetric camber on WHEEL_* parent nodes and true 305 mm local tyre geometry (zero spin wobble)',
+    Math.abs(lfRot[2] + rfRot[2]) < 1e-3 && Math.abs(lfRot[2]) > 0.01 && Math.abs((thw.LF ?? 0) - 0.1525) < 0.003 && Math.abs((thw.RF ?? 0) - 0.1525) < 0.003,
+    `LF.rz=${lfRot[2].toFixed(4)}, RF.rz=${rfRot[2].toFixed(4)}, halfW=${thw.LF}/${thw.RF} m`
+  );
 }
 
 console.log(`\nLC25 verification: ${passed} passed, ${failed} failed.`);

@@ -42,8 +42,8 @@ const WHEELBASE_M = 3.5684;
 /** Track widths measured directly from `lc25.glb` wheel centres [model] */
 const TRACK_FRONT_M = 1.5782;
 const TRACK_REAR_M = 1.6012;
-/** Unloaded 18-inch tyre radii & section widths matching `lc25.glb` [model, fia25] */
-const TYRE_FRONT = { width: 0.3284, radius: 0.3607, rimRadius: 0.2286 } as const;
+/** Unloaded 18-inch tyre radii & section widths matching `lc25.glb` [model, fia25: 305/720-18 F & 405/720-18 R] */
+const TYRE_FRONT = { width: 0.3050, radius: 0.3600, rimRadius: 0.2286 } as const;
 const TYRE_REAR = { width: 0.4050, radius: 0.3600, rimRadius: 0.2286 } as const;
 
 /** Static ground-effect ride heights (m): low-rake 2025 platform [est] */
@@ -65,11 +65,11 @@ const boxInertia = (a: number, b: number) => Math.round((MASS_KG / 12) * (a * a 
 /** Unsprung mass per corner (18" rim + Pirelli slick + upright + carbon brake + half links, kg) [est] */
 const UNSPRUNG_KG = { front: 30, rear: 34 } as const;
 
-/** Steering rack geometry (360° rim lock-to-lock, 11:1 base ratio, 20.5° max road-wheel angle for Monaco hairpin) */
+/** Steering rack geometry (360° rim lock-to-lock, 14:1 base ratio, 19.29° max road-wheel angle matching LC26) */
 export const LC25_STEERING = {
-  lockDeg: 225.5,
-  ratio: 11,
-  maxRoadWheelDeg: 20.5,
+  lockDeg: 270,
+  ratio: 14,
+  maxRoadWheelDeg: 270 / 14,
   mechanicalTrailM: 0.012,
 } as const;
 
@@ -152,11 +152,17 @@ const COAST_CURVE: LutPoints = [
 const ENGINE: EngineData = {
   powerCurve: POWER_CURVE,
   coastCurve: COAST_CURVE,
+  // Progressive F1 torque-demand pedal map: fine modulation across 0–65% pedal for 1,000 hp corner-exit traction,
+  // ramping cleanly to 100% full ICE + MGU-K output at full throttle
   throttleResponseCurve: [
     [0, 0],
+    [0.2, 0.11],
+    [0.4, 0.25],
+    [0.6, 0.44],
+    [0.8, 0.70],
     [1, 1],
   ],
-  torqueResponseS: { rise: 0.055, fall: 0.04 },
+  torqueResponseS: { rise: 0.065, fall: 0.045 },
   wetPedalMap: true,
   turbo: TURBO,
   idleRpm: 4000,
@@ -328,13 +334,13 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
 // ---------------------------------------------------------------------------
 
 /** Corner wheel rates (N/m): compliant for roll and single-wheel kerb absorption [est] */
-const WHEEL_RATE = { front: 130_000, rear: 92_000 } as const;
+const WHEEL_RATE = { front: 118_000, rear: 80_000 } as const;
 /** Third (heave) springs (N/m): primary vertical aero platform support [est] */
-const HEAVE_RATE = { front: 255_000, rear: 285_000 } as const;
+const HEAVE_RATE = { front: 245_000, rear: 275_000 } as const;
 /** Heave packers: engage cleanly at ~150 km/h to hold floor in peak ground-effect window [est] */
-const HEAVE_PACKER = { gap: { front: 0.003, rear: 0.0045 }, rate: 1_100_000 } as const;
-/** Anti-roll bars (N/m at wheel) [est] */
-const ARB_RATE = { front: 62_000, rear: 25_000 } as const;
+const HEAVE_PACKER = { gap: { front: 0.003, rear: 0.0045 }, rate: 1_000_000 } as const;
+/** Anti-roll bars (N/m at wheel): ~60% front lateral load transfer share for planted corner-exit balance [est] */
+const ARB_RATE = { front: 64_000, rear: 22_000 } as const;
 
 function cornerDamper(axle: 'front' | 'rear', zeta: number): DamperSettingsUnits {
   const sprungKg = MASS_KG - 2 * (UNSPRUNG_KG.front + UNSPRUNG_KG.rear);
@@ -355,29 +361,29 @@ const NO_DAMPER: DamperSettingsUnits = { slow_bump: 0, fast_bump: 0, slow_reboun
 
 /**
  * 3D wishbone + steering link pickup coordinates `[x_inboard, y_up, z_fwd]` from wheel centre (m).
- * Front: high anti-dive top wishbone geometry for 2025 braking pitch stability, low front RC (~28 mm), ~-8°/m bump camber.
- * Rear: pullrod double wishbone with anti-squat, ~76 mm RC, ~-15°/m bump camber.
+ * Front: high anti-dive top wishbone geometry with ~48 mm front RC (matches modern F1 roll-axis balance).
+ * Rear: pullrod double wishbone with anti-squat, ~92 mm RC, ~-13°/m bump camber.
  */
 const FRONT_HARDPOINTS: ReadonlyArray<readonly [number, number, number]> = [
-  [0.690, 0.172, 0.040],   // WBCAR_TOP_FRONT
-  [0.650, 0.146, -0.340],  // WBCAR_TOP_REAR
-  [0.695, -0.036, 0.070],  // WBCAR_BOTTOM_FRONT
-  [0.655, -0.044, -0.320], // WBCAR_BOTTOM_REAR
-  [0.130, 0.185, -0.015],  // WBTYRE_TOP
-  [0.075, -0.030, 0.015],  // WBTYRE_BOTTOM
-  [0.680, 0.160, 0.085],   // WBCAR_STEER
-  [0.125, 0.175, 0.085],   // WBTYRE_STEER
+  [0.690, 0.220, -0.010],  // WBCAR_TOP_FRONT
+  [0.650, 0.158, -0.330],  // WBCAR_TOP_REAR
+  [0.695, 0.022, 0.070],   // WBCAR_BOTTOM_FRONT
+  [0.655, -0.016, -0.320], // WBCAR_BOTTOM_REAR
+  [0.126, 0.174, -0.010],  // WBTYRE_TOP
+  [0.074, -0.025, 0.018],  // WBTYRE_BOTTOM
+  [0.690, 0.220, 0.080],   // WBCAR_STEER (aligned with upper wishbone for near-zero bump steer)
+  [0.126, 0.174, 0.080],   // WBTYRE_STEER
 ];
 
 const REAR_HARDPOINTS: ReadonlyArray<readonly [number, number, number]> = [
-  [0.680, 0.145, 0.300],   // WBCAR_TOP_FRONT
-  [0.740, 0.175, -0.150],  // WBCAR_TOP_REAR
-  [0.700, -0.005, 0.220],  // WBCAR_BOTTOM_FRONT
-  [0.740, -0.025, -0.200], // WBCAR_BOTTOM_REAR
-  [0.125, 0.195, 0.050],   // WBTYRE_TOP
-  [0.095, -0.015, 0.040],  // WBTYRE_BOTTOM
-  [0.720, 0.165, -0.070],  // WBCAR_STEER (toe link)
-  [0.120, 0.185, -0.070],  // WBTYRE_STEER (toe link)
+  [0.665, 0.105, 0.340],   // WBCAR_TOP_FRONT
+  [0.740, 0.182, 0.070],   // WBCAR_TOP_REAR
+  [0.700, 0.024, 0.060],   // WBCAR_BOTTOM_FRONT
+  [0.745, -0.016, -0.210], // WBCAR_BOTTOM_REAR
+  [0.120, 0.196, 0.064],   // WBTYRE_TOP
+  [0.094, 0.012, 0.052],   // WBTYRE_BOTTOM
+  [0.740, 0.182, -0.060],  // WBCAR_STEER (toe link)
+  [0.120, 0.196, -0.060],  // WBTYRE_STEER (toe link)
 ];
 
 /** Exact 2D front-view kinematic roll centre height (m above ground) and bump camber gain (deg/m) from wishbone points */
@@ -677,17 +683,17 @@ const PAD_MU_CURVE: LutPoints = [
 ];
 
 const BRAKES: BrakesData = {
-  // ~5.9–6.4 g peak at 300+ km/h on warm carbon discs (Austria T1/T3/T4 telemetry) [openf1]
-  maxTorqueNm: 7200,
+  // ~5.4–6.0 g peak at 300+ km/h on warm carbon discs without rear lockup on entry [openf1]
+  maxTorqueNm: 7000,
   brakeByWire: true,
-  front_bias: 0.56,
+  front_bias: 0.59,
   ebbStep: 0.005,
   discMaterial: 'carbon-ceramic',
   padMuCurve: PAD_MU_CURVE,
   discStartTempC: 300,
   rearDuctShare: 0.25,
-  // Dynamic forward migration at high pedal pressure (+4% past 45% pedal), tapering off for trail-braking rotation
-  migration: { amount: 0.04, rampStart: 0.45 },
+  // Smooth forward migration (+5.5% by full pedal, linear from 0) so heavy braking stays front-limited and trail braking rotates cleanly
+  migration: { amount: 0.055, rampStart: 0 },
 };
 
 // ---------------------------------------------------------------------------
@@ -944,7 +950,7 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     maxRoadWheelDeg: LC25_STEERING.maxRoadWheelDeg,
     ffbMechanicalTrailM: LC25_STEERING.mechanicalTrailM,
     steerComplianceDegPerKN: 0.045,
-    powerSteering: { steeringRatio: LC25_STEERING.ratio, deadbandNm: 25, rampNm: 6, maxRatio: 0.45 },
+    powerSteering: { steeringRatio: LC25_STEERING.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
     // Body plan at barrier height, measured from `public/cars/lc25/model/lc25.glb` (`scripts/measure-car-plans.ts`)
     bodyPlan: [
       [0.0, 2.92],
@@ -982,23 +988,18 @@ export const LC25_CAR_CONFIG: CarPhysicsConfig = {
     lockRpm: 5800,
     launchRpm: 8800,
   },
-  // 3-phase active electronic LSD (Entry / Mid / Exit + High-Speed stability switch at 220 km/h) [est]
+  // Progressive ramp electronic LSD (dials scale power/coast lock cleanly without snapping mid-corner) [est]
   differential: {
     type: 'LSD_Ramp',
     settings: {
-      power: 0.16,
-      coast: 0.22,
-      preload: 100,
+      power: 0.14,
+      coast: 0.20,
+      preload: 90,
       friction_faces: 1,
       power_ramp_deg: 45,
       coast_ramp_deg: 45,
     },
     halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 35 },
-    threePhase: true,
-    diffEntryLevel: 4,
-    diffMidLevel: 4,
-    diffExitLevel: 3,
-    hiSpdSwitchKmh: 220,
   },
   brakes: BRAKES,
   suspensions: SUSPENSIONS,
