@@ -743,6 +743,7 @@
     "downloading": "Downloading {name}…",
     "fetchingPython": "Fetching Python {version} and its packages…",
     "fetchingHint": "This takes a few minutes the first time.",
+    "copying": "Copying {name}…",
     "converting": "Converting {name}…",
     "convertingHint": "A circuit takes a few minutes: its racing lines are worked out lap by lap.",
     "checking": "Checking the package from {name}…",

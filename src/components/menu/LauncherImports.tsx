@@ -28,8 +28,8 @@ const POLL_MS = 1000;
 const SHOWN_LOG = 80;
 
 /**
- * The jobs this page has seen running (kept while the page lives, across the panel closing and opening): only their
- * results are shown and reported, so the last job of a launcher that ran before a restart isn't announced again
+ * The jobs this page started or saw running (kept while the page lives, across the panel closing and opening): only
+ * their results are shown and reported, so the last job of a launcher that ran before a restart isn't announced again
  */
 const watchedJobs = new Set<number>();
 
@@ -171,7 +171,8 @@ const JobProgress: React.FC<{ tx: Tx; job: LauncherJob; python?: string; onCance
   if (job.type === "toolchain") {
     label = job.step === "python" ? tx("fetchingPython", { version: python ?? "3" }) : tx("downloading", { name: programName(job.step) });
   } else {
-    label = job.step === "check" ? tx("checking", { name: job.folder ?? "" }) : tx("converting", { name: job.folder ?? "" });
+    const name = job.folder ?? "";
+    label = job.step === "check" ? tx("checking", { name }) : job.step === "copy" ? tx("copying", { name }) : tx("converting", { name });
   }
   const sized = job.total && job.total > 0;
   return (
@@ -273,6 +274,9 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
   /** The tools' download asked for: the folder to convert once they are in */
   const [askTools, setAskTools] = useState<{ folder: string | null } | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  /** A start (a conversion, the tools' download) is on its way to the launcher: a second press would only be refused */
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   /** The last job's result was put away */
   const [dismissed, setDismissed] = useState<number | null>(null);
   const mounted = useRef(true);
@@ -329,13 +333,32 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     return () => window.clearInterval(timer);
   }, [running]);
 
+  /**
+   * Starts a job, one start at a time: a start that is still on its way holds off a second (a double click), and the
+   * job started is watched whatever its answer says, so one that ended at once still shows how
+   */
+  const begin = useCallback(async (start: () => Promise<LauncherJob>): Promise<void> => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      const started = await start();
+      watchedJobs.add(started.id);
+      if (mounted.current) setJob(started);
+    } finally {
+      startingRef.current = false;
+      if (mounted.current) setStarting(false);
+    }
+  }, []);
+
   const convert = useCallback(
     async (folder: string) => {
       setError(null);
       setDismissed(null);
       try {
-        setJob(await startConvert(folder));
+        await begin(() => startConvert(folder));
       } catch (err) {
+        if (!mounted.current) return;
         if (err instanceof LauncherError && err.code === "not-ready") {
           setAskTools({ folder });
           return;
@@ -343,7 +366,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
         setError(refusal(tx, err));
       }
     },
-    [tx],
+    [tx, begin],
   );
 
   // A job ended: the folder list again, the panel told of a new package, and a conversion that waited on the tools
@@ -379,6 +402,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
   const totalBytes = downloadBytes + (tools?.pythonApproxBytes ?? 0);
 
   const onConvert = (folder: string) => {
+    if (startingRef.current) return;
     if (tools?.state === "missing") {
       setAskTools({ folder });
       return;
@@ -392,10 +416,10 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
     setError(null);
     setDismissed(null);
     try {
-      setJob(await startToolchain());
+      await begin(startToolchain);
     } catch (err) {
       after.current = null;
-      setError(refusal(tx, err));
+      if (mounted.current) setError(refusal(tx, err));
     }
   };
 
@@ -464,7 +488,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
           </ul>
           <p className="lc-hint m-0 break-all">{tx("toolsWhere", { dir: tools.dir })}</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" icon={<Icon name="download" />} onClick={() => void onDownload()}>
+            <Button size="sm" variant="primary" icon={<Icon name="download" />} loading={starting} disabled={starting} onClick={() => void onDownload()}>
               {tx("toolsDownload", { size: mb(totalBytes) })}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setAskTools(null)}>
@@ -505,7 +529,7 @@ export const LauncherImports: React.FC<LauncherImportsProps> = ({ onConverted, o
                     variant="secondary"
                     aria-label={tx("convertNamed", { name: f.name })}
                     loading={running && job?.type === "convert" && job.folder === f.name}
-                    disabled={running}
+                    disabled={running || starting}
                     onClick={() => onConvert(f.name)}
                   >
                     {tx("convert")}
