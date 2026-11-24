@@ -305,7 +305,7 @@ const ALL_CARS: readonly CarDefinition[] = [
   {
     id: "lc26",
     classId: "f1",
-    title: "2026 Prototype",
+    title: "LC26 Prototype",
     sub: "2026 model · active aero",
     badge: "PROTO 26",
     quality: "own",

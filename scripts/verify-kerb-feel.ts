@@ -148,7 +148,7 @@ const cars: { id: string; make: () => Car; minFeel: number }[] = [
   { id: 'GT3', make: () => createAmgGt3Sim(track, root) as unknown as Car, minFeel: 0.5 },
   // The prototype's own tyre and suspension take the slots more softly (0.30 median)
   {
-    id: '2026 Prototype',
+    id: 'LC26 Prototype',
     make: () => {
       const c = new F1Physics2026(track);
       c.attachTrackRoot(root);

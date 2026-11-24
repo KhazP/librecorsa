@@ -281,7 +281,7 @@ const Credits: React.FC = () => {
         </div>
         <div>
           <CreditRow title={tx("carModelsTitle")}>
-            2026 Prototype: &ldquo;F1 2026 concept (polygon model)&rdquo; by{" "}
+            LC26 Prototype: &ldquo;F1 2026 concept (polygon model)&rdquo; by{" "}
             <a href="https://qvistdesigns.framer.website/" target="_blank" rel="noreferrer" className={linkClass}>
               Qvist Designs
             </a>
