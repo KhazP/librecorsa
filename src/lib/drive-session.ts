@@ -276,7 +276,7 @@ function telemetryStructKeyOf(t: CarTelemetry): string {
   const me = results?.find((row) => row.isPlayer);
   const resKey =
     me && results
-      ? `${r?.resultsFinal ? 1 : 0}:${results.length}:${me.position}:${me.finishTimeS ?? ""}:${me.dnf ? 1 : 0}:${me.gridPosition ?? ""}:${me.bestLapMs ?? ""}:${me.penaltyS ?? ""}`
+      ? `${r?.resultsFinal ? 1 : 0}:${results.length}:${me.position}:${me.finishTimeS ?? ""}:${me.dnf ? 1 : 0}:${me.dq ? 1 : 0}:${me.dnfReason ?? ""}:${me.gridPosition ?? ""}:${me.bestLapMs ?? ""}:${me.penaltyS ?? ""}`
       : "";
   return `${t.runId ?? ""}|${r?.phase ?? ""}|${r?.multiplayer ? 1 : 0}|${t.liveTuner?.absAllowed === false ? 0 : 1}|${resKey}`;
 }

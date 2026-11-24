@@ -36,7 +36,7 @@ import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedC
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import { ROLLING_START_PACE_MS, type SimulatorCar } from '@/lib/sim/simulator-car';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
-import type { RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
+import type { DnfReason, RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
 import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
 import { CarDamage, worldToCarLocal, type CarDamageSnapshot, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import {
@@ -580,10 +580,12 @@ interface FieldCar {
   /** The driver's hands off the autopilot: reaction to a knock, spin, stop and rejoin (AI cars only) */
   control: AiCarControl | null;
   damage: CarDamage;
-  /** Out of the race (terminal damage) */
+  /** Out of the race (terminal damage or disqualification) */
   retired: boolean;
   /** Race time the car retired (s) */
   retiredAtS: number | null;
+  /** Specific cause when retired or disqualified */
+  retiredReason: DnfReason | null;
   /** Retired and stopped long enough ago that the marshals have taken it away: no longer on the track */
   removed: boolean;
   /** Barrier impact last counted for damage (the car's own event clock) */
@@ -1296,6 +1298,7 @@ export class AiOpponentField implements AiRace {
       damage: new CarDamage(this.damageLevel, CAR_LEN_M / 2, CAR_WID_M / 2, seededRng(hashString(code) ^ 0x5bd1e995)),
       retired: false,
       retiredAtS: null,
+      retiredReason: null,
       removed: false,
       lastWallDamageMs: 0,
       craft: new RacecraftMemory(),
@@ -1412,6 +1415,7 @@ export class AiOpponentField implements AiRace {
       car.sim.setDamageEffects?.(null);
       car.retired = false;
       car.retiredAtS = null;
+      car.retiredReason = null;
       car.removed = false;
       car.lastWallDamageMs = car.sim.telemetry.f12026?.wallImpact?.atMs ?? 0;
       car.craft.reset();
@@ -1786,6 +1790,7 @@ export class AiOpponentField implements AiRace {
     if ((car.damage.terminal || wrecked) && !car.retired) {
       car.retired = true;
       car.retiredAtS = this.raceTimeS;
+      car.retiredReason = car.damage.terminalReason ?? 'damage';
       car.control?.retire();
       this.incidents.push({ kind: 'retired', code: car.code, isPlayer: car.isPlayer, s: car.sim.sMeters });
       if (car.isPlayer) this.phase = 'finished';
@@ -3275,6 +3280,7 @@ export class AiOpponentField implements AiRace {
       compound: c.sim.tireCompound,
       dnf: c.retired || undefined,
       dq: (c.isPlayer && this.playerDq) || undefined,
+      dnfReason: c.retiredReason ?? undefined,
     };
   }
 
@@ -3346,7 +3352,7 @@ export class AiOpponentField implements AiRace {
     timeS: number;
     cars: ReadonlyMap<
       string,
-      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; removed: boolean }
+      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; retiredReason: DnfReason | null; removed: boolean }
     >;
   }> = [];
   private lastDamageHistoryS = -Infinity;
@@ -3362,6 +3368,7 @@ export class AiOpponentField implements AiRace {
           !p ||
           p.version !== car.damage.version ||
           p.retired !== car.retired ||
+          p.retiredReason !== car.retiredReason ||
           p.removed !== car.removed ||
           p.damage.terminal !== car.damage.terminal
         ) {
@@ -3374,7 +3381,7 @@ export class AiOpponentField implements AiRace {
     this.lastDamageHistoryS = this.raceTimeS;
     const cars = new Map<
       string,
-      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; removed: boolean }
+      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; retiredReason: DnfReason | null; removed: boolean }
     >();
     for (const car of this.cars) {
       cars.set(car.isPlayer ? 'player' : car.id, {
@@ -3382,6 +3389,7 @@ export class AiOpponentField implements AiRace {
         version: car.damage.version,
         retired: car.retired,
         retiredAtS: car.retiredAtS,
+        retiredReason: car.retiredReason,
         removed: car.removed,
       });
     }
@@ -3425,6 +3433,7 @@ export class AiOpponentField implements AiRace {
         car.damage.restore(snap.damage);
         car.retired = snap.retired;
         car.retiredAtS = snap.retiredAtS;
+        car.retiredReason = snap.retiredReason;
         car.removed = snap.removed;
         car.sim.setDamageEffects?.(car.damage.effects());
       }
@@ -3630,6 +3639,7 @@ export class AiOpponentField implements AiRace {
     if (!car || car.retired || car.finishTimeS !== null) return;
     car.retired = true;
     car.retiredAtS = this.raceTimeS;
+    car.retiredReason = 'track_limits';
     this.phase = 'finished';
     this.raceControl.announce(this.raceTimeS, 'penalty', `${car.label} disqualified`, 'Track limits');
   }
@@ -3683,6 +3693,7 @@ export class AiOpponentField implements AiRace {
           finished: c.finishTimeS !== null,
           retired: c.retired || undefined,
           dq: (c.isPlayer && this.playerDq) || undefined,
+          dnfReason: c.retiredReason ?? undefined,
           damage: c.damage.pristine ? undefined : Math.round(c.damage.overall * 100) / 100,
           bestLapMs: c.bestLapMs,
           lastLapMs: c.lastLapMs,

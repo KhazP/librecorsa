@@ -71,6 +71,9 @@ export interface DamageReport {
 
 export type DamageZone = 'front' | 'rear' | 'left' | 'right';
 
+/** Why a car's damage became terminal */
+export type TerminalDamageReason = 'collision' | 'wall_impact' | 'suspension';
+
 /** Plain copy of a `CarDamage` instance's state, for Flashback history restore */
 export interface CarDamageSnapshot {
   front: number;
@@ -81,6 +84,7 @@ export interface CarDamageSnapshot {
   toeSign: [number, number, number, number];
   punctured: [boolean, boolean, boolean, boolean];
   terminal: boolean;
+  terminalReason?: TerminalDamageReason | null;
 }
 
 /** What a level does: damage scale, the terminal impact speed (m/s), whether punctures happen */
@@ -113,6 +117,8 @@ export class CarDamage {
   public readonly punctured: [boolean, boolean, boolean, boolean] = [false, false, false, false];
   /** Out of the race */
   public terminal = false;
+  /** Why damage became terminal (null while the car is still running) */
+  public terminalReason: TerminalDamageReason | null = null;
   /** Monotonic counter incremented on every damage mutation/reset/restore so Flashback history captures non-terminal hits immediately */
   public version = 0;
   /** Damage changed since effects() was last read */
@@ -134,6 +140,7 @@ export class CarDamage {
     this.toeSign.fill(0);
     this.punctured.fill(false);
     this.terminal = false;
+    this.terminalReason = null;
     this.dirty = true;
     this.version++;
   }
@@ -149,6 +156,7 @@ export class CarDamage {
       toeSign: [this.toeSign[0], this.toeSign[1], this.toeSign[2], this.toeSign[3]],
       punctured: [this.punctured[0], this.punctured[1], this.punctured[2], this.punctured[3]],
       terminal: this.terminal,
+      terminalReason: this.terminalReason,
     };
   }
 
@@ -164,6 +172,7 @@ export class CarDamage {
       this.punctured[i] = s.punctured[i];
     }
     this.terminal = s.terminal;
+    this.terminalReason = s.terminalReason ?? null;
     this.dirty = true;
     this.version++;
   }
@@ -210,8 +219,17 @@ export class CarDamage {
         puncture = true;
       }
     }
-    const terminal = hit.speedMs >= L.terminalMs || this.suspension.some((s) => s >= 1);
-    if (terminal) this.terminal = true;
+    const suspensionBroken = this.suspension.some((s) => s >= 1);
+    const terminal = hit.speedMs >= L.terminalMs || suspensionBroken;
+    if (terminal) {
+      this.terminal = true;
+      this.terminalReason =
+        suspensionBroken && hit.speedMs < L.terminalMs
+          ? 'suspension'
+          : hit.source === 'wall'
+            ? 'wall_impact'
+            : 'collision';
+    }
     this.dirty = true;
     this.version++;
     if (severity < 0.02 && !puncture && !terminal) return null;

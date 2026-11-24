@@ -5,7 +5,7 @@
  *
  * No three.js and no DOM: the Worker imports this file.
  */
-import type { TireCompound } from "@/types/f1";
+import type { DnfReason, TireCompound } from "@/types/f1";
 
 /** One car in the classification */
 export interface RacerProgress {
@@ -36,6 +36,8 @@ export interface RacerProgress {
   dnf?: boolean;
   /** Disqualified: classified last, behind the retired cars */
   dq?: boolean;
+  /** Specific cause when retired or disqualified */
+  dnfReason?: DnfReason;
 }
 
 /** Race time at the flag with the time penalties added (s); null while running */

@@ -3,7 +3,7 @@
  * the final classification. A multiplayer race also runs its start procedure here, on the host's clock, so every
  * client shows the same lights and has the same lights-out instant.
  */
-import type { RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
+import type { DnfReason, RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
@@ -231,6 +231,10 @@ export function classify(
         : finished
           ? Math.max(0, winnerLaps - lapsCompleted)
           : Math.max(0, Math.floor((winnerLaps * lapLengthM - r.distM) / lapLengthM));
+    const dnf = !!r.dnf || !!r.dq || (final && !finished);
+    const dnfReason: DnfReason | undefined = !dnf
+      ? undefined
+      : r.dnfReason ?? (r.dq ? "track_limits" : final && !finished ? "time_limit" : undefined);
     return {
       position: i + 1,
       driverCode: r.code,
@@ -242,8 +246,9 @@ export function classify(
       lapsDown,
       lapsCompleted,
       bestLapMs: r.bestLapMs,
-      dnf: !!r.dnf || !!r.dq || (final && !finished),
+      dnf,
       dq: r.dq || undefined,
+      dnfReason,
       penaltyS: r.penaltyS ? r.penaltyS : undefined,
     };
   });
@@ -710,6 +715,7 @@ export class MultiplayerRace {
         finishLaps: row.timeS === null ? undefined : row.laps,
         bestLapMs: row.bestLapMs ?? known?.bestLapMs ?? null,
         dnf: row.dnf,
+        dnfReason: row.dnf ? (known?.dnfReason ?? (official.final ? "time_limit" : undefined)) : undefined,
         grid: row.grid - 1,
       };
     });
@@ -754,6 +760,7 @@ export class MultiplayerRace {
         compound: p.race.cmp,
         // Retired when the classification closed: that stands even if its packets come back
         dnf: existing?.dnf,
+        dnfReason: existing?.dnfReason,
       });
     }
   }
@@ -782,7 +789,9 @@ export class MultiplayerRace {
       // Not heard from yet: on the grid, placed against this car's own grid spot by grid order (a guess at a fixed
       // distance would put a car ahead of the one in front of it on another screen)
       const placed = this.lastSeenS.has(r.id) ? r : { ...r, distM: this.lapClock.startDistM + (this.gridSlot - (r.grid ?? this.start.grid.length)) * 8 };
-      return !r.dnf && frame.phase === "racing" && r.finishTimeS === null && !this.present.has(r.id) ? { ...placed, dnf: true } : placed;
+      return !r.dnf && frame.phase === "racing" && r.finishTimeS === null && !this.present.has(r.id)
+        ? { ...placed, dnf: true, dnfReason: "disconnected" as const }
+        : placed;
     });
     const field = [me, ...remote];
     const L = this.lapLengthM;
@@ -813,6 +822,8 @@ export class MultiplayerRace {
         intervalS,
         name: r.name,
         finished: r.finishTimeS !== null,
+        retired: r.dnf || undefined,
+        dnfReason: r.dnfReason,
         bestLapMs: r.bestLapMs,
         lastLapMs: r.lastLapMs ?? null,
         trackS: lapPositionM(r.distM, L),
@@ -826,7 +837,10 @@ export class MultiplayerRace {
       // The classification closes: the cars out now stay out, and the result is kept as it stands
       for (const r of remote) {
         const kept = this.remote.get(r.id);
-        if (r.dnf && kept) kept.dnf = true;
+        if (r.dnf && kept) {
+          kept.dnf = true;
+          kept.dnfReason ??= r.dnfReason;
+        }
       }
       this.finalResults = withGridPositions(classify(ordered, L, this.start.laps, true), ordered);
     }

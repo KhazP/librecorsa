@@ -232,7 +232,20 @@
     "noTimesVersion": "No times on {version}.",
     "noTimes": "No times set yet.",
     "tableLabel": "This week's times",
-    "tableLabelVersion": "This week's times, {version}"
+    "tableLabelVersion": "This week's times, {version}",
+    "postingAs": "Posting as <b>{name}</b>",
+    "changeName": "Change",
+    "namePrompt": {
+      "title": "Choose your driver name",
+      "body": "Your Weekly Challenge laps are posted to the online leaderboard under this name.",
+      "label": "Driver name",
+      "hint": "Up to 16 characters. You can change it anytime in Settings.",
+      "keepAndDrive": "Keep name & drive",
+      "saveAndDrive": "Save & drive",
+      "save": "Save name",
+      "saving": "Saving…",
+      "cancel": "Cancel"
+    }
   },
   "conditions": {
     "hostSet": "Set by the host",

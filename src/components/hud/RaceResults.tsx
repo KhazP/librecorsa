@@ -11,7 +11,7 @@ import { PenaltyBadge, PlayerTag, PositionBadge } from "@/components/ui/badges";
 import { Icon, Trend } from "@/components/ui/icons";
 import { PromptBar } from "@/components/ui/prompts";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
-import { formatLapTime } from "./hud-format";
+import { dnfReasonLabel, formatLapTime } from "./hud-format";
 import { placesGained, type RaceRecord } from "@/lib/sim/race-history";
 import { countdownLabel, nextRaceSlot } from "@/lib/net/race-schedule";
 import { TRACKS } from "@/lib/track-registry";
@@ -100,6 +100,7 @@ function sameRaceResults(a: RaceResultsProps, b: RaceResultsProps): boolean {
       x.lapsCompleted !== y.lapsCompleted ||
       x.dnf !== y.dnf ||
       x.dq !== y.dq ||
+      x.dnfReason !== y.dnfReason ||
       x.bestLapMs !== y.bestLapMs ||
       x.penaltyS !== y.penaltyS ||
       x.gridPosition !== y.gridPosition
@@ -179,6 +180,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
   );
   const isFastest = (r: RaceResultEntry) => r.bestLapMs !== null && r.bestLapMs === fastestMs;
   const me = ordered.find((r) => r.isPlayer);
+  const meDnfReason = me && (me.dq || me.dnf) ? dnfReasonLabel(me.dnfReason, me.dq) : null;
   const showGrid = ordered.some((r) => r.gridPosition !== undefined);
   // One main action: restart where there is one, else the way on, else closing. The card opens with the cursor on it:
   // on the first button instead (Watch replay), the cursor's volt fill beside the main action's read as two main actions
@@ -200,6 +202,11 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
             {trackName}
           </h2>
           <span className="flex flex-wrap items-center gap-1.5">
+            {me && meDnfReason ? (
+              <Badge tone="bad" icon={me.dq ? "trackLimits" : "damage"}>
+                {me.dq ? tx("dsqBadge", { reason: meDnfReason }) : tx("dnfBadge", { reason: meDnfReason })}
+              </Badge>
+            ) : null}
             {race.totalLaps ? (
               <Badge variant="outline">
                 {tx("laps", { count: race.totalLaps })}
@@ -284,15 +291,27 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
                     </td>
                     <td className="lc-mono px-2 text-end text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
                     <td className="px-2 text-end whitespace-nowrap">
-                      <span className="inline-flex items-center justify-end gap-2">
-                        {r.dq ? <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" /> : null}
-                        {r.penaltyS && !r.dq ? (
-                          <span title={tx("penaltyTitle", { seconds: r.penaltyS.toFixed(1) })}>
-                            <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
+                      {(() => {
+                        const rowReason = r.dq || r.dnf ? dnfReasonLabel(r.dnfReason, r.dq) : null;
+                        return (
+                          <span className="inline-flex flex-col items-end">
+                            <span className="inline-flex items-center justify-end gap-2">
+                              {r.dq ? <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" /> : null}
+                              {r.penaltyS && !r.dq ? (
+                                <span title={tx("penaltyTitle", { seconds: r.penaltyS.toFixed(1) })}>
+                                  <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
+                                </span>
+                              ) : null}
+                              <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
+                            </span>
+                            {rowReason ? (
+                              <span className="text-[11px] leading-tight text-lc-fog" title={rowReason}>
+                                {rowReason}
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                        <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
-                      </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-2 text-end whitespace-nowrap max-sm:hidden">
                       <BestLap ms={r.bestLapMs} fastest={fastest} />
@@ -387,6 +406,16 @@ const PlacesGained: React.FC<{ gained: number | null; large?: boolean }> = ({ ga
 const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest: boolean }> = ({ me, fieldSize, fastest }) => {
   const tx = useTranslations("hud.raceResults");
   const gained = me.dnf ? null : placesGained(me.gridPosition, me.position);
+  const reason = me.dq || me.dnf ? dnfReasonLabel(me.dnfReason, me.dq) : null;
+  const finishDetail = me.dq
+    ? reason
+      ? tx("disqualifiedReason", { reason })
+      : tx("disqualified")
+    : me.dnf
+      ? reason
+        ? tx("retiredReason", { reason })
+        : tx("retired")
+      : tx("ofField", { count: fieldSize });
   // Each value says what it is in the words under it, with no label above
   const cell = "flex min-w-0 flex-col gap-0.5 px-4 py-2.5 short:px-3 short:py-1.5";
   const after = "lc-hint truncate";
@@ -396,7 +425,7 @@ const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest:
         <span className={`lc-mono text-[22px] leading-tight font-bold ${me.dnf ? "text-lc-loss" : "text-lc-volt"}`}>
           {me.dq ? tx("dsq") : me.dnf ? tx("dnf") : tx("position", { position: me.position })}
         </span>
-        <span className={after}>{me.dq ? tx("disqualified") : me.dnf ? tx("retired") : tx("ofField", { count: fieldSize })}</span>
+        <span className={after} title={finishDetail}>{finishDetail}</span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">
