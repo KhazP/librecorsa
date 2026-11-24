@@ -12,6 +12,8 @@ LibreCorsa drives with a keyboard, a gamepad, a touch screen or a wheel with ped
 - **Simple / Advanced**: the switch at the top of Settings (Y on the keyboard, Y / △ on a controller). Many of the finer settings below only show in Advanced, and I mark those.
 - **Reset**: every card has one, and it asks first. Delete, or X / □ on a controller, resets the row you're on.
 
+![Settings > Controls > Device, with the Active device cards for Keyboard, Controller and Wheel, the Connected devices list and the Run setup button](media/controls/device.png)
+
 ## Keyboard
 
 These are the default keys. They follow the key's position, so on an AZERTY keyboard the game shows Z where this table says W.
@@ -41,6 +43,8 @@ These are the default keys. They follow the key's position, so on an AZERTY keyb
 - **Mouse steering**: V, or the switch in the Mouse card. The mouse's left-right position on the screen steers.
 - **Fixed keys** (Advanced): lists the keys the game keeps for itself, such as Alt with the arrows to move the view in the cockpit.
 
+![Controls > Keyboard, with the Key bindings card: two key slots for most actions, such as W and Up for Throttle, and an Add button on each empty slot](media/controls/keyboard.png)
+
 ## Controller
 
 Xbox and PlayStation controllers work through the browser. The default layout is GT style:
@@ -67,6 +71,8 @@ Gear up and gear down pressed together select neutral. Everything else is under 
 - **One button**: press the action's slot, then the button. A button that is a pedal can't take an action.
 - **Fine tuning** (Advanced): Steering speed, Inner dead zone, Outer dead zone, Stick linearity, Throttle curve, Brake curve, Pedal stick dead zone, Trigger rumble and Trigger slip with ABS/TC on. Trigger rumble needs the pedals on the triggers.
 - **Controller steering assist**: under Driving > Assists (Advanced unless your device is Controller), on by default. It limits the lock to what the front tyres can take and catches slides. Driving > Steering help (Advanced) tunes it.
+
+![Controls > Controller, scrolled to Button layout: GT style selected out of GT classic, Formula style, Forza style and Bumper shift, Pedals set to Triggers, and the button of each action below](media/controls/controller-layout.png)
 
 ## DualSense and DualShock 4
 
@@ -99,6 +105,8 @@ Steering, pedals and buttons come through the browser's Gamepad API, so any whee
 
 If you drive with a wheel whose throttle or brake isn't calibrated, a **Calibrate pedals** button shows on the HUD outside a race. It opens this tab.
 
+![Controls > Wheel with no wheel connected: Wheel type set to Direct drive, Calibrate all and the per-axis Calibrate buttons greyed out under "Needs a wheel", and Rotation at 1080°](media/controls/wheel.png)
+
 ## Clutch, gearbox and assists
 
 - **Clutch**: no device has one bound at first, and the car works its own clutch until you give it one: Clutch (hold) on the keyboard, Clutch in Controller > Buttons, or the clutch pedal on a wheel.
@@ -122,6 +130,8 @@ To set it up in the browser, open Settings > Force feedback:
 3. Press **Connect wheel** and pick the wheel in the browser's prompt. The browser asks once, then opens the wheel by itself on later visits. With force feedback on and the steering set up but no wheel paired, the title menu and the pause menu show **Pair wheel for force feedback** with a Connect button.
 4. Hold the rim and press **Test** beside Test direction. It should pull right, then left. If it pulls left first, switch on **Invert**.
 5. Set **Strength** (0 to 200 %).
+
+![Settings > Force feedback, with the Forces card: the Force feedback switch, Strength at 100%, Per-car strength, Invert and the Test direction button](media/controls/force-feedback.png)
 
 The other cards:
 
