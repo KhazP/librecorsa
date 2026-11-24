@@ -17,7 +17,14 @@ import type {
   TyreSetup,
 } from '@/types/f1';
 import type { VehicleWheelState } from './vehicle-types';
-import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './f12026-car/TrackColliderQuery';
+import {
+  createGroundHit,
+  WALL_SEGMENT_STRIDE,
+  type GroundHit,
+  type GroundQuery,
+  type TrackSurfaceKind,
+  type WallQuery,
+} from './f12026-car/TrackColliderQuery';
 import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
 
@@ -227,30 +234,63 @@ export interface SimulatorCar {
 
 /** A flying lap's run-up is this long where the final straight allows it (m) */
 const FLYING_RUN_UP_M = 450;
-/** Slower than this (the circuit's speed profile, km/h) a stretch counts as the last corner, not the straight */
+/** Slower than this (the circuit's speed profile, km/h) a stretch on a fast straight counts as the last corner */
 const FLYING_CORNER_KMH = 200;
+/** Curvature past this (1/m; R ≈ 222 m) ends the final straight even when speed stays above 200 km/h (e.g. Riverside T9) */
+const FLYING_STRAIGHT_MAX_CURV = 0.0045;
+/** Lateral acceleration cap (g) when a flying start itself must sit inside a corner near S/F (no yaw rate at spawn) */
+const FLYING_CORNER_LAT_G = 0.75;
 
 /** Acceleration a flying start assumes out of the last corner (m/s²) */
 const FLYING_EXIT_ACCEL = 0.5 * 9.81;
 
 /**
  * Where a flying lap starts (`s`, m along the lap): 450 m before the line, or 20 m past the exit of the last
- * corner (`cornerS`: the last point of the speed profile under 200 km/h) where the final straight is shorter
- * (Shanghai, Suzuka), so no car is dropped into a corner with no yaw rate. Never closer than 40 m to
- * the line. `cornerS` is null on a full-length run-up.
+ * corner (`cornerS`) where the final straight is shorter. Detects the last corner by both speed (< 200 km/h on fast
+ * straights) and curvature (> `FLYING_STRAIGHT_MAX_CURV`, catching fast sweepers like Riverside T9 and Watkins Glen
+ * Short as well as slow-exit straights like Le Mans 1982's Ford Chicane where S/F itself is under 200 km/h).
+ * Guarantees `cornerS` never lies ahead of `s` (which previously wrapped `s - cornerS` around the full lap and
+ * launched cars at 270 km/h out of slow chicanes). `cornerS` is null on a full-length run-up.
  */
 export function flyingStartPoint(track: {
   totalLengthM: number;
-  getSampleAtDistance(s: number): { optimalSpeedKmh: number };
+  getSampleAtDistance(s: number): { optimalSpeedKmh: number; curvature?: number };
 }): { s: number; cornerS: number | null } {
   const L = track.totalLengthM;
+  const sfSpeedKmh = track.getSampleAtDistance(L - 5).optimalSpeedKmh;
+  const fastStraight = sfSpeedKmh >= FLYING_CORNER_KMH;
   let straight = 0;
+  let prevSpeed = sfSpeedKmh;
   for (let d = 5; d <= FLYING_RUN_UP_M; d += 5) {
-    if (track.getSampleAtDistance(L - d).optimalSpeedKmh < FLYING_CORNER_KMH) break;
+    const smp = track.getSampleAtDistance(L - d);
+    if (Math.abs(smp.curvature ?? 0) > FLYING_STRAIGHT_MAX_CURV) break;
+    if (fastStraight) {
+      if (smp.optimalSpeedKmh < FLYING_CORNER_KMH) break;
+    } else if (smp.optimalSpeedKmh > prevSpeed + 1) {
+      // Walked back past the last corner exit into an upstream braking zone
+      break;
+    }
+    prevSpeed = smp.optimalSpeedKmh;
     straight = d;
   }
   if (straight >= FLYING_RUN_UP_M) return { s: L - FLYING_RUN_UP_M, cornerS: null };
-  return { s: L - Math.max(40, straight - 20), cornerS: L - straight - 5 };
+  if (straight >= 25) {
+    const runUp = Math.max(Math.min(40, straight - 5), straight - 20);
+    return { s: L - runUp, cornerS: L - straight - 5 };
+  }
+  // S/F itself lies inside or immediately after a tight corner (e.g. Spielberg Inner, Dunsfold, VIR Patriot):
+  // pick the straightest point 15..40 m before the line instead of pushing deeper into a hairpin, and anchor
+  // `cornerS` at `s` so exit speed never wraps around the whole lap.
+  let bestD = 20;
+  let bestCurv = Infinity;
+  for (let d = 15; d <= 40; d += 5) {
+    const c = Math.abs(track.getSampleAtDistance(L - d).curvature ?? 0);
+    if (c < bestCurv - 1e-4) {
+      bestCurv = c;
+      bestD = d;
+    }
+  }
+  return { s: L - bestD, cornerS: L - bestD };
 }
 
 /** Speed (m/s) a car leaving the last corner at `exitMs` carries `distanceM` further on */
@@ -259,10 +299,49 @@ export function flyingExitSpeedMs(exitMs: number, distanceM: number): number {
 }
 
 /**
+ * Solo flying-start speed (m/s) at `s`: capped by `spotSpeedMs(s)`, 90 % of the track's optimal speed at `s`,
+ * the exit speed carried from `start.cornerS` (using signed distance so it never wraps around the lap), and
+ * a lateral-g ceiling when the spawn stretch itself curves tighter than `FLYING_STRAIGHT_MAX_CURV`.
+ */
+export function flyingStartSpeedMs(
+  track: {
+    totalLengthM: number;
+    getSampleAtDistance(s: number): { optimalSpeedKmh: number; curvature: number };
+  },
+  start: { s: number; cornerS: number | null },
+  s: number,
+  spotSpeedMs: (at: number) => number,
+  cornerExitMs: number
+): number {
+  const L = track.totalLengthM;
+  const sample = track.getSampleAtDistance(s);
+  let speed = Math.min(spotSpeedMs(s), (0.9 * sample.optimalSpeedKmh) / 3.6);
+  if (start.cornerS !== null) {
+    const d = ((((s - start.cornerS + L / 2) % L) + L) % L) - L / 2;
+    speed = Math.min(speed, flyingExitSpeedMs(cornerExitMs, d));
+  }
+  let maxCurv = Math.abs(sample.curvature);
+  for (let d = 5; d <= 25; d += 5) {
+    maxCurv = Math.max(maxCurv, Math.abs(track.getSampleAtDistance(s + d).curvature));
+  }
+  if (maxCurv > FLYING_STRAIGHT_MAX_CURV) {
+    speed = Math.min(speed, Math.sqrt((FLYING_CORNER_LAT_G * 9.81) / maxCurv));
+  }
+  return speed;
+}
+
+/**
  * A car put down at speed for a flying lap has no yaw rate and its wheel straight, so it runs straight on until its
  * driver reacts: for this long (s) its tyres must stay on the asphalt with no help (`startPose`)
  */
 export const START_HANDS_OFF_S = 1;
+/** Peak longitudinal acceleration (m/s²) allowed for when computing the distance covered during `START_HANDS_OFF_S` */
+const START_HANDS_OFF_ACCEL_MS2 = 9.81;
+
+/** Distance (m) a car starting at `speedMs` covers during `START_HANDS_OFF_S` under full throttle */
+export function startHandsOffRunM(speedMs: number): number {
+  return speedMs * START_HANDS_OFF_S + 0.5 * START_HANDS_OFF_ACCEL_MS2 * START_HANDS_OFF_S * START_HANDS_OFF_S;
+}
 /** What those tyres may run on: the road and its kerbs, not run-off, gravel, grass, sausage kerbs or the pit lane */
 const START_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['road', 'kerb']);
 /** Spacing of the checks along that run (m) */
@@ -276,6 +355,10 @@ const START_LATERAL_STEP_M = 0.25;
  */
 const START_MAX_TURN_RAD = (10 * Math.PI) / 180;
 const START_MAX_SHIFT_M = 2;
+/** Minimum clearance (m) from any barrier collider to the car's footprint during the hands-off run */
+const START_WALL_MARGIN_M = 0.5;
+const START_WALL_Y_SLACK_M = 1.5;
+const _startWallIds = new Int32Array(256);
 
 /** A car's tyres for `startPose`: their outer edges either side of its centre, its axles ahead of and behind it (m) */
 export interface StartFootprint {
@@ -304,13 +387,60 @@ function pointAcross(track: StartTrack, s: number, lateral: number): [number, nu
   return [smp.position.x + (b.x / bl) * lateral, smp.position.z + (b.z / bl) * lateral];
 }
 
+function pointToSegDistSq2D(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / len2)) : 0;
+  const ex = px - (ax + t * dx);
+  const ez = pz - (az + t * dz);
+  return ex * ex + ez * ez;
+}
+
+/** True when the car footprint centred at (cx, cy, cz) heading (fx, fz) keeps at least `marginM` clear of every barrier */
+function wallClearAt(
+  walls: WallQuery,
+  cx: number,
+  cy: number,
+  cz: number,
+  fx: number,
+  fz: number,
+  fp: StartFootprint,
+  marginM: number
+): boolean {
+  const radius = Math.hypot(Math.max(fp.frontM, fp.rearM), fp.halfWidthM) + marginM + 0.5;
+  const n = walls.near(cx, cz, radius, _startWallIds);
+  if (n === 0) return true;
+  const segs = walls.segments;
+  const marginSq = marginM * marginM;
+  for (let k = 0; k < n; k++) {
+    const o = _startWallIds[k] * WALL_SEGMENT_STRIDE;
+    if (cy < segs[o + 4] - START_WALL_Y_SLACK_M || cy > segs[o + 5] + START_WALL_Y_SLACK_M) continue;
+    const ax = segs[o];
+    const az = segs[o + 1];
+    const bx = segs[o + 2];
+    const bz = segs[o + 3];
+    if (pointToSegDistSq2D(cx, cz, ax, az, bx, bz) < marginSq) return false;
+    for (const along of [fp.frontM, 0, -fp.rearM]) {
+      for (const across of [-fp.halfWidthM, fp.halfWidthM]) {
+        const px = cx + fx * along - fz * across;
+        const pz = cz + fz * along + fx * across;
+        if (pointToSegDistSq2D(px, pz, ax, az, bx, bz) < marginSq) return false;
+      }
+    }
+  }
+  return true;
+}
+
 /**
  * How far (m, up to `runM`) a car at (x, z), `s` along the lap, heading `yawRad`, runs straight on before a tyre's
- * outer edge leaves the asphalt (`START_SURFACES`), read off the circuit's ground under all four every `START_RUN_STEP_M`
+ * outer edge leaves the asphalt (`START_SURFACES`) or its footprint comes within `START_WALL_MARGIN_M` of a barrier,
+ * read off the circuit's colliders every `START_RUN_STEP_M`
  */
 function straightRunOnAsphaltM(
   track: StartTrack,
-  ground: GroundQuery,
+  ground: GroundQuery | null,
+  walls: WallQuery | null,
   hit: GroundHit,
   s: number,
   pose: StartPose,
@@ -321,16 +451,21 @@ function straightRunOnAsphaltM(
   const fz = Math.cos(pose.yawRad);
   let clean = 0;
   for (let d = 0; d <= runM + 1e-6; d += START_RUN_STEP_M) {
-    // From above the road there: the run stays close to it
-    const probeY = track.getSampleAtDistance(s + d).position.y + 3;
-    for (const along of [fp.frontM, -fp.rearM]) {
-      for (const across of [-fp.halfWidthM, fp.halfWidthM]) {
-        // (-fz, fx) is the car's right, as the binormal is the road's
-        const x = pose.x + fx * (d + along) - fz * across;
-        const z = pose.z + fz * (d + along) + fx * across;
-        if (!ground.query(x, z, probeY, hit) || !START_SURFACES.has(hit.surface)) return clean;
+    const smpY = track.getSampleAtDistance(s + d).position.y;
+    const cx = pose.x + fx * d;
+    const cz = pose.z + fz * d;
+    if (ground) {
+      const probeY = smpY + 3;
+      for (const along of [fp.frontM, -fp.rearM]) {
+        for (const across of [-fp.halfWidthM, fp.halfWidthM]) {
+          // (-fz, fx) is the car's right, as the binormal is the road's
+          const x = cx + fx * along - fz * across;
+          const z = cz + fz * along + fx * across;
+          if (!ground.query(x, z, probeY, hit) || !START_SURFACES.has(hit.surface)) return clean;
+        }
       }
     }
+    if (walls && !wallClearAt(walls, cx, smpY + 0.5, cz, fx, fz, fp, START_WALL_MARGIN_M)) return clean;
     clean = Math.min(runM, d);
   }
   return runM;
@@ -338,14 +473,13 @@ function straightRunOnAsphaltM(
 
 /**
  * Where a car put down at `s` at speed for a flying lap starts, and which way it points (`START_HANDS_OFF_S`). On its
- * line (`lateral`) heading along the road wherever, from there, its tyres stay on the asphalt for `runM` (m) hands-off,
- * as on a straight. Where they would not (a short final straight starts on the last corner's exit: at Sachsenring the
- * road still bends left there and its right edge closes in, and the right-hand tyres were on the run-off 0.3 s after
- * a flying start), it points at its line `runM` ahead (`aimLateral` there), from `lateral` or from the spot nearest it
- * within `lo`..`hi` that keeps them on, turned and moved no further than `START_MAX_TURN_RAD` / `START_MAX_SHIFT_M`;
- * failing every one, it stays on its line along the road. The circuit's ground (its colliders) decides what is
- * asphalt, not the track data's width. With no `ground` (the track samples' stand-in) the car goes on its line, along
- * the road
+ * line (`lateral`) heading along the road wherever, from there, its tyres stay on the asphalt and clear of barriers
+ * for `runM` (m) hands-off, as on a straight. Where they would not (a short final straight on the last corner's exit,
+ * or a racing line hugging a pit wall), it aims at its line `runM` ahead (or the centreline if the line ahead crowds
+ * a barrier), from `lateral` or the nearest spot within `lo`..`hi` that keeps them on and clear, turned no further
+ * than `START_MAX_TURN_RAD` and moved no further than `START_MAX_SHIFT_M` (or toward the centreline if a barrier
+ * blocks `alongRoad`). Failing a full clean run, it keeps the longest clear pose found when `alongRoad` hits a wall,
+ * else stays on its line along the road.
  */
 export function startPose(
   track: StartTrack,
@@ -356,30 +490,47 @@ export function startPose(
   lo: number,
   hi: number,
   footprint: StartFootprint,
-  runM: number
+  runM: number,
+  walls: WallQuery | null = null
 ): StartPose {
   const tangent = track.getSampleAtDistance(s).tangent;
   const [x0, z0] = pointAcross(track, s, lateral);
   const alongRoad: StartPose = { x: x0, z: z0, yawRad: Math.atan2(tangent.x, tangent.z), lateral };
-  if (!ground || !(runM > 0)) return alongRoad;
+  if ((!ground && !walls) || !(runM > 0)) return alongRoad;
   const hit = createGroundHit();
-  const run = (pose: StartPose) => straightRunOnAsphaltM(track, ground, hit, s, pose, footprint, runM);
-  if (run(alongRoad) >= runM) return alongRoad;
-  const [ax, az] = pointAcross(track, s + runM, aimLateral(s + runM));
-  // Nearest the line first, and of two as near, the one nearer the centre
+  const run = (pose: StartPose) => straightRunOnAsphaltM(track, ground, walls, hit, s, pose, footprint, runM);
+  const alongClean = run(alongRoad);
+  if (alongClean >= runM) return alongRoad;
+  const aimTargets = [aimLateral(s + runM), 0];
   const toCentre = lateral > 0 ? -1 : 1;
-  for (let k = 0; k * START_LATERAL_STEP_M <= START_MAX_SHIFT_M + 1e-9; k++) {
-    for (const side of k === 0 ? [0] : [toCentre, -toCentre]) {
-      const lat = lateral + side * k * START_LATERAL_STEP_M;
-      if (k > 0 && (lat < lo || lat > hi)) continue;
-      const [x, z] = pointAcross(track, s, lat);
-      const pose: StartPose = { x, z, yawRad: Math.atan2(ax - x, az - z), lateral: lat };
-      const turn = pose.yawRad - alongRoad.yawRad;
-      if (Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) > START_MAX_TURN_RAD) continue;
-      if (run(pose) >= runM) return pose;
+  // Allow shifting all the way to the centreline when moving away from a close barrier, otherwise cap at START_MAX_SHIFT_M
+  const maxShift = Math.max(START_MAX_SHIFT_M, walls ? Math.abs(lateral) : 0);
+  let bestPose = alongRoad;
+  let bestClean = alongClean;
+  for (const targetLat of aimTargets) {
+    const [ax, az] = pointAcross(track, s + runM, targetLat);
+    for (let k = 0; k * START_LATERAL_STEP_M <= maxShift + 1e-9; k++) {
+      const shift = k * START_LATERAL_STEP_M;
+      for (const side of k === 0 ? [0] : [toCentre, -toCentre]) {
+        if (shift > START_MAX_SHIFT_M + 1e-9 && side !== toCentre) continue;
+        const lat = lateral + side * shift;
+        if (k > 0 && (lat < lo || lat > hi)) continue;
+        const [x, z] = pointAcross(track, s, lat);
+        const pose: StartPose = { x, z, yawRad: Math.atan2(ax - x, az - z), lateral: lat };
+        const turn = pose.yawRad - alongRoad.yawRad;
+        if (Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) > START_MAX_TURN_RAD) continue;
+        const clean = run(pose);
+        if (clean >= runM) return pose;
+        if (clean > bestClean + 0.5) {
+          bestClean = clean;
+          bestPose = pose;
+        }
+      }
     }
   }
-  return alongRoad;
+  // Keep a strictly safer pose if `alongRoad` itself is blocked by a barrier
+  const wallBlocked = walls !== null && straightRunOnAsphaltM(track, null, walls, hit, s, alongRoad, footprint, runM) < runM;
+  return wallBlocked ? bestPose : alongRoad;
 }
 
 /** Gap between grid slots in a flying start's queue (m); the slots alternate sides */

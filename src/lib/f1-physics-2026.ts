@@ -141,11 +141,11 @@ import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import {
   FLYING_SLOT_SPACING_M,
-  flyingExitSpeedMs,
   flyingStartPoint,
+  flyingStartSpeedMs,
   rollingStartSlots,
   rollingStartSpeedMs,
-  START_HANDS_OFF_S,
+  startHandsOffRunM,
   startPose,
   type TyreVisualState,
 } from './sim/simulator-car';
@@ -1077,18 +1077,31 @@ export class F1Physics2026 {
         return Math.min(75, (0.9 * (sample.brakeLimitKmh ?? sample.optimalSpeedKmh)) / 3.6);
       };
       const cornerExit = start.cornerS === null ? 0 : (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
-      let speed = spotSpeed(s);
-      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
-      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, (s - start.cornerS + lapLen) % lapLen));
+      const speed =
+        fieldSize !== undefined
+          ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
+          : flyingStartSpeedMs(this.track, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
-        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
-        // first second (`startPose`; a race's rolling start is left on its line along the road, as `F12026CarSim` does)
+        // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt and
+        // clear of barriers for its first second (`startPose`; a race's rolling start is left on its line along the
+        // road, as `F12026CarSim` does)
         const footprint = {
           halfWidthM: Math.max(...this.wheels.map((w) => Math.abs(w.staticPos.y) + 0.5 * w.tyre.spec.width)),
           frontM: this.cgToFrontAxleM,
           rearM: this.cgToRearAxleM,
         };
-        const pose = startPose(this.track, this.ground ?? null, s, lineAt(s), lineAt, -edge, edge, footprint, speed * START_HANDS_OFF_S);
+        const pose = startPose(
+          this.track,
+          this.ground ?? null,
+          s,
+          lineAt(s),
+          lineAt,
+          -edge,
+          edge,
+          footprint,
+          startHandsOffRunM(speed),
+          this.walls ?? null
+        );
         this.placeCar(s, speed, pose.lateral);
         // + = nose right of the road's tangent
         const tangent = this.track.getSampleAtDistance(s).tangent;
