@@ -38,7 +38,7 @@ import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/onli
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
-import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { currentBoardBase, lapBoardClass, lapConditionsNow, lapGoesOnBoards, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
   boardKeyOf,
@@ -64,6 +64,8 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import { applyConditionsChoice, effectiveConditions, resolveTimeOfDay, type RoomConditionsOverride, type SessionConditions } from "@/lib/sim/weather";
 import { getTrackInfo, LISTED_TRACKS, trackDefaultTimeOfDay, TRACKS } from "@/lib/track-registry";
+import { roomTrackStatus } from "@/lib/mods/room-content";
+import { requestShellSync } from "@/lib/service-worker";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
@@ -84,7 +86,8 @@ import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { dualShock4Hid } from "@/lib/input/webhid-dualshock4";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
-import { clampFov, codeFromName, confirmDriverProfileName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, needsDriverNamePrompt, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
+import { loadCarChoice, saveCarChoice } from "@/lib/settings/car-choice";
+import { clampFov, codeFromName, confirmDriverProfileName, DEFAULT_PLAYER_SETTINGS, loadOnboarded, loadPlayerSettings, loadRumble, needsDriverNamePrompt, pushLibraryRecent, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
 import { signalBoardLap } from "@/components/hud/BoardWidget";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
@@ -124,6 +127,15 @@ const roomCarSwitch = (rule: { vehicle?: VehicleModelId; carClass: CarClassRule 
   if (rule.vehicle) return current === rule.vehicle ? null : rule.vehicle;
   if (vehicleModelsFor(rule.carClass).includes(current)) return null;
   return listedVehiclesForClassRule(rule.carClass)[0] ?? null;
+};
+/**
+ * The game's own car to race in place of a mod car, or null when the car may race: the others see a car by its
+ * vehicle model only, so no mod car runs in a scheduled race (an official result), and none with physics of its own
+ * runs in any room
+ */
+const modCarSwap = (car: CarId, scheduled: boolean): CarId | null => {
+  const def = carById(car);
+  return def.mod && (scheduled || def.simProfile) ? raceCarFor(def.physics, scheduled).id : null;
 };
 /** Human-readable name for a room's car class or spec vehicle lock */
 const vehicleRuleLabel = (rule: VehicleRule): string => {
@@ -955,7 +967,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
       // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
       const switchTo = roomCarSwitch(start, vehicleModelRef.current);
+      const modSwap = switchTo ? null : modCarSwap(carIdRef.current, mp.inScheduledRace);
       if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
+      else if (modSwap) changeCar(modSwap);
       // A scheduled race is driven to the week's rules: its assists and realism, a dry track
       if (mp.inScheduledRace) applyWeekRules();
       else if (!mp.isHost && !guestWeatherSyncedRef.current && (start.weather || start.timeOfDay || start.timeScale !== undefined)) {
@@ -1021,8 +1035,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const mp = getMultiplayerManager();
       const lobbyNow = mp.lobby;
       if (lobbyNow) {
+        // The race's rules hold in qualifying too: the class's car, and no mod car with physics of its own
         const switchTo = roomCarSwitch(lobbyNow.settings, vehicleModelRef.current);
+        const modSwap = switchTo ? null : modCarSwap(carIdRef.current, mp.inScheduledRace);
         if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
+        else if (modSwap) changeCar(modSwap);
       }
       startSession({ kind: "practice" });
       session.car.resetToStartGrid(true);
@@ -1057,6 +1074,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const loadPbGhost = useCallback(async () => {
     // A ghost picked (or another car's PB requested) while this one loads wins over it
     const req = ++ghostReqRef.current;
+    // A mod car keeps no best (its laps would stand in its vehicle model's): it starts the session with none
+    if (carById(carIdRef.current).mod) {
+      ghostSourceRef.current = "pb";
+      session?.setGhost(null);
+      session?.lapRecorder.setContext({ personalBestMs: null });
+      return;
+    }
     // The best on the board the player is driving now (an assisted best is not their pro reference)
     const rec = await loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).catch(() => null);
     if (req !== ghostReqRef.current) return;
@@ -1085,6 +1109,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const ghostReq = ghostReqRef.current;
       // The upload this lap's card may show the result of (a later card, or a manual upload, takes over)
       const submitReq = submitReqRef.current;
+      // A mod car shares its vehicle model's id: its laps (on another body, or physics of its own) would stand in that
+      // model's bests and ghosts, so they stay this session's only. A mod circuit's laps keep their own id and are saved
+      if (carById(carIdRef.current).mod) return;
       void saveBestLapIfFaster(recording)
         .then((saved) => {
           if (saved) {
@@ -1102,6 +1129,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           // not the local personal best: a best set before the board began never went up, and a returning driver's
           // slower laps still belong on it. A failure offers a retry on the lap card; a board out of reach is asked
           // again now, and if it still doesn't answer the lap waits and goes up once it does
+          // A lap with mod content is the player's own: nothing goes up, and the card doesn't offer it
+          if (!lapGoesOnBoards(recording)) return;
           const week = challengeOf(recording);
           const weekBest = week ? loadChallengeBest(week) : null;
           const board = boardKeyOf(recording);
@@ -1148,7 +1177,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    */
   const handleSubmitLap = useCallback(async (driver?: { name: string; code: string }) => {
     const rec = lapSummary?.recording;
-    if (!rec) return;
+    if (!rec || !lapGoesOnBoards(rec)) return;
     const as = driver ?? settingsRef.current.profile;
     const req = ++submitReqRef.current;
     const problem = nameProblem(as.name);
@@ -1665,12 +1694,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
      */
     const follow = (l: LobbyState | null) => {
       if (!l) return;
-      if (isVehicleRestricted(l.settings)) {
-        enforceLobbyCar(l.settings, mp.inScheduledRace);
-      }
+      const switched = isVehicleRestricted(l.settings) && enforceLobbyCar(l.settings, mp.inScheduledRace);
       if (l.hostId === mp.localPeerId || (phaseRef.current !== "title" && phaseRef.current !== "loading")) return;
       if (l.settings.trackId !== trackId) {
-        if (onSelectTrack && TRACKS.some((t) => t.id === l.settings.trackId)) onSelectTrack(l.settings.trackId);
+        if (onSelectTrack && roomTrackStatus(l.settings.trackId, l.settings.trackMod) === "ok") onSelectTrack(l.settings.trackId);
+        return;
+      }
+      if (!switched) {
+        const modSwap = modCarSwap(carIdRef.current, mp.inScheduledRace);
+        if (modSwap) changeCar(modSwap);
       }
     };
     mp.onRoomCarRule = (rule) => {
@@ -1703,7 +1735,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
     mp.onQualifyingStart = (quali) => {
       const targetTrack = mp.lobby?.settings.trackId ?? trackId;
-      if (targetTrack !== trackId && onSelectTrack && TRACKS.some((t) => t.id === targetTrack)) {
+      // A mod circuit this copy hasn't got, or has in another version (another road): it sits this one out
+      if (roomTrackStatus(targetTrack, mp.lobby?.settings.trackMod) !== "ok") return;
+      if (targetTrack !== trackId && onSelectTrack) {
         pendingQualifying = { id: quali.id, trackId: targetTrack };
         onSelectTrack(targetTrack);
         return;
@@ -1722,6 +1756,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         soloRaceRef.current();
         return;
       }
+      // A mod circuit this copy hasn't got, or has in another version (another road): it sits this race out
+      const lobbyTrack = mp.lobby?.settings;
+      if (start.trackId && roomTrackStatus(start.trackId, lobbyTrack?.trackId === start.trackId ? lobbyTrack.trackMod : undefined) !== "ok") return;
       // A race on another circuit: switch to it, and pick the race up once that scene has loaded
       if (start.trackId && start.trackId !== trackId && onSelectTrack) {
         pendingRaceStart = start;
@@ -1798,7 +1835,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
       // A week that names its car is driven in it (a no-op when already in it); any other in the car one is in, if it is the week's vehicle
       const rules = race ? week.race : week;
-      if (vehicleModelRef.current !== rules.vehicle || rules.car !== undefined) changeCar(weekCar(rules).id);
+      // A mod car is never the week's, whatever its vehicle model
+      if (vehicleModelRef.current !== rules.vehicle || rules.car !== undefined || carById(carIdRef.current).mod) changeCar(weekCar(rules).id);
       if (race && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
@@ -1860,6 +1898,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     driveChallenge(asked.race);
   }, [assetsReady, trackId, session, driveChallenge]);
 
+  // The first circuit is in: the offline copy of the game may download now, without slowing it
+  useEffect(() => {
+    if (assetsReady) requestShellSync();
+  }, [assetsReady]);
+
   // The race the host started before this circuit loaded
   useEffect(() => {
     if (!assetsReady || !pendingRaceStart) return;
@@ -1886,12 +1929,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.lapRecorder.setContext({ driverName: settings.profile.name, driverCode: settings.profile.code });
   }, [session, settings.profile, vehicleModel, trackId]);
 
-  // A car change brings back that car's personal-best ghost and leaderboard
+  // A car change brings back that car's personal-best ghost and leaderboard. Bests are kept per vehicle model, so the
+  // model's cars share one; a mod car (which keeps none) is a car of its own
+  const pbOwner = carById(carId).mod ? carId : vehicleModel;
   useEffect(() => {
     void loadPbGhost();
     void refreshLeaderboard();
     wheelFfb.resetMeter();
-  }, [vehicleModel, loadPbGhost, refreshLeaderboard]);
+  }, [pbOwner, loadPbGhost, refreshLeaderboard]);
 
   const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
   useEffect(() => {
@@ -2388,6 +2433,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   // that hasn't answered yet is asked again by the press)
                   onSubmit:
                     (boardState === "on" || boardState === "unreachable") &&
+                    lapGoesOnBoards(lapSummary.recording) &&
                     lapSummary.summary.valid &&
                     !lapSummary.summary.autopilot &&
                     (!settings.profile.autoUpload || submitState === "error" || submitState === "waiting")

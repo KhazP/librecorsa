@@ -1,5 +1,5 @@
 /**
- * What the account routes run on, gathered in one object so the checks (scripts/verify-accounts.ts) can stand in for
+ * What the account routes run on, gathered in one object so the checks (scripts/verify/verify-accounts.ts) can stand in for
  * the providers, the clock and the randomness: the two databases, the ghost bucket, the outbound fetch, the OAuth
  * clients and the passkey library. `accountsDeps` builds the real one from the Worker's bindings.
  */

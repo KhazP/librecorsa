@@ -9,7 +9,7 @@ import { leafShading } from "./leaf-shading";
  * Trackside scenery that replaces some of a circuit's own (public/tracks/<id>/scenery/*.glb). Each file's root
  * lists in `extras.replaces` the circuit nodes it stands in for; those are hidden once it is in, so if it fails to
  * load the circuit keeps its own.
- *  - Instanced foliage (scripts/rwanda-official/foliage.mjs): openly licensed trees and shrubs, one EXT_mesh_gpu_instancing
+ *  - Instanced foliage (scripts/tracks/rwanda-official/foliage.mjs): openly licensed trees and shrubs, one EXT_mesh_gpu_instancing
  *    node per 250 m tile, model and level of detail. Each tile's levels go under a THREE.LOD at the tile's centre,
  *    which the renderer switches per camera (main view and mirrors; the shadow pass reuses the main view's pick).
  *    Instances inside a tile are stored in hash order, so drawing the first N of each tile thins it out evenly: that
@@ -51,7 +51,7 @@ export function setSceneryDensity(q: Quality): void {
 
 /**
  * The scenery GLB's root, or null when it is missing or fails to load (the circuit's own scenery stays). The deploy
- * meshopt-compresses the props and stands (scripts/compress-track-glb.mjs), so the loader takes both kinds.
+ * meshopt-compresses the props and stands (scripts/tracks/compress-track-glb.mjs), so the loader takes both kinds.
  */
 export async function loadSceneryInstances(url: string): Promise<THREE.Object3D | null> {
   try {
@@ -122,7 +122,7 @@ export function attachSceneryInstances(trackRoot: THREE.Object3D, scenery: THREE
   trackRoot.add(scenery);
 }
 
-/** One level of a foliage tile, with its node extras from scripts/rwanda-official/foliage.mjs */
+/** One level of a foliage tile, with its node extras from scripts/tracks/rwanda-official/foliage.mjs */
 interface TileLevel {
   obj: THREE.Object3D;
   extras: { tile: string; level: number; from: number; until?: number; shadow: boolean; shadowFrom?: number };

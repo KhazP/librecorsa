@@ -34,7 +34,7 @@ const sharedMaterialOf = new WeakMap<THREE.Object3D, number>();
 
 const parseJson = (buf: Buffer): GltfJson => JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as GltfJson;
 
-/** The GLB's bytes; a meshopt-compressed file is decoded once (scripts/compress-track-glb.mjs) and cached by mtime */
+/** The GLB's bytes; a meshopt-compressed file is decoded once (scripts/tracks/compress-track-glb.mjs) and cached by mtime */
 function readGlb(path: string): Buffer {
   const buf = readFileSync(path);
   if (!parseJson(buf).extensionsUsed?.includes('EXT_meshopt_compression')) return buf;
@@ -42,7 +42,7 @@ function readGlb(path: string): Buffer {
   const decoded = join(tmpdir(), `glb-geometry-${basename(path, '.glb')}-${Math.round(mtimeMs)}-${size}.glb`);
   if (!existsSync(decoded)) {
     // The meshopt decoder's WASM only starts asynchronously, so decode in a child process to keep this sync.
-    // The verify suites run side by side (scripts/run-verify.mjs), so the copy is written under this process's own
+    // The verify suites run side by side (scripts/verify/run-verify.mjs), so the copy is written under this process's own
     // name and renamed into place: another suite never reads a half-written file.
     const partial = `${decoded}.${process.pid}.partial`;
     execFileSync(process.execPath, [join(__dirname, 'decode-meshopt-glb.mjs'), path, partial], { stdio: 'inherit' });

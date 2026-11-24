@@ -2,8 +2,10 @@
 Assetto Corsa circuit mod (KN5 + AI + INI data) → LibreCorsa track
 (public/tracks/<id>/track_data.json + public/tracks/<id>/<id>.glb).
 
-    python -P scripts/tracks/port_ac_track.py <id|id,id|all> [--src DIR] [--no-glb] [--no-line-opt] [--no-compress]
-                                              [--extras-only]
+    python -P scripts/tracks/port_ac_track.py <id|id,id|all> [--src DIR] [--no-glb] [--no-line-opt | --light-lines] [--no-compress]
+                                              [--extras-only] [--no-register]
+    python -P scripts/tracks/port_ac_track.py <new id> --src DIR [--layout NAME] [--settings overrides.json]
+                                              [--entry-only FILE] ...
 
 Reads the KN5 models listed in the layout's models_*.ini, the binary AI lanes (fast_lane.ai and pit_lane.ai),
 and the INI metadata (sections.ini, surfaces.ini, drs_zones.ini, cameras*.ini, groove.ini, crew.ini, lighting.ini),
@@ -13,7 +15,8 @@ lap-time racing-line optimiser for both F1 (`ro`) and GT3 (`roGt3`), and meshopt
 Each circuit's settings are in AC_TRACKS below. `folder` is the mod's track folder (the one holding models*.ini,
 data/ and the layouts), found by the first of: --src DIR (porting a single folder), scripts/tracks/sources.local.json
 ({"<folder or id>": "<path>"}, git-ignored), or $LIBRECORSA_AC_TRACKS/<folder> (e.g. Assetto Corsa's content/tracks).
-See docs/PORTING-TRACKS.md.
+A mod with no entry here is converted under an id of its own from its folder (--src): its settings are read from the
+mod itself (ac_mod_entry.py), with --settings merged over them. See docs/PORTING-TRACKS.md.
 """
 import argparse
 import configparser
@@ -40,6 +43,7 @@ from PIL import Image  # noqa: E402
 from scipy import ndimage  # noqa: E402
 from scipy.spatial import cKDTree  # noqa: E402
 
+import ac_mod_entry  # noqa: E402
 import build_track as bt  # noqa: E402
 import centreline as cl  # noqa: E402
 import surface as srf  # noqa: E402
@@ -63,7 +67,7 @@ PHYS_COLOURS = {
 
 # Red Bull Ring props drawn with Assetto Corsa's own textures, left out (`hideTextures`): the pit wall panels with the
 # Assetto Corsa logo, the marshals, the pit crew and pit props, and three prop atlases from Kunos's Monza, Magione and
-# Silverstone. scripts/strip-track-props.mjs takes the same props out of built GLBs.
+# Silverstone. scripts/tracks/strip-track-props.mjs takes the same props out of built GLBs.
 SPIELBERG_AC_TEXTURES = r'^(ac_crew|misc|misc1|misc_silver_2|commissario_NEW|DRIVER_Suit2|driver_face|props_pitlane)\.dds$'
 
 AC_TRACKS = {
@@ -1410,7 +1414,8 @@ def get_kn5_list(cfg):
     out = []
     for sec in cp.sections():
         if sec.startswith('MODEL_') or sec.startswith('DYNAMIC_OBJECT_'):
-            f = cp[sec].get('FILE', '').strip()
+            # Only the track folder's own models: a FILE outside it (an absolute path, '..') is never read
+            f = ac_mod_entry.model_path(base, cp[sec].get('FILE', ''))
             if f and f.lower().endswith('.kn5') and os.path.exists(os.path.join(base, f)):
                 if f not in out:
                     out.append(f)
@@ -2618,6 +2623,18 @@ def index_entry(tid, cfg, data):
     }
 
 
+def write_circuit_entry(tid, cfg, data):
+    """`--no-register`: the circuit's index entry beside its files (public/tracks/<id>/circuit.json), for
+    `npm run mod -- from-circuit` to package, instead of adding the circuit to the game's own lists"""
+    path = os.path.join(ROOT, 'public', 'tracks', tid, 'circuit.json')
+    entry = index_entry(tid, cfg, data)
+    if cfg.get('defaultTimeOfDay'):
+        entry['defaultTimeOfDay'] = cfg['defaultTimeOfDay']
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(entry, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
 def sync_track_configs(built_tracks):
     """Update scripts/tracks/tracks.json and public/tracks/index.json with the ported AC tracks."""
     tjson_path = os.path.join(HERE, 'tracks.json')
@@ -2642,7 +2659,7 @@ def sync_track_configs(built_tracks):
     for tid, (cfg, data) in built_tracks.items():
         idx = [e for e in idx if e['id'] != tid] + [index_entry(tid, cfg, data)]
     order = list(cfgs.keys())
-    # Circuits this script does not know (RISE Motordrome, built by scripts/rwanda-official) keep their place on top
+    # Circuits this script does not know (RISE Motordrome, built by scripts/tracks/rwanda-official) keep their place on top
     idx.sort(key=lambda e: order.index(e['id']) if e['id'] in order else -1)
     with open(idx_path, 'w', encoding='utf-8') as f:
         json.dump(idx, f, indent=2, ensure_ascii=False)
@@ -4032,7 +4049,7 @@ def build_from_sources(tid, cfg, args, src):
         src['write_glb'](off, extra, glb_out)
         if not args.no_compress:
             r = subprocess.run(
-                ['node', 'scripts/compress-track-glb.mjs', glb_out],
+                ['node', 'scripts/tracks/compress-track-glb.mjs', glb_out],
                 cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace',
             )
             log('  compress:', (r.stdout.strip() or r.stderr.strip()))
@@ -4145,7 +4162,7 @@ def apply_street_hairpin_margin(tid, cfg):
 
 def graft_extras(tid, cfg):
     """--extras-only: builds just the circuit's `extraModels` and `driftingObjects` meshes and grafts them into its
-    existing GLB with scripts/graft-track-extras.mjs, which keeps every other byte of it. For a circuit whose full
+    existing GLB with scripts/tracks/graft-track-extras.mjs, which keeps every other byte of it. For a circuit whose full
     rebuild would also change what it ships (converter changes since it was built). The track data and index.json are
     left alone"""
     out_dir = os.path.join(ROOT, 'public', 'tracks', tid)
@@ -4168,7 +4185,7 @@ def graft_extras(tid, cfg):
     addon = os.path.join(out_dir, f'{tid}.extras.glb')
     write_ac_glb(items, tex_pool, materials, {}, scale, off, [], addon, cfg=cfg)
     try:
-        for cmd in (['node', 'scripts/compress-track-glb.mjs', addon], ['node', 'scripts/graft-track-extras.mjs', glb, addon]):
+        for cmd in (['node', 'scripts/tracks/compress-track-glb.mjs', addon], ['node', 'scripts/tracks/graft-track-extras.mjs', glb, addon]):
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
             log(f'  {os.path.basename(cmd[1])}:', r.stdout.strip() or r.stderr.strip())
             if r.returncode != 0:
@@ -4201,40 +4218,99 @@ def resolve_sources(ids, src_arg):
         cfg['base_dir'] = path
 
 
+def mod_entry(tid, args):
+    """The entry of a mod with none in AC_TRACKS, read from the mod (ac_mod_entry.py) with --settings merged over it,
+    its folder from --src or scripts/tracks/sources.local.json"""
+    if not re.fullmatch(r'[a-z0-9_]+', tid):
+        raise SystemExit(f'{tid}: an id is lower case letters, digits and _ (it names the folder and the URL)')
+    local = json.load(open(LOCAL_SOURCES, encoding='utf-8')) if os.path.exists(LOCAL_SOURCES) else {}
+    src = args.src or local.get(tid)
+    if not src:
+        raise SystemExit(f'{tid}: no such circuit in AC_TRACKS. A mod without an entry is read from its track folder: '
+                         '--src DIR')
+    cfg = ac_mod_entry.auto_entry(tid, src, args.layout, args.settings, classify_physics_node)
+    # An id the game lists is taken, unless it is this mod's own earlier build (sync_track_configs recorded its folder)
+    idx_path = os.path.join(ROOT, 'public', 'tracks', 'index.json')
+    listed = {e['id'] for e in json.load(open(idx_path, encoding='utf-8'))} if os.path.exists(idx_path) else set()
+    tjson_path = os.path.join(HERE, 'tracks.json')
+    built = json.load(open(tjson_path, encoding='utf-8')) if os.path.exists(tjson_path) else {}
+    if tid.startswith('rwanda_official') or (tid in listed and built.get(tid, {}).get('folder') != cfg['folder']):
+        raise SystemExit(f'{tid} is taken by a circuit the game already has: pick another id')
+    # The game's own circuit from this layout of the mod, whose entry holds the permission it is hosted with
+    hosted = next((h for h, c in AC_TRACKS.items()
+                   if c['folder'].lower() == cfg['folder'].lower() and c['layout_dir'].lower() == cfg['layout_dir'].lower()), None)
+    if hosted:
+        cfg['_auto']['gameCircuit'] = {'id': hosted, 'author': AC_TRACKS[hosted]['credit']['author']}
+    return cfg
+
+
+def write_entry(path, cfg):
+    """--entry-only: a circuit's entry as JSON, for the mod tools"""
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('id', help='track id, comma-separated ids, or "all"')
     ap.add_argument('--src', help="the mod's track folder (the one holding models*.ini, data/ and the layouts)")
     ap.add_argument('--no-glb', action='store_true')
     ap.add_argument('--no-line-opt', action='store_true')
+    ap.add_argument('--light-lines', action='store_true',
+                    help="one optimiser sweep, no optimal-control start: a mod's import (build_track.py optimise_lines)")
     ap.add_argument('--no-compress', action='store_true')
     ap.add_argument('--extras-only', action='store_true',
                     help="graft just the circuit's extraModels and driftingObjects into its existing GLB")
+    ap.add_argument('--no-register', action='store_true',
+                    help="leave the game's circuit lists alone: write public/tracks/<id>/circuit.json for a mod package")
+    ap.add_argument('--layout', help='a mod without an AC_TRACKS entry: the layout to convert (its folder, or its name)')
+    ap.add_argument('--settings', help='a mod without an AC_TRACKS entry: a JSON file of settings merged over the ones '
+                                       'read from the mod')
+    ap.add_argument('--entry-only', metavar='FILE',
+                    help="write the circuit's entry (AC_TRACKS's, or the one read from the mod) to FILE as JSON and stop")
     args = ap.parse_args()
 
     ids = list(AC_TRACKS.keys()) if args.id == 'all' else [x.strip() for x in args.id.split(',')]
-    for tid in ids:
-        if tid not in AC_TRACKS:
-            raise SystemExit(f'Unknown AC track id: {tid}')
-    resolve_sources(ids, args.src)
+    new = [tid for tid in ids if tid not in AC_TRACKS]
+    if new and len(ids) > 1:
+        raise SystemExit(f'{", ".join(new)}: not in AC_TRACKS. A mod without an entry is converted on its own: '
+                         '<id> --src DIR')
+    if not new and (args.layout is not None or args.settings):
+        raise SystemExit('--layout and --settings are for a mod without an AC_TRACKS entry: edit its entry instead')
+    if args.entry_only and len(ids) > 1:
+        raise SystemExit('--entry-only writes one circuit\'s entry')
+    entries = {new[0]: mod_entry(new[0], args)} if new else {tid: AC_TRACKS[tid] for tid in ids}
+    if args.entry_only:
+        # A hand-written entry as it is, without looking for its folder
+        write_entry(args.entry_only, entries[ids[0]])
+        return
+    if new:
+        ac_mod_entry.report(entries[new[0]], log)
+    else:
+        resolve_sources(ids, args.src)
     if args.extras_only:
         for tid in ids:
-            graft_extras(tid, AC_TRACKS[tid])
+            graft_extras(tid, entries[tid])
         return
     built = {}
     for tid in ids:
-        cfg = AC_TRACKS[tid]
+        cfg = entries[tid]
         data = build_ac_track(tid, cfg, args)
         built[tid] = (cfg, data)
 
-    sync_track_configs(built)
+    if args.no_register:
+        for tid, (cfg, data) in built.items():
+            write_circuit_entry(tid, cfg, data)
+    else:
+        sync_track_configs(built)
 
     if not args.no_glb and not args.no_line_opt:
         for tid in ids:
             log(f'  optimising F1 and GT3 racing lines for {tid}...')
             # A hill climb's run is timed from rest at the start line to the finish (the optimiser reads pointToPoint)
-            bt.optimise_lines(tid, AC_TRACKS[tid].get('lineMarginM'))
-            apply_street_hairpin_margin(tid, AC_TRACKS[tid])
+            bt.optimise_lines(tid, entries[tid].get('lineMarginM'), light=args.light_lines)
+            apply_street_hairpin_margin(tid, entries[tid])
 
 
 if __name__ == '__main__':

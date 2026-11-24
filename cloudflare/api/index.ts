@@ -160,7 +160,7 @@ async function raceWaiting(races: DurableObjectNamespace, slotS: number, url: UR
   return { startsMs: slot.startsMs, waiting, names };
 }
 
-/** Stand-ins for the checks (scripts/verify-accounts.ts): the accounts' outbound fetch, clock and randomness */
+/** Stand-ins for the checks (scripts/verify/verify-accounts.ts): the accounts' outbound fetch, clock and randomness */
 export interface ApiInjections {
   accounts?: Partial<AccountsDeps>;
 }

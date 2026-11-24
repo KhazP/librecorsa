@@ -29,7 +29,7 @@ import { homeQualityText } from "@/lib/home/quality";
 import { CONTACT_EMAIL, REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, VENUE_HERO_WIDTHS, circuitModder, circuitType, venueHeroUrl } from "@/lib/track-registry";
 
-/** Written by scripts/build-home-outlines.ts, so its shape is LapOutline's (JSON reads a tuple as an array) */
+/** Written by scripts/site/build-home-outlines.ts, so its shape is LapOutline's (JSON reads a tuple as an array) */
 const OUTLINES = outlines as unknown as Record<string, LapOutline>;
 
 /**

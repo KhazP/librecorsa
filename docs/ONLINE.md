@@ -1,116 +1,127 @@
-# Racing online and the lap boards
+# Racing online and lap boards
 
 LibreCorsa has four online parts: private rooms for racing friends, open races that start every 20 minutes, lap boards with a weekly challenge, and optional accounts that keep your names and your save on all your devices. On librecorsa.org they run on the site's own server. A copy of the game without that server still has peer-to-peer rooms, paired through the public PeerJS service, and keeps your lap times in your browser.
 
-## Your driver
+On `librecorsa.org`, these features are backed by the site's Cloudflare Worker (see [Self-hosting and the online backend](SELF-HOSTING.md) to run your own). Self-hosted copies without that backend still support peer-to-peer private rooms (via the public PeerJS broker) and save personal best laps locally in the browser.
 
-- Rooms and races show your name, a three-letter code and a colour. The boards show the name and code. A new player gets a random name, such as Apex Falcon 27 with the code FAL.
-- Change them under **Settings > Profile and data > Driver**: **Name** (up to 16 characters), **Code** (three letters) and **Colour**.
-- The boards refuse slurs, profanity and names that pass for the game's own. The game tells you "Pick another name".
+## Driver profile
+
+In rooms and open races, other drivers see your **Name**, three-letter **Code**, and **Colour**. The lap boards display your name and code. New players start with a randomly generated profile (such as `Apex Falcon 27` / `FAL`).
+
+- Customize your identity under **Settings > Profile and data > Driver**: **Name** (up to 16 characters), **Code** (3 letters), and **Colour**.
+- The lap boards reject slurs, profanity, and names that impersonate official LibreCorsa accounts, prompting `"Pick another name"`.
 
 ## Private rooms
 
 ### Hosting and joining
 
-- Open **Multiplayer** from the main menu, or from the pause menu while you drive.
-- **Host a room** gives you a six-character room code, made of letters and digits without I, O, 0 or 1. **Copy invite link** copies a link to the room, and **Share** opens your device's share sheet where it has one. **New room** opens another room with a fresh code.
-- To join, type the code under **Join a friend's room** and press **Join**. Or open the host's invite link: the game joins the room once you're past the loading screen.
-- The host has to keep the game open. If the game can't find a room, it asks you to check the code and to ask the host to keep the game open on screen.
-- On librecorsa.org a room takes the host and up to 15 guests. If the host's connection drops, their game opens the room again under the same code.
-- Everyone needs the same version of the game. A player on another version sees "This room runs another version of LibreCorsa. Everyone in it needs to reload the page."
-- There are no races on a hill climb, since a run is one car at a time.
+1. Open **Multiplayer** from the main menu or the pause menu.
+2. Click **Host a room** to generate a 6-character room code (letters and digits, omitting `I`, `O`, `0`, and `1` to prevent typos). Use **Copy invite link** or **Share** (on devices with a native share sheet) to invite friends, or click **New room** to open a fresh lobby with a new code.
+3. Guests can enter the code under **Join a friend's room** and click **Join**, or open the invite link directly to join automatically once the circuit finishes loading.
+
+A few ground rules for rooms:
+
+- **Host presence:** The host must keep the game tab open. If a room cannot be found, the client reminds guests to double-check the code and ensure the host still has the game open on screen.
+- **Capacity and reconnects:** On `librecorsa.org`, a room supports the host plus up to 15 guests (16 cars total). If the host briefly loses connectivity, their client re-opens the room automatically under the same code.
+- **Version matching:** Everyone in a room must run the same build. A mismatched client sees `"This room runs another version of LibreCorsa. Everyone in it needs to reload the page."`
+- **Hill climbs:** Multiplayer races are disabled on hill-climb venues, which are single-car timed runs.
 
 ### The lobby
 
-- The **Drivers** card lists everyone with their code, name and car, the **Host** badge, and **Ready** or **Not ready**. Beside other players it shows the ping and the packet loss.
-- On another circuit than the host's, you see "The host is on" that circuit, with **Switch circuit**. If your car isn't in the room's class, the game lists the cars that are, and the others see **Wrong class** beside your name.
-- Guests press **Ready up**. The host presses **Start race**. With qualifying on, that button starts qualifying instead (**Start 5 min qualifying**, for example), and during qualifying **Start race now** cuts it short.
-- **End qualifying** and **End race for everyone** send every driver back to the lobby. The host's settings are locked while qualifying or a race runs.
-- When the race ends, the host's game sends one result to everyone. Nothing from a room is stored.
+- The **Drivers** card lists every participant with their code, name, car, **Host** badge, **Ready** / **Not ready** status, and live ping and packet loss for remote players.
+- If you are loaded onto a different circuit from the host, the lobby displays `"The host is on"` followed by that circuit and a **Switch circuit** button. If your car does not match the room's allowed class, eligible cars are listed and other drivers see a **Wrong class** badge next to your name.
+- Guests click **Ready up**, and the host launches the session with **Start race**. If qualifying is enabled, that button launches qualifying instead (for example, **Start 5 min qualifying**), and the host can skip straight to the grid using **Start race now**.
+- **End qualifying** and **End race for everyone** return the entire lobby to the waiting room. Host settings are locked once qualifying or a race is underway.
+- At the checkered flag, the host distributes one canonical race result to all drivers. Private room results are ephemeral and never stored on the server.
 
-### What the host sets
+### Host settings
 
-| Card | Setting | Choices |
-|---|---|---|
-| Event | **Circuit** | Picked with **Change** from the main menu |
-| Event | **Cars** | **Any car** (classes mixed) or one class |
-| Event | **Weather**, **Time of day**, **Time speed** | The presets; time speed is **Fixed** or a multiple |
+| Card | Setting | Options |
+| :-- | :-- | :-- |
+| Event | **Circuit** | Selected via **Change** from the main menu |
+| Event | **Cars** | **Any car** (multi-class) or a single car class |
+| Event | **Weather**, **Time of day**, **Time speed** | Weather/time presets; time speed set to **Fixed** or a multiplier |
 | Race | **Laps** | 1 to 50 |
-| Race | **Qualifying** | **Off**, 3, 5 or 10 min: the best clean lap sets the grid |
-| Race | **Grid order** | **Qualifying**, **Reverse** or **Random** (set by qualifying when it is on) |
+| Race | **Qualifying** | **Off**, 3, 5, or 10 min (best clean lap sets the grid) |
+| Race | **Grid order** | **Qualifying**, **Reverse**, or **Random** (overridden by qualifying when enabled) |
 | Race | **Start** | **Standing** or **Rolling** |
-| Race | **Launch** | **Assisted** or **Manual**, for a standing start only |
-| Rules | **Rules** | **Classic**, **Auto**, **Open-wheel** or **Endurance** |
+| Race | **Launch** | **Assisted** or **Manual** (standing starts only) |
+| Rules | **Rules** | **Classic**, **Auto**, **Open-wheel**, or **Endurance** |
 | Rules | **Track limits** | **On** or **Off** |
-| Rules | **Penalties** | On or off: time added for track limits and jump starts |
-| Rules | **Damage** | **Off**, **Reduced** or **Full** |
-| Rules | **Collisions** | **On**, **Ghosted lap 1** (no contact on the opening lap) or **Off** |
+| Rules | **Penalties** | **On** or **Off** (time penalties for track limits and jump starts) |
+| Rules | **Damage** | **Off**, **Reduced**, or **Full** |
+| Rules | **Collisions** | **On**, **Ghosted lap 1** (no contact on lap 1), or **Off** |
 
-Under **Classic**, every third track-limits strike is +3 s, then +5 s. **Open-wheel** counts strikes (4 is +5 s, 8 is +10 s, 12 is a disqualification) and **Endurance** weighted points (5 is +5 s, 10 is +10 s, 15 is a disqualification). **Auto** uses open-wheel rules for single-seaters and endurance rules for the rest.
+How the track-limits rule sets score off-track strikes:
 
-### How players connect
+- **Classic:** Every third strike incurs a time penalty (`+3 s`, then `+5 s`).
+- **Open-wheel:** Counts strikes—4 strikes = `+5 s`, 8 = `+10 s`, 12 = disqualification.
+- **Endurance:** Uses weighted severity points—5 points = `+5 s`, 10 = `+10 s`, 15 = disqualification.
+- **Auto:** Applies **Open-wheel** rules to single-seaters and **Endurance** rules to all other classes.
 
-- The site's room server pairs the players of a room code. After that the cars go straight between your browsers, 60 times a second.
-- Guests connect to the host, and the host passes each car on to the others. The **Relayed** badge beside a driver means their car reaches you through the host.
-- Some networks block a direct link (strict routers, mobile data). For those, the room server hands out relay servers run by Cloudflare. If a link still fails, the game suggests trying again, or using the same Wi-Fi.
-- A car that hasn't been heard from for half a second turns see-through and can't be touched. After two seconds it disappears until it is heard from again.
-- Under **More ways to connect**:
-  - **Local tabs**: **Connect local tab** races another tab in the same browser.
-  - **Manual WebRTC**: no server at all. The host presses **1. Create offer (host)** and sends the token, the guest pastes it into **Remote token** and presses **2. Accept offer**, and the host pastes the guest's answer and presses **3. Accept answer (host)**.
-  - **Custom TURN relay**: your own relay server. The **Relay address** must start with `turn:` or `turns:`, with a **Username** and **Password** if it needs them.
+### Connection architecture and fallbacks
+
+- The room server handles initial matchmaking by room code; once paired, vehicle state streams directly between browsers at 60 Hz over WebRTC.
+- Guests connect to the host, who relays traffic to any peers that cannot connect directly. A **Relayed** badge beside a driver indicates their state is routing through the host.
+- When strict NATs, firewalls, or mobile carriers block direct peer-to-peer links, the room server issues Cloudflare TURN relay credentials. If a connection still fails, retrying or joining on the same Wi-Fi network usually resolves it.
+- To prevent netcode warping, any car that stops sending packets for 0.5 seconds becomes translucent and non-collidable, and disappears entirely after 2 seconds until packets resume.
+- Under **More ways to connect**, you can also use:
+  - **Local tabs:** Click **Connect local tab** to race against another tab in the same browser.
+  - **Manual WebRTC:** Serverless peer-to-peer pairing. The host clicks **1. Create offer (host)** and sends the token; the guest pastes it into **Remote token** and clicks **2. Accept offer**; the host pastes the guest's answer back and clicks **3. Accept answer (host)**.
+  - **Custom TURN relay:** Supply your own relay server (**Relay address** starting with `turn:` or `turns:`, plus optional **Username** and **Password**).
 
 ## Open races
 
-### Joining
+### Joining a scheduled race
 
-- Under **Multiplayer** on the main menu, a card named after the week's circuit counts down to the next race. It shows the car, the laps and how often a race starts.
-- A race starts every 20 minutes, on the weekly challenge's circuit and car, for whoever has joined. The laps are set so a race lasts about ten minutes, and never fewer than three.
-- In a week whose challenge is at Dunsfold (time trials only), the races are on RISE Motordrome's Grand Prix layout in the 2026 Prototype.
-- Press **Join next race**. Before you join, the card shows how many drivers are waiting and some of their names. Once you're in, **Leave race** takes you out.
-- Entries close 15 seconds before the lights: join later and you're in the next race. A race takes up to 16 cars.
+- Under **Multiplayer** on the main menu, the featured event card counts down to the next open race and shows the circuit, car, lap count, and interval.
+- Races start every **20 minutes** using the current weekly challenge's circuit and car. Lap counts are tuned for roughly 10 minutes of racing, with a minimum of 3 laps.
+- When the weekly challenge visits Dunsfold (a time-trial-only venue), open races run at **RISE Motordrome (Grand Prix layout)** in the **2026 Prototype** instead.
+- Click **Join next race** to register; the card previews the number of waiting drivers and a sample of their names. Click **Leave race** to withdraw at any time before entry closes.
+- Registration locks **15 seconds before lights out** (joining later places you in the following race), with a grid cap of 16 cars.
 
-### The start and the result
+### Grid, start, and results
 
-- Ten seconds before the lights, the grid is set. The fastest driver on this week's challenge board starts on pole, and drivers with no time there line up behind in the order they joined. If nobody else joins, you race the AI.
-- The game puts you in the race's car, with the week's assists and realism and a dry track. Five red lights come on a second apart, and they go out after a random hold.
-- Collisions are **Protected**: cars are ghosts on the opening lap. After it, a car that is stopped or crawling, going the wrong way, off the track or ramming another passes through the others. In every online race, a car that has taken the flag neither gives nor takes contact.
-- If your connection drops, the game tries a few times to get you back in. Only a car on the grid can rejoin a race under way.
-- Each car reports its finish. The result is final once the whole grid is in, or 90 seconds after the first car finishes.
-- The card shows **This week's top drivers** (the top five by wins, then podiums) and your own line: races, wins, podiums and best finish.
-- A result counts for your name only when your game proved the name with its driver key, so it needs a name you have claimed on the lap boards.
+- Ten seconds before lights out, the grid locks. Drivers who have posted a time on the current weekly challenge board line up in order of pace, followed by unranked entrants in join order. If no other human drivers join, you race against the AI field.
+- Everyone spawns in the scheduled car on a dry track with the week's fixed assists and realism settings. Five red lights illuminate one second apart and extinguish after a random hold.
+- Open races enforce **Protected** collisions: all cars are ghosted on lap 1, and from lap 2 onward any car that is stopped, crawling, driving the wrong way, off-track, or attempting to ram passes harmlessly through other cars. Across all online modes, cars that have crossed the finish line also become ghosts.
+- If you disconnect mid-race, the client automatically attempts to reconnect; only drivers who started on the grid can rejoin an active race.
+- Each car submits its finish time. Official results finalize once every car finishes or 90 seconds after the winner crosses the line.
+- The open-races card tracks **This week's top drivers** (top five ranked by wins, then podiums) alongside your personal record (races, wins, podiums, and best finish).
+- Results only count toward your standings if your client proves ownership of your driver name with its driver key—meaning you must first claim your name by posting a lap to any leaderboard.
 
-## The lap boards
+## Lap boards
 
-### Reading a board
+### Browsing boards
 
-- Open **Lap times** from the main menu or the pause menu. The home page shows the same boards.
-- There is one board per circuit and car. Every driver appears once, with their fastest lap and how it was driven: realism (**Full**, **Standard** or **Casual**), assists (**Pro**, **Semi** or **Assisted**), **Wet** for a wet line, and an icon for the input.
-- **My car** shows the board of the car you're driving, **All cars** every driver's fastest lap in any car. **Filters** narrows it to **No assists**, **Full realism** or **Wet laps**. A page holds 20 places, and **Jump to me** goes to yours.
-- **Race ghost** races any lap on the circuit you have loaded. **Apply setup** loads the setup a lap was driven with, on rows in the car you're driving.
+- Open **Lap times** from the main menu or pause menu (the same boards are also visible on the home page).
+- Each circuit and car combination has its own board. Every driver appears once with their fastest lap and metadata tags: realism (**Full**, **Standard**, or **Casual**), assists (**Pro**, **Semi**, or **Assisted**), **Wet** (if any part of the lap was wet), and an input-device icon.
+- Switch between **My car** and **All cars** (every driver's fastest lap in any car), and use **Filters** to narrow results to **No assists**, **Full realism**, or **Wet laps**. Boards paginate 20 entries at a time, and **Jump to me** scrolls straight to your row.
+- Click **Race ghost** on any entry for your loaded circuit to drive against their ghost, or click **Apply setup** (when viewing rows for your current car) to load the exact setup used on that lap.
 
-### How a lap gets on
+### Uploading laps
 
-- Laps go up from **Drive** (practice) and the weekly challenge. Laps in a race, and in qualifying for an AI race, don't.
-- A valid lap that beats your best on its board goes up by itself, under your name. So does your best lap of the week's challenge. **Auto-upload best laps** in **Settings > Profile and data > Driver** turns this off.
-- With it off, the lap card has **Post online**. After a failed upload it has **Retry upload**.
-- A lap keeps the most-aided assists and the least realistic level you used during it, and counts as wet if it met any wet surface.
-- The board keeps one lap per driver for each mix of assists, realism and dry or wet. That way the filters still show everyone's best of that kind.
-- The board takes up to 30 uploads and name changes an hour from one IP address.
+- Laps are eligible for upload from **Drive** (practice) and the **Weekly challenge**. Laps set during races or AI qualifying sessions are excluded.
+- Any valid lap that beats your current best uploads automatically under your name (as does your best weekly challenge lap). You can disable automatic uploads via **Auto-upload best laps** under **Settings > Profile and data > Driver**.
+- When auto-upload is disabled, the lap summary card provides a **Post online** button; after a network error, it shows **Retry upload**.
+- Each lap is tagged with the highest assist level and lowest realism level active at any point during that lap, and is marked **Wet** if the tyres touched any wet surface.
+- The server stores one best lap per driver for every combination of assists, realism, and dry/wet conditions so filtered boards always show accurate category bests.
+- Uploads and driver renames are rate-limited to 30 requests per hour per IP address.
 
-### What makes a lap invalid
+### Lap validity and anti-cheat limits
 
-Outside a race the rule is strict:
+Outside of races, track-limits enforcement is strict:
 
-- All four wheels off the track deletes the lap at once, with no way to give the time back. Off in the last sector deletes the next lap too, since it gave you a run onto the straight. A restart clears that.
-- Jumping round the lap off its road is a course cut: "Course cut · lap deleted".
-- Riding a barrier deletes the lap ("Wall contact · lap deleted"). A brush off a barrier doesn't. On a hill climb any touch ends the run.
-- A lap the autopilot drove any part of is shown but never ranks.
+- **Off-track:** Putting all four wheels outside track limits invalidates the lap immediately with no option to give time back. Going off-track in the final sector also invalidates the following lap (to prevent gaining an illegal launch onto the main straight); restarting clears that flag.
+- **Course cuts:** Skipping part of the circuit triggers `"Course cut · lap deleted"`.
+- **Wall contact:** Grinding or riding a barrier triggers `"Wall contact · lap deleted"` (light glancing brushes are allowed). On hill climbs, any wall contact ends the run.
+- **Autopilot:** Any lap where autopilot was engaged at any point is displayed locally but never ranked.
 
-The lap card says **Invalid: track limits** or **Invalid: wall contact**. The board then checks every upload. The lap must end where it started (except on a hill climb), and its sector times must add up to the lap time. The time must match the recording, and the recorded speeds must match the distance driven. Nothing may go over 420 km/h or jump from place to place, and the lap must be on the current physics.
+Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on the lap card. Before accepting an upload, the server also validates that the lap starts and ends at the timing line (except hill climbs), sector times sum to the total lap time, the lap time matches the ghost telemetry duration, recorded speeds match distance covered without exceeding `420 km/h` or teleporting, and the lap was set on the current physics version.
 
-These checks stop careless fakes, such as a short time pasted onto a real recording. They can't prove a lap was driven, and a lap built with care can pass them. Fake lap times are a known limit of the boards. If you see a cheated entry, open an issue on [GitHub](https://github.com/librecorsa/librecorsa/issues).
+> **Honest limitation:** Server checks catch casual tampering—such as pasting a faster lap time onto a genuine ghost—but browser-side telemetry cannot cryptographically prove a lap was genuinely driven. A carefully fabricated payload can still pass validation. If you spot a cheated time on a board, please report it on [GitHub Issues](https://github.com/librecorsa/librecorsa/issues).
 
-### Your name and the driver key
+### Driver name and identity key
 
 - The first lap you post claims your name with your driver key, a random code kept in your browser. Later laps under that name, ignoring case and extra spaces, need the same key.
 - Without it the board answers "This name is taken. Sign in to the account that holds it, import your driver key under Lap Times, or race under another name".
@@ -122,32 +133,32 @@ These checks stop careless fakes, such as a short time pasted onto a real record
 
 ### Input icons
 
-- The icon beside a name shows what the lap was driven with: keyboard, controller, wheel or touch screen. Hover over it for "Driven with" and its name.
-- A lap keeps the input used most. Only what you actually use counts: on-screen controls you touch, a bound wheel, keys or mouse steering, a pad's pedals or stick.
-- A pad without the standard layout counts as a wheel when you have picked **Wheel** as your device. Laps posted before the boards kept the input show no icon.
+- Each leaderboard row shows an icon for the primary input used on that lap: keyboard, controller, wheel, or touch screen. Hover over the icon to view `"Driven with ..."` details.
+- The tag reflects whichever input you actively drove with most during the lap (touch controls pressed, bound wheel axes, keys or mouse steering, or controller sticks/pedals).
+- Non-standard gamepads count as a wheel when **Wheel** is selected as your active device. Older laps uploaded before input tracking existed display no icon.
 
-### When the physics changes
+### Physics and circuit version updates
 
-- When I change the physics in a way that makes older lap times incomparable, the physics version goes up and the boards start again. Laps only go on the board of the current version.
-- Older boards stay readable as they were, with the picker on every board: **Physics V2 (New)** for the current one, **Physics V1** for the one before.
-- A lap from an older version, say from a tab left open across an update, is refused: "This lap is from an older version of the physics or the circuit. Reload the game to drive on the new one".
-- A change to one circuit (its kerbs, walls, track limits or surface) can restart that circuit's boards alone, without a new physics version. Its older board stays in the picker.
-- Ghosts, personal bests and the weekly challenge go by the same versions.
+- Whenever a physics update meaningfully alters lap times, the physics version increments and fresh boards open. New uploads are only accepted on the current version.
+- Historical boards remain browsable via the version picker on every board (for example, **Physics V2 (New)** alongside **Physics V1**).
+- Submitting a lap from a stale tab left open across an update returns `"This lap is from an older version of the physics or the circuit. Reload the game to drive on the new one"`.
+- Changes to a specific circuit (kerbs, walls, track limits, or surface grip) can reset that circuit's boards independently without bumping the global physics version; its previous board remains accessible in the picker.
+- Ghosts, personal bests, and weekly challenge entries follow the same versioning rules.
 
-### A best that didn't go up
+### Recovering unposted bests
 
-- If the board can't be reached, the lap waits and goes up once it answers. In a session the game sends each waiting lap up to five times. After a reload it sends your saved best when that is the lap. A lap the board turns down isn't sent again by itself.
-- **Your best laps** in **Lap times** marks a best that isn't on its board: "Not on the online board yet" with **Post**, or "Not on the online board" with the reason and **Retry**. That covers bests set with posting off, or before the boards began.
+- If the leaderboard server is temporarily unreachable, the game queues your lap and retries automatically once connectivity returns (up to 5 attempts per session, and again after a reload if the queued lap is your saved personal best). Laps explicitly rejected by the server are not retried automatically.
+- Under **Lap times > Your best laps**, any local best missing from the online board is flagged with `"Not on the online board yet"` (**Post**) or `"Not on the online board"` with the rejection reason (**Retry**)—including laps set with auto-upload off or before online boards launched.
 
-## The weekly challenge
+## Weekly challenge
 
-- **Weekly challenge** on the main menu shows the time left. A week runs from Monday 00:00 UTC to the next. The circuits and cars follow a list of weeks I wrote by hand, up to the week of 4 October 2027, then the list starts again.
-- One circuit and car for everyone, with fixed assists and realism: every fourth week **Pro** with **Full** realism, the other weeks **Semi** with **Standard**.
-- The track is dry and fully rubbered in, each car runs its softest dry tyre, and the tank holds the lightest fuel load it allows ("Dry track · Soft tyres · Low fuel" for most cars).
-- **Drive challenge** sets all of this up and takes you out on track. Your own assists, realism and weather come back afterwards.
-- **This week's times** is the challenge's own board, with the same physics picker. A challenge lap also counts on the circuit's open board.
-- A lap counts for the challenge only when it was driven to the week's rules. One sent after the week ended goes on the open board only.
-- **Hall of Fame** has the **Fastest Lap record holders**, the **Weekly podiums** and the **Most decorated** drivers.
+- The **Weekly challenge** card on the main menu shows the active event and remaining time. Weeks run from **Monday 00:00 UTC** to the next Monday, following a curated schedule through the week of **4 October 2027** before looping.
+- Every driver runs the same circuit, car, assists, and realism preset: every fourth week enforces **Pro** assists with **Full** realism; all other weeks use **Semi** assists with **Standard** realism.
+- Conditions are standardized: a dry, fully rubbered-in track, the car's softest dry tyre compound, and minimum permitted fuel (`"Dry track · Soft tyres · Low fuel"` for most cars).
+- Clicking **Drive challenge** applies these rules automatically and puts you on track; your personal assists, realism, and weather settings are restored afterward.
+- **This week's times** displays the challenge's dedicated leaderboard (including the physics version picker), and valid challenge laps also count on the circuit's regular open board.
+- Laps only qualify for the weekly challenge if driven under that week's rules and submitted before the week closes; late uploads still post to the regular open board.
+- The **Hall of Fame** tracks **Fastest Lap record holders**, **Weekly podiums**, and **Most decorated** drivers.
 
 ## Accounts
 
@@ -180,15 +191,15 @@ An account is optional. Without one, the game works as it always has: each brows
 
 ## Sharing a car setup
 
-- In the **Garage**, **Share code** copies a code for your current setup that starts with `LC1-`. Each saved setup has its own **Copy share code** button.
-- **Import** opens **Paste share code or JSON**. Paste a code there, or press **Load .json** for a setup file. **Export setup (.json)** saves your current setup as a file.
-- Before you apply it, the game shows the setup's name, car and main changes. **Apply** loads it, and **Save & apply** also keeps it in your list.
-- A setup built for another car shows "Built for" that car: its chassis offsets, electronics and tyres are clamped to yours. Every value is checked and kept inside your car's limits, and your own fuel load stays.
-- Every lap you post carries the setup it was driven with, without its fuel load or name. That is what **Apply setup** loads from a board.
+- Open the **Garage** (see [Garage and car setups](DRIVING.md#garage-and-car-setups)) and click **Share code** to copy a portable `LC1-` setup string for your current configuration. Saved setups also have individual **Copy share code** buttons.
+- Click **Import** to open **Paste share code or JSON**, where you can paste an `LC1-` string or click **Load .json** to import a file. Click **Export setup (.json)** to download your current setup.
+- Before applying an imported setup, LibreCorsa previews its name, target car, and key changes. Choose **Apply** to load it immediately or **Save & apply** to store it in your saved list as well.
+- Importing a setup built for a different car displays `"Built for ..."` and safely clamps chassis offsets, electronics, and tyre values to your current car's valid ranges while preserving your fuel load.
+- Every uploaded lap embeds its car setup (stripped of setup name and fuel load), which is what **Apply setup** loads from the leaderboards.
 
-## What the boards keep
+## Data and privacy
 
-The [privacy page](https://librecorsa.org/privacy) has the full list. For the boards and races:
+See the full [privacy policy](https://librecorsa.org/privacy) for complete details. Specifically for online racing and leaderboards:
 
 - A posted lap stores your driver name and code, the lap (times, circuit, car, assists, realism, tyre, and whether it was driven on a keyboard, controller, wheel or touch screen) and a recording others can race as a ghost. Names and laps on a board are public. The board also stores a scrambled form of your driver key, which can't be turned back into the key.
 - An open race stores its result: the name you raced under, your place, times and best lap.

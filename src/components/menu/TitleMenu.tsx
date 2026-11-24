@@ -1,7 +1,8 @@
 "use client";
 import { useTranslations } from "use-intl/react";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import type { VehicleModelId } from "@/types/f1";
@@ -40,6 +41,11 @@ import { CarClassTag, TrackQualityBadge } from "./menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "./menu-shell";
 import { feedbackContextOf, RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
+/** For a value that never changes while the page is open */
+const noSubscription = () => () => {};
+// The Mods panel, and what it brings (the zip reader, the package store, the catalogue), loads only where mods are taken
+const ModsPanel = dynamic(() => import("./ModsPanel").then((m) => m.ModsPanel), { ssr: false });
+import { modsAvailable, modsState } from "@/lib/mods/mod-loader";
 import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel } from "./ConditionsPanel";
@@ -61,9 +67,10 @@ import { EmbeddedBadge } from "./EmbeddedBadge";
 import { InstallAppButton } from "./InstallAppButton";
 import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
+import { LauncherUpdate } from "@/components/launcher/LauncherUpdate";
 import { TitleMusic } from "./TitleMusic";
 
-type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "mods" | "request";
 
 /**
  * How far a panel reaches beside the rail, in CSS px (the big-screen zoom scales them): each as wide as its content
@@ -119,6 +126,8 @@ export interface TitleMenuProps extends PauseMenuProps {
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
 /** A licence's name never breaks at its hyphen or space ("CC BY-NC-" / "SA 4.0") */
 const licenceClass = cx(linkClass, "whitespace-nowrap");
+/** What a circuit's credit line is for: its source's address, else its own title and author (a mod circuit may have no link) */
+const creditKey = (t: TrackInfo): string => t.credit?.url || `${t.credit?.title}\u0000${t.credit?.author}`;
 
 /** A circuit's length in the player's units ("5.34 km") */
 const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)} ${DISTANCE_LABEL[unit]}`;
@@ -422,13 +431,20 @@ const Credits: React.FC = () => {
           </CreditRow>
           {LISTED_TRACKS.some((t) => t.credit) ? (
             <CreditRow title={tx("circuitsTitle")}>
-              {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
+              {/* One line per source: a venue's layouts share one, and a mod circuit with no link of its own is its own line */}
+              {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => creditKey(o) === creditKey(t)) === i).map((t) => (
                 <React.Fragment key={t.id}>
-                  &ldquo;{t.credit!.title}&rdquo; (
-                  <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
-                    {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
-                  </a>
-                  ) by{" "}
+                  &ldquo;{t.credit!.title}&rdquo;{" "}
+                  {t.credit!.short || t.credit!.url ? (
+                    <>
+                      (
+                      <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
+                        {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
+                      </a>
+                      ){" "}
+                    </>
+                  ) : null}
+                  by{" "}
                   {t.credit!.authorUrl ? (
                     <a href={t.credit!.authorUrl} target="_blank" rel="noreferrer" className={linkClass}>
                       {t.credit!.author}
@@ -437,9 +453,13 @@ const Credits: React.FC = () => {
                     t.credit!.author
                   )}{" "}
                   ·{" "}
-                  <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
-                    {t.credit!.license}
-                  </a>
+                  {t.credit!.licenseUrl ? (
+                    <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
+                      {t.credit!.license}
+                    </a>
+                  ) : (
+                    t.credit!.license
+                  )}
                   <br />
                 </React.Fragment>
               ))}
@@ -656,6 +676,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     () => bestLapForCircuit(bestLaps.filter((s) => s.vehicle === props.vehicleModel), trackId, props.vehicleModel),
     [bestLaps, trackId, props.vehicleModel],
   );
+  // The mod packages switched on (read once, as the game started with them)
+  const modCount = useMemo(() => modsState().packages.filter((p) => p.enabled && p.manifest).length, []);
+  // Mods are for the offline launcher and a clone's dev server (mod-loader.ts modsAvailable); the page is built without
+  // a window, so the entry comes in after the first render
+  const modsHere = useSyncExternalStore(noSubscription, modsAvailable, () => false);
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -760,6 +785,19 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: () => (props.onOpenSettings ? props.onOpenSettings() : onControls()),
     },
     { id: "credits", label: t("credits"), icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
+    ...(modsHere
+      ? [
+          {
+            id: "mods",
+            label: t("mods"),
+            // How many packages are switched on, when any are installed
+            badge: modCount > 0 ? t("modsDetail", { count: modCount }) : undefined,
+            icon: "mods" as const,
+            panel: "mods" as const,
+            run: () => openPanel("mods"),
+          },
+        ]
+      : []),
     {
       id: "request",
       label: t("feedback"),
@@ -882,6 +920,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? tp("startRace") : tp("drive") }] : []),
   ];
   const phonePrompts = prompts.filter((p) => p.action !== "move" && p.action !== "tabs");
+  // What reloading the page for an update ends, if anything: a room, or a race joined
+  const updateEnds = props.lobby
+    ? t("updateLeavesRoom")
+    : props.races?.entry.state === "joined" || props.races?.entry.state === "joining"
+      ? t("updateLeavesRace")
+      : undefined;
 
   return (
     <div
@@ -912,15 +956,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             {/* Never beside the badge: a framed game offers no install */}
             <InstallAppButton />
             {/* A newer build is out: from the title screen a reload loses nothing, unless it leaves a room or a race */}
-            <UpdateReady
-              endsSession={
-                props.lobby
-                  ? t("updateLeavesRoom")
-                  : props.races?.entry.state === "joined" || props.races?.entry.state === "joining"
-                    ? t("updateLeavesRace")
-                    : undefined
-              }
-            />
+            <UpdateReady endsSession={updateEnds} />
+            {/* The desktop app's own update (the offline launcher): installed with a restart that keeps this window */}
+            <LauncherUpdate endsSession={updateEnds} />
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
             <InputHint pad={pad} />
@@ -970,7 +1008,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div aria-hidden className="h-3" />
               {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
-              {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "md", true))}
+              {byId(["credits", "mods", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "md", true))}
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
@@ -1060,6 +1098,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
                   ) : null}
                   {panel === "credits" ? <Credits /> : null}
+                  {panel === "mods" && modsHere ? <ModsPanel /> : null}
                   {panel === "request" ? (
                     // The frame above names it, with Close beside the name: the panel leaves out its own heading
                     <RequestPanel
@@ -1090,7 +1129,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md"))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 border-t border-lc-line pt-2.5 short:pt-1.5">
-                  {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "sm"))}
+                  {byId(["credits", "mods", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "sm"))}
                 </div>
               </div>
             </nav>

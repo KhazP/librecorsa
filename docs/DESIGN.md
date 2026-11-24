@@ -3,7 +3,7 @@
 The visual language of every LibreCorsa screen: the site pages, title menu, Settings, pause menu, first-run setup,
 Garage, results and the in-race HUD. The code that carries it: tokens and role classes in `src/app/globals.css`,
 semantic colours in `src/app/palette.css`, and one set of parts in `src/components/ui/` (shown, every part, size and
-state, on the development-only page `/kit`). `node scripts/check-ui.mjs` counts what a typecheck cannot see: a hex in
+state, on the development-only page `/kit`). `node scripts/site/check-ui.mjs` counts what a typecheck cannot see: a hex in
 a class, a hand-typed glyph standing in for an icon, text under the size floor, a radius off the scale. When the code
 and this file disagree, fix one of them; don't let a third look appear.
 

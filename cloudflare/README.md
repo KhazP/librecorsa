@@ -119,7 +119,7 @@ started from a `DEV_ORIGINS` page comes back to it. Discord and Google sign-in l
 work as they are.
 
 The checks run without Cloudflare: `npm run verify` covers the room server, the race server (both sides) and the
-boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`,
+boards on an in-memory database (`scripts/verify/verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`,
 `verify-leaderboard.ts`), the boards' pages and totals (`verify-board-stats.ts`), the usage counter
 (`verify-usage.ts`), the admin numbers with the limits that guard them (`verify-admin.ts`), and player accounts with
 Discord, Google and Steam played by a stand-in and a software passkey (`verify-accounts.ts`).

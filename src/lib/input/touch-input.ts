@@ -23,6 +23,10 @@ export interface TouchInputState {
   shiftUp: boolean;
   /** set true for one frame by a button tap; the consumer clears them */
   shiftDown: boolean;
+  /** One-shot: the Reverse button, straight into reverse past neutral */
+  reverse: boolean;
+  /** One-shot: the Drive button, straight into first out of reverse */
+  drive: boolean;
   /** set true for one frame by a button tap; the consumer clears them */
   boost: boolean;
   /** One-shot: use the Overtake earned in a race, or stop using it */
@@ -44,6 +48,8 @@ export const touchInput: TouchInputState = {
   brakeBtn: false,
   shiftUp: false,
   shiftDown: false,
+  reverse: false,
+  drive: false,
   boost: false,
   overtake: false,
   aero: false,
@@ -62,6 +68,8 @@ export function resetTouchInput(): void {
   touchInput.brakeBtn = false;
   touchInput.shiftUp = false;
   touchInput.shiftDown = false;
+  touchInput.reverse = false;
+  touchInput.drive = false;
   touchInput.boost = false;
   touchInput.overtake = false;
   touchInput.aero = false;

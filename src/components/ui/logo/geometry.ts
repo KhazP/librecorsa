@@ -1,6 +1,6 @@
 /**
  * The one source of the LibreCorsa logo: the LC emblem (full and small), the outlined wordmark, the bars and the
- * lock-up proportions. `LibreCorsaLogo.tsx` draws from it at runtime and `scripts/build-brand.ts` writes every file in
+ * lock-up proportions. `LibreCorsaLogo.tsx` draws from it at runtime and `scripts/site/build-brand.ts` writes every file in
  * public/branding and public/favicon.ico from it (`npm run brand`), so no rendition is kept by hand.
  *
  * The hex values below are the mark's own colours and are defined only here. Chalk, volt, void, cyan, crimson and
@@ -201,7 +201,7 @@ export const MASK_COLORS = { cut: "#000000", keep: "#FFFFFF" } as const;
  * The box is one em tall, the baseline where a `line-height: 1` line box puts it, so it sits where the live text sat.
  * The slanted capitals reach `overhang` past `width` at the right; give the box overflow or padding for that.
  */
-// <wordmark:generated> by scripts/brand/outline-text.py from Orbitron 900, do not edit by hand
+// <wordmark:generated> by scripts/site/brand/outline-text.py from Orbitron 900, do not edit by hand
 export const WORDMARK = {
   /** One em, in font units; the box is one em tall with the baseline where `line-height: 1` puts it */
   em: 1000,

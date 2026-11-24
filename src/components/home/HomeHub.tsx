@@ -29,7 +29,7 @@ import { groupCoverage } from "@/lib/home/coverage";
 import { preloadVenueHero, VenueHero } from "./VenueHero";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
-import { APP_RELEASE } from "@/lib/downloads";
+import { RELEASE_LINKS } from "@/lib/downloads";
 import { HomeLapTimes } from "./HomeLapTimes";
 import { bestLapForCircuit } from "@/lib/sim/ghost-store";
 import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
@@ -1042,7 +1042,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
             {(
               [
                 ["GitHub", data.repoUrl, true],
-                [td("signingPolicy"), APP_RELEASE.codeSigningPolicyUrl, true],
+                [td("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl, true],
                 [tm("privacy"), withBasePath("/privacy"), false],
                 [tm("press"), withBasePath("/press"), false],
               ] as const

@@ -186,7 +186,7 @@
     "list": "{car} liveries"
   },
   "downloads": {
-    "intro": "Optional native wrappers for Windows, macOS, Linux and Android. They open librecorsa.org directly, so game updates arrive without reinstalling.",
+    "introApps": "A desktop app for Windows, macOS and Linux that plays offline too and takes mods, and an app for Android. Online, both play the live game, so updates arrive without reinstalling.",
     "directLink": "Direct link",
     "platforms": "Platforms",
     "thisDevice": "This device",
@@ -198,17 +198,17 @@
     "installCommand": "{platform} install command",
     "whyInstall": "Why install the app",
     "highlights": {
-      "desktop": {
+      "desktopApp": {
         "label": "Desktop",
-        "text": "Requests the discrete GPU on multi-GPU laptops, grants WebHID silently for racing wheels and DualSense, disables background throttling, and checks GitHub Releases for updates."
+        "text": "Keeps the pages, cars and circuits it loads, so the game plays offline too. It takes mods, converts circuits and cars from other games, and updates itself from GitHub Releases."
       },
       "android": {
         "label": "Android",
         "text": "Fullscreen Trusted Web Activity with no browser URL bar, sticky-immersive edge swipes, Android Game Mode, and Drive / Boards launcher shortcuts."
       },
-      "current": {
+      "live": {
         "label": "Always current",
-        "text": "Every wrapper opens librecorsa.org directly instead of bundling tracks or cars, so physics, circuits and multiplayer updates arrive immediately."
+        "text": "Online, both apps play the live game from librecorsa.org, so physics, circuits and multiplayer updates arrive without reinstalling. Offline, the desktop app plays what it kept."
       },
       "browser": {
         "label": "Browser & iOS",
@@ -216,7 +216,7 @@
       }
     },
     "buildsTitle": "Builds & signing",
-    "builds": "All installers and APKs are built from this repository’s source by GitHub Actions and published on GitHub Releases with SHA-256 digests. Free Windows code signing through SignPath Foundation is being set up; macOS builds are currently unsigned; the Android APK is signed with the upload key verified by <code>{file}</code>.",
+    "buildsSigned": "Every app is built from this repository’s source by GitHub Actions and published on GitHub Releases with SHA-256 digests. The desktop app installs an update only when its signature checks out. Free Windows code signing through SignPath Foundation is being set up; Apple hasn’t notarised the macOS app yet; the Android APK is signed with the upload key verified by <code>{file}</code>.",
     "allReleases": "All releases on GitHub",
     "signingPolicy": "Code signing policy"
   }

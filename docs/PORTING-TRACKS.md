@@ -1,49 +1,67 @@
 # Porting circuits
 
-The repository includes one circuit, RISE Motordrome. Every other circuit is hosted on librecorsa.org and is gitignored. This guide is how I convert an Assetto Corsa circuit mod for a local clone, and how to build a circuit of your own in Blender. An F1 25 track mod has its own page: [Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md).
+A local clone of LibreCorsa includes one circuit, RISE Motordrome—all other hosted circuits live in R2 and are gitignored. This guide explains how to convert an Assetto Corsa track mod for a local build, as well as how to model and build an original circuit from scratch in Blender.
 
-The converter was written circuit by circuit, so expect to read it and adjust it for a new one.
+To extract a track mod from an F1 25 `.erp` archive instead, see [Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md). Because the mod converter evolved circuit by circuit, expect to read through `port_ac_track.py` and add track-specific overrides for new conversions.
 
-## What you need
+## Prerequisites
 
-- Node.js, then `npm install` once (the game, the racing-line optimiser, the checks and the compressor).
-- [uv](https://docs.astral.sh/uv/) for the Python scripts. The commands below pull the pinned packages from `scripts/tracks/requirements.txt`, so there is no virtualenv to set up. Other Pillow or OpenCV versions work, but they encode some textures to different bytes.
-- For a mod: its track folder, the one with the `.kn5` models, `models*.ini` files, `data/` and the layout folders. You don't need the game itself to convert a mod.
-- For your own circuit: [Blender](https://www.blender.org/) (I use 5.3).
+- **Node.js:** Run `npm install` once for the simulator, racing-line optimizer, verification suites, and meshopt compressor.
+- **[uv](https://docs.astral.sh/uv/):** Executes the Python pipeline using the pinned packages in `scripts/tracks/requirements.txt` (no virtualenv setup required; different Pillow or OpenCV versions work too, though encoded texture bytes may vary slightly).
+- **For an Assetto Corsa mod:** The extracted track directory containing `.kn5` models, `models*.ini`, `data/`, and any layout subdirectories. You do not need Assetto Corsa installed.
+- **For an original circuit:** [Blender](https://www.blender.org/) (developed against Blender 5.3).
 
-## Converting a mod
+## Converting an Assetto Corsa mod
 
-### 1. Add the circuit
+### 1. Set up the circuit
 
-Every circuit has an entry in `AC_TRACKS` at the top of `scripts/tracks/port_ac_track.py`. Copy the closest existing one:
+A mod converts without an entry: give it an id of its own and its track folder, and the converter reads its settings from the mod itself (`scripts/tracks/ac_mod_entry.py`): the layouts, the models in `models_<layout>.ini`, the name, place, pitboxes, author and tags in `ui_track.json`, and the mod's own surface keys in `data/surfaces.ini`. It prints every value with where it came from and marks the ones it guessed (the altitude, a layout name, a description). A JSON file of the keys below, passed with `--settings`, is merged over them:
 
-- a circuit with one layout: `oschersleben`
-- several layouts in one folder: `okayama` and `okayama_piper`, or the `vir_*` entries
-- a street circuit: `monaco` or `norisring`
-- a hill climb (one timed run, no laps): `borgloh` or `goodwood`
+```bash
+uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirements.txt \
+  python -P scripts/tracks/port_ac_track.py my_circuit --src path/to/<track folder> [--layout <name>] [--settings my_circuit.json]
+```
 
-The fields every entry needs:
+A mod with several layouts needs `--layout` (the layout's folder, or its name in the game); without it the converter lists them. `npm run mod -- import ac-track` does the same and packages the result ([docs/importing-mods.md](importing-mods.md)).
 
-- `folder`: the name of the mod's track folder
-- `layout_dir`: the layout's subfolder (`''` when the folder holds a single layout)
-- `models_ini` (the layout's `models_*.ini`) or `kn5_files` (a list of `.kn5` files, when the mod has no ini)
-- `name`, `layout`, `country`, `city`, `description`
-- `baseAltitudeM`: the circuit's height above sea level, for air density
-- `pitboxes`
-- `credit`: `title`, `author`, `url`, `short`, `license`, `licenseUrl`, shown in the game's credits
-- `type` (`'street'` or `'hillclimb'`) and `pointToPoint: True` where they apply
+The circuits the game hosts have hand-written entries in `AC_TRACKS` at the top of `scripts/tracks/port_ac_track.py`, with the fixes each mod needed and the licence it is hosted under. To add one, copy the closest existing entry:
 
-The other keys fix things a particular mod needs: `physicsNodeOverrides` when the mod's surface names don't say what a surface is, `hideTextures`, `hideNodes` and `hideMaterials` to leave meshes out, `sectionSkip` and `sectionNames` for corner names, `closeBranches` and `openWalls` where several layouts share the asphalt, `bakeMultilayerMasks` for terrain drawn from a blend mask over a blank base texture (LilSki's circuits), `texturePatches` to paint over one panel of a sign atlas, `extraModels` to draw props from another of the mod's models (never as physics), and `driftingObjects` for a models ini whose `DYNAMIC_OBJECT_n` balloons or blimps float over the circuit (drawn moving as Assetto Corsa moves them, `src/lib/render/drifting-objects.ts`). The comments next to each one in the existing entries say what it was for.
+- **Single layout:** `oschersleben`
+- **Multi-layout track folder:** `okayama` / `okayama_piper`, or the `vir_*` entries
+- **Street circuit:** `monaco` or `norisring`
+- **Hill climb (point-to-point timed run):** `borgloh` or `goodwood`
 
-### 2. Point it at the folder
+Required fields:
 
-The converter looks for the track folder in this order:
+- `folder`: Name of the source track directory.
+- `layout_dir`: Layout subfolder name (`""` for single-layout tracks).
+- `models_ini` (the layout's `models_*.ini`) or `kn5_files` (explicit list of `.kn5` files when no `.ini` exists).
+- `name`, `layout`, `country`, `city`, `description`.
+- `baseAltitudeM`: Elevation above sea level in metres (controls air density).
+- `pitboxes`: Number of pit stalls.
+- `credit`: `{ title, author, url, short, license, licenseUrl }` shown in the game's credits.
+- `type` (`"street"` or `"hillclimb"`) and `pointToPoint: True` where applicable.
 
-1. `--src <folder>` on the command line (one folder at a time, for any of its layouts)
-2. `scripts/tracks/sources.local.json`, a gitignored file mapping folder names (or circuit ids) to paths: `{ "oschersleben": "/path/to/oschersleben" }`
-3. `$LIBRECORSA_AC_TRACKS/<folder>`, e.g. set to Assetto Corsa's `content/tracks` if you have the game
+Optional override keys let you work around quirks in individual mods (see inline comments on existing entries for concrete examples):
 
-### 3. Run it
+- `physicsNodeOverrides`: Override surface classification when mesh names are ambiguous.
+- `hideTextures`, `hideNodes`, `hideMaterials`: Exclude unwanted visual geometry.
+- `sectionSkip`, `sectionNames`: Clean up or supply corner names.
+- `closeBranches`, `openWalls`: Manage barriers where multiple layouts share asphalt.
+- `bakeMultilayerMasks`: Bake splat/blend masks over blank base textures (common on LilSki circuits).
+- `texturePatches`: Paint over specific regions of a billboard or sign atlas.
+- `extraModels`: Import visual-only props from additional `.kn5` files (never added to physics colliders).
+- `driftingObjects`: Import animated `DYNAMIC_OBJECT_n` balloons or blimps from `models.ini` (rendered via `src/lib/render/drifting-objects.ts`).
+
+### 2. Point the converter at your track files
+
+The converter resolves the source folder in this priority order:
+
+1. `--src <folder>` passed directly on the CLI (applies to one folder at a time, across any of its layouts).
+2. `scripts/tracks/sources.local.json` (gitignored), mapping folder names or circuit IDs to local paths, e.g., `{ "oschersleben": "/path/to/oschersleben" }`.
+3. `$LIBRECORSA_AC_TRACKS/<folder>` (for example, pointing directly at Assetto Corsa's `content/tracks` directory).
+
+### 3. Run the converter
 
 ```bash
 uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirements.txt \
@@ -56,22 +74,28 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
 - `--no-line-opt` skips the optimiser. The circuit keeps the racing lines of its last build when the new centreline has as many samples; otherwise it gets the minimum-curvature line.
 - `--no-glb` writes only the track data. The optimiser needs the GLB, so it is skipped too and the lines are kept the same way.
 - `--no-compress` keeps the raw GLB.
-- `--extras-only` grafts just the circuit's `extraModels` and `driftingObjects` into its existing GLB (`scripts/graft-track-extras.mjs`), leaving every other byte of it and the track data as they are. For a circuit whose full rebuild would also change what it ships.
+- `--extras-only` grafts just the circuit's `extraModels` and `driftingObjects` into its existing GLB (`scripts/tracks/graft-track-extras.mjs`), leaving every other byte of it and the track data as they are. For a circuit whose full rebuild would also change what it ships.
 
-From the mod it reads:
+- `--no-line-opt`: Skips the racing-line optimizer (reuses previously optimized lines if sample counts match, otherwise computes a minimum-curvature line).
+- `--no-glb`: Regenerates `track_data.json` only (also skips line optimization, since the optimizer requires the GLB).
+- `--no-compress`: Writes an uncompressed GLB.
+- `--extras-only`: Grafts only `extraModels` and `driftingObjects` into an existing GLB (`scripts/tracks/graft-track-extras.mjs`) without touching other geometry or `track_data.json`.
+- `--no-register`: Leaves `public/tracks/index.json` and `scripts/tracks/tracks.json` untouched and writes a standalone `circuit.json` next to the build for packaging as a mod (see [Making mods](modding.md)).
 
-- the `.kn5` models: visual meshes, and the physics meshes by their surface names
-- `ai/fast_lane.ai`: required, since the centreline and the road width are taken from it
-- `ai/pit_lane.ai`: optional, the pit lane
-- `data/`: `surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras.ini` and `groove.ini`, each optional
+Files consumed from the mod directory:
+
+- `.kn5` models (visual geometry plus physics meshes identified by surface naming)
+- `ai/fast_lane.ai` (**required**—provides centreline and track widths)
+- `ai/pit_lane.ai` (optional pit lane spline)
+- `data/surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras.ini`, and `groove.ini` (all optional)
 
 ## Building a circuit in Blender
 
-`scripts/tracks/build_blender_track.py` turns a circuit modelled in Blender into the game's files. It runs the same road, kerb, wall and racing-line steps as the mod converter, so you don't need Assetto Corsa.
+`scripts/tracks/build_blender_track.py` turns a Blender-authored circuit into LibreCorsa's runtime format using the exact same road, kerb, barrier, and racing-line pipeline—no Assetto Corsa files needed.
 
-### Try the example
+### Try the worked example
 
-`scripts/tracks/example_circuit.py` models a small test circuit in Blender from code: a 1.86 km loop with a pit lane, a hairpin, esses and a banked corner. Build it and convert it:
+`scripts/tracks/example_circuit.py` procedurally generates a 1.86 km test circuit (complete with pit lane, hairpin, esses, and a banked turn) as both a `.blend` and a `.glb`:
 
 ```bash
 blender -b --factory-startup -P scripts/tracks/example_circuit.py -- ~/librecorsa-example
@@ -82,33 +106,33 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
   python -P scripts/tracks/build_blender_track.py example_circuit --glb ~/librecorsa-example/example_circuit.glb
 ```
 
-On a Mac, `blender` is `/Applications/Blender.app/Contents/MacOS/Blender`. The first command also saves `example_circuit.blend` next to the GLB: open it to see how the meshes are named and laid out.
+On macOS, invoke Blender via `/Applications/Blender.app/Contents/MacOS/Blender`. Open the generated `example_circuit.blend` to inspect exact mesh naming and layout conventions.
 
-### Modelling
+### Modelling conventions
 
-Work in metres with Blender's Z up; the export turns it into the game's Y up.
+Model in metres using Blender's standard `Z`-up orientation (glTF export automatically converts to LibreCorsa's `Y`-up space):
 
-- **Surfaces**: name each mesh the cars touch by what it is: `Road`, `Kerb`, `Runoff`, `Gravel`, `Grass`, `Wall` or `PitLane`, alone or followed by `.`, `_`, `-`, a space or a digit (`Road.001`, `Kerb_T1`, `Wall 3`). The cars drive on those meshes' triangles and hit the walls. Meshes with any other name are scenery: drawn, never driven on.
-- **The road** should be smooth, with enough faces across it for its camber. Unwrap its UVs: the game draws the road's materials with its own asphalt shader, which needs them. Lay kerbs a centimetre or so above the road edge.
-- **Materials**: Principled BSDF, as the glTF exporter expects. The game keeps metalness (up to 0.6) only on material names that say metal (metal, steel, armco, rail, guard, post, pole and the like), and roughness at 0.65 or more (0.8 for ground: asphalt, grass, kerbs, gravel), unless a texture sets them.
-- **`Track_Centreline`**: a curve down the middle of the road all the way round, converted to a mesh (Object > Convert > Mesh). It can float above the road; the heights come from the road under it.
-- **`Track_Start`**: an empty with Single Arrow display on the start line, rotated so the arrow lies flat and points the way the cars go. The grid lines up behind it, so leave about 180 m of road there.
-- **`Track_PitLane`** (optional): the same kind of line down the middle of the pit lane, from its entry to its exit.
+- **Drivable surfaces and walls:** Name every physical mesh starting with `Road`, `Kerb`, `Runoff`, `Gravel`, `Grass`, `Wall`, or `PitLane`—either alone or followed by `.`, `_`, `-`, a space, or a digit (e.g., `Road.001`, `Kerb_T1`, `Wall 3`). Cars drive directly on these triangles and collide with walls. Any other mesh name is treated as visual-only scenery.
+- **Road mesh and UVs:** Keep the road surface smooth with enough lateral subdivisions to represent camber cleanly, and unwrap its UVs so LibreCorsa's custom asphalt shader renders properly. Raise kerbs roughly `1 cm` above the road edge.
+- **Materials:** Use Principled BSDF materials. Unless driven by a texture map, LibreCorsa only retains metalness (clamped up to `0.6`) on material names containing metal keywords (`metal`, `steel`, `armco`, `rail`, `guard`, `post`, `pole`, etc.), and enforces minimum roughness of `0.65` (`0.8` for ground surfaces such as asphalt, grass, kerbs, and gravel).
+- **`Track_Centreline`:** A closed loop tracing the middle of the road, converted to a mesh (**Object > Convert > Mesh**). Vertical height is projected onto the `Road` mesh below, so the loop may float above the surface.
+- **`Track_Start`:** A **Single Arrow** Empty placed on the start/finish line, rotated flat so the arrow points in the direction of travel. Leave roughly `180 m` of clear road behind it for the starting grid.
+- **`Track_PitLane` (optional):** A loose-edge mesh line running down the middle of the pit lane from pit entry to pit exit.
 
-Closed circuits only for now: a hill climb still needs the mod converter.
+> `build_blender_track.py` currently supports closed circuits only; point-to-point hill climbs still require the mod converter.
 
-### Exporting
+### glTF export settings
 
-File > Export > glTF 2.0, with:
+In Blender, open **File > Export > glTF 2.0** with these exact options:
 
-- Format: glTF Binary (`.glb`)
-- Data > Mesh > Loose Edges: on. That's how `Track_Centreline` and `Track_PitLane` get into the file.
-- Data > Mesh > Apply Modifiers: on if any mesh is built with modifiers (an Array or Curve road, say). It is off by default, and the meshes then export without them.
-- Draco Compression and Meshopt Compression (under Data): off
+- **Format:** glTF Binary (`.glb`)
+- **Data > Mesh > Loose Edges:** **On** (required so `Track_Centreline` and `Track_PitLane` export)
+- **Data > Mesh > Apply Modifiers:** **On** if your track uses modifiers such as Array or Curve (off by default)
+- **Data > Draco Compression** and **Meshopt Compression:** **Off** (the build script handles meshopt compression separately)
 
-### Settings
+### Settings JSON
 
-Next to the GLB, a JSON file with the same name (or pass `--settings <file>`):
+Place a `.json` file next to your `.glb` with the same stem (or pass `--settings <file>`):
 
 ```json
 {
@@ -119,61 +143,67 @@ Next to the GLB, a JSON file with the same name (or pass `--settings <file>`):
   "baseAltitudeM": 120,
   "pitboxes": 20,
   "description": "One or two sentences for the circuit menu.",
-  "credit": { "title": "My Circuit", "author": "Your name", "url": "https://…", "license": "CC BY 4.0", "licenseUrl": "https://…" }
+  "credit": {
+    "title": "My Circuit",
+    "author": "Your name",
+    "url": "https://…",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://…"
+  }
 }
 ```
 
-The keys the mod converter reads also work here, e.g. `minWidthM` for a road narrower than 8.5 m or `turns_override` to name the corners.
+Any applicable mod-converter setting also works here—such as `minWidthM` for roads narrower than `8.5 m`, or `turns_override` to supply custom corner names.
 
-### Converting
+### Running the Blender builder
 
 ```bash
 uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirements.txt \
   python -P scripts/tracks/build_blender_track.py <id> --glb path/to/circuit.glb
 ```
 
-It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json`, runs the racing-line optimiser and compresses the GLB, with the same `--no-line-opt`, `--no-glb` and `--no-compress` options. A DRS zone goes on each of the three longest straights that is at least 450 m long, the TV cameras are spread round the lap, and the corners are numbered in order. Then list it and check it as below.
+This writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, updates `public/tracks/index.json`, optimizes racing lines, and compresses the GLB (supporting the same `--no-line-opt`, `--no-glb`, `--no-compress`, and `--no-register` flags). DRS zones are placed automatically on up to the three longest straights of at least `450 m`, TV cameras are distributed around the lap, and turns are numbered sequentially.
 
-## Problems you're likely to hit
+## Common issues and fixes
 
-I ran into these porting Qiddiya Speed Park, a modelled circuit with a sharp crest, tight banked corners and a night race. The settings go in the circuit's settings JSON and work with both converters, except `gridBoxes`, `defaultTimeOfDay` and `nightLighting`, which only `build_blender_track.py` reads.
+These solutions came out of porting Qiddiya Speed Park—a circuit with sharp elevation crests, tight banked corners, and night lighting. Put these keys in your circuit settings JSON; all work with both converters except `gridBoxes`, `defaultTimeOfDay`, and `nightLighting` (`build_blender_track.py` only).
 
-- **A crest comes out lower than the model.** The road's height profile is smoothed along the lap (`profileSmoothSamples`, 1.5 samples by default, about 7.5 m) and crests are eased to a 400 m radius (`crestMinRadiusM`), so scan ripple doesn't launch the cars. On a clean model with a real sharp crest that cuts the crest down, and the car drives under the drawn road. Lower both: Qiddiya uses `"crestMinRadiusM": 20` and `"profileSmoothSamples": 0.6`.
-- **The car bounces through a tight banked corner.** The physics surface is built from rows 5 m apart joined by straight lines. Round a tight banked corner those lines sag a few centimetres off the curve the wheels read the road height from, and the car bounces every 5 m. `"colliderRowsPerSample": 2` puts the rows on that curve, two per 5 m. Four smooths it more but makes the GLB a few MB bigger. If the road also twists quickly, `"roadTwistM"` (Qiddiya: 0.005) cuts the road surface finer where it twists.
-- **Kerbs and lines break up in the distance.** Paint lying a millimetre over the road fights it for depth. Give those materials a `depthOffset` in their glTF extras (Qiddiya's paint uses -2) and the game draws them in front. In Blender that's a custom property on the material, exported with Include > Data > Custom Properties on. Paint with a `depthOffset` also moves with the road under it when the game fits the drawn road to the physics one, so long road triangles don't bury the kerbs.
-- **The model is too heavy.** Simplify meshes with their UVs kept, or the textures smear. Leave painted lines out of any simplification: they're thin enough to turn into wedges.
-- **Sponsor logos.** Real brands hide in textures with generic names. Before you publish, look at every texture the circuit uses (a contact sheet makes it quick) and paint over logos, photos of real people and photos of real places.
-- **The grid doesn't sit on the painted boxes.** `gridBoxes` takes the corner points of each painted box in the model's coordinates and stands the grid on the paint (`scripts/tracks/painted_grid.py`).
-- **A night race.** `"defaultTimeOfDay": "night"` starts sessions at night until the player picks a time. `nightLighting` places floodlight masts and lights tunnels (its settings are at the top of `scripts/tracks/night_lighting.py`). A material that should glow at night gets `nightEmissive` extras with its `day` and `night` strength.
-- **Corner names.** `turns_override` names corners by distance round the lap in metres: `[[740, "The Blade"]]`.
-- **Testing a hosted circuit before it's listed.** `"unlisted": true` keeps it out of the game's lists. It still opens by link (`?track=<id>`).
+- **Sharp crests come out flattened:** By default, road elevation is smoothed over `1.5` samples (~`7.5 m`, `profileSmoothSamples`) and crests are eased to a `400 m` minimum radius (`crestMinRadiusM`) to suppress laser-scan noise. On a clean modelled circuit with an intentional sharp crest, this drops the physics surface below the visual road. Lower both values (Qiddiya uses `"crestMinRadiusM": 20` and `"profileSmoothSamples": 0.6`).
+- **Car bounces every 5 m through tight banked corners:** The physics collider connects sample rows spaced `5 m` apart with straight chords. On steep, tight banking those chords sag a few centimetres beneath the curve sampled by the tyres, causing rhythmic bouncing. Set `"colliderRowsPerSample": 2` (or `4` for even smoother surfaces at the cost of a few extra megabytes) to place intermediate rows on the true curve. For rapidly twisting banking, also tighten `"roadTwistM"` (Qiddiya uses `0.005`).
+- **Kerbs and painted lines Z-fight at distance:** Decals sitting a millimetre above asphalt fight the road surface in the depth buffer. Add a `depthOffset` glTF extra to those materials (Qiddiya uses `-2`; in Blender, add a custom property on the material and export with **Include > Data > Custom Properties** enabled). Materials with `depthOffset` also track road-mesh elevation adjustments so long asphalt triangles never swallow painted lines or kerbs.
+- **Mesh complexity is too heavy:** Always simplify geometry with UV preservation enabled so textures don't smear, and exclude thin painted lines from simplification so they don't collapse into jagged wedges.
+- **Unwanted real-world branding:** Real logos and photos often hide inside generically named textures. Generate a contact sheet of every texture before publishing and paint over real sponsors, people, and recognizable places.
+- **Start grid misaligned with painted grid boxes:** Supply `gridBoxes` with the model-space corner coordinates of each painted box so cars spawn directly inside the paint (`scripts/tracks/painted_grid.py`).
+- **Night races and glowing materials:** Set `"defaultTimeOfDay": "night"` to default sessions to night, configure `nightLighting` to place floodlight masts and tunnel lights (see options at the top of `scripts/tracks/night_lighting.py`), and add `nightEmissive` glTF extras specifying `day` and `night` emissive intensities on materials that should illuminate after dark.
+- **Custom corner names:** Use `turns_override` to label turns by lap distance in metres, e.g., `[[740, "The Blade"]]`.
+- **Testing a hosted circuit privately:** Set `"unlisted": true` to hide the circuit from in-game menus while keeping it accessible via `?track=<id>`.
 
-## Listing it in the game
+## Listing the circuit in a local clone
 
-- A clone lists only the circuits in `REPO_TRACK_IDS` in `src/lib/hosted-content.ts`. Add your id there. Setting `NEXT_PUBLIC_HOSTED_CONTENT=1` instead lists every circuit, including hosted ones whose files you don't have.
-- `npm run home-outlines` draws the circuit's map for the home page.
-- The AI's per-circuit settings are optional: see the tuning files in `public/ai`.
-- Both converters add the circuit to `public/tracks/index.json`, which is tracked. Don't commit that change for a circuit whose files only you have: a listed circuit without its files can't load.
+- Add your circuit ID to `REPO_TRACK_IDS` in `src/lib/hosted-content.ts` (local clones only display listed IDs; setting `NEXT_PUBLIC_HOSTED_CONTENT=1` displays every hosted circuit even if its files are absent).
+- Run `npm run home-outlines` to regenerate the circuit outline map for the home page.
+- Per-circuit AI tuning files in `public/ai` are optional.
+- Both converters register new circuits in the tracked `public/tracks/index.json` file. Do **not** commit an `index.json` entry for a circuit whose assets only exist locally—a listed circuit without files will fail to load.
 
-## Checking it
+## Verification and compression
 
 ```bash
 npx tsx scripts/tracks/verify-tracks.ts <id>
 npm run dev
 ```
 
-`verify-tracks.ts` builds the track data through the game's own code, checks the grid sits on the road and the GLB has its collider nodes, and drives a lap in both F1 cars and the GT3. Then pick the circuit in the menu and drive it. Add `?colliders=1` to the address to see the physics surfaces drawn over the circuit.
+`verify-tracks.ts` parses the circuit through LibreCorsa's runtime loader, verifies grid placement and GLB collider nodes, and simulates test laps in both F1 cars and the GT3. Launch the dev server, select the circuit, and append `?colliders=1` to visualize the physics surfaces overlaid on the 3D scene.
 
-If you converted with `--no-compress`, `npm run compress-tracks` compresses every listed circuit that isn't yet and checks the physics meshes come out bit-exact.
+If you built with `--no-compress`, run `npm run compress-tracks` to meshopt-compress all uncompressed circuits and verify that hidden physics colliders remain bit-exact.
 
-## What a circuit is
+## Circuit file format
 
-A GLB and a `track_data.json` in `public/tracks/<id>/`:
+Every circuit lives under `public/tracks/<id>/` as two core files:
 
-- **The GLB** needs `Track_Collider_Road`, a low-resolution drivable surface covering the road plus 1.6 m each side, and `Track_Collider_Wall` for the barriers. Drivable and off-road surfaces are meshes tagged with `userData.surface` (`road`, `kerb`, `sausage`, `runoff`, `pitlane`, `gravel` or `grass`) and optionally `userData.grip`. The converters name them `Track_Surface_Road`, `Track_Surface_Kerb`, `Track_Surface_Runoff`, `Track_Surface_Gravel` and `Track_Surface_Grass`. The full contract is the comment at the top of `src/lib/sim/f12026-car/TrackColliderQuery.ts`.
-- **`track_data.json`** holds the circuit's metadata, DRS zones, cameras, turns, sectors, spawn grid, pit lane and a sample every few metres along the lap (position, width, banking, racing lines, kerbs, run-off and walls each side). `public/tracks/rwanda_official/track_data.json` is the reference schema, and `src/lib/track-data.ts` reads it.
+- **`<id>.glb`:** Must contain `Track_Collider_Road` (a clean drivable physics surface extending `1.6 m` past each road edge) and `Track_Collider_Wall` (barriers). Drivable and off-track meshes carry `userData.surface` (`road`, `kerb`, `sausage`, `runoff`, `pitlane`, `gravel`, or `grass`) and optional `userData.grip`—named `Track_Surface_Road`, `Track_Surface_Kerb`, `Track_Surface_Runoff`, `Track_Surface_Gravel`, and `Track_Surface_Grass` by the converters. See the header comment in `src/lib/sim/f12026-car/TrackColliderQuery.ts` for the full collider contract.
+- **`track_data.json`:** Stores metadata, DRS zones, TV cameras, turn markers, sectors, starting grid, pit lane, and dense spline samples (position, width, banking, racing lines, kerbs, run-off, and wall offsets). Inspect `public/tracks/rwanda_official/track_data.json` and `src/lib/track-data.ts` as the canonical reference.
 
-`scripts/rwanda-official/` builds RISE Motordrome in Blender and writes both files itself, with its own terrain, kerbs and scenery. It is written for that one site, so read it as a worked example of a more detailed build. Its README explains the steps.
+For an advanced, fully scripted Blender build—complete with custom terrain, kerbs, and scenery—see `scripts/tracks/rwanda-official/` and its README, which generates RISE Motordrome directly.
 
 ## Licences
 

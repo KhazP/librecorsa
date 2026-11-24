@@ -1,6 +1,6 @@
 /**
  * Circuits the simulator offers, as listed in public/tracks/index.json: RISE Motordrome (built for LibreCorsa,
- * scripts/rwanda-official), hand-built sim circuits (scripts/tracks/port_ac_track.py) and community scans
+ * scripts/tracks/rwanda-official), hand-built sim circuits (scripts/tracks/port_ac_track.py) and community scans
  * (scripts/tracks/build_track.py), each written to public/tracks/<id>/. The default circuit ships inside the bundle
  * (track-data.ts imports its JSON); the others' track data is fetched when the player picks one.
  */
@@ -10,6 +10,7 @@ import { withBasePath } from "@/lib/base-path";
 import { trackListed } from "@/lib/hosted-content";
 import { DEFAULT_TRACK_ID, setActiveTrack, type RawTrackJson } from "@/lib/track-data";
 import { TIME_OF_DAY_PRESETS, type TimeOfDayId } from "@/lib/sim/weather";
+import { resolveModTrackUrls } from "@/lib/mods/mod-urls";
 
 export { DEFAULT_TRACK_ID };
 
@@ -31,8 +32,9 @@ export interface TrackCredit {
  * - "original": built for LibreCorsa (RISE Motordrome)
  * - "sim": a hand-built sim circuit (an Assetto Corsa track) with its own road, kerb and barrier meshes
  * - "sketchfab": a community 3D model converted automatically, its road, kerbs and barriers traced from the mesh
+ * - "mod": a circuit from a mod package the player installed (src/lib/mods), nothing the game itself has checked
  */
-export type CircuitQuality = "original" | "sim" | "sketchfab";
+export type CircuitQuality = "original" | "sim" | "sketchfab" | "mod";
 
 export interface CircuitQualityMeta {
   /** Badge on cards and next to track names */
@@ -67,7 +69,25 @@ export const CIRCUIT_QUALITY_META: Record<CircuitQuality, CircuitQualityMeta> = 
     variant: "soft",
     get description() { return tx("game.circuitQuality.scanDetail"); },
   },
+  mod: {
+    get badge() { return tx("game.circuitQuality.modBadge"); },
+    get filterLabel() { return tx("game.circuitQuality.mod"); },
+    color: "#B388FF",
+    variant: "outline",
+    get description() { return tx("game.circuitQuality.modDetail"); },
+  },
 };
+
+/** The mod package a circuit or car comes from (src/lib/mods) */
+export interface ModOrigin {
+  /** `author.name` */
+  packageId: string;
+  /** The package's own name */
+  packageName: string;
+  version: string;
+  /** Its content hash (mod-manifest.ts `packageHash`), when known: online rooms compare it */
+  hash?: string;
+}
 
 export interface TrackInfo {
   id: string;
@@ -97,6 +117,8 @@ export interface TrackInfo {
    * everywhere: a stored choice, a room's circuit, a board.
    */
   unlisted?: boolean;
+  /** The mod package it comes from; absent for the game's own circuits */
+  mod?: ModOrigin;
 }
 
 /** "hillclimb": a road from a start line to a finish line somewhere else, driven as one timed run */
@@ -198,16 +220,42 @@ export const LINKED_TRACK_ID: string | null = (() => {
 export const listedTracks = (tracks: readonly TrackInfo[], linkedId: string | null): TrackInfo[] =>
   tracks.filter((t) => !t.unlisted || t.id === linkedId);
 
-/** What the circuit browser, the home page, the lap board picker and the credits show */
+/** What the circuit browser, the home page, the lap board picker and the credits show (refilled in place by `registerModTracks`) */
 export const LISTED_TRACKS: readonly TrackInfo[] = listedTracks(TRACKS, LINKED_TRACK_ID);
 
-/** The listed circuits grouped by venue (same name and country), in index order */
-export const CIRCUIT_VENUES: readonly CircuitVenue[] = LISTED_TRACKS.reduce<CircuitVenue[]>((venues, t) => {
-  const venue = venues.find((v) => v.name === t.name && v.country === t.country);
-  if (venue) venue.layouts.push(t);
-  else venues.push({ id: t.id, name: t.name, country: t.country, city: t.city, region: circuitRegion(t), layouts: [t] });
-  return venues;
-}, []);
+/** Circuits grouped by venue (same name and country, and the same mod package), in list order */
+export const groupVenues = (tracks: readonly TrackInfo[]): CircuitVenue[] =>
+  tracks.reduce<CircuitVenue[]>((venues, t) => {
+    const venue = venues.find((v) => v.name === t.name && v.country === t.country && v.layouts[0].mod?.packageId === t.mod?.packageId);
+    if (venue) venue.layouts.push(t);
+    else venues.push({ id: t.id, name: t.name, country: t.country, city: t.city, region: circuitRegion(t), layouts: [t] });
+    return venues;
+  }, []);
+
+/** The listed circuits grouped by venue (refilled in place by `registerModTracks`) */
+export const CIRCUIT_VENUES: readonly CircuitVenue[] = groupVenues(LISTED_TRACKS);
+
+/** The game's own circuits, before any mod package added its own */
+const BUILT_IN_TRACKS: readonly TrackInfo[] = [...TRACKS];
+
+/**
+ * Makes `modTracks` the mod circuits every list and lookup offers, after the game's own, in place of any registered
+ * before: the exported arrays are refilled, so modules that imported them see the change. Call before the menus
+ * mount (mod-loader.ts does, once the installed packages are read). An id the game already has is skipped: a package
+ * can never stand in for one of the game's own circuits.
+ */
+export function registerModTracks(modTracks: readonly TrackInfo[]): void {
+  const builtIn = new Set(BUILT_IN_TRACKS.map((t) => t.id));
+  const added = modTracks.filter((t) => t.mod && !builtIn.has(t.id));
+  refill(TRACKS, [...BUILT_IN_TRACKS, ...added]);
+  refill(LISTED_TRACKS as TrackInfo[], listedTracks(TRACKS, LINKED_TRACK_ID));
+  refill(CIRCUIT_VENUES as CircuitVenue[], groupVenues(LISTED_TRACKS));
+}
+
+function refill<T>(target: T[], items: readonly T[]): void {
+  target.length = 0;
+  target.push(...items);
+}
 
 export const venueOf = (trackId: string): CircuitVenue | undefined => CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === trackId));
 
@@ -292,8 +340,10 @@ export async function activateTrack(id: string): Promise<TrackInfo> {
   } else {
     const res = await fetch(withBasePath(info.dataUrl));
     if (!res.ok) throw new Error(`Track data ${info.dataUrl}: HTTP ${res.status}`);
-    const raw = (await res.json()) as RawTrackJson;
+    const json = (await res.json()) as RawTrackJson;
     if (gen !== activateGen) throw new Error(`Circuit "${id}" was superseded by a later choice`);
+    // A package's track data names its model and scenery by paths in the package
+    const raw = info.mod ? resolveModTrackUrls(json, info.mod.packageId) : json;
     setActiveTrack(info.id, raw);
   }
   storeTrackId(info.id);

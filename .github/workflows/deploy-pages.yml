@@ -38,6 +38,16 @@ jobs:
       - name: Verify suites
         run: npm run verify
 
+      # The offline launcher (launcher/, Go standard library only): its server, mods index and browser lookup
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: launcher/go.mod
+
+      - name: Launcher tests
+        working-directory: launcher
+        run: go vet ./... && go test -race ./...
+
   cloudflare:
     runs-on: ubuntu-latest
     needs: test
@@ -59,11 +69,11 @@ jobs:
 
       # The repository keeps the default car's raw GLB the authoring scripts edit; the site ships it
       # meshopt-compressed (16 → 6 MB). RISE Motordrome's model is compressed when it is built
-      # (scripts/rwanda-official/post.mjs); its foliage stays raw: it is instance transforms and textures,
+      # (scripts/tracks/rwanda-official/post.mjs); its foliage stays raw: it is instance transforms and textures,
       # which meshopt makes bigger, not smaller.
       - name: Compress models for the download
         run: |
-          node scripts/compress-car-glb.mjs --all
+          node scripts/cars/compress-car-glb.mjs --all
 
       - name: Build static export
         env:
@@ -93,7 +103,7 @@ jobs:
       # GLBs are sent brotli-encoded with no Content-Length: each one the asset store serves gets its full size in an
       # X-File-Size header, for the loading screen's progress (cloudflare/worker.js does the same for the R2 files)
       - name: Add the GLB sizes to _headers
-        run: node scripts/glb-size-headers.mjs out
+        run: node scripts/site/glb-size-headers.mjs out
 
       - name: Deploy to Cloudflare
         env:

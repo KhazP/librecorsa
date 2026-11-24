@@ -30,7 +30,7 @@ import { NIGHT_CLOUD_GLOW, nightShareOfElevation, nightSkyGlsl, starShare } from
  *   - Which clouds show comes from a seed per session (cloud-recipes.ts): the cloud types, their heights and where
  *     the pattern starts. The caller picks the seed; they drift with the session's wind, faster aloft.
  *   - The clouds' noise volumes are generated on the GPU and their ray-march jitter is our own blue noise
- *     (scripts/generate-blue-noise.ts): nothing is fetched from outside the game.
+ *     (scripts/site/generate-blue-noise.ts): nothing is fetched from outside the game.
  */
 
 /** Brings the atmosphere's luminance to this scene's exposure (the library's own examples run at exposure ~10) */
@@ -69,7 +69,7 @@ export interface PhysicalSkyConditions {
 
 /**
  * The scene's frame on the globe: scene +Y is local up, compass north lies along the three.js Sky azimuth
- * AZIMUTH_OFFSET_DEG (x = sin θ, z = cos θ). Exported for scripts/verify-physical-sky.ts.
+ * AZIMUTH_OFFSET_DEG (x = sin θ, z = cos θ). Exported for scripts/verify/verify-physical-sky.ts.
  */
 export function sceneToECEFMatrix(result = new THREE.Matrix4()): THREE.Matrix4 {
   const anchor = new Geodetic(radians(ANCHOR_LONGITUDE_DEG), radians(LATITUDE_DEG), 0).toECEF();

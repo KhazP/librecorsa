@@ -205,6 +205,8 @@
       "ready": "Ready",
       "notReady": "Not ready",
       "hostOn": "The host is on {circuit}",
+      "modMissing": "The host races on a circuit from the mod {mod}. Install it in Mods to join this race.",
+      "modDifferent": "The host has the mod {mod}, and your copy differs. Install the same version to join this race.",
       "switchCircuit": "Switch circuit",
       "wrongCar": "Your car isn't in this room's class ({class}).",
       "wrongCarSwitch": "Your car isn't in this room's class ({class}). Switch car:",

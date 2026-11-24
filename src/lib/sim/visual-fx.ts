@@ -1133,9 +1133,9 @@ const PREWARM_DRIVERS = ['KIG', 'MUS', 'NYA', 'RUB', 'HUY'] as const;
  * model's chassis and wheel lock. The GT3s race as the Mercedes-AMG GT3 Evo, the model's own car.
  */
 const PORTED_ONLY = {
-  gt3: { url: '/cars/amg-gt3-evo/model/amg-gt3-evo.glb', config: AMG_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['amg-gt3'] },
-  road: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
-  proto: { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
+  'amg-gt3': { url: '/cars/amg-gt3-evo/model/amg-gt3-evo.glb', config: AMG_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['amg-gt3'] },
+  liana: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
+  'mtr-496r': { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
   'lc-lmdh': { url: '/cars/lc-lmdh/model/lc-lmdh.glb', config: LC_LMDH_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['lc-lmdh'] },
   'nissan-r33-jgtc': {
     url: '/cars/nissan-r33-jgtc/model/nissan-r33-jgtc.glb',
@@ -1172,26 +1172,11 @@ const PORTED_ONLY = {
     config: PORSCHE_934_RSR_CONFIG,
     lockDeg: CAR_WHEEL_LOCKS_DEG['porsche-934-rsr'],
   },
-} as const;
+} as const satisfies Partial<Record<VehicleModelId, { url: string; config: unknown; lockDeg: number }>>;
 type PortedKind = keyof typeof PORTED_ONLY;
+const isPortedKind = (vehicle: VehicleModelId | undefined): vehicle is PortedKind => vehicle !== undefined && vehicle in PORTED_ONLY;
 /** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), or the 2026 car's for the F1 models */
-const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
-  vehicle === 'amg-gt3'
-    ? 'gt3'
-    : vehicle === 'liana'
-      ? 'road'
-      : vehicle === 'mtr-496r'
-        ? 'proto'
-        : vehicle === 'lc-lmdh' ||
-            vehicle === 'nissan-r33-jgtc' ||
-            vehicle === 'nissan-r32-jtcc' ||
-            vehicle === 'bmw-m1-procar' ||
-            vehicle === 'vw-scirocco-gtx' ||
-            vehicle === 'chaparral-2d' ||
-            vehicle === 'chaparral-2d-67' ||
-            vehicle === 'porsche-934-rsr'
-          ? vehicle
-          : 'f1';
+const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' => (isPortedKind(vehicle) ? vehicle : 'f1');
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
 export function opponentGtTyreBrand(vehicle: VehicleModelId | undefined): GtTyreBrand | null {

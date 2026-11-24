@@ -1,6 +1,6 @@
 /*
  * MFD dial button auto-repeat (TC, ABS, brake bias, diff, engine map, ERS), kept apart from the drive loop so the
- * checks can test it frame by frame (scripts/verify-input.ts).
+ * checks can test it frame by frame (scripts/verify/verify-input.ts).
  *
  * Driven strictly by resolved PadAction bindings from DeviceInputReader (never raw button indices), so steering
  * wheel shift paddles on buttons 12–15 (such as Moza R3 ES/ES-X rims) cannot touch MFD dials unless explicitly bound.

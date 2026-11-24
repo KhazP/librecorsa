@@ -8,7 +8,7 @@
  *
  * Workers caching is on (wrangler.jsonc): Cloudflare keeps those files at the edge, tiered, and answers repeat and
  * byte-range requests without running this or reading R2. Each deploy is a fresh cache (the Worker version is part of
- * the key): CI uploads to R2 before it deploys, and a file re-uploaded by hand (scripts/upload-hosted.mjs) reaches
+ * the key): CI uploads to R2 before it deploys, and a file re-uploaded by hand (scripts/site/upload-hosted.mjs) reaches
  * players at the next deploy. Browsers and the game's service worker (public/sw.js) check the ETag before reusing
  * their copy, so after a deploy a file that didn't change costs a 304, not a download.
  *

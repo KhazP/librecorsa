@@ -186,7 +186,6 @@
     "list": "{car} 리버리"
   },
   "downloads": {
-    "intro": "Windows, macOS, Linux, Android용 선택형 네이티브 래퍼입니다. librecorsa.org를 직접 열기 때문에 재설치 없이 게임 업데이트가 즉시 반영됩니다.",
     "directLink": "직접 링크",
     "platforms": "플랫폼",
     "thisDevice": "현재 기기",
@@ -198,17 +197,15 @@
     "installCommand": "{platform} 설치 명령어",
     "whyInstall": "앱을 설치해야 하는 이유",
     "highlights": {
-      "desktop": {
-        "label": "데스크톱",
-        "text": "멀티 GPU 노트북에서 외장 GPU를 요청하고, 레이싱 휠 및 DualSense용 WebHID 권한을 자동으로 승인하며, 백그라운드 속도 제한을 비활성화하고, GitHub Releases에서 업데이트를 확인합니다."
+      "desktopApp": {
+        "label": "데스크톱"
       },
       "android": {
         "label": "Android",
         "text": "브라우저 주소창 없는 전체 화면 Trusted Web Activity, 몰입형 가장자리 스와이프, Android Game Mode 및 주행 / 랩 보드 런처 바로가기를 제공합니다."
       },
-      "current": {
-        "label": "항상 최신 유지",
-        "text": "모든 래퍼는 서킷이나 차량을 내장하지 않고 librecorsa.org를 직접 열기 때문에 물리, 서킷, 멀티플레이어 업데이트가 즉시 적용됩니다."
+      "live": {
+        "label": "항상 최신 유지"
       },
       "browser": {
         "label": "브라우저 및 iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "빌드 및 서명",
-    "builds": "모든 설치 파일과 APK는 GitHub Actions가 이 저장소의 소스에서 빌드하여 SHA-256 다이제스트와 함께 GitHub Releases에 게시합니다. SignPath Foundation을 통한 무료 Windows 코드 서명을 설정 중이며, macOS 빌드는 현재 미서명 상태이고, Android APK는 <code>{file}</code>로 검증되는 업로드 키로 서명됩니다.",
     "allReleases": "GitHub의 모든 릴리스",
     "signingPolicy": "코드 서명 정책"
   }

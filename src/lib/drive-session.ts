@@ -28,7 +28,7 @@ import {
   type HeadlightBeam,
   type HeadlightMode,
 } from "@/lib/render/car-headlights";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { createVehicleSim, vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
@@ -258,6 +258,11 @@ const approach = (value: number, target: number, maxStep: number) =>
 
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
+/** A car's own physics (a mod car's physics file) while it drives on the model they were made for; else none */
+const ownProfile = (car: CarId, vehicle: VehicleModelId) => {
+  const def = carById(car);
+  return def.physics === vehicle ? def.simProfile : undefined;
+};
 /**
  * Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a timer instead, `fallbackDelayMs` from now,
  * a frame by default)
@@ -970,7 +975,7 @@ export class DriveSession {
         ref = { lapMs: Math.round(check.physicsLapS * 1000), base: LINE_CHECK_REF_BASE, car: null, lap0: 0, simS: 0 };
       } else {
         // A copy of the car on the page, on its autopilot at full pace, alone on a flying lap
-        const car = vehicleModelSpec(vehicleNow).createSim(track, trackRoot, carById(carIdNow).bodyPlan);
+        const car = createVehicleSim(vehicleNow, track, trackRoot, carById(carIdNow).bodyPlan, ownProfile(carIdNow, vehicleNow));
         car.resetToStartGrid(true);
         car.aiAutopilot = true;
         if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
@@ -1076,8 +1081,9 @@ export class DriveSession {
     const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdNow): SimulatorCar => {
       // A body that is not its vehicle model's own brings its own outline for the barriers
       const bodyPlan = carById(carId).bodyPlan;
-      const built = vehicleModelSpec(vehicle).createSim(track, trackRoot, bodyPlan);
-      const car = simHost ? simHost.adopt(built, vehicle, trackRoot, bodyPlan) : built;
+      const profile = ownProfile(carId, vehicle);
+      const built = createVehicleSim(vehicle, track, trackRoot, bodyPlan, profile);
+      const car = simHost ? simHost.adopt(built, vehicle, trackRoot, bodyPlan, profile) : built;
       // An F1 car's overtaking aids by its year, and race control for them while a race is on (free in practice);
       // other classes have none
       const rules = carOvertakingRules(carById(carId));
@@ -1277,7 +1283,7 @@ export class DriveSession {
       this.publish(carSetup);
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);
-      lapRecorder.setContext({ vehicle });
+      lapRecorder.setContext({ vehicle, modCar: carById(car).mod ? car : null });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
       if (raceNow().kind === "ai") {
@@ -1669,6 +1675,7 @@ export class DriveSession {
       vehicle: vehicleNow,
       driverName: settings.profile.name,
       driverCode: settings.profile.code,
+      modCar: carById(carIdNow).mod ? carIdNow : null,
     });
     this.lapRecorder = lapRecorder;
 
@@ -3273,6 +3280,8 @@ export class DriveSession {
         !touch.steerLeft &&
         !touch.steerRight &&
         ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
+      // The automatic gearbox's Reverse and Drive buttons go straight to their gear, past neutral
+      let selectGear: -1 | 1 | undefined;
       if (touchInput.active) {
         if (driving) {
           if (touchInput.shiftUp) runAction("shiftUp");
@@ -3280,8 +3289,11 @@ export class DriveSession {
           if (touchInput.aero) runAction("aero");
           if (touchInput.boost) runAction("boostLatch");
           if (touchInput.overtake) runAction("overtake");
+          if (touchInput.reverse) selectGear = -1;
+          else if (touchInput.drive) selectGear = 1;
         }
         touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = touchInput.overtake = false;
+        touchInput.reverse = touchInput.drive = false;
       }
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
@@ -3311,6 +3323,7 @@ export class DriveSession {
         shiftUp: heldKeys.shiftUp && !startClutch.active,
         shiftDown: heldKeys.shiftDown,
         neutral: heldKeys.neutral,
+        selectGear,
         clutchBound,
         ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
@@ -4409,7 +4422,8 @@ export class DriveSession {
         }
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
-        const limiter = vehicleModelSpec(vehicleNow).limiterRpm;
+        // A mod car's physics file may move the limiter
+        const limiter = carById(carIdNow).simProfile?.config.gearbox.gears.redline_rpm ?? vehicleModelSpec(vehicleNow).limiterRpm;
         if (tc.gear !== cueGear || tc.rpm < limiter - 600) {
           cueGear = tc.gear;
           cueShiftArmed = true;

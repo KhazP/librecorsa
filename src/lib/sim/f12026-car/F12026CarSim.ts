@@ -248,7 +248,13 @@ export const F1_ASSIST_DIALS: Readonly<Record<DriverAssistPreset, AidDials>> = {
  * aids and the envelope the autopilot plans with.
  */
 export interface CarSimProfile {
+  /** What the car's plans, guides and lines are kept under: one per profile. The vehicle model's id, unless `model` */
   id: string;
+  /**
+   * The vehicle model this profile drives as, when `id` is not one: a mod car's physics patch on that model
+   * (mods/mod-physics.ts), whose setup limits, fuel, wing steps, AI and HUD it takes. Absent: `id` is the model
+   */
+  model?: VehicleModelId;
   config: CarPhysicsConfig;
   /** MGU-K / push mode */
   hasErs: boolean;
@@ -1146,7 +1152,7 @@ export class F12026CarSim implements SimulatorCar {
   public steerAngleNorm = 0;
 
   public get vehicleId(): import('@/types/f1').VehicleModelId {
-    return this.profile.id as import('@/types/f1').VehicleModelId;
+    return this.profile.model ?? (this.profile.id as import('@/types/f1').VehicleModelId);
   }
   public get racingLineId(): 'f1' | 'gt3' {
     return this.line;
@@ -1330,6 +1336,8 @@ export class F12026CarSim implements SimulatorCar {
   private shiftUpPending = false;
   private shiftDownPending = false;
   private neutralPending = false;
+  /** The touch Reverse or Drive button (`ControlInputs.selectGear`), kept like a paddle */
+  private selectGearPending: -1 | 0 | 1 = 0;
   /** The steering rim's position at the last frame (`ControlInputs.steerRim`), its move is spread over this frame's ticks */
   private lastRimSteer: number | null = null;
   private lapStartMs = 0;
@@ -1478,7 +1486,7 @@ export class F12026CarSim implements SimulatorCar {
     this.applyAssistPresetLevels(this._assistPreset);
     this.telemetry = this.createTelemetry();
     this.telemetry.f12026 = this.channels;
-    this.channels.carId = profile.id;
+    this.channels.carId = profile.model ?? profile.id;
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
     this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
@@ -1650,7 +1658,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
-    const id = this.profile.id;
+    const id = this.vehicleId;
     return id === 'amg-gt3' ||
       id === 'liana' ||
       id === 'mtr-496r' ||
@@ -2244,6 +2252,7 @@ export class F12026CarSim implements SimulatorCar {
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
       neutral: raw.neutral ?? false,
+      selectGear: raw.selectGear === -1 || raw.selectGear === 1 ? raw.selectGear : undefined,
       // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
       clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? clamp(raw.clutch ?? 0, 0, 1) : undefined,
       clutchBound: raw.clutchBound,
@@ -2341,11 +2350,16 @@ export class F12026CarSim implements SimulatorCar {
     this.shiftUpPending ||= inputs.shiftUp;
     this.shiftDownPending ||= inputs.shiftDown;
     this.neutralPending ||= inputs.neutral;
+    if (inputs.selectGear) this.selectGearPending = inputs.selectGear;
     const drsPress = this.drsPressPending;
     const shiftUp = this.shiftUpPending;
     const shiftDown = this.shiftDownPending;
     const neutral = this.neutralPending;
-    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+    const selectGear = this.selectGearPending;
+    if (ticks > 0) {
+      this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+      this.selectGearPending = 0;
+    }
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     // Never soft-lock a car when manual clutch is requested but no clutch control is bound on the active device
     this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot || inputs.clutchBound === false;
@@ -2377,6 +2391,7 @@ export class F12026CarSim implements SimulatorCar {
         shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
         neutral: !held && neutral && !this.aiAutopilot,
+        selectGear: held || this.aiAutopilot || selectGear === 0 ? undefined : selectGear,
         clutch: pinned ? 1 : this.aiAutopilot ? undefined : this.vehicle.autoClutch ? inputs.clutch : (inputs.clutch ?? 0),
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
@@ -3143,6 +3158,7 @@ export class F12026CarSim implements SimulatorCar {
     this.steerCmd = 0;
     this.lastRimSteer = null;
     this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+    this.selectGearPending = 0;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;

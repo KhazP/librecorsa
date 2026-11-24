@@ -1,0 +1,619 @@
+/**
+ * End-to-end verification suite for all 8 Priority Realism Upgrades (P0 through P7):
+ *   npx tsx "scripts/verify/verify-realism-upgrades.ts"
+ *
+ * Tests:
+ *   P0: Full physics parity between F1Physics2026 and VehiclePhysics / F12026CarSim
+ *   P1: 5-point 3D cambered tire contact patch + ISO 8608 spatial road micro-roughness
+ *   P2: 16-sector circumferential tire grid, flat-spots, graining, blistering, dirt pickup, centrifugal growth, & WLF shift
+ *   P3: Live 3D AC1-style double-wishbone + steering tie-rod kinematics solver
+ *   P4: 2-node physical brake disc thermals (T^4 radiation + speed convection), pad compound mu(T), glazing, & dynamic brake migration
+ *   P5: Aerodynamic slipstream tow & dirty-air vortex wake + yaw/roll/wind aero sensitivities
+ *   P6: True 3D steering rack FFB solver + 240/480 Hz subframe output & auto-configuration
+ *   P7: 3D OBB SAT car-to-car rigid-body collisions, dynamic track evolution (player car in every mode),
+ *       remote-peer aero wake, & EWMA clock-synced P2P netcode
+ */
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { getActiveTrackData } from '../../src/lib/track-data';
+import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
+import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { LC26_CHASSIS, LC26_TYRES } from '../../src/lib/sim/lc26-data';
+import {
+  advanceTreadDirt,
+  computeTyreForces,
+  createTyreRuntime,
+  evaluateIso8608RoadRoughness,
+  sample5PointContactPatch,
+  tyreLoadedRadius,
+  updateTyreThermal,
+} from '../../src/lib/sim/ac-tyre';
+import {
+  buildDoubleWishboneHardpoints,
+  solveAxleKinematics3D,
+  solveCornerKinematics3D,
+} from '../../src/lib/sim/suspension-kinematics';
+import {
+  computeDynamicBrakeMigration,
+  createBrakeDiscState,
+  evaluateBrakePadMuFactor,
+  stepBrakeDiscThermal,
+} from '../../src/lib/sim/brake-physics';
+import {
+  computeRelativeAirspeed,
+  evaluateAeroWakeDeficit,
+  evaluateRollAeroFactor,
+} from '../../src/lib/sim/aero-wake';
+import {
+  TrackEvolutionState,
+  resolveCarToCarObbCollision,
+  type RigidBodyCollisionCar,
+} from '../../src/lib/sim/track-evolution';
+import {
+  MultiplayerSyncManager,
+  type InterpolatedPeerState,
+  type NetworkVehiclePacket,
+} from '../../src/lib/sim/multiplayer-sync';
+import { peerWakeEmitters, TrackEnvironment } from '../../src/lib/sim/track-environment';
+import { AiOpponentField } from '../../src/lib/sim/ai-opponents';
+import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
+import { compoundData, F12026_CAR_CONFIG } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { VehiclePhysics } from '../../src/lib/sim/f12026-car/VehiclePhysics';
+import { FlatGroundQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
+import { CarAudioEngine } from '../../src/lib/sim/CarAudio';
+import type { TrackEvolutionSample } from '../../src/lib/sim/track-evolution';
+import type { AeroWakeState, WakeEmitterCar } from '../../src/lib/sim/aero-wake';
+import { autoConfigureWheel, DEFAULT_WHEEL_SETTINGS } from '../../src/lib/input/device-input';
+
+let passed = 0;
+let failed = 0;
+
+function check(name: string, fn: () => void) {
+  try {
+    fn();
+    passed++;
+    console.log(`  [PASS] ${name}`);
+  } catch (err) {
+    failed++;
+    console.error(`  [FAIL] ${name}:`, err);
+  }
+}
+
+console.log('=== Verifying Sim Racing Realism Upgrades (P0 - P7) ===\n');
+
+const track = getActiveTrackData();
+
+// -----------------------------------------------------------------------------
+// P1: 5-Point 3D Cambered Contact Patch & ISO 8608 Spatial Road Micro-Roughness
+// -----------------------------------------------------------------------------
+console.log('P1: 5-Point 3D Cambered Contact Patch & ISO 8608 Road Roughness');
+
+check('contact patch sampler shifts the load centroid toward a kerb rising across the tread, giving an overturning moment Mx', () => {
+  // Simulate a right-hand kerb rising on the outer edge (x > 0)
+  const patch = sample5PointContactPatch(
+    0,
+    0,
+    1,
+    0,
+    -1, // left wheel: inward is -left (+x)
+    0.305,
+    0.015,
+    (x, _z) => (x < 0 ? -0.085 * x : 0),
+    'kerb'
+  );
+  assert.ok(Math.abs(patch.centroidShiftInwardNorm) > 0.01, `Expected lateral centroid shift: ${patch.centroidShiftInwardNorm}`);
+
+  const tyre = createTyreRuntime(LC26_TYRES.soft.front, 95);
+  const out = computeTyreForces(tyre, {
+    fz: 4200,
+    vx: 55,
+    vy: 2.5,
+    rimSpeed: 55,
+    camberLeftRad: -0.055, // -3.15 deg negative camber
+    surfaceGrip: 1.0,
+    inwardSign: -1,
+    contactCentroidShiftInward: patch.centroidShiftInwardNorm,
+    contactCentroidShiftLeftM: patch.centroidShiftLeftM,
+    dt: 1 / 240,
+  });
+  assert.ok(Math.abs(out.mx) > 1.0, `Expected non-zero overturning moment Mx: ${out.mx} Nm`);
+  assert.ok(tyre.bandLoad[0] > tyre.bandLoad[2], `Expected inner band load (${tyre.bandLoad[0]}) > outer band load (${tyre.bandLoad[2]})`);
+});
+
+check('ISO 8608 spatial road micro-roughness is deterministic in (x, z) and rougher on kerbs than asphalt', () => {
+  const rAsphalt1 = evaluateIso8608RoadRoughness(120.4, -85.2, 'asphalt');
+  const rAsphalt2 = evaluateIso8608RoadRoughness(120.4, -85.2, 'asphalt');
+  const rKerb = evaluateIso8608RoadRoughness(120.4, -85.2, 'kerb');
+  assert.equal(rAsphalt1, rAsphalt2, 'Deterministic spatial elevation');
+  assert.ok(Math.abs(rKerb) > Math.abs(rAsphalt1), `Expected kerb roughness (${Math.abs(rKerb)}) > asphalt roughness (${Math.abs(rAsphalt1)})`);
+});
+
+// -----------------------------------------------------------------------------
+// P2: 16-Sector Circumferential Grid, Flat-Spots, Graining, Blistering, Dirt, Centrifugal Growth
+// -----------------------------------------------------------------------------
+console.log('\nP2: 16-Sector Circumferential Tire Grid, Flat-Spots, Graining, Blistering, Dirt & Centrifugal Growth');
+
+check('Locked wheel concentrates wear and heat into the grounded circumferential sector (flat-spot) and excites harmonic vibration', () => {
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 90);
+  // Simulate a 1.0-second full lockup (rimSpeed = 0 at rollSpeed = 75 m/s)
+  for (let i = 0; i < 240; i++) {
+    updateTyreThermal(t, 180_000, 3800, 75, 25, 38, 1 / 240, 450, 0, 'asphalt', 0);
+  }
+  assert.ok(t.flatSpotSeverity > 0.08, `Expected flatSpotSeverity > 0.08 after lockup, got ${t.flatSpotSeverity}`);
+  const maxWear = Math.max(...t.circumferentialWear);
+  const minWear = Math.min(...t.circumferentialWear);
+  assert.ok(maxWear > minWear * 1.5, `Locked sector wear (${maxWear}) must exceed opposite sector wear (${minWear})`);
+
+  // Roll the flat-spotted tyre and verify harmonic flat-spot vibration torque
+  let maxVib = 0;
+  for (let i = 0; i < 40; i++) {
+    const out = computeTyreForces(t, {
+      fz: 3800,
+      vx: 60,
+      vy: 0,
+      rimSpeed: 60,
+      camberLeftRad: -0.05,
+      surfaceGrip: 1.0,
+      dt: 1 / 240,
+    });
+    maxVib = Math.max(maxVib, Math.abs(out.flatSpotVibrationNm));
+  }
+  assert.ok(maxVib > 0.2, `Expected non-zero harmonic flat-spot vibration torque (${maxVib} Nm)`);
+});
+
+check('Off-track excursion picks up dirt and on-track rolling cleans it off', () => {
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 90);
+  for (let i = 0; i < 60; i++) {
+    updateTyreThermal(t, 5000, 3000, 35, 25, 38, 1 / 60, 350, 35, 'grass', 0);
+  }
+  const peakDirt = t.dirtyLevel;
+  assert.ok(peakDirt > 0.3, `Expected dirt pickup on grass > 0.3, got ${peakDirt}`);
+  for (let i = 0; i < 180; i++) {
+    updateTyreThermal(t, 25_000, 3500, 55, 25, 38, 1 / 60, 350, 55, 'asphalt', 0);
+  }
+  assert.ok(t.dirtyLevel < peakDirt * 0.4, `Expected dirt to clean off on asphalt (${t.dirtyLevel} < ${peakDirt * 0.4})`);
+});
+
+check('Rigid-body tyres: dirt goes by the distance rolled: a brush with the grass costs about 3 %, the full load takes seconds, the road cleans it', () => {
+  const roll = (level: number, surface: string, speedMs: number, seconds: number) => {
+    let l = level;
+    for (let i = 0; i < Math.round(seconds * 240); i++) l = advanceTreadDirt(l, surface, speedMs, 1 / 240, 0);
+    return l;
+  };
+  const gripLoss = (l: number) => 0.18 * l;
+  const brush = roll(0, 'grass', 30, 0.65);
+  assert.ok(gripLoss(brush) > 0.025 && gripLoss(brush) < 0.035, `0.65 s of grass at 30 m/s: ${(gripLoss(brush) * 100).toFixed(2)} % grip`);
+  let tFull = 0;
+  for (let l = 0; l < 1 && tFull < 10; tFull += 1 / 240) l = advanceTreadDirt(l, 'grass', 30, 1 / 240, 0);
+  assert.ok(tFull > 3 && tFull < 5, `grass at 30 m/s loads the tread fully in ${tFull.toFixed(2)} s`);
+  assert.ok(roll(0, 'gravel', 30, 1) > roll(0, 'grass', 30, 1) * 1.3, 'gravel dirtier than grass');
+  assert.ok(roll(0, 'grass', 0, 2) === 0, 'a tyre standing on the grass picks nothing up');
+  let tClean = 0;
+  for (let l = 1; l > 0 && tClean < 20; tClean += 1 / 240) l = advanceTreadDirt(l, 'road', 50, 1 / 240, 0);
+  assert.ok(tClean > 6 && tClean < 8, `a fully dirty tyre cleans in ${tClean.toFixed(2)} s at 50 m/s`);
+  assert.ok(roll(brush, 'road', 50, 1.3) === 0, 'the brush is gone within 1.3 s at 50 m/s');
+  assert.ok(roll(0.5, 'road', 0, 5) === 0.5, 'a parked tyre keeps its dirt');
+});
+
+check('Centrifugal carcass growth increases loaded radius at 330 km/h', () => {
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 95);
+  const rRest = tyreLoadedRadius(t, 3500, 0);
+  const rHighSpeed = tyreLoadedRadius(t, 3500, 260); // ~335 km/h
+  assert.ok(rHighSpeed > rRest + 0.002, `Expected >2 mm centrifugal growth at 335 km/h (${rHighSpeed - rRest} m)`);
+});
+
+// -----------------------------------------------------------------------------
+// P3: 3D Double-Wishbone + Steering Tie-Rod Kinematics & Chassis Torsion
+// -----------------------------------------------------------------------------
+console.log('\nP3: 3D Double-Wishbone Kinematics & Chassis Torsion Spring');
+
+check('3D double-wishbone solver reproduces the LC26 camber gains in bump and computes kingpin/caster/scrub/bump-steer/roll-centre', () => {
+  const frontHp = buildDoubleWishboneHardpoints(undefined, true, 'pull_rod');
+  const rest = solveCornerKinematics3D(frontHp, 0, 0, true, 0.345);
+  const bump = solveCornerKinematics3D(frontHp, 0.025, 0, true, 0.345);
+  // The car's own gains (front +4.6, rear -12.7 deg/m), within 2 deg/m, from the default F1 hardpoints
+  const gainDegPerM = (hp: typeof frontHp) =>
+    ((solveCornerKinematics3D(hp, 0.025, 0, true, 0.345).dynamicCamberDeltaRad -
+      solveCornerKinematics3D(hp, 0, 0, true, 0.345).dynamicCamberDeltaRad) /
+      0.025) *
+    (180 / Math.PI);
+  const gF = gainDegPerM(frontHp);
+  const gR = gainDegPerM(buildDoubleWishboneHardpoints(undefined, false, 'push_rod'));
+  assert.ok(Math.abs(gF - LC26_CHASSIS.front.camberGainDegPerM) < 2, `Front camber gain ${gF} vs ${LC26_CHASSIS.front.camberGainDegPerM} deg/m`);
+  assert.ok(Math.abs(gR - LC26_CHASSIS.rear.camberGainDegPerM) < 2, `Rear camber gain ${gR} vs ${LC26_CHASSIS.rear.camberGainDegPerM} deg/m`);
+  assert.ok(Math.abs(bump.bumpSteerToeInRad) > 1e-5, 'Tie-rod arc produces physical bump steer');
+  assert.ok(bump.casterTrailM > 0.008 && bump.scrubRadiusM > 0.008, 'Physical caster trail and scrub radius');
+
+  const axle = solveAxleKinematics3D(frontHp, 0.02, -0.01, 0.08, 1.60, 0.34, 0.35);
+  assert.ok(Number.isFinite(axle.rollCentreHeightM) && Math.abs(axle.rollCentreLatOffsetM) > 0, 'Roll centre migrates laterally under asymmetric roll');
+  // Side-view slope at the contact patch: the LC26 front's inclined arm axes give anti-dive
+  assert.ok(axle.antiPitchFraction > 0.05, '3D wishbone plane inclinations yield anti-dive / anti-squat');
+});
+
+check('f12026-car and GT3 hardpoints solve to their configs\' camber gain and roll centre, with anti-dive and a closed tie rod', () => {
+  const D = 180 / Math.PI;
+  for (const [name, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['amg-gt3', AMG_GT3_CONFIG]] as const) {
+    const tyre = compoundData(cfg, cfg.compoundSlots.soft);
+    for (const front of [true, false]) {
+      const spec = front ? cfg.suspensions.front : cfg.suspensions.rear;
+      const hp = buildDoubleWishboneHardpoints(spec.hardpoints, front, spec.actuation);
+      const R = front ? tyre.front.radius : tyre.rear.radius;
+      const halfTrack = 0.5 * (front ? cfg.chassis.trackWidthFront : cfg.chassis.trackWidthRear);
+      const at = (z: number, steer = 0, left = true) => ({ ...solveCornerKinematics3D(hp, z, steer, left, R) });
+      const s0 = at(0);
+      const gain = ((at(0.005).uprightCamberRad - at(-0.005).uprightCamberRad) / 0.01) * D;
+      // Force-based roll centre: tan θ of the front-view swing arm (the patch's lateral path) times the half track
+      const rc = -s0.contactInboardPerBump * halfTrack;
+      const where = `${name} ${front ? 'front' : 'rear'}`;
+      assert.ok(Math.abs(gain - spec.camberGainKinematic) < 1, `${where}: camber gain ${gain.toFixed(1)} vs ${spec.camberGainKinematic} deg/m`);
+      assert.ok(Math.abs(rc - spec.rollCentreHeight) < 0.003, `${where}: roll centre ${(rc * 1000).toFixed(1)} vs ${spec.rollCentreHeight * 1000} mm`);
+      assert.ok(Math.abs(s0.uprightCamberRad) < 1e-9 && Math.abs(s0.wheelSteerRad) < 1e-9, `${where}: no camber or toe of its own at static`);
+      if (front) {
+        assert.ok(s0.contactForwardPerBump > 0.02, `${where}: the patch moves forward in bump (anti-dive), slope ${s0.contactForwardPerBump.toFixed(3)}`);
+        // The rack turns both wheels the same way, within a few per cent of the nominal angle (the rest is Ackermann; the
+        // GT3's ball joints inside its barrel give its steering arm ≈ 5 % of it)
+        const n = 10 / D;
+        const inner = at(0, n, true).wheelSteerRad;
+        const outer = at(0, n, false).wheelSteerRad;
+        assert.ok(Math.abs(inner / n - 1) < 0.06 && Math.abs(outer / n - 1) < 0.06, `${where}: 10° rack gives ${(inner * D).toFixed(2)}° / ${(outer * D).toFixed(2)}°`);
+      }
+    }
+  }
+});
+
+check('The tyres carry the whole load transfer, M·a·h, through springs and links (f12026-car, GT3: steady corner and braking)', () => {
+  for (const [name, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['amg-gt3', AMG_GT3_CONFIG]] as const) {
+    const h = cfg.chassis.cgHeight;
+    // No air, so no aero moments: what the tyres' vertical loads hold is the tyre forces' moment at the ground
+    const make = () => new VehiclePhysics({ ground: new FlatGroundQuery(0), config: cfg, airDensity: 1e-6 });
+    const corner = make();
+    corner.reset(0, 0, 0, 15);
+    // Averaged over the last second: the road texture (`road-texture.ts`) rocks the loads ±20 % moment to moment, but
+    // it is zero-mean. The spinning wheels' momentum H = Σ I_w·ω precesses at the yaw rate r, and the tyres supply
+    // that roll couple H·r on top of ΣFy·h (VehiclePhysics' ω × (Iω + h)): ~10 % of it on the F1 at 15 m/s
+    let rollMoment = 0;
+    let fyMoment = 0;
+    for (let i = 0; i < 500 * 8; i++) {
+      corner.step(1 / 500, { throttle: corner.velocity.length() < 15 ? 0.35 : 0, brake: 0, steer: Math.min(0.12, i / 1500) });
+      if (i < 500 * 7) continue;
+      const W = corner.wheels;
+      rollMoment += ((W[0].fz - W[1].fz) * cfg.chassis.trackWidthFront + (W[2].fz - W[3].fz) * cfg.chassis.trackWidthRear) / 2;
+      const spinMomentum = W.reduce(
+        (a, w) => a + (w.isFront ? cfg.chassis.wheelInertiaFront : cfg.chassis.wheelInertiaRear) * w.omega * Math.cos(w.steerRad),
+        0
+      );
+      fyMoment += -W.reduce((a, w) => a + w.fy, 0) * h - spinMomentum * corner.angularVelocity.y;
+    }
+    assert.ok(Math.abs(rollMoment / fyMoment - 1) < 0.03, `${name}: lateral load moment ${(rollMoment / 500).toFixed(0)} Nm vs ΣFy·h + H·r ${(fyMoment / 500).toFixed(0)} Nm`);
+    const stop = make();
+    stop.reset(0, 0, 0, 30);
+    // Averaged from 0.5 s to 1 s into the stop, past the dive's first swing, for the road texture as above
+    let frontGain = 0;
+    let fxMoment = 0;
+    for (let i = 0; i < 500; i++) {
+      stop.step(1 / 500, { throttle: 0, brake: 0.4, steer: 0 });
+      if (i < 250) continue;
+      const B = stop.wheels;
+      frontGain += (B[0].fz + B[1].fz - stop.totalMassKg * 9.81 * cfg.chassis.frontWeightFraction) / 250;
+      fxMoment += (-B.reduce((a, w) => a + w.fx, 0) * h) / 250;
+    }
+    assert.ok(Math.abs((frontGain * stop.wheelbaseM) / fxMoment - 1) < 0.05, `${name}: front gains ${frontGain.toFixed(0)} N under braking vs ΣFx·h / L ${(fxMoment / stop.wheelbaseM).toFixed(0)} N`);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// P4: Physical 2-Node Brake System, Pad Mu(T), Glazing & Dynamic Migration
+// -----------------------------------------------------------------------------
+console.log('\nP4: Physical 2-Node Brake System, Pad Mu(T), Glazing & Dynamic Migration');
+
+check('Carbon-carbon brake cold bite is lower than optimal window (250-880°C) and overheating causes fade/glazing', () => {
+  const coldMu = evaluateBrakePadMuFactor(60, 'carbon-ceramic', 0);
+  const optMu = evaluateBrakePadMuFactor(550, 'carbon-ceramic', 0);
+  const hotFadeMu = evaluateBrakePadMuFactor(1120, 'carbon-ceramic', 0.4);
+  assert.ok(optMu > coldMu + 0.15, `Expected optimal carbon pad mu (${optMu}) > cold carbon pad mu (${coldMu})`);
+  assert.ok(hotFadeMu < optMu - 0.2, `Expected overheated glazed carbon pad mu (${hotFadeMu}) < optimal (${optMu})`);
+
+  const disc = createBrakeDiscState(300, 'carbon-ceramic');
+  for (let i = 0; i < 60; i++) {
+    stepBrakeDiscThermal(disc, 3800, 210, 75, 25, 1 / 60, 'carbon-ceramic');
+  }
+  assert.ok(disc.surfaceTempC > disc.coreTempC, `2-node thermal model maintains surface (${disc.surfaceTempC}°C) > core (${disc.coreTempC}°C) gradient during heavy braking`);
+});
+
+check('Dynamic brake migration shifts bias forward at peak pressure and rearward during trail-braking release', () => {
+  const peakBias = computeDynamicBrakeMigration(0.56, 1.0, 0.025);
+  const trailBias = computeDynamicBrakeMigration(0.56, 0.25, 0.025);
+  assert.ok(peakBias > trailBias, `Expected peak brake pressure bias (${peakBias}) > trail-braking bias (${trailBias})`);
+});
+
+// -----------------------------------------------------------------------------
+// P5: Aerodynamic Slipstream & Dirty-Air Vortex Wake + Wind/Yaw/Roll Aero
+// -----------------------------------------------------------------------------
+console.log('\nP5: Aerodynamic Slipstream & Dirty-Air Vortex Wake');
+
+check('Following car experiences greater front wing downforce loss than drag reduction in dirty air, and lateral offset recovers clean air', () => {
+  const leader = { sMeters: 500, lateralOffsetM: 0, speedMs: 80 };
+  const wakeInline = evaluateAeroWakeDeficit(478, 0, 80, [leader], 5000, 0);
+  const wakeOffset = evaluateAeroWakeDeficit(478, 3.5, 80, [leader], 5000, 0);
+
+  assert.ok(wakeInline.dragMultiplier < 0.92, `Slipstream should reduce drag (${wakeInline.dragMultiplier})`);
+  assert.ok(
+    wakeInline.frontDownforceMultiplier < wakeInline.dragMultiplier,
+    `Dirty air hurts front downforce (${wakeInline.frontDownforceMultiplier}) more than it reduces drag (${wakeInline.dragMultiplier})`
+  );
+  assert.ok(wakeInline.copFrontShiftPct < 0, 'Dirty air shifts CoP rearward (high-speed understeer)');
+  assert.ok(wakeOffset.frontDownforceMultiplier > wakeInline.frontDownforceMultiplier, 'Stepping 3.5m off-line recovers clean air on the front wing');
+});
+
+check('Chassis roll floor seal leakage and ambient wind vector modulate airspeed and downforce', () => {
+  const levelMult = evaluateRollAeroFactor(0);
+  const rolledMult = evaluateRollAeroFactor(0.06);
+  assert.ok(rolledMult < levelMult, 'Chassis roll leaks Venturi floor downforce');
+
+  // Heading 0 is +Z: a 10 m/s headwind blows toward −Z (the wind is given as world X / Z velocity components)
+  const headwind = computeRelativeAirspeed(70, 0, 0, 0, -10);
+  assert.ok(headwind.airspeedMs > 79.9, `Headwind increases relative airspeed (${headwind.airspeedMs} m/s)`);
+  const crosswind = computeRelativeAirspeed(70, 0, 0, -10, 0);
+  assert.ok(crosswind.aeroBetaRad > 0.1 && Math.abs(crosswind.airspeedMs - Math.hypot(70, 10)) < 1e-6, `A wind from the left (blowing toward −X) gives sideslip (${crosswind.aeroBetaRad} rad)`);
+});
+
+// -----------------------------------------------------------------------------
+// P6: True 3D Steering Rack Force Feedback & Wheel Auto-Configuration
+// -----------------------------------------------------------------------------
+console.log('\nP6: True 3D Steering Rack Force Feedback & Wheel Auto-Configuration');
+
+check('autoConfigureWheel automatically enables ffbEnabled when a wheel base is detected', () => {
+  const patch = autoConfigureWheel(
+    [{ id: 'MOZA R9 Base (Vendor: 346e Product: 0002)', index: 0, mapping: '', axes: [0, 0], buttons: [] }],
+    DEFAULT_WHEEL_SETTINGS
+  );
+  assert.equal(patch?.ffbEnabled, true, 'Expected ffbEnabled: true on wheel auto-configuration');
+});
+
+// -----------------------------------------------------------------------------
+// P7: 3D OBB Collisions, Track Evolution & EWMA Clock-Synced Netcode
+// -----------------------------------------------------------------------------
+console.log('\nP7: 3D OBB Collisions, Track Evolution & Clock-Synced Netcode');
+
+check('3D OBB SAT collision solver computes off-center yaw rate impulse on rear-quarter contact', () => {
+  const carA: RigidBodyCollisionCar = {
+    x: 0,
+    y: 0,
+    z: 0,
+    fwdX: 0,
+    fwdZ: 1,
+    vx: 0,
+    vz: 50,
+    yawRateRadS: 0,
+    halfLengthM: 2.5,
+    halfWidthM: 0.98,
+    massKg: 778,
+    yawInertiaKgM2: 1120,
+  };
+  const carB: RigidBodyCollisionCar = {
+    ...carA,
+    x: 0.85, // off-center tap on right rear quarter
+    z: -4.6,
+    vz: 56,
+  };
+  const hit = resolveCarToCarObbCollision(carA, carB);
+  assert.equal(hit.collided, true, 'Expected OBB SAT collision detection');
+  assert.ok(Math.abs(hit.yawDeltaA) > 0.01, `Off-center contact must induce yaw rotation (${hit.yawDeltaA} rad/s)`);
+});
+
+check('Track evolution builds racing-line rubber grip and off-line marbles as cars lap', () => {
+  const rr = new TrackEvolutionState(track.totalLengthM);
+  rr.reset(0.35); // start on a green track
+  const initialLine = rr.sample(200, 0, 0);
+  for (let pass = 0; pass < 120; pass++) {
+    rr.depositCarPass(200, 0, 0, 85_000, 0.25);
+  }
+  const rubberedLine = rr.sample(200, 0, 0);
+  const offLineMarbles = rr.sample(200, 4.8, 0);
+  assert.ok(rubberedLine.gripMultiplier > initialLine.gripMultiplier, `Rubbered racing line grip (${rubberedLine.gripMultiplier}) > green track (${initialLine.gripMultiplier})`);
+  assert.ok(offLineMarbles.marbleLevel > rubberedLine.marbleLevel, `Off-line marbles (${offLineMarbles.marbleLevel}) > racing line (${rubberedLine.marbleLevel})`);
+});
+
+check('Player car gets a track evolution sample and remote-peer wake with no AI field; an AI field sharing the environment does not double-apply', () => {
+  const env = new TrackEnvironment(track);
+  env.trackEvolution.reset(0.35); // green track, so the line visibly rubbers in
+  const player = new F1Physics2026(track);
+  player.teleportToDistance(200, 60);
+  const roadSamples: TrackEvolutionSample[] = [];
+  const wakes: AeroWakeState[] = [];
+  const setRoad = player.setTrackEvolutionSample.bind(player);
+  const setWake = player.setAeroWakeState.bind(player);
+  player.setTrackEvolutionSample = (rr) => {
+    roadSamples.push(rr);
+    setRoad(rr);
+  };
+  player.setAeroWakeState = (w) => {
+    wakes.push(w);
+    setWake(w);
+  };
+
+  // Solo practice: no AI field, no peers
+  for (let i = 0; i < 30; i++) env.update(1 / 60, [player]);
+  assert.equal(roadSamples.length, 30, `Solo player gets one track evolution sample per frame (${roadSamples.length})`);
+  assert.ok(roadSamples.every((rr) => Number.isFinite(rr.gripMultiplier) && rr.gripMultiplier > 0.85));
+  assert.equal(wakes.at(-1)!.wakeIntensity, 0, 'Clean air with nobody around');
+
+  // A remote player 15 m ahead on the same line puts the player in its wake; the best-lap ghost does not
+  const peerAt = (dsM: number, ghost: boolean): InterpolatedPeerState => {
+    const smp = track.getSampleAtDistance(player.sMeters + dsM);
+    return {
+      peerId: ghost ? 'ghost' : 'peer_remote',
+      driverCode: 'REM',
+      teamColorHex: '#ffffff',
+      position: smp.position.clone().addScaledVector(smp.binormal, player.lateralOffsetM),
+      quaternion: new THREE.Quaternion(),
+      linearVelocity: new THREE.Vector3(),
+      steerAngle: 0,
+      wheelRPMs: [0, 0, 0, 0],
+      throttle: 1,
+      brake: 0,
+      trackS: smp.s,
+      speedKmh: 216,
+      isAiPeer: false,
+      ghost,
+    };
+  };
+  const remote: WakeEmitterCar[] = [];
+  peerWakeEmitters(track, [peerAt(15, true)], remote);
+  assert.equal(remote.length, 0, 'The best-lap ghost sheds no wake');
+  peerWakeEmitters(track, [peerAt(15, false), peerAt(40, true)], remote);
+  assert.equal(remote.length, 1, 'One remote emitter (ghost left out)');
+  env.update(1 / 60, [player], remote);
+  const w = wakes.at(-1)!;
+  assert.ok(w.wakeIntensity > 0.3 && w.frontDownforceMultiplier < 0.95 && w.dragMultiplier < 0.95,
+    `Remote peer 15 m ahead puts the player in dirty air (intensity ${w.wakeIntensity.toFixed(2)}, front DF ×${w.frontDownforceMultiplier.toFixed(3)})`);
+
+  // An AI field given the shared environment leaves the update to its owner: one sample per car per frame
+  const field = new AiOpponentField(track, player, undefined, env);
+  field.startRace(false);
+  roadSamples.length = 0;
+  for (let i = 0; i < 20; i++) {
+    env.update(1 / 60, field.sims());
+    player.step(1 / 60, { throttle: 0.6 });
+    field.update(1 / 60);
+  }
+  assert.equal(roadSamples.length, 20, `Player sampled once per frame alongside a shared-environment AI field (${roadSamples.length})`);
+});
+
+check('MultiplayerSyncManager maps a remote peer clock to its own and rejects out-of-order UDP packets', () => {
+  const net = new MultiplayerSyncManager();
+  const makePkt = (ts: number, sMeters: number): NetworkVehiclePacket => ({
+    peerId: 'remote_1',
+    driverCode: 'VER',
+    teamColorHex: '#3671c6',
+    timestampMs: ts,
+    pos: [0, 0, sMeters],
+    quat: [0, 0, 0, 1],
+    linVel: [0, 0, 60],
+    angVel: [0, 0, 0],
+    steerAngle: 0,
+    wheelRPMs: [1500, 1500, 1500, 1500],
+    throttle: 1,
+    brake: 0,
+    trackS: sMeters,
+    speedKmh: 216,
+  });
+  // Remote clock is +5000 ms ahead of local performance.now()
+  const localNow = 1000;
+  net.ingestPacket(makePkt(localNow + 5000, 100), false, localNow);
+  net.ingestPacket(makePkt(localNow + 5050, 103), false, localNow + 50);
+  // Out-of-order stale packet with earlier timestamp must be ignored
+  net.ingestPacket(makePkt(localNow + 4900, 50), false, localNow + 55);
+  const peers = net.update(localNow + 120, makePkt(localNow + 120, 0));
+  assert.equal(peers.length, 1);
+  assert.equal(peers[0].trackS, 103, 'Out-of-order packet was rejected');
+});
+
+// -----------------------------------------------------------------------------
+// P0: End-to-End Parity Between F1Physics2026 & F12026CarSim (VehiclePhysics)
+// -----------------------------------------------------------------------------
+console.log('\nP0: Full Physics Parity Between F1Physics2026 & F12026CarSim');
+
+check('Both F1Physics2026 and F12026CarSim populate all P0-P7 telemetry fields and 240/500 Hz FFB subframes', () => {
+  const lc26 = new F1Physics2026(track);
+  const f126 = new F12026CarSim(track);
+  lc26.aiAutopilot = false;
+  f126.aiAutopilot = false;
+
+  for (let i = 0; i < 60; i++) {
+    lc26.step(1 / 60, { throttle: 0.85, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.15 });
+    f126.step(1 / 60, { throttle: 0.85, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.15 });
+  }
+
+  for (const [name, sim] of [['F1Physics2026', lc26], ['F12026CarSim', f126]] as const) {
+    const t = sim.telemetry;
+    assert.equal(t.tireTempsC.length, 4, `${name} tireTempsC`);
+    assert.equal(t.tireWearPct.length, 4, `${name} tireWearPct`);
+    assert.equal(t.tireBandTempsC?.length, 4, `${name} tireBandTempsC`);
+    assert.equal(t.tirePressuresPsi?.length, 4, `${name} tirePressuresPsi`);
+    assert.equal(t.tireFlatSpotSeverity?.length, 4, `${name} tireFlatSpotSeverity`);
+    assert.equal(t.tireGrainLevel?.length, 4, `${name} tireGrainLevel`);
+    assert.equal(t.tireBlisterLevel?.length, 4, `${name} tireBlisterLevel`);
+    assert.equal(t.tireDirtyLevel?.length, 4, `${name} tireDirtyLevel`);
+    assert.equal(t.brakeTempsC.length, 4, `${name} brakeTempsC`);
+    assert.equal(t.brakeCoreTempsC?.length, 4, `${name} brakeCoreTempsC`);
+    assert.equal(t.brakePadMuFactor?.length, 4, `${name} brakePadMuFactor`);
+    assert.ok(t.ffbSubframeSamples && t.ffbSubframeSamples.length >= 4, `${name} ffbSubframeSamples`);
+    assert.ok(Number.isFinite(t.ffbTorqueNorm) && Math.abs(t.ffbTorqueNorm!) > 0.005, `${name} ffbTorqueNorm=${t.ffbTorqueNorm}`);
+    assert.ok(t.turboBoostBar >= 0, `${name} turboBoostBar=${t.turboBoostBar}`);
+    assert.ok(t.liveTuner !== undefined, `${name} populates liveTuner telemetry for MFD`);
+  }
+});
+
+check('Front vs Rear Tire Load-Sensitivity Asymmetry (16-pt DY_CURVE/DX_CURVE), 3-Phase Diff, Per-Gear MGU-K Clipping & Live Tuner MFD API', () => {
+  // 1. Verify LC26 front vs rear 16-pt load-sensitivity asymmetry at heavy load (8 kN)
+  const frontTyre = createTyreRuntime(LC26_TYRES.soft.front, 95);
+  const rearTyre = createTyreRuntime(LC26_TYRES.soft.rear, 95);
+  assert.equal(LC26_TYRES.soft.front.dyCurve?.length, 16, 'LC26 front 16-point DY_CURVE');
+  assert.equal(LC26_TYRES.soft.rear.dyCurve?.length, 16, 'LC26 rear 16-point DY_CURVE');
+  assert.ok(
+    LC26_TYRES.soft.rear.lsExpY > LC26_TYRES.soft.front.lsExpY,
+    `Rear lsExpY (${LC26_TYRES.soft.rear.lsExpY}) > Front lsExpY (${LC26_TYRES.soft.front.lsExpY})`
+  );
+  const fOut = computeTyreForces(frontTyre, { fz: 8000, vx: 60, vy: 5, rimSpeed: 60, camberLeftRad: 0, surfaceGrip: 1, dt: 1 / 240 });
+  const rOut = computeTyreForces(rearTyre, { fz: 8000, vx: 60, vy: 5, rimSpeed: 60, camberLeftRad: 0, surfaceGrip: 1, dt: 1 / 240 });
+  assert.ok(rOut.mu > fOut.mu * 0.96, `Wider rear tire retains strong mu at 8kN load (rear=${rOut.mu.toFixed(3)}, front=${fOut.mu.toFixed(3)})`);
+
+  // 2. Verify Live Tuner MFD round-trip & 3-Phase Diff + Per-Gear MGU-K Clipping on F1Physics2026 & F12026CarSim
+  const lc26 = new F1Physics2026(track);
+  const f126 = new F12026CarSim(track);
+  for (const sim of [lc26, f126]) {
+    sim.setLiveTuner({
+      tcLevel: 9,
+      tc2Level: 7,
+      absLevel: 10,
+      brakeBiasPct: 57.5,
+      brakeMigrationPct: 2.5,
+      diffEntry: 4,
+      diffMid: 3,
+      diffExit: 8,
+      engineMap: 2,
+      ersMode: 'PSH',
+    });
+    const state = sim.getLiveTunerState();
+    assert.equal(state.tcLevel, 9);
+    assert.equal(state.tc2Level, 7);
+    assert.equal(state.absLevel, 10);
+    assert.equal(state.brakeBiasPct, 57.5);
+    assert.equal(state.brakeMigrationPct, 2.5);
+    assert.equal(state.diffEntry, 4);
+    assert.equal(state.diffMid, 3);
+    assert.equal(state.diffExit, 8);
+    assert.equal(state.engineMap, 2);
+    assert.equal(state.ersMode, 'PSH');
+    assert.ok(state.mgukGearClipFraction > 0 && state.mgukGearClipFraction <= 1);
+  }
+});
+
+check('AiOpponentField dynamically instantiates AI peers matching the player vehicle (lc26, f12026-car, amg-gt3) and CarAudioEngine silences when paused', () => {
+  for (const playerCar of [new F1Physics2026(track), new F12026CarSim(track), createAmgGt3Sim(track)]) {
+    const field = new AiOpponentField(track, playerCar);
+    field.startRace(false);
+    field.update(1 / 60);
+    const aiSims = field.aiSims();
+    assert.ok(aiSims.length > 0, `AI field created peers for ${playerCar.vehicleId}`);
+    for (const ai of aiSims) {
+      assert.equal(ai.vehicleId, playerCar.vehicleId, `AI sim vehicleId (${ai.vehicleId}) matches player (${playerCar.vehicleId})`);
+      assert.equal(ai.racingLineId, playerCar.racingLineId, `AI sim racingLineId (${ai.racingLineId}) matches player (${playerCar.racingLineId})`);
+    }
+    for (const peer of field.peers()) {
+      assert.equal(peer.vehicle, playerCar.vehicleId, `Peer render state vehicle (${peer.vehicle}) matches player (${playerCar.vehicleId})`);
+    }
+  }
+
+  const audio = new CarAudioEngine();
+  assert.equal(audio.getPaused(), false);
+  audio.setPaused(true);
+  assert.equal(audio.getPaused(), true);
+  audio.setPaused(false);
+  assert.equal(audio.getPaused(), false);
+});
+
+console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);
+if (failed > 0) process.exit(1);

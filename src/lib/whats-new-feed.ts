@@ -3,7 +3,7 @@
  * (src/app/feed.xml/route.ts) so feed readers and news sites can follow updates. One item per day, newest first, each
  * linking to the What's new tab on the home page. English only, like the notes themselves.
  *
- * Pure: the route passes the notes and the site address, and scripts/verify-feed.ts checks the output.
+ * Pure: the route passes the notes and the site address, and scripts/verify/verify-feed.ts checks the output.
  */
 import type { WhatsNewDay } from "@/components/home/home-data";
 

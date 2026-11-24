@@ -186,7 +186,6 @@
     "list": "Livery {car}"
   },
   "downloads": {
-    "intro": "Pembungkus aplikasi opsional untuk Windows, macOS, Linux, dan Android. Membuka librecorsa.org secara langsung, sehingga pembaruan game langsung tersedia tanpa perlu memasang ulang.",
     "directLink": "Tautan langsung",
     "platforms": "Platform",
     "thisDevice": "Perangkat ini",
@@ -198,17 +197,15 @@
     "installCommand": "Perintah pemasangan {platform}",
     "whyInstall": "Mengapa memasang aplikasi",
     "highlights": {
-      "desktop": {
-        "label": "Desktop",
-        "text": "Meminta GPU diskrit pada laptop multi-GPU, memberi akses WebHID senyap untuk setir balap dan DualSense, menonaktifkan pembatasan latar belakang, dan memeriksa pembaruan di GitHub Releases."
+      "desktopApp": {
+        "label": "Desktop"
       },
       "android": {
         "label": "Android",
         "text": "Trusted Web Activity layar penuh tanpa bilah URL browser, gestur tepi imersif, Android Game Mode, serta pintasan peluncur Mengemudi / Papan."
       },
-      "current": {
-        "label": "Selalu terbaru",
-        "text": "Setiap pembungkus membuka librecorsa.org langsung alih-alih menyertakan sirkuit atau mobil, sehingga pembaruan fisika, sirkuit, dan multipemain langsung tersedia."
+      "live": {
+        "label": "Selalu terbaru"
       },
       "browser": {
         "label": "Browser & iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "Build & penandatanganan",
-    "builds": "Semua installer dan APK dibangun dari kode sumber repositori ini oleh GitHub Actions dan diterbitkan di GitHub Releases dengan digest SHA-256. Penandatanganan kode Windows gratis melalui SignPath Foundation sedang disiapkan; build macOS saat ini belum ditandatangani; APK Android ditandatangani dengan kunci unggahan yang diverifikasi oleh <code>{file}</code>.",
     "allReleases": "Semua rilis di GitHub",
     "signingPolicy": "Kebijakan penandatanganan kode"
   }

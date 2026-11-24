@@ -809,7 +809,7 @@ export const NISSAN_R32_CONFIG = {
     maxRoadWheelDeg: 360 / 12.4,
     // The kingpin (WBTYRE_BOTTOM → WBTYRE_TOP) leans back 3.7° and meets the ground 33 mm ahead of the contact patch [derived]
     ffbMechanicalTrailM: 0.033,
-    // The body's plan at barrier height, measured from nissan-r32-jtcc.glb (`scripts/measure-car-plans.ts`)
+    // The body's plan at barrier height, measured from nissan-r32-jtcc.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.29], [0.39, 2.26], [0.73, 2.07], [0.80, 1.94], [0.88, -0.94], [0.79, -2.17], [0.00, -2.26]],
     // Torsional stiffness between the axle structures: a steel unibody stiffened by a welded cage [est]
     chassisTorsion: { torsionalStiffnessNmPerDeg: 20_000, torsionalDampingNmsPerDeg: 200, frontRollInertiaShare: 0.5 },

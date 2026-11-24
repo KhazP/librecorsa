@@ -68,6 +68,7 @@ import {
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
 import { carPhysicsVersion } from '@/lib/sim/lap-types';
+import { roomModRefOf, roomTrackStatus } from '@/lib/mods/room-content';
 import { MP_HEAVY_JITTER_MS, MP_HEAVY_LOSS_PCT } from '@/lib/sim/mp-contact';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
@@ -541,7 +542,7 @@ export class MultiplayerSyncManager {
    */
   public predictRemotePlayers = true;
   /**
-   * The netcode bench's ablation only (scripts/bench-netcode.ts): maps a sender's stamp to the time on this client's
+   * The netcode bench's ablation only (scripts/online/bench-netcode.ts): maps a sender's stamp to the time on this client's
    * clock it was sent at, exactly, in place of the estimators. Unset in the game.
    */
   public timingOracle?: (peerId: string, senderStampMs: number) => number;
@@ -552,7 +553,7 @@ export class MultiplayerSyncManager {
 
   /**
    * The clock `update()` is given (requestAnimationFrame's timestamps are `performance.now()`): arrivals, pings and
-   * time-outs are read on it. The netcode bench (scripts/bench-netcode.ts) gives each client a simulated one.
+   * time-outs are read on it. The netcode bench (scripts/online/bench-netcode.ts) gives each client a simulated one.
    */
   private readonly clock: () => number;
 
@@ -1483,7 +1484,7 @@ export class MultiplayerSyncManager {
     if (this.isHost) {
       if (trackId) {
         if (this.activeQualifying && trackId !== this.lobbySettings.trackId) this.abortQualifying();
-        this.lobbySettings = { ...this.lobbySettings, trackId };
+        this.lobbySettings = { ...this.lobbySettings, trackId, trackMod: roomModRefOf(trackId) };
       }
       this.broadcastLobby();
     } else if (this.hostId) {
@@ -1507,7 +1508,7 @@ export class MultiplayerSyncManager {
     this.hostId = this.localPeerId;
     this.clockOffsetMs = 0;
     this.bestClockRttMs = 0;
-    if (this.localTrackId) this.lobbySettings = { ...this.lobbySettings, trackId: this.localTrackId };
+    if (this.localTrackId) this.lobbySettings = { ...this.lobbySettings, trackId: this.localTrackId, trackMod: roomModRefOf(this.localTrackId) };
     this.broadcastLobby();
     if (droppedQuali) this.onQualifyingEnd?.(droppedQuali.id);
     if (dropped) this.onRaceAbort?.(dropped.id);
@@ -1562,7 +1563,9 @@ export class MultiplayerSyncManager {
       this.abortQualifying();
     }
     const kind: RoomKind = this.inScheduledRace ? 'public' : 'private';
-    this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch }, kind);
+    // A new circuit names its mod package (or none), so guests can tell whether they have it
+    const mod = patch.trackId !== undefined ? { trackMod: roomModRefOf(patch.trackId) } : {};
+    this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch, ...mod }, kind);
     // Unready and stop showing any guest whose current car violates the new carClass/vehicle rule
     if (isVehicleRestricted(this.lobbySettings)) {
       for (const [peerId, member] of this.members) {
@@ -2084,6 +2087,8 @@ export class MultiplayerSyncManager {
           if (driverKey) this.sendControl({ type: 'identify', driverKey });
         }
         this.setLobby(msg.lobby);
+        // The host moved to a mod circuit this copy hasn't got (or has in another version): not ready for that one
+        if (this.localReady && roomTrackStatus(msg.lobby.settings.trackId, msg.lobby.settings.trackMod) !== 'ok') this.setReady(false);
         if (dropped) this.onRaceAbort?.(dropped.id);
         this.reconcileRace(true);
         break;

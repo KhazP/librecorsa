@@ -878,11 +878,11 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
   }, [speed, car.runId, drivenOffRun]);
   const drivenOff = drivenOffRun === car.runId;
   const gearButton = !autoGearbox || car.lights ? null : car.gear < 0 ? (
-    <GhostButton key="drive" label={lbl.drive} onTap={() => { touchInput.shiftUp = true; }}>
+    <GhostButton key="drive" label={lbl.drive} onTap={() => { touchInput.drive = true; }}>
       <span className="lc-disp text-[20px] leading-none">D</span>
     </GhostButton>
   ) : drivenOff && speed < REVERSE_OFFER_KMH ? (
-    <GhostButton key="reverse" label={lbl.reverse} onTap={() => { touchInput.shiftDown = true; }}>
+    <GhostButton key="reverse" label={lbl.reverse} onTap={() => { touchInput.reverse = true; }}>
       <span className="lc-disp text-[20px] leading-none">R</span>
     </GhostButton>
   ) : null;

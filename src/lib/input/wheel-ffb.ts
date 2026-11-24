@@ -2,7 +2,7 @@
  * Wheel force feedback through the local bridge.
  *
  * A browser cannot play DirectInput force feedback, so `npm run ffb` runs a small bridge on the PC
- * (scripts/ffb-bridge.ts → FfbHelper.exe) that owns the wheel's constant-force effect, as a native sim does. This
+ * (scripts/ffb-bridge/ffb-bridge.ts → FfbHelper.exe) that owns the wheel's constant-force effect, as a native sim does. This
  * client streams one packet per frame over a localhost WebSocket: the shaped rim force (the physics' steering torque
  * with the player's gain, minimum force and the soft lock past the car's steering lock), the frame's 500 Hz physics
  * samples, plus kerb / ABS vibration levels. The helper plays the samples out at 500 Hz, synthesises the vibrations,

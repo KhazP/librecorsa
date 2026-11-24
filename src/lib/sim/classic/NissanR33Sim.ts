@@ -91,7 +91,7 @@ export const NISSAN_R33_SIM_PROFILE: CarSimProfile = {
   // Rwanda's thinner air, where the drag helps less), and 1.1 × 0.85 × it 1.36 g at 54 km/h (1.37 measured), falling to
   // ≈ 75 % of the measured cornering by 270 km/h
   braking: { lowG: 1.43, aeroG: 0.45, refMs: 75 },
-  // As the GT3's [est]; scripts/verify-nissan-r33-jgtc.ts checks the autopilot's laps
+  // As the GT3's [est]; scripts/verify/verify-nissan-r33-jgtc.ts checks the autopilot's laps
   understeerRadPerMs2: 0.0035,
   speedProfile: NISSAN_R33_PROFILE_CAR,
   // The GT3's line: closed-wheel grip and downforce

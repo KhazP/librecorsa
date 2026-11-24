@@ -22,7 +22,7 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 
 /**
  * The GT3's planning model for its lap-time line, braking zones, braking urgency and HUD target speed: what this
- * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify-gt3.ts checks it). Held corners
+ * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify/verify-gt3.ts checks it). Held corners
  * pull μ ≈1.62 up to 190 km/h, easing to 1.5 at 250 km/h as the load rises; a threshold stop from 250 to 80 km/h
  * takes ≈117–120 m on the fixed 71 % balance-bar bias (the tyres' hot pressure moves it by a few metres), μ ≈1.42–1.45
  * on the full brake force. The plan corners on μ 1.6 and brakes on 1.42 (≈121 m, never shorter than the car), so its
@@ -74,7 +74,7 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   padLateralMu: 1.63,
   // The autopilot plans on 85 % of this: ≈1.5 g on the brakes at 100 km/h to ≈1.9 g past 250 km/h, and corners on
   // 1.1 × that (≈1.6 g slow, ≈2.1 g fast, the car's own grip): it laps the circuits' GT3 speed profiles to within
-  // ≈1–5 % at the AI's 0.975 pace (scripts/race-headless.ts --car amg-gt3)
+  // ≈1–5 % at the AI's 0.975 pace (scripts/physics/race-headless.ts --car amg-gt3)
   braking: { lowG: 1.7, aeroG: 0.55, refMs: 70 },
   // The car's understeer, which the autopilot's yaw loop otherwise only caught up with by mid-corner at speed: the front
   // road-wheel angle past the kinematic one (and past the loop's 0.8 × body slip) per m/s², on a flat-pad steer ramp at

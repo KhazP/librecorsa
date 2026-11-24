@@ -164,6 +164,28 @@ export interface LobbySettings {
   rules?: MpRaceRules;
   /** Qualifying before the race (min): private rooms only, always 0 in a public one */
   qualifyingMinutes?: MpQualifyingMinutes;
+  /** The mod package the circuit comes from (src/lib/mods), so a guest can tell whether theirs is the same */
+  trackMod?: RoomModRef;
+}
+
+/** A mod package as a room names it: enough to tell a guest what to install, and whether theirs is the same */
+export interface RoomModRef {
+  packageId: string;
+  name: string;
+  version: string;
+  /** Its content hash (mod-manifest.ts `packageHash`) */
+  hash: string;
+}
+
+const MOD_PACKAGE_ID = /^[a-z0-9][a-z0-9_-]{0,15}\.[a-z0-9][a-z0-9_-]{0,23}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
+
+function asModRef(v: unknown): RoomModRef | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const m = v as Record<string, unknown>;
+  if (typeof m.packageId !== 'string' || !MOD_PACKAGE_ID.test(m.packageId)) return undefined;
+  if (typeof m.hash !== 'string' || !SHA256.test(m.hash)) return undefined;
+  return { packageId: m.packageId, name: clampStr(m.name, 80, m.packageId), version: clampStr(m.version, 32, ''), hash: m.hash };
 }
 
 /** The settings an older host's lobby (or race) leaves out, as those races always ran */
@@ -456,6 +478,10 @@ export function sanitizeLobbySettings(v: unknown, roomKind?: RoomKind): LobbySet
   if (gridOrder !== undefined) out.gridOrder = gridOrder;
   if (rules !== undefined) out.rules = rules;
   if (qualifyingMinutes !== undefined) out.qualifyingMinutes = qualifyingMinutes;
+  // Only the package the circuit comes from: a reference left from the room's last mod circuit (settings are merged
+  // over the old ones) or one naming another package says nothing about this circuit
+  const trackMod = asModRef(st.trackMod);
+  if (trackMod && out.trackId.startsWith(`mod:${trackMod.packageId}/`)) out.trackMod = trackMod;
   return out;
 }
 

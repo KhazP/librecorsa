@@ -6,6 +6,7 @@ import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { RenderProfiler } from "@/components/dev/RenderProfiler";
 import { activateTrack, getTrackInfo, loadStoredTrackId, DEFAULT_TRACK_ID } from "@/lib/track-registry";
 import { registerAssetCache } from "@/lib/service-worker";
+import { loadMods } from "@/lib/mods/mod-loader";
 import { watchForUpdates } from "@/lib/build-update";
 import { useLiveHeartbeat } from "@/lib/net/live-heartbeat";
 import { Toast } from "@/components/ui";
@@ -85,7 +86,8 @@ export const TrackGate: React.FC = () => {
     // Before the simulator reads the settings
     const notice = applySafeStart();
     if (notice) setSafeStartNotice(notice);
-    void select(loadStoredTrackId());
+    // The installed mod packages' circuits and cars join the lists first: a stored choice may name one of them
+    void loadMods().then(() => select(loadStoredTrackId()));
   }, [select]);
 
   useEffect(() => {

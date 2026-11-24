@@ -12,7 +12,7 @@ import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { isPointToPointTrack } from "@/lib/track-kinds";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import { isCurrentLapPhysics, lapBoardClass, lapPhysicsVersion, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { isCurrentLapPhysics, lapBoardClass, lapGoesOnBoards, lapPhysicsVersion, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { getOrCreateDriverKey } from "./driver-key";
 import { getOnlineConfig, markOnlineAnswered, markOnlineUnreachable, onlineUrl, readOnlineConfig } from "./online-config";
 import { cappedString, clampLimit, fetchBoardPage, finiteNumber, parseBoardPage, requestJson, type BoardFilter } from "./board-client";
@@ -62,6 +62,8 @@ export const BOARD_UNREACHABLE = "Couldn't reach the online board, I'll keep try
 export const BOARD_UNREACHABLE_GAVE_UP = "Couldn't reach the online board";
 /** A lap driven on an older physics version, or before its circuit's boards started again: that board is read only */
 export const OLDER_PHYSICS_LAP = "This lap is from an older version of the physics or the circuit, and that board is read only";
+/** A lap with a mod package's car or circuit in it */
+export const MOD_LAP = "Laps with mod cars or mod circuits stay off the online boards";
 
 export interface RenameResult {
   ok: boolean;
@@ -240,12 +242,14 @@ export function clearBoardMiss(key: string, lapTimeMs: number): void {
 /**
  * Whether a saved best is on its online board, as far as this browser knows: `posted` once the board took it (or has a
  * faster lap of the driver's), else not, with the reason its last upload failed when it was this lap's. Null for a lap
- * that can't go on a current board (no conditions, or an older physics revision)
+ * that can't go on a current board (no conditions, an older physics revision, or a mod circuit's)
  */
 export function boardStatusOf(
   lap: Pick<LeaderboardEntry, "trackId" | "vehicle" | "conditions" | "lapTimeMs" | "recordedAt">,
 ): { posted: true } | { posted: false; error: string | null } | null {
   if (!lap.conditions || lap.conditions.physicsVersion !== lapPhysicsVersion(lap.vehicle, lap.trackId)) return null;
+  // A mod circuit's best is the player's own: no board to be on
+  if (!lapGoesOnBoards(lap)) return null;
   const key = boardKeyOf(lap);
   if (!key) return null;
   const best = loadBoardBest(key);
@@ -351,6 +355,8 @@ export async function submitLap(rec: LapRecording, opts: { event?: string } = {}
   if (!online.config.board) return { ok: false, error: "The online board is not available right now" };
   const valid = validateLapRecording(rec);
   if (!valid) return { ok: false, error: "The lap recording is invalid" };
+  // A mod package's car or circuit: the lap is the player's own, never the board's
+  if (!lapGoesOnBoards(valid)) return { ok: false, error: MOD_LAP };
   // Without its assists, realism, surface and physics revision a lap can't be shown fairly
   if (!valid.conditions) return { ok: false, error: "This lap was recorded by an older version of the game" };
   // Only the physics and the circuit as they are now take laps (a lap queued from before an update stays off)

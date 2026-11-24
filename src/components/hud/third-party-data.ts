@@ -5,7 +5,7 @@ import { perLanguage } from "./hud-format";
 /**
  * Readings the third-party HUD layouts share (styles/*Hud.tsx from other projects): the cars around the player on the
  * road, the slice of the order a short leaderboard shows, the session's best lap, the ideal lap and the fuel's laps.
- * Pure, so scripts/verify-third-party-hud.ts can check them headlessly.
+ * Pure, so scripts/verify/verify-third-party-hud.ts can check them headlessly.
  */
 
 /** A completed lap a layout lists */

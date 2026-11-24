@@ -104,7 +104,7 @@ export function drivingInputUsed(): string | null {
   return inputNames[tally.indexOf(Math.max(...tally))] ?? null;
 }
 
-/** Forgets the frames (scripts/verify-report-details.ts) */
+/** Forgets the frames (scripts/verify/verify-report-details.ts) */
 export function resetFrameStats(): void {
   count = 0;
   next = 0;

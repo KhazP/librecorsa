@@ -13,6 +13,7 @@ import type { SimRealismFlags } from "../sim-realism";
 import type { SessionConditions, WeatherSyncState } from "../weather";
 import type { SteeringAssistSettings } from "../steering-assist";
 import type { TrackColliderData } from "../track-colliders";
+import type { CarSimProfile } from "../f12026-car/F12026CarSim";
 import type { CarState } from "./car-state";
 
 /** The simulation's tick (s): the cars' own control tick, 250 Hz. The worker advances whole ticks of this */
@@ -138,6 +139,8 @@ export type SimCommand =
       vehicle: VehicleModelId;
       /** The plan of another body the car wears (`CarDefinition.bodyPlan`) */
       bodyPlan?: [number, number][];
+      /** The car's own physics, when not its model's (`CarDefinition.simProfile`, a mod car's): plain data, as it crosses */
+      profile?: CarSimProfile;
       lc26Rigid: boolean;
     }
   /** The circuit's colliders, once its mesh has loaded on the page */

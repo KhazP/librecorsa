@@ -8,7 +8,7 @@ import type { SupportLink } from "@/lib/modder-support";
  *  - at most once a week, whatever was driven;
  *  - never again for a maker the player pressed the donate button for.
  * A drive with nothing left to say spends nothing: the week's chance waits for one that has. The rules take their
- * storage and clock as arguments (scripts/verify-support-prompt.ts runs them on a Map).
+ * storage and clock as arguments (scripts/verify/verify-support-prompt.ts runs them on a Map).
  */
 
 export const SUPPORT_PROMPT_KEY = "librecorsa.supportPrompt";

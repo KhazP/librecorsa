@@ -4,11 +4,11 @@
  * the race too: its field round the same car, the track environment every car shares, and the race's standing.
  *
  * It knows nothing of threads or timers: `sim-worker.ts` feeds it messages and wall-clock time, and the headless
- * checks drive it directly (`scripts/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
+ * checks drive it directly (`scripts/verify/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
  */
 import type { ControlInputs } from "@/types/f1";
 import { setLc26OnRigidBody } from "@/lib/cars/lc26-engine";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { createVehicleSim } from "@/lib/cars/vehicle-models";
 import { getActiveTrackData, setActiveTrack, type BuiltTrackData } from "@/lib/track-data";
 import type * as THREE from "three";
 import type { SimulatorCar } from "../simulator-car";
@@ -112,7 +112,7 @@ export class SimRuntime {
         // Another car: a race round the last one ends with it
         this.endRace();
         this.spare = null;
-        this.car = vehicleModelSpec(command.vehicle).createSim(this.track, this.trackRoot, command.bodyPlan);
+        this.car = createVehicleSim(command.vehicle, this.track, this.trackRoot, command.bodyPlan, command.profile);
         this.carNumber = command.car;
         this.epoch = 0;
         this.inputs = {};

@@ -1,6 +1,7 @@
 import {
   Accessibility,
   Activity,
+  Blocks,
   ArrowDownUp,
   ArrowLeft,
   AudioLines,
@@ -180,6 +181,7 @@ export const ICONS = {
 
   // Site and about
   credits: ScrollText,
+  mods: Blocks,
   feedback: MessageSquarePlus,
   press: Newspaper,
   privacy: ShieldCheck,

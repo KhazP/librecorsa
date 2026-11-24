@@ -1,6 +1,12 @@
 /*
  * Keeps the circuits, cars, textures and sounds a player has downloaded (tens of MB each), across deploys. Registered
- * by src/lib/service-worker.ts in production builds only. Pages and scripts never come from here.
+ * by src/lib/service-worker.ts in production builds only. It also does two other jobs, each with its own cache:
+ * - The game's pages and scripts for offline play ("the shell", below the files' code): a page always comes from the
+ *   server when there is one, and from the shell only when there isn't.
+ * - Mod packages the player imported (src/lib/mods/mod-store.ts), answered under /mods/ from the cache the page
+ *   writes them to, in the offline launcher and a clone's dev server only (`MODS_HERE`). Nothing here ever deletes
+ *   them: only the player's Remove does. A catalogue of packages and the
+ *   zips it offers (/mods/_catalogue/, src/lib/mods/mod-catalogue.ts) pass by untouched.
  *
  * Most of these files keep their name when they change: a circuit's GLB and track_data.json, a layout's file, car
  * models and sounds get replaced in place on R2. So a kept copy is only used once the server says it is current: the
@@ -16,7 +22,7 @@
  * is dropped. Files unused for MAX_IDLE_MS are dropped, and once the kept files pass the budget (MAX_BYTES, or
  * QUOTA_SHARE of the site's storage quota if that is smaller) the least recently used go first.
  *
- * scripts/verify-asset-cache.ts runs this file against a stand-in server and cache.
+ * scripts/verify/verify-asset-cache.ts runs this file against a stand-in server and cache.
  */
 
 /** The kept files, one per URL */
@@ -29,6 +35,23 @@ const LEGACY_PREFIX = "librecorsa-assets-";
 const ASSET_PATH = /\/(tracks|cars|lc26|gt3|audio)\/[^?#]+\.(glb|gltf|bin|webp|png|jpg|jpeg|ktx2|ogg|wav|mp3|json)$/i;
 /** The KTX2 texture transcoder (src/lib/render/ktx2.ts), which a phone fetches with every circuit: kept and checked the same way */
 const TRANSCODER_PATH = /\/basis\/basis_transcoder\.(js|wasm)$/;
+/** The site's base path, where this file is served (`/` or `/<base>/`) */
+const BASE = self.location.pathname.replace(/[^/]*$/, "");
+/** Imported mod packages (src/lib/mods/mod-store.ts `MODS_CACHE`), by URL */
+const MODS = "librecorsa-mods-v1";
+/**
+ * Mods are taken only by a copy of the game on this computer, the offline launcher or a clone's dev server
+ * (src/lib/mods/mod-manifest.ts `modsAvailableOn`): on the web this worker leaves /mods/ alone
+ */
+const MODS_HERE = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(self.location.hostname);
+/** The shell: one cache per build (`librecorsa-shell-<build>`), the previous build's deleted once the next is whole */
+const SHELL_PREFIX = "librecorsa-shell-";
+/** What the build lists for the shell (scripts/site/build-offline-manifest.mjs) */
+const SHELL_MANIFEST = `${self.location.origin}${BASE}offline-manifest.json`;
+/** The record in a shell cache that says every file of its build is in it */
+const SHELL_COMPLETE = "__librecorsa-shell-complete";
+/** How long a page waits for the server before the shell's copy is served */
+const PAGE_TIMEOUT_MS = 8000;
 
 /** How long a check may wait for the server's answer before the kept copy is served */
 const CHECK_TIMEOUT_MS = 6000;
@@ -59,12 +82,36 @@ self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+// A page asks for the shell to be brought up to its build (src/lib/service-worker.ts), once per load
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "librecorsa:sync-shell") event.waitUntil(syncShell());
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET" || req.headers.has("range") || req.cache === "no-store" || req.cache === "reload") return;
+  if (req.method !== "GET") return;
   const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  // A catalogue and the zips it offers: straight from the server and never kept, since a zip is downloaded once, to
+  // be imported. Offline, the Mods panel says so
+  if (MODS_HERE && url.pathname.startsWith(`${BASE}mods/_catalogue/`)) return;
+  // Imported mods: their own cache first, then the server (`public/mods/`, the launcher's folder)
+  if (MODS_HERE && url.pathname.startsWith(`${BASE}mods/`)) {
+    event.respondWith(serveMod(req, url));
+    return;
+  }
+  if (req.mode === "navigate") {
+    event.respondWith(servePage(req, url));
+    return;
+  }
+  // Next's scripts and styles never change under the same name: the shell's copy, else the server
+  if (url.pathname.startsWith(`${BASE}_next/static/`)) {
+    event.respondWith(serveStatic(req));
+    return;
+  }
+  if (req.headers.has("range") || req.cache === "no-store" || req.cache === "reload") return;
   // A query string asks past the edge copy: that request is left to the network as it is
-  if (url.origin !== self.location.origin || url.search || !(ASSET_PATH.test(url.pathname) || TRANSCODER_PATH.test(url.pathname))) return;
+  if (url.search || !(ASSET_PATH.test(url.pathname) || TRANSCODER_PATH.test(url.pathname))) return;
   // The work after the answer (keeping a download, noting a use, the clean-up) is collected while serving it
   const later = [];
   const answer = serve(event, url.origin + url.pathname, later);
@@ -72,6 +119,16 @@ self.addEventListener("fetch", (event) => {
   const settle = () => Promise.all(later).catch(() => {});
   event.waitUntil(answer.then(settle, settle));
 });
+
+async function serveMod(req, url) {
+  try {
+    const kept = await (await caches.open(MODS)).match(url.origin + url.pathname);
+    if (kept) return kept;
+  } catch {
+    // No cache to read: the server's copy, if it has one
+  }
+  return fetch(req);
+}
 
 async function serve(event, key, later) {
   if (Date.now() - lastSweepCheck >= SWEEP_EVERY_MS) {
@@ -336,4 +393,193 @@ async function runSweep(need, keepKey, force, ifDue) {
   }
   keptBytes = total;
   await used.put(SWEPT, recordResponse({ used: now, size: 0 }));
+}
+
+// --- The shell: the game's pages and scripts, for offline play ---
+
+/** `completeShell`'s answer while this worker runs (a sync resets it): every page and script asks */
+let shellName;
+
+/**
+ * The newest whole shell cache's name, or null (none yet: the first visit, a download cut short, or no Cache Storage to
+ * read). Never rejects: a page or script is then fetched as if there were no shell
+ */
+async function completeShell() {
+  if (shellName === undefined) shellName = findCompleteShell().catch(() => (shellName = undefined, null));
+  return shellName;
+}
+
+async function findCompleteShell() {
+  let best = null;
+  for (const name of await caches.keys()) {
+    if (!name.startsWith(SHELL_PREFIX)) continue;
+    const cache = await caches.open(name);
+    const mark = await cache.match(`${self.location.origin}/${SHELL_COMPLETE}`);
+    if (!mark) continue;
+    const { at } = await mark.json().catch(() => ({ at: 0 }));
+    if (!best || at > best.at) best = { name, at };
+  }
+  return best ? best.name : null;
+}
+
+/**
+ * A page's shell copy: `/play`, `/play/` and `/play.html` are one page, as are `/` and `/index.html`. Made anonymous,
+ * so the page keeps the address it was opened at (`/play?mods=off`, a room link), not the one it was kept under
+ */
+async function shellPage(url) {
+  try {
+    const name = await completeShell();
+    if (!name) return null;
+    const cache = await caches.open(name);
+    const root = BASE.replace(/\/+$/, "");
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    const forms = path === root || path === "/" || path === `${root}/index.html` ? [BASE, `${BASE}index.html`] : [path, `${path}.html`, path.replace(/\.html$/, "")];
+    for (const form of forms) {
+      const hit = await cache.match(self.location.origin + form, { ignoreVary: true });
+      if (hit) return anonymous(hit);
+    }
+  } catch {
+    // No Cache Storage to read: no shell
+  }
+  return null;
+}
+
+/** Lets a response nobody will read go, so its connection isn't held open */
+const discard = (res) => void res?.body?.cancel().catch(() => {});
+
+/** The server's page when it answers; the shell's when it doesn't, or not within PAGE_TIMEOUT_MS */
+async function servePage(req, url) {
+  const network = fetch(req);
+  // Raced, never aborted: a navigation's own request is passed on as it is (its redirect handling included)
+  network.catch(() => {});
+  let timer;
+  const slow = new Promise((resolve) => (timer = setTimeout(() => resolve(null), PAGE_TIMEOUT_MS)));
+  try {
+    const res = await Promise.race([network, slow]);
+    if (res === null) {
+      const copy = await shellPage(url);
+      if (!copy) return await network;
+      // The server's answer, when it comes, isn't needed
+      network.then(discard, () => {});
+      return copy;
+    }
+    // A server error with a shell copy at hand: the copy
+    if (res.status >= 500) {
+      const copy = await shellPage(url);
+      if (copy) {
+        discard(res);
+        return copy;
+      }
+    }
+    return res;
+  } catch (err) {
+    const copy = await shellPage(url);
+    if (copy) return copy;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * A response made here, with no URL of its own: a worker started from it keeps the URL it was asked for, fragment and
+ * query included. Turbopack's worker bootstrap reads its config from there (`#params=`); a kept or fetched response
+ * carries the URL it was stored or fetched under, without them, and the worker would start without its config.
+ */
+const anonymous = (res) => {
+  // Its body is already decoded: it no longer is what these described
+  const headers = new Headers(res.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+};
+
+async function serveStatic(req) {
+  const worker = req.destination === "worker" || req.destination === "sharedworker";
+  try {
+    const name = await completeShell();
+    if (name) {
+      // Next may add a query to its script URLs (a deployment id): the file is the same. Looked up by its address
+      // alone, as the sync stored it (a header the request carries and a Vary names would miss it)
+      const url = new URL(req.url);
+      const hit = await (await caches.open(name)).match(url.origin + url.pathname, { ignoreSearch: true, ignoreVary: true });
+      if (hit) return worker || url.search ? anonymous(hit) : hit;
+    }
+  } catch {
+    // No Cache Storage to read: the server's copy
+  }
+  const res = await fetch(req);
+  return worker && res.ok ? anonymous(res) : res;
+}
+
+let syncing = null;
+
+/**
+ * Brings the shell up to the build the server lists: every file of it in a new cache (a file the last build had
+ * under the same name, a hashed script, is copied over rather than downloaded again), then the older caches go. A
+ * download cut short leaves the last whole shell in use, and the next page load carries on where it stopped.
+ */
+function syncShell() {
+  syncing = syncing || runSync().catch(() => {}).finally(() => (syncing = null));
+  return syncing;
+}
+
+/** The build the server lists now, or null (no manifest: `next dev`, an older deploy) */
+async function listedShell() {
+  const res = await fetch(SHELL_MANIFEST, { cache: "no-store" });
+  if (!res.ok) return null;
+  const manifest = await res.json();
+  return manifest && typeof manifest.build === "string" && Array.isArray(manifest.files) ? manifest : null;
+}
+
+async function runSync() {
+  const manifest = await listedShell();
+  if (!manifest) return;
+  const name = SHELL_PREFIX + manifest.build;
+  const current = await completeShell();
+  if (current === name) return;
+  // A build that never finished downloading (the player went offline, a deploy came first) is of no use now
+  for (const other of await caches.keys()) {
+    if (other.startsWith(SHELL_PREFIX) && other !== name && other !== current) await caches.delete(other);
+  }
+  try {
+    await fillShell(name, current, manifest);
+  } catch (err) {
+    // Out of space: this build's files go (the last whole shell stays), and the next load tries again
+    if (err && err.name === "QuotaExceededError") await caches.delete(name);
+    throw err;
+  }
+}
+
+async function fillShell(name, current, manifest) {
+  const cache = await caches.open(name);
+  const previous = current ? await caches.open(current) : null;
+  for (const file of manifest.files) {
+    if (typeof file !== "string" || !file.startsWith("/")) continue;
+    const url = self.location.origin + BASE + file.slice(1);
+    if (await cache.match(url)) continue;
+    // Hashed files are the same file under the same name; pages change with every build
+    const reuse = previous && file.startsWith("/_next/static/") ? await previous.match(url) : null;
+    if (reuse) {
+      await cache.put(url, reuse);
+      continue;
+    }
+    // A script may come from the browser's own cache (the page just loaded it); a page is checked with the server
+    const got = await fetch(url, { cache: file.startsWith("/_next/static/") ? "default" : "no-cache", credentials: "same-origin" });
+    if (!got.ok || got.type !== "basic") throw new Error(`${file}: HTTP ${got.status}`);
+    // A page the server redirected to can't answer a navigation as it is: kept as a response of its own
+    await cache.put(url, got.redirected ? anonymous(got) : got);
+  }
+  // A deploy while this ran may have sent the new build's pages with the old build's scripts: whole only if not
+  const now = await listedShell();
+  if (!now || now.build !== manifest.build) {
+    // Gone, so a later sync of this build (a deploy rolled back) never builds on the other build's pages
+    await caches.delete(name);
+    throw new Error("the build changed while its shell downloaded");
+  }
+  await cache.put(`${self.location.origin}/${SHELL_COMPLETE}`, new Response(JSON.stringify({ at: Date.now() }), { headers: { "Content-Type": "application/json" } }));
+  shellName = Promise.resolve(name);
+  for (const other of await caches.keys()) {
+    if (other.startsWith(SHELL_PREFIX) && other !== name) await caches.delete(other);
+  }
 }

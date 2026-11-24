@@ -42,6 +42,8 @@ export interface ControlInputs {
   shiftUp: boolean;
   shiftDown: boolean;
   neutral?: boolean; // One-frame press: out of gear (both shift buttons at once, or the Neutral key / button)
+  /** One-frame press: straight into reverse (−1, near a standstill) or first (1), past neutral: the touch Reverse and Drive buttons */
+  selectGear?: -1 | 1;
 }
 
 export type CameraMode =

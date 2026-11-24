@@ -775,7 +775,7 @@ function config(year: '66' | '67') {
       maxRoadWheelDeg: 360 / 14.1,
       // The kingpin (WBTYRE_BOTTOM → WBTYRE_TOP) leans back 7.7° and meets the ground 41 mm ahead of the contact patch [derived]
       ffbMechanicalTrailM: 0.041,
-      // The body's plan at barrier height, measured from the GLB (`scripts/measure-car-plans.ts`)
+      // The body's plan at barrier height, measured from the GLB (`scripts/cars/measure-car-plans.ts`)
       bodyPlan: year === '66'
         ? [[0.0, 2.12], [0.57, 1.87], [0.83, 1.48], [0.89, -1.24], [0.71, -1.98], [0.0, -2.04]]
         : [[0.0, 2.12], [0.66, 1.89], [0.88, 1.68], [0.89, -1.24], [0.8, -2.04], [0.0, -2.12]],
