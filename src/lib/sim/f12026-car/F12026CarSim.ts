@@ -632,6 +632,8 @@ interface BiasEdges {
 /** Per collider (or none yet), track and car profile */
 const NO_COLLIDER = {};
 const biasEdgeCache = new WeakMap<object, WeakMap<BuiltTrackData, WeakMap<CarSimProfile, BiasEdges>>>();
+/** Per car profile and drive plan (a plan is one circuit's) */
+const planWallRooms = new WeakMap<CarSimProfile, WeakMap<AiDrivePlan, WallBiasRoom>>();
 
 /**
  * The lateral range (`rangeAt`, a car's `lateralRangeAt`) as the edges a traffic bias may push a tracked plan's target
@@ -708,6 +710,58 @@ function biasEdgesOf(L: number, rangeAt: (s: number) => [number, number]): BiasE
     if (lo[i] > hi[i]) lo[i] = hi[i] = 0.5 * (lo[i] + hi[i]);
   }
   return { lo, hi, loAhead, hiAhead, ds };
+}
+
+/** How far a traffic bias may take a car off its path toward each side (m, ≥ 0), every `ds` along the lap */
+interface WallBiasRoom {
+  pos: Float32Array;
+  neg: Float32Array;
+  ds: number;
+}
+
+/**
+ * How far a traffic bias may move a car off its path (`offsetAt`, every `ds` = lap / `n`) toward each side and keep its
+ * tyres `BIAS_WALL_ROOM_M` clear of the barriers (`wallLeftM` / `wallRightM`): the room to each barrier less half the
+ * car's tyre footprint, measured from the path, never changing along the lap faster than `TRACK_BIAS_EDGE_SLOPE` (each
+ * point pulled in to within the slope × distance of every point with less room, twice round the lap each way). So a
+ * path swinging toward a barrier takes a car's bias in gradually before the swing, as a narrowing of the edges does,
+ * and gives it back as gradually after. Far from a barrier it is no limit; it never takes a car past its own path
+ */
+function wallBiasRoomOf(track: BuiltTrackData, n: number, offsetAt: (i: number, s: number) => number, halfWidthM: number): WallBiasRoom {
+  const ds = track.totalLengthM / n;
+  const pos = new Float32Array(n);
+  const neg = new Float32Array(n);
+  const keep = halfWidthM + BIAS_WALL_ROOM_M;
+  for (let i = 0; i < n; i++) {
+    const s = i * ds;
+    const smp = track.getSampleAtDistance(s);
+    const off = offsetAt(i, s);
+    pos[i] = smp.wallRightM !== undefined && Number.isFinite(smp.wallRightM) ? smp.wallRightM - keep - off : Infinity;
+    neg[i] = smp.wallLeftM !== undefined && Number.isFinite(smp.wallLeftM) ? smp.wallLeftM - keep + off : Infinity;
+  }
+  const rise = TRACK_BIAS_EDGE_SLOPE * ds;
+  for (let k = 2 * n - 1; k >= 0; k--) {
+    const i = k % n;
+    const j = (i + 1) % n;
+    pos[i] = Math.min(pos[i], pos[j] + rise);
+    neg[i] = Math.min(neg[i], neg[j] + rise);
+  }
+  for (let k = 0; k < 2 * n; k++) {
+    const i = k % n;
+    const j = (i - 1 + n) % n;
+    pos[i] = Math.min(pos[i], pos[j] + rise);
+    neg[i] = Math.min(neg[i], neg[j] + rise);
+  }
+  for (let i = 0; i < n; i++) {
+    pos[i] = Math.max(0, pos[i]);
+    neg[i] = Math.max(0, neg[i]);
+  }
+  return { pos, neg, ds };
+}
+
+/** A traffic bias held to the room the barriers leave it (`wallBiasRoomOf`) at lap distance `s` */
+function wallHeldBias(room: WallBiasRoom, s: number, bias: number): number {
+  return bias > 0 ? Math.min(bias, sampleGrid(room.pos, s, room.ds)) : Math.max(bias, -sampleGrid(room.neg, s, room.ds));
 }
 
 /** The lateral range (m) the autopilot keeps its CG in at distance `s`: the usable road less its edge margin */
@@ -992,6 +1046,13 @@ const OWN_KERB_FAR_WHEELS_M = 0.25;
 const TRACK_BIAS_EDGE_SLOPE = 0.025;
 const TRACK_BIAS_EDGE_ROUND_M = 10;
 const TRACK_BIAS_EDGE_STEP_M = 0.5;
+/**
+ * Room a traffic bias leaves between the tyres' outer edges and a barrier (m), there and ahead (`wallBiasRoomOf`). With
+ * none, GT3s at Watkins Glen hit the Esses' Armco about ten times a race: the line swings 6 m right in a second at
+ * 220 km/h toward a barrier 0.2-0.4 m past the edge, and a car held 3 m right of it in traffic came to the road's edge
+ * still 3 m off its line, overshot it by half a metre and touched
+ */
+const BIAS_WALL_ROOM_M = 0.6;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -2859,13 +2920,15 @@ export class F12026CarSim implements SimulatorCar {
   private ownTargetAt(s: number, sample: TrackSamplePoint): number {
     const [lo, hi] = this.ownRangeAt(s, sample);
     // No kerb room (`aiOwnKerbShare` 0, or no colliders): the line and its bias kept on the asphalt, as ever
+    // (the bias held to the room the barriers leave it, `wallBiasRoomOf`)
+    const bias = this.aiLineBiasM === 0 ? 0 : wallHeldBias(this.ownWallRoom(), s, this.aiLineBiasM);
     if ((this.profile.aiOwnKerbShare ?? OWN_KERB_SHARE) <= 0 || !this.autopilotEdges()) {
-      return clamp(aiLineOffsetM(sample, this.line) + this.aiLineBiasM, lo, hi);
+      return clamp(aiLineOffsetM(sample, this.line) + bias, lo, hi);
     }
     const line = clamp(aiLineOffsetM(sample, this.line), lo, hi);
-    if (this.aiLineBiasM === 0) return line;
+    if (bias === 0) return line;
     const [roadLo, roadHi] = autopilotLateralRange(this.track, sample, s, this.autopilotEdges(), this.profile);
-    return clamp(line + this.aiLineBiasM, Math.min(line, roadLo), Math.max(line, roadHi));
+    return clamp(line + bias, Math.min(line, roadLo), Math.max(line, roadHi));
   }
 
   /** The own driver's speed limit along the lap: its path onto the kerbs (`ownRangeAt`), else the autopilot's */
@@ -2876,6 +2939,26 @@ export class F12026CarSim implements SimulatorCar {
     }
     return autopilotProfile(this.track, this.profile, edges, (s, smp) => this.ownRangeAt(s, smp));
   }
+
+  /** The room the barriers leave a traffic bias off a plan's path (`wallBiasRoomOf`), built on first use per plan */
+  private planWallRoom(plan: AiDrivePlan): WallBiasRoom {
+    let perPlan = planWallRooms.get(this.profile);
+    if (!perPlan) planWallRooms.set(this.profile, (perPlan = new WeakMap()));
+    let room = perPlan.get(plan);
+    if (!room) perPlan.set(plan, (room = wallBiasRoomOf(this.track, plan.n.length, (i) => plan.n[i], this.startFootprint().halfWidthM)));
+    return room;
+  }
+
+  /** The room the barriers leave a traffic bias off the own driver's line (`wallBiasRoomOf`), built on first use */
+  private ownWallRoom(): WallBiasRoom {
+    if (!this.ownWallRoomCache || this.ownWallRoomCache.track !== this.track || this.ownWallRoomCache.line !== this.line) {
+      const n = Math.max(16, Math.ceil(this.track.totalLengthM / TRACK_BIAS_EDGE_STEP_M));
+      const room = wallBiasRoomOf(this.track, n, (_, s) => aiLineOffsetM(this.track.getSampleAtDistance(s), this.line), this.startFootprint().halfWidthM);
+      this.ownWallRoomCache = { track: this.track, line: this.line, room };
+    }
+    return this.ownWallRoomCache.room;
+  }
+  private ownWallRoomCache: { track: BuiltTrackData; line: RacingLineId; room: WallBiasRoom } | null = null;
 
   /** The edges a traffic bias may push this car's plan target out to (`biasEdgesOf`), built on first use */
   private biasEdges(): BiasEdges {
@@ -2901,8 +2984,9 @@ export class F12026CarSim implements SimulatorCar {
   private planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number {
     const [lo, hi] = this.lateralRangeAt(s, sample);
     const n = sampleGrid(plan.n, s, plan.track.ds);
-    let want = n + this.aiLineBiasM;
-    if (this.aiLineBiasM !== 0) {
+    const bias = this.aiLineBiasM === 0 ? 0 : wallHeldBias(this.planWallRoom(plan), s, this.aiLineBiasM);
+    let want = n + bias;
+    if (bias !== 0) {
       const e = this.biasEdges();
       const loE = Math.min(sampleGrid(e.lo, s, e.ds), Math.max(sampleGrid(e.loAhead, s, e.ds), latNow));
       const hiE = Math.max(sampleGrid(e.hi, s, e.ds), Math.min(sampleGrid(e.hiAhead, s, e.ds), latNow));

@@ -27,7 +27,7 @@ import type { AiDrivePlan } from '../src/lib/sim/ai/drive-plan';
 import { chooseAttackSide, chooseDefenseTarget, hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
 import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
 import { loadGlbGeometry } from './lib/glb-geometry';
-import { skipSuiteWithout } from './lib/hosted-files';
+import { hasFile, skipSuiteWithout } from './lib/hosted-files';
 
 skipSuiteWithout('public/tracks/istanbul_park/track_data.json', 'public/tracks/istanbul_park/istanbul_park.glb');
 
@@ -443,6 +443,74 @@ const DT = 1 / 120;
   }
   check('No racecraft: the AI car runs into the player in 1 run in 12 at most', aiFault <= runs / 12, `${aiFault} of ${runs}${faults.length ? `: ${faults.join(', ')}` : ''}`);
   check('No racecraft: ... and never at more than 6 m/s', worstAiFaultMs <= 6, `worst ${f(worstAiFaultMs)} m/s`);
+}
+
+// ---- 8. A bias keeps a car off the barriers: Watkins Glen's Esses, where the line swings 6 m right in a second at
+// 220 km/h toward Armco 0.2-0.4 m past the edge. A car held 3 m right of its line in traffic was aimed at the road's
+// edge still 3 m off it, overshot it and touched: GT3 fields hit the Armco there about ten times a race. The aim now keeps
+// the tyres 0.6 m off the barrier (0.5 between the plan's 2 m grid points; or no further out than the line itself), takes
+// the bias in before the swing no quicker than the edges are drawn, and never past the car's own line. Last: it moves
+// the active track off Istanbul
+if (hasFile('public/tracks/watkins_glen/track_data.json') && hasFile('public/tracks/watkins_glen/watkins_glen.glb')) {
+  setActiveTrack('watkins_glen', JSON.parse(readFileSync('public/tracks/watkins_glen/track_data.json', 'utf8')) as RawTrackJson);
+  const wg = getActiveTrackData(1200);
+  const wgRoot = loadGlbGeometry(`public${wg.meshUrl}`);
+  const field = new AiOpponentField(wg, createAmgGt3Sim(wg, wgRoot), [{ code: 'AAA', teamColorHex: '#fff', pace: 1 }], undefined, {
+    spectate: true,
+    learning: false,
+    seed: 1,
+  });
+  field.startRace(false);
+  const sim = field.aiSims()[0] as unknown as {
+    aiLineBiasM: number;
+    aiPlan: AiDrivePlan;
+    planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number;
+    startFootprint(): { halfWidthM: number };
+  };
+  const plan = sim.aiPlan;
+  const L = wg.totalLengthM;
+  const lineAt = (s: number) => sampleGrid(plan.n, s, plan.track.ds);
+  const aim = (s: number, bias: number) => {
+    sim.aiLineBiasM = bias;
+    return sim.planTargetAt(plan, s, wg.getSampleAtDistance(((s % L) + L) % L), lineAt(s));
+  };
+  const halfW = sim.startFootprint().halfWidthM;
+  // Closest the tyres come to a barrier with a bias of 3 m toward it, where the line itself leaves more than the room
+  let closest = Infinity;
+  let closestAt = '';
+  for (let s = 980; s <= 1160; s += 0.5) {
+    const smp = wg.getSampleAtDistance(s);
+    const room = (smp.wallRightM ?? Infinity) - (aim(s, 3) + halfW);
+    if ((smp.wallRightM ?? Infinity) - (lineAt(s) + halfW) > 0.6 && room < closest) {
+      closest = room;
+      closestAt = `s ${f(s, 0)}`;
+    }
+  }
+  check('Barriers: through the Esses a 3 m bias keeps the tyres 0.5 m off the Armco', closest >= 0.5, `${f(closest, 2)} m at ${closestAt} (once 0.38)`);
+  let past = 0;
+  let jump = 0;
+  let jumpAt = '';
+  for (const bias of [-4, -2, 2, 4]) {
+    let prev = NaN;
+    let prevCut = true;
+    for (let s = 0; s <= L; s += 0.25) {
+      const a = aim(s, bias);
+      const own = a - lineAt(s);
+      const cut = Math.abs(aim(s, 0) - lineAt(s)) > 0.01;
+      // (the bias toward its side or none, never past the line to the other: where the road's range leaves the line be)
+      if (!cut) past = Math.max(past, bias > 0 ? -own : own);
+      if (!cut && !prevCut && Math.abs(own - prev) > jump) {
+        jump = Math.abs(own - prev);
+        jumpAt = `bias ${bias} m at s ${f(s, 0)}`;
+      }
+      prev = own;
+      prevCut = cut;
+    }
+  }
+  check('Barriers: ... never past the car\'s own line', past < 0.02, `${f(past, 3)} m`);
+  check('Barriers: ... and round the lap the aim moves < 0.25 m per 0.25 m', jump < 0.25, `${f(jump, 2)} m, ${jumpAt}`);
+} else {
+  console.log('SKIP  Barriers: Watkins Glen is not here (hosted file)');
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll racecraft checks passed.');
