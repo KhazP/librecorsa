@@ -16,6 +16,11 @@ import { DETAIL_LAYER } from "@/lib/render/layers";
  * is refracted through it (a half-size copy of the frame), darker towards the rim, and the blade and arm are drawn on
  * the glass where they are. The glass is depth-tested against the frame, so the wheel, dash and pillars stay in front.
  *
+ * The side windows beside the driver get drops of their own, drawn straight from a pattern in the glass (no
+ * simulation): beads that gather in the rain, slide back along the glass at speed and draw out into streaks, refracted
+ * as the windscreen's are. A model that carries its own parked wiper (the LMDh's) has it hidden in these views while
+ * the drawn one is on the glass.
+ *
  * Open cars: the same drops on the driver's visor, in screen space, soft and out of focus, blown off by the air.
  *
  * The water meshes are drawn in the scene's own render (view camera only: the mirrors and the reflection probe leave
@@ -95,6 +100,11 @@ export interface WiperSpec {
   outer: number;
   parkDeg: number;
   sweepDeg: number;
+  /**
+   * The car's model has a wiper of its own parked where this one parks: hidden on the driven car while this one is
+   * drawn on the glass (the two would otherwise lie side by side, or cross as this one sweeps)
+   */
+  modelWiper?: boolean;
 }
 
 /** One blade from the bottom middle, parked towards the passenger, sweeping across the driver's view */
@@ -106,6 +116,8 @@ const WIPER_OVERRIDES: Partial<Record<CarId, WiperSpec>> = {
   // The Mk2 Scirocco's one long blade
   "vw-scirocco-gtx": { pivots: [[0.42, -0.04]], inner: 0.15, outer: 1.02, parkDeg: 6, sweepDeg: 140 },
   "porsche-934-rsr": TWIN_WIPERS,
+  // The model's own blade lies along the foot of the screen where this one parks
+  "lc-lmdh": { ...SINGLE_WIPER, modelWiper: true },
 };
 
 /** The car's wipers (null: none, as an open car has none) */
@@ -264,6 +276,227 @@ export function findWindscreenGlass(chassis: THREE.Object3D, eye: THREE.Vector3)
     vMin,
     vMax,
   };
+}
+
+/**
+ * The glass beside the driver: meshes under `chassis` with glass faces turned to the side, within reach of the
+ * driver's eye (chassis space). The windscreen's own mesh is one of them when a model glazes the whole cabin in one.
+ */
+export function findSideGlass(chassis: THREE.Object3D, eye: THREE.Vector3): SideGlass[] {
+  chassis.updateWorldMatrix(true, true);
+  const toChassis = new THREE.Matrix4().copy(chassis.matrixWorld).invert();
+  const m = new THREE.Matrix4();
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const toEye = new THREE.Vector3();
+  const out: SideGlass[] = [];
+  chassis.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.visible || Array.isArray(mesh.material)) return;
+    const mat = mesh.material as THREE.Material;
+    if (!GLASS_NAME.test(mat.name) || NOT_WINDSCREEN.test(mat.name) || NOT_WINDSCREEN.test(namesOf(mesh, chassis))) return;
+    if (!mat.transparent && (mat as THREE.MeshStandardMaterial).opacity >= 1) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    m.multiplyMatrices(toChassis, mesh.matrixWorld);
+    const mirrored = m.determinant() < 0;
+    const index = mesh.geometry.index;
+    const count = index ? index.count : pos.count;
+    let area = 0;
+    let frontArea = 0;
+    for (let i = 0; i + 2 < count; i += 3) {
+      a.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(m);
+      b.fromBufferAttribute(pos, index ? index.getX(i + 1) : i + 1).applyMatrix4(m);
+      c.fromBufferAttribute(pos, index ? index.getX(i + 2) : i + 2).applyMatrix4(m);
+      const cz = (a.z + b.z + c.z) / 3 - eye.z;
+      const cy = (a.y + b.y + c.y) / 3 - eye.y;
+      if (cz < -1.3 || cz > 0.9 || cy < -0.5 || cy > 0.6 || Math.abs((a.x + b.x + c.x) / 3) > 1.3) continue;
+      n.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a));
+      const area2 = n.length();
+      if (area2 < 1e-10 || Math.abs(n.x) / area2 < SIDE_FACING) continue;
+      area += area2 * 0.5;
+      // Front-facing as the eye sees it (three flips the winding of a mirrored mesh)
+      toEye.set(eye.x - (a.x + b.x + c.x) / 3, eye.y - (a.y + b.y + c.y) / 3, eye.z - (a.z + b.z + c.z) / 3);
+      if (n.dot(toEye) > 0 !== mirrored) frontArea += area2 * 0.5;
+    }
+    // A few square decimetres at least: not a lamp's edge or a mirror's rim
+    if (area > 0.04) out.push({ mesh, side: frontArea > 0.3 * area ? THREE.FrontSide : THREE.BackSide });
+  });
+  return out;
+}
+
+/** A side window's mesh and the faces to draw so the glass is drawn once from inside */
+export interface SideGlass {
+  mesh: THREE.Mesh;
+  side: THREE.Side;
+}
+
+/** A side window faces this far sideways (|normal x|) at least; the shader draws drops only on such faces */
+const SIDE_FACING = 0.7;
+
+/** A model's own wiper: the mesh it is part of and the triangles that make it */
+export interface ModelWiper {
+  mesh: THREE.Mesh;
+  /** Triangle numbers (index / 3) to leave out */
+  triangles: Set<number>;
+}
+
+/**
+ * Finds the wiper a car model carries on its windscreen, parked about where `spec` parks its blade (already mirrored
+ * for the driver's side): rod-like pieces (long and thin, at any angle) lying just over the glass within 16 cm of the
+ * parked blade and reaching onto the glass. Glass, pieces standing off it (an aerial) and trim below its foot (vents)
+ * are left alone. Empty when the model has none.
+ */
+export function findModelWiper(chassis: THREE.Object3D, glass: WindscreenGlass, spec: WiperSpec): ModelWiper[] {
+  chassis.updateWorldMatrix(true, true);
+  const toChassis = new THREE.Matrix4().copy(chassis.matrixWorld).invert();
+  const w = glass.uMax - glass.uMin;
+  const h = glass.vMax - glass.vMin;
+  const rad = THREE.MathUtils.degToRad(spec.parkDeg);
+  const dirU = Math.cos(rad);
+  const dirV = Math.sin(rad);
+  const reach = spec.outer * h;
+  const m = new THREE.Matrix4();
+  const p = new THREE.Vector3();
+  const found: ModelWiper[] = [];
+  chassis.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material) || GLASS_NAME.test((mesh.material as THREE.Material).name)) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    m.multiplyMatrices(toChassis, mesh.matrixWorld);
+    const index = mesh.geometry.index;
+    const triCount = (index ? index.count : pos.count) / 3;
+    // Each vertex placed against the parked blade it lies by (the first): along it from the pivot, across it, and up
+    // the glass
+    const along = new Float32Array(pos.count);
+    const across = new Float32Array(pos.count);
+    const upGlass = new Float32Array(pos.count);
+    const near = new Uint8Array(pos.count);
+    for (const [px, py] of spec.pivots) {
+      const pu = glass.uMin + px * w;
+      const pv = glass.vMin + py * h;
+      for (let i = 0; i < pos.count; i++) {
+        p.fromBufferAttribute(pos, i).applyMatrix4(m).sub(glass.origin);
+        const du = p.dot(glass.axisU) - pu;
+        const dv = p.dot(glass.axisV) - pv;
+        const t = du * dirU + dv * dirV;
+        const s = du * -dirV + dv * dirU;
+        const nn = p.dot(glass.axisN);
+        if (!near[i] && t > -0.08 && t < reach + 0.06 && Math.abs(s) < 0.16 && nn > -0.03 && nn < 0.12) {
+          near[i] = 1;
+          along[i] = t;
+          across[i] = s;
+          upGlass[i] = dv + pv;
+        }
+      }
+    }
+    // The triangles lying wholly by the blade, joined into pieces by the vertices they share (welded by position: a
+    // model splits its vertices along hard edges)
+    const parent = new Int32Array(pos.count).map((_, i) => i);
+    const find = (x: number): number => {
+      while (parent[x] !== x) x = parent[x] = parent[parent[x]];
+      return x;
+    };
+    const weld = new Map<string, number>();
+    for (let i = 0; i < pos.count; i++) {
+      if (!near[i]) continue;
+      const key = `${Math.round(pos.getX(i) * 2000)},${Math.round(pos.getY(i) * 2000)},${Math.round(pos.getZ(i) * 2000)}`;
+      const first = weld.get(key);
+      if (first === undefined) weld.set(key, i);
+      else parent[find(i)] = find(first);
+    }
+    const tris: number[] = [];
+    for (let t = 0; t < triCount; t++) {
+      const i0 = index ? index.getX(3 * t) : 3 * t;
+      const i1 = index ? index.getX(3 * t + 1) : 3 * t + 1;
+      const i2 = index ? index.getX(3 * t + 2) : 3 * t + 2;
+      if (!near[i0] || !near[i1] || !near[i2]) continue;
+      tris.push(t);
+      parent[find(i0)] = find(i1);
+      parent[find(i1)] = find(i2);
+    }
+    if (tris.length === 0) return;
+    // Per piece: its vertices' spread in the glass plane (for its long and short axes) and how far up the glass it goes
+    const pieces = new Map<number, { tris: number[]; verts: Set<number>; vMax: number }>();
+    for (const t of tris) {
+      const root = find(index ? index.getX(3 * t) : 3 * t);
+      let piece = pieces.get(root);
+      if (!piece) pieces.set(root, (piece = { tris: [], verts: new Set(), vMax: -Infinity }));
+      piece.tris.push(t);
+      for (let k = 0; k < 3; k++) {
+        const i = index ? index.getX(3 * t + k) : 3 * t + k;
+        piece.verts.add(i);
+        piece.vMax = Math.max(piece.vMax, upGlass[i]);
+      }
+    }
+    const triangles = new Set<number>();
+    const rodVerts: number[] = [];
+    const small: { tris: number[]; t: number; s: number }[] = [];
+    for (const piece of pieces.values()) {
+      let mt = 0;
+      let ms = 0;
+      for (const i of piece.verts) {
+        mt += along[i];
+        ms += across[i];
+      }
+      mt /= piece.verts.size;
+      ms /= piece.verts.size;
+      let ctt = 0;
+      let css = 0;
+      let cts = 0;
+      for (const i of piece.verts) {
+        const dt = along[i] - mt;
+        const ds = across[i] - ms;
+        ctt += dt * dt;
+        css += ds * ds;
+        cts += dt * ds;
+      }
+      ctt /= piece.verts.size;
+      css /= piece.verts.size;
+      cts /= piece.verts.size;
+      // The spread along its long and short axes (the covariance's eigenvalues)
+      const mid = (ctt + css) / 2;
+      const half = Math.sqrt(Math.max(0, ((ctt - css) / 2) ** 2 + cts * cts));
+      const long = Math.sqrt(mid + half);
+      const short = Math.sqrt(Math.max(0, mid - half));
+      // A rod (an arm and its blade) lying on the glass, not trim along its foot
+      if (long > 0.05 && short < 0.015 && piece.vMax > glass.vMin + 0.05) {
+        for (const t of piece.tris) triangles.add(t);
+        rodVerts.push(...piece.verts);
+      } else if (long < 0.02) small.push({ tris: piece.tris, t: mt, s: ms });
+    }
+    // Small parts at the rod (a cap over its end, a clip) go with it
+    for (const part of small) {
+      if (rodVerts.some((i) => Math.hypot(along[i] - part.t, across[i] - part.s) < 0.03)) for (const t of part.tris) triangles.add(t);
+    }
+    if (triangles.size > 0) found.push({ mesh, triangles });
+  });
+  return found;
+}
+
+/** The mesh's geometry without the given triangles (sharing its vertex data), to swap in while the wiper is hidden */
+function geometryWithout(geometry: THREE.BufferGeometry, triangles: Set<number>): THREE.BufferGeometry {
+  const out = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(geometry.attributes)) out.setAttribute(name, attr);
+  const index = geometry.index;
+  const pos = geometry.getAttribute("position");
+  const triCount = (index ? index.count : pos.count) / 3;
+  const kept: number[] = [];
+  for (let t = 0; t < triCount; t++) {
+    if (triangles.has(t)) continue;
+    for (let k = 0; k < 3; k++) kept.push(index ? index.getX(3 * t + k) : 3 * t + k);
+  }
+  out.setIndex(kept);
+  if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  out.boundingSphere = geometry.boundingSphere!.clone();
+  out.boundingBox = geometry.boundingBox!.clone();
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1041,6 +1274,62 @@ function fullscreenTriangle(): THREE.BufferGeometry {
   return g;
 }
 
+const SIDE_VERT = /* glsl */ `
+uniform mat4 uMeshToChassis;
+varying vec3 vPc;
+varying vec3 vNc;
+void main() {
+  vPc = (uMeshToChassis * vec4(position, 1.0)).xyz;
+  vNc = mat3(uMeshToChassis) * normal;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+/**
+ * Drops on a side window, from a pattern in the glass (chassis metres back along the car and up): jittered cells with
+ * a bead in some, the share growing with the glass's wetness; every row slides back at its own pace as the air pushes
+ * the water along at speed, each bead drawn out into a streak ahead of it, where it came from
+ */
+const SIDE_FRAG = /* glsl */ `
+${WATER_SHADE}
+uniform vec2 uDirU;
+uniform vec2 uDirV;
+uniform float uSideWet;
+uniform float uSideSlide;
+uniform float uSideStretch;
+uniform float uSideDetail;
+varying vec3 vPc;
+varying vec3 vNc;
+float sideHash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+vec3 sideDrops(vec2 p, float cell, float salt, float cover) {
+  float row = floor(p.y / cell);
+  p.x -= uSideSlide * (0.5 + sideHash(vec2(row, salt)));
+  vec2 id = floor(p / cell);
+  if (sideHash(id + salt) > cover) return vec3(0.0);
+  vec2 jitter = vec2(sideHash(id + salt + 3.1), sideHash(id + salt + 11.3)) - 0.5;
+  float r = mix(0.16, 0.34, sideHash(id + salt + 7.7));
+  vec2 d = (p / cell - id - 0.5 - jitter * (0.9 - 2.0 * r)) / r;
+  d.x /= d.x < 0.0 ? 1.0 + uSideStretch : 1.0;
+  float d2 = dot(d, d);
+  if (d2 >= 1.0) return vec3(0.0);
+  return vec3(0.6 * (1.0 - d2) * r, -1.2 * d);
+}
+void main() {
+  if (uSideWet <= 0.0 || abs(normalize(vNc).x) < ${SIDE_FACING.toFixed(2)}) discard;
+  vec2 p = vec2(-vPc.z, vPc.y);
+  vec3 w = sideDrops(p, 0.02, 0.0, 0.75 * uSideWet);
+  if (uSideDetail > 0.5 && w.x <= 0.0) w = sideDrops(p + 0.0071, 0.012, 37.3, 0.5 * uSideWet);
+  if (w.x <= 0.0) discard;
+  vec4 drop = shadeDrop(vec3(w.x * 4.0, w.yz), uDirU, uDirV, 0.0, 0.1, 1.0);
+  if (drop.a < 0.12) discard;
+  gl_FragColor = drop;
+}
+`;
+
 export interface WindscreenWaterFrame {
   dt: number;
   /** Rain falling (0..1) and spray thrown up by the cars ahead (0..1) */
@@ -1090,11 +1379,20 @@ export class WindscreenWaterPass extends Pass {
   private readonly microMaterial: THREE.ShaderMaterial;
   private readonly microMesh: THREE.Mesh;
   private glass: WindscreenGlass | null = null;
+  private sideGlass: SideGlass[] = [];
   private glassFor: THREE.Object3D | null = null;
   private glassCar: CarId | null = null;
   private glassScanMs = -Infinity;
   private glassScans = 0;
   private proxies: GlassProxy[] = [];
+  /** The side windows' drops, drawn on their own glass */
+  private sideProxies: GlassProxy[] = [];
+  /** How wet the side windows are (0..1), how far their beads have slid back (m), how drawn out they are */
+  private sideWet = 0;
+  private sideSlide = 0;
+  private sideStretch = 0;
+  /** The model's own wiper on the driven car, and its body without it (swapped in while the drawn blade shows) */
+  private modelWipers: { mesh: THREE.Mesh; original: THREE.BufferGeometry; hidden: THREE.BufferGeometry }[] = [];
   private modeNow: WaterMode = "off";
   private wiper: WiperSpec | null = null;
   private wiperDeg = 0;
@@ -1270,11 +1568,28 @@ export class WindscreenWaterPass extends Pass {
   }
 
   private dropProxies(): void {
-    for (const p of this.proxies) {
+    for (const p of [...this.proxies, ...this.sideProxies]) {
       this.group.remove(p.mesh);
       p.mesh.material.dispose();
     }
     this.proxies = [];
+    this.sideProxies = [];
+    this.releaseModelWipers();
+  }
+
+  /** Shows the model's own wiper (or hides it, with the drawn blade on the glass) */
+  private showModelWipers(show: boolean): void {
+    for (const w of this.modelWipers) {
+      const want = show ? w.original : w.hidden;
+      // Only swap what is still ours to swap (something else may have given the mesh new geometry since)
+      if (w.mesh.geometry === w.original || w.mesh.geometry === w.hidden) w.mesh.geometry = want;
+    }
+  }
+
+  private releaseModelWipers(): void {
+    this.showModelWipers(true);
+    for (const w of this.modelWipers) w.hidden.dispose();
+    this.modelWipers = [];
   }
 
   private syncGlassUniforms(mat: THREE.ShaderMaterial): void {
@@ -1336,6 +1651,38 @@ export class WindscreenWaterPass extends Pass {
       this.group.add(mesh);
       this.proxies.push({ source, mesh });
     }
+    for (const { mesh: source, side } of this.sideGlass) {
+      const mat = new THREE.ShaderMaterial({
+        vertexShader: SIDE_VERT,
+        fragmentShader: SIDE_FRAG,
+        uniforms: {
+          ...this.waterUniforms(this.waterTarget, 0.12),
+          uMeshToChassis: { value: new THREE.Matrix4() },
+          uDirU: { value: new THREE.Vector2(1, 0) },
+          uDirV: { value: new THREE.Vector2(0, 1) },
+          uSideWet: { value: 0 },
+          uSideSlide: { value: 0 },
+          uSideStretch: { value: 0 },
+          uSideDetail: { value: 1 },
+        },
+        transparent: true,
+        depthTest: true,
+        depthWrite: true,
+        side,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -4,
+      });
+      const mesh = new THREE.Mesh(source.geometry, mat);
+      mesh.name = "windscreen-water-side";
+      mesh.matrixAutoUpdate = false;
+      mesh.matrixWorldAutoUpdate = false;
+      mesh.frustumCulled = false;
+      mesh.onBeforeRender = () => mesh.matrixWorld.copy(source.matrixWorld);
+      mesh.layers.set(DETAIL_LAYER);
+      this.group.add(mesh);
+      this.sideProxies.push({ source, mesh });
+    }
   }
 
   /** Finds (or re-finds after a car change or a late model load) the windscreen of the car being driven */
@@ -1349,10 +1696,18 @@ export class WindscreenWaterPass extends Pass {
     this.glassCar = f.carId;
     this.glassScanMs = nowMs;
     this.glass = f.eye ? findWindscreenGlass(f.chassis, f.eye) : null;
+    this.sideGlass = this.glass && f.eye ? findSideGlass(f.chassis, f.eye) : [];
     this.wiper = wiperSpecFor(f.carId);
     // Specs park the blade towards the car's left; a driver sitting on the left has it park towards the passenger
     if (this.wiper && f.eye && f.eye.x > 0.05) this.wiper = mirrorWiper(this.wiper);
     this.buildProxies();
+    if (this.glass && this.wiper?.modelWiper) {
+      this.modelWipers = findModelWiper(f.chassis, this.glass, this.wiper).map(({ mesh, triangles }) => ({
+        mesh,
+        original: mesh.geometry,
+        hidden: geometryWithout(mesh.geometry, triangles),
+      }));
+    }
     if (this.glass) {
       const w = this.glass.uMax - this.glass.uMin;
       const h = this.glass.vMax - this.glass.vMin;
@@ -1383,14 +1738,27 @@ export class WindscreenWaterPass extends Pass {
     if (this.glassFor && this.glassFor !== f.chassis && mode !== "windscreen") {
       this.dropProxies();
       this.glass = null;
+      this.sideGlass = [];
       this.glassFor = null;
       this.glassCar = null;
     }
-    const water = field.count > 0 || (mode === "windscreen" && this.wetGrid.maxWet > 0.01);
+    // The side windows: wet within a few seconds of rain, dry over a quarter of a minute; at speed the air slides the
+    // beads back along the glass and draws them out
+    const air = Math.max(0, this.chassisVel.z);
+    // (fewer beads hold on at speed: the air takes them)
+    const sideTarget =
+      mode === "windscreen" ? THREE.MathUtils.clamp(1.3 * f.rain + 0.8 * f.spray, 0, 1) * (1 - 0.4 * THREE.MathUtils.smoothstep(air, 20, 60)) : 0;
+    this.sideWet += (sideTarget - this.sideWet) * (1 - Math.exp(-dt / (sideTarget > this.sideWet ? 3 : 15)));
+    if (this.sideWet < 0.005) this.sideWet = sideTarget > 0 ? this.sideWet : 0;
+    this.sideSlide = (this.sideSlide + dt * 0.9 * THREE.MathUtils.smoothstep(air, 8, 45)) % 10000;
+    this.sideStretch = 2.5 * THREE.MathUtils.smoothstep(air, 12, 50);
+    const water = field.count > 0 || (mode === "windscreen" && (this.wetGrid.maxWet > 0.01 || this.sideWet > 0.01));
     if (mode === "off" || (!wet && !water)) {
       this.enabled = false;
       this.visorMesh.visible = false;
       for (const p of this.proxies) p.mesh.visible = false;
+      for (const p of this.sideProxies) p.mesh.visible = false;
+      this.showModelWipers(true);
       return;
     }
     // A floor for the drops' gathered light where the view above them is dark (the cabin roof)
@@ -1422,9 +1790,14 @@ export class WindscreenWaterPass extends Pass {
     if (mode === "visor") {
       this.visorMesh.visible = true;
       for (const p of this.proxies) p.mesh.visible = false;
+      for (const p of this.sideProxies) p.mesh.visible = false;
+      this.showModelWipers(true);
     } else {
       this.visorMesh.visible = false;
       for (const p of this.proxies) p.mesh.visible = p.source.visible !== false;
+      for (const p of this.sideProxies) p.mesh.visible = p.source.visible !== false && this.sideWet > 0.01;
+      // The drawn blade is on the glass: the model's own wiper makes way for it
+      this.showModelWipers(false);
     }
     this.chassis = f.chassis;
     if (mode === "windscreen" && this.glass) this.syncProxies(f.camera, f.chassis);
@@ -1578,6 +1951,25 @@ export class WindscreenWaterPass extends Pass {
       setBlade(u.uBladeA.value as THREE.Vector4, 0);
       setBlade(u.uBladeB.value as THREE.Vector4, 1);
       if (spec) (u.uBladeShape.value as THREE.Vector4).set(spec.inner * field.height, spec.outer * field.height, 0.009, 0.006);
+    }
+    if (this.sideProxies.length === 0) return;
+    // The side glass's own axes on screen: back along the car (the way its beads slide) and up
+    const back = _v1.set(0, 0, -1).transformDirection(toView);
+    const up = _v2.set(0, 1, 0).transformDirection(toView);
+    const backLen = Math.hypot(back.x, back.y) || 1;
+    const upLen = Math.hypot(up.x, up.y) || 1;
+    for (const p of this.sideProxies) {
+      const mesh = p.mesh;
+      mesh.matrixWorld.copy(p.source.matrixWorld);
+      const u = mesh.material.uniforms;
+      (u.uMeshToChassis.value as THREE.Matrix4).multiplyMatrices(chassisInv, p.source.matrixWorld);
+      (u.uDirU.value as THREE.Vector2).set(back.x / backLen, back.y / backLen);
+      (u.uDirV.value as THREE.Vector2).set(up.x / upLen, up.y / upLen);
+      u.uScene.value = this.sceneTarget.texture;
+      u.uSideWet.value = this.sideWet;
+      u.uSideSlide.value = this.sideSlide;
+      u.uSideStretch.value = this.sideStretch;
+      u.uSideDetail.value = this.quality === "low" ? 0 : 1;
     }
   }
 

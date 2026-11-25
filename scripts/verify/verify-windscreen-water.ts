@@ -1,12 +1,15 @@
 /**
  * Rain water on the windscreen and visor (src/lib/render/windscreen-water.ts): the drop simulation, the wiper, the
- * fine-bead wetness grid, finding a car model's windscreen glass, and the wiper timing in rain-fx.ts.
+ * fine-bead wetness grid, finding a car model's windscreen glass, its side windows and its own parked wiper, and the
+ * wiper timing in rain-fx.ts.
  *
  *   node scripts/verify/run-verify.mjs windscreen-water
  */
 import * as THREE from "three";
 import {
   DropletField,
+  findModelWiper,
+  findSideGlass,
   findWindscreenGlass,
   mirrorWiper,
   WetnessGrid,
@@ -185,6 +188,47 @@ console.log("\n== Finding the windscreen");
   const open = new THREE.Group();
   open.add(lens.clone());
   check("a car with no windscreen glass has none", findWindscreenGlass(open, eye) === null);
+  const sides = findSideGlass(chassis, eye);
+  check(
+    "the window beside the driver is side glass; the windscreen and the lamp are not",
+    sides.length === 1 && sides[0].mesh === side,
+    sides.map((g) => g.mesh.uuid === side.uuid).join(",") || "none"
+  );
+
+  // The model's own wiper: a thin rod on the glass where the drawn blade parks; an aerial standing off the glass and
+  // a vent strip along its foot are not one
+  if (found) {
+    const spec = wiperSpecFor("lc-lmdh")!;
+    const w = found.uMax - found.uMin;
+    const h = found.vMax - found.vMin;
+    const at = (u: number, v: number, n: number) =>
+      found.origin.clone().addScaledVector(found.axisU, u).addScaledVector(found.axisV, v).addScaledVector(found.axisN, n);
+    const pivot = { u: found.uMin + spec.pivots[0][0] * w, v: found.vMin + spec.pivots[0][1] * h };
+    const rad = THREE.MathUtils.degToRad(spec.parkDeg);
+    // A box between two points on the glass, `thick` across, as one welded piece
+    const rod = (a: THREE.Vector3, b: THREE.Vector3, thick: number) => {
+      const g = new THREE.BoxGeometry(thick, thick, a.distanceTo(b));
+      const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ name: "carbon" }));
+      mesh.position.copy(a).add(b).multiplyScalar(0.5);
+      mesh.lookAt(b);
+      return mesh;
+    };
+    const blade = rod(
+      at(pivot.u + Math.cos(rad) * 0.06, pivot.v + Math.sin(rad) * 0.06 + 0.06, 0.03),
+      at(pivot.u + Math.cos(rad) * 0.5, pivot.v + Math.sin(rad) * 0.5 + 0.1, 0.03),
+      0.012
+    );
+    const aerial = rod(at(pivot.u - 0.2, pivot.v + 0.1, 0.02), at(pivot.u - 0.2, pivot.v + 0.1, 0.5), 0.01);
+    const vent = rod(at(-0.13, found.vMin - 0.08, 0.04), at(0.13, found.vMin - 0.08, 0.04), 0.004);
+    chassis.add(blade, aerial, vent);
+    const wipers = findModelWiper(chassis, found, spec);
+    check(
+      "the model's own wiper on the glass is found, the aerial and the vent strip are not",
+      spec.modelWiper === true && wipers.length === 1 && wipers[0].mesh === blade && wipers[0].triangles.size === 12,
+      wipers.map((x) => `${x.mesh === blade ? "blade" : x.mesh === aerial ? "aerial" : "vent"} ${x.triangles.size}`).join(", ") || "none"
+    );
+    chassis.remove(blade, aerial, vent);
+  }
 }
 
 console.log("\n== Wiper timing");
