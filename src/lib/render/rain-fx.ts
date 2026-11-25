@@ -265,6 +265,7 @@ uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec4 uBeamPos[${RAIN_BEAMS}]; // xyz, reach (0: off)
 uniform vec4 uBeamDir[${RAIN_BEAMS}]; // unit direction, strength
+uniform float uBeamScale; // the beams against the daylight (a lamp shows on rain at night, hardly by day)
 uniform float uCockpitEnabled;
 uniform mat4 uCockpitInvMatrix;
 uniform vec3 uCockpitMin;
@@ -394,7 +395,9 @@ void main() {
   vec3 view = -toCam / dist;
   vec3 light = uAmbient + uLamp;
   light += uSunColor * pow(max(dot(view, uSunDir), 0.0), 6.0);
-  for (int i = 0; i < ${RAIN_BEAMS}; i++) light += beamLight(p, view, uBeamPos[i], uBeamDir[i]);
+  vec3 beams = vec3(0.0);
+  for (int i = 0; i < ${RAIN_BEAMS}; i++) beams += beamLight(p, view, uBeamPos[i], uBeamDir[i]);
+  light += beams * uBeamScale;
   vColor = light;
 }
 `;
@@ -571,6 +574,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       uSunColor: { value: new THREE.Color(0, 0, 0) },
       uBeamPos: { value: beamPos },
       uBeamDir: { value: beamDir },
+      uBeamScale: { value: 1 },
       uOpacity: { value: 0.32 },
       uCockpitEnabled: { value: 0 },
       uCockpitInvMatrix: { value: new THREE.Matrix4() },
@@ -684,6 +688,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       // The sky's light on the rain: by day a pale grey that shows against the stands and trees, at night barely
       // there (the beams and the lamps light it)
       ambient.copy(baseColor).multiplyScalar(0.06 + 1.3 * THREE.MathUtils.clamp(brightness, 0, 1));
+      material.uniforms.uBeamScale.value = 1 - 0.85 * THREE.MathUtils.clamp(brightness * 1.5, 0, 1);
       material.uniforms.uOpacity.value = 0.35 + 0.25 * effectiveIntensity;
     },
     dispose() {
