@@ -25,7 +25,7 @@ import { BMW_M1_PROCAR_SOUND } from "../../src/lib/sim/classic/BmwM1ProcarSim";
 import { CHAPARRAL_2D_67_SOUND, CHAPARRAL_2D_SOUND } from "../../src/lib/sim/classic/Chaparral2dSim";
 import { PORSCHE_934_RSR_SOUND } from "../../src/lib/sim/classic/Porsche934RsrSim";
 import { VW_SCIROCCO_SOUND } from "../../src/lib/sim/road/VwSciroccoSim";
-import type { Lc26AudioManifest } from "../../src/lib/sim/lc26-audio";
+import { lerpTable, type Lc26AudioManifest } from "../../src/lib/sim/lc26-audio";
 import { noteSkip, REPO_CAR_IDS } from "../lib/hosted-files";
 import { HOSTED_CONTENT } from "../../src/lib/hosted-content";
 
@@ -295,6 +295,29 @@ if (HOSTED_CONTENT) {
   }
 } else {
   noteSkip("the LC-LMDH and LC25 engine sound credits on their car cards", "NEXT_PUBLIC_HOSTED_CONTENT=1");
+}
+
+// hahmad's RB21 bank as its own FMOD events play it (scripts/audio/car_configs.json "lc25-v6"): its wind, skid and
+// limiter events are silent stubs, so it brings no wind or tyre loop of its own (CarAudio's procedural wind and the
+// full road roar play, as with the LC26); its outside sound is the cockpit loops through the engine_ext mixer's EQ,
+// baked into the outside loops, with no tone stage on top; and its overrun fades out between 10 and 40 % throttle
+console.log("\n4. The LC25's hosted RB21 bank against its own FMOD design");
+const RB21_MANIFEST = join("public", "cars", "lc25-v6", "audio", "manifest.json");
+if (existsSync(RB21_MANIFEST)) {
+  const m = JSON.parse(readFileSync(RB21_MANIFEST, "utf8")) as Lc26AudioManifest;
+  check("no wind or tyre-rolling loop: the bank has none (a drivetrain rumble is no wind)", !m.wind && !m.tyreRolling && !m.bodywork);
+  check("no tone stage on top: the outside EQ of the bank's own mixer is in its outside loops", !m.viewTone);
+  for (const view of ["int", "ext"] as const) {
+    const curve = m.throttleCurve[view];
+    const at = (x: number) => lerpTable(curve, x);
+    check(
+      `throttleCurve.${view}: the overrun alone at a closed throttle, half gone by 20 %, gone by 40 %`,
+      at(0.05) === 0 && at(0.2) > 0.35 && at(0.2) < 0.5 && at(0.4) >= 0.99,
+      `${at(0.05).toFixed(2)} / ${at(0.2).toFixed(2)} / ${at(0.4).toFixed(2)}`
+    );
+  }
+} else {
+  noteSkip("the LC25's hosted RB21 bank", RB21_MANIFEST);
 }
 
 console.log(`\nCar sounds verification: all ${passed} checks passed.`);
