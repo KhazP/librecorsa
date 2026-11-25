@@ -1,11 +1,11 @@
 /**
- * Where and why AI cars spin or leave the road in a headless race (`lib/stand-in-race.ts`): the race the A/B gate runs,
+ * Where and why AI cars spin, leave the road or hit a wall in a headless race (`lib/stand-in-race.ts`): the race the A/B gate runs,
  * with a trace of every AI car kept for the last few seconds and printed at each spin and off, and a tally by lap, by
  * traffic (another car within 15 m along and 4 m across in the 2 s before) and by how far off its line the field had
  * moved it.
  *
  *   npx tsx scripts/ai/race-probe.ts --track rwanda_official_short --car liana [--seeds 0,1,2] [--laps 3] [--ai 7]
- *       [--stand-in line] [--plans '<plan checks json>'] [--racecraft '<json>'] [--trace 0|1] [--json out.json]
+ *       [--stand-in line] [--plans '<plan checks json>'] [--racecraft '<json>'] [--skill 0-100] [--trace 0|1] [--json out.json]
  */
 import { writeFileSync } from 'node:fs';
 import { runStandInRace, type StandInProfile, type StandInRaceOptions } from './lib/stand-in-race';
@@ -29,6 +29,7 @@ const standIn = opt('stand-in', 'line') as StandInProfile;
 const plans = argv.includes('--plans') ? (JSON.parse(opt('plans', '{}')) as StandInRaceOptions['plans']) : undefined;
 const racecraft = JSON.parse(opt('racecraft', '{}'));
 const trace = opt('trace', '1') !== '0';
+const skill = argv.includes('--skill') ? Number(opt('skill', '70')) : undefined;
 
 interface Frame {
   t: number;
@@ -55,7 +56,7 @@ interface Frame {
 
 interface Event {
   seed: number;
-  kind: 'spin' | 'off' | 'contact';
+  kind: 'spin' | 'off' | 'wall' | 'contact';
   code: string;
   t: number;
   lap: number;
@@ -73,14 +74,15 @@ const f1 = (x: number) => (Number.isFinite(x) ? x.toFixed(1) : '-');
 const f2 = (x: number) => (Number.isFinite(x) ? x.toFixed(2) : '-');
 
 for (const k of seeds) {
-  const o: StandInRaceOptions = { trackId, car, seed: 101 + k * 31, laps, aiCars, standIn, racecraft, plans };
+  const o: StandInRaceOptions = { trackId, car, seed: 101 + k * 31, laps, aiCars, standIn, racecraft, plans, skill };
   const hist = new Map<string, Frame[]>();
   const offWas = new Map<string, number>();
+  const wallWas = new Map<string, number>();
   const lastHit = new Map<string, number>();
   let nextS = 0;
   const r = runStandInRace(o, (field: AiOpponentField, t: number) => {
     const F = field as unknown as {
-      cars: { code: string; ai: SimulatorCar | null; isPlayer: boolean; sim: SimulatorCar; biasM: number; biasTargetM: number; clock: { lapsDone: number }; control?: { mode: string } | null; stats: { offTracks: number; spins: number }; removed: boolean }[];
+      cars: { code: string; ai: SimulatorCar | null; isPlayer: boolean; sim: SimulatorCar; biasM: number; biasTargetM: number; clock: { lapsDone: number }; control?: { mode: string } | null; stats: { offTracks: number; spins: number; wallHits: number }; removed: boolean }[];
       headingErr(s: SimulatorCar): number;
       incidents: { kind: string; code?: string; a?: string; b?: string; aIsPlayer?: boolean; bIsPlayer?: boolean; impactMs?: number }[];
     };
@@ -98,7 +100,9 @@ for (const k of seeds) {
       const me = c.sim;
       const offNow = c.stats.offTracks > (offWas.get(c.code) ?? 0);
       offWas.set(c.code, c.stats.offTracks);
-      if (sample || spun.has(c.code) || offNow || hitPlayer.has(c.code)) {
+      const wallNow = c.stats.wallHits > (wallWas.get(c.code) ?? 0);
+      wallWas.set(c.code, c.stats.wallHits);
+      if (sample || spun.has(c.code) || offNow || wallNow || hitPlayer.has(c.code)) {
         let near = '', nearDs = Infinity, nearDl = Infinity;
         for (const o2 of F.cars) {
           if (o2 === c || o2.removed) continue;
@@ -125,7 +129,7 @@ for (const k of seeds) {
         hist.set(c.code, h);
         const touched = hitPlayer.has(c.code) && t - (lastHit.get(c.code) ?? -9) > 1;
         if (hitPlayer.has(c.code)) lastHit.set(c.code, t);
-        for (const kind of [spun.has(c.code) ? 'spin' : null, offNow ? 'off' : null, touched ? 'contact' : null] as const) {
+        for (const kind of [spun.has(c.code) ? 'spin' : null, offNow ? 'off' : null, wallNow ? 'wall' : null, touched ? 'contact' : null] as const) {
           if (!kind) continue;
           const pre = h.filter((x) => t - x.t <= 2);
           const traffic = pre.some((x) => Math.abs(x.nearDs) < 15 && Math.abs(x.nearDl) < 4);
@@ -146,7 +150,7 @@ const by = (key: (e: Event) => string) => {
   for (const e of events) m.set(key(e), (m.get(key(e)) ?? 0) + 1);
   return [...m].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}:${n}`).join('  ');
 };
-console.log(`\n${events.filter((e) => e.kind === 'spin').length} spins, ${events.filter((e) => e.kind === 'off').length} offs`);
+console.log(`\n${events.filter((e) => e.kind === 'spin').length} spins, ${events.filter((e) => e.kind === 'off').length} offs, ${events.filter((e) => e.kind === 'wall').length} wall hits`);
 console.log(`by kind/lap:     ${by((e) => `${e.kind}/L${e.lap + 1}`)}`);
 console.log(`by traffic:      ${by((e) => `${e.kind}/${e.traffic ? 'traffic' : 'alone'}`)}`);
 console.log(`by bias (2 s):   ${by((e) => `${e.kind}/${e.maxBias < 0.3 ? 'on line' : e.maxBias < 1.5 ? '<1.5 m' : e.maxBias < 3 ? '<3 m' : '3 m+'}`)}`);
