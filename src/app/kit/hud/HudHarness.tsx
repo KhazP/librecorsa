@@ -6,10 +6,13 @@ import { useUiZoom } from "@/lib/ui-zoom";
 import { MultiPageMfd } from "@/components/hud/MultiPageMfd";
 import { SplitGaps } from "@/components/hud/SplitGaps";
 import { HudEditor } from "@/components/hud/HudEditor";
+import { FfbMeter } from "@/components/hud/FfbMeter";
+import { FinalLapNotice } from "@/components/hud/FinalLapNotice";
+import type { PitStrategyState } from "@/types/f1";
 import { cleanHudLayoutParts, HUD_PART_IDS, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import { useLapDeltaTracker } from "@/components/hud/useLapDelta";
 import { HudRunProvider } from "@/components/hud/styles/third-party-parts";
-import { buildHudMap, revRangeOf, setActiveHudParts, type HudDesignProps, type HudStyleOptions } from "@/components/hud/styles/hud-style-parts";
+import { anchor, buildHudMap, revRangeOf, setActiveHudParts, type HudDesignProps, type HudStyleOptions } from "@/components/hud/styles/hud-style-parts";
 import { BladeHud, BLADE_STYLE } from "@/components/hud/styles/BladeHud";
 import { TracksideHud, TRACKSIDE_STYLE } from "@/components/hud/styles/TracksideHud";
 import { PitWallHud, PIT_WALL_STYLE } from "@/components/hud/styles/PitWallHud";
@@ -50,6 +53,10 @@ interface HarnessQuery {
   parts: HudLayoutParts;
   /** The layout editor over the HUD, framing each part it finds */
   edit: boolean;
+  /** A force-feedback wheel in use: its meter is drawn where the layout puts it */
+  ffb: boolean;
+  /** The player's Input trace setting on */
+  trace: boolean;
 }
 
 /**
@@ -85,12 +92,17 @@ function readQuery(): HarnessQuery {
     size: Math.max(0.75, Math.min(1.5, Number(q.get("size") ?? 1) || 1)),
     parts: readParts(q.get("parts")),
     edit: q.get("edit") === "1",
+    ffb: q.get("ffb") === "1",
+    trace: q.get("trace") === "1",
   };
 }
 
 /**
  * The HUD test page: one layout over a still game frame, fed a fixed moment of a session (hud-fixture.ts).
- * `?style=blade&scenario=race|practice|gt3|lights&bg=/path.jpg&mfd=0&extras=1&map=local&chrome=0`.
+ * `?style=blade&scenario=race|practice|gt3|lights|final&bg=/path.jpg&mfd=0&extras=1&map=local&chrome=0&ffb=1&trace=1`.
+ * `ffb=1` draws a force-feedback wheel's meter (without it, the HUD is a controller's or the keyboard's), `trace=1`
+ * turns the Input trace setting on. The MFD's Pit page takes its choices (pointer, D-pad keys , . − =), and the top
+ * centre calls the last lap (`scenario=final`).
  * `size=0.75..1.5` is the HUD size, `parts=shrunk|grown|moved|<json>` the layout editor's moved and resized parts, and
  * `edit=1` puts the layout editor over it. `chrome=0` drops the page's own switcher, for screenshots; `?previews=1`
  * shows every layout's picker picture instead.
@@ -107,6 +119,8 @@ export function HudHarness() {
   return <Harness query={query} onChange={(q) => {
     const next = { ...query, ...q };
     const params = new URLSearchParams({ style: next.style, scenario: next.scenario, mfd: next.mfd ? "1" : "0", extras: next.extras ? "1" : "0", map: next.map });
+    if (next.ffb) params.set("ffb", "1");
+    if (next.trace) params.set("trace", "1");
     if (next.bg !== DEFAULT_BG) params.set("bg", next.bg);
     window.history.replaceState(null, "", `?${params}`);
     setQuery(next);
@@ -117,6 +131,14 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
   const track = useMemo(() => getActiveTrackData(1200), []);
   const map = useMemo(() => buildHudMap(track), [track]);
   const fixture = useMemo(() => hudFixture(track, query.scenario), [track, query.scenario]);
+  // The Pit page's choices, kept here as the drive's crew would (pit-stop.ts)
+  const [strategy, setStrategy] = useState<PitStrategyState | null>(null);
+  const t = useMemo(
+    () => (fixture.t.pit && strategy ? { ...fixture.t, pit: { ...fixture.t.pit, strategy } } : fixture.t),
+    [fixture.t, strategy]
+  );
+  const onChangePitStrategy = (patch: Partial<PitStrategyState>) =>
+    setStrategy((s) => (fixture.t.pit ? { ...(s ?? fixture.t.pit.strategy), ...patch } : s));
   const { tracker } = useLapDeltaTracker(fixture.t, track.totalLengthM);
   const zoom = useUiZoom();
   const frameRef = useRef<HTMLDivElement>(null);
@@ -127,7 +149,14 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
   const Style = style.component;
   const mfd = query.mfd ? (
     <div data-hud-avoid>
-      <MultiPageMfd telemetry={fixture.t} tracker={tracker} trackLengthM={track.totalLengthM} compound={fixture.compound} defaultFolded={Boolean(style.options.mfdFolded)} />
+      <MultiPageMfd
+        telemetry={t}
+        tracker={tracker}
+        trackLengthM={track.totalLengthM}
+        compound={fixture.compound}
+        defaultFolded={Boolean(style.options.mfdFolded)}
+        onChangePitStrategy={onChangePitStrategy}
+      />
     </div>
   ) : undefined;
   const leftExtra = query.extras && fixture.t.race ? <SplitGaps splits={fixture.t.race.splits} variant="panel" /> : null;
@@ -138,9 +167,9 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
       <img src={query.bg} alt="" className="absolute inset-0 h-full w-full object-cover" />
       {/* Left to right in every language, as the in-race HUD is */}
       <div ref={frameRef} dir="ltr" className="lc-safe-frame pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4">
-        <HudRunProvider t={fixture.t}>
+        <HudRunProvider t={t}>
           <Style
-            t={fixture.t}
+            t={t}
             deltaS={fixture.deltaS}
             map={map}
             compound={fixture.compound}
@@ -148,6 +177,7 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
             scale={zoom * query.size}
             trackCode="RWA"
             mfd={mfd}
+            ffb={query.ffb ? <FfbMeter force={0.34} clipping={false} peak={0.78} /> : null}
             lapInvalid={false}
             towerGaps="interval"
             mapMode={query.map}
@@ -155,10 +185,17 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
             leftExtra={leftExtra}
             showDeltaBar
             showRadar
+            showTrace={query.trace}
             cameraMode="chase"
             carId={query.scenario === "gt3" ? "amg-gt3" : "lc26"}
           />
         </HudRunProvider>
+        {/* The top centre's race notices, where the in-race HUD stacks them under the layout's own group */}
+        <div className="absolute left-1/2 w-max -translate-x-1/2" style={{ top: 16 + Math.round((style.options.topClearance ?? 0) * zoom * query.size) }}>
+          <div className="flex flex-col items-center gap-2" style={anchor(zoom * query.size, "top center")}>
+            <FinalLapNotice race={t.race} hold />
+          </div>
+        </div>
       </div>
       {query.edit ? <HudEditor parts={parts} hudRootRef={frameRef} onChange={setParts} onDone={() => {}} onCancel={() => setParts(query.parts)} /> : null}
       {query.chrome ? (

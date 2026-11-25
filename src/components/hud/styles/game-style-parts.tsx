@@ -5,6 +5,7 @@ import type { CarTelemetry, PlayerDamageStatus, RaceStandingEntry } from "@/type
 import type { CarClassCode } from "@/components/ui/badges/class-colors";
 import { CLASSIC_CAR_IDS, HUD_CAUTION, HUD_LOSS, PROTO_CAR_IDS, ROAD_CAR_IDS, lapMark, tyreHeatColor, type LapMark } from "../hud-format";
 import { sessionBestLapMs } from "../third-party-data";
+import { finalLapState } from "@/lib/broadcast/final-lap";
 
 /**
  * Readings the GT-Like and F1-Like layouts share: a completed sector or lap held for a moment with its gap to the best
@@ -237,10 +238,12 @@ export function fastestLap(t: Pick<CarTelemetry, "race">): { entry: RaceStanding
   return best;
 }
 
-/** The race is on its last lap */
+/**
+ * The player is on their own last lap, the one that ends in the chequered flag: the race's last lap on the lead lap,
+ * and a lap down the first lap they start after the leader has started the race's last one
+ */
 export function onFinalLap(t: Pick<CarTelemetry, "race">): boolean {
-  const r = t.race;
-  return Boolean(r && r.phase === "racing" && r.totalLaps && r.lap >= r.totalLaps);
+  return finalLapState(t.race).player;
 }
 
 /** A point on a circle (centre cx, cy; radius r) at `deg` clockwise from straight up */

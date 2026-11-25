@@ -2059,7 +2059,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     wheelFfb.resetMeter();
   }, [pbOwner, loadPbGhost, refreshLeaderboard]);
 
-  const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
+  // The force meter only with a force-feedback wheel in use: the browser's WebHID driver ready, or the bridge driving a
+  // wheel (as the force feedback settings read it). Without one the layout puts something else in its place (Blade: the
+  // driver's inputs)
+  const ffbBridge = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
+  const ffbHid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
+  const ffbLive =
+    (settings.wheel.hidFfb && ffbHid.state === "ready") ||
+    (ffbBridge.connection === "connected" && ffbBridge.device !== null && ffbBridge.error === null);
+  const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled && ffbLive;
   useEffect(() => {
     if (!ffbMeterOn) return;
     const id = window.setInterval(() => setFfbMeter({ ...wheelFfb.meter }), 100);
@@ -2193,12 +2201,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // polish:B after the flag: the podium shot, the race kept in this browser, the next open race
   const podiumUi = useSyncExternalStore(session?.podium.subscribe ?? noSubscribe, session?.podium.getSnapshot ?? idlePodium, idlePodium);
-  // The career's pre-race show: its scenes as the drive plays them, and its two buttons
+  // The career's pre-race show: its scenes as the drive plays them, and its three buttons
   const showUi = useSyncExternalStore(session?.preRaceShow.subscribe ?? noSubscribe, session?.preRaceShow.getSnapshot ?? idleShow, idleShow);
   const preRaceShow = useMemo(
     () => ({
       ui: showUi,
       timeS: session?.preRaceShow.timeS ?? noShowTime,
+      onNext: () => session?.preRaceShow.next(),
       onSkip: () => session?.preRaceShow.skip(),
       onStart: () => session?.preRaceShow.startNow(),
     }),

@@ -191,8 +191,14 @@ export interface TunerMfdPanelProps {
   hidden?: boolean;
   /** Embedded: wake the MFD from its folded pill without mutating a dial on the first press */
   onWake?: () => void;
-  /** Embedded: step MFD pages with D-Pad Left / Right while viewing a non-electronics page */
+  /** Embedded: step MFD pages with D-Pad Left / Right while viewing a page with nothing to pick */
   onCyclePage?: (delta: -1 | 1) => void;
+  /**
+   * Embedded: the page on screen when it has settings of its own (Pit) takes the D-pad first, as this one does: left /
+   * right pick a setting, up / down change it. True when it did; else left / right step the pages and up / down come
+   * back here
+   */
+  onPageDial?: (kind: "pick" | "change", dir: -1 | 1) => boolean;
   /** Embedded: the driver turned a dial or changed a value (D-pad, keys or a click) */
   onInteract?: () => void;
 }
@@ -242,6 +248,10 @@ export const MfdStatusChips: React.FC<{ telemetry: CarTelemetry }> = ({ telemetr
  * driving: left / right picks the dial, up / down changes it (keys , . and − =). Every dial draws the same blocks at the same size,
  * so nothing moves while you step through them. [ and ] are the cockpit FOV's keys, not the tuner's. The D-pad and keys
  * act only while the HUD is live (not under the pause menu, a replay or the results card).
+ *
+ * Embedded in the multi-page MFD it reads the D-pad and keys for every page, one scheme throughout: a page with settings
+ * (this one, Pit) picks with left / right and changes with up / down; a page with nothing to set steps the pages with
+ * left / right and comes back here with up / down. The page button steps the pages everywhere.
  */
 export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   telemetry,
@@ -253,6 +263,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   hidden = false,
   onWake,
   onCyclePage,
+  onPageDial,
   onInteract,
 }) => {
   const skin = useHudSkin();
@@ -269,8 +280,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   const collapsed = embedded ? false : ownCollapsed;
   const interactRef = useRef(onInteract);
   interactRef.current = onInteract;
-  const mfdStateRef = useRef({ embedded, folded, hidden, onWake, onCyclePage });
-  mfdStateRef.current = { embedded, folded, hidden, onWake, onCyclePage };
+  const mfdStateRef = useRef({ embedded, folded, hidden, onWake, onCyclePage, onPageDial });
+  mfdStateRef.current = { embedded, folded, hidden, onWake, onCyclePage, onPageDial };
   // The MFD pad button (L3 by default) opens and closes it
   useEffect(() => {
     if (embedded) return;
@@ -319,7 +330,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
         return;
       }
       if (m.embedded && m.hidden) {
-        m.onCyclePage?.(delta);
+        if (!m.onPageDial?.("pick", delta)) m.onCyclePage?.(delta);
         return;
       }
       setCollapsed(false);
@@ -349,7 +360,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
         return;
       }
       if (m.embedded && m.hidden) {
-        interactRef.current?.();
+        // A page with nothing to change hands the press back to this page (the MFD shows it), never a page with settings
+        if (!m.onPageDial?.("change", dir)) interactRef.current?.();
         return;
       }
       setCollapsed(false);

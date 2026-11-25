@@ -35,6 +35,7 @@ Default bindings are mapped by physical key position, so an AZERTY keyboard auto
 | Headlights on / off, flash headlights (hold) | `U`, `Y` |
 | Show / hide HUD, open / close lap board | `H`, `J` |
 | Open / close MFD, next MFD page | `O`, `Insert` or `I` |
+| MFD: pick a setting, change it (Electronics and Pit pages) | `,` `.`, `-` `=` |
 | Mute, next music track | `M`, `K` |
 | Pause menu | `Esc` |
 
@@ -63,6 +64,7 @@ Xbox and PlayStation controllers work out of the box through the browser's Gamep
 | Camera | `RB` | `R1` |
 | Headlights (tap: flash, hold: on / off) | Left stick click | `L3` |
 | Next MFD page, show / hide HUD | `B`, `LB` | `○`, `L1` |
+| MFD: pick a setting, change it (Electronics and Pit pages) | D-pad left / right, up / down | D-pad left / right, up / down |
 | Restart, pause menu | `View`, `Menu` | `Create`, `Options` |
 
 Pressing gear up and gear down simultaneously shifts into neutral. All controller options live under **Controls > Controller**:

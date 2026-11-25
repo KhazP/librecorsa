@@ -2229,8 +2229,8 @@ export class DriveSession {
         if (!e.repeat) podium.skip();
         return;
       }
-      // The pre-race show: Enter starts, Space or Backspace go to the start card (on it, they start); Esc still
-      // pauses; nothing else drives under it
+      // The pre-race show: Enter starts; Space or Backspace move it on a graphic, twice quickly to the start card (on
+      // it, they start); Esc still pauses; nothing else drives under it
       if (preRaceShow.playing && !this.snapshot.paused && !this.snapshot.seatPanel && e.code !== "Escape") {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         const start = e.code === "Enter" || e.code === "NumpadEnter";
@@ -2239,7 +2239,7 @@ export class DriveSession {
           e.preventDefault();
           if (!e.repeat) {
             if (start) preRaceShow.startNow();
-            else preRaceShow.skip();
+            else preRaceShow.press();
           }
         }
         return;
@@ -2945,11 +2945,16 @@ export class DriveSession {
     // How the full-screen podium's aerial is filmed (set each frame)
     const podiumView: PodiumView = { fogDensity: 0.00035, still: false };
     // The career's pre-race show takes the camera while it plays; the drive's cameras start over after it
-    const preRaceShow = new PreRaceShowDirector(track, () => {
-      cameraRig.reset();
-      camera.layers.enable(OVERLAY_LAYER);
-      showWheel = null;
-    });
+    const preRaceShow = new PreRaceShowDirector(
+      track,
+      () => {
+        cameraRig.reset();
+        camera.layers.enable(OVERLAY_LAYER);
+        showWheel = null;
+      },
+      // A press moved the show on: its cue goes there with it (the clock follows the music)
+      (showTimeS) => music.jumpShow((preRaceShow.getSnapshot().timeline?.musicFromS ?? 0) + showTimeS)
+    );
     this.preRaceShow = preRaceShow;
     const showWheelAt = new THREE.Vector3();
     /**
@@ -3328,9 +3333,10 @@ export class DriveSession {
             podium.skip();
             break;
           }
-          // The pre-race show: Menu still pauses; any other button goes to the start card, and on it starts
+          // The pre-race show: Menu still pauses; any other button moves it on a graphic, twice quickly to the start
+          // card, and on it starts
           if (preRaceShow.playing && action !== "pause" && !this.snapshot.paused && !this.snapshot.seatPanel) {
-            preRaceShow.skip();
+            preRaceShow.press();
             break;
           }
           if (action === "pause") {

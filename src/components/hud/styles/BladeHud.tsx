@@ -28,6 +28,8 @@ import {
   tyreHeatColor,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
+import { InputTrace } from "../InputTrace";
+import { PedalBars, pedalLayers } from "../PedalBars";
 import { ersButtons } from "../ers-buttons";
 import { fuelLapsLeft, idealLapMs, predictedLapMs, sessionBestLapMs } from "../third-party-data";
 import { revLights, useFuelPerLap } from "./third-party-parts";
@@ -40,10 +42,12 @@ import { BladeMap, BladeOrder } from "./BladeOrder";
  * Blade, the default layout: one low slanted instrument across the bottom centre carries the whole car (tyres, fuel,
  * speed, the raised gear tile with the rev lights closing in on it, delta to the best lap, energy, electronics), and
  * the corners carry the race: a compact order window top left with the flag state in its header and the weather and
- * track-limits count in its footer, the circuit as bare numbered dots under it, and lap timing top right.
+ * track-limits count in its footer, the circuit as bare numbered dots under it, and lap timing top right. Bottom left,
+ * the driver's inputs (a short trace of throttle, brake and steering beside the pedal bars), or with a force-feedback
+ * wheel its force meter, and both when the player's Input trace setting is on.
  * Hard plates only: no radius, no blur.
  */
-export const BLADE_STYLE: HudStyleOptions = { bottomClearance: 176, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true };
+export const BLADE_STYLE: HudStyleOptions = { bottomClearance: 176, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true, ownTrace: true };
 
 const REV_LEDS = 8;
 
@@ -458,6 +462,39 @@ const Blade: React.FC<{
 };
 
 /* ------------------------------------------------------------------------------------------------------------------ */
+/* Bottom left: the driver's inputs                                                                                    */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+/** The trace's width (px): the panel comes out as wide as the MFD's in the other corner */
+const INPUTS_TRACE_W = 216;
+
+/**
+ * Throttle, brake and steering over the last five seconds, the pedal bars beside them (what TC and ABS cut, striped),
+ * on a plate: how smooth a controller's triggers and stick really are, which a wheel's force meter cannot say
+ */
+const BladeInputs: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+  const p = pedalLayers(t);
+  return (
+    <div className={`px-3.5 pt-2.5 pb-3 ${PLATE}`}>
+      <InputTrace
+        frameless
+        width={INPUTS_TRACE_W}
+        sample={{
+          throttle: t.throttle,
+          brake: t.brake,
+          steering: t.steering,
+          steerInput: t.steerInput,
+          throttleOut: p.throttleOut,
+          brakeOut: p.brakeOut,
+        }}
+        steerLockDeg={t.steerLockDeg}
+        aside={<PedalBars t={t} showFfb={false} showClutch={false} />}
+      />
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 
 export const BladeHud: React.FC<HudDesignProps> = ({
   t,
@@ -469,16 +506,19 @@ export const BladeHud: React.FC<HudDesignProps> = ({
   mfd,
   channels,
   ffb,
+  touch,
   lapInvalid,
   towerGaps,
   mapMode,
   leftExtra,
   weather,
   showDeltaBar,
+  showTrace,
 }) => {
   const w = useBladeWords();
   const { s, half } = useBladeFit(scale);
   const [leftRef, leftW] = useOwnWidth();
+  const inputs = !ffb || Boolean(showTrace);
   const [rightRef, rightW] = useOwnWidth();
   const centre = anchor(s, "bottom center");
   const left = anchor(s, "bottom left");
@@ -508,9 +548,11 @@ export const BladeHud: React.FC<HudDesignProps> = ({
         <LapTiming t={t} deltaS={deltaS} lapInvalid={lapInvalid} w={w} />
       </div>
 
-      {/* Bottom left: the wheel force meter, when there is one */}
-      {ffb ? (
-        <div ref={leftRef} className={`absolute flex flex-col items-start ${HARD}`} style={{ bottom: cornerBottom("left", leftW, left), left: CORNER_EDGE, ...left }}>
+      {/* Bottom left: the driver's inputs without a force-feedback wheel (or with the Input trace setting on), the
+          wheel's force meter with one; under the touch controls, their steering pad's */}
+      {!touch && (ffb || inputs) ? (
+        <div ref={leftRef} className={`absolute flex flex-col items-start gap-2 ${HARD}`} style={{ bottom: cornerBottom("left", leftW, left), left: CORNER_EDGE, ...left }}>
+          {inputs ? <BladeInputs t={t} /> : null}
           {ffb}
         </div>
       ) : null}

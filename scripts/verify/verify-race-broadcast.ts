@@ -5,7 +5,8 @@
  * (one at a time, the most important first, a newer one of the same news replacing the waiting one, held while race
  * control speaks, old news dropped), the battle forecast (two laps of history, attacking, closing with the laps to
  * catch, pulling away, stable), the battle picked (the player's own first, else the closest in the top ten, on and off,
- * another one next, over when the two part), the player's pit stop on their own line, and the towers' pit clock.
+ * another one next, over when the two part), the player's pit stop on their own line, the towers' pit clock, and the
+ * last lap (the race's from the leader, the player's own a lap down too, and the notice's timing).
  * Run: npx tsx scripts/verify/verify-race-broadcast.ts
  */
 import type { PitTelemetry, RaceStandingEntry, RaceStatus } from "../../src/types/f1";
@@ -27,6 +28,7 @@ import {
   battleForecast,
 } from "../../src/lib/broadcast/battle";
 import { withPlayerPit } from "../../src/lib/broadcast/player-pit";
+import { FINAL_LAP_NOTICE_MS, FinalLapCue, finalLapState } from "../../src/lib/broadcast/final-lap";
 import { pitGapText } from "../../src/components/hud/pit-clock";
 
 let passed = 0;
@@ -327,6 +329,58 @@ console.log("pit clock");
   check("in the lane: the word alone", row({ inPit: true }) === "PIT");
   check("on the track: the gap as ever", row({}) === null);
   check("out of the race or past the flag: their own words", row({ inPit: true, retired: true }) === null && row({ inPit: true, finished: true }) === null);
+}
+
+// --- The last lap ---------------------------------------------------------------------------------------------
+console.log("last lap");
+{
+  // A 10-lap race; trackS is the car's place on the lap (m)
+  const at = (code: string, lap: number, trackS: number, extra: Car = { driverCode: code }): Car => ({ ...extra, driverCode: code, lap, trackS, raceDistM: (lap - 1) * LAP_M + trackS });
+  const race = (cars: Car[], playerLap: number, extra: Partial<RaceStatus> = {}) => frame(cars, { lap: playerLap, ...extra });
+  const s9 = finalLapState(race([at("AAA", 9, 3000), at("YOU", 9, 2900, { driverCode: "YOU", isPlayer: true })], 9));
+  check("lap 9 of 10: not the last lap", !s9.race && !s9.player);
+  const lead = finalLapState(race([at("YOU", 10, 20, { driverCode: "YOU", isPlayer: true }), at("BBB", 9, 3990)], 10));
+  check("the player leads onto lap 10: the race's last lap and the player's", lead.race && lead.player);
+  // The leader has just crossed; the player, on the lead lap, is still short of the line
+  const p2Before = finalLapState(race([at("AAA", 10, 30), at("YOU", 9, 3980, { driverCode: "YOU", isPlayer: true })], 9));
+  check("P2 still short of the line: the race is on its last lap, the player not yet", p2Before.race && !p2Before.player);
+  const p2After = finalLapState(race([at("AAA", 10, 60), at("YOU", 10, 10, { driverCode: "YOU", isPlayer: true })], 10));
+  check("…over it: the player's last lap too", p2After.player);
+  // A lap down: the lap the player is on when the leader starts the last one still ends before the flag
+  const downAhead = finalLapState(race([at("AAA", 10, 100), at("YOU", 8, 2500, { driverCode: "YOU", isPlayer: true })], 8));
+  check("a lap down, ahead of the leader on the lap: not the last lap yet", downAhead.race && !downAhead.player);
+  const downNext = finalLapState(race([at("AAA", 10, 1700), at("YOU", 9, 80, { driverCode: "YOU", isPlayer: true })], 9));
+  check("…the lap they start next is (the counter says 9 of 10)", downNext.player);
+  const downBehind = finalLapState(race([at("AAA", 10, 400), at("YOU", 9, 350, { driverCode: "YOU", isPlayer: true })], 9));
+  check("a lap down, right behind the leader on the lap: this lap is the last", downBehind.player);
+  const flag = finalLapState(race([at("AAA", 10, 0, { driverCode: "AAA", finished: true }), at("YOU", 9, 3000, { driverCode: "YOU", isPlayer: true })], 9));
+  check("the flag is out: every car still running is on its last lap", flag.race && flag.player);
+  const retiredLeader = finalLapState(race([at("AAA", 10, 50, { driverCode: "AAA", retired: true }), at("BBB", 9, 3900), at("YOU", 9, 3800, { driverCode: "YOU", isPlayer: true })], 9));
+  check("a retired car at the top is not the leader", !retiredLeader.race && !retiredLeader.player);
+  const done = finalLapState(race([at("YOU", 10, 0, { driverCode: "YOU", isPlayer: true, finished: true })], 10));
+  check("the player has the flag: no longer on a lap", !done.player);
+  check("no lap count (a timed session): never", !finalLapState(race([at("AAA", 10, 0)], 10, { totalLaps: undefined })).race);
+  check("the lights: never", !finalLapState(race([at("AAA", 10, 0)], 10, { phase: "lights" })).race);
+
+  const cue = new FinalLapCue();
+  const r9 = race([at("AAA", 9, 3900), at("YOU", 9, 3800, { driverCode: "YOU", isPlayer: true })], 9);
+  const r10 = race([at("AAA", 10, 10), at("YOU", 9, 3990, { driverCode: "YOU", isPlayer: true })], 9);
+  check("the notice: down before the last lap", !cue.update(r9, 0));
+  check("…up as the leader starts it", cue.update(r10, 1000));
+  check("…the same frame read twice changes nothing", cue.update(r10, 1000));
+  check("…still up near its end", cue.update(r10, 1000 + FINAL_LAP_NOTICE_MS - 1));
+  check("…down after it", !cue.update(r10, 1000 + FINAL_LAP_NOTICE_MS));
+  check("…and stays down", !cue.update(r10, 1000 + FINAL_LAP_NOTICE_MS * 3));
+  const late = new FinalLapCue();
+  check("a HUD first seeing the race on its last lap: no notice", !late.update(r10, 0));
+  late.update(race([at("AAA", 1, 0)], 1, { phase: "lights" }), 10);
+  check("a restart arms it again", late.update(r10, 20));
+  const sprint = new FinalLapCue();
+  const one = (extra: Partial<RaceStatus>) => race([at("AAA", 1, 5), at("YOU", 1, 0, { driverCode: "YOU", isPlayer: true })], 1, { totalLaps: 1, ...extra });
+  const rolling = { paceMs: 30, stage: "formation" as const, limiterActive: true, distanceToLineM: 900 };
+  sprint.update(one({ phase: "lights" }), 0);
+  check("a one-lap race: not on the formation lap of a rolling start", !sprint.update(one({ rollingFormation: rolling }), 10));
+  check("…called at the green", sprint.update(one({}), 20));
 }
 
 console.log(`\n${passed} checks passed`);

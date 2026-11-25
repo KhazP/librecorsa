@@ -12,6 +12,9 @@
  *   the car itself and the start card. Its cue starts late enough for the tyres to land on their section.
  *
  * The start card waits for the player; nothing starts by itself.
+ *
+ * A press moves on one graphic (`nextStopS`): each scene in turn, the grid's pairs in two steps (the player's own pair,
+ * then pole); a second press within `DOUBLE_PRESS_MS` goes straight to the start card.
  */
 
 export type ShowKind = "race" | "qualifying" | "grid" | "test";
@@ -33,6 +36,11 @@ export const DEFAULT_SHOW_MARKERS: ShowMarkers = { tyresAtS: 43, gridAtS: 52, cl
 
 /** The event's title card, over the circuit as it starts to draw (s) */
 export const TITLE_S = 4.5;
+/**
+ * The circuit on its own after the title (s): its drawing is done 8.2 s into the show (CircuitStage), then a few
+ * seconds to read its facts. The aerial shots, with the weather and the standings, take the rest up to the tyres
+ */
+export const CIRCUIT_S = 9;
 /** The grid's title card before the first pair (s) */
 export const GRID_INTRO_S = 3.5;
 /** One pair of the grid on screen (s): stretched or squeezed to land pole on the music's peak, within these */
@@ -101,8 +109,9 @@ export function buildShowTimeline(kind: ShowKind, gridSize: number, markers: Sho
     return { kind, scenes, readyAtS: t, musicFromS: Math.max(0, m.tyresAtS - tyresS), pairS: 0 };
   }
   if (kind !== "grid") {
-    // The opening: the title, the circuit, the aerial shots up to the tyres' section, then the tyres to the grid's
-    const circuitEnd = TITLE_S + (m.tyresAtS - TITLE_S) * 0.52;
+    // The opening: the title, the circuit, the aerial shots up to the tyres' section, then the tyres to the grid's (a
+    // short cue's opening keeps half of it for the aerial shots)
+    const circuitEnd = TITLE_S + Math.min(CIRCUIT_S, (m.tyresAtS - TITLE_S) * 0.5);
     add("title", 0, TITLE_S);
     add("circuit", TITLE_S, circuitEnd);
     add("aerial", circuitEnd, m.tyresAtS);
@@ -181,9 +190,28 @@ export function aerialCut(sceneS: number, localS: number): { shot: number; shotS
   return { shot, shotS: localS - shot * cutS, cutS };
 }
 
+/** Two presses this close together (ms) skip the whole show to the start card; one moves on a graphic */
+export const DOUBLE_PRESS_MS = 600;
+
 /**
- * The show's state from frame to frame: its clock, the scene it is on, a skip to the start card. Pure: the director
- * steps it with each frame's dt (0 while the pause menu is open) and reads back whether the scene changed.
+ * Where one press goes from `timeS`: the start of the next graphic. Every scene is one, but the grid's pairs (a dozen on
+ * a full grid) are two: the player's own pair (`playerPair`, 0 = the back of the grid) and pole. Past the last, and on
+ * the start card, the start card.
+ */
+export function nextStopS(timeline: ShowTimeline, timeS: number, playerPair: number | null = null): number {
+  const pairs = timeline.scenes.filter((s) => s.id === "gridPair").length;
+  for (const scene of timeline.scenes) {
+    if (scene.startS <= timeS + 1e-6) continue;
+    if (scene.id === "gridPair" && scene.pair !== pairs - 1 && scene.pair !== playerPair) continue;
+    return Math.min(scene.startS, timeline.readyAtS);
+  }
+  return timeline.readyAtS;
+}
+
+/**
+ * The show's state from frame to frame: its clock, the scene it is on, a press to the next graphic or a skip to the
+ * start card. Pure: the director steps it with each frame's dt (0 while the pause menu is open) and reads back whether
+ * the scene changed.
  */
 export class ShowClock {
   timeS = 0;
@@ -202,6 +230,13 @@ export class ShowClock {
   /** Moves the clock on; true when the scene changed (the overlay redraws) */
   step(dt: number): boolean {
     if (dt > 0 && Number.isFinite(dt)) this.timeS += Math.min(dt, 0.25);
+    return this.syncScene();
+  }
+
+  /** On to the next graphic (`nextStopS`); true when that moved it */
+  next(playerPair: number | null = null): boolean {
+    if (this.onReadyCard) return false;
+    this.timeS = nextStopS(this.timeline, this.timeS, playerPair);
     return this.syncScene();
   }
 

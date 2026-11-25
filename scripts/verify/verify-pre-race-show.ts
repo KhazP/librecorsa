@@ -1,10 +1,12 @@
 /**
  * Checks the career's pre-race show (`src/lib/show/show-timeline.ts`, `src/lib/show/circuit-stage.ts`,
  * `src/lib/render/pre-race-show.ts`): the scenes of each show land on the music's sections, pole lands on the peak
- * for a usual grid, a skip goes to the start card and the card waits, the grid's pairs run from the back, the aerial
- * cuts share their scene, the circuit drawing's projection, and the director: when a show starts (a round's qualifying,
- * its grid at the lights), that a restart does not play it again, that its cameras always place, and that the start
- * card's start hands the camera back.
+ * for a usual grid, the circuit's scene is no longer than its drawing needs, a press moves on one graphic (the grid's
+ * pairs in two steps: the player's, then pole) and a skip goes to the start card and the card waits, the grid's pairs
+ * run from the back, the aerial cuts share their scene, the circuit drawing's projection, and the director: when a show
+ * starts (a round's qualifying, its grid at the lights), that a restart does not play it again, that its cameras always
+ * place, that one press moves it on and a quick second skips to the card (the music told each time, the card not
+ * started by the double press), and that the start card's start hands the camera back.
  * Run: npx tsx scripts/verify/verify-pre-race-show.ts
  */
 import * as THREE from "three";
@@ -12,9 +14,12 @@ import { getActiveTrackData, TURN_METADATA } from "../../src/lib/track-data";
 import {
   aerialCut,
   buildShowTimeline,
+  CIRCUIT_S,
   DEFAULT_SHOW_MARKERS,
+  DOUBLE_PRESS_MS,
   GRID_INTRO_S,
   gridPairs,
+  nextStopS,
   PAIR_MAX_S,
   PAIR_MIN_S,
   sceneAt,
@@ -52,6 +57,32 @@ console.log("timeline");
   check("pole lands on the music's peak", near(pairs[pairs.length - 1].endS, m.climaxS, 1e-6), `${pairs[pairs.length - 1].endS} vs ${m.climaxS}`);
   check("the start card has no end and follows the last pair", race.scenes[race.scenes.length - 1].endS === Infinity && near(race.readyAtS, pairs[pairs.length - 1].endS));
   check("the race show plays its cue from the top", race.musicFromS === 0);
+  const circuit = race.scenes.find((s) => s.id === "circuit")!;
+  const aerial = race.scenes.find((s) => s.id === "aerial")!;
+  check("the circuit holds no longer than its drawing and a read of its facts", near(circuit.endS - circuit.startS, CIRCUIT_S), `${circuit.endS - circuit.startS}`);
+  check("…the aerial shots, the weather and the standings, take the rest of the opening", aerial.endS - aerial.startS > (circuit.endS - circuit.startS) * 2, `${aerial.endS - aerial.startS}`);
+
+  // One press: the next graphic. Each scene is one; the grid's ten pairs are two, the player's and pole
+  const startOf = (id: string, pair?: number) => race.scenes.find((s) => s.id === id && (pair === undefined || s.pair === pair))!.startS;
+  const walk = (playerPair: number | null) => {
+    const stops: number[] = [];
+    for (let t = 0; stops.length < 20; ) {
+      t = nextStopS(race, t, playerPair);
+      stops.push(t);
+      if (t >= race.readyAtS) break;
+    }
+    return stops;
+  };
+  const opening = [startOf("circuit"), startOf("aerial"), startOf("tyres"), startOf("gridIntro")];
+  check("presses from the title: the circuit, the aerial shots, the tyres, the grid's card…", walk(null).slice(0, 4).every((t, i) => near(t, opening[i])));
+  check("…then pole, then the start card", JSON.stringify(walk(null).slice(4)) === JSON.stringify([startOf("gridPair", 9), race.readyAtS]), JSON.stringify(walk(null)));
+  check("…with the player in pair 3 (from the back), their pair on the way", JSON.stringify(walk(3).slice(4)) === JSON.stringify([startOf("gridPair", 3), startOf("gridPair", 9), race.readyAtS]));
+  check("…a press halfway through a scene goes to the next one's start", near(nextStopS(race, startOf("aerial") + 2), startOf("tyres")));
+  check("on the start card a press stays there", nextStopS(race, race.readyAtS + 3) === race.readyAtS);
+  const qualiStops: number[] = [];
+  const qTimeline = buildShowTimeline("qualifying", 12, m);
+  for (let t = 0; t < qTimeline.readyAtS; ) qualiStops.push((t = nextStopS(qTimeline, t)));
+  check("qualifying: each of its scenes, then the card", qualiStops.length === qTimeline.scenes.length - 1, JSON.stringify(qualiStops));
 
   const small = buildShowTimeline("race", 4, m);
   check("a small grid's pairs are held at their longest (pole early, never stretched)", near(small.pairS, PAIR_MAX_S));
@@ -84,7 +115,9 @@ console.log("clock");
   check("a new clock names its first scene once", clock.step(0) && !clock.step(0));
   check("a frame's step is capped (a stall does not skip scenes)", (clock.step(5), near(clock.timeS, 0.25)));
   check("a paused frame (dt 0) does not move it", (clock.step(0), near(clock.timeS, 0.25)));
+  check("next: on to the circuit", clock.next() && clock.at.scene.id === "circuit" && clock.timeS === clock.timeline.scenes[1].startS);
   check("skip: straight to the card", clock.skip() && clock.onReadyCard && clock.at.scene.id === "ready");
+  check("next on the card does nothing", !clock.next());
   check("skip on the card does nothing", !clock.skip());
   for (let i = 0; i < 400; i++) clock.step(0.25);
   check("the card waits however long", clock.at.scene.id === "ready");
@@ -231,6 +264,31 @@ console.log("director");
   const t1 = tuned.timeS();
   tuned.update(frame({ atLights: true, grid, musicS: t1 - 5, dt: 1 / 30 }));
   check("music behind: the clock never runs backwards", tuned.timeS() >= t1);
+
+  // Presses: one moves on a graphic, a quick second skips to the card; the music is told where the show went
+  const jumps: number[] = [];
+  let pressEnded = 0;
+  const pressed = new PreRaceShowDirector(track, () => pressEnded++, (t) => jumps.push(t));
+  pressed.arm({ ...ctx, roundIndex: 10, qualifyingMin: 0 });
+  pressed.update(frame({ atLights: true, grid }));
+  const timeline = pressed.getSnapshot().timeline!;
+  pressed.press(10_000);
+  check("a press: the next graphic (the title to the circuit)", pressed.getSnapshot().scene === "circuit" && near(pressed.timeS(), timeline.scenes[1].startS));
+  check("…and the music goes there with it", jumps.length === 1 && near(jumps[0], timeline.scenes[1].startS));
+  pressed.press(10_000 + DOUBLE_PRESS_MS + 1);
+  check("a second press after the double-press window: one more graphic", pressed.getSnapshot().scene === "aerial");
+  pressed.press(10_000 + DOUBLE_PRESS_MS + 200);
+  check("a quick second press: straight to the start card", pressed.getSnapshot().scene === "ready" && near(jumps[jumps.length - 1], timeline.readyAtS));
+  pressed.press(10_000 + DOUBLE_PRESS_MS + 400);
+  check("…a third quick press does not start the session from under the player's thumb", pressed.playing && pressEnded === 0);
+  pressed.press(10_000 + DOUBLE_PRESS_MS * 3);
+  check("…a fresh press on the card starts", !pressed.playing && pressEnded === 1);
+  const clicked = new PreRaceShowDirector(track, () => {});
+  clicked.arm({ ...ctx, roundIndex: 11, qualifyingMin: 0 });
+  clicked.update(frame({ atLights: true, grid }));
+  clicked.next();
+  clicked.next();
+  check("the Next button twice: two graphics on, never a skip", clicked.getSnapshot().scene === "aerial");
 }
 
 console.log(`\n${passed} checks passed`);

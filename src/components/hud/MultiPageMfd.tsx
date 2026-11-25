@@ -33,6 +33,7 @@ import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE, LapMarkGlyph } from "./styles/hud-st
 import { SkinButton, skinCss, SkinPanel, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudModeRef } from "./hud-mode";
 import { MfdPitPage, MfdPitPill } from "./MfdPitPage";
+import { pitDial, pitPick, type PitItem } from "@/lib/input/mfd-input";
 import { usePitGap } from "./pit-clock";
 
 export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd" | "pit";
@@ -559,8 +560,10 @@ export interface MultiPageMfdProps {
 
 /**
  * The car's multi-function display: one bottom-right panel with five pages (Electronics tuner, Relative, Tyres &
- * brakes, Fuel & energy, Standings). The page button (Insert / pad B) steps through them, the MFD button folds it to
- * a one-line pill, and the D-pad wakes it from folded, cycles pages on non-electronics tabs, or tunes electronics on ELEC.
+ * brakes, Fuel & energy, Standings), and Pit with pit stops in the session. The page button (Insert / pad B) steps
+ * through them and the MFD button folds it to a one-line pill. The D-pad (keys , . − =) wakes it from folded; on a page
+ * with settings (Electronics, Pit) left / right pick one and up / down change it; on the others left / right step the
+ * pages and up / down go back to Electronics.
  */
 export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   telemetry: t,
@@ -583,6 +586,10 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
   const [folded, setFolded] = useState(defaultFolded);
+  // The Pit page's cursor: the setting the D-pad's up / down change
+  const [pitItem, setPitItem] = useState<PitItem>("tyres");
+  const pitRef = useRef({ pit: t.pit, onChange: onChangePitStrategy, item: pitItem });
+  pitRef.current = { pit: t.pit, onChange: onChangePitStrategy, item: pitItem };
   const laps = useLapHistory(t);
   const units = useUnits();
   const hudModeRef = useHudModeRef();
@@ -653,6 +660,26 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       armAutoFold();
     },
     [armAutoFold, stepPage]
+  );
+
+  // The Pit page takes the D-pad while it shows and its choices can be made: left / right move its cursor, up / down
+  // change the setting under it
+  const onPageDial = useCallback(
+    (kind: "pick" | "change", dir: -1 | 1): boolean => {
+      const { pit, onChange, item } = pitRef.current;
+      if (pageRef.current !== "pit" || !pit || !onChange) return false;
+      if (kind === "pick") {
+        const next = pitPick(item, dir);
+        pitRef.current.item = next;
+        setPitItem(next);
+      } else {
+        const patch = pitDial(pit.strategy, item, dir);
+        if (patch) onChange(patch);
+      }
+      armAutoFold();
+      return true;
+    },
+    [armAutoFold]
   );
 
   const onInteract = useCallback(() => {
@@ -762,6 +789,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         hidden={folded || page !== "elec"}
         onWake={onWake}
         onCyclePage={onCyclePage}
+        onPageDial={onPageDial}
         onInteract={onInteract}
       />
       {/* Every page fills the same box, so the MFD's top edge never moves between tabs */}
@@ -774,7 +802,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
           ) : page === "fuel" ? (
             <FuelPage t={t} laps={laps} L={trackLengthM} />
           ) : page === "pit" && t.pit ? (
-            <MfdPitPage pit={t.pit} onChange={onChangePitStrategy} />
+            <MfdPitPage pit={t.pit} onChange={onChangePitStrategy} cursor={pitItem} onCursor={setPitItem} />
           ) : (
             <StandingsPage t={t} laps={laps} />
           )}

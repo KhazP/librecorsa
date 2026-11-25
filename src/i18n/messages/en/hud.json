@@ -595,7 +595,9 @@
       "callBox": "Call",
       "stops": "Stops",
       "stopsOf": "{made} of {required}",
-      "stopsShort": "{made, plural, =0 {No stops} one {# stop} other {# stops}}"
+      "stopsShort": "{made, plural, =0 {No stops} one {# stop} other {# stops}}",
+      "pick": "Pick",
+      "change": "Set"
     }
   },
   "tunerMfdPanel": {
@@ -817,6 +819,7 @@
       "region": "Timing tower",
       "lap": "Lap {lap}",
       "lapOf": "Lap {lap}<dim>/{total}</dim>",
+      "finalLap": "Final lap",
       "driver": "Driver",
       "gap": "Gap",
       "interval": "Interval",
@@ -881,6 +884,9 @@
       "doubleYellow": "Double yellow",
       "yellow": "Yellow"
     }
+  },
+  "finalLapNotice": {
+    "title": "Final lap"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1186,7 +1192,9 @@
   },
   "preRace": {
     "label": "Pre-race show",
+    "next": "Next",
     "skip": "Skip",
+    "skipHint": "Press twice to skip the show",
     "start": "Start",
     "keySpace": "Space",
     "keyEnter": "Enter",
