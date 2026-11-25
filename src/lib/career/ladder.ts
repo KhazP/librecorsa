@@ -150,9 +150,9 @@ export const CAREER_SERIES: readonly CareerSeries[] = [
           : ["chang", "okayama", "rwanda_official", "barbagallo", "qiddiya"],
     raceKm: 120,
     grid: 10,
-    // Above the ladder's step of 4 (endurance races at 86): at 82 the leader planned on 0.95-0.97 of the grip the AMG
-    // drives cleanly, 2-4 % off real 2024 GT3 poles. At 88 its planned lap is 0.3-0.6 s quicker (Spielberg 89.0 →
-    // 88.4 s, pole 87.9), and in 45 headless races the field spun less (72 → 53) and touched less (170 → 99)
+    // Above the ladder's step of 4: at 82 the leader planned on 0.95-0.97 of the grip the AMG drives cleanly, 2-4 % off
+    // real 2024 GT3 poles. At 88 its planned lap is 0.3-0.6 s quicker (Spielberg 89.0 → 88.4 s, pole 87.9), and in 45
+    // headless races the field spun less (72 → 53) and touched less (170 → 99)
     skill: 88,
     promoteTop: 4,
     stops: { medium: 1, long: 1, full: 1 },
@@ -167,7 +167,10 @@ export const CAREER_SERIES: readonly CareerSeries[] = [
     calendar: ["le_mans_82", "spielberg", "watkins_glen", "chang", "istanbul_park", "vir_grand_west", "rwanda_official", "qiddiya"],
     raceKm: 240,
     grid: 10,
-    skill: 86,
+    // Not below the GT3 series it follows (88). 90 against 86 over 69 headless races (Spielberg, Chang, Istanbul): fewer
+    // AI-v-AI contacts (94 → 68) and spins (5 → 3), the same AI-fault contacts with the player's stand-in on held-out
+    // seeds (1 → 1)
+    skill: 90,
     promoteTop: 4,
     stops: { short: 1, medium: 1, long: 2, full: 2 },
     next: ["grandPrix"],
