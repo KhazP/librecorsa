@@ -2058,7 +2058,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     wheelFfb.resetMeter();
   }, [pbOwner, loadPbGhost, refreshLeaderboard]);
 
-  const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
+  // The force meter only with a force-feedback wheel in use: the browser's WebHID driver ready, or the bridge driving a
+  // wheel (as the force feedback settings read it). Without one the layout puts something else in its place (Blade: the
+  // driver's inputs)
+  const ffbBridge = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
+  const ffbHid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
+  const ffbLive =
+    (settings.wheel.hidFfb && ffbHid.state === "ready") ||
+    (ffbBridge.connection === "connected" && ffbBridge.device !== null && ffbBridge.error === null);
+  const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled && ffbLive;
   useEffect(() => {
     if (!ffbMeterOn) return;
     const id = window.setInterval(() => setFfbMeter({ ...wheelFfb.meter }), 100);
