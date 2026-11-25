@@ -421,52 +421,6 @@ export function stepWindscreenWipers(
   return state;
 }
 
-const VISOR_VERT = /* glsl */ `
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = vec4(position.xy, 0.0, 1.0);
-}
-`;
-
-const VISOR_FRAG = /* glsl */ `
-uniform float uTime;
-uniform float uDroplets;
-uniform float uSpray;
-uniform float uSpeedNorm;
-uniform vec3 uTint;
-varying vec2 vUv;
-
-float hash21(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-void main() {
-  vec2 centered = vUv - 0.5;
-  float dist = length(centered);
-  float activeBead = 0.0;
-  if (uDroplets > 0.01) {
-    // Radial airflow blows droplets outward at speed; gravity pulls them down at low speed
-    vec2 radialDir = dist > 0.001 ? centered / dist : vec2(0.0, 1.0);
-    vec2 flowUv = vUv - radialDir * (uTime * 0.18 * uSpeedNorm) + vec2(0.0, uTime * 0.06 * (1.0 - 0.7 * uSpeedNorm));
-    vec2 grid = flowUv * vec2(28.0, 18.0);
-    vec2 cell = floor(grid);
-    vec2 local = fract(grid) - 0.5;
-    float h = hash21(cell);
-    if (h >= 1.0 - uDroplets * 0.85) {
-      activeBead = smoothstep(0.28, 0.06, length(local - vec2(h - 0.5, fract(h * 17.3) - 0.5) * 0.45));
-    }
-  }
-  // Edge vignette mist from rooster-tail spray wake
-  float mist = uSpray * smoothstep(0.18, 0.72, dist) * 0.22;
-  float alpha = clamp(activeBead * 0.22 * uDroplets + mist, 0.0, 0.35);
-  if (alpha < 0.003) discard;
-  gl_FragColor = vec4(uTint, alpha);
-}
-`;
-
 export interface RainFx {
   readonly object: THREE.LineSegments;
   readonly windscreenState: WindscreenWetState;
@@ -493,9 +447,6 @@ export interface RainFx {
   ): void;
   dispose(): void;
 }
-
-/** Layer of the visor droplets: only a camera that enables it (the driver's eye) draws them, never the mirrors */
-export const RAIN_VISOR_LAYER = 7;
 
 export function createRainFx(scene: THREE.Scene): RainFx {
   const windscreenState: WindscreenWetState = {
@@ -553,29 +504,6 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   object.layers.set(DETAIL_LAYER);
   scene.add(object);
 
-  const visorGeo = new THREE.PlaneGeometry(2, 2);
-  const visorMat = new THREE.ShaderMaterial({
-    vertexShader: VISOR_VERT,
-    fragmentShader: VISOR_FRAG,
-    uniforms: {
-      uTime: { value: 0 },
-      uDroplets: { value: 0 },
-      uSpray: { value: 0 },
-      uSpeedNorm: { value: 0 },
-      uTint: { value: new THREE.Color(0xdbe4ee) },
-    },
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-    fog: false,
-  });
-  const visorMesh = new THREE.Mesh(visorGeo, visorMat);
-  visorMesh.frustumCulled = false;
-  visorMesh.renderOrder = 1002;
-  visorMesh.visible = false;
-  visorMesh.layers.set(RAIN_VISOR_LAYER);
-  scene.add(visorMesh);
-
   const camPos = material.uniforms.uCamPos.value as THREE.Vector3;
   const vel = material.uniforms.uVel.value as THREE.Vector3;
   const windXZ = material.uniforms.uWindXZ.value as THREE.Vector2;
@@ -584,7 +512,6 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   const cockpitMin = material.uniforms.uCockpitMin.value as THREE.Vector3;
   const cockpitMax = material.uniforms.uCockpitMax.value as THREE.Vector3;
   const cockpitWindscreen = material.uniforms.uCockpitWindscreen.value as THREE.Vector4;
-  const visorTint = visorMat.uniforms.uTint.value as THREE.Color;
   const baseColor = new THREE.Color(0xb8c2cc);
   let qualityNow: GraphicsQuality = "high";
   let lodScaleNow = 1;
@@ -619,24 +546,14 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       const effectiveIntensity = Math.max(r, spray * 0.65);
       const carSpeedMs = cameraVelocity.length();
       stepWindscreenWipers(windscreenState, dt, r, spray, carSpeedMs, true);
-      // The clock runs while anything is drawn, so drops left on the visor keep running after the rain stops
       time += dt;
 
-      const showVisor = windscreenState.dropletDensity > 0.015 || spray > 0.02;
       const count = rainStreakCountFor(effectiveIntensity, qualityNow, lodScaleNow);
       const streaksShown = count > 0;
       // The streak phase is time × a per-drop speed, so wrapping the clock moves every drop at once. Wrap it only
       // while nothing is drawn; the hard limit (float precision in the shader) is only reached by four hours of
       // unbroken rain
-      if ((!showVisor && !streaksShown && time > 60) || time > RAIN_CLOCK_MAX_S) time = 0;
-      visorMesh.visible = showVisor;
-      if (showVisor) {
-        visorMat.uniforms.uTime.value = time;
-        visorMat.uniforms.uDroplets.value = windscreenState.dropletDensity;
-        visorMat.uniforms.uSpray.value = spray;
-        visorMat.uniforms.uSpeedNorm.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
-        visorTint.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.45 + 0.55 * brightness, 0.25, 1));
-      }
+      if ((!streaksShown && time > 60) || time > RAIN_CLOCK_MAX_S) time = 0;
 
       object.visible = streaksShown;
       if (!object.visible) return;
@@ -651,11 +568,8 @@ export function createRainFx(scene: THREE.Scene): RainFx {
     },
     dispose() {
       scene.remove(object);
-      scene.remove(visorMesh);
       geometry.dispose();
       material.dispose();
-      visorGeo.dispose();
-      visorMat.dispose();
     },
   };
 }

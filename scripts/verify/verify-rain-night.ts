@@ -12,7 +12,6 @@ import {
   cockpitRainVolumeFor,
   createRainFx,
   RAIN_STREAK_BUDGET,
-  RAIN_VISOR_LAYER,
   rainStreakCountFor,
   type CockpitRainVolume,
 } from "../../src/lib/render/rain-fx";
@@ -205,7 +204,7 @@ console.log("\n== Closed-cockpit rain masking");
   rainFx.dispose();
   check(
     "RainFx sets DETAIL_LAYER (skipped by mirrors/probe) and toggles cockpit occlusion uniforms",
-    enabledOk && disabledOk && onDetailLayer && RAIN_VISOR_LAYER === 7,
+    enabledOk && disabledOk && onDetailLayer,
     `enabled=${enabledOk}, disabled=${disabledOk}, detailLayer=${onDetailLayer}`
   );
 }
