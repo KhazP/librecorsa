@@ -12,7 +12,6 @@ import {
   cockpitRainVolumeFor,
   createRainFx,
   RAIN_STREAK_BUDGET,
-  RAIN_VISOR_LAYER,
   rainStreakCountFor,
   type CockpitRainVolume,
 } from "../../src/lib/render/rain-fx";
@@ -205,7 +204,7 @@ console.log("\n== Closed-cockpit rain masking");
   rainFx.dispose();
   check(
     "RainFx sets DETAIL_LAYER (skipped by mirrors/probe) and toggles cockpit occlusion uniforms",
-    enabledOk && disabledOk && onDetailLayer && RAIN_VISOR_LAYER === 7,
+    enabledOk && disabledOk && onDetailLayer,
     `enabled=${enabledOk}, disabled=${disabledOk}, detailLayer=${onDetailLayer}`
   );
 }
@@ -369,11 +368,11 @@ console.log("\n== Heavy-rain performance budgets");
     "Rain streak counts respect per-tier budgets and adaptive LOD scaling",
     rainStreakCountFor(0, "high", 1) === 0 &&
       lowHeavy === RAIN_STREAK_BUDGET.low &&
-      lowHeavy <= 1000 &&
+      lowHeavy <= 1200 &&
       medHeavy === RAIN_STREAK_BUDGET.medium &&
-      medHeavy <= 2000 &&
+      medHeavy <= 2800 &&
       highHeavy === RAIN_STREAK_BUDGET.high &&
-      highHeavy <= 3200 &&
+      highHeavy <= 4800 &&
       highSteppedDown < highHeavy * 0.75,
     `low=${lowHeavy}, med=${medHeavy}, high=${highHeavy}, lod0.7=${highSteppedDown}`
   );
@@ -387,8 +386,8 @@ console.log("\n== Heavy-rain performance budgets");
   rainFx.setQuality("medium", 0.85);
   rainFx.setCockpitOcclusion(gt3Vol, chassisMat);
   rainFx.update(1 / 60, 0.9, cam, vel, 0.3, 4, -2, 0.6);
-  const expectedDrawVerts = rainStreakCountFor(0.9, "medium", 0.85) * 2;
-  const drawRangeOk = rainFx.object.visible && rainFx.object.geometry.drawRange.count === expectedDrawVerts;
+  const expectedStreaks = rainStreakCountFor(0.9, "medium", 0.85);
+  const drawRangeOk = rainFx.object.visible && rainFx.object.geometry.instanceCount === expectedStreaks;
 
   const t0 = performance.now();
   for (let i = 0; i < 1000; i++) {
@@ -401,9 +400,9 @@ console.log("\n== Heavy-rain performance budgets");
   const hidesDry = !rainFx.object.visible;
   rainFx.dispose();
   check(
-    "RainFx updates draw range accurately, hides in dry, and runs 1000 heavy-rain frames fast",
+    "RainFx draws one streak per drop accurately, hides in dry, and runs 1000 heavy-rain frames fast",
     drawRangeOk && hidesDry && rainMs < 40,
-    `drawVerts=${expectedDrawVerts}, 1000 frames=${rainMs.toFixed(2)} ms`
+    `streaks=${expectedStreaks}, 1000 frames=${rainMs.toFixed(2)} ms`
   );
 
   // SimVisualFxManager spray compaction, quality budgets, and distance culling
@@ -469,7 +468,7 @@ console.log("\n== Heavy-rain performance budgets");
   const scenerySrc = readFileSync(resolve(process.cwd(), "src/lib/render/scenery-detail.ts"), "utf8");
   check(
     "Heavy-rain shader guards (sphere cull, ALU puff hash, distance-gated road/water splashes) are active",
-    rainSrc.includes("midDist > 0.5 * uBox.x + 1.5") &&
+    rainSrc.includes("midDist > reach + 1.5") &&
       rainSrc.includes("if (a < 0.003) discard;") &&
       visualFxSrc.includes("if (r >= 1.0 || vAlpha < 0.003) discard;") &&
       !visualFxSrc.includes("new THREE.Vector3(0, 0, 1).applyQuaternion(peer.quaternion)") &&

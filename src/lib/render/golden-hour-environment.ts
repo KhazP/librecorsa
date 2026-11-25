@@ -10,6 +10,7 @@ import {
   Effect,
   EffectComposer,
   EffectPass,
+  type Pass,
   RenderPass,
   ToneMappingEffect,
   ToneMappingMode,
@@ -218,6 +219,11 @@ export interface PostFx {
   setCamera(camera: THREE.Camera): void;
   /** Graphics preset: MSAA samples and bloom on / off (`bloom` decouples touch High bloom from disabled touch MSAA) */
   setQuality(quality: "low" | "medium" | "high", msaa?: boolean, bloom?: boolean): void;
+  /**
+   * A pass that reads the scene's own buffer right after the scene render, ahead of the clouds and haze (the copy of
+   * the frame the water on the glass refracts)
+   */
+  addScenePass(pass: Pass): void;
   /** Puts the physical sky's clouds (and High desktop aerial perspective) into the chain, once; later calls are no-ops */
   setClouds(sky: {
     readonly clouds: CloudsEffect;
@@ -1021,6 +1027,8 @@ export function createPostFx(
   let aerialPass: EffectPass | null = null;
   let cloudsPlainPass: EffectPass | null = null;
   let mainCamera = camera;
+  /** Passes reading the scene buffer right after the RenderPass (addScenePass) */
+  const scenePasses: Pass[] = [];
 
   const bloom = new BloomEffect({
     mipmapBlur: true,
@@ -1154,10 +1162,17 @@ export function createPostFx(
       cloudsPlainPass.mainCamera = mainCamera;
       cloudsPlainPass.renderToScreen = true;
       cloudsPlainPass.enabled = false;
-      composer.addPass(cloudsPass, 1);
-      if (aerialPass) composer.addPass(aerialPass, 2);
+      const afterScene = 1 + scenePasses.length;
+      composer.addPass(cloudsPass, afterScene);
+      if (aerialPass) composer.addPass(aerialPass, afterScene + 1);
       composer.addPass(cloudsPlainPass);
       syncPassRouting();
+    },
+
+    addScenePass(pass): void {
+      if (scenePasses.includes(pass)) return;
+      composer.addPass(pass, 1 + scenePasses.length);
+      scenePasses.push(pass);
     },
 
     setSharpness(amount: number): void {

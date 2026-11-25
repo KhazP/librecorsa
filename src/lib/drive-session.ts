@@ -98,7 +98,8 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { cockpitRainVolumeFor, createRainFx, RAIN_VISOR_LAYER, type CockpitRainVolume } from "@/lib/render/rain-fx";
+import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume } from "@/lib/render/rain-fx";
+import { WindscreenWaterPass, type WaterMode } from "@/lib/render/windscreen-water";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
@@ -1537,6 +1538,9 @@ export class DriveSession {
     const postFx = createPostFx(renderer, scene, camera, {
       multisampling: touchGraphics ? 0 : undefined,
     });
+    // Rain on the windscreen (closed cars) or the visor (open cars) in the onboard views, drawn on the frame's own glass
+    const windscreenWater = new WindscreenWaterPass(scene);
+    postFx.addScenePass(windscreenWater);
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
     const reflectionProbe = new CarReflectionProbe(renderer, scene, { mobile: touchGraphics });
     // `?perf=1`: a report of the first 30 s on track (startup-monitor.ts), and a line every 10 s for the whole session
@@ -1545,6 +1549,8 @@ export class DriveSession {
     const sessionPerf = SessionPerfMonitor.requested() ? new SessionPerfMonitor(renderer) : null;
     if (sessionPerf) {
       (window as unknown as { __lcPerfReport?: SessionPerfMonitor }).__lcPerfReport = sessionPerf;
+      // The rain's own parts, for timing them on and off in one session
+      (window as unknown as { __lcRain?: object }).__lcRain = { water: windscreenWater, rain: rainFx };
       simWorker?.listen((event) => {
         if (event.type === "perf") sessionPerf.worker(event.spanMs, event.busyMs, event.maxWakeMs);
       });
@@ -1888,6 +1894,8 @@ export class DriveSession {
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
       rainFx.setQuality(g.quality, plan.renderScale);
+      // Phones keep Low's drop count and water map whatever the preset
+      windscreenWater.setQuality(touchGraphics ? "low" : g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
@@ -2999,6 +3007,10 @@ export class DriveSession {
       };
     }
     const rainCamPos = new THREE.Vector3();
+    /** The beams lighting the rain (the player's first) and the order the others' are taken in */
+    const rainBeams: HeadlightBeam[] = Array.from({ length: RAIN_BEAMS }, () => ({ pos: new THREE.Vector3(), dir: new THREE.Vector3(), intensity: 0, range: 1 }));
+    const rainBeamOrder: number[] = [];
+    const rainLamp = new THREE.Color();
     const rainCamPrev = new THREE.Vector3();
     const rainCamVel = new THREE.Vector3();
     let rainCockpitCarId: CarId = carIdNow;
@@ -4879,9 +4891,6 @@ export class DriveSession {
         // Spray thrown up by the cars ahead (the wake model's, from their speed, gap and the water)
         const workerRace = aiFieldOf(raceNow())?.worker;
         const sprayWake = workerRace ? workerRace.playerSpray : (trackEnv.weatherSampleFor(physics)?.sprayIntensity ?? 0);
-        // Droplets on the visor only from the driver's eye (the mirrors render without this layer)
-        if (view.driverEye && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
-        else camera.layers.disable(RAIN_VISOR_LAYER);
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
         const headlights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
@@ -4897,7 +4906,9 @@ export class DriveSession {
         visualFx.setHeadlights(headlights.opponents, camera);
         // Lamps in the wet road (wet-road-lamps.ts): the cars' rear lamps and headlights, the circuit's lamps at night
         const wetRoadNow = wetnessFromWater(wx.waterMm) > 0.05;
-        const beamCount = opponentBeams || wetRoadNow ? visualFx.collectBeams(beamScratch) : 0;
+        // Every car's beams: the opponent beams, the rain they light (rain-fx.ts) and their lamps in the wet road
+        const beamCount = visualFx.collectBeams(beamScratch);
+        const opponentBeamCount = beamCount;
         if (opponentBeams) opponentBeams.update(beamScratch, beamCount, rainCamPos);
         let wetLampCount = 0;
         if (wetRoadNow) {
@@ -4944,6 +4955,30 @@ export class DriveSession {
         } else {
           rainFx.setCockpitOcclusion(null, null);
         }
+        // What lights the rain: the player's headlights, the three nearest other cars' beams, a street lamp over the
+        // camera, the sun through the cloud
+        let rainBeamCount = carHeadlights.beam(rainBeams[0]) ? 1 : 0;
+        if (opponentBeamCount > 0) {
+          rainBeamOrder.length = 0;
+          for (let i = 0; i < opponentBeamCount; i++) rainBeamOrder.push(i);
+          rainBeamOrder.sort((a, b) => beamScratch[a].pos.distanceToSquared(rainCamPos) - beamScratch[b].pos.distanceToSquared(rainCamPos));
+          for (let k = 0; k < rainBeamOrder.length && rainBeamCount < RAIN_BEAMS; k++) {
+            const from = beamScratch[rainBeamOrder[k]];
+            const to = rainBeams[rainBeamCount++];
+            to.pos.copy(from.pos);
+            to.dir.copy(from.dir);
+            to.intensity = from.intensity;
+            to.range = from.range;
+          }
+        }
+        rainFx.setLight({
+          beams: rainBeams,
+          beamCount: rainBeamCount,
+          lamp: venueNight?.mode === "lamps" ? venueNight.lightAt(rainCamPos.x, rainCamPos.z, rainLamp) : null,
+          sunDir: env.sunDirection,
+          sunShare: THREE.MathUtils.clamp(skyConditions.elevationDeg / 10, 0, 1) * (1 - wx.cloudCover) * (1 - 0.7 * wx.rainIntensity),
+        });
+        rainFx.setViewportHeight(renderer.domElement.height);
         rainFx.update(
           drawDtS,
           wx.rainIntensity,
@@ -4954,6 +4989,28 @@ export class DriveSession {
           wx.windVzMs,
           THREE.MathUtils.clamp(sprayWake, 0, 1)
         );
+        // Water on the glass in front of the driver: the windscreen from the cockpit and over the wheel, the visor
+        // from the driver's eye in an open car (never in VR, whose frame skips the post chain)
+        const onboardGlass = !inVr && (view.driverEye || view.anchor === "overWheel");
+        const waterMode: WaterMode = !onboardGlass
+          ? "off"
+          : carHasClosedCockpit(rainCockpitCarId)
+            ? "windscreen"
+            : view.driverEye
+              ? "visor"
+              : "off";
+        windscreenWater.update({
+          dt: drawDtS,
+          rain: wx.rainIntensity,
+          spray: THREE.MathUtils.clamp(sprayWake, 0, 1),
+          mode: waterMode,
+          carId: rainCockpitCarId,
+          chassis: rainCockpitChassis,
+          eye: rainCockpitEye,
+          camera,
+          wiperPhase: rainFx.windscreenState.wiperPhase,
+          light: skyLight,
+        });
         env.update(physics.worldPosition, camera);
         startupMonitor?.begin();
         // Not in the aerial tour or while paused (once primed): reflections are static when the scene is frozen
@@ -5190,6 +5247,7 @@ export class DriveSession {
       opponentBeams?.dispose();
       env.dispose();
       rainFx.dispose();
+      windscreenWater.dispose();
       virtualMirror.dispose();
       pitBoxVisual?.dispose();
       floorSparks.dispose();
