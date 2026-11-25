@@ -295,6 +295,13 @@ export interface CarSimProfile {
    * rpm / 1000 × this × throttle (× `FUEL_KG_PER_L`). Absent: `fuelFlowCurveKgS` or the constant `fuelFlowKgS` × throttle
    */
   fuelLPerS1000Rpm?: number;
+  /**
+   * Fuel burnt for the work the engine does, where none of the flows above is given: its mechanical power at the crank
+   * over its brake thermal efficiency and the fuel's lower heating value (MJ/kg), and `idleKgS` while it runs below
+   * that. So a hybrid's deployment, which the engine gives way to under a power cap, saves the fuel of the work it takes
+   * over, and an engine map with less torque burns less
+   */
+  fuelFromEngineWork?: { brakeThermalEfficiency: number; lowerHeatingValueMJPerKg: number; idleKgS: number };
   /** The TC / ABS dial positions of each driver-assist preset */
   assistDials: Record<DriverAssistPreset, AidDials>;
   /** The plan of the body worn when it is not the vehicle model's own (`VehiclePhysicsOptions.bodyPlan`) */
@@ -2407,7 +2414,18 @@ export class F12026CarSim implements SimulatorCar {
         this.chassisG = filterChassisG(this.chassisG, (dvx.dot(_ey) / stepS + G * _ey.y) / G, stepS);
       }
       // Fuel burnt this tick: the car gets lighter tick by tick, not frame by frame
-      if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
+      const p = this.profile;
+      // A flow given outright wins (a car imported on this car's profile brings its own consumption)
+      const byWork = p.fuelLPerS1000Rpm === undefined && p.fuelFlowCurveKgS === undefined && p.fuelFlowKgS === undefined ? p.fuelFromEngineWork : undefined;
+      if (byWork && this.fuelKg > 0 && this.realism.fuelUse) {
+        // The engine's work at the crank over its efficiency and the fuel's heating value, and its idle while it runs
+        const running = v.rpm > 0.5 * this.config.engine.idleRpm;
+        const burnKgS = running ? Math.max(byWork.idleKgS, v.iceMechanicalPowerW / (byWork.brakeThermalEfficiency * byWork.lowerHeatingValueMJPerKg * 1e6)) : 0;
+        if (burnKgS > 0) {
+          this.fuelKg = Math.max(0, this.fuelKg - burnKgS * CONTROL_DT_S);
+          v.setFuelMass(this.fuelKg);
+        }
+      } else if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
         const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
         const perRpm = this.profile.fuelLPerS1000Rpm;
         const flowLut = this.fuelFlowCurveLut;
