@@ -358,8 +358,17 @@ const BUILT_IN_CARS: readonly CarDefinition[] = [
     quality: "own",
     credit: SHUNQI_F1_2025,
     tyreCredit: { author: "Purple Sector", url: "https://www.patreon.com/cw/PurpleSector" },
-    // kyojinvan's sound plays where the hosted files are listed (LC25_SOUND); a plain copy plays the project's own
-    ...(HOSTED_CONTENT ? { soundCredit: { author: "kyojinvan", url: "https://www.overtake.gg/members/kyojinvan.2113755/" } } : {}),
+    // hahmad's Red Bull RB21 (Honda RBPT) sound plays where the hosted files are listed (LC25_SOUND); a plain copy
+    // plays the project's own (CREDITS.md)
+    ...(HOSTED_CONTENT
+      ? {
+          soundCredit: {
+            author: "hahmad",
+            url: "https://www.overtake.gg/members/hahmad.2388716/",
+            engineSound: "RB21 (Honda RBPT)",
+          },
+        }
+      : {}),
     physics: "lc25",
     year: 2025,
     sound: LC25_SOUND,

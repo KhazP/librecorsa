@@ -269,18 +269,32 @@ check(
   "CREDITS.md credits the LC-LMDH's engine sound in its author's words",
   credits.includes("Engine sound: Engine Lab by bimbalanch, [https://ko-fi.com/bimbalanch](https://ko-fi.com/bimbalanch)")
 );
+// The LC25's hosted RB21 (Honda RBPT) sound is used with hahmad's permission: credited by name with their OverTake
+// link in the game, on the site, and in CREDITS.md, and explicitly excluded from AGPL-3.0
+const RB21_SOUND_CREDIT = "Engine sound: RB21 (Honda RBPT) by hahmad, https://www.overtake.gg/members/hahmad.2388716/";
+check(
+  "CREDITS.md credits hahmad with their OverTake link and excludes the RB21 sound from AGPL-3.0",
+  credits.includes("hahmad") &&
+    credits.includes("https://www.overtake.gg/members/hahmad.2388716/") &&
+    credits.includes("not covered by AGPL-3.0 or any other licence")
+);
 if (HOSTED_CONTENT) {
-  const s = carById("lc-lmdh").soundCredit;
   const card = (JSON.parse(readFileSync("src/i18n/messages/en/menu.json", "utf8")) as { carBrowser: Record<string, string> })
     .carBrowser.creditEngineSound;
-  const shown = card
-    .replace("{work}", s?.engineSound ?? "?")
-    .replace("{author}", s?.author ?? "?")
-    .replace("{url}", s?.url ?? "?")
-    .replace(/<\/?link>/g, "");
-  check("The LC-LMDH's car card shows the same credit, its address a link", shown === ENGINE_LAB_CREDIT && card.includes("<link>{url}</link>"), shown);
+  for (const [id, expected] of [
+    ["lc-lmdh", ENGINE_LAB_CREDIT],
+    ["lc25", RB21_SOUND_CREDIT],
+  ] as const) {
+    const s = carById(id).soundCredit;
+    const shown = card
+      .replace("{work}", s?.engineSound ?? "?")
+      .replace("{author}", s?.author ?? "?")
+      .replace("{url}", s?.url ?? "?")
+      .replace(/<\/?link>/g, "");
+    check(`The ${id} car card shows the required sound credit, its address a link`, shown === expected && card.includes("<link>{url}</link>"), shown);
+  }
 } else {
-  noteSkip("the LC-LMDH's engine sound credit on its car card", "NEXT_PUBLIC_HOSTED_CONTENT=1");
+  noteSkip("the LC-LMDH and LC25 engine sound credits on their car cards", "NEXT_PUBLIC_HOSTED_CONTENT=1");
 }
 
 console.log(`\nCar sounds verification: all ${passed} checks passed.`);

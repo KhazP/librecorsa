@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "use-intl/react";
 import type { ModelSource } from "@/lib/model-source";
 import { SupportButton } from "@/components/SupportButton";
+import { supportOf } from "@/lib/modder-support";
+import { useStoreBuild } from "@/lib/use-store-build";
 import { TAKEDOWN_URL } from "@/lib/site";
 import { IconButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
@@ -38,6 +40,7 @@ export const SourceChip: React.FC<{
   className?: string;
 }> = ({ source, className = "inline-flex" }) => {
   const tx = useTranslations("game.source");
+  const storeBuild = useStoreBuild();
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState<Place | null>(null);
   // Whether the button sits in a zoomed screen (TV distance, the UI scale setting): the panel then takes the same zoom
@@ -192,6 +195,23 @@ export const SourceChip: React.FC<{
                   ) : (
                     source.model.license
                   )}
+                </span>
+              ) : null}
+              {source.sound ? (
+                <span className="min-w-0 text-lc-slate [overflow-wrap:anywhere]">
+                  Sound: {source.sound.title ? `${source.sound.title} by ` : "by "}
+                  <span className="text-lc-chalk">{source.sound.author}</span>
+                  {!(storeBuild && supportOf(source.sound.author)?.url === source.sound.url) ? (
+                    <>
+                      {" "}
+                      (
+                      <a href={source.sound.url} target="_blank" rel="noreferrer" className={linkClass}>
+                        {source.sound.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                      </a>
+                      )
+                    </>
+                  ) : null}
+                  {" · "}used with permission
                 </span>
               ) : null}
               {source.note ? <span className="min-w-0 text-lc-slate [overflow-wrap:anywhere]">{source.note}</span> : null}
