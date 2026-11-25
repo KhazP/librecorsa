@@ -42,7 +42,6 @@ People whose pull requests are in the game (the list the home page's About secti
   | GT / prototype / classic racing tyre sidewall textures (`public/cars/shared/tyres/gt/*.webp`: Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) | By **sagatron918** ([https://www.paypal.me/SagarNaikB](https://www.paypal.me/SagarNaikB)) (Used with permission) |
   | Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
   | LC-LMDH model (`public/cars/lc-lmdh/model/`) | By **kilianhoffmann13**, CC BY 4.0 |
-  | BMW M6 GT3 model (`public/cars/bmw-m6-gt3/model/`) | By **ᗩᒪE᙭. Kᗩ.🚗** ([Sketchfab](https://sketchfab.com/3d-models/fb5d595766974a57868f84890f4425d2)), CC BY-NC 4.0 |
   | Jaguar I-Type 4 Formula E model (`public/cars/jaguar-fe/model/`) | By **3dblender_1** ([Sketchfab](https://sketchfab.com/3d-models/c722e175f91240a88eec2d777b6d503f)), CC BY 4.0 |
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
   | Suzuki Liana model (`public/cars/liana/model/`) | Forza Motorsport 4's (Turn 10 Studios / Microsoft) via a 2015 Assetto Corsa conversion; **not licensed for redistribution** (see *Suzuki Liana*) |

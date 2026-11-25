@@ -762,7 +762,6 @@ export type VehicleModelId =
   | "lc26"
   | "f12026-car"
   | "amg-gt3"
-  | "bmw-m6-gt3"
   | "jaguar-fe"
   | "liana"
   | "mtr-496r"
@@ -780,7 +779,6 @@ const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
   lc26: true,
   "f12026-car": true,
   "amg-gt3": true,
-  "bmw-m6-gt3": true,
   "jaguar-fe": true,
   liana: true,
   "mtr-496r": true,

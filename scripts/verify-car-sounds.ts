@@ -15,7 +15,6 @@ import {
   type CarSoundSource,
 } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
-import { BMW_M6_GT3_SOUND } from "../src/lib/sim/gt3/BmwM6Gt3Sim";
 import { JAGUAR_FE_SOUND } from "../src/lib/sim/fe/JaguarFeSim";
 import { SUZUKI_LIANA_SOUND } from "../src/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "../src/lib/sim/proto/Mtr496rSim";
@@ -43,7 +42,6 @@ const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number
   lc26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
   "amg-gt3": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
-  "bmw-m6-gt3": { sound: BMW_M6_GT3_SOUND, maxIdleRpm: 1600 },
   "jaguar-fe": { sound: JAGUAR_FE_SOUND, maxIdleRpm: 4200 },
   liana: { sound: SUZUKI_LIANA_SOUND, maxIdleRpm: 1000 },
   "mtr-496r": { sound: MTR_496R_SOUND, maxIdleRpm: 2200 },

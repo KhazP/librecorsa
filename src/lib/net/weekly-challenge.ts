@@ -216,7 +216,6 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   "f12026-car": { compound: "soft", tyres: "soft" },
   "jaguar-fe": { compound: "soft", tyres: "soft" },
   "amg-gt3": { compound: "soft", tyres: "soft" },
-  "bmw-m6-gt3": { compound: "soft", tyres: "soft" },
   "mtr-496r": { compound: "soft", tyres: "soft" },
   "lc-lmdh": { compound: "soft", tyres: "soft" },
   liana: { compound: "soft", tyres: "street" },

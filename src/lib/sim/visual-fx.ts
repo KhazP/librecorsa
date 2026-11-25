@@ -28,7 +28,6 @@ import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from './classic/Chaparral
 import { PORSCHE_934_RSR_CONFIG } from './classic/Porsche934RsrConfig';
 import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
-import { BMW_M6_GT3_CONFIG } from './gt3/BmwM6Gt3Config';
 import { JAGUAR_FE_CONFIG } from './fe/JaguarFeConfig';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
@@ -1078,7 +1077,6 @@ const PREWARM_DRIVERS = ['KIG', 'MUS', 'NYA', 'RUB', 'HUY'] as const;
  */
 const PORTED_ONLY = {
   gt3: { url: '/cars/amg-gt3-evo/model/amg-gt3-evo.glb', config: AMG_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['amg-gt3'] },
-  'bmw-m6-gt3': { url: '/cars/bmw-m6-gt3/model/bmw-m6-gt3.glb', config: BMW_M6_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['bmw-m6-gt3'] },
   'jaguar-fe': { url: '/cars/jaguar-fe/model/jaguar-fe.glb', config: JAGUAR_FE_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['jaguar-fe'] },
   road: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
   proto: { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
@@ -1128,8 +1126,7 @@ const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
       ? 'road'
       : vehicle === 'mtr-496r'
         ? 'proto'
-        : vehicle === 'bmw-m6-gt3' ||
-            vehicle === 'jaguar-fe' ||
+        : vehicle === 'jaguar-fe' ||
             vehicle === 'lc-lmdh' ||
             vehicle === 'nissan-r33-jgtc' ||
             vehicle === 'nissan-r32-jtcc' ||

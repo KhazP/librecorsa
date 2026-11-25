@@ -243,21 +243,6 @@ const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> =
     ]),
     measured: true,
   },
-  "bmw-m6-gt3": {
-    halfWidthM: 0.68,
-    heightM: 0.56,
-    frontZM: 1.97,
-    rearHalfWidthM: 0.60,
-    rearHeightM: 0.75,
-    rearZM: -2.29,
-    flareSizeM: 0.30,
-    rearFlareSizeM: 0.19,
-    rearLamps: rearPairs([
-      [0.52, 0.75, -2.29, 0.18],
-      [0.68, 0.75, -2.25, 0.19],
-    ]),
-    measured: true,
-  },
   "mtr-496r": {
     halfWidthM: 0.58,
     heightM: 0.52,

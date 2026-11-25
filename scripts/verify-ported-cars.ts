@@ -22,7 +22,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 console.log("Registry checks");
-for (const native of ["lc26", "amg-gt3", "bmw-m4-gt3", "bmw-m6-gt3", "jaguar-fe", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar", "vw-scirocco-gtx", "chaparral-2d", "chaparral-2d-67", "porsche-934-rsr"] as const) {
+for (const native of ["lc26", "amg-gt3", "bmw-m4-gt3", "jaguar-fe", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar", "vw-scirocco-gtx", "chaparral-2d", "chaparral-2d-67", "porsche-934-rsr"] as const) {
   // A hosted car is only listed where hosted content is on; elsewhere carById falls back to another car
   if (!carListed(native)) {
     console.log(`  SKIP  ${native}: hosted on librecorsa.org only, not listed in this copy`);

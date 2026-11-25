@@ -649,5 +649,4 @@ async function portJaguarFe() {
   console.log("Wrote public/cars/jaguar-fe/model/jaguar-fe.glb");
 }
 
-await portBmwM6();
 await portJaguarFe();

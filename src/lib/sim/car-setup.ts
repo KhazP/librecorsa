@@ -192,7 +192,6 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   lc26: { front: 0.1, rear: 0.14 },
   "f12026-car": { front: 0.2, rear: 0.2 },
   "amg-gt3": { front: 0.4, rear: 0.6 },
-  "bmw-m6-gt3": { front: 0.4, rear: 0.6 },
   "jaguar-fe": { front: 0.15, rear: 0.25 },
   // No wings
   liana: { front: 0, rear: 0 },
@@ -224,7 +223,6 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "f12026-car": { defaultKg: 35, minKg: 5, maxKg: 110 },
   // A sprint's fixed 30 kg (≈ 40 l) [est]
   "amg-gt3": { defaultKg: 30, minKg: 5, maxKg: 74 },
-  "bmw-m6-gt3": { defaultKg: 30, minKg: 5, maxKg: 74 },
   "jaguar-fe": { defaultKg: 0, minKg: 0, maxKg: 0 },
   // 30 l of a 50 l tank of petrol [spec car.ini FUEL / MAX_FUEL]
   liana: { defaultKg: 22, minKg: 4, maxKg: 37 },
@@ -287,7 +285,6 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   lc26: 11,
   "f12026-car": 11,
   "amg-gt3": 12.6,
-  "bmw-m6-gt3": 12.6,
   "jaguar-fe": 12.5,
   liana: 15,
   "mtr-496r": 14,

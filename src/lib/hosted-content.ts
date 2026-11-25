@@ -8,7 +8,7 @@
 export const HOSTED_CONTENT = process.env.NEXT_PUBLIC_HOSTED_CONTENT === "1";
 
 /** The cars in the repository: both drive the 2026 prototype's body and sound */
-export const REPO_CAR_IDS: ReadonlySet<string> = new Set(["lc26", "bmw-m6-gt3", "jaguar-fe"]);
+export const REPO_CAR_IDS: ReadonlySet<string> = new Set(["lc26", "jaguar-fe"]);
 
 /** The circuits in the repository */
 export const REPO_TRACK_IDS: ReadonlySet<string> = new Set(["rwanda_official_short", "rwanda_official"]);

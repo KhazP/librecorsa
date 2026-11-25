@@ -3,7 +3,6 @@ import type { VehicleModelId } from "@/types/f1";
 import type { CarClassRule } from "@/lib/net/wire";
 import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
-import { BMW_M6_GT3_SOUND } from "@/lib/sim/gt3/BmwM6Gt3Sim";
 import { JAGUAR_FE_SOUND } from "@/lib/sim/fe/JaguarFeSim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
@@ -35,7 +34,6 @@ export type CarId =
   | "lc26"
   | "amg-gt3"
   | "bmw-m4-gt3"
-  | "bmw-m6-gt3"
   | "jaguar-fe"
   | "mtr-496r"
   | "lc-lmdh"
@@ -113,7 +111,6 @@ export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
  */
 export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
-  "bmw-m6-gt3": "Calibrated to BMW M6 GT3 P63 twin-turbo V8 specs, wheelbase and endurance BoP.",
   "jaguar-fe": "Calibrated to Gen2 Formula E Jaguar I-Type 4 specs (200 kW race + 50 kW Attack Mode, no DRS).",
   lc26: "Its physics are checked against the reference data they were built from.",
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
@@ -354,25 +351,6 @@ const ALL_CARS: readonly CarDefinition[] = [
     // 28 cm longer than the AMG's, its tail 18 cm further back
     bodyPlan: [[0.0, 2.32], [0.61, 2.24], [0.94, 2.01], [1.02, 1.84], [1.02, 0.8], [1.02, -1.83], [0.87, -2.27], [0.61, -2.46], [0.48, -2.52], [0.0, -2.52]],
     sound: BMW_M4_GT3_SOUND,
-  },
-  {
-    id: "bmw-m6-gt3",
-    classId: "gt3",
-    title: "BMW M6 GT3",
-    sub: "F13 GT3 · 4.4L Twin-Turbo V8 · ABS / TC",
-    badge: "M6 GT3",
-    quality: "own",
-    credit: {
-      title: "BMW M6 GT3 Engraving",
-      author: "ᗩᒪE᙭. Kᗩ.🚗",
-      url: "https://sketchfab.com/3d-models/fb5d595766974a57868f84890f4425d2",
-      license: "CC BY-NC 4.0",
-      licenseUrl: "https://creativecommons.org/licenses/by-nc/4.0/",
-    },
-    physics: "bmw-m6-gt3",
-    year: 2016,
-    modelUrl: "/cars/bmw-m6-gt3/model/bmw-m6-gt3.glb",
-    sound: BMW_M6_GT3_SOUND,
   },
   {
     id: "jaguar-fe",
