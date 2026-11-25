@@ -9,6 +9,8 @@
  *       [--only 'clubCup_europe|liana|grobnik,...'] [--length full|long|medium|short]
  *   npx tsx scripts/ai/career-plan-audit.ts --report audit.jsonl [--md] [--json verdicts.json]
  *
+ * `touch <out>.stop` drains a run: no new races start, those running finish and are written.
+ *
  * combos.json: `[{ "series": "clubCup_europe", "car": "liana", "track": "grobnik", "check": { "ok": true, ... } }]`, the
  * check being the car's plan check on the GT3 line (`metadata.aiPlansByLine.gt3[car]`, as the hosted file has it or a
  * candidate's). The plan arm races with it, the own-driver arm with the same check marked failed, whatever the circuit's
@@ -130,6 +132,8 @@ async function audit(): Promise<void> {
   await Promise.all(
     Array.from({ length: jobsN }, async () => {
       while (next < todo.length) {
+        // A stop file next to the output: start no more races, let those running finish
+        if (existsSync(`${out}.stop`)) break;
         const job = todo[next++];
         const t0 = Date.now();
         const result = await runOne(job.o);
