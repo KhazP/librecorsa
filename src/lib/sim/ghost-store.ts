@@ -8,8 +8,9 @@ import { validateLapRecording } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapPhysicsVersion, type LapRecording } from "@/lib/sim/lap-types";
 
 const DB_NAME = "bugesera-laps";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "bestLaps";
+const LATEST_STORE_NAME = "latestLaps";
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const BROADCAST_CHANNEL = "librecorsa-best-laps";
 const STORAGE_PING_KEY = "librecorsa.bestLapsUpdatedAt";
@@ -214,8 +215,12 @@ function openDb(): Promise<IDBDatabase | null> {
         }
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = () => {
-          if (!req.result.objectStoreNames.contains(STORE_NAME)) {
-            req.result.createObjectStore(STORE_NAME);
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+          if (!db.objectStoreNames.contains(LATEST_STORE_NAME)) {
+            db.createObjectStore(LATEST_STORE_NAME);
           }
         };
         req.onsuccess = () => {
@@ -228,6 +233,7 @@ function openDb(): Promise<IDBDatabase | null> {
           resolve(db);
         };
         req.onerror = () => resolve(null);
+        req.onblocked = () => resolve(null);
       } catch {
         resolve(null);
       }
@@ -244,6 +250,7 @@ function openDb(): Promise<IDBDatabase | null> {
 function runRequest<T>(
   mode: IDBTransactionMode,
   build: (store: IDBObjectStore) => IDBRequest<T>,
+  storeName: string = STORE_NAME,
 ): Promise<T | null> {
   return openDb().then(
     (db) =>
@@ -253,8 +260,8 @@ function runRequest<T>(
           return;
         }
         try {
-          const tx = db.transaction(STORE_NAME, mode);
-          const req = build(tx.objectStore(STORE_NAME));
+          const tx = db.transaction(storeName, mode);
+          const req = build(tx.objectStore(storeName));
           req.onsuccess = () => resolve(req.result);
           req.onerror = () => resolve(null);
           tx.onabort = () => resolve(null);
@@ -467,6 +474,21 @@ export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, bo
     if (oldRes !== null) patchSummaryIndex(oldKey, null);
   }
   notifyBestLapsChanged();
+}
+
+/** Persists the player's most recent completed lap for a track/car in the lap database */
+export async function saveLatestLap(rec: LapRecording): Promise<void> {
+  const lap = validateLapRecording(rec);
+  if (!lap) return;
+  await runRequest("readwrite", (store) => store.put(lap, lapKey(lap.trackId, lap.vehicle)), LATEST_STORE_NAME);
+}
+
+/** Loads the player's most recent completed lap for a track/car from the lap database */
+export async function loadLatestLap(trackId: string, vehicle: VehicleModelId): Promise<LapRecording | null> {
+  const raw = await runRequest("readonly", (store) => store.get(lapKey(trackId, vehicle)), LATEST_STORE_NAME);
+  if (raw === null || raw === undefined) return null;
+  const lap = validateLapRecording(raw);
+  return lap && lap.trackId === trackId && lap.vehicle === vehicle ? lap : null;
 }
 
 /** m.ss.mmm, e.g. 1.23.456 for 83456 ms */

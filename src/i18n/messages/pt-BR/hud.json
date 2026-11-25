@@ -95,7 +95,11 @@
     "potential": "{delta} s de potencial",
     "allBestSectors": "Todos os melhores setores em uma volta",
     "offline": "Ranking offline. Mostrando tempos locais.",
-    "disabled": "Ranking online desativado. Mostrando tempos locais."
+    "disabled": "Ranking online desativado. Mostrando tempos locais.",
+    "viewLabel": "Visualização de tempos de volta",
+    "tabTimes": "Tempos de volta",
+    "tabAnalysis": "Telemetria",
+    "analysisEmpty": "Complete uma volta para ver a telemetria."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Mais rápido",
       "slower": "Mais lento",
       "same": "Igual"
-    }
+    },
+    "analyzeLap": "Telemetria da volta"
   },
   "raceResults": {
     "dialog": "Resultado da corrida",
@@ -1096,5 +1101,56 @@
     "resetAll": "Redefinir layout",
     "cancel": "Cancelar",
     "done": "Concluído"
+  },
+  "lapTelemetry": {
+    "title": "Telemetria da volta",
+    "description": "Volta de referência (tracejada) vs. volta comparada (contínua) · Passe o cursor sobre qualquer canal",
+    "reference": "Referência",
+    "compared": "Comparada",
+    "allTimeBest": "Recorde pessoal",
+    "latestLap": "Última volta",
+    "sessionLap": "Volta {lap}",
+    "invalidTag": "Inválida",
+    "channels": {
+      "brake": "Freio",
+      "speed": "Velocidade",
+      "throttle": "Acelerador",
+      "gear": "Marcha",
+      "steering": "Direção",
+      "delta": "Delta de tempo"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "s"
+    },
+    "drivingLine": "Traçado",
+    "startFinish": "L/C",
+    "legend": {
+      "fastest": "Mais rápido",
+      "faster": "Rápido",
+      "same": "Igual",
+      "slower": "Mais lento"
+    },
+    "sectors": "Setores",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "Em {distance}",
+    "insights": "Principais observações",
+    "noInsights": "As voltas estão bem próximas, sem grandes desvios.",
+    "insight": {
+      "sectorLossTitle": "Perda no Setor {sector}",
+      "sectorLossDetail": "Perdeu {seconds} s no Setor {sector}.",
+      "sectorGainTitle": "Ganho no Setor {sector}",
+      "sectorGainDetail": "Ganhou {seconds} s no Setor {sector}.",
+      "apexTitle": "Velocidade no ápice da Curva {turn}",
+      "apexNamedTitle": "Velocidade no ápice da Curva {turn} ({name})",
+      "apexFasterDetail": "Manteve {speed} {unit} a mais de velocidade mínima na Curva {turn}.",
+      "apexSlowerDetail": "Manteve {speed} {unit} a menos de velocidade mínima na Curva {turn}.",
+      "brakeTitle": "Ponto de frenagem na Curva {turn}",
+      "brakeNamedTitle": "Ponto de frenagem na Curva {turn} ({name})",
+      "brakeEarlierDetail": "Freou ~{distance} {unit} mais cedo para a Curva {turn}.",
+      "brakeLaterDetail": "Freou ~{distance} {unit} mais tarde para a Curva {turn}."
+    }
   }
 }

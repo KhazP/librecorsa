@@ -95,7 +95,11 @@
     "potential": "{delta} s de potentiel",
     "allBestSectors": "Tous les meilleurs secteurs en un tour",
     "offline": "Classement hors ligne. Temps locaux affichés.",
-    "disabled": "Classement en ligne désactivé. Temps locaux affichés."
+    "disabled": "Classement en ligne désactivé. Temps locaux affichés.",
+    "viewLabel": "Vue des temps au tour",
+    "tabTimes": "Temps au tour",
+    "tabAnalysis": "Télémétrie",
+    "analysisEmpty": "Bouclez un tour pour consulter la télémétrie."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Plus rapide",
       "slower": "Plus lent",
       "same": "Identique"
-    }
+    },
+    "analyzeLap": "Télémétrie du tour"
   },
   "raceResults": {
     "dialog": "Résultat de la course",
@@ -1096,5 +1101,56 @@
     "resetAll": "Réinitialiser la disposition",
     "cancel": "Annuler",
     "done": "Terminé"
+  },
+  "lapTelemetry": {
+    "title": "Télémétrie du tour",
+    "description": "Tour de référence (pointillés) vs tour comparé (trait plein) · Survolez un canal pour inspecter",
+    "reference": "Référence",
+    "compared": "Comparé",
+    "allTimeBest": "Record personnel",
+    "latestLap": "Dernier tour",
+    "sessionLap": "Tour {lap}",
+    "invalidTag": "Invalide",
+    "channels": {
+      "brake": "Frein",
+      "speed": "Vitesse",
+      "throttle": "Accélérateur",
+      "gear": "Rapport",
+      "steering": "Direction",
+      "delta": "Écart"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "s"
+    },
+    "drivingLine": "Trajectoire",
+    "startFinish": "D/A",
+    "legend": {
+      "fastest": "Record",
+      "faster": "Plus rapide",
+      "same": "Identique",
+      "slower": "Plus lent"
+    },
+    "sectors": "Secteurs",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "À {distance}",
+    "insights": "Points clés",
+    "noInsights": "Les tours sont très proches sans écart majeur.",
+    "insight": {
+      "sectorLossTitle": "Temps perdu dans le Secteur {sector}",
+      "sectorLossDetail": "{seconds} s perdues dans le Secteur {sector}.",
+      "sectorGainTitle": "Temps gagné dans le Secteur {sector}",
+      "sectorGainDetail": "{seconds} s gagnées dans le Secteur {sector}.",
+      "apexTitle": "Vitesse au point de corde Virage {turn}",
+      "apexNamedTitle": "Vitesse au point de corde Virage {turn} ({name})",
+      "apexFasterDetail": "{speed} {unit} de vitesse minimale en plus au Virage {turn}.",
+      "apexSlowerDetail": "{speed} {unit} de vitesse minimale en moins au Virage {turn}.",
+      "brakeTitle": "Point de freinage Virage {turn}",
+      "brakeNamedTitle": "Point de freinage Virage {turn} ({name})",
+      "brakeEarlierDetail": "Freinage ~{distance} {unit} plus tôt pour le Virage {turn}.",
+      "brakeLaterDetail": "Freinage ~{distance} {unit} plus tard pour le Virage {turn}."
+    }
   }
 }
