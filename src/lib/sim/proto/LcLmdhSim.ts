@@ -13,7 +13,9 @@ import type { SpeedProfileCarModel } from '../speed-profile';
 /**
  * Its sound bank (on librecorsa.org only): the engine, in the cockpit and outside, and its shift and lift-off sounds are
  * Engine Lab by bimbalanch, given to LibreCorsa (CREDITS.md); the gearbox whine, hybrid motor and limiter are from its
- * earlier bank (`scripts/audio/build_custom_soundbank.py`), whose shift-cut bark the new engine's own upshifts replace. The engine's 16 anchors run from 1800 to 9846 rpm
+ * earlier bank (`scripts/audio/build_custom_soundbank.py`), whose shift-cut bark the new engine's own upshifts replace.
+ * The whine has loops at 110 km/h pitched down from its 262 ones, so it rises from walking pace (out of the pit box on
+ * the motor alone), and the motor's loop is louder than it was, to carry the electric launch and the regeneration The engine's 16 anchors run from 1800 to 9846 rpm
  * at the engine's own revs, past the 8300 rpm limiter, so the bank plays at the physics' rpm unscaled
  */
 export const LC_LMDH_SOUND: CarSoundSource = {
