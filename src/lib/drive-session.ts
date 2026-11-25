@@ -391,6 +391,8 @@ export interface DriveSnapshot {
   cameraOverride: CameraMode | null;
   /** True once at least 1 s of driving has been recorded in the replay buffer */
   replayAvailable: boolean;
+  /** An AI race's qualifying is under way (the pause menu offers to end it: `finishQualifyingNow`) */
+  qualifying: boolean;
 }
 
 /** A lost WebGL context: whether the page was hidden at the time, and where the player was */
@@ -436,6 +438,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     nowPlaying: null,
     cameraOverride: null,
     replayAvailable: false,
+    qualifying: false,
   };
 }
 
@@ -623,6 +626,13 @@ export class DriveSession {
    * ends it
    */
   readonly startQualifying: (field: AiRace, minutes: number) => void;
+  /**
+   * The player ends qualifying now (the pause menu), as the clock running out would end it: their best clean lap so
+   * far stands, the AI cars' times are made as at the flag, and the race lines up. The AI times come from a reference
+   * lap that may still be being driven: it is driven to its end first, a slice at a time so the page stays responsive.
+   * Resolves true once the race has lined up, false when there was no qualifying to end (or another session took over)
+   */
+  readonly finishQualifyingNow: () => Promise<boolean>;
   /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
@@ -993,6 +1003,8 @@ export class DriveSession {
       field: AiRace;
       session: QualifyingSession;
       ref: { lapMs: number | null; base: number; car: SimulatorCar | null; lap0: number; simS: number };
+      /** The player ended the session early: its reference lap is being driven to its end (`finishQualifyingNow`) */
+      ending: Promise<boolean> | null;
     } | null = null;
     /** Page time per frame for the reference lap (ms), and the step it is driven at (s) */
     const QUALI_REF_BUDGET_MS = 1.5;
@@ -1001,8 +1013,16 @@ export class DriveSession {
     const QUALI_REF_GIVE_UP_S = 600;
     /** Page time the reference lap gets at the end of qualifying (ms): one not done by then is given up */
     const QUALI_REF_FINISH_MS = 200;
+    /** Page time per slice for a reference lap driven to its end after the player ended qualifying early (ms) */
+    const QUALI_REF_SLICE_MS = 24;
+    /** Tells the UI whether a qualifying is under way (the pause menu offers to end one) */
+    const publishQualifying = () => {
+      const on = quali !== null;
+      if (this.snapshot.qualifying !== on) this.publish({ qualifying: on });
+    };
     const endQualifying = () => {
       quali = null;
+      publishQualifying();
     };
     /** Drives the reference lap on for up to `budgetMs` of page time (Infinity: to its end) */
     const stepQualifyingRef = (budgetMs: number) => {
@@ -1029,6 +1049,7 @@ export class DriveSession {
       // one still not over the line gives no reference, and the race lines up as its setup says (the AI cars by pace)
       stepQualifyingRef(QUALI_REF_FINISH_MS);
       quali = null;
+      publishQualifying();
       // In the rain the AI cars lap slower, as they race (the reference laps are dry)
       const weather = Math.max(0.5, getTrackEnv().weatherPaceScale(physics));
       q.field.qualifying = {
@@ -1058,8 +1079,31 @@ export class DriveSession {
         if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
         ref = { lapMs: null, base: AUTOPILOT_REF_BASE, car, lap0: car.telemetry.lapCount, simS: 0 };
       }
-      quali = { field, session: new QualifyingSession(minutes * 60), ref };
+      quali = { field, session: new QualifyingSession(minutes * 60), ref, ending: null };
+      publishQualifying();
       physics.resetToStartGrid(true);
+    };
+    this.finishQualifyingNow = () => {
+      const q = quali;
+      if (disposed || !q) return Promise.resolve(false);
+      if (q.ending) return q.ending;
+      // The flag now, for the player: the laps done count, the one under way does not
+      q.session.end();
+      // The AI cars' times are made as at the flag (their pace, not the time left): only their reference lap may still
+      // be on track. It is driven to its end a slice at a time, the page answering in between, so the grid is the one
+      // the full session would have drawn (at the flag a reference not done in a moment is given up instead)
+      q.ending = new Promise<boolean>((resolve) => {
+        const slice = () => {
+          // Another session took over meanwhile (a car change, leaving the round): nothing to line up
+          if (disposed || quali !== q) return resolve(false);
+          stepQualifyingRef(QUALI_REF_SLICE_MS);
+          if (q.ref.car) return void setTimeout(slice, 0);
+          finishQualifying();
+          resolve(true);
+        };
+        slice();
+      });
+      return q.ending;
     };
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
     /** The AI race's rules close the overtaking aids inside a yellow zone (set with the track-limits ladder) */
@@ -1239,6 +1283,7 @@ export class DriveSession {
       nowPlaying: sharedMusic().current,
       cameraOverride: null,
       replayAvailable: false,
+      qualifying: false,
     };
 
     /**
@@ -3714,8 +3759,9 @@ export class DriveSession {
         // A jump start has no reaction to show (a clutch let out and pressed again before the lights went out)
         physics.telemetry.startReactionMs = jumpWatch.jumped ? undefined : (reactionWatch.ms ?? undefined);
       }
-      // Qualifying: the clock, the reference lap behind it, and the race once the session is over
-      if (quali && driving) {
+      // Qualifying: the clock, the reference lap behind it, and the race once the session is over (one the player ended
+      // early lines up once its reference lap is done: `finishQualifyingNow`)
+      if (quali && driving && !quali.ending) {
         const t = physics.telemetry;
         stepQualifyingRef(QUALI_REF_BUDGET_MS);
         const state = quali.session.update(dtSeconds, {

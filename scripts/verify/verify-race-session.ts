@@ -510,6 +510,15 @@ console.log("Qualifying");
   restart.update(1, frame({ currentLapTimeMs: 1000 }));
   restart.update(29.5, frame({ currentLapTimeMs: 30500 }));
   check("a restart after the flag is no lap under way", restart.state === "last_lap" && restart.update(0.1, frame({ currentLapTimeMs: 100 })) === "done");
+  // Ended early by the player (the pause menu), 10 s into a clean lap after a 25.1 s one
+  const early = new QualifyingSession(300);
+  early.update(1, frame({ lapCount: 1, currentLapTimeMs: 1000 }));
+  early.update(24, frame({ lapCount: 1, currentLapTimeMs: 25000 }));
+  early.update(0.1, frame({ lapCount: 2, lastLapTimeMs: 25100, currentLapTimeMs: 100 }));
+  early.update(10, frame({ lapCount: 2, currentLapTimeMs: 10100 }));
+  check("ended early: over at once, the best lap so far kept", early.end() === "done" && early.bestMs === 25100 && early.remainingS > 0);
+  check("ended early: the lap under way never counts", early.update(15, frame({ lapCount: 3, lastLapTimeMs: 24000, currentLapTimeMs: 100 })) === "done" && early.bestMs === 25100 && early.laps.length === 1);
+  check("ended early without a lap: no time (the back of the grid)", new QualifyingSession(300).end() === "done");
 
   const order = qualifyingOrder([
     { id: "a", lapMs: 25300 },
