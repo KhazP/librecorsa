@@ -1,7 +1,9 @@
 import * as THREE from "three";
+import type { MeshPhysicalNodeMaterial, Node, UniformNode } from "three/webgpu";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 import { toPhysical } from "./to-physical";
 import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * PBR upgrades for the LC26 GLB materials (see lc26-car-model.ts; the GLB itself is not edited).
@@ -94,12 +96,34 @@ const liveryUniforms = {
   lc26Secondary: { value: new THREE.Color("#0f172a") },
   lc26Accent: { value: new THREE.Color("#fad201") },
 };
+let tslLiveryUniforms: {
+  tslLiveryPrimary: UniformNode<"vec3", THREE.Vector3>;
+  tslLiverySecondary: UniformNode<"vec3", THREE.Vector3>;
+  tslLiveryAccent: UniformNode<"vec3", THREE.Vector3>;
+} | null = null;
+
+function getTslLiveryUniforms() {
+  if (!tslLiveryUniforms) {
+    const { tsl: { uniform } } = getWebGPUBundle();
+    tslLiveryUniforms = {
+      tslLiveryPrimary: uniform(new THREE.Vector3(liveryUniforms.lc26Primary.value.r, liveryUniforms.lc26Primary.value.g, liveryUniforms.lc26Primary.value.b)),
+      tslLiverySecondary: uniform(new THREE.Vector3(liveryUniforms.lc26Secondary.value.r, liveryUniforms.lc26Secondary.value.g, liveryUniforms.lc26Secondary.value.b)),
+      tslLiveryAccent: uniform(new THREE.Vector3(liveryUniforms.lc26Accent.value.r, liveryUniforms.lc26Accent.value.g, liveryUniforms.lc26Accent.value.b)),
+    };
+  }
+  return tslLiveryUniforms;
+}
 
 /** Sets the colours the livery mask mixes (CSS colour strings, sRGB). No shader recompile. */
 export function setLc26LiveryColours(primary: string, secondary: string, accent: string): void {
   liveryUniforms.lc26Primary.value.set(primary);
   liveryUniforms.lc26Secondary.value.set(secondary);
   liveryUniforms.lc26Accent.value.set(accent);
+  if (tslLiveryUniforms) {
+    tslLiveryUniforms.tslLiveryPrimary.value.set(liveryUniforms.lc26Primary.value.r, liveryUniforms.lc26Primary.value.g, liveryUniforms.lc26Primary.value.b);
+    tslLiveryUniforms.tslLiverySecondary.value.set(liveryUniforms.lc26Secondary.value.r, liveryUniforms.lc26Secondary.value.g, liveryUniforms.lc26Secondary.value.b);
+    tslLiveryUniforms.tslLiveryAccent.value.set(liveryUniforms.lc26Accent.value.r, liveryUniforms.lc26Accent.value.g, liveryUniforms.lc26Accent.value.b);
+  }
 }
 
 function targetFor(name: string): PaintTarget | null {
@@ -107,6 +131,150 @@ function targetFor(name: string): PaintTarget | null {
   if (name === "EXT_DECALS") return "decal";
   if (CARBON_MATERIALS.has(name)) return "carbon";
   return null;
+}
+
+function tslTwill(p: Node<"vec2">) {
+  const { tsl: { floor, fract, mix, mod, sin, step } } = getWebGPUBundle();
+  const c = floor(p);
+  const f = fract(p);
+  const warpOver = step(mod(c.x.add(c.y), 4.0), 1.5);
+  const prof = mix(sin(f.x.mul(Math.PI)), sin(f.y.mul(Math.PI)), warpOver);
+  return { prof, warpOver };
+}
+
+function upgradeOneWebGpu(src: THREE.MeshStandardMaterial, target: PaintTarget, liveryMask: boolean): MeshPhysicalNodeMaterial {
+  const {
+    webgpu: { MeshPhysicalNodeMaterial },
+    tsl: {
+      Fn,
+      If,
+      abs,
+      clamp,
+      cross,
+      dFdx,
+      dFdy,
+      dot,
+      faceDirection,
+      float,
+      fwidth,
+      length,
+      max,
+      mix,
+      normalLocal,
+      normalView,
+      normalize,
+      positionLocal,
+      positionView,
+      pow,
+      sign,
+      smoothstep,
+      texture,
+      uniform,
+      uv,
+      vec2,
+      vec3,
+    },
+  } = getWebGPUBundle();
+  const { tslLiveryPrimary, tslLiverySecondary, tslLiveryAccent } = getTslLiveryUniforms();
+  const out = new MeshPhysicalNodeMaterial();
+  out.name = src.name;
+  out.color.copy(src.color);
+  out.map = src.map;
+  out.normalMap = src.normalMap;
+  out.normalScale.copy(src.normalScale);
+  out.aoMap = src.aoMap;
+  out.aoMapIntensity = src.aoMapIntensity;
+  out.emissive.copy(src.emissive);
+  out.emissiveMap = src.emissiveMap;
+  out.emissiveIntensity = src.emissiveIntensity;
+  out.transparent = src.transparent;
+  out.opacity = src.opacity;
+  out.alphaTest = src.alphaTest;
+  out.side = src.side;
+  out.depthWrite = src.depthWrite;
+  out.userData = { ...src.userData };
+
+  switch (target) {
+    case "skin": {
+      out.roughness = SATIN_PAINT.roughness;
+      out.metalness = SATIN_PAINT.metalness;
+      out.specularIntensity = PAINT_REFLECTION;
+      out.clearcoat = PAINT_COAT;
+      out.clearcoatRoughness = PAINT_COAT_ROUGHNESS;
+      if (liveryMask && out.map) {
+        out.map = out.map.clone();
+        out.map.colorSpace = THREE.NoColorSpace;
+        out.map.needsUpdate = true;
+        const baseCol = uniform(new THREE.Vector3(out.color.r, out.color.g, out.color.b));
+        const maskMap = out.map;
+        out.colorNode = Fn(() => {
+          const m = texture(maskMap, uv()).rgb;
+          const sum = max(m.r.add(m.g).add(m.b), 1e-3);
+          const w = m.div(sum);
+          const mixed = tslLiveryPrimary.mul(w.r).add(tslLiverySecondary.mul(w.g)).add(tslLiveryAccent.mul(w.b));
+          return baseCol.mul(mixed);
+        })();
+      }
+      break;
+    }
+    case "decal": {
+      out.roughness = SATIN_PAINT.roughness;
+      out.metalness = SATIN_PAINT.metalness;
+      out.specularIntensity = PAINT_REFLECTION;
+      out.clearcoat = PAINT_COAT;
+      out.clearcoatRoughness = PAINT_COAT_ROUGHNESS;
+      break;
+    }
+    case "carbon": {
+      const c = src.color;
+      out.color.setRGB(
+        Math.max(c.r, CARBON_BASE_FLOOR),
+        Math.max(c.g, CARBON_BASE_FLOOR),
+        Math.max(c.b, CARBON_BASE_FLOOR)
+      );
+      out.roughness = 0.32;
+      out.metalness = 0.1;
+      out.clearcoat = 0.2;
+      out.clearcoatRoughness = 0.2;
+
+      const invPitch = 1 / CARBON_TOW_PITCH;
+      const nrm = normalize(normalLocal);
+      const wPow = pow(abs(nrm), vec3(4.0));
+      const w = wPow.div(wPow.x.add(wPow.y).add(wPow.z));
+      const hx = tslTwill(vec2(positionLocal.z, positionLocal.y).mul(invPitch));
+      const hy = tslTwill(vec2(positionLocal.x, positionLocal.z).mul(invPitch));
+      const hz = tslTwill(vec2(positionLocal.x, positionLocal.y).mul(invPitch));
+      const height = dot(w, vec3(hx.prof, hy.prof, hz.prof));
+      const tow = dot(w, vec3(hx.warpOver, hy.warpOver, hz.warpOver));
+      const dP = fwidth(positionLocal);
+      const towPerPx = max(dP.x, max(dP.y, dP.z)).mul(invPitch);
+      const fade = float(1.0)
+        .sub(smoothstep(0.15, 0.3, towPerPx))
+        .mul(float(1.0).sub(smoothstep(8.0, 25.0, length(positionView))));
+      const towSign = tow.mul(2.0).sub(1.0);
+      const baseCol = uniform(new THREE.Vector3(out.color.r, out.color.g, out.color.b));
+      out.colorNode = baseCol.mul(float(1.0).add(towSign.mul(0.2).mul(fade)));
+      out.roughnessNode = float(0.32).add(towSign.mul(0.06).mul(fade));
+      const reliefM = height.mul(CARBON_RELIEF_M).mul(fade);
+      out.normalNode = Fn(() => {
+        const surfNorm = normalView.toVar();
+        const eyePos = positionView.negate();
+        const dPdx = dFdx(eyePos);
+        const dPdy = dFdy(eyePos);
+        const r1 = cross(dPdy, surfNorm);
+        const r2 = cross(surfNorm, dPdx);
+        const det = dot(dPdx, r1).mul(faceDirection);
+        const grad = sign(det).mul(r1.mul(dFdx(reliefM)).add(r2.mul(dFdy(reliefM))));
+        const bumped = surfNorm.mul(abs(det)).sub(grad);
+        If(dot(bumped, bumped).greaterThan(0.0), () => {
+          surfNorm.assign(normalize(bumped));
+        });
+        return surfNorm;
+      })();
+      break;
+    }
+  }
+  return out;
 }
 
 function upgradeOne(m: THREE.Material, liveryMask: boolean): THREE.Material {
@@ -124,6 +292,13 @@ function upgradeOne(m: THREE.Material, liveryMask: boolean): THREE.Material {
   const target = targetFor(m.name);
   if (!target) return m;
   if (!(m as THREE.MeshStandardMaterial).isMeshStandardMaterial) return m;
+
+  if (isWebGPUMode()) {
+    const out = upgradeOneWebGpu(m as THREE.MeshStandardMaterial, target, liveryMask);
+    upgradedMaterials.add(out);
+    conversions.set(m, out);
+    return out;
+  }
 
   const out = toPhysical(m as THREE.MeshStandardMaterial);
   configure(out, target, m as THREE.MeshStandardMaterial, liveryMask);

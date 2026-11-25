@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * `?perf=1`: a second-by-second report of the first 30 s on track, for stalls that only show on some browsers (the
@@ -37,7 +38,7 @@ export class StartupMonitor {
   private prev = { programs: 0, textures: 0, geometries: 0 };
   private done = false;
 
-  constructor(private readonly renderer: THREE.WebGLRenderer) {}
+  constructor(private readonly renderer: AnyRenderer) {}
 
   /** Whether the page asked for the report (`?perf=1`) */
   static requested(): boolean {
@@ -104,7 +105,7 @@ export class StartupMonitor {
   }
 
   private counts() {
-    const info = this.renderer.info;
+    const info = this.renderer.info as { programs?: unknown[]; memory: { textures: number; geometries: number } };
     return { programs: info.programs?.length ?? 0, textures: info.memory.textures, geometries: info.memory.geometries };
   }
 
@@ -126,12 +127,18 @@ export class StartupMonitor {
       newTextures: b.textures,
       newGeometries: b.geometries,
     }));
-    const gl = this.renderer.getContext();
-    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    let gpu = "WebGPU";
+    let parallelShaderCompile = true;
+    if (!isWebGPURenderer(this.renderer)) {
+      const gl = this.renderer.getContext();
+      const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+      gpu = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      parallelShaderCompile = !!gl.getExtension("KHR_parallel_shader_compile");
+    }
     const report = {
       userAgent: navigator.userAgent,
-      gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
-      parallelShaderCompile: !!gl.getExtension("KHR_parallel_shader_compile"),
+      gpu,
+      parallelShaderCompile,
       rows,
     };
     (window as unknown as { __lcStartupReport: unknown }).__lcStartupReport = report;

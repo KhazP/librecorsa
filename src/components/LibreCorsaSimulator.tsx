@@ -78,6 +78,7 @@ import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnb
 import { signalBoardLap } from "@/components/hud/BoardWidget";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
+import { createSimRenderer } from "@/lib/render/webgpu-renderer";
 import { GpuLostNotice } from "@/components/menu/GpuLostNotice";
 import { NowPlayingToast } from "@/components/hud/NowPlayingToast";
 import { browserStore, lostRecently, probeRenderer, settleLoss } from "@/lib/render/gpu-health";
@@ -1577,32 +1578,44 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    let session: DriveSession;
-    try {
-      session = new DriveSession(container, {
-        car: carIdRef.current,
-        cycleCamera,
-        getTrackEnv,
-        handleToggleRacingLine,
-        setSettings,
-        setRaceKind,
-        onRunReset,
-        track,
-        trackId,
-        // The save itself, read here as well as below: the state still holds the prerendered defaults at this point
-        settings: loadPlayerSettings(),
-        nameplatesRef,
-      });
-    } catch (err) {
-      // No WebGL for this page (switched off, or refused after a GPU reset): say so rather than the error screen
-      if (!(err instanceof WebGLUnavailableError)) throw err;
-      console.warn("[gpu]", err.message);
-      setWebglRefused(true);
-      return;
-    }
-    setSession(session);
+    let cancelled = false;
+    let session: DriveSession | null = null;
+    (async () => {
+      try {
+        const created = await createSimRenderer({
+          reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
+        });
+        if (cancelled) {
+          created.renderer.dispose();
+          return;
+        }
+        session = new DriveSession(container, {
+          car: carIdRef.current,
+          cycleCamera,
+          getTrackEnv,
+          handleToggleRacingLine,
+          setSettings,
+          setRaceKind,
+          onRunReset,
+          track,
+          trackId,
+          // The save itself, read here as well as below: the state still holds the prerendered defaults at this point
+          settings: loadPlayerSettings(),
+          nameplatesRef,
+          precreatedRenderer: created,
+        });
+        setSession(session);
+      } catch (err) {
+        if (cancelled) return;
+        // No WebGL for this page (switched off, or refused after a GPU reset): say so rather than the error screen
+        if (!(err instanceof WebGLUnavailableError)) throw err;
+        console.warn("[gpu]", err.message);
+        setWebglRefused(true);
+      }
+    })();
     return () => {
-      session.dispose();
+      cancelled = true;
+      session?.dispose();
       setSession(null);
     };
   }, [track, getTrackEnv, handleToggleRacingLine, onRunReset]);

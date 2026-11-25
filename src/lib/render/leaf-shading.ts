@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import type { MeshPhysicalNodeMaterial } from "three/webgpu";
 import { patchShader } from "./shader-patch";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Leaf cards (Rwanda's instanced foliage, scenery-instances.ts, and the converted circuits' alpha-tested
@@ -16,10 +18,53 @@ import { patchShader } from "./shader-patch";
  *  - Leaves are matte. With the sun low ahead the crowns' upward normals sit at the grazing angle where the standard
  *    Fresnel term climbs to full white: the canopy glinted silver-grey. Their specular is cut to a fifth.
  */
-export function leafShading(mat: THREE.Material): void {
+const leafNodeCache = new WeakMap<THREE.Material, MeshPhysicalNodeMaterial>();
+
+export function leafShading(mat: THREE.Material): THREE.Material {
   const std = mat as THREE.MeshStandardMaterial;
-  if (!std.isMeshStandardMaterial || !std.map || !(std.alphaTest > 0) || std.userData.leafShading) return;
+  if (!std.isMeshStandardMaterial || !std.map || !(std.alphaTest > 0)) return mat;
+  const cached = leafNodeCache.get(mat);
+  if (cached) return cached;
+  if (std.userData.leafShading) return mat;
   std.userData.leafShading = true;
+  if (isWebGPUMode()) {
+    const {
+      webgpu: { MeshPhysicalNodeMaterial: NodeMat },
+      tsl: { Fn, dFdx, dFdy, dot, faceDirection, float, log2, max, normalView, texture, uv, vec2 },
+    } = getWebGPUBundle();
+    const out = new NodeMat();
+    out.name = std.name;
+    out.color.copy(std.color);
+    out.map = std.map;
+    out.normalMap = std.normalMap;
+    out.alphaTest = std.alphaTest;
+    out.transparent = std.transparent;
+    out.opacity = std.opacity;
+    out.depthWrite = std.depthWrite;
+    out.side = std.side;
+    out.roughness = Math.max(std.roughness, 0.96);
+    out.metalness = 0;
+    out.specularIntensity = 0.2;
+    out.envMapIntensity = 0.35;
+    out.vertexColors = std.vertexColors;
+    out.userData = { ...std.userData };
+    // Cancel DoubleSide faceDirection flip so crossed leaf cards keep their original normal.
+    out.normalNode = normalView.mul(faceDirection);
+    const leafMap = std.map;
+    const img = leafMap.image as { width?: number; height?: number } | undefined;
+    const texW = img?.width && img.width > 0 ? img.width : 512;
+    const texH = img?.height && img.height > 0 ? img.height : 512;
+    out.opacityNode = Fn(() => {
+      const texUv = uv();
+      const texel = texUv.mul(vec2(texW, texH));
+      const dx = dFdx(texel);
+      const dy = dFdy(texel);
+      const mip = max(0.0, log2(max(dot(dx, dx), dot(dy, dy))).mul(0.5));
+      return texture(leafMap, texUv).a.mul(std.opacity).mul(float(1.0).add(mip.mul(0.6)));
+    })();
+    leafNodeCache.set(mat, out);
+    return out;
+  }
   std.onBeforeCompile = (shader) => {
     shader.fragmentShader = patchShader(shader.fragmentShader, [
       [
@@ -46,4 +91,5 @@ export function leafShading(mat: THREE.Material): void {
   };
   std.customProgramCacheKey = () => "scenery-leaf-v3";
   std.needsUpdate = true;
+  return mat;
 }

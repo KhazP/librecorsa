@@ -1,11 +1,13 @@
 import * as THREE from "three";
+import type { UniformNode } from "three/webgpu";
+import { getWebGPUBundle, isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * Virtual rear-view mirror: a top-centre strip on screen showing the road behind, for the views where the car's own
  * wing mirrors are not in shot (TV pod, bumper / nose, shoulder, and the cockpit of cars without working mirrors).
  *
  * A rear-facing camera on the chassis (roof height, the car's own model hidden) renders into a 640x160 half-float
- * target (every second frame, or every frame at a low frame rate: `MirrorClock`). After the main post-processed frame, one screen quad draws that image into a rounded
+ * target every second frame. After the main post-processed frame, one screen quad draws that image into a rounded
  * rectangle through renderer.toneMapping (AgX) and the sRGB output transform, so it matches the main image. The quad
  * mirrors the image horizontally: a camera looking backwards has screen-right = the car's left, a mirror shows the
  * car's left on the left.
@@ -66,14 +68,17 @@ void main() {
 `;
 
 export class VirtualMirror {
-  private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderer: AnyRenderer;
   private readonly scene: THREE.Scene;
   private readonly rt: THREE.WebGLRenderTarget;
   private readonly cam: THREE.PerspectiveCamera;
   private readonly quadScene = new THREE.Scene();
   private readonly quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  private readonly material: THREE.ShaderMaterial;
-  private readonly quad: THREE.Mesh;
+  private readonly material: THREE.ShaderMaterial | null = null;
+  private readonly tslActive: UniformNode<"float", number> | null = null;
+  private readonly tslUvRect: UniformNode<"vec4", THREE.Vector4> | null = null;
+  private readonly tslSizePx: UniformNode<"vec2", THREE.Vector2> | null = null;
+  private readonly quad: THREE.Mesh | null = null;
   private active = false;
   private renderNext = false;
 
@@ -85,26 +90,43 @@ export class VirtualMirror {
   private readonly prevScissor = new THREE.Vector4();
   private readonly size = new THREE.Vector2();
 
-  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
+  constructor(renderer: AnyRenderer, scene: THREE.Scene) {
     this.renderer = renderer;
     this.scene = scene;
     this.rt = new THREE.WebGLRenderTarget(RT_W, RT_H, { type: THREE.HalfFloatType, samples: 0, depthBuffer: true });
     this.cam = new THREE.PerspectiveCamera(V_FOV_DEG, ASPECT, 0.3, 300);
-    this.material = new THREE.ShaderMaterial({
-      uniforms: {
-        map: { value: this.rt.texture },
-        sizePx: { value: new THREE.Vector2(1, 1) },
-        radiusPx: { value: 14 },
-      },
-      vertexShader: VERT,
-      fragmentShader: FRAG,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-    this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
-    this.quad.frustumCulled = false;
-    this.quadScene.add(this.quad);
+    if (isWebGPURenderer(renderer)) {
+      const { tsl: { uniform } } = getWebGPUBundle();
+      this.tslActive = uniform(0);
+      this.tslUvRect = uniform(new THREE.Vector4(0.37, 0.016, 0.26, 0.115));
+      this.tslSizePx = uniform(new THREE.Vector2(333, 83));
+    } else {
+      this.material = new THREE.ShaderMaterial({
+        uniforms: {
+          map: { value: this.rt.texture },
+          sizePx: { value: new THREE.Vector2(1, 1) },
+          radiusPx: { value: 14 },
+        },
+        vertexShader: VERT,
+        fragmentShader: FRAG,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
+      this.quad.frustumCulled = false;
+      this.quadScene.add(this.quad);
+    }
+  }
+
+  getOverlayArgs(): [
+    THREE.Texture,
+    UniformNode<"float", number>,
+    UniformNode<"vec4", THREE.Vector4>,
+    UniformNode<"vec2", THREE.Vector2>
+  ] | null {
+    if (!this.tslActive || !this.tslUvRect || !this.tslSizePx) return null;
+    return [this.rt.texture, this.tslActive, this.tslUvRect, this.tslSizePx];
   }
 
   get shown(): boolean {
@@ -112,13 +134,30 @@ export class VirtualMirror {
   }
 
   /**
-   * Before the main render: refresh the rear view when the mirror is on and `refresh` says this frame does
-   * (`MirrorClock`). `hide` is the player's car, kept out of its own mirror.
+   * Before the main render: refresh the rear view (every second frame) when the mirror is on. `hide` is the player's
+   * car, kept out of its own mirror.
    */
   update(refresh: boolean, enabled: boolean, chassis: THREE.Object3D, hide: THREE.Object3D): void {
     if (enabled !== this.active) {
       this.active = enabled;
       this.renderNext = enabled;
+    }
+    const r = this.renderer;
+    if (isWebGPURenderer(r) && this.tslActive && this.tslUvRect && this.tslSizePx) {
+      this.tslActive.value = enabled ? 1 : 0;
+      if (enabled) {
+        r.getSize(this.size);
+        if (this.size.x > 0 && this.size.y > 0) {
+          const rect = virtualMirrorRect(this.size.x, this.size.y);
+          this.tslUvRect.value.set(
+            rect.x / this.size.x,
+            rect.y / this.size.y,
+            rect.w / this.size.x,
+            rect.h / this.size.y
+          );
+          this.tslSizePx.value.set(rect.w, rect.h);
+        }
+      }
     }
     if (!enabled) return;
     if (!this.renderNext && !refresh) return;
@@ -131,27 +170,30 @@ export class VirtualMirror {
     this.cam.quaternion.copy(this.quat).multiply(this.pitch);
     this.cam.updateMatrixWorld(true);
 
-    const r = this.renderer;
     const prevTarget = r.getRenderTarget();
-    const prevAutoUpdate = r.shadowMap.autoUpdate;
+    const prevAutoClear = r.autoClear;
+    const shadowMap = r.shadowMap as { enabled: boolean; autoUpdate?: boolean };
+    const prevAutoUpdate = shadowMap.autoUpdate;
     const visible = hide.visible;
     hide.visible = false;
-    r.shadowMap.autoUpdate = false;
+    if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = false;
     // Restored even if the render throws, or the player's car would stay hidden
     try {
       r.setRenderTarget(this.rt);
-      r.clear();
+      r.autoClear = true;
+      if (!isWebGPURenderer(r)) r.clear();
       r.render(this.scene, this.cam);
     } finally {
-      r.setRenderTarget(prevTarget);
-      r.shadowMap.autoUpdate = prevAutoUpdate;
+      r.setRenderTarget(prevTarget as THREE.WebGLRenderTarget | null);
+      r.autoClear = prevAutoClear;
+      if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = prevAutoUpdate;
       hide.visible = visible;
     }
   }
 
   /** After the main render: draw the mirror over the frame (default framebuffer) */
   draw(): void {
-    if (!this.active) return;
+    if (!this.active || !this.material || isWebGPURenderer(this.renderer)) return;
     const r = this.renderer;
     r.getSize(this.size);
     const rect = virtualMirrorRect(this.size.x, this.size.y);
@@ -173,13 +215,13 @@ export class VirtualMirror {
     r.setScissor(this.prevScissor);
     r.setViewport(this.prevViewport);
     r.autoClear = prevAutoClear;
-    r.setRenderTarget(prevTarget);
+    r.setRenderTarget(prevTarget as THREE.WebGLRenderTarget | null);
   }
 
   dispose(): void {
     this.rt.dispose();
-    this.material.dispose();
-    this.quad.geometry.dispose();
+    this.material?.dispose();
+    this.quad?.geometry.dispose();
     this.active = false;
   }
 }

@@ -11,6 +11,8 @@
 
 import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
+import type { UniformNode } from 'three/webgpu';
+import { getWebGPUBundle, isWebGPUMode } from '@/lib/render/webgpu-renderer';
 import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-builder-2026';
 import { anyCarForVehicle, carForVehicle, portedSkinFor } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
@@ -131,7 +133,9 @@ export class SimVisualFxManager {
 
   // Instanced smoke / gravel particle state
   private particleMesh: THREE.InstancedMesh;
-  private particleMat: THREE.ShaderMaterial;
+  private particleMat: THREE.Material;
+  private particleLightUniform: UniformNode<'float', number> | null = null;
+  private glParticleUniforms: { uLight: { value: number } } | null = null;
   private puffAttr: THREE.InstancedBufferAttribute;
   private particles: ParticleInstance[] = [];
   private particleCursor = 0;
@@ -278,14 +282,35 @@ export class SimVisualFxManager {
     this.puffAttr = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PARTICLES * 2), 2);
     this.puffAttr.setUsage(THREE.DynamicDrawUsage);
     puffGeom.setAttribute('aPuff', this.puffAttr);
-    this.particleMat = new THREE.ShaderMaterial({
-      vertexShader: PUFF_VERT,
-      fragmentShader: PUFF_FRAG,
-      uniforms: { uLight: { value: 1 } },
-      transparent: true,
-      depthWrite: false,
-      fog: false,
-    });
+    if (isWebGPUMode()) {
+      const {
+        webgpu: { MeshBasicNodeMaterial },
+        tsl: { attribute, float, length, smoothstep, uniform, uv },
+      } = getWebGPUBundle();
+      this.particleLightUniform = uniform(1);
+      const aPuff = attribute('aPuff', 'vec2');
+      const r = length(uv().sub(0.5)).mul(2.0);
+      const body = float(1.0).sub(smoothstep(0.15, 1.0, r));
+      const nodeMat = new MeshBasicNodeMaterial({
+        transparent: true,
+        depthWrite: false,
+        fog: false,
+      });
+      nodeMat.colorNode = this.particleLightUniform;
+      nodeMat.opacityNode = body.mul(body).mul(aPuff.x).mul(0.85);
+      this.particleMat = nodeMat;
+    } else {
+      const glMat = new THREE.ShaderMaterial({
+        vertexShader: PUFF_VERT,
+        fragmentShader: PUFF_FRAG,
+        uniforms: { uLight: { value: 1 } },
+        transparent: true,
+        depthWrite: false,
+        fog: false,
+      });
+      this.glParticleUniforms = glMat.uniforms as { uLight: { value: number } };
+      this.particleMat = glMat;
+    }
     this.particleMesh = new THREE.InstancedMesh(puffGeom, this.particleMat, MAX_PARTICLES);
     this.particleMesh.frustumCulled = false;
     this.particleMesh.renderOrder = 2;
@@ -316,7 +341,9 @@ export class SimVisualFxManager {
 
   /** Daylight on the puffs (0..1, the sky brightness): smoke and spray do not glow at dusk or under rain clouds */
   public setLightLevel(level: number): void {
-    this.particleMat.uniforms.uLight.value = THREE.MathUtils.clamp(0.3 + 0.7 * level, 0.25, 1);
+    const nextLight = THREE.MathUtils.clamp(0.3 + 0.7 * level, 0.25, 1);
+    if (this.particleLightUniform) this.particleLightUniform.value = nextLight;
+    if (this.glParticleUniforms) this.glParticleUniforms.uLight.value = nextLight;
   }
 
   /** Wetness of the road under the player's car (weather.ts): spray behind the rear wheels, no smoke */

@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import type { MeshPhysicalNodeMaterial } from "three/webgpu";
 import { patchShader } from "./shader-patch";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Close-range detail on the converted circuits' ground (scripts/tracks/port_ac_track.py). The mods paint their ground
@@ -28,15 +30,50 @@ function isGroundDetail(value: unknown): value is GroundDetailExtras {
   return !!v && typeof v.tileM === "number" && v.tileM > 0 && Array.isArray(v.mean) && v.mean.length === 3;
 }
 
-export function applyGroundDetail(mat: THREE.Material): void {
+const groundNodeCache = new WeakMap<THREE.Material, MeshPhysicalNodeMaterial>();
+
+export function applyGroundDetail(mat: THREE.Material): THREE.Material {
+  const cached = groundNodeCache.get(mat);
+  if (cached) return cached;
   const std = mat as THREE.MeshStandardMaterial;
   const extras = std.userData?.groundDetail;
-  if (!std.isMeshStandardMaterial || !isGroundDetail(extras) || !std.emissiveMap || std.userData.groundDetailApplied) return;
+  if (!std.isMeshStandardMaterial || !isGroundDetail(extras) || !std.emissiveMap || std.userData.groundDetailApplied) return mat;
   std.userData.groundDetailApplied = true;
   const detail = std.emissiveMap;
   std.emissiveMap = null;
   detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
   detail.anisotropy = 8;
+  if (isWebGPUMode()) {
+    const {
+      webgpu: { MeshPhysicalNodeMaterial: NodeMat },
+      tsl: { Fn, If, clamp, float, length, mix, positionView, positionWorld, smoothstep, texture, uniform, uv, vec3 },
+    } = getWebGPUBundle();
+    const out = new NodeMat();
+    out.name = std.name;
+    out.color.copy(std.color);
+    out.map = std.map;
+    out.roughness = std.roughness;
+    out.metalness = std.metalness;
+    out.specularIntensity = 0.25;
+    out.side = std.side;
+    out.userData = { ...std.userData };
+    const baseCol = uniform(new THREE.Vector3(std.color.r, std.color.g, std.color.b));
+    const meanVec = uniform(new THREE.Vector3(...extras.mean.map((c) => Math.max(c, 0.02))));
+    const tileM = extras.tileM;
+    out.colorNode = Fn(() => {
+      const col = (std.map ? texture(std.map, uv()).rgb.mul(baseCol) : baseCol).toVar();
+      const gdFade = float(1.0).sub(smoothstep(FADE_NEAR_M, FADE_FAR_M, length(positionView)));
+      If(gdFade.greaterThan(0.0), () => {
+        const gdNear = texture(detail, positionWorld.xz.div(tileM)).rgb;
+        const gdFar = texture(detail, positionWorld.xz.div(tileM * 5.37).add(0.31)).rgb;
+        const gd = clamp(gdNear.mul(0.65).add(gdFar.mul(0.35)).div(meanVec), 0.0, 2.5);
+        col.mulAssign(mix(vec3(1.0), gd, gdFade.mul(STRENGTH)));
+      });
+      return col;
+    })();
+    groundNodeCache.set(mat, out);
+    return out;
+  }
   const uniforms = {
     groundDetailMap: { value: detail },
     groundDetailTile: { value: extras.tileM },
@@ -77,4 +114,5 @@ export function applyGroundDetail(mat: THREE.Material): void {
   };
   std.customProgramCacheKey = () => "ground-detail-v2";
   std.needsUpdate = true;
+  return mat;
 }

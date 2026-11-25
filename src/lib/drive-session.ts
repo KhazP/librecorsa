@@ -2,6 +2,7 @@ import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
 import { text as tx } from "@/lib/text";
 import { perLanguage } from "@/lib/per-language";
+import { createWebGLRendererSync, isWebGPURenderer, type AnyRenderer, type CreatedSimRenderer } from "@/lib/render/webgpu-renderer";
 import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
@@ -479,6 +480,8 @@ export interface DriveSessionHost {
   settings: PlayerSettings;
   /** Optional ref to the DOM-pooled overhead nameplate overlay, updated directly in the render loop */
   nameplatesRef?: { readonly current: OverheadNameplatesSink | null };
+  /** Pre-initialized renderer from `createSimRenderer()` (WebGPU awaits `init()` before session construction) */
+  precreatedRenderer?: CreatedSimRenderer;
 }
 
 /**
@@ -1316,24 +1319,26 @@ export class DriveSession {
     const nameplateBadges = new NameplateBadgeCache();
     let latestRemotePeers: readonly InterpolatedPeerState[] = [];
 
-    let renderer: THREE.WebGLRenderer;
+    let renderer: AnyRenderer;
+    let rendererBackend: "webgpu" | "webgl2" = "webgl2";
+    let gpuName: string | null = null;
+    let onWebGPUDeviceLost: ((cb: () => void) => void) | undefined;
     try {
-      renderer = new THREE.WebGLRenderer({
-        // MSAA happens in the post-processing composer's half-float target instead
-        antialias: false,
-        stencil: false,
-        powerPreference: "high-performance",
-        // Float precision across the 0.12 m .. 5.5 km depth range (kerbs, lines and decals stop z-fighting at
-        // distance). three falls back to the standard buffer without EXT_clip_control; ?depth=standard forces it.
-        reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
-      });
+      const created =
+        host.precreatedRenderer ??
+        createWebGLRendererSync({
+          reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
+        });
+      renderer = created.renderer;
+      rendererBackend = created.backend;
+      gpuName = created.gpuName;
+      onWebGPUDeviceLost = created.onDeviceLost;
     } catch (reason) {
       // No WebGL (switched off, or refused after a GPU reset): the worker started above goes with the session
       simHost?.dispose();
       throw new WebGLUnavailableError(reason);
     }
     // The GPU for the bug form, read now: after a context loss the browser may refuse to tell
-    const gpuName = rendererName(renderer.getContext());
     noteRenderer(gpuName);
     /**
      * A gentle start on a CPU rasteriser, an older Intel HD / UHD chip, or within two weeks of a context loss: no
@@ -1341,7 +1346,7 @@ export class DriveSession {
      */
     const gpuClass = classifyRenderer(gpuName);
     const { gentle } = safeStartPlan(readLossMemory(browserStore(), Date.now()), gpuClass);
-    console.info(`[gpu] ${gpuName ?? "renderer not named"} (${gpuClass})${gentle ? ": gentle start" : ""}`);
+    console.info(`[gpu] [${rendererBackend}] ${gpuName ?? "renderer not named"} (${gpuClass})${gentle ? ": gentle start" : ""}`);
     /**
      * The context is gone: the frame loop keeps the network and the menus going but draws nothing and moves nothing,
      * and the component offers to load the circuit again on a new context. The old one is never reused: the sky's
@@ -1369,6 +1374,16 @@ export class DriveSession {
     };
     renderer.domElement.addEventListener("webglcontextlost", onContextLost);
     renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
+    onWebGPUDeviceLost?.(() => {
+      if (disposed || gpuLost) return;
+      gpuLost = true;
+      const hidden = document.visibilityState === "hidden" || performance.now() - shownAtMs < BACKGROUND_LOSS_GRACE_MS;
+      recordContextLoss(browserStore(), Date.now(), hidden);
+      console.warn(`[gpu] WebGPU device lost (${appPhaseNow}${hidden ? ", page hidden" : ""}): the drive is paused`);
+      releaseHeldKeys();
+      this.silenceFeedback();
+      this.publish({ gpuLost: { hidden, phase: appPhaseNow } });
+    });
     // AgX exposure, pixel ratio clamp and shadow type; set before the composer is created
     configureRenderer(renderer);
     // The GPU formats the circuit's KTX2 textures transcode to (render/ktx2.ts)
@@ -1445,6 +1460,8 @@ export class DriveSession {
     reflectionProbe.setSky(env.probeSky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
+    const overlayArgs = virtualMirror.getOverlayArgs();
+    if (overlayArgs) postFx.setVirtualMirrorOverlay?.(...overlayArgs);
     let virtualMirrorShown = false;
 
     const builtCircuit = buildCircuitScene(track);
@@ -2826,6 +2843,9 @@ export class DriveSession {
       });
     };
     function compileForComposer(): Promise<THREE.Object3D> {
+      if (isWebGPURenderer(renderer) || !postFx.composer) {
+        return renderer.compileAsync(scene, camera) as unknown as Promise<THREE.Object3D>;
+      }
       const prevTarget = renderer.getRenderTarget();
       renderer.setRenderTarget(postFx.composer.inputBuffer);
       try {
@@ -2844,6 +2864,15 @@ export class DriveSession {
      * shows. It stops where it is once the session goes, the context is lost or the loading screen was let go anyway.
      */
     const warmUpGpu = async (): Promise<void> => {
+      if (isWebGPURenderer(renderer)) {
+        try {
+          await renderer.compileAsync(scene, camera);
+          postFx.render(0);
+        } catch {
+          // ignore compile errors during warmup
+        }
+        return;
+      }
       const t0 = performance.now();
       const gl = renderer.getContext();
       const stop = () => disposed || gpuLost || warmupSettled;
@@ -2907,7 +2936,7 @@ export class DriveSession {
             for (const o of hidden) o.visible = false;
             const prevTarget = renderer.getRenderTarget();
             try {
-              renderer.setRenderTarget(postFx.composer.inputBuffer);
+              if (postFx.composer) renderer.setRenderTarget(postFx.composer.inputBuffer);
               renderer.render(scene, camera);
             } finally {
               renderer.setRenderTarget(prevTarget);
@@ -4459,7 +4488,7 @@ export class DriveSession {
             loggedFirstFrame = true;
             if (process.env.NODE_ENV !== "production") {
               // The frame right after the loading screen: it stalls when the warm-up missed something
-              renderer.getContext().finish();
+              if (!isWebGPURenderer(renderer)) renderer.getContext().finish();
               console.info(`[load] first visible frame: ${(performance.now() - t0).toFixed(0)} ms`);
             }
           }
@@ -4587,8 +4616,10 @@ export class DriveSession {
       disposed = true;
       // A context the browser gave back after a loss holds none of this session's GPU objects: let go of it first, and
       // the disposals below are no-ops instead of a WebGL warning each
-      const gl = renderer.getContext();
-      if (gpuLost && !gl.isContextLost()) gl.getExtension("WEBGL_lose_context")?.loseContext();
+      if (!isWebGPURenderer(renderer)) {
+        const gl = renderer.getContext();
+        if (gpuLost && !gl.isContextLost()) gl.getExtension("WEBGL_lose_context")?.loseContext();
+      }
       unsubscribeAssets();
       window.clearInterval(assetWatchdog);
       renderer.setAnimationLoop(null);

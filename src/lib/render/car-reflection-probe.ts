@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { isTouchDevice } from "@/lib/input/touch-input";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * Live reflections for the cars: a cube camera that rides above the player's car and films the world around it (track,
@@ -40,9 +41,9 @@ export class CarReflectionProbe {
   readonly isMobile: boolean;
   readonly faceSize: number;
   readonly farDistanceM: number;
-  private readonly cubeTarget: THREE.WebGLCubeRenderTarget;
-  private readonly cubeCamera: THREE.CubeCamera;
-  private readonly pmrem: THREE.PMREMGenerator;
+  private readonly cubeTarget: THREE.WebGLCubeRenderTarget | null;
+  private readonly cubeCamera: THREE.CubeCamera | null;
+  private readonly pmrem: THREE.PMREMGenerator | null;
   private envTarget: THREE.WebGLRenderTarget | null = null;
   private face = 0;
   private frame = 0;
@@ -56,13 +57,19 @@ export class CarReflectionProbe {
   private readonly skyPosScratch = new THREE.Vector3();
 
   constructor(
-    private readonly renderer: THREE.WebGLRenderer,
+    private readonly renderer: AnyRenderer,
     private readonly scene: THREE.Scene,
     options?: CarReflectionProbeOptions
   ) {
     this.isMobile = options?.mobile ?? isTouchDevice();
     this.faceSize = this.isMobile ? CUBE_SIZE_MOBILE : CUBE_SIZE;
     this.farDistanceM = this.isMobile ? PROBE_FAR_MOBILE_M : PROBE_FAR_M;
+    if (isWebGPURenderer(renderer)) {
+      this.cubeTarget = null;
+      this.cubeCamera = null;
+      this.pmrem = null;
+      return;
+    }
     this.cubeTarget = new THREE.WebGLCubeRenderTarget(this.faceSize, { type: THREE.HalfFloatType, generateMipmaps: false });
     // Both classic Sky and PhysicalSky pin their vertices to the far plane (frustumCulled = false), so clipping
     // at 300-350 m drops distant trackside clutter and far opponents while the full sky dome still films cleanly.
@@ -111,6 +118,7 @@ export class CarReflectionProbe {
     this.frame++;
     const stride = this.isMobile ? (this.quality === "medium" ? 4 : 2) : this.quality === "medium" ? 3 : 1;
     if (this.primed && this.frame % stride !== 0) return;
+    if (isWebGPURenderer(this.renderer) || !this.cubeTarget || !this.cubeCamera || !this.pmrem) return;
     this.cubeCamera.position.set(carPos.x, carPos.y + PROBE_HEIGHT_M, carPos.z);
     this.cubeCamera.updateMatrixWorld();
 
@@ -188,6 +196,7 @@ export class CarReflectionProbe {
   }
 
   private filter(): void {
+    if (!this.pmrem || !this.cubeTarget) return;
     // Reuses the previous output target (the typings name it a cube target; PMREM takes and returns a 2D one)
     this.envTarget = this.pmrem.fromCubemap(
       this.cubeTarget.texture,
@@ -222,8 +231,8 @@ export class CarReflectionProbe {
   dispose(): void {
     this.applyTo(null);
     this.roots.clear();
-    this.cubeTarget.dispose();
+    this.cubeTarget?.dispose();
     this.envTarget?.dispose();
-    this.pmrem.dispose();
+    this.pmrem?.dispose();
   }
 }

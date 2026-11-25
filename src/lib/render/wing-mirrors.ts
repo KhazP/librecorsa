@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { planarUvGeometry } from "./planar-uv";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * Wing mirrors for the LC26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
  *
  * One rear-facing camera at the driver's eye point renders the scene behind the car into a 256x128 half-float
- * target while the cockpit view is active (every second frame, or every frame at a low frame rate: `MirrorClock`). Both mirror meshes show that image through a
+ * target every second frame while the cockpit view is active. Both mirror meshes show that image through a
  * planar projection in object space, so no per-vertex UVs from the GLB are used.
  *
  * Mapping (derived from the GLB, not guessed):
@@ -143,11 +144,11 @@ export class WingMirrors {
   readonly coversSides: boolean = false;
   private readonly eyeInModel: THREE.Vector3;
 
-  private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderer: AnyRenderer;
   private readonly scene: THREE.Scene;
   private readonly carModelRoot: THREE.Object3D;
   private readonly rt: THREE.WebGLRenderTarget | null = null;
-  private readonly cam: THREE.PerspectiveCamera;
+  private readonly cam: THREE.PerspectiveCamera | null = null;
   private readonly slots: MirrorSlot[] = [];
   /** Live glass laid over mirror patches of bigger meshes; shown only while the mirrors are live */
   private readonly overlays: THREE.Mesh[] = [];
@@ -163,7 +164,7 @@ export class WingMirrors {
   private readonly chassisScale = new THREE.Vector3();
 
   constructor(
-    renderer: THREE.WebGLRenderer,
+    renderer: AnyRenderer,
     scene: THREE.Scene,
     carModelRoot: THREE.Object3D,
     options: WingMirrorOptions = {}
@@ -225,8 +226,8 @@ export class WingMirrors {
   }
 
   /**
-   * Call once per drawn frame before the main render, with whether the mirrors render this frame (`MirrorClock`),
-   * whether the cockpit view is active, and the chassis group that carries the car's pitch/roll/heave. Renders only
+   * Call once per frame before the main render, with the frame index, whether the cockpit view is active, and
+   * the chassis group that carries the car's pitch/roll/heave. Renders at most every second frame, and only
    * when enabled; when disabled the mirrors go back to their dark glass material.
    */
   update(refresh: boolean, enabled: boolean, chassis: THREE.Object3D): void {
@@ -266,8 +267,8 @@ export class WingMirrors {
 
   private renderRearView(chassis: THREE.Object3D): void {
     const rt = this.rt;
-    if (!rt) return;
     const r = this.renderer;
+    if (!rt || !this.cam) return;
 
     // Pose from the live chassis (its pitch/roll/heave already applied this frame)
     chassis.updateWorldMatrix(true, false);
@@ -279,21 +280,25 @@ export class WingMirrors {
     this.cam.updateMatrixWorld(true);
 
     const prevTarget = r.getRenderTarget();
-    const prevAutoUpdate = r.shadowMap.autoUpdate;
+    const prevAutoClear = r.autoClear;
+    const shadowMap = r.shadowMap as { enabled: boolean; autoUpdate?: boolean };
+    const prevAutoUpdate = shadowMap.autoUpdate;
     const carVisible = this.carModelRoot.visible;
 
     this.carModelRoot.visible = false;
-    r.shadowMap.autoUpdate = false;
+    if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = false;
     // Restored even if the render throws, or the player's car would stay hidden
     try {
       r.setRenderTarget(rt);
-      // The post-processing chain turns the renderer's autoClear off: without this the depth stays 0 and nothing draws
-      r.clear();
+      r.autoClear = true;
+      // The post-processing chain turns the renderer's autoClear off on WebGL2: without this the depth stays 0 and nothing draws
+      if (!isWebGPURenderer(r)) r.clear();
       r.render(this.scene, this.cam);
     } finally {
-      r.setRenderTarget(prevTarget);
+      r.setRenderTarget(prevTarget as THREE.WebGLRenderTarget | null);
+      r.autoClear = prevAutoClear;
       this.carModelRoot.visible = carVisible;
-      r.shadowMap.autoUpdate = prevAutoUpdate;
+      if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = prevAutoUpdate;
     }
   }
 
@@ -305,7 +310,7 @@ export class WingMirrors {
   private prewarm(): void {
     const r = this.renderer;
     const rt = this.rt;
-    if (!rt) return;
+    if (isWebGPURenderer(r) || !rt || !this.cam) return;
     const prevTarget = r.getRenderTarget();
     const carVisible = this.carModelRoot.visible;
     try {
