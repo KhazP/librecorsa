@@ -72,6 +72,9 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "librecorsa.mods.disabled": "device",
   // UI state
   "lc.mfdPage": "device",
+  // The page the Endurance and Racing line HUD layouts' paged boxes were left on
+  "lc.endurancePage": "device",
+  "lc.hud.racing-line.page": "device",
   "lc.seatHintCars": "device",
   "librecorsa.boardFilters": "device",
   // URL flags
