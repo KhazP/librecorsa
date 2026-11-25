@@ -143,7 +143,9 @@ export const CAR_WHEEL_LOCK_DEG = 360;
 export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   lc26: 360,
   "f12026-car": 360,
+  "jaguar-fe": 360,
   "amg-gt3": 640,
+  "bmw-m6-gt3": 640,
   liana: 1080,
   "mtr-496r": 480,
   // 225° each way [est]
