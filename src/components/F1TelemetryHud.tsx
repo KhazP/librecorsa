@@ -269,7 +269,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
     nextRace?: NextRaceProps;
   };
   /** The career's pre-race show: its scenes, its clock, Skip and Start */
-  preRaceShow?: { ui: PreRaceShowUi; timeS: () => number; onSkip: () => void; onStart: () => void };
+  preRaceShow?: { ui: PreRaceShowUi; timeS: () => number; onNext: () => void; onSkip: () => void; onStart: () => void };
   /** Instant replay in progress: only the transport bar shows */
   replay?: React.ComponentProps<typeof ReplayBar> | null;
   /** On-screen pedals and steering (touch screens) */
@@ -1063,6 +1063,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <PreRaceShow
         ui={props.preRaceShow.ui}
         timeS={props.preRaceShow.timeS}
+        onNext={props.preRaceShow.onNext}
         onSkip={props.preRaceShow.onSkip}
         onStart={props.preRaceShow.onStart}
         weather={props.weather}

@@ -1190,7 +1190,9 @@
   },
   "preRace": {
     "label": "Pre-race show",
+    "next": "Next",
     "skip": "Skip",
+    "skipHint": "Press twice to skip the show",
     "start": "Start",
     "keySpace": "Space",
     "keyEnter": "Enter",

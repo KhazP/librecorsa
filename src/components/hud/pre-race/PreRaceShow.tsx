@@ -14,7 +14,8 @@ import { anyCarById, CAR_CLASSES, type CarId } from "@/lib/cars/car-registry";
 import { carTitle, seriesName } from "@/components/career/career-ui";
 import { COMPOUNDS, type Compound } from "@/components/ui/badges/compounds";
 import { PlayerTag } from "@/components/ui/badges";
-import { KeyCap } from "@/components/ui/prompts";
+import { KeyCap, PadGlyph } from "@/components/ui/prompts";
+import { useInputMode } from "@/components/menu/input-mode";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { formatLapTime, formatSpeed, formatTemp, speedUnit } from "@/components/hud/hud-format";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
@@ -30,13 +31,18 @@ import { DriverSilhouette, InfoBar, SceneBug, TyreArt, type InfoBarItem } from "
 export const PreRaceShow: React.FC<{
   ui: PreRaceShowUi;
   timeS: () => number;
+  /** On a graphic (a press of Space or a pad button) */
+  onNext: () => void;
+  /** Straight to the start card (two presses) */
   onSkip: () => void;
   onStart: () => void;
   weather: WeatherHudState | null | undefined;
   compound: TireCompound;
   trackInfo: TrackInfo;
-}> = ({ ui, timeS, onSkip, onStart, weather, compound, trackInfo }) => {
+}> = ({ ui, timeS, onNext, onSkip, onStart, weather, compound, trackInfo }) => {
   const tx = useTranslations("hud.preRace");
+  const input = useInputMode();
+  const pad = input.mode === "pad" ? input.family : null;
   const timeline = ui.timeline;
   const scene = timeline && ui.sceneIndex >= 0 ? timeline.scenes[ui.sceneIndex] : null;
   const prevScene = timeline && ui.sceneIndex > 0 ? timeline.scenes[ui.sceneIndex - 1] : null;
@@ -80,13 +86,28 @@ export const PreRaceShow: React.FC<{
 
       {scene.id !== "ready" ? (
         <div className="absolute right-[max(1rem,env(safe-area-inset-right))] bottom-[max(0.85rem,env(safe-area-inset-bottom))] z-20 flex items-center gap-2 sm:right-10">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-lc-keyline bg-lc-void/85 px-3.5 text-[13px] font-semibold text-lc-fog backdrop-blur-sm transition-colors duration-200 ease-lc hover:border-lc-chalk/40 hover:text-lc-chalk sm:h-9"
-          >
+          {/* One press: the next graphic. Two quick presses skip the show to its start card, which the doubled key says */}
+          <button type="button" onClick={onNext} className={SHOW_BUTTON}>
+            {tx("next")}
+            <span className="hidden items-center gap-1 sm:inline-flex">
+              {pad ? <PadGlyph button="a" family={pad} /> : <KeyCap>{tx("keySpace")}</KeyCap>}
+            </span>
+          </button>
+          <button type="button" onClick={onSkip} title={tx("skipHint")} className={SHOW_BUTTON}>
             {tx("skip")}
-            <KeyCap className="hidden sm:inline-flex">{tx("keySpace")}</KeyCap>
+            <span className="hidden items-center gap-1 sm:inline-flex" aria-label={tx("skipHint")}>
+              {pad ? (
+                <>
+                  <PadGlyph button="a" family={pad} />
+                  <PadGlyph button="a" family={pad} />
+                </>
+              ) : (
+                <>
+                  <KeyCap>{tx("keySpace")}</KeyCap>
+                  <KeyCap>{tx("keySpace")}</KeyCap>
+                </>
+              )}
+            </span>
           </button>
           <button
             type="button"
@@ -94,9 +115,12 @@ export const PreRaceShow: React.FC<{
             className="inline-flex h-10 items-center gap-2 rounded-full bg-lc-volt px-3.5 text-[13px] font-bold text-lc-void shadow-lc-pop transition-colors duration-200 ease-lc hover:bg-lc-volt-hi sm:h-9"
           >
             {tx("start")}
-            <KeyCap tone="ink" className="hidden sm:inline-flex">
-              {tx("keyEnter")}
-            </KeyCap>
+            {/* A pad starts from the start card: Enter is the keyboard's way straight in */}
+            {pad ? null : (
+              <KeyCap tone="ink" className="hidden sm:inline-flex">
+                {tx("keyEnter")}
+              </KeyCap>
+            )}
           </button>
         </div>
       ) : null}
@@ -104,6 +128,10 @@ export const PreRaceShow: React.FC<{
     </div>
   );
 };
+
+/** The show's secondary buttons over the picture (Next, Skip) */
+const SHOW_BUTTON =
+  "inline-flex h-10 items-center gap-2 rounded-full border border-lc-keyline bg-lc-void/85 px-3.5 text-[13px] font-semibold text-lc-fog backdrop-blur-sm transition-colors duration-200 ease-lc hover:border-lc-chalk/40 hover:text-lc-chalk sm:h-9";
 
 /** High-speed F1-style multi-blade diagonal broadcast wipe (volt + chalk + void) */
 const SceneCut: React.FC<{ light: boolean }> = ({ light }) => (

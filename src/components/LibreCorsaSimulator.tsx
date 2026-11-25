@@ -2200,12 +2200,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // polish:B after the flag: the podium shot, the race kept in this browser, the next open race
   const podiumUi = useSyncExternalStore(session?.podium.subscribe ?? noSubscribe, session?.podium.getSnapshot ?? idlePodium, idlePodium);
-  // The career's pre-race show: its scenes as the drive plays them, and its two buttons
+  // The career's pre-race show: its scenes as the drive plays them, and its three buttons
   const showUi = useSyncExternalStore(session?.preRaceShow.subscribe ?? noSubscribe, session?.preRaceShow.getSnapshot ?? idleShow, idleShow);
   const preRaceShow = useMemo(
     () => ({
       ui: showUi,
       timeS: session?.preRaceShow.timeS ?? noShowTime,
+      onNext: () => session?.preRaceShow.next(),
       onSkip: () => session?.preRaceShow.skip(),
       onStart: () => session?.preRaceShow.startNow(),
     }),
