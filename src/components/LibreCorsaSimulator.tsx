@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl/react";
 import { t as tr } from "@/i18n/runtime";
-import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, resolveLivery } from "@/lib/track-data";
+import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, resolveLivery, TURN_METADATA } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
@@ -39,7 +39,7 @@ import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { currentBoardBase, lapBoardClass, lapConditionsNow, lapGoesOnBoards, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
-import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
+import { exportLapFile, importLapFile, listBestLaps, loadBestLap, loadLatestLap, saveBestLapIfFaster, saveLatestLap } from "@/lib/sim/ghost-store";
 import {
   boardKeyOf,
   boardStatusOf,
@@ -347,6 +347,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // ---- Laps, ghosts, leaderboards
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
+  // The lap board's Analysis view: this visit's laps (newest first), this car's best on the board being driven, and
+  // the last lap finished here (kept across visits)
+  const [sessionLaps, setSessionLaps] = useState<LapRecording[]>([]);
+  const [allTimeBestLap, setAllTimeBestLap] = useState<LapRecording | null>(null);
+  const [latestLap, setLatestLap] = useState<LapRecording | null>(null);
+  /** The lap card's Analyse button paused the drive: the pause menu opens on the lap board's Analysis view */
+  const [openLapAnalysis, setOpenLapAnalysis] = useState(false);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error" | "waiting">("idle");
   /** Place of the uploaded lap on its board, and how many drivers that board has */
   const [submitRank, setSubmitRank] = useState<ReturnType<typeof placeOf>>(null);
@@ -798,6 +805,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** Esc / pad Menu: open or close the pause menu, releasing every held key */
   const togglePause = useCallback(() => session?.togglePause(), [session]);
+  /** The lap card's Analyse button: pauses the drive on the lap board's Analysis view */
+  const analyseLap = useCallback(() => {
+    setOpenLapAnalysis(true);
+    if (!session?.getSnapshot().paused) session?.togglePause();
+  }, [session]);
+  // Back in the car, the pause menu opens on its first tab again
+  useEffect(() => {
+    if (!paused) setOpenLapAnalysis(false);
+  }, [paused]);
+  /** The circuit's corners, for the Analysis view's notes (TURN_METADATA is the active circuit's, as `track` is) */
+  const analysisTurns = useMemo(() => [...TURN_METADATA], [track]);
 
   const setRacingLineVisible = useCallback((visible: boolean) => setPreference("racingLine", visible), [setPreference]);
   const setGamepadAssistEnabled = useCallback((enabled: boolean) => setPreference("gamepadAssist", enabled), [setPreference]);
@@ -1068,7 +1086,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (req !== leaderboardReqRef.current) return;
     setLocalLaps(local);
     setBoardVersion((v) => v + 1);
-  }, [trackId]);
+    // The Analysis view's reference: the best the ghost races (this car, the board being driven). A mod car keeps none
+    if (carById(carIdRef.current).mod) setAllTimeBestLap(null);
+    else void loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).then(setAllTimeBestLap, () => setAllTimeBestLap(null));
+  }, [trackId, currentBoard]);
 
   /** Races the personal best of this car as the ghost, replacing whichever lap was chosen */
   const loadPbGhost = useCallback(async () => {
@@ -1090,8 +1111,31 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.lapRecorder.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
   }, [session, trackId, currentBoard, track]);
 
+  useEffect(() => {
+    // This visit's laps are compared with this car's on this circuit only
+    setSessionLaps([]);
+    let cancelled = false;
+    void loadLatestLap(trackId, vehicleModel)
+      .then((rec) => {
+        if (!cancelled) setLatestLap(rec);
+      })
+      .catch(() => {
+        if (!cancelled) setLatestLap(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackId, vehicleModel]);
+
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
+      // Any lap can be analysed, a cut one too; the reference best is the saved one (refreshLeaderboard, after a save)
+      if (recording.data.length > 0) {
+        setSessionLaps((prev) => [recording, ...prev].slice(0, 20));
+        setLatestLap(recording);
+        // A mod car's laps would be kept as its vehicle model's
+        if (!carById(carIdRef.current).mod) void saveLatestLap(recording);
+      }
       if (settingsRef.current.hud.lapSummary) {
         // A new card: an upload still out for the last one must not land on it
         submitReqRef.current++;
@@ -2285,6 +2329,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vehicleLabel,
       carTag: carBoardTag,
       local: localLaps,
+      analysis: { best: allTimeBestLap, latest: latestLap, session: sessionLaps, turns: analysisTurns, openOnAnalysis: openLapAnalysis },
       remoteEnabled: boardOn,
       remoteStatus: boardState === null ? ("unknown" as const) : boardState === "unreachable" ? ("unreachable" as const) : ("off" as const),
       boardVersion,
@@ -2429,6 +2474,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   summary: lapSummary.summary,
                   onClose: closeLapSummary,
                   onSaveGhost: () => exportLapFile(lapSummary.recording),
+                  onAnalyze: analyseLap,
                   // Laps post themselves: the button is there with that turned off, or to retry a failed upload (a board
                   // that hasn't answered yet is asked again by the press)
                   onSubmit:

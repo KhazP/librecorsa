@@ -5,7 +5,7 @@
  *
  * No three.js and no DOM: the Worker imports this file.
  */
-import { foldVehicleModelId, isVehicleModelId, type TireCompound, type VehicleModelId } from '../../types/f1';
+import { foldVehicleModelId, isVehicleModelId, type CustomLiveryColors, type TireCompound, type VehicleModelId } from '../../types/f1';
 import {
   sanitizeWeatherSync,
   TIME_OF_DAY_PRESETS,
@@ -36,6 +36,10 @@ export interface NetworkVehiclePacket {
   peerId: string;
   driverCode: string;
   teamColorHex: string;
+  /** Selected livery id (absent from older clients: falls back to driverCode) */
+  liveryId?: string | null;
+  /** Custom livery colours when liveryId === "custom" */
+  customLivery?: CustomLiveryColors;
   /** Car the sender drives (absent from older clients: rendered as the AMR) */
   vehicle?: VehicleModelId;
   /** Circuit the sender is on (absent from older clients) */
@@ -721,6 +725,25 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
     peerId: p.peerId,
     driverCode: asCode(p.driverCode),
     teamColorHex: asColor(p.teamColorHex),
+    ...(p.liveryId === null
+      ? { liveryId: null }
+      : typeof p.liveryId === 'string' && p.liveryId.length > 0
+        ? { liveryId: p.liveryId.slice(0, 32) }
+        : {}),
+    ...(typeof p.customLivery === 'object' &&
+    p.customLivery !== null &&
+    !Array.isArray(p.customLivery) &&
+    typeof (p.customLivery as Record<string, unknown>).primary === 'string' &&
+    typeof (p.customLivery as Record<string, unknown>).secondary === 'string' &&
+    typeof (p.customLivery as Record<string, unknown>).accent === 'string'
+      ? {
+          customLivery: {
+            primary: asColor((p.customLivery as Record<string, unknown>).primary),
+            secondary: asColor((p.customLivery as Record<string, unknown>).secondary),
+            accent: asColor((p.customLivery as Record<string, unknown>).accent),
+          },
+        }
+      : {}),
     vehicle: asPeerVehicle(p.vehicle),
     trackId: typeof p.trackId === 'string' ? p.trackId.slice(0, 64) : undefined,
     timestampMs,

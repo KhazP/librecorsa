@@ -17,7 +17,11 @@ import {
  * distance and a 90° forward sightline exclusion cone, and projects dynamic two-stage (yellow / orange) overlap
  * arcs that track the lateral gap and longitudinal bearing of cars alongside.
  */
-export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: number }> = ({ blips, size = 168 }) => {
+export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: number; forceVisible?: boolean }> = ({
+  blips,
+  size = 168,
+  forceVisible = false,
+}) => {
   const { blips: evaluated, leftCar, rightCar, opacity: maxOpacity } = evaluateRadar(blips ?? []);
   const tx = useTranslations("hud.proximityRadar");
   // The radar draws every frame; its spoken name changes only with the count and the sides
@@ -43,7 +47,7 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
   return (
     <div
       className="pointer-events-none transition-opacity duration-150 ease-out"
-      style={{ width: size, height: size, opacity: maxOpacity }}
+      style={{ width: size, height: size, opacity: forceVisible ? Math.max(0.9, maxOpacity) : maxOpacity }}
       aria-hidden={evaluated.length === 0}
       role="img"
       aria-label={label}

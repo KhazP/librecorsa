@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { LapTelemetryAnalysis, type LapTelemetryAnalysisProps } from "./LapTelemetryAnalysis";
 import { boardLabel } from "@/lib/net/leaderboard";
 import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
@@ -33,6 +34,11 @@ export interface LeaderboardPanelProps {
   carTag?: (vehicle: VehicleModelId) => BoardCarTag;
   /** This car's best laps on this circuit, saved in this browser */
   local: LeaderboardEntry[];
+  /**
+   * In a drive: the laps the Analysis view compares (this car on this circuit), and whether the panel opens on it (the
+   * lap card's Analyse button). Without it the panel shows lap times only
+   */
+  analysis?: LapTelemetryAnalysisProps & { openOnAnalysis?: boolean };
   /** Every personal best saved in this browser, any circuit and car: lets the panel switch circuit and car */
   loadAllLocal?: () => Promise<LeaderboardEntry[]>;
   /** This site has an online board */
@@ -96,6 +102,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   vehicleLabel,
   carTag = NEUTRAL_TAG,
   local,
+  analysis,
   loadAllLocal,
   remoteEnabled,
   remoteStatus = "off",
@@ -123,6 +130,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   // a refusal also stays here, for one that never reached storage (the lap no longer saved)
   const [posting, setPosting] = useState<ReadonlySet<string>>(() => new Set());
   const [postErrors, setPostErrors] = useState<Readonly<Record<string, string>>>({});
+  const txa = useTranslations("hud.lapAnalysis");
+  const [view, setView] = useState<"times" | "analysis">(analysis?.openOnAnalysis ? "analysis" : "times");
   const postLap = (e: LeaderboardEntry, id: string) => {
     if (!onPostLap || posting.has(id)) return;
     setPosting((s) => new Set(s).add(id));
@@ -351,6 +360,23 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
 
   return (
     <div className="flex flex-col gap-3 text-lc-chalk">
+      {analysis ? (
+        <Segmented
+          aria-label={txa("viewLabel")}
+          size="sm"
+          value={view}
+          onChange={setView}
+          options={[
+            { id: "times", label: txa("tabTimes") },
+            { id: "analysis", label: txa("tabAnalysis") },
+          ]}
+        />
+      ) : null}
+
+      {analysis && view === "analysis" ? (
+        <LapTelemetryAnalysis best={analysis.best} latest={analysis.latest} session={analysis.session} turns={analysis.turns} />
+      ) : (
+        <>
       {/* Toolbar: the sheet around the panel already names it, and the board below names the circuit */}
       {onImportGhost || onExportBest ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -485,6 +511,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         <p className="lc-hint m-0 px-1">
           {remoteStatus === "unreachable" ? tx("offline") : tx("disabled")}
         </p>
+      )}
+        </>
       )}
     </div>
   );

@@ -13,6 +13,8 @@ You can open **Settings** from the title menu or the pause menu (`Esc`, or `Menu
 - **Simple vs. Advanced mode:** Toggle this switch at the top of Settings (`Y` on keyboard, `Y` / `△` on controller). Finer tuning controls marked **(Advanced)** below are hidden in Simple mode.
 - **Resetting values:** Every settings card has a **Reset** button (with confirmation). To reset a single highlighted row, press `Delete` on keyboard or `X` / `□` on a controller.
 
+![Settings > Controls > Device, with the Active device cards for Keyboard, Controller and Wheel, the Connected devices list and the Run setup button](media/controls/device.png)
+
 ## Keyboard
 
 Default bindings are mapped by physical key position, so an AZERTY keyboard automatically displays `Z` where the table below lists `W`.
@@ -44,6 +46,8 @@ Default bindings are mapped by physical key position, so an AZERTY keyboard auto
 - **Mouse steering:** Press `V` or toggle the switch in the **Mouse** card to steer using your horizontal cursor position on screen.
 - **Fixed keys (Advanced):** Lists built-in shortcuts the game reserves for itself, such as `Alt` + arrow keys to adjust your cockpit seating position.
 
+![Controls > Keyboard, with the Key bindings card: two key slots for most actions, such as W and Up for Throttle, and an Add button on each empty slot](media/controls/keyboard.png)
+
 ## Controller
 
 Xbox and PlayStation controllers work out of the box through the browser's Gamepad API. The default preset is **GT style**:
@@ -70,6 +74,8 @@ Pressing gear up and gear down simultaneously shifts into neutral. All controlle
 - **Custom button bindings:** Select any action slot and press a controller button to rebind it. Buttons currently assigned as pedals cannot be bound to other actions.
 - **Fine tuning (Advanced):** Adjust **Steering speed**, **Inner dead zone**, **Outer dead zone**, **Stick linearity**, **Throttle curve**, **Brake curve**, **Pedal stick dead zone**, **Trigger rumble**, and **Trigger slip with ABS/TC on**. Trigger rumble requires pedals to be mapped to the triggers.
 - **Controller steering assist:** Located under **Driving > Assists** (visible by default when your active device is **Controller**, otherwise shown in Advanced). Enabled by default, it caps steering lock to available front-tyre grip and helps catch slides. Fine-tune it under **Driving > Steering help (Advanced)**.
+
+![Controls > Controller, scrolled to Button layout: GT style selected out of GT classic, Formula style, Forza style and Bumper shift, Pedals set to Triggers, and the button of each action below](media/controls/controller-layout.png)
 
 ## DualSense and DualShock 4
 
@@ -104,6 +110,8 @@ All wheel settings live under **Controls > Wheel**:
 
 > If you load onto the track with an uncalibrated throttle or brake axis on a wheel, a **Calibrate pedals** shortcut appears on the HUD outside of races and jumps directly to this tab.
 
+![Controls > Wheel with no wheel connected: Wheel type set to Direct drive, Calibrate all and the per-axis Calibrate buttons greyed out under "Needs a wheel", and Rotation at 1080°](media/controls/wheel.png)
+
 ## Clutch, gearbox, and assists
 
 - **Clutch:** No input device binds a clutch by default, so the car operates its own clutch until you assign **Clutch (hold)** on keyboard, **Clutch** under **Controller > Buttons**, or a wheel clutch pedal.
@@ -130,6 +138,8 @@ Open **Settings > Force feedback** and follow these steps:
 3. Click **Connect wheel** and pick your wheel base in the browser prompt. After the first pairing, Chrome/Edge reconnects automatically on future visits. If force feedback is enabled and steering is bound without a paired wheel, the title and pause menus display a **Pair wheel for force feedback** banner with a quick **Connect** button.
 4. Hold the rim firmly and click **Test** next to **Test direction**. The wheel should tug right, then left. If it pulls left first, enable **Invert**.
 5. Adjust overall **Strength** (`0%`–`200%`).
+
+![Settings > Force feedback, with the Forces card: the Force feedback switch, Strength at 100%, Per-car strength, Invert and the Test direction button](media/controls/force-feedback.png)
 
 ### Additional force feedback settings
 

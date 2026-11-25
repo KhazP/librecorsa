@@ -469,6 +469,62 @@ export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, bo
   notifyBestLapsChanged();
 }
 
+/** The last lap finished per circuit and car (the lap board's Analysis view); Settings' clear deletes it (storage.ts) */
+const LATEST_DB_NAME = "librecorsa-latest-laps";
+const LATEST_STORE = "latest";
+
+function openLatestDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(LATEST_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(LATEST_STORE)) {
+          req.result.createObjectStore(LATEST_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/** Persists the player's most recent completed lap for a track/car in IndexedDB */
+export async function saveLatestLap(rec: LapRecording): Promise<void> {
+  const lap = validateLapRecording(rec);
+  if (!lap) return;
+  const db = await openLatestDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(LATEST_STORE, "readwrite");
+      tx.objectStore(LATEST_STORE).put(lap, `${lap.trackId}:${lap.vehicle}`);
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/** Loads the player's most recent completed lap for a track/car from IndexedDB */
+export async function loadLatestLap(trackId: string, vehicle: VehicleModelId): Promise<LapRecording | null> {
+  const db = await openLatestDb();
+  if (!db) return null;
+  return new Promise<LapRecording | null>((resolve) => {
+    try {
+      const tx = db.transaction(LATEST_STORE, "readonly");
+      const req = tx.objectStore(LATEST_STORE).get(`${trackId}:${vehicle}`);
+      req.onsuccess = () => resolve(validateLapRecording(req.result ?? null));
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 /** m.ss.mmm, e.g. 1.23.456 for 83456 ms */
 function formatLapFileTime(ms: number): string {
   const total = Math.max(0, Math.round(Number.isFinite(ms) ? ms : 0));

@@ -240,6 +240,7 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
           const box = boxes[id];
           if (!box) return null;
           const part = parts[id] ?? NO_HUD_PART;
+          const isHidden = Boolean(part.hidden);
           const changed = parts[id] !== undefined;
           const h = HANDLE[id];
           const live = active === id;
@@ -254,9 +255,11 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
               className={`fixed cursor-move rounded-lc-row border-2 transition-colors duration-150 ${
                 live
                   ? "border-lc-volt bg-lc-volt/15"
-                  : changed
-                    ? "border-lc-cyan/80 bg-lc-cyan/10 hover:border-lc-volt hover:bg-lc-volt/10"
-                    : "border-lc-chalk/40 bg-lc-void/10 hover:border-lc-volt hover:bg-lc-volt/10"
+                  : isHidden
+                    ? "border-dashed border-lc-caution/75 bg-lc-void/40 hover:border-lc-volt"
+                    : changed
+                      ? "border-lc-cyan/80 bg-lc-cyan/10 hover:border-lc-volt hover:bg-lc-volt/10"
+                      : "border-lc-chalk/40 bg-lc-void/10 hover:border-lc-volt hover:bg-lc-volt/10"
               }`}
             >
               <div
@@ -265,17 +268,38 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                 <Icon name="move" size="xs" className="text-lc-volt" />
                 <span>{tx(`parts.${id}`)}</span>
                 {part.scale !== 1 ? <span className="lc-data text-lc-fog">{Math.round(part.scale * 100)}%</span> : null}
+                {isHidden ? <span className="text-lc-caution">{tx("hidden")}</span> : null}
               </div>
-              {changed ? (
+              <div className="pointer-events-auto absolute end-1 top-1 flex items-center gap-1">
                 <button
                   type="button"
+                  title={tx(isHidden ? "showPart" : "hidePart", { part: tx(`parts.${id}`) })}
+                  aria-label={tx(isHidden ? "showPart" : "hidePart", { part: tx(`parts.${id}`) })}
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => setPart(id, NO_HUD_PART)}
-                  className={`absolute end-1 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk top-1`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPart(id, { ...part, hidden: !isHidden });
+                  }}
+                  className={`flex size-5 items-center justify-center rounded-lc-nub bg-lc-void/90 transition-colors ${
+                    isHidden ? "text-lc-caution hover:text-lc-chalk" : "text-lc-fog hover:text-lc-volt"
+                  }`}
                 >
-                  {tx("resetPart")}
+                  <Icon name={isHidden ? "show" : "hide"} size="xs" />
                 </button>
-              ) : null}
+                {changed ? (
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPart(id, NO_HUD_PART);
+                    }}
+                    className="rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk"
+                  >
+                    {tx("resetPart")}
+                  </button>
+                ) : null}
+              </div>
               <div
                 title={tx("resize")}
                 onPointerDown={(e) => startDrag(e, id, "scale")}
