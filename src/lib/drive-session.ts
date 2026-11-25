@@ -1,5 +1,6 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
+import { createSimRendererSync, isWebGPURenderer, type AnyRenderer } from "@/lib/render/webgpu-renderer";
 import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
@@ -29,6 +30,7 @@ import {
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
+import { SpotterEngine } from "@/lib/sim/spotter";
 import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
 import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
@@ -1310,32 +1312,32 @@ export class DriveSession {
     const nameplateBadges = new NameplateBadgeCache();
     let latestRemotePeers: readonly InterpolatedPeerState[] = [];
 
-    let renderer: THREE.WebGLRenderer;
+    let renderer: AnyRenderer;
+    let rendererBackend: "webgpu" | "webgl2" = "webgl2";
+    let gpuName: string | null = null;
+    let rendererReady = false;
+    let rendererInitPromise: Promise<void> = Promise.resolve();
     try {
-      renderer = new THREE.WebGLRenderer({
-        // MSAA happens in the post-processing composer's half-float target instead
-        antialias: false,
-        stencil: false,
-        powerPreference: "high-performance",
-        // Float precision across the 0.12 m .. 5.5 km depth range (kerbs, lines and decals stop z-fighting at
-        // distance). three falls back to the standard buffer without EXT_clip_control; ?depth=standard forces it.
+      const created = createSimRendererSync({
         reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
       });
+      renderer = created.renderer;
+      rendererBackend = created.backend;
+      rendererInitPromise = created.initPromise.then(async () => {
+        gpuName = await created.getGpuName();
+        noteRenderer(gpuName);
+        const cls = classifyRenderer(gpuName);
+        const plan = safeStartPlan(readLossMemory(browserStore(), Date.now()), cls);
+        console.info(`[gpu] [${rendererBackend}] ${gpuName ?? "renderer not named"} (${cls})${plan.gentle ? ": gentle start" : ""}`);
+        rendererReady = true;
+      });
     } catch (reason) {
-      // No WebGL (switched off, or refused after a GPU reset): the worker started above goes with the session
+      // No WebGPU/WebGL (switched off, or refused after a GPU reset): the worker started above goes with the session
       simHost?.dispose();
       throw new WebGLUnavailableError(reason);
     }
-    // The GPU for the bug form, read now: after a context loss the browser may refuse to tell
-    const gpuName = rendererName(renderer.getContext());
-    noteRenderer(gpuName);
-    /**
-     * A gentle start on a CPU rasteriser, an older Intel HD / UHD chip, or within two weeks of a context loss: no
-     * physical sky (its GPU precompute), and a loading warm-up of what the camera sees rather than the whole circuit
-     */
     const gpuClass = classifyRenderer(gpuName);
     const { gentle } = safeStartPlan(readLossMemory(browserStore(), Date.now()), gpuClass);
-    console.info(`[gpu] ${gpuName ?? "renderer not named"} (${gpuClass})${gentle ? ": gentle start" : ""}`);
     /**
      * The context is gone: the frame loop keeps the network and the menus going but draws nothing and moves nothing,
      * and the component offers to load the circuit again on a new context. The old one is never reused: the sky's
@@ -1447,6 +1449,7 @@ export class DriveSession {
     const pitStop = new PitStopManager(track, physics.tireCompound, 4);
     pitStop.setSpeedLimitKmh(settings.pitSpeedLimitKmh);
     const pitBoxVisual = createPitBoxVisual(pitStop.boxPose, livery.accent);
+    pitBoxVisual.group.visible = false;
     scene.add(pitBoxVisual.group);
     const pitGroundHit = createGroundHit();
     let mpPitPenaltyS = 0;
@@ -2681,6 +2684,7 @@ export class DriveSession {
     const kbAxleSlip = createAxleSlipSample();
     // The other cars, heard where they are from the active camera
     const opponentAudio = new OpponentAudio();
+    const spotter = new SpotterEngine();
     const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "lc26").sound;
     const trackEnv = getTrackEnv();
     // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
@@ -2783,6 +2787,9 @@ export class DriveSession {
       });
     };
     function compileForComposer(): Promise<THREE.Object3D> {
+      if (isWebGPURenderer(renderer) || !postFx.composer) {
+        return renderer.compileAsync(scene, camera) as unknown as Promise<THREE.Object3D>;
+      }
       const prevTarget = renderer.getRenderTarget();
       renderer.setRenderTarget(postFx.composer.inputBuffer);
       try {
@@ -2801,6 +2808,16 @@ export class DriveSession {
      * shows. It stops where it is once the session goes, the context is lost or the loading screen was let go anyway.
      */
     const warmUpGpu = async (): Promise<void> => {
+      await rendererInitPromise;
+      if (isWebGPURenderer(renderer)) {
+        try {
+          await renderer.compileAsync(scene, camera);
+          postFx.render(0);
+        } catch {
+          // ignore compile errors during warmup
+        }
+        return;
+      }
       const t0 = performance.now();
       const gl = renderer.getContext();
       const stop = () => disposed || gpuLost || warmupSettled;
@@ -2864,7 +2881,7 @@ export class DriveSession {
             for (const o of hidden) o.visible = false;
             const prevTarget = renderer.getRenderTarget();
             try {
-              renderer.setRenderTarget(postFx.composer.inputBuffer);
+              if (postFx.composer) renderer.setRenderTarget(postFx.composer.inputBuffer);
               renderer.render(scene, camera);
             } finally {
               renderer.setRenderTarget(prevTarget);
@@ -2901,6 +2918,7 @@ export class DriveSession {
     checkAssets();
 
     const animate = (nowMs: number) => {
+      if (!rendererReady) return;
       // Dev: a frame that took far longer than a frame is a stall worth knowing about (shader compiles, uploads, builds)
       if (process.env.NODE_ENV !== "production" && lastTimeMs > 0 && nowMs - lastTimeMs > 120 && appPhaseNow !== "loading") {
         console.info(`[load] long frame: ${(nowMs - lastTimeMs).toFixed(0)} ms (${appPhaseNow})`);
@@ -3316,32 +3334,7 @@ export class DriveSession {
         }
         gridHeldLastFrame = gridHeld;
         startClutchIn = inputs.clutch ?? 0;
-        const playerSpeedMs = Math.max(0, physics.telemetry.speedMs ?? Math.abs(physics.vxMs));
-        const pitUpdate: PitUpdateResult = pitStop.update(dtSeconds, {
-          worldX: physics.worldPosition.x,
-          worldZ: physics.worldPosition.z,
-          trackS: physics.sMeters,
-          trackLateralOffsetM: physics.lateralOffsetM,
-          speedMs: playerSpeedMs,
-          damage: physics.telemetry.race?.damage,
-          canService: !aiField?.playerFrozen && !mpFrozen && !coolDown.active && !replaying,
-        });
-        if (pitUpdate.speedingPenalty) {
-          const msg = `Pit lane speeding (>${pitStop.getSpeedLimitKmh()} km/h)`;
-          aiField?.penalisePlayer(5, "pit_speeding", msg);
-          if (mpRace) mpPitPenaltyS += 5;
-        }
-        if (pitUpdate.serviceComplete) {
-          this.servicePitStop(pitUpdate.telemetry.strategy.nextCompound, {
-            repairDamage: pitUpdate.telemetry.strategy.repairDamage,
-            refuel: true,
-          });
-        }
-        pitStop.filterInputs(inputs, playerSpeedMs);
-        if (pitStop.isControlsLocked() && !raceInWorker && !simHost?.remote) {
-          physics.vxMs = 0;
-        }
-        physics.telemetry.pit = pitUpdate.telemetry;
+        physics.telemetry.pit = undefined;
         if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
@@ -3548,18 +3541,8 @@ export class DriveSession {
           mpRace.compound = physics.tireCompound;
         }
         if (!driving || replaying) {
-          const pausedPit = pitStop.update(0, {
-            worldX: physics.worldPosition.x,
-            worldZ: physics.worldPosition.z,
-            trackS: physics.sMeters,
-            trackLateralOffsetM: physics.lateralOffsetM,
-            speedMs: Math.max(0, physics.telemetry.speedMs ?? Math.abs(physics.vxMs)),
-            damage: physics.telemetry.race?.damage,
-            canService: false,
-          });
-          physics.telemetry.pit = pausedPit.telemetry;
+          physics.telemetry.pit = undefined;
         }
-        pitBoxVisual.update(physics.telemetry.pit, nowMs / 1000);
         t.trackLimits = trackLimits.snapshot(nowMs);
       }
       builtCircuit.setStartLights(
@@ -4213,6 +4196,12 @@ export class DriveSession {
         );
       }
       if (driving) {
+        spotter.update(nowMs, physics.worldPosition, physics.worldQuaternion, physics.vxMs, drawnPeers, {
+          enabled: !settingsNow.audio.muted && settingsNow.audio.spotter,
+          volume: settingsNow.audio.volume * settingsNow.audio.spotterVolume,
+          voice: settingsNow.audio.spotterVoice,
+          radioFilter: settingsNow.audio.spotterRadio,
+        });
         audio?.update(physics.telemetry, dtSeconds);
         // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
         const tc = physics.telemetry;
@@ -4393,7 +4382,7 @@ export class DriveSession {
             loggedFirstFrame = true;
             if (process.env.NODE_ENV !== "production") {
               // The frame right after the loading screen: it stalls when the warm-up missed something
-              renderer.getContext().finish();
+              if (!isWebGPURenderer(renderer)) renderer.getContext().finish();
               console.info(`[load] first visible frame: ${(performance.now() - t0).toFixed(0)} ms`);
             }
           }
@@ -4521,8 +4510,10 @@ export class DriveSession {
       disposed = true;
       // A context the browser gave back after a loss holds none of this session's GPU objects: let go of it first, and
       // the disposals below are no-ops instead of a WebGL warning each
-      const gl = renderer.getContext();
-      if (gpuLost && !gl.isContextLost()) gl.getExtension("WEBGL_lose_context")?.loseContext();
+      if (!isWebGPURenderer(renderer)) {
+        const gl = renderer.getContext();
+        if (gpuLost && !gl.isContextLost()) gl.getExtension("WEBGL_lose_context")?.loseContext();
+      }
       unsubscribeAssets();
       window.clearInterval(assetWatchdog);
       renderer.setAnimationLoop(null);

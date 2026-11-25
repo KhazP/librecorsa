@@ -13,6 +13,7 @@ import {
 } from "@/lib/render/tyre-deformation";
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { PAINT_ZONE_MATERIALS, setLc26LiveryColours, upgradeLc26Materials } from "@/lib/render/car-materials";
+import { isWebGPUMode } from "@/lib/render/webgpu-renderer";
 import { installVertexOcclusion } from "@/lib/render/vertex-occlusion";
 import { createDriverFigure } from "@/lib/render/driver-figure";
 import { createDriverHelmet } from "@/lib/render/driver-helmet";
@@ -578,7 +579,7 @@ export function attachLc26Model(
       EXT_PAINT_SECONDARY: livery.secondary,
       EXT_PAINT_ACCENT: livery.accent,
     };
-    const useProcedural = !liveryMask && proceduralPaint !== null;
+    const useProcedural = !isWebGPUMode() && !liveryMask && proceduralPaint !== null;
     const appliedProcedural = useProcedural ? proceduralPaint.set(livery) : false;
     if (!appliedProcedural) {
       proceduralPaint?.set(null);

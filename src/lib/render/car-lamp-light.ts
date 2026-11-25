@@ -68,7 +68,9 @@ const cars = new WeakMap<THREE.Object3D, CarState>();
  * program here instead would make three.js skip the upload of the camera and the lights for the draw.)
  */
 function forceUniformUpload(renderer: THREE.WebGLRenderer): void {
-  renderer.state.useProgram(null as unknown as WebGLProgram);
+  if ("state" in renderer && renderer.state && typeof renderer.state.useProgram === "function") {
+    renderer.state.useProgram(null as unknown as WebGLProgram);
+  }
 }
 
 function hook(mesh: THREE.Mesh, state: CarState): void {

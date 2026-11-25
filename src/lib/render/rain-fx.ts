@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import { MeshBasicNodeMaterial } from "three/webgpu";
+import { attribute, clamp, float, length, max, mod, smoothstep, uniform, uv, vec2, vec3 } from "three/tsl";
+import { isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Falling rain around the camera: one LineSegments draw call of up to 6000 streaks, animated entirely on the GPU
@@ -201,23 +204,95 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 4));
   geometry.setDrawRange(0, 0);
 
-  const material = new THREE.ShaderMaterial({
-    vertexShader: VERT,
-    fragmentShader: FRAG,
-    uniforms: {
-      uTime: { value: 0 },
-      uCamPos: { value: new THREE.Vector3() },
-      uBox: { value: BOX.clone() },
-      uVel: { value: new THREE.Vector3() },
-      uWindXZ: { value: new THREE.Vector2() },
-      uLength: { value: 0.55 },
-      uColor: { value: new THREE.Color(0xb8c2cc) },
-      uOpacity: { value: 0.32 },
-    },
-    transparent: true,
-    depthWrite: false,
-    fog: false,
-  });
+  const uTimeNode = uniform(0);
+  const uCamPosNode = uniform(new THREE.Vector3());
+  const uBoxNode = uniform(BOX.clone());
+  const uVelNode = uniform(new THREE.Vector3());
+  const uWindXZNode = uniform(new THREE.Vector2());
+  const uLengthNode = uniform(0.55);
+  const uColorNode = uniform(new THREE.Color(0xb8c2cc));
+  const uOpacityNode = uniform(0.32);
+
+  const uVisorTime = uniform(0);
+  const uVisorDroplets = uniform(0);
+  const uVisorSpray = uniform(0);
+  const uVisorSpeedNorm = uniform(0);
+  const uVisorTint = uniform(new THREE.Color(0xdbe4ee));
+
+  const useWebGPU = isWebGPUMode();
+
+  let material: THREE.Material;
+  let visorMat: THREE.Material;
+  let glRainUniforms: Record<string, { value: unknown }> | null = null;
+  let glVisorUniforms: Record<string, { value: unknown }> | null = null;
+
+  if (useWebGPU) {
+    const aSeed = attribute("aSeed", "vec4");
+    const fallSpeed = float(FALL_MS).mul(float(0.85).add(float(0.3).mul(aSeed.x)));
+    const pBase = aSeed.xyz.mul(uBoxNode);
+    const py = mod(pBase.y.sub(uTimeNode.mul(fallSpeed)), uBoxNode.y).add(uCamPosNode.y.sub(uBoxNode.y.mul(0.5)));
+    const pxzShift = pBase.xz.add(uWindXZNode.mul(uTimeNode.mul(0.35)));
+    const pxz = mod(pxzShift.sub(uCamPosNode.xz).add(uBoxNode.xz.mul(0.5)), uBoxNode.xz)
+      .sub(uBoxNode.xz.mul(0.5))
+      .add(uCamPosNode.xz);
+    const rel = vec3(uWindXZNode.x, fallSpeed.negate(), uWindXZNode.y).sub(uVelNode);
+    const speed = max(length(rel), 0.001);
+    const dir = rel.div(speed);
+    const streakPos = vec3(pxz.x, py, pxz.y).add(dir.mul(uLengthNode.mul(clamp(speed.div(20.0), 0.6, 3.0)).mul(aSeed.w)));
+    const dist = length(streakPos.sub(uCamPosNode));
+    const vAlpha = smoothstep(0.6, 2.0, dist).mul(float(1.0).sub(smoothstep(uBoxNode.x.mul(0.35), uBoxNode.x.mul(0.5), dist)));
+
+    const rainNodeMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false });
+    rainNodeMat.positionNode = streakPos;
+    rainNodeMat.colorNode = uColorNode;
+    rainNodeMat.opacityNode = uOpacityNode.mul(vAlpha);
+    material = rainNodeMat;
+
+    const visorNodeMat = new MeshBasicNodeMaterial({ transparent: true, depthTest: false, depthWrite: false, fog: false });
+    const edge = smoothstep(0.35, 0.98, length(uv().sub(0.5).mul(vec2(1.4, 2.0))));
+    const mistAlpha = edge.mul(uVisorSpray.mul(0.28).add(uVisorDroplets.mul(0.14)));
+    visorNodeMat.colorNode = uVisorTint;
+    visorNodeMat.opacityNode = mistAlpha;
+    visorMat = visorNodeMat;
+  } else {
+    const glRain = new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms: {
+        uTime: { value: 0 },
+        uCamPos: { value: new THREE.Vector3() },
+        uBox: { value: BOX.clone() },
+        uVel: { value: new THREE.Vector3() },
+        uWindXZ: { value: new THREE.Vector2() },
+        uLength: { value: 0.55 },
+        uColor: { value: new THREE.Color(0xb8c2cc) },
+        uOpacity: { value: 0.32 },
+      },
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    });
+    glRainUniforms = glRain.uniforms;
+    material = glRain;
+
+    const glVisor = new THREE.ShaderMaterial({
+      vertexShader: VISOR_VERT,
+      fragmentShader: VISOR_FRAG,
+      uniforms: {
+        uTime: { value: 0 },
+        uDroplets: { value: 0 },
+        uSpray: { value: 0 },
+        uSpeedNorm: { value: 0 },
+        uTint: { value: new THREE.Color(0xdbe4ee) },
+      },
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      fog: false,
+    });
+    glVisorUniforms = glVisor.uniforms;
+    visorMat = glVisor;
+  }
 
   const object = new THREE.LineSegments(geometry, material);
   object.frustumCulled = false;
@@ -226,21 +301,6 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   scene.add(object);
 
   const visorGeo = new THREE.PlaneGeometry(2, 2);
-  const visorMat = new THREE.ShaderMaterial({
-    vertexShader: VISOR_VERT,
-    fragmentShader: VISOR_FRAG,
-    uniforms: {
-      uTime: { value: 0 },
-      uDroplets: { value: 0 },
-      uSpray: { value: 0 },
-      uSpeedNorm: { value: 0 },
-      uTint: { value: new THREE.Color(0xdbe4ee) },
-    },
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-    fog: false,
-  });
   const visorMesh = new THREE.Mesh(visorGeo, visorMat);
   visorMesh.frustumCulled = false;
   visorMesh.renderOrder = 1002;
@@ -248,11 +308,11 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   visorMesh.layers.set(RAIN_VISOR_LAYER);
   scene.add(visorMesh);
 
-  const camPos = material.uniforms.uCamPos.value as THREE.Vector3;
-  const vel = material.uniforms.uVel.value as THREE.Vector3;
-  const windXZ = material.uniforms.uWindXZ.value as THREE.Vector2;
-  const color = material.uniforms.uColor.value as THREE.Color;
-  const visorTint = visorMat.uniforms.uTint.value as THREE.Color;
+  const camPos = useWebGPU ? uCamPosNode.value : (glRainUniforms!.uCamPos.value as THREE.Vector3);
+  const vel = useWebGPU ? uVelNode.value : (glRainUniforms!.uVel.value as THREE.Vector3);
+  const windXZ = useWebGPU ? uWindXZNode.value : (glRainUniforms!.uWindXZ.value as THREE.Vector2);
+  const color = useWebGPU ? uColorNode.value : (glRainUniforms!.uColor.value as THREE.Color);
+  const visorTint = useWebGPU ? uVisorTint.value : (glVisorUniforms!.uTint.value as THREE.Color);
   const baseColor = new THREE.Color(0xb8c2cc);
   let time = 0;
 
@@ -276,24 +336,33 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       if ((!showVisor && !streaksShown && time > 60) || time > RAIN_CLOCK_MAX_S) time = 0;
       visorMesh.visible = showVisor;
       if (showVisor) {
-        visorMat.uniforms.uTime.value = time;
-        visorMat.uniforms.uDroplets.value = windscreenState.dropletDensity;
-        visorMat.uniforms.uSpray.value = spray;
-        visorMat.uniforms.uSpeedNorm.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
+        if (useWebGPU) {
+          uVisorTime.value = time;
+          uVisorDroplets.value = windscreenState.dropletDensity;
+          uVisorSpray.value = spray;
+          uVisorSpeedNorm.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
+        } else if (glVisorUniforms) {
+          glVisorUniforms.uTime.value = time;
+          glVisorUniforms.uDroplets.value = windscreenState.dropletDensity;
+          glVisorUniforms.uSpray.value = spray;
+          glVisorUniforms.uSpeedNorm.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
+        }
         visorTint.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.45 + 0.55 * brightness, 0.25, 1));
       }
 
       const count = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8));
       object.visible = count > 0;
       if (!object.visible) return;
-      material.uniforms.uTime.value = time;
+      if (useWebGPU) uTimeNode.value = time;
+      else if (glRainUniforms) glRainUniforms.uTime.value = time;
       camera.getWorldPosition(camPos);
       // Smooth the camera velocity so camera cuts do not flick the streaks
       vel.lerp(cameraVelocity, 1 - Math.exp(-dt * 8));
       windXZ.set(Number.isFinite(windVxMs) ? windVxMs : 0, Number.isFinite(windVzMs) ? windVzMs : 0);
       geometry.setDrawRange(0, count * 2);
       color.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.35 + 0.65 * brightness, 0.2, 1));
-      material.uniforms.uOpacity.value = 0.22 + 0.16 * effectiveIntensity;
+      if (useWebGPU) uOpacityNode.value = 0.22 + 0.16 * effectiveIntensity;
+      else if (glRainUniforms) glRainUniforms.uOpacity.value = 0.22 + 0.16 * effectiveIntensity;
     },
     dispose() {
       scene.remove(object);

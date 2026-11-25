@@ -401,7 +401,7 @@ function loadTrackGlb(
         });
 
         if (topName === "Track_Model") {
-          for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) cleanScanMaterial(m);
+          obj.material = Array.isArray(obj.material) ? obj.material.map(cleanScanMaterial) : cleanScanMaterial(obj.material);
         }
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName] ?? (isDecal ? -2 : undefined);
@@ -428,13 +428,12 @@ function loadTrackGlb(
           obj.geometry.computeBoundingBox();
           baseY = box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).min.y;
         }
-        for (const mat of mats) {
+        let replacedMats = false;
+        for (let mi = 0; mi < mats.length; mi++) {
+          const mat = mats[mi];
           singlePassTransparency(mat);
           applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
-          if (!isDecal && !mat.transparent && (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name)))) {
-            applyAsphaltSheen(mat, sheenMask);
-          }
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
             if (tex) tex.anisotropy = 8;
           }
@@ -451,6 +450,16 @@ function loadTrackGlb(
             mat.polygonOffsetFactor = mat.userData.depthOffset;
             mat.polygonOffsetUnits = mat.userData.depthOffset;
           }
+          if (!isDecal && !mat.transparent && (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name)))) {
+            const sheened = applyAsphaltSheen(mat, sheenMask);
+            if (sheened !== mat) {
+              mats[mi] = sheened;
+              replacedMats = true;
+            }
+          }
+        }
+        if (replacedMats) {
+          obj.material = Array.isArray(obj.material) ? mats : mats[0];
         }
         if (offset !== undefined) obj.renderOrder = 1;
       });
@@ -716,15 +725,17 @@ export function buildCircuitScene(
   trackGeom.setAttribute("uv", new THREE.Float32BufferAttribute(trackUVs, 2));
   trackGeom.setIndex(trackIndices);
 
-  const asphaltMat = new THREE.MeshStandardMaterial({
-    map: createAsphaltTexture(),
-    roughness: 0.68,
-    metalness: 0.08,
-    side: THREE.DoubleSide,
-  });
   // Rubbered-in racing line, shared by the fallback ribbon and the authored Track_Asphalt_Road
   const sheenMask = createRacingLineMask(track);
-  applyAsphaltSheen(asphaltMat, sheenMask);
+  const asphaltMat = applyAsphaltSheen(
+    new THREE.MeshStandardMaterial({
+      map: createAsphaltTexture(),
+      roughness: 0.68,
+      metalness: 0.08,
+      side: THREE.DoubleSide,
+    }),
+    sheenMask
+  );
 
   const trackMesh = new THREE.Mesh(trackGeom, asphaltMat);
   trackMesh.receiveShadow = true;

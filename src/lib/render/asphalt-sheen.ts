@@ -1,7 +1,41 @@
 import * as THREE from "three";
+import { MeshStandardNodeMaterial } from "three/webgpu";
+import {
+  Fn,
+  abs,
+  clamp,
+  cross,
+  dFdx,
+  dFdy,
+  dot,
+  exp,
+  faceDirection,
+  float,
+  floor,
+  fract,
+  fwidth,
+  If,
+  length,
+  max,
+  mix,
+  normalView,
+  normalize,
+  positionView,
+  positionWorld,
+  pow,
+  sign,
+  sin,
+  smoothstep,
+  texture,
+  uniform,
+  uv,
+  vec2,
+  vec3,
+} from "three/tsl";
 import type { BuiltTrackData } from "@/lib/track-data";
 import { aiLineOffsetM } from "@/lib/sim/speed-profile";
 import { patchShader, type ShaderPatch } from "./shader-patch";
+import { isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Rubbered-in racing line on the asphalt: a top-down world-XZ mask (white = rubber) drives roughness, a slight
@@ -39,6 +73,11 @@ const wetUniforms = {
 const qualityUniform = {
   uAsphaltDetail: { value: 1 },
 };
+const tslWetness = uniform(0);
+const tslLineWetness = uniform(0);
+const tslRainIntensity = uniform(0);
+const tslWetTime = uniform(0);
+const tslAsphaltDetail = uniform(1);
 /** The same uniform objects, for other surfaces that get wet with the track (scenery-detail) */
 export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
 
@@ -48,7 +87,9 @@ export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
  * and wetness intact.
  */
 export function setAsphaltQuality(quality: "low" | "medium" | "high"): void {
-  qualityUniform.uAsphaltDetail.value = quality === "low" ? 0 : 1;
+  const val = quality === "low" ? 0 : 1;
+  qualityUniform.uAsphaltDetail.value = val;
+  tslAsphaltDetail.value = val;
 }
 
 /**
@@ -56,9 +97,15 @@ export function setAsphaltQuality(quality: "low" | "medium" | "high"): void {
  * grazing-angle Fresnel reflections, and animated raindrop splash ripples when raining.
  */
 export function setAsphaltWetness(offLine: number, onLine: number = offLine, rainIntensity: number = 0): void {
-  wetUniforms.uWetness.value = Math.min(1, Math.max(0, offLine));
-  wetUniforms.uLineWetness.value = Math.min(1, Math.max(0, onLine));
-  wetUniforms.uRainIntensity.value = Math.min(1, Math.max(0, rainIntensity));
+  const w = Math.min(1, Math.max(0, offLine));
+  const lw = Math.min(1, Math.max(0, onLine));
+  const r = Math.min(1, Math.max(0, rainIntensity));
+  wetUniforms.uWetness.value = w;
+  wetUniforms.uLineWetness.value = lw;
+  wetUniforms.uRainIntensity.value = r;
+  tslWetness.value = w;
+  tslLineWetness.value = lw;
+  tslRainIntensity.value = r;
 }
 
 /** Runs the raindrop ripples' clock; call every frame with the frame time (s), so they animate at frame rate */
@@ -72,6 +119,7 @@ export function advanceAsphaltRain(dt: number): void {
     // No rain, no ripples drawn: the moment to bring the clock back to zero
     wetUniforms.uWetTime.value = 0;
   }
+  tslWetTime.value = wetUniforms.uWetTime.value;
 }
 
 /** Racing line in world XZ, using the same lateral convention as the drawn racing line in scene-builder */
@@ -185,13 +233,156 @@ export function createRacingLineMask(
   return mask;
 }
 
+const tslAsphaltCache = new WeakMap<THREE.MeshStandardMaterial, MeshStandardNodeMaterial>();
+
+type Vec2Node = typeof positionWorld.xz;
+
+function tslHash(p: Vec2Node) {
+  const p3 = fract(vec3(p.x, p.y, p.x).mul(0.1031));
+  const p3Sum = p3.add(dot(p3, vec3(p3.y, p3.z, p3.x).add(33.33)));
+  return fract(p3Sum.x.add(p3Sum.y).mul(p3Sum.z));
+}
+
+function tslValueNoise(p: Vec2Node) {
+  const i = floor(p);
+  const f = fract(p);
+  const u = f.mul(f).mul(float(3.0).sub(f.mul(2.0)));
+  const a = tslHash(i);
+  const b = tslHash(i.add(vec2(1.0, 0.0)));
+  const c = tslHash(i.add(vec2(0.0, 1.0)));
+  const d = tslHash(i.add(vec2(1.0, 1.0)));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y).mul(2.0).sub(1.0);
+}
+
+function tslRainSplash(
+  worldXZ: Vec2Node,
+  time: typeof tslWetTime,
+  intensity: typeof tslRainIntensity
+) {
+  const cell = floor(worldXZ.mul(2.8));
+  const local = fract(worldXZ.mul(2.8)).sub(0.5);
+  const h = tslHash(cell);
+  const phase = fract(time.mul(h.mul(0.8).add(1.6)).add(h.mul(6.28318)));
+  const center = vec2(tslHash(cell.add(7.1)), tslHash(cell.add(19.3))).sub(0.5).mul(0.45);
+  const dist = length(local.sub(center));
+  const radius = phase.mul(0.42);
+  const dr = dist.sub(radius);
+  const ring = exp(dr.mul(dr).mul(-90.0)).mul(sin(dr.mul(55.0)));
+  const envelope = float(1.0).sub(phase).mul(smoothstep(0.0, 0.08, phase));
+  return ring.mul(envelope).mul(intensity);
+}
+
+function createAsphaltNodeMaterial(material: THREE.MeshStandardMaterial, mask: RacingLineMask): MeshStandardNodeMaterial {
+  const cached = tslAsphaltCache.get(material);
+  if (cached) return cached;
+
+  const nodeMat = new MeshStandardNodeMaterial();
+  nodeMat.name = material.name;
+  nodeMat.color.copy(material.color);
+  nodeMat.roughness = material.roughness;
+  nodeMat.metalness = material.metalness;
+  nodeMat.map = material.map;
+  nodeMat.roughnessMap = material.roughnessMap;
+  nodeMat.normalMap = material.normalMap;
+  nodeMat.normalScale.copy(material.normalScale);
+  nodeMat.side = material.side;
+  nodeMat.transparent = material.transparent;
+  nodeMat.opacity = material.opacity;
+  nodeMat.depthWrite = material.depthWrite;
+  nodeMat.polygonOffset = material.polygonOffset;
+  nodeMat.polygonOffsetFactor = material.polygonOffsetFactor;
+  nodeMat.polygonOffsetUnits = material.polygonOffsetUnits;
+  nodeMat.userData = { ...material.userData };
+
+  const uMaskMin = uniform(mask.worldMin);
+  const uMaskSize = uniform(mask.worldSize);
+  const baseColor = uniform(new THREE.Vector3(material.color.r, material.color.g, material.color.b));
+
+  const maskUv = positionWorld.xz.sub(uMaskMin).div(uMaskSize);
+  const rubber = texture(mask.texture, maskUv).r;
+
+  const wetRaw = mix(tslWetness, tslLineWetness, rubber);
+  const patchNoise = tslValueNoise(positionWorld.xz.div(2.2)).mul(0.5).add(0.5);
+  const finePatch = tslValueNoise(positionWorld.xz.div(0.65)).mul(0.5).add(0.5);
+  const wet = clamp(wetRaw.mul(mix(0.72, 1.08, patchNoise.mul(0.7).add(finePatch.mul(0.3)))), 0.0, 1.0);
+  const puddleMask = smoothstep(
+    0.52,
+    0.86,
+    wet.mul(float(1.0).sub(rubber.mul(0.35))).mul(patchNoise.mul(0.35).add(0.65))
+  );
+
+  nodeMat.colorNode = Fn(() => {
+    const col = (material.map ? texture(material.map, uv()).rgb.mul(baseColor) : baseColor).toVar();
+    col.mulAssign(mix(1.0, 0.85, rubber));
+    If(wetRaw.greaterThan(0.0), () => {
+      const albedoReduction = smoothstep(0.0, 0.35, wet)
+        .mul(0.25)
+        .add(wet.mul(0.18))
+        .add(puddleMask.mul(0.08));
+      col.mulAssign(float(1.0).sub(albedoReduction));
+    });
+    return col;
+  })();
+
+  nodeMat.roughnessNode = Fn(() => {
+    const r = mix(0.78, 0.32, rubber).toVar();
+    if (material.roughnessMap) {
+      r.mulAssign(mix(1.0, texture(material.roughnessMap, uv()).g, 0.35));
+    }
+    If(wetRaw.greaterThan(0.0), () => {
+      const viewDir = normalize(positionView.negate());
+      const ndotv = clamp(abs(viewDir.y), 0.0, 1.0);
+      const wetFresnel = pow(float(1.0).sub(ndotv), 3.0).mul(wet);
+      const wetRough = mix(0.14, 0.025, puddleMask);
+      r.assign(mix(r, wetRough, clamp(wet.add(wetFresnel.mul(0.35)), 0.0, 1.0)));
+    });
+    return r;
+  })();
+
+  nodeMat.normalNode = Fn(() => {
+    const n = normalView.toVar();
+    If(tslAsphaltDetail.greaterThan(0.5), () => {
+      const aggP = positionWorld.xz;
+      const aggH = float(0.008)
+        .mul(tslValueNoise(aggP.div(0.03)).mul(0.6).add(tslValueNoise(aggP.div(0.12)).mul(0.4)))
+        .mul(mix(1.0, 0.12, puddleMask))
+        .toVar();
+      const viewDist = length(positionView);
+      If(tslRainIntensity.greaterThan(0.02).and(wetRaw.greaterThan(0.15)), () => {
+        const splashFade = float(1.0).sub(smoothstep(12.0, 42.0, viewDist)).mul(clamp(wetRaw, 0.0, 1.0));
+        aggH.addAssign(tslRainSplash(aggP, tslWetTime, tslRainIntensity).mul(0.0035).mul(splashFade));
+      });
+      const aggAa = float(1.0).sub(smoothstep(0.25, 0.5, max(fwidth(aggP.x), fwidth(aggP.y)).div(0.03)));
+      const aggFade = aggAa.mul(float(1.0).sub(smoothstep(30.0, 90.0, viewDist)));
+      const grad = vec2(dFdx(aggH), dFdy(aggH)).mul(AGGREGATE_NORMAL_SCALE).mul(aggFade);
+      const dPdx = dFdx(positionView);
+      const dPdy = dFdy(positionView);
+      const r1 = cross(dPdy, n);
+      const r2 = cross(n, dPdx);
+      const det = dot(dPdx, r1).mul(faceDirection);
+      const surfGrad = sign(det).mul(r1.mul(grad.x).add(r2.mul(grad.y)));
+      const bumped = n.mul(abs(det)).sub(surfGrad);
+      If(dot(bumped, bumped).greaterThan(0.0), () => {
+        n.assign(normalize(bumped));
+      });
+    });
+    return n;
+  })();
+
+  tslAsphaltCache.set(material, nodeMat);
+  return nodeMat;
+}
+
 /**
- * Patches a MeshStandardMaterial in place: rubber-dependent roughness (0.78 -> 0.32) and darkening (x0.85),
- * plus a world-space aggregate normal bump (3 cm + 12 cm value noise, faded by pixel footprint and distance).
- * Rain (`setAsphaltWetness`) darkens the asphalt and drops its roughness towards a wet gloss, patchy at metre scale.
- * Idempotent per material: calling it again simply replaces the earlier patch.
+ * Patches a MeshStandardMaterial in place (WebGL2) or returns a TSL MeshStandardNodeMaterial (WebGPU):
+ * rubber-dependent roughness (0.78 -> 0.32) and darkening (x0.85), plus a world-space aggregate normal bump
+ * (3 cm + 12 cm value noise, faded by pixel footprint and distance) and dynamic wetness / raindrop ripples.
  */
-export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: RacingLineMask): void {
+export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: RacingLineMask): THREE.Material {
+  if (isWebGPUMode()) {
+    return createAsphaltNodeMaterial(material, mask);
+  }
+
   const uniforms = {
     uRubberMask: { value: mask.texture },
     uMaskMin: { value: mask.worldMin },
@@ -208,6 +399,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
   };
   material.customProgramCacheKey = () => "asphalt-sheen-v4";
   material.needsUpdate = true;
+  return material;
 }
 
 type Patch = ShaderPatch;

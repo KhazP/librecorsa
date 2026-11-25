@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { planarUvGeometry } from "./planar-uv";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * Wing mirrors for the LC26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
@@ -143,11 +144,11 @@ export class WingMirrors {
   readonly coversSides: boolean = false;
   private readonly eyeInModel: THREE.Vector3;
 
-  private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderer: AnyRenderer;
   private readonly scene: THREE.Scene;
   private readonly carModelRoot: THREE.Object3D;
   private readonly rt: THREE.WebGLRenderTarget | null = null;
-  private readonly cam: THREE.PerspectiveCamera;
+  private readonly cam: THREE.PerspectiveCamera | null = null;
   private readonly slots: MirrorSlot[] = [];
   /** Live glass laid over mirror patches of bigger meshes; shown only while the mirrors are live */
   private readonly overlays: THREE.Mesh[] = [];
@@ -163,7 +164,7 @@ export class WingMirrors {
   private readonly chassisScale = new THREE.Vector3();
 
   constructor(
-    renderer: THREE.WebGLRenderer,
+    renderer: AnyRenderer,
     scene: THREE.Scene,
     carModelRoot: THREE.Object3D,
     options: WingMirrorOptions = {}
@@ -173,6 +174,11 @@ export class WingMirrors {
     this.carModelRoot = carModelRoot;
     this.eyeInModel = (options.eyeInModel ?? EYE_IN_MODEL).clone();
     this.coversSides = options.coversSides ?? true;
+    if (isWebGPURenderer(renderer)) {
+      this.found = false;
+      this.coversSides = false;
+      return;
+    }
     const materials = options.materials ?? MIRROR_MATERIALS;
     this.cam = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, RT_ASPECT, CAMERA_NEAR, CAMERA_FAR);
 
@@ -266,8 +272,8 @@ export class WingMirrors {
 
   private renderRearView(chassis: THREE.Object3D): void {
     const rt = this.rt;
-    if (!rt) return;
     const r = this.renderer;
+    if (isWebGPURenderer(r) || !rt || !this.cam) return;
 
     // Pose from the live chassis (its pitch/roll/heave already applied this frame)
     chassis.updateWorldMatrix(true, false);
@@ -305,7 +311,7 @@ export class WingMirrors {
   private prewarm(): void {
     const r = this.renderer;
     const rt = this.rt;
-    if (!rt) return;
+    if (isWebGPURenderer(r) || !rt || !this.cam) return;
     const prevTarget = r.getRenderTarget();
     const carVisible = this.carModelRoot.visible;
     try {
