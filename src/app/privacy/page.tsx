@@ -7,7 +7,7 @@ import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 // storage, cloudflare/api (boards, races, rooms, usage, accounts) and the connection servers in multiplayer-sync.ts.
 // Change this page in the same commit as anything that changes what is stored or sent.
 const DESCRIPTION = "What LibreCorsa keeps in your browser, what it sends online and when, and how to have it removed.";
-const UPDATED = "23 November 2026";
+const UPDATED = "24 November 2026";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -34,7 +34,7 @@ export default function PrivacyPage() {
 
       <SiteSection id="browser" title="What stays in your browser">
         <p className={READ}>
-          Your settings, controls, car setups, saved laps, race history and driver name are kept in your browser’s
+          Your settings, controls, car setups, saved laps, race history, careers and driver name are kept in your browser’s
           own storage on your device. So is a driver key: a random code that proves a name on the lap boards is yours.
           None of it leaves your device except as described below, and clearing this site’s data in your browser
           removes all of it.
@@ -108,7 +108,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <span className={B}>The synced save.</span> Your settings (not controls, graphics or volumes), car setups,
-            liveries, race history, and best laps with their ghosts.
+            liveries, race history, careers, and best laps with their ghosts.
           </li>
         </ul>
         <p className={READ}>

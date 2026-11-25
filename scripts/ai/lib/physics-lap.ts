@@ -3,9 +3,13 @@
  * timed on its second lap from a flying start; on a point-to-point course (a hill climb) the run from the grid, timed
  * from the start line to the finish. Reports the lap time, the frames spent off the track, the barrier hits
  * and the worst distance from the line. `line` names the car: the F1 line is driven by the f12026-car, or by the LC26
- * (`lc26`, its own physics and limits on the same line), on the rigid-body engine it ships on.
+ * (`lc26`, its own physics and limits on the same line), on the rigid-body engine it ships on; any other car by its
+ * vehicle id, on the offsets given (`physicsLapLine` says which line the game gives it).
+ *
+ * `{ plan: false }` drives the same car on its own driver instead (`autopilotProfile`, F12026CarSim.ts): what the field
+ * races with where a car has no checked plan, at the field's pace cap for it (0.999).
  */
-import type { BuiltTrackData } from '../../../src/lib/track-data';
+import { getActiveTrackMetadata, type BuiltTrackData } from '../../../src/lib/track-data';
 import { F12026CarSim } from '../../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../../src/lib/sim/gt3/AmgGt3Sim';
 import { createLc26Sim } from '../../../src/lib/sim/f12026-car/Lc26Sim';
@@ -19,7 +23,8 @@ import { createBmwM1ProcarSim } from '../../../src/lib/sim/classic/BmwM1ProcarSi
 import { createChaparral2d67Sim, createChaparral2dSim } from '../../../src/lib/sim/classic/Chaparral2dSim';
 import { createPorsche934RsrSim } from '../../../src/lib/sim/classic/Porsche934RsrSim';
 import { createVwSciroccoSim } from '../../../src/lib/sim/road/VwSciroccoSim';
-import type { VehicleModelId } from '../../../src/types/f1';
+import type { RacingLineId, VehicleModelId } from '../../../src/types/f1';
+import { VEHICLE_MODELS } from '../../../src/lib/cars/vehicle-models';
 import { aiTrackFor } from '../../../src/lib/sim/ai/ai-track';
 import { carLimitsFor } from '../../../src/lib/sim/ai/ggv';
 import { makeDrivePlan, type AiDrivePlan } from '../../../src/lib/sim/ai/drive-plan';
@@ -46,9 +51,26 @@ export interface PhysicsLap {
 /** Who drives a physics lap: `f1` is the f12026-car and `gt3` the AMG (the cars each line was made for), or any car by id */
 export type PhysicsLapCar = 'f1' | 'gt3' | VehicleModelId;
 
-export const physicsLapVehicle = (car: PhysicsLapCar): VehicleModelId => (car === 'f1' ? 'f12026-car' : car === 'gt3' ? 'amg-gt3' : car);
+export const physicsLapVehicle = (car: PhysicsLapCar): VehicleModelId => {
+  const vehicle = car === 'f1' ? 'f12026-car' : car === 'gt3' ? 'amg-gt3' : car;
+  // An unknown id would be driven as the f12026-car (simFor's default) and its check written under the wrong car
+  if (!(vehicle in VEHICLE_MODELS)) throw new Error(`unknown car "${car}" (a vehicle model id, or f1 / gt3)`);
+  return vehicle;
+};
 
-function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCar {
+/** The racing line the game gives this car on the circuit (its profile's `racingLine`, as its sim resolves it) */
+export function physicsLapLine(car: PhysicsLapCar, track: BuiltTrackData): RacingLineId {
+  return simFor(physicsLapVehicle(car), track, null).racingLineId ?? 'f1';
+}
+
+/** The line slot a car's profile names (`road` for the road cars, which drive the GT3's where a circuit has no road line for them) */
+export function physicsLapProfileLine(car: PhysicsLapCar, track: BuiltTrackData): RacingLineId {
+  const sim = simFor(physicsLapVehicle(car), track, null) as SimulatorCar & { profile?: { racingLine?: RacingLineId } };
+  return sim.profile?.racingLine ?? sim.racingLineId ?? 'f1';
+}
+
+/** A car of this model on the circuit, as the physics laps drive it (the rigid-body LC26, whatever the game's default) */
+export function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCar {
   switch (vehicle) {
     case 'amg-gt3':
       return createAmgGt3Sim(track, root);
@@ -87,23 +109,63 @@ export function physicsLap(
   line: PhysicsLapCar,
   offsets: ArrayLike<number>,
   gripScale = 0.95,
-  maxS = 400
+  maxS?: number,
+  opts: { plan?: boolean; line?: RacingLineId } = {}
+): PhysicsLap {
+  if (!opts.line) return driveLap(track, root, line, offsets, gripScale, maxS, opts.plan !== false);
+  // The car on the line its offsets are, in everything it reads off its line (its own driver, its flying start, its
+  // recovery): a road car takes the road line from the circuit's checks (`racingLineFor`), so for this lap its check
+  // there reads as passed for the road line and failed for any other, then goes back to what it was
+  const vehicle = physicsLapVehicle(line);
+  const meta = getActiveTrackMetadata();
+  const hadByLine = meta.aiPlansByLine !== undefined;
+  const road = ((meta.aiPlansByLine ??= {}).road ??= {});
+  const had = Object.prototype.hasOwnProperty.call(road, vehicle);
+  const was = road[vehicle];
+  road[vehicle] = { ok: opts.line === 'road', physicsLapS: 0, planLapS: 0, wallHits: 0, offTrackFrames: 0, maxErrM: 0, checked: '' };
+  try {
+    return driveLap(track, root, line, offsets, gripScale, maxS, opts.plan !== false);
+  } finally {
+    if (had) road[vehicle] = was;
+    else delete road[vehicle];
+    if (!hadByLine) delete meta.aiPlansByLine;
+    else if (!Object.keys(road).length) delete meta.aiPlansByLine?.road;
+  }
+}
+
+function driveLap(
+  track: BuiltTrackData,
+  root: THREE.Object3D | null,
+  line: PhysicsLapCar,
+  offsets: ArrayLike<number>,
+  gripScale: number,
+  maxS: number | undefined,
+  onPlan: boolean
 ): PhysicsLap {
   const t = aiTrackFor(track);
   const vehicle = physicsLapVehicle(line);
   const plan = makeDrivePlan(t, offsets, carLimitsFor(vehicle, gripScale));
+  // Room for the flying start and the timed lap, on its own driver too: a road car's two laps of Le Mans or RISE's
+  // Grand Prix layout run past a fixed 400 s
+  const limitS = maxS ?? Math.max(400, 2.6 * plan.lapS + 60);
   const car = simFor(vehicle, track, root);
   car.assistPreset = 'pro';
   car.aiAutopilot = true;
-  car.aiPaceScale = 1;
-  car.aiPlan = plan;
+  // Its own driver: the field's cap for a car without a plan (ai-opponents.ts), on the line its profile names
+  car.aiPaceScale = onPlan ? 1 : 0.999;
+  car.aiPlan = onPlan ? plan : null;
   // A hill climb's run starts from rest on the grid, short of the start line
   const p2p = track.pointToPoint;
   if (p2p) car.resetToStartGrid(false, 0);
   else {
     car.resetToStartGrid(true, 0);
-    // On the line being judged from the start (the flying start puts the car on the stored line)
-    car.teleportToDistance(car.sMeters, car.vxMs, plan.n[((Math.round(car.sMeters / t.ds) % t.n) + t.n) % t.n]);
+    // From the slowest corner of the lap's last 40 %, on the line being judged, at the speed the plan expects there:
+    // the car reaches the line at its own pace. The game's flying start is the circuit's car's speed on the last
+    // straight: a Liana handed RISE's at 188 km/h, where it does 90, spun and began its timed lap from a crawl, and
+    // held to its plan's speed there it still crossed the line 40 km/h slow
+    let i0 = Math.floor(0.6 * t.n);
+    for (let i = i0; i < Math.floor(0.97 * t.n); i++) if (plan.vExpected[i] < plan.vExpected[i0]) i0 = i;
+    car.teleportToDistance(i0 * t.ds, plan.vExpected[i0], plan.n[i0]);
   }
   const L = track.totalLengthM;
   const n = new Float64Array(t.n).fill(NaN), v = new Float64Array(t.n).fill(NaN), tAt = new Float64Array(t.n).fill(NaN);
@@ -112,7 +174,7 @@ export function physicsLap(
   let walls = 0, lastWallMs = 0, prevVx = car.vxMs, inHit = false;
   let runS = Infinity;
   const dt = 1 / 120;
-  while (laps < 2 && time < maxS) {
+  while (laps < 2 && time < limitS) {
     car.step(dt, {});
     time += dt;
     const s = car.sMeters;

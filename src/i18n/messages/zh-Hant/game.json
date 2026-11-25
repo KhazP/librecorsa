@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "選單",
     "poolRace": "正賽",
-    "poolResults": "結算與重播"
+    "poolResults": "結算與重播",
+    "poolShow": "賽前節目"
   },
   "carQuality": {
     "ownBadge": "專屬物理",
@@ -270,7 +271,8 @@
     "hud": "顯示／隱藏 HUD",
     "board": "開啟／關閉圈速榜",
     "headlights": "開啟／關閉頭燈",
-    "headlightFlash": "閃爍頭燈（按住）"
+    "headlightFlash": "閃爍頭燈（按住）",
+    "pitLimiter": "維修區限速器"
   },
   "padActions": {
     "shiftUp": "升檔",
@@ -295,7 +297,8 @@
     "hud": "顯示／隱藏 HUD",
     "board": "開啟／關閉圈速榜",
     "headlights": "頭燈（輕按：閃燈，長按：開／關）",
-    "headlightFlash": "閃爍頭燈（按住）"
+    "headlightFlash": "閃爍頭燈（按住）",
+    "pitLimiter": "維修區限速器"
   },
   "pedals": {
     "throttle": "油門",
@@ -845,6 +848,8 @@
     "launchKey": "按住 {key} 起跑 · Esc 選單",
     "noRacesOnHillClimb": "爬山賽不開放競速賽事",
     "backToRaces": "返回賽事列表",
+    "backToCareer": "返回生涯模式",
+    "restartMulligan": "{count, plural, other {將使用一次重賽機會：剩 # 次}}",
     "carAutoSwitched": "已切換至 {car}：大廳已鎖定為 {rule}",
     "carBlockedByLobby": "在此大廳期間車輛已鎖定為 {rule}"
   },
@@ -947,5 +952,9 @@
       "saveChanged": "雲端存檔已在另一部裝置上變更",
       "tooManyLaps": "雲端最多可存放 {count} 筆最佳單圈"
     }
+  },
+  "pit": {
+    "speeding": "維修區超速（超過 {limit} km/h）",
+    "stopMissed": "{count, plural, other {未完成 # 次強制進站}}"
   }
 }

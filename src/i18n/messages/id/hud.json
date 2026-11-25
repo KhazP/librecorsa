@@ -487,6 +487,20 @@
     "third": "Ke-3",
     "skip": "Lewati"
   },
+  "podiumBoard": {
+    "label": "Podium",
+    "close": "Tutup",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Klasifikasi",
+    "pointsScored": "{count, plural, other {+# poin}}",
+    "noPoints": "Tanpa poin",
+    "championshipPlace": "Kejuaraan P{position}",
+    "placesUp": "{count, plural, other {Naik # posisi}}",
+    "placesDown": "{count, plural, other {Turun # posisi}}",
+    "pointsTotal": "{count, plural, other {Total # poin}}"
+  },
   "qualifyingHud": {
     "clock": "Kualifikasi",
     "lastLap": "Lap terakhir",
@@ -521,7 +535,9 @@
       "fuelTag": "BBM",
       "fuelTitle": "Bahan bakar & energi",
       "stndTag": "POS",
-      "stndTitle": "Klasemen"
+      "stndTitle": "Klasemen",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Halaman MFD",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {# lap}}"
+    },
+    "pit": {
+      "tyres": "Ban berikutnya",
+      "repair": "Perbaiki kerusakan",
+      "repairTime": "Kerusakan {damage}% · +{seconds} s",
+      "noDamage": "Tanpa kerusakan",
+      "box": "Box di lap ini",
+      "limit": "Batas {limit} km/h · box {box}",
+      "on": "Ya",
+      "off": "Tidak",
+      "boxCalled": "Masuk pit",
+      "callBox": "Panggil",
+      "stops": "Pit stop",
+      "stopsOf": "{made} dari {required}",
+      "stopsShort": "{made, plural, =0 {Belum pit stop} other {# pit stop}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "Pimpin",
       "lastVsBestTitle": "Lap sebelumnya dibanding terbaikmu",
       "lastVsTheirsTitle": "Lap sebelumnya mereka dibanding milikmu",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Lap",
@@ -1130,6 +1163,90 @@
     "resetAll": "Reset tata letak",
     "cancel": "Batal",
     "done": "Selesai"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limiter",
+    "stop": "Berhenti",
+    "go": "Jalan",
+    "crew": "Kru",
+    "fitting": "Memasang ban {compound}",
+    "fittingRepairing": "Memasang ban {compound} · perbaikan",
+    "stopTime": "Pit stop {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit lane",
+    "boxIn": "Box {box} dalam {metres} m",
+    "boxPassed": "Box {box} terlewat",
+    "approach": "Masuk pit · batas {limit} km/h",
+    "limiterKey": "Limiter: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, other {Box · wajib # pit stop}}"
+  },
+  "preRace": {
+    "label": "Tayangan prabalapan",
+    "skip": "Lewati",
+    "start": "Mulai",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "Ronde {round} dari {rounds}",
+    "lengthKm": "{value} km",
+    "lengthMi": "{value} mi",
+    "riseM": "Elevasi {value} m",
+    "riseFt": "Elevasi {value} ft",
+    "turns": "{count, plural, other {# tikungan}}",
+    "laps": "{count, plural, other {# lap}}",
+    "stops": "{count, plural, other {# pit stop}}",
+    "noStops": "Tanpa pit stop",
+    "qualifyingMin": "Kualifikasi {minutes} mnt",
+    "gridByPace": "Grid sesuai kecepatan",
+    "air": "Udara {value}",
+    "track": "Trek {value}",
+    "wind": "Angin {value} {direction}",
+    "humidity": "Kelembapan {value}%",
+    "wetTrack": "Trek basah",
+    "dryTrack": "Trek kering",
+    "championship": "Kejuaraan",
+    "points": "{count, plural, other {# poin}}",
+    "tyres": "Ban",
+    "startingOn": "Terpasang",
+    "alsoAvailable": "Juga tersedia",
+    "startingGrid": "Grid start",
+    "place": "P{position}",
+    "pole": "Pole",
+    "field": "Daftar pembalap",
+    "startRace": "Mulai balapan",
+    "startQualifying": "Mulai kualifikasi",
+    "testDay": "Hari tes",
+    "targetLap": "Target {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% di depan",
+    "drivetrain": {
+      "rwd": "Penggerak roda belakang",
+      "fwd": "Penggerak roda depan",
+      "awd": "Penggerak semua roda"
+    },
+    "revLimit": "Batas putaran {value} rpm",
+    "go": "Jalan",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Momen balapan",
+    "event": {
+      "winner": "Pemenang",
+      "newLeader": "Pemimpin baru",
+      "fastestLap": "Lap tercepat",
+      "pitStop": "Pit stop",
+      "retired": "Gagal finis"
+    },
+    "lap": "Lap {lap}",
+    "stationary": "{seconds} dtk",
+    "battleFor": "Duel untuk P{position}",
+    "attacking": "Menyerang",
+    "closing": "Memangkas {rate} dtk/lap",
+    "closingCatch": "Memangkas {rate} dtk/lap · menyusul dalam {laps, plural, other {# lap}}",
+    "pullingAway": "Menjauh",
+    "stable": "Gap stabil"
   },
   "lapTelemetry": {
     "title": "Telemetri lap",

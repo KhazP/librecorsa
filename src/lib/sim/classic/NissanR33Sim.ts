@@ -94,6 +94,9 @@ export const NISSAN_R33_SIM_PROFILE: CarSimProfile = {
   // As the GT3's [est]; scripts/verify/verify-nissan-r33-jgtc.ts checks the autopilot's laps
   understeerRadPerMs2: 0.0035,
   speedProfile: NISSAN_R33_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) it failed the race gate on its 8 Classic GT
+  // layouts (more contacts with the player's stand-in, wall touches in Watkins Glen's esses), laps 1 % quicker
+  aiOwnKerbShare: 0,
   // The GT3's line: closed-wheel grip and downforce
   racingLine: 'gt3',
   // Fuel flow with the engine's speed: 0.00574 l/s per 1000 rpm flat out, ≈ 0.038 l/s (0.028 kg/s) at 6700 rpm

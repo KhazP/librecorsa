@@ -261,3 +261,25 @@
 | combine saves | fusionner les sauvegardes | |
 | sign-in method | méthode de connexion | |
 | driver key | clé de pilote | Unchanged |
+
+## Career
+| English | French | Note |
+|---|---|---|
+| career | carrière | |
+| career mode | mode carrière | |
+| ladder | échelle | Tab "Échelle" |
+| tier | échelon | "Échelon {tier}" |
+| discipline | discipline | Road racing = Course sur circuit, Historic racing = Course historique |
+| series | série | Series names stay English (Club Cup, GT3, Can-Am Legends); "Coupe Prototypes", "Prototypes d’endurance", "Groupe 4 Classic" |
+| promotion / promoted | promotion / promu | Cut line: "barre de promotion" |
+| attempt | tentative | |
+| mulligan | mulligan (m, pl. mulligans) | Golf loanword: restart a round left early |
+| bonus objective | objectif bonus | |
+| test day | journée d’essais | |
+| pre-season | pré-saison | |
+| round | manche | Not "tour", which is a lap. Tag stays "R{round}" |
+| standings | classement du championnat | "Classement" alone is the lap board |
+| career score | score de carrière | "pts" for championship points |
+| multiplier | multiplicateur | |
+| pit stop / mandatory stop | pit stop / pit stop obligatoire | Pit box: stand |
+| regions | Amériques, Europe, Asie-Pacifique | |

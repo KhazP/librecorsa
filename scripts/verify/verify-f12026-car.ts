@@ -945,18 +945,28 @@ console.log('\n== F12026CarSim (simulator adapter)');
     const lap0 = fast.telemetry.lapCount;
     let tf = 0;
     let beyond = -Infinity;
+    let pastKerb = -Infinity;
+    let offFrames = 0;
     let maxSlip = 0;
     while (tf < 240 && fast.telemetry.lapCount < lap0 + 2) {
       fast.step(1 / 60, {});
       tf += 1 / 60;
-      beyond = Math.max(beyond, Math.abs(fast.lateralOffsetM) - track.getSampleAtDistance(fast.sMeters).width / 2);
+      const lat = fast.lateralOffsetM;
+      const past = Math.abs(lat) - track.getSampleAtDistance(fast.sMeters).width / 2;
+      beyond = Math.max(beyond, past);
+      // The own driver follows the line onto the flat kerbs, out to its room on them (`ownRangeAt`): past the edge by
+      // no more than that room where there is one
+      const [lo, hi] = fast.ownRangeAt(fast.sMeters);
+      const room = Math.max(0, (lat >= 0 ? hi : -lo) - track.getSampleAtDistance(fast.sMeters).width / 2);
+      pastKerb = Math.max(pastKerb, past - room);
+      if (fast.telemetry.offTrack) offFrames++;
       maxSlip = Math.max(maxSlip, (Math.abs(Math.atan2(fast.vyMs, Math.max(1, fast.vxMs))) * 180) / Math.PI);
     }
     check(
-      `Autopilot at full pace stays on the asphalt (${preset})`,
+      `Autopilot at full pace stays on the asphalt and its flat kerbs (${preset})`,
       // The CG may graze the white line by a few cm on the exit kerbs (a kerb's feel nudges the line by that much)
-      fast.telemetry.lapCount === lap0 + 2 && beyond <= AUTOPILOT_EDGE_TOLERANCE_M && maxSlip < 10,
-      `lap ${fmt((fast.telemetry.lastLapTimeMs ?? 0) / 1000, 1)} s, CG ${fmt(Math.max(0, beyond), 3)} m past the edge, max body slip ${fmt(maxSlip, 1)}°`
+      fast.telemetry.lapCount === lap0 + 2 && pastKerb <= AUTOPILOT_EDGE_TOLERANCE_M && offFrames === 0 && maxSlip < 10,
+      `lap ${fmt((fast.telemetry.lastLapTimeMs ?? 0) / 1000, 1)} s, CG ${fmt(Math.max(0, beyond), 3)} m past the edge, ${fmt(Math.max(0, pastKerb), 3)} m past its kerb room, ${offFrames} frames off, max body slip ${fmt(maxSlip, 1)}°`
     );
   }
   check(

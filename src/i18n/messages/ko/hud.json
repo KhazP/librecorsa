@@ -487,6 +487,20 @@
     "third": "3위",
     "skip": "건너뛰기"
   },
+  "podiumBoard": {
+    "label": "포디움",
+    "close": "닫기",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "순위",
+    "pointsScored": "{count, plural, other {+#점}}",
+    "noPoints": "득점 없음",
+    "championshipPlace": "챔피언십 P{position}",
+    "placesUp": "{count, plural, other {#계단 상승}}",
+    "placesDown": "{count, plural, other {#계단 하락}}",
+    "pointsTotal": "{count, plural, other {총 #점}}"
+  },
   "qualifyingHud": {
     "clock": "예선",
     "lastLap": "마지막 랩",
@@ -521,7 +535,9 @@
       "fuelTag": "연료",
       "fuelTitle": "연료 및 에너지",
       "stndTag": "순위",
-      "stndTitle": "순위표"
+      "stndTitle": "순위표",
+      "pitTag": "피트",
+      "pitTitle": "피트 스톱"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD 페이지",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {#랩}}"
+    },
+    "pit": {
+      "tyres": "다음 타이어",
+      "repair": "손상 수리",
+      "repairTime": "손상 {damage}% · +{seconds}초",
+      "noDamage": "손상 없음",
+      "box": "이번 랩 피트 인",
+      "limit": "제한 {limit} km/h · {box}번 박스",
+      "on": "켜짐",
+      "off": "꺼짐",
+      "boxCalled": "피트 인",
+      "callBox": "요청",
+      "stops": "피트 스톱",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {스톱 없음} other {스톱 #회}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "선두",
       "lastVsBestTitle": "내 베스트 대비 이전 랩",
       "lastVsTheirsTitle": "내 랩 대비 상대 이전 랩",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "피트",
+      "pitClock": "피트 {seconds}"
     },
     "lap": {
       "region": "랩",
@@ -1130,6 +1163,90 @@
     "resetAll": "레이아웃 초기화",
     "cancel": "취소",
     "done": "완료"
+  },
+  "pit": {
+    "boxBox": "박스",
+    "limiter": "리미터",
+    "stop": "정지",
+    "go": "출발",
+    "crew": "크루",
+    "fitting": "{compound} 장착 중",
+    "fittingRepairing": "{compound} 장착 · 수리 중",
+    "stopTime": "정차 {seconds}초",
+    "inBox": "{box}번 박스",
+    "lane": "피트 레인",
+    "boxIn": "{box}번 박스까지 {metres} m",
+    "boxPassed": "{box}번 박스 지나침",
+    "approach": "피트 진입 · 제한 {limit} km/h",
+    "limiterKey": "리미터: {key}",
+    "stopsPill": "피트 {made}/{required}",
+    "stopRequired": "{remaining, plural, other {박스 · 의무 피트 스톱 #회}}"
+  },
+  "preRace": {
+    "label": "프리 레이스 쇼",
+    "skip": "건너뛰기",
+    "start": "시작",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "라운드 {round}/{rounds}",
+    "lengthKm": "{value}km",
+    "lengthMi": "{value}mi",
+    "riseM": "고저차 {value}m",
+    "riseFt": "고저차 {value}ft",
+    "turns": "{count, plural, other {코너 #개}}",
+    "laps": "{count, plural, other {#랩}}",
+    "stops": "{count, plural, other {피트 스톱 #회}}",
+    "noStops": "피트 스톱 없음",
+    "qualifyingMin": "{minutes}분 예선",
+    "gridByPace": "페이스순 그리드",
+    "air": "기온 {value}",
+    "track": "노면 {value}",
+    "wind": "바람 {value} {direction}",
+    "humidity": "습도 {value}%",
+    "wetTrack": "젖은 노면",
+    "dryTrack": "마른 노면",
+    "championship": "챔피언십",
+    "points": "{count, plural, other {#점}}",
+    "tyres": "타이어",
+    "startingOn": "장착됨",
+    "alsoAvailable": "선택 가능",
+    "startingGrid": "스타팅 그리드",
+    "place": "P{position}",
+    "pole": "폴",
+    "field": "출전 드라이버",
+    "startRace": "레이스 시작",
+    "startQualifying": "예선 시작",
+    "testDay": "테스트 데이",
+    "targetLap": "목표 {time}",
+    "weightKg": "{value}kg",
+    "weightLb": "{value}lb",
+    "frontWeight": "앞쪽 {value}%",
+    "drivetrain": {
+      "rwd": "후륜구동",
+      "fwd": "전륜구동",
+      "awd": "사륜구동"
+    },
+    "revLimit": "레브 리밋 {value}rpm",
+    "go": "출발",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "레이스 이벤트",
+    "event": {
+      "winner": "우승",
+      "newLeader": "새 선두",
+      "fastestLap": "패스티스트 랩",
+      "pitStop": "피트 스톱",
+      "retired": "리타이어"
+    },
+    "lap": "{lap}랩",
+    "stationary": "{seconds}초",
+    "battleFor": "P{position} 배틀",
+    "attacking": "공격 중",
+    "closing": "랩당 {rate}초 추격",
+    "closingCatch": "랩당 {rate}초 추격 · {laps, plural, other {#랩}} 후 따라잡음",
+    "pullingAway": "격차 벌리는 중",
+    "stable": "격차 유지"
   },
   "lapTelemetry": {
     "title": "랩 텔레메트리",

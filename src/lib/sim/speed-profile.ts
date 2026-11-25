@@ -100,10 +100,12 @@ export interface SpeedProfile {
 export const AI_LINE_WIDTH_SCALE = 0.3;
 
 export function aiLineOffsetM(
-  sample: Pick<TrackSamplePoint, 'racingLineOffset' | 'racingLineOffsetGt3' | 'width'>,
+  sample: Pick<TrackSamplePoint, 'racingLineOffset' | 'racingLineOffsetGt3' | 'racingLineOffsetRoad' | 'width'>,
   line: RacingLineId = 'f1'
 ): number {
-  const norm = line === 'gt3' ? (sample.racingLineOffsetGt3 ?? sample.racingLineOffset) : sample.racingLineOffset;
+  // The road line falls back to the GT3's, and the GT3's to the F1's, where a circuit has none
+  const gt3 = sample.racingLineOffsetGt3 ?? sample.racingLineOffset;
+  const norm = line === 'road' ? (sample.racingLineOffsetRoad ?? gt3) : line === 'gt3' ? gt3 : sample.racingLineOffset;
   return norm * sample.width * AI_LINE_WIDTH_SCALE;
 }
 

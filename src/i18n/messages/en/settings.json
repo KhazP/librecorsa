@@ -387,6 +387,18 @@
     "showPlayerNames": {
       "label": "Player nameplates"
     },
+    "preRaceShow": {
+      "label": "Career pre-race show",
+      "hint": "Before each career round: the circuit, the weather, the tyres and the grid, set to music. Space skips it, Enter starts."
+    },
+    "fullPodium": {
+      "label": "Full-screen podium",
+      "hint": "After an AI race: the top three on the podium, the top ten and the fastest lap, before the results. Any key closes it."
+    },
+    "raceEventCards": {
+      "label": "Race event cards",
+      "hint": "In AI races: a driver card when a car wins, takes the lead, sets the fastest lap, pits or retires, and a strip on a close battle with its forecast."
+    },
     "boardWidget": {
       "label": "Lap board",
       "options": {

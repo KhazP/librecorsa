@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "메뉴",
     "poolRace": "레이스",
-    "poolResults": "결과 및 리플레이"
+    "poolResults": "결과 및 리플레이",
+    "poolShow": "프리 레이스 쇼"
   },
   "carQuality": {
     "ownBadge": "전용 물리",
@@ -270,7 +271,8 @@
     "hud": "HUD 표시 / 숨기기",
     "board": "랩 보드 열기 / 닫기",
     "headlights": "헤드라이트 켜기 / 끄기",
-    "headlightFlash": "상향등 점멸(누르고 있기)"
+    "headlightFlash": "상향등 점멸(누르고 있기)",
+    "pitLimiter": "피트 리미터"
   },
   "padActions": {
     "shiftUp": "기어 업",
@@ -295,7 +297,8 @@
     "hud": "HUD 표시 / 숨기기",
     "board": "랩 보드 열기 / 닫기",
     "headlights": "헤드라이트(짧게: 점멸, 길게: 켜기 / 끄기)",
-    "headlightFlash": "상향등 점멸(누르고 있기)"
+    "headlightFlash": "상향등 점멸(누르고 있기)",
+    "pitLimiter": "피트 리미터"
   },
   "pedals": {
     "throttle": "스로틀",
@@ -845,6 +848,8 @@
     "launchKey": "{key} 길게 눌러 출발 · Esc 메뉴",
     "noRacesOnHillClimb": "힐 클라임에서는 레이스를 진행할 수 없습니다",
     "backToRaces": "레이스 목록으로 돌아가기",
+    "backToCareer": "커리어로 돌아가기",
+    "restartMulligan": "{count, plural, other {멀리건 1회 사용: #회 남음}}",
     "carAutoSwitched": "{car} 차량으로 전환되었습니다(로비 제한: {rule})",
     "carBlockedByLobby": "이 로비에서는 차량이 {rule} 규칙으로 제한됩니다"
   },
@@ -947,5 +952,9 @@
       "saveChanged": "클라우드 저장 데이터가 다른 기기에서 변경되었습니다",
       "tooManyLaps": "클라우드에는 베스트 랩을 최대 {count}개까지 보관할 수 있습니다"
     }
+  },
+  "pit": {
+    "speeding": "피트 레인 과속({limit} km/h 초과)",
+    "stopMissed": "{count, plural, other {의무 피트 스톱 #회 미이행}}"
   }
 }

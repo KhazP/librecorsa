@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menü",
     "poolRace": "Rennen",
-    "poolResults": "Ergebnisse und Replay"
+    "poolResults": "Ergebnisse und Replay",
+    "poolShow": "Vorprogramm"
   },
   "carQuality": {
     "ownBadge": "EIGENE PHYSIK",
@@ -270,7 +271,8 @@
     "hud": "HUD ein- / ausblenden",
     "board": "Bestenliste öffnen / schließen",
     "headlights": "Scheinwerfer an / aus",
-    "headlightFlash": "Lichthupe (halten)"
+    "headlightFlash": "Lichthupe (halten)",
+    "pitLimiter": "Boxenlimiter"
   },
   "padActions": {
     "shiftUp": "Hochschalten",
@@ -295,7 +297,8 @@
     "hud": "HUD ein- / ausblenden",
     "board": "Bestenliste öffnen / schließen",
     "headlights": "Scheinwerfer (tippen: Lichthupe, halten: an / aus)",
-    "headlightFlash": "Lichthupe (halten)"
+    "headlightFlash": "Lichthupe (halten)",
+    "pitLimiter": "Boxenlimiter"
   },
   "pedals": {
     "throttle": "Gas",
@@ -845,6 +848,8 @@
     "launchKey": "{key} halten zum Losfahren · Esc Menü",
     "noRacesOnHillClimb": "Keine Rennen bei einem Bergrennen",
     "backToRaces": "Zurück zu den Rennen",
+    "backToCareer": "Zurück zur Karriere",
+    "restartMulligan": "{count, plural, one {Kostet einen Mulligan: # übrig} other {Kostet einen Mulligan: # übrig}}",
     "carAutoSwitched": "Zu {car} gewechselt: Lobby auf {rule} beschränkt",
     "carBlockedByLobby": "Auto in dieser Lobby auf {rule} beschränkt"
   },
@@ -947,5 +952,9 @@
       "saveChanged": "Der Cloud-Spielstand wurde auf einem anderen Gerät geändert",
       "tooManyLaps": "Die Cloud speichert bis zu {count} beste Runden"
     }
+  },
+  "pit": {
+    "speeding": "Zu schnell in der Boxengasse (über {limit} km/h)",
+    "stopMissed": "{count, plural, one {Pflichtstopp nicht absolviert} other {# Pflichtstopps nicht absolviert}}"
   }
 }

@@ -442,8 +442,9 @@ export const EngineersGarage: React.FC<
   const [browsing, setBrowsing] = useState(false);
   const browseRef = useRef<HTMLButtonElement | null>(null);
   const { mode, family } = useInputMode();
-  // The car is fixed for an online race (the shell refuses the swap too)
-  const carLocked = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
+  // The car is fixed for an online race and for a career drive, the season's (the shell refuses the swap too)
+  const careerCar = p.careerDrive === true;
+  const carLocked = careerCar || p.telemetry.race?.multiplayer === true || p.raceRunning === true;
   const openBrowser = () => {
     if (carLocked) return;
     if (p.onOpenCarBrowser) return p.onOpenCarBrowser();
@@ -606,10 +607,10 @@ export const EngineersGarage: React.FC<
             // Where the garage starts: the car, not the setup name field
             data-nav-default=""
             onClick={openBrowser}
-            disabledReason={carLocked ? tx("carFixedReason") : undefined}
+            disabledReason={careerCar ? tx("carSeasonReason") : carLocked ? tx("carFixedReason") : undefined}
             icon={<Icon name="car" />}
           >
-            {carLocked ? tx("carFixed") : tx("changeCar")}
+            {careerCar ? tx("carSeason") : carLocked ? tx("carFixed") : tx("changeCar")}
           </Button>
         }
       >

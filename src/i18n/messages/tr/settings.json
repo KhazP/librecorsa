@@ -387,6 +387,18 @@
     "showPlayerNames": {
       "label": "Oyuncu isimlikleri"
     },
+    "preRaceShow": {
+      "label": "Kariyer yarış öncesi yayını",
+      "hint": "Her kariyer ayağından önce müzik eşliğinde pist, hava durumu, lastikler ve grid. Space atlar, Enter başlatır."
+    },
+    "fullPodium": {
+      "label": "Tam ekran podyum",
+      "hint": "Yapay zeka yarışından sonra, sonuçlardan önce: podyumdaki ilk üç, ilk on ve en hızlı tur. Herhangi bir tuş kapatır."
+    },
+    "raceEventCards": {
+      "label": "Yarış olayı kartları",
+      "hint": "Yapay zeka yarışlarında: bir araç kazandığında, liderliği aldığında, en hızlı turu attığında, pite girdiğinde ya da yarış dışı kaldığında pilot kartı ve yakın bir mücadele için tahminli bir şerit."
+    },
     "boardWidget": {
       "label": "Tur tablosu",
       "options": {

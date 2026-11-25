@@ -487,6 +487,20 @@
     "third": "3rd",
     "skip": "Skip"
   },
+  "podiumBoard": {
+    "label": "Podium",
+    "close": "Close",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Classification",
+    "pointsScored": "{count, plural, one {+# pt} other {+# pts}}",
+    "noPoints": "No points",
+    "championshipPlace": "Championship P{position}",
+    "placesUp": "{count, plural, one {Up # place} other {Up # places}}",
+    "placesDown": "{count, plural, one {Down # place} other {Down # places}}",
+    "pointsTotal": "{count, plural, one {# pt in total} other {# pts in total}}"
+  },
   "qualifyingHud": {
     "clock": "Qualifying",
     "lastLap": "Last lap",
@@ -521,7 +535,9 @@
       "fuelTag": "FUEL",
       "fuelTitle": "Fuel & energy",
       "stndTag": "STND",
-      "stndTitle": "Standings"
+      "stndTitle": "Standings",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD pages",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# lap} other {# laps}}"
+    },
+    "pit": {
+      "tyres": "Next tyres",
+      "repair": "Repair damage",
+      "repairTime": "{damage}% damage · +{seconds} s",
+      "noDamage": "No damage",
+      "box": "Box this lap",
+      "limit": "Limit {limit} km/h · box {box}",
+      "on": "On",
+      "off": "Off",
+      "boxCalled": "Boxing",
+      "callBox": "Call",
+      "stops": "Stops",
+      "stopsOf": "{made} of {required}",
+      "stopsShort": "{made, plural, =0 {No stops} one {# stop} other {# stops}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "Lead",
       "lastVsBestTitle": "Last lap against your best",
       "lastVsTheirsTitle": "Their last lap against yours",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Lap",
@@ -1130,6 +1163,90 @@
     "resetAll": "Reset layout",
     "cancel": "Cancel",
     "done": "Done"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limiter",
+    "stop": "Stop",
+    "go": "Go",
+    "crew": "Crew",
+    "fitting": "Fitting {compound}",
+    "fittingRepairing": "Fitting {compound} · repairing",
+    "stopTime": "Stop {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit lane",
+    "boxIn": "Box {box} in {metres} m",
+    "boxPassed": "Box {box} passed",
+    "approach": "Pit entry · limit {limit} km/h",
+    "limiterKey": "Limiter: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Box · # stop required} other {Box · # stops required}}"
+  },
+  "preRace": {
+    "label": "Pre-race show",
+    "skip": "Skip",
+    "start": "Start",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "Round {round} of {rounds}",
+    "lengthKm": "{value} km",
+    "lengthMi": "{value} mi",
+    "riseM": "{value} m climb",
+    "riseFt": "{value} ft climb",
+    "turns": "{count, plural, one {# turn} other {# turns}}",
+    "laps": "{count, plural, one {# lap} other {# laps}}",
+    "stops": "{count, plural, one {# pit stop} other {# pit stops}}",
+    "noStops": "No pit stop",
+    "qualifyingMin": "{minutes} min qualifying",
+    "gridByPace": "Grid set by pace",
+    "air": "Air {value}",
+    "track": "Track {value}",
+    "wind": "Wind {value} {direction}",
+    "humidity": "Humidity {value}%",
+    "wetTrack": "Wet track",
+    "dryTrack": "Dry track",
+    "championship": "Championship",
+    "points": "{count, plural, one {# pt} other {# pts}}",
+    "tyres": "Tyres",
+    "startingOn": "Fitted",
+    "alsoAvailable": "Also available",
+    "startingGrid": "Starting grid",
+    "place": "P{position}",
+    "pole": "Pole",
+    "field": "The field",
+    "startRace": "Start the race",
+    "startQualifying": "Start qualifying",
+    "testDay": "Test day",
+    "targetLap": "Target {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% front",
+    "drivetrain": {
+      "rwd": "Rear-wheel drive",
+      "fwd": "Front-wheel drive",
+      "awd": "All-wheel drive"
+    },
+    "revLimit": "{value} rpm limit",
+    "go": "Go",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Race events",
+    "event": {
+      "winner": "Winner",
+      "newLeader": "New leader",
+      "fastestLap": "Fastest lap",
+      "pitStop": "Pit stop",
+      "retired": "Retired"
+    },
+    "lap": "Lap {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Battle for P{position}",
+    "attacking": "Attacking",
+    "closing": "Closing {rate} s/lap",
+    "closingCatch": "Closing {rate} s/lap · catch in {laps, plural, one {# lap} other {# laps}}",
+    "pullingAway": "Pulling away",
+    "stable": "Gap stable"
   },
   "lapTelemetry": {
     "title": "Lap telemetry",

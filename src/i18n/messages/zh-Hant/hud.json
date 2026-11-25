@@ -487,6 +487,20 @@
     "third": "第 3 名",
     "skip": "略過"
   },
+  "podiumBoard": {
+    "label": "頒獎台",
+    "close": "關閉",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}，{name}",
+    "classification": "排名",
+    "pointsScored": "{count, plural, other {+# 分}}",
+    "noPoints": "未得分",
+    "championshipPlace": "錦標賽 P{position}",
+    "placesUp": "{count, plural, other {上升 # 名}}",
+    "placesDown": "{count, plural, other {下降 # 名}}",
+    "pointsTotal": "{count, plural, other {共 # 分}}"
+  },
   "qualifyingHud": {
     "clock": "排位賽",
     "lastLap": "上一圈",
@@ -521,7 +535,9 @@
       "fuelTag": "燃油",
       "fuelTitle": "燃油與電量",
       "stndTag": "排名",
-      "stndTitle": "場上排名"
+      "stndTitle": "場上排名",
+      "pitTag": "進站",
+      "pitTitle": "進站維修"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD 頁面",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {# 圈}}"
+    },
+    "pit": {
+      "tyres": "下次換胎",
+      "repair": "修復車損",
+      "repairTime": "車損 {damage}% · +{seconds} s",
+      "noDamage": "無車損",
+      "box": "本圈進站",
+      "limit": "限速 {limit} km/h · {box} 號維修位",
+      "on": "開啟",
+      "off": "關閉",
+      "boxCalled": "將進站",
+      "callBox": "呼叫",
+      "stops": "進站次數",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {未進站} other {已進站 # 次}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "領先",
       "lastVsBestTitle": "上一圈與個人最佳相比",
       "lastVsTheirsTitle": "對方上一圈與你相比",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "進站",
+      "pitClock": "進站 {seconds}"
     },
     "lap": {
       "region": "單圈計時",
@@ -1130,6 +1163,90 @@
     "resetAll": "重設配置",
     "cancel": "取消",
     "done": "完成"
+  },
+  "pit": {
+    "boxBox": "進站",
+    "limiter": "限速",
+    "stop": "停車",
+    "go": "出發",
+    "crew": "維修組",
+    "fitting": "換上{compound}",
+    "fittingRepairing": "換上{compound} · 修復中",
+    "stopTime": "停站 {seconds} s",
+    "inBox": "{box} 號維修位",
+    "lane": "維修區",
+    "boxIn": "距 {box} 號維修位 {metres} m",
+    "boxPassed": "已駛過 {box} 號維修位",
+    "approach": "維修區入口 · 限速 {limit} km/h",
+    "limiterKey": "限速器：{key}",
+    "stopsPill": "進站 {made}/{required}",
+    "stopRequired": "{remaining, plural, other {進站 · 尚需 # 次強制進站}}"
+  },
+  "preRace": {
+    "label": "賽前節目",
+    "skip": "略過",
+    "start": "開始",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "第 {round} 站（共 {rounds} 站）",
+    "lengthKm": "{value} km",
+    "lengthMi": "{value} mi",
+    "riseM": "高低落差 {value} m",
+    "riseFt": "高低落差 {value} ft",
+    "turns": "{count, plural, other {# 個彎道}}",
+    "laps": "{count, plural, other {# 圈}}",
+    "stops": "{count, plural, other {# 次進站}}",
+    "noStops": "無需進站",
+    "qualifyingMin": "{minutes} 分鐘排位賽",
+    "gridByPace": "依速度排位",
+    "air": "氣溫 {value}",
+    "track": "賽道 {value}",
+    "wind": "風速 {value} {direction}",
+    "humidity": "濕度 {value}%",
+    "wetTrack": "濕地賽道",
+    "dryTrack": "乾地賽道",
+    "championship": "錦標賽",
+    "points": "{count, plural, other {# 分}}",
+    "tyres": "輪胎",
+    "startingOn": "已裝配",
+    "alsoAvailable": "其他可用",
+    "startingGrid": "起跑排位",
+    "place": "P{position}",
+    "pole": "桿位",
+    "field": "參賽陣容",
+    "startRace": "開始賽事",
+    "startQualifying": "開始排位賽",
+    "testDay": "測試日",
+    "targetLap": "目標 {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "前軸 {value}%",
+    "drivetrain": {
+      "rwd": "後輪驅動",
+      "fwd": "前輪驅動",
+      "awd": "四輪驅動"
+    },
+    "revLimit": "斷油轉速 {value} rpm",
+    "go": "出發",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "賽事事件",
+    "event": {
+      "winner": "冠軍",
+      "newLeader": "新領先者",
+      "fastestLap": "最快單圈",
+      "pitStop": "進站",
+      "retired": "退賽"
+    },
+    "lap": "第 {lap} 圈",
+    "stationary": "{seconds} 秒",
+    "battleFor": "爭奪 P{position}",
+    "attacking": "發動攻勢",
+    "closing": "每圈追近 {rate} 秒",
+    "closingCatch": "每圈追近 {rate} 秒 · {laps, plural, other {# 圈}}後追上",
+    "pullingAway": "逐漸拉開",
+    "stable": "差距穩定"
   },
   "lapTelemetry": {
     "title": "單圈遙測",

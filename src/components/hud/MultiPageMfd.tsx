@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
-import type { CarTelemetry, LiveTunerPatch, TireCompound } from "@/types/f1";
+import type { CarTelemetry, LiveTunerPatch, PitStrategyState, TireCompound } from "@/types/f1";
 import type { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
@@ -32,10 +32,14 @@ import { computeRelatives, fuelStrategy, useLapHistory, type LapRecord, type Rel
 import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE, LapMarkGlyph } from "./styles/hud-style-parts";
 import { SkinButton, skinCss, SkinPanel, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudModeRef } from "./hud-mode";
+import { MfdPitPage, MfdPitPill } from "./MfdPitPage";
+import { usePitGap } from "./pit-clock";
 
-export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd";
+export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd" | "pit";
 
 const PAGES: { id: MfdPageId }[] = [{ id: "elec" }, { id: "rel" }, { id: "tyre" }, { id: "fuel" }, { id: "stnd" }];
+/** With pit stops in the session, the Pit page too */
+const PAGES_WITH_PIT: { id: MfdPageId }[] = [...PAGES, { id: "pit" }];
 
 /** D-pad quiet time after which an MFD opened via D-pad folds back to its compact status pill */
 const AUTO_FOLD_MS = 3500;
@@ -59,6 +63,7 @@ function useMfdText() {
         tyre: { tag: tx("pages.tyreTag"), title: tx("pages.tyreTitle") },
         fuel: { tag: tx("pages.fuelTag"), title: tx("pages.fuelTitle") },
         stnd: { tag: tx("pages.stndTag"), title: tx("pages.stndTitle") },
+        pit: { tag: tx("pages.pitTag"), title: tx("pages.pitTitle") },
       } satisfies Record<MfdPageId, { tag: string; title: string }>,
       pagesLabel: tx("pagesLabel"),
       pagesHint: tx("pagesHint"),
@@ -96,7 +101,7 @@ const lapDiffText = (text: ReturnType<typeof useMfdText>, lapDiff: number) =>
 function readPage(): MfdPageId {
   try {
     const v = window.localStorage.getItem(PAGE_KEY);
-    if (v && PAGES.some((p) => p.id === v)) return v as MfdPageId;
+    if (v && PAGES_WITH_PIT.some((p) => p.id === v)) return v as MfdPageId;
   } catch {
     // Storage blocked: start on the tuner
   }
@@ -396,6 +401,7 @@ const Empty: React.FC<{ text: string }> = ({ text }) => {
 const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, laps }) => {
   const skin = useHudSkin();
   const text = useMfdText();
+  const pitGap = usePitGap();
   const standings = t.race?.standings;
   if (standings && standings.length > 0) {
     const fastest = standings.reduce<number | null>((m, s) => (s.bestLapMs && (m === null || s.bestLapMs < m) ? s.bestLapMs : m), null);
@@ -437,7 +443,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                       {formatLapTime(s.bestLapMs)}
                     </span>
                   </td>
-                  <td className="w-13 pe-1 text-end">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                  <td className="w-13 pe-1 text-end">{pitGap(s) ?? (pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`)}</td>
                 </tr>
               );
             }
@@ -458,7 +464,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                     {formatLapTime(s.bestLapMs)}
                   </span>
                 </td>
-                <td className="w-13 rounded-e-lc-nub pe-1 text-end">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                <td className="w-13 rounded-e-lc-nub pe-1 text-end">{pitGap(s) ?? (pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`)}</td>
               </tr>
             );
           })}
@@ -547,6 +553,8 @@ export interface MultiPageMfdProps {
   defaultFolded?: boolean;
   /** Fold back to the pill 3.5 s after the last D-pad press when the D-pad opened it */
   autoFold?: boolean;
+  /** The Pit page's choices (pit/pit-stop.ts) */
+  onChangePitStrategy?: (patch: Partial<PitStrategyState>) => void;
 }
 
 /**
@@ -563,11 +571,17 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   playerCode,
   defaultFolded = false,
   autoFold = true,
+  onChangePitStrategy,
 }) => {
   const skin = useHudSkin();
   const text = useMfdText();
   const code = playerCode ?? text.you;
-  const [page, setPage] = useState<MfdPageId>(readPage);
+  const [chosenPage, setPage] = useState<MfdPageId>(readPage);
+  // The Pit page exists only with pit stops in the session: without them its tab is gone and the MFD shows Electronics
+  const pages = t.pit ? PAGES_WITH_PIT : PAGES;
+  const page: MfdPageId = chosenPage === "pit" && !t.pit ? "elec" : chosenPage;
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
   const [folded, setFolded] = useState(defaultFolded);
   const laps = useLapHistory(t);
   const units = useUnits();
@@ -600,8 +614,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   }, []);
   const stepPage = useCallback(
     (delta: -1 | 1) => {
-      const idx = PAGES.findIndex((x) => x.id === pageRef.current);
-      choose(PAGES[(idx + delta + PAGES.length) % PAGES.length].id);
+      const list = pagesRef.current;
+      const idx = list.findIndex((x) => x.id === pageRef.current);
+      choose(list[(idx + delta + list.length) % list.length].id);
     },
     [choose]
   );
@@ -688,6 +703,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
     const dimCls = skinned ? skinCss.inkDim : "text-lc-slate";
     const infoCls = skinned ? skinCss.inkInfo : "text-lc-info";
     if (page === "elec") return <MfdStatusChips telemetry={t} />;
+    if (page === "pit" && t.pit) return <MfdPitPill pit={t.pit} className={inkCls} />;
     if (page === "rel") {
       const i = rows.findIndex((r) => r.isPlayer);
       const ahead = rows[i - 1];
@@ -757,6 +773,8 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
             <TyrePage t={t} />
           ) : page === "fuel" ? (
             <FuelPage t={t} laps={laps} L={trackLengthM} />
+          ) : page === "pit" && t.pit ? (
+            <MfdPitPage pit={t.pit} onChange={onChangePitStrategy} />
           ) : (
             <StandingsPage t={t} laps={laps} />
           )}
@@ -795,7 +813,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         ) : (
           <div className="flex items-center gap-1">
             <div className={`flex min-w-0 flex-1 gap-1 ${skinCss.tablist}`} role="tablist" aria-label={text.pagesLabel} title={text.pagesHint}>
-              {PAGES.map((p) => (
+              {pages.map((p) => (
                 <SkinButton
                   key={p.id}
                   role="tab"
@@ -865,7 +883,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
           {/* Page strip */}
           <div className="flex items-center gap-1">
             <div className="flex min-w-0 flex-1 gap-1" role="tablist" aria-label={text.pagesLabel} title={text.pagesHint}>
-              {PAGES.map((p) => (
+              {pages.map((p) => (
                 <button
                   key={p.id}
                   type="button"

@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menu",
     "poolRace": "Cuộc đua",
-    "poolResults": "Kết quả và phát lại"
+    "poolResults": "Kết quả và phát lại",
+    "poolShow": "Trước cuộc đua"
   },
   "carQuality": {
     "ownBadge": "Vật lý riêng",
@@ -270,7 +271,8 @@
     "hud": "Hiện / ẩn HUD",
     "board": "Mở / đóng bảng xếp hạng vòng",
     "headlights": "Bật / tắt đèn pha",
-    "headlightFlash": "Nháy đèn pha (giữ)"
+    "headlightFlash": "Nháy đèn pha (giữ)",
+    "pitLimiter": "Giới hạn tốc độ pit"
   },
   "padActions": {
     "shiftUp": "Lên số",
@@ -295,7 +297,8 @@
     "hud": "Hiện / ẩn HUD",
     "board": "Mở / đóng bảng xếp hạng vòng",
     "headlights": "Đèn pha (nhấn: nháy, giữ: bật / tắt)",
-    "headlightFlash": "Nháy đèn pha (giữ)"
+    "headlightFlash": "Nháy đèn pha (giữ)",
+    "pitLimiter": "Giới hạn tốc độ pit"
   },
   "pedals": {
     "throttle": "Chân ga",
@@ -845,6 +848,8 @@
     "launchKey": "Giữ {key} để xuất phát · Esc Menu",
     "noRacesOnHillClimb": "Không hỗ trợ đua chính trên đường đua leo đồi",
     "backToRaces": "Quay lại danh sách cuộc đua",
+    "backToCareer": "Quay lại sự nghiệp",
+    "restartMulligan": "{count, plural, other {Dùng một lượt đua lại: còn #}}",
     "carAutoSwitched": "Đã chuyển sang {car}: sảnh chờ khóa theo {rule}",
     "carBlockedByLobby": "Xe bị khóa theo {rule} khi ở trong sảnh chờ này"
   },
@@ -947,5 +952,9 @@
       "saveChanged": "Bản lưu đám mây đã bị thay đổi trên thiết bị khác",
       "tooManyLaps": "Đám mây lưu tối đa {count} vòng tốt nhất"
     }
+  },
+  "pit": {
+    "speeding": "Chạy quá tốc độ trong làn pit (trên {limit} km/h)",
+    "stopMissed": "{count, plural, other {Không thực hiện # lần dừng pit bắt buộc}}"
   }
 }

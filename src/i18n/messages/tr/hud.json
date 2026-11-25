@@ -487,6 +487,20 @@
     "third": "3.",
     "skip": "Atla"
   },
+  "podiumBoard": {
+    "label": "Podyum",
+    "close": "Kapat",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Klasman",
+    "pointsScored": "{count, plural, one {+# puan} other {+# puan}}",
+    "noPoints": "Puan yok",
+    "championshipPlace": "Şampiyona P{position}",
+    "placesUp": "{count, plural, one {# sıra yükseldi} other {# sıra yükseldi}}",
+    "placesDown": "{count, plural, one {# sıra düştü} other {# sıra düştü}}",
+    "pointsTotal": "{count, plural, one {Toplam # puan} other {Toplam # puan}}"
+  },
   "qualifyingHud": {
     "clock": "Sıralama turları",
     "lastLap": "Son tur",
@@ -521,7 +535,9 @@
       "fuelTag": "Yakıt",
       "fuelTitle": "Yakıt ve enerji",
       "stndTag": "Sıra",
-      "stndTitle": "Sıralama"
+      "stndTitle": "Sıralama",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD sayfaları",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# tur} other {# tur}}"
+    },
+    "pit": {
+      "tyres": "Sonraki lastik",
+      "repair": "Hasarı onar",
+      "repairTime": "Hasar %{damage} · +{seconds} s",
+      "noDamage": "Hasar yok",
+      "box": "Bu tur pite gir",
+      "limit": "Sınır {limit} km/h · box {box}",
+      "on": "Açık",
+      "off": "Kapalı",
+      "boxCalled": "Pit çağrıldı",
+      "callBox": "Çağır",
+      "stops": "Pit stop",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {Pit stop yok} one {# pit stop} other {# pit stop}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "Lider",
       "lastVsBestTitle": "Son tur, en iyine göre",
       "lastVsTheirsTitle": "Onun son turu, seninkine göre",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Tur",
@@ -1130,6 +1163,90 @@
     "resetAll": "Düzeni sıfırla",
     "cancel": "İptal",
     "done": "Tamam"
+  },
+  "pit": {
+    "boxBox": "Pite gir",
+    "limiter": "Sınırlayıcı",
+    "stop": "Dur",
+    "go": "Çık",
+    "crew": "Ekip",
+    "fitting": "Takılan: {compound}",
+    "fittingRepairing": "Takılan: {compound} · onarım",
+    "stopTime": "Duruş {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit yolu",
+    "boxIn": "Box {box}: {metres} m kaldı",
+    "boxPassed": "Box {box} geçildi",
+    "approach": "Pit girişi · sınır {limit} km/h",
+    "limiterKey": "Sınırlayıcı: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Pite gir · # zorunlu pit stop} other {Pite gir · # zorunlu pit stop}}"
+  },
+  "preRace": {
+    "label": "Yarış öncesi yayını",
+    "skip": "Atla",
+    "start": "Başlat",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "Ayak {round}/{rounds}",
+    "lengthKm": "{value} km",
+    "lengthMi": "{value} mi",
+    "riseM": "{value} m yükselti",
+    "riseFt": "{value} ft yükselti",
+    "turns": "{count, plural, one {# viraj} other {# viraj}}",
+    "laps": "{count, plural, one {# tur} other {# tur}}",
+    "stops": "{count, plural, one {# pit stop} other {# pit stop}}",
+    "noStops": "Pit stop yok",
+    "qualifyingMin": "{minutes} dk sıralama",
+    "gridByPace": "Grid tempoya göre",
+    "air": "Hava {value}",
+    "track": "Pist {value}",
+    "wind": "Rüzgar {value} {direction}",
+    "humidity": "Nem %{value}",
+    "wetTrack": "Islak pist",
+    "dryTrack": "Kuru pist",
+    "championship": "Şampiyona",
+    "points": "{count, plural, one {# puan} other {# puan}}",
+    "tyres": "Lastikler",
+    "startingOn": "Takılı",
+    "alsoAvailable": "Diğer seçenekler",
+    "startingGrid": "Başlangıç gridi",
+    "place": "P{position}",
+    "pole": "Pole",
+    "field": "Pilotlar",
+    "startRace": "Yarışı başlat",
+    "startQualifying": "Sıralamayı başlat",
+    "testDay": "Test günü",
+    "targetLap": "Hedef {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "Önde %{value}",
+    "drivetrain": {
+      "rwd": "Arkadan itiş",
+      "fwd": "Önden çekiş",
+      "awd": "Dört çeker"
+    },
+    "revLimit": "Devir sınırı {value} d/dk",
+    "go": "Başla",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Yarış olayları",
+    "event": {
+      "winner": "Kazanan",
+      "newLeader": "Yeni lider",
+      "fastestLap": "En hızlı tur",
+      "pitStop": "Pit duruşu",
+      "retired": "Yarış dışı"
+    },
+    "lap": "{lap}. tur",
+    "stationary": "{seconds} s",
+    "battleFor": "P{position} mücadelesi",
+    "attacking": "Atakta",
+    "closing": "Turda {rate} s yaklaşıyor",
+    "closingCatch": "Turda {rate} s yaklaşıyor · {laps, plural, other {# turda}} yetişir",
+    "pullingAway": "Uzaklaşıyor",
+    "stable": "Fark sabit"
   },
   "lapTelemetry": {
     "title": "Tur telemetrisi",

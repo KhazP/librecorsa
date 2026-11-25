@@ -708,6 +708,24 @@ export const playerNames = toggle({
   get label() { return rt("showPlayerNames.label"); },
   ...hud("showPlayerNames"),
 });
+export const preRaceShow = toggle({
+  id: "preRaceShow",
+  get label() { return rt("preRaceShow.label"); },
+  hint: () => rt("preRaceShow.hint"),
+  ...hud("preRaceShow"),
+});
+export const fullPodium = toggle({
+  id: "fullPodium",
+  get label() { return rt("fullPodium.label"); },
+  hint: () => rt("fullPodium.hint"),
+  ...hud("fullPodium"),
+});
+export const raceEventCards = toggle({
+  id: "raceEventCards",
+  get label() { return rt("raceEventCards.label"); },
+  hint: () => rt("raceEventCards.hint"),
+  ...hud("raceEventCards"),
+});
 export const boardWidget = choice("segmented", {
   id: "boardWidget",
   get label() { return rt("boardWidget.label"); },

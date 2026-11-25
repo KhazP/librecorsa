@@ -260,3 +260,25 @@
 | combine saves | combina / unire i salvataggi | Button "Combina" |
 | driver key | chiave del pilota | Existing term, unchanged |
 | driver name | nome da pilota | |
+
+## Career
+| English | Italian | Note |
+|---|---|---|
+| career | carriera | |
+| career mode | modalità carriera | |
+| ladder | percorso | Tab "Percorso"; "Percorso: {discipline}" |
+| tier | livello | "Livello {tier}" |
+| discipline | disciplina | Road racing = Corse su pista, Historic racing = Corse storiche |
+| series | serie | Series names stay English (Club Cup, GT3, Can-Am Legends); "Coppa Prototipi", "Prototipi Endurance", "Gruppo 4 Classic" |
+| promotion / promoted | promozione / promosso | Cut line: "soglia promozione" |
+| attempt | tentativo | |
+| mulligan | mulligan | Golf loanword, invariable plural: restart a round left early |
+| bonus objective | obiettivo bonus | |
+| test day | giornata di test | |
+| pre-season | pre-stagione | |
+| round | round (m, invariable) | Not "giro", which is a lap. Tag stays "R{round}" |
+| standings | classifica del campionato | "Classifica" alone is the lap board |
+| career score | punteggio carriera | "pt" for championship points |
+| multiplier | moltiplicatore | |
+| pit stop / mandatory stop | sosta ai box / sosta obbligatoria | |
+| regions | Americhe, Europa, Asia-Pacifico | |

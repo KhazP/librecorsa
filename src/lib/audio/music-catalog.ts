@@ -1,12 +1,15 @@
 /**
  * The soundtrack: public-domain classical recordings (CC0 or US government works), one MP3 each under /music/,
  * loudness-matched to -16 LUFS (each one's remainder in gainDb). Each track belongs to one pool, and the music director
- * picks the pool from where the player is (music-director.ts): the menus, a race, or the results and replays.
+ * picks the pool from where the player is (music-director.ts): the menus, a race, the results and replays, or the
+ * career's pre-race show (a cue cut to its scenes).
  */
 import { text as tx } from "@/lib/text";
+import type { ShowMarkers } from "@/lib/show/show-timeline";
 import { withBasePath } from "@/lib/base-path";
 
-export type MusicPool = "menu" | "race" | "results";
+/** The menus, a race, the flag and after; and the career's pre-race show (its own cue, never shuffled with the rest) */
+export type MusicPool = "menu" | "race" | "results" | "show";
 
 export interface MusicTrack {
   /** The file's name under /music/ and the id the settings keep */
@@ -29,6 +32,8 @@ export interface MusicTrack {
   source: string;
   /** One of these opens the menus the first time they play */
   opener?: boolean;
+  /** The pre-race show's cue: where its sections fall, the scenes cut to them (show-timeline.ts) */
+  show?: ShowMarkers;
 }
 
 const COMMONS = "Wikimedia Commons";
@@ -69,7 +74,14 @@ export const MUSIC_TRACKS: readonly MusicTrack[] = [
   { id: "brahms-2-finale", title: "Symphony No. 2: IV. Allegro con spirito", composer: "Johannes Brahms", performer: "Czech National Symphony Orchestra", pool: "results", gainDb: -0.3, startS: 0.23, endS: 583.8, licence: "CC0", source: MUSOPEN },
   { id: "haydn-lark-allegro", title: "\"Lark\" Quartet: I. Allegro moderato", composer: "Joseph Haydn", performer: "Musopen String Quartet", pool: "results", gainDb: 0.1, startS: 0.13, endS: 370.9, licence: "CC0", source: MUSOPEN },
   { id: "dvorak-american-finale", title: "\"American\" Quartet: IV. Finale", composer: "Antonín Dvořák", performer: "Musopen String Quartet", pool: "results", gainDb: -0.5, startS: 0.13, endS: 350.4, licence: "CC0", source: MUSOPEN },
+
+  // The career's pre-race show: the finale's opening, cut so its brass returns on the tyres (43 s), its coda drives the
+  // grid and peaks on pole (88 s), and its last chord holds over the start card. Played once, from the top
+  { id: "show-new-world", title: "\"New World\" Symphony: IV. Allegro con fuoco", composer: "Antonín Dvořák", performer: "Musopen", pool: "show", gainDb: 0.4, startS: 0, endS: 105.4, licence: "Public domain", source: COMMONS, show: { tyresAtS: 43, gridAtS: 52, climaxS: 88 } },
 ];
+
+/** The pre-race show's sections, from its cue */
+export const SHOW_CUE_MARKERS: ShowMarkers | undefined = MUSIC_TRACKS.find((t) => t.pool === "show" && t.show)?.show;
 
 export const MUSIC_TRACK_IDS: ReadonlySet<string> = new Set(MUSIC_TRACKS.map((t) => t.id));
 
@@ -81,4 +93,5 @@ export const POOL_LABEL: Record<MusicPool, string> = {
   get menu() { return tx("game.music.poolMenu"); },
   get race() { return tx("game.music.poolRace"); },
   get results() { return tx("game.music.poolResults"); },
+  get show() { return tx("game.music.poolShow"); },
 };

@@ -330,7 +330,7 @@ let activateGen = 0;
  * active track (`setActiveTrack` reads all of the data before it switches anything), so after one, the active track
  * is still the last one activated (`ACTIVE_TRACK_ID`): the circuit to fall back to.
  */
-export async function activateTrack(id: string): Promise<TrackInfo> {
+export async function activateTrack(id: string, opts?: { remember?: boolean }): Promise<TrackInfo> {
   if (!TRACKS.some((t) => t.id === id)) throw new Error(`Unknown circuit "${id}"`);
   const gen = ++activateGen;
   const info = getTrackInfo(id);
@@ -346,6 +346,7 @@ export async function activateTrack(id: string): Promise<TrackInfo> {
     const raw = info.mod ? resolveModTrackUrls(json, info.mod.packageId) : json;
     setActiveTrack(info.id, raw);
   }
-  storeTrackId(info.id);
+  // A career round's circuit is the round's, not the player's next pick
+  if (opts?.remember !== false) storeTrackId(info.id);
   return info;
 }

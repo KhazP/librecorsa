@@ -1,14 +1,17 @@
 /**
  * Checks the podium shot after a race (`src/lib/render/podium-shot.ts`): when it plays (the top three known, once per
  * race, skippable, straight to the table when something is missing), where the cars park on the start/finish straight,
- * that the camera keeps all three in frame on a wide and a narrow screen, and which cars are drawn where.
+ * that the camera keeps all three in frame on a wide and a narrow screen, and which cars are drawn where. Then the
+ * full-screen podium after it: when it follows the shot, how long it stays, what closes it, and its aerial camera.
  * Run: npx tsx scripts/verify/verify-podium-shot.ts
  */
 import * as THREE from "three";
 import { getActiveTrackData } from "../../src/lib/track-data";
 import type { RaceResultEntry, RaceStatus } from "../../src/types/f1";
 import type { InterpolatedPeerState } from "../../src/lib/sim/multiplayer-sync";
+import type { ShowContext } from "../../src/lib/show/show-context";
 import {
+  PODIUM_BOARD_S,
   PODIUM_SHOT_S,
   PODIUM_WAIT_S,
   PodiumDirector,
@@ -192,6 +195,121 @@ console.log("The cars drawn during the shot");
   const lost = new PodiumDirector(track, () => ended++);
   lost.update({ race: three, dt: 0.1, allowed: true, peers: [peer("x", "X")], ground: null });
   check("a top-three car not on track: straight to the table", lost.getSnapshot().stage === "done" && ended === 2);
+}
+
+console.log("The full-screen podium after the shot");
+{
+  const three = [row(1, "A"), row(2, "YOU"), row(3, "C")];
+  const yes = () => true;
+  const f = new PodiumFlow();
+  f.step(status(three), 0.1, true, yes, true);
+  check("the shot first", f.stage === "playing");
+  for (let t = 0; t < PODIUM_SHOT_S + 0.2; t += 0.1) f.step(status(three), 0.1, true, yes, true);
+  check("then the full-screen podium, the top three kept", f.stage === "board" && f.rows.length === 3);
+  for (let t = 0; t < PODIUM_BOARD_S - 1; t += 0.5) f.step(status(three), 0.5, true, yes, true);
+  check("up to half a minute", f.stage === "board" && f.boardElapsedS > PODIUM_BOARD_S - 2);
+  for (let t = 0; t < 2; t += 0.5) f.step(status(three), 0.5, true, yes, true);
+  check("then the table", f.stage === "done" && f.rows.length === 0);
+  f.step(status(three, true), 0.1, true, yes, true);
+  check("once per race", f.stage === "done");
+  f.step(status(undefined), 0.1, true, yes, true);
+  check("a restart starts it over", f.stage === "idle" && f.boardElapsedS === 0);
+
+  const held = new PodiumFlow();
+  held.step(status(three), 0.1, true, () => false, true);
+  for (let t = 0; t < 60; t += 1) held.step(status(three), 0, true, yes, true);
+  check("the pause menu (no time passing) holds it up", held.stage === "board" && held.boardElapsedS === 0);
+
+  const k = new PodiumFlow();
+  k.step(status(three), 0.1, true, yes, true);
+  check("a key in the shot: on to the full-screen podium", k.skip() && k.stage === "board" && k.rows.length === 3);
+  check("a key on it: the table", k.skip() && k.stage === "done" && k.rows.length === 0 && !k.skip());
+
+  const noShot = new PodiumFlow();
+  noShot.step(status(three), 0.1, true, () => false, true);
+  check("a shot that cannot be set up: straight to the full-screen podium", noShot.stage === "board");
+
+  const online = new PodiumFlow();
+  online.step(status(three), 0.1, true, yes, false);
+  for (let t = 0; t < PODIUM_SHOT_S + 0.2; t += 0.1) online.step(status(three), 0.1, true, yes, false);
+  check("not to be had (online, the setting off): the table after the shot", online.stage === "done");
+
+  const vr = new PodiumFlow();
+  vr.step(status(three), 0.1, true, () => false, true);
+  vr.step(status(three), 0.1, false, yes, true);
+  check("not allowed any more (VR, a replay): the table", vr.stage === "done");
+  const turnedOff = new PodiumFlow();
+  turnedOff.step(status(three), 0.1, true, () => false, true);
+  turnedOff.step(status(three), 0.1, true, yes, false);
+  check("switched off while up: the table", turnedOff.stage === "done");
+
+  const out = new PodiumFlow();
+  out.step(status([row(1, "A"), row(2, "B"), row(3, "C"), row(4, "YOU", { finishTimeS: null, dnf: true })]), 0.1, true, yes, true);
+  check("the player out of the race: the table at once", out.stage === "done");
+  const slow = new PodiumFlow();
+  const behind = status([row(1, "YOU"), row(2, "B", { finishTimeS: null }), row(3, "C", { finishTimeS: null })]);
+  for (let t = 0; t < PODIUM_WAIT_S + 1; t += 0.5) slow.step(behind, 0.5, true, yes, true);
+  check("no top three in time: the table, no full-screen podium", slow.stage === "done");
+  const stopped = new PodiumFlow();
+  stopped.step(status(three), 0.1, true, () => false, true);
+  check("stopped (an error): the table", stopped.stop() && stopped.stage === "done" && !stopped.stop());
+}
+
+console.log("The full-screen podium on the drive's scene");
+{
+  const track = getActiveTrackData();
+  const peer = (id: string, code: string): InterpolatedPeerState =>
+    ({
+      peerId: id,
+      driverCode: code,
+      teamColorHex: "#fff",
+      position: new THREE.Vector3(100, 2, 100),
+      quaternion: new THREE.Quaternion(),
+      linearVelocity: new THREE.Vector3(10, 0, 0),
+      wheelRPMs: [900, 900, 900, 900],
+      speedKmh: 140,
+      isAiPeer: true,
+    }) as InterpolatedPeerState;
+  const peers = [peer("a", "A"), peer("c", "C"), peer("x", "X")];
+  const three = status([row(1, "A"), row(2, "YOU"), row(3, "C")]);
+  const ctx = { seriesId: "s", roundIndex: 2, rounds: 6, drivers: {}, standings: [] } as unknown as ShowContext;
+  let ended = 0;
+  const d = new PodiumDirector(track, () => ended++);
+  const frame = (dt: number) => ({ race: three, dt, allowed: true, board: true, context: ctx, peers, ground: null });
+  d.update(frame(0.1));
+  check("the shot plays first", d.playing && d.getSnapshot().stage === "playing");
+  check("the overlay is told the career round", d.getSnapshot().context === ctx);
+  d.skip();
+  check("a key: the full-screen podium, the screen still the podium's", d.playing && d.getSnapshot().stage === "board" && ended === 0);
+  check("the cars drawn where they are again", d.drawPeers(peers) === peers);
+  const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 5000);
+  check("without a view the drive's cameras keep it", !d.placeCamera(cam));
+  const view = { fogDensity: 0.00035, still: false };
+  check("the aerial has the camera", d.placeCamera(cam, view) && cam.fov === 40);
+  const roadY = track.getSampleAtDistance(track.spawnGrid[0]?.s ?? 0).position.y;
+  check("high over the circuit", cam.position.y > roadY + 60, `${cam.position.y} vs ${roadY}`);
+  check("what follows the camera looks where it looks", d.focus !== null);
+  const first = cam.position.clone();
+  for (let i = 0; i < 20; i++) d.update(frame(0.1));
+  d.placeCamera(cam, view);
+  check("and flies on", cam.position.distanceTo(first) > 5 && d.boardTimeS() > 1.9);
+  const still = cam.position.clone();
+  d.update(frame(1));
+  d.placeCamera(cam, { ...view, still: true });
+  const held = cam.position.clone();
+  d.update(frame(1));
+  d.placeCamera(cam, { ...view, still: true });
+  check("reduced motion: one held frame", cam.position.distanceTo(held) < 1e-6 && held.distanceTo(still) > 0);
+  const portrait = new THREE.PerspectiveCamera(60, 9 / 19.5, 0.1, 5000);
+  check("a phone upright gets a wider view", d.placeCamera(portrait, view) && portrait.fov === 55);
+  d.skip();
+  check("closed: the table, the cameras start over", d.getSnapshot().stage === "done" && ended === 1 && !d.playing && !d.placeCamera(cam, view) && d.focus === null);
+
+  const timed = new PodiumDirector(track, () => ended++);
+  timed.update({ ...frame(0.1), peers: [] });
+  check("no shot to be had: straight to the full-screen podium", timed.getSnapshot().stage === "board");
+  for (let t = 0; t < PODIUM_BOARD_S + 1; t += 0.5) timed.update({ ...frame(0.5), peers: [] });
+  check("half a minute later: the table", timed.getSnapshot().stage === "done" && ended === 2);
 }
 
 console.log(`\n${passed} checks passed`);

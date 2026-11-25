@@ -8,6 +8,7 @@
  * car on the grid itself). The page's track environment goes on stepping the weather for drawing it; the worker's
  * weather is eased into it about once a second, and the road under the player (water, spray, rubber) is the worker's.
  */
+import type { AiDriverDef } from "../ai-opponents";
 import type { QualifyingGridInput } from "../qualifying";
 import * as THREE from "three";
 import type { RaceStatus } from "@/types/f1";
@@ -34,6 +35,7 @@ let raceNumber = 0;
 
 export class WorkerAiField implements AiRace, WorkerRaceView {
   raceLaps = 5;
+  pitStopsRequired = 0;
   gridOrder: AiGridOrder = "pace";
   playerGrid: PlayerGridSlot = "back";
   damageLevel: DamageLevel = "reduced";
@@ -46,6 +48,9 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void {
     if (this.race) this.link.post({ type: "race", op: "penalise", seconds, reason, detail });
+  }
+  repairPlayerDamage(): void {
+    if (this.race) this.link.post({ type: "race", op: "repair" });
   }
   private sentLockAids = true;
   qualifying: QualifyingGridInput | undefined = undefined;
@@ -91,7 +96,9 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     private readonly opponents: number,
     skill: number,
     /** The circuit's ground, which the AI cars' wheels are seated on as they are drawn */
-    private readonly ground: () => GroundQuery | null
+    private readonly ground: () => GroundQuery | null,
+    /** The field's own drivers (a career's rivals); absent: the game's */
+    private readonly drivers?: AiDriverDef[]
   ) {
     this.skillLevel = skill;
   }
@@ -138,6 +145,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
       skill: this.skillLevel,
       setup: {
         laps: this.raceLaps,
+        pitStops: this.pitStopsRequired,
         gridOrder: this.gridOrder,
         playerGrid: this.playerGrid,
         damage: this.damageLevel,
@@ -152,6 +160,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
       weather: this.env.weather.snapshot(),
       realism: { ...this.env.simRealism },
       seed: this.seed,
+      drivers: this.drivers,
     });
   }
 

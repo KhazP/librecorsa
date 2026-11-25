@@ -163,7 +163,7 @@ export class AudioBGMController {
   private disabled: ReadonlySet<string> = new Set();
   /** Tracks whose file would not load (absent in this checkout, or a network error): left out until a reload */
   private readonly unavailable = new Set<string>();
-  private readonly bags: Record<MusicPool, TrackBag> = { menu: new TrackBag(), race: new TrackBag(), results: new TrackBag() };
+  private readonly bags: Record<MusicPool, TrackBag> = { menu: new TrackBag(), race: new TrackBag(), results: new TrackBag(), show: new TrackBag() };
   /** Where a held pool's track stopped, to pick up from there */
   private readonly held: Partial<Record<MusicPool, { id: string; timeS: number }>> = {};
   private openerPlayed = false;
@@ -197,6 +197,18 @@ export class AudioBGMController {
 
   get unlocked(): boolean {
     return this.ctx !== null;
+  }
+
+  /** The music can sound for `pool` now: unlocked, its level above zero, a track of it playable */
+  canPlay(pool: MusicPool): boolean {
+    return this.ctx !== null && this.levelOf(pool) > 0 && MUSIC_TRACKS.some((t) => t.pool === pool && this.playable(t.id));
+  }
+
+  /** Where the pre-race show's cue is (s into the cue, from its start point), while it sounds; null otherwise */
+  showPositionS(): number | null {
+    const deck = this.decks[this.active];
+    if (!deck?.track || deck.pool !== "show" || deck.leaving || !deck.started || deck.el.paused) return null;
+    return deck.el.currentTime - (deck.track.startS ?? 0);
   }
 
   /**
@@ -458,7 +470,9 @@ export class AudioBGMController {
   }
 
   private levelOf(pool: MusicPool): number {
-    return this.levels.musicMuted ? 0 : Math.min(1, Math.max(0, this.levels[pool]));
+    // The pre-race show has no slider of its own: the cars are silent under it, so it sits at the menus' level
+    const level = pool === "show" ? this.levels.menu : this.levels[pool];
+    return this.levels.musicMuted ? 0 : Math.min(1, Math.max(0, level));
   }
 
   private playable(id: string): boolean {
@@ -484,8 +498,9 @@ export class AudioBGMController {
     this.playing = pool;
     const cur = this.decks[this.active];
     if (from && cur.track && cur.pool === from && !cur.leaving) {
-      // The menus always pick up where they were; another pool only when it was held (a restart at the lights)
-      if (pool === null || from === "menu") this.held[from] = { id: cur.track.id, timeS: cur.el.currentTime };
+      // The menus always pick up where they were; another pool only when it was held (a restart at the lights). The
+      // show's cue never: each show plays it from its own start
+      if (from !== "show" && (pool === null || from === "menu")) this.held[from] = { id: cur.track.id, timeS: cur.el.currentTime };
       else delete this.held[from];
     }
     if (pool === null) {
@@ -494,6 +509,18 @@ export class AudioBGMController {
       return;
     }
     const outS = from === "race" && pool === "results" ? FINISH_FADE_S : CROSSFADE_S;
+    if (pool === "show") {
+      // The show's cue from its start, or from the grid's section (the one loaded beforehand when it is there)
+      const armed = this.decks.find((d) => d.armed && d.pool === pool && d.track && this.playable(d.track.id));
+      const track = armed?.track ?? this.pick(pool);
+      if (!track) {
+        this.silence(outS);
+        this.onTrack(null);
+        return;
+      }
+      this.play(track, pool, (track.startS ?? 0) + Math.max(0, this.wanted.fromS ?? 0), true, outS, ENTRY_S);
+      return;
+    }
     const resume = this.held[pool];
     delete this.held[pool];
     const track = resume && this.playable(resume.id) ? musicTrack(resume.id) : undefined;
@@ -760,6 +787,11 @@ export class AudioBGMController {
     if (deck.el.paused || this.handover) return;
     const end = deck.track.endS ?? (Number.isFinite(deck.el.duration) ? deck.el.duration : Infinity);
     const left = end - deck.el.currentTime;
+    // The show's cue is played once: at its end it fades, and the start card waits in silence
+    if (deck.pool === "show") {
+      if (left <= END_LEAD_S) this.silence(TAIL_FADE_S);
+      return;
+    }
     if (left <= END_LEAD_S) this.playNext(deck.pool, TAIL_FADE_S, ENTRY_S);
     else if (left <= ARM_LEAD_S) this.armNext(deck);
   }
@@ -767,6 +799,7 @@ export class AudioBGMController {
   /** The file ran out before the handover (a missed timeupdate, a short file): the next track now */
   private onEnded(deck: Deck): void {
     if (deck !== this.decks[this.active] || deck.leaving || !deck.pool || deck.pool !== this.playing) return;
+    if (deck.pool === "show") return this.silence(TAIL_FADE_S);
     this.playNext(deck.pool, TAIL_FADE_S, ENTRY_S);
   }
 

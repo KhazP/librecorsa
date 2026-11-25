@@ -70,12 +70,39 @@ export function passFeasible(opts: {
   return madeUp > Math.max(0, opts.gapM) && madeUp > 0;
 }
 
+/** Crawling: under this share of the car's own speed (`hazardPaceProfile`) wherever it is… */
+const HAZARD_PACE_SHARE = 0.35;
+/** …or, in a slow corner, under this speed (m/s), but never more than this share of its own speed there */
+const HAZARD_FLOOR_MS = 8;
+export const HAZARD_FLOOR_SHARE = 0.55;
+/** A car braking into a corner at this share of its braking is still racing (lap 1, a queue braking early) */
+const HAZARD_EASY_BRAKING = 0.35;
+
 /**
  * A car on the road the others must treat as an obstacle, not as a car racing: spun, stopped, rejoining slowly, or
- * crawling (well under the road's speed)
+ * crawling, well under `ownSpeedMs`, the speed this car is expected to carry here (`hazardPaceProfile`). Its own, not
+ * the circuit's (the LC26's): a road car at its normal pace up a climb sat under a third of that and through a hairpin
+ * under 8 m/s, and was flagged lap after lap
  */
-export function isHazardSpeed(speedMs: number, roadSpeedMs: number): boolean {
-  return speedMs < Math.max(8, 0.35 * roadSpeedMs);
+export function isHazardSpeed(speedMs: number, ownSpeedMs: number): boolean {
+  return speedMs < Math.max(HAZARD_PACE_SHARE * ownSpeedMs, Math.min(HAZARD_FLOOR_MS, HAZARD_FLOOR_SHARE * ownSpeedMs));
+}
+
+/**
+ * The speeds `isHazardSpeed` judges a car by round the lap: its expected speeds (m/s, every `ds` m of a closed lap),
+ * with the braking zones eased to `HAZARD_EASY_BRAKING` of its braking at a speed (`brakingMs2`, m/s²). Its expected
+ * speeds brake at the limit, at the last moment: a queue braking early into a corner sat under a third of them
+ */
+export function hazardPaceProfile(expectedMs: ArrayLike<number>, ds: number, brakingMs2: (speedMs: number) => number): Float64Array {
+  const n = expectedMs.length;
+  const v = Float64Array.from(expectedMs);
+  // Backward pass, twice round the lap so the wrap is consistent
+  for (let pass = 0; pass < 2 * n; pass++) {
+    const i = n - 1 - (pass % n);
+    const vj = v[(i + 1) % n];
+    v[i] = Math.min(v[i], Math.sqrt(vj * vj + 2 * HAZARD_EASY_BRAKING * brakingMs2(vj) * ds));
+  }
+  return v;
 }
 
 /** Half-width a hazard takes across the road (m): a car sideways is near its length wide */

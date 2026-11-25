@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menu",
     "poolRace": "Race",
-    "poolResults": "Results and replay"
+    "poolResults": "Results and replay",
+    "poolShow": "Pre-race show"
   },
   "carQuality": {
     "ownBadge": "OWN PHYSICS",
@@ -270,7 +271,8 @@
     "hud": "Show / hide HUD",
     "board": "Open / close lap board",
     "headlights": "Headlights on / off",
-    "headlightFlash": "Flash headlights (hold)"
+    "headlightFlash": "Flash headlights (hold)",
+    "pitLimiter": "Pit speed limiter"
   },
   "padActions": {
     "shiftUp": "Gear up",
@@ -295,7 +297,8 @@
     "hud": "Show / hide HUD",
     "board": "Open / close lap board",
     "headlights": "Headlights (tap: flash, hold: on / off)",
-    "headlightFlash": "Flash headlights (hold)"
+    "headlightFlash": "Flash headlights (hold)",
+    "pitLimiter": "Pit speed limiter"
   },
   "pedals": {
     "throttle": "Throttle",
@@ -845,6 +848,8 @@
     "launchKey": "Hold {key} to launch · Esc Menu",
     "noRacesOnHillClimb": "No races on a hill climb",
     "backToRaces": "Back to the races",
+    "backToCareer": "Back to career",
+    "restartMulligan": "{count, plural, one {Uses a mulligan: # left} other {Uses a mulligan: # left}}",
     "carAutoSwitched": "Switched to {car}: lobby locked to {rule}",
     "carBlockedByLobby": "Car locked to {rule} while in this lobby"
   },
@@ -954,5 +959,9 @@
       "saveChanged": "The cloud save changed on another device",
       "tooManyLaps": "The cloud holds up to {count} best laps"
     }
+  },
+  "pit": {
+    "speeding": "Pit lane speeding (over {limit} km/h)",
+    "stopMissed": "{count, plural, one {Required pit stop not made} other {# required pit stops not made}}"
   }
 }

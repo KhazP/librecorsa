@@ -1,7 +1,7 @@
 /**
  * The penalties race control hands out in a race, per car: every call kept with its kind and reason, the time
- * penalties summed for the classification. Sprint races have no pit lane, so every penalty is time added at the
- * flag, a warning, or a disqualification.
+ * penalties summed for the classification. Every penalty is time added at the flag, a warning, or a disqualification
+ * (pit stops exist, pit/pit-stop.ts, but no drive-through is served: a pit-lane call is time at the flag too).
  *
  * No three.js and no DOM: the worker and the race server can import this file.
  */
@@ -19,7 +19,9 @@ export type PenaltyReason =
   | "jump_start"
   | "collision"
   | "unsafe_rejoin"
-  | "unsportsmanlike";
+  | "unsportsmanlike"
+  | "pit_speeding"
+  | "pit_stop_missed";
 
 export interface PenaltyEntry {
   id: number;

@@ -65,9 +65,12 @@ export function Modal({
       around.push(el);
       if (el.hasAttribute("data-nav-zone")) break;
     }
-    const raf = requestAnimationFrame(() =>
-      sheetRef.current?.querySelector<HTMLElement>("[data-nav-default]")?.focus({ preventScroll: true }),
-    );
+    const raf = requestAnimationFrame(() => {
+      const target =
+        sheetRef.current?.querySelector<HTMLElement>("[data-nav-default]") ??
+        sheetRef.current?.querySelector<HTMLElement>("[data-modal-close]");
+      target?.focus({ preventScroll: true });
+    });
     const onKey = (e: KeyboardEvent) => {
       // Leave Escape/Tab to a nested dialog portalled above this modal (such as the Fastest Lap popover)
       const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
@@ -141,7 +144,7 @@ export function Modal({
               variant="ghost"
               icon={<Icon name="close" />}
               aria-label={tx("close")}
-              data-nav-default=""
+              data-modal-close=""
               onClick={dismiss}
             />
           </div>

@@ -204,3 +204,29 @@
 | combine saves | دمج الحفظين | |
 | driver key | مفتاح السائق | existing term |
 | driver names | أسماء السائق | |
+
+## Career
+
+| English | Arabic | Note |
+|---|---|---|
+| career | المسيرة المهنية | Short: المسيرة when the context is clear; pl. المسيرات |
+| career mode | وضع المسيرة المهنية | |
+| ladder | السلّم | "سلّم {discipline}"; a tier on it: الدرجة |
+| tier | الدرجة | Not مستوى (that is AI level) |
+| discipline | نوع السباقات | Road racing: سباقات الحلبات; Historic racing: السباقات الكلاسيكية |
+| series | السلسلة | pl. السلاسل |
+| season | الموسم | pl. مواسم |
+| round | الجولة | pl. جولات; never لفة (lap) |
+| promotion / promoted | الصعود / تم الصعود | Promotion cut: خط الصعود |
+| attempt | المحاولة | "المحاولة 1 من 3" |
+| mulligan | فرصة إعادة | dual فرصتا إعادة, pl. فرص إعادة; a round raced again |
+| bonus objective | الأهداف الإضافية | sg. هدف إضافي |
+| test day | يوم الاختبار | |
+| pre-season | ما قبل الموسم | |
+| standings | ترتيب البطولة | Short: الترتيب; championship: البطولة |
+| calendar / schedule | الروزنامة / الجدول | |
+| career score / race score / season score | رصيد المسيرة / رصيد السباق / رصيد الموسم | رصيد, not نتيجة (race result) and not نقاط (championship points) |
+| multiplier | المضاعف | |
+| points (pts) | نقطة / النقاط | "{points} نقطة" |
+| regions: Americas, Europe, Asia-Pacific | الأمريكتان، أوروبا، آسيا والمحيط الهادئ | "{series} ({region})" |
+| series names | كأس الأندية، كأس السيارات السياحية، GT الكلاسيكية، كأس النماذج الأولية، GT3، نماذج التحمل الأولية، الجائزة الكبرى، سلسلة Procar، كلاسيكيات المجموعة 4، أساطير Can-Am | |

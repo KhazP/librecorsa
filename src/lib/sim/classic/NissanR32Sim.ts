@@ -76,8 +76,8 @@ export const NISSAN_R32_SIM_PROFILE: CarSimProfile = {
   // 5.3° of front against 2.4° of rear slip at the peak of a 100 km/h steer ramp (1.40 g, scripts/verify/verify-nissan-r32-jtcc.ts)
   understeerRadPerMs2: 0.0037,
   speedProfile: NISSAN_R32_PROFILE_CAR,
-  // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's
-  racingLine: 'gt3',
+  // The road cars' line where a circuit has one for it, else the GT3's: a touring car's grip and power
+  racingLine: 'road',
   // Fuel flow with the engine's speed: 0.004 l/s per 1000 rpm flat out, ≈ 0.03 l/s (0.022 kg/s) at 7500 rpm
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.004,

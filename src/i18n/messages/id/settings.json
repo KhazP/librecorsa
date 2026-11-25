@@ -387,6 +387,18 @@
     "showPlayerNames": {
       "label": "Nama pemain di atas mobil"
     },
+    "preRaceShow": {
+      "label": "Tayangan prabalapan karier",
+      "hint": "Sebelum tiap ronde karier: sirkuit, cuaca, ban, dan grid dengan musik. Space untuk lewati, Enter untuk mulai."
+    },
+    "fullPodium": {
+      "label": "Podium layar penuh",
+      "hint": "Setelah balapan AI: tiga besar di podium, sepuluh besar, dan lap tercepat, sebelum hasil. Tombol apa pun menutupnya."
+    },
+    "raceEventCards": {
+      "label": "Kartu momen balapan",
+      "hint": "Di Balapan AI: kartu pembalap saat mobil menang, memimpin, mencetak lap tercepat, pit stop, atau gagal finis, dan strip duel ketat beserta prakiraannya."
+    },
     "boardWidget": {
       "label": "Papan waktu lap",
       "options": {

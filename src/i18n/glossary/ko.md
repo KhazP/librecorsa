@@ -203,3 +203,29 @@
 | combine saves / accounts | 합치기 | |
 | ways to sign in | 로그인 방법 | |
 | driver key | 드라이버 키 | 기존 용어 유지 |
+
+## Career
+
+| English | 한국어 | 비고 |
+|---|---|---|
+| career | 커리어 | |
+| career mode | 커리어 모드 | |
+| ladder | 래더 | 탭·제목, `{discipline} 래더` |
+| tier | 티어 | `티어 {tier}` |
+| series | 시리즈 | 시리즈 이름은 아래 참조 |
+| discipline | 종목 | 로드 레이싱 / 히스토릭 레이싱 |
+| promotion / promoted | 승격 | 승격권, 승격 기준선 |
+| attempt | 도전 | `도전 {attempt}/{max}`, 도전 배율 |
+| mulligan | 멀리건 | 골프 용어 그대로, 횟수는 `멀리건 #회` |
+| bonus objective | 보너스 목표 | |
+| test day | 테스트 데이 | |
+| pre-season | 프리시즌 | |
+| season | 시즌 | `시즌 {season}` |
+| round | 라운드 | `라운드 {round}/{total}`, `랩`과 구분 |
+| standings | 챔피언십 순위 | HUD 순위표와 구분 |
+| calendar | 캘린더 | |
+| career score / multiplier | 커리어 점수 / 배율 | `점수 {mult}×` |
+| pit stop(s) | 피트 스톱 / 의무 피트 스톱 | |
+| clean race | 클린 레이스 | |
+| series names | 클럽 컵, 투어링 컵, 클래식 GT, 프로토타입 컵, GT3, 내구 프로토타입, 그랑프리, 프로카 시리즈, 그룹 4 클래식, 캔암 레전드 | |
+| regions | 아메리카, 유럽, 아시아 태평양 | `{series} {region}` |

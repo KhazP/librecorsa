@@ -58,8 +58,8 @@ export interface VehicleModel {
   /** Top of the telemetry-out packet's rpm bar */
   telemetryMaxRpm: number;
   tyreSetupRanges: TyreSetupRanges;
-  /** The chassis a ported body on this model is fitted to (axles, floor) */
-  rigConfig: Pick<CarPhysicsConfig, "chassis" | "aero">;
+  /** The chassis a ported body on this model is fitted to (axles, floor), and the axles it drives (the car's card) */
+  rigConfig: Pick<CarPhysicsConfig, "chassis" | "aero" | "drivenAxle" | "awd">;
   /** The model's own car (no ported GLB) has the GT3 dash and mirrors rather than the LC26 wheel display */
   gt3Cockpit: boolean;
   /** The plank throws sparks off the road at speed */

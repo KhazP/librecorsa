@@ -71,8 +71,12 @@ export const VW_SCIROCCO_SIM_PROFILE: CarSimProfile = {
   // scripts/verify/verify-vw-scirocco-gtx.ts): a nose-heavy front-driver
   understeerRadPerMs2: 0.0115,
   speedProfile: VW_SCIROCCO_PROFILE_CAR,
-  // The slower line: lower grip than an F1 car moves the apexes and braking points
-  racingLine: 'gt3',
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) its fields left the road more on lap 1 at
+  // Bridgehampton (Club Cup gate: lap-1 offs 3 → 7 at the whole room, 5 → 10 at half of it)
+  aiOwnKerbShare: 0,
+  // The road cars' line where a circuit has one for it, else the GT3's: lower grip and power than an F1 car's or a
+  // GT3's move the apexes and braking points
+  racingLine: 'road',
   // Fuel flow with the engine's speed: 0.003 l/s per 1000 rpm flat out, ≈ 0.02 l/s (0.015 kg/s) at 6500 rpm
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.003,

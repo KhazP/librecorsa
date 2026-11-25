@@ -48,12 +48,12 @@ export const TrackGate: React.FC = () => {
 
   // Only the latest pick counts: a slower load of a circuit picked earlier must not land after it
   const requestRef = useRef(0);
-  const select = useCallback(async (id: string) => {
+  const select = useCallback(async (id: string, opts?: { remember?: boolean }) => {
     const req = ++requestRef.current;
     // A new pick replaces the last one's notice
     setError(null);
     try {
-      const info = await activateTrack(id);
+      const info = await activateTrack(id, opts);
       if (req !== requestRef.current) return;
       trackIdRef.current = info.id;
       setTrackId(info.id);

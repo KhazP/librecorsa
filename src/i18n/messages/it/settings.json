@@ -387,6 +387,18 @@
     "showPlayerNames": {
       "label": "Nomi dei piloti"
     },
+    "preRaceShow": {
+      "label": "Pre-gara in carriera",
+      "hint": "Prima di ogni round di carriera: circuito, meteo, gomme e griglia con musica. Space salta, Enter avvia."
+    },
+    "fullPodium": {
+      "label": "Podio a schermo intero",
+      "hint": "Dopo una gara contro IA: i primi tre sul podio, la top 10 e il giro più veloce, prima dei risultati. Qualsiasi tasto lo chiude."
+    },
+    "raceEventCards": {
+      "label": "Schede eventi di gara",
+      "hint": "Nelle gare contro IA: la scheda del pilota quando un’auto vince, passa in testa, fa il giro più veloce, si ferma ai box o si ritira, e una barra su una lotta ravvicinata con la sua previsione."
+    },
     "boardWidget": {
       "label": "Classifica",
       "options": {

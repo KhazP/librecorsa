@@ -32,6 +32,7 @@ import { FlagIcon } from "@/components/ui/badges/FlagIcon";
 import { PenaltyBadge } from "@/components/ui/badges/PenaltyBadge";
 import { PositionBadge } from "@/components/ui/badges/PositionBadge";
 import { InvalidTag, LapMarkGlyph } from "./styles/hud-style-parts";
+import { usePitGap } from "./pit-clock";
 import { skinCss, SkinPanel, useHudSkin } from "./styles/third-party-skin";
 import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-target";
 
@@ -103,6 +104,7 @@ export const TowerRows: React.FC<{
       },
     };
   }, [tx]);
+  const pitGap = usePitGap();
   const st = race.standings;
   const meIdx = st.findIndex((e) => e.isPlayer);
   const me = meIdx >= 0 ? st[meIdx] : undefined;
@@ -167,7 +169,7 @@ export const TowerRows: React.FC<{
               ) : null}
             </span>
             <span className={`text-[12px] ${e.retired ? (e.isPlayer ? "" : "text-lc-loss") : e.isPlayer ? "" : i === 0 ? "text-lc-fog" : "text-lc-slate"}`}>
-              {e.retired ? L.out : gap === null ? (gaps === "leader" ? L.leader : L.lead) : `+${formatGap(gap)}`}
+              {e.retired ? L.out : (pitGap(e) ?? (gap === null ? (gaps === "leader" ? L.leader : L.lead) : `+${formatGap(gap)}`))}
             </span>
             <span
               className="text-end text-[10px]"

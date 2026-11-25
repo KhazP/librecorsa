@@ -450,14 +450,18 @@ for (const K of CARS) {
           sim.step(1 / 60, {});
           t += 1 / 60;
           const i = sim.telemetry.lapCount - lap0;
-          beyond[i] = Math.max(beyond[i], Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
+          // Past the edge beyond the own driver's room on the flat kerbs (`ownRangeAt`): it follows the line onto them
+          const lat = sim.lateralOffsetM;
+          const half = track.getSampleAtDistance(sim.sMeters).width / 2;
+          const [lo, hi] = sim.ownRangeAt(sim.sMeters);
+          beyond[i] = Math.max(beyond[i], Math.abs(lat) - half - Math.max(0, (lat >= 0 ? hi : -lo) - half));
           maxSlip = Math.max(maxSlip, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, sim.vxMs))) * 180) / Math.PI);
         }
         return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh };
       };
       const m = lap(K.make(track, root));
-      check(`${label}: flying lap completes in ${K.lap[0]}–${K.lap[1]} s, CG within ${K.edgeM} m of the edge`, m.done && m.lapS > K.lap[0] && m.lapS < K.lap[1] && m.beyond[1] <= K.edgeM && m.beyond[0] <= 1 && m.maxSlip < 12,
-        `lap ${fmt(m.lapS, 2)} s, top ${fmt(m.top, 0)} km/h, CG ${fmt(Math.max(0, m.beyond[1]), 2)} m past the edge (opening lap on cold tyres ${fmt(Math.max(0, m.beyond[0]), 2)}), max body slip ${fmt(m.maxSlip, 1)}°`);
+      check(`${label}: flying lap completes in ${K.lap[0]}–${K.lap[1]} s, CG within ${K.edgeM} m of the edge and its kerb room`, m.done && m.lapS > K.lap[0] && m.lapS < K.lap[1] && m.beyond[1] <= K.edgeM && m.beyond[0] <= 1 && m.maxSlip < 12,
+        `lap ${fmt(m.lapS, 2)} s, top ${fmt(m.top, 0)} km/h, CG ${fmt(Math.max(0, m.beyond[1]), 2)} m past the edge and its kerb room (opening lap on cold tyres ${fmt(Math.max(0, m.beyond[0]), 2)}), max body slip ${fmt(m.maxSlip, 1)}°`);
       if (K.id === 'chaparral-2d') {
         const gt3 = lap(createAmgGt3Sim(track, root));
         console.log(`      the GT3 on the same autopilot: ${fmt(gt3.lapS, 2)} s, top ${fmt(gt3.top, 0)} km/h`);

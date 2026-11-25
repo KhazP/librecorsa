@@ -62,7 +62,7 @@ for (const trackId of tracks) {
     const line = lineOf(car);
     const current = new Float64Array(N);
     for (let i = 0; i < N; i++) current[i] = aiLineOffsetM(track.getSampleAtDistance(i * t.ds), line);
-    const ai = physicsLap(track, root, car as VehicleModelId, current, grip);
+    const ai = physicsLap(track, root, car as VehicleModelId, current, grip, undefined, { line });
     const corners = cornerMinima(ai.v, t.ds);
     const segs = cornerSegments(ai.v, corners);
     const best = ghosts[0];

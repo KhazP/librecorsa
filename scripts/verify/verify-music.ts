@@ -33,6 +33,9 @@ console.log('Catalogue');
     check(`the ${pool} pool has tracks`, n >= 2, `${n}`);
   }
   check('the menus have an opener', MUSIC_TRACKS.some((t) => t.opener && t.pool === 'menu'));
+  const show = MUSIC_TRACKS.filter((t) => t.pool === 'show');
+  check('the pre-race show has one cue, with its sections in order', show.length === 1 && Boolean(show[0].show) && show[0].show!.tyresAtS < show[0].show!.gridAtS && show[0].show!.gridAtS < show[0].show!.climaxS);
+  check('…and music past its peak to hold over the start card', show.every((t) => (t.endS ?? Infinity) >= t.show!.climaxS + 8));
   check('every track is CC0 or public domain', MUSIC_TRACKS.every((t) => t.licence === 'CC0' || t.licence === 'Public domain'));
   const badTrim = MUSIC_TRACKS.filter((t) => !(Math.abs(t.gainDb) <= 3) || (t.startS ?? 0) < 0 || (t.endS !== undefined && t.endS <= (t.startS ?? 0) + 30));
   check('every track has a level trim within 3 dB and its music between start and end', badTrim.length === 0, badTrim.map((t) => t.id).join(', '));
@@ -92,6 +95,22 @@ console.log('Practice');
   check('a flying lap (moving at once): the race pool', fly.cue({ ...base, speedMs: 60 }).pool === 'race');
   const frozenFly = new MusicDirector();
   check('a speed seen only while frozen does not start it', frozenFly.cue({ ...base, speedMs: 60, frozen: true }).pool === null);
+}
+
+console.log('The career\'s pre-race show');
+{
+  const d = new MusicDirector();
+  const show = d.cue({ ...base, racePhase: 'lights', show: true });
+  check('the show at the lights: its own cue, not the silence', show.pool === 'show' && !show.duck && !show.driveEq);
+  check('…from its top', show.fromS === 0);
+  check('the grid show: its cue from the grid\'s section', d.cue({ ...base, racePhase: 'lights', show: true, showFromS: 60.5 }).fromS === 60.5);
+  check('the pause menu over the show: the cue stops (the show waits too)', d.cue({ ...base, racePhase: 'lights', show: true, frozen: true }).pool === null);
+  check('…and comes back where the show is', d.cue({ ...base, racePhase: 'lights', show: true, showFromS: 31.5 }).fromS === 31.5);
+  const after = d.cue({ ...base, racePhase: 'lights' });
+  check('the show handed back: silence at the lights, the race loading', after.pool === null && after.arm === 'race');
+  check('a qualifying show: the cue too', new MusicDirector().cue({ ...base, show: true }).pool === 'show');
+  check('the menus never play it', new MusicDirector().cue({ ...base, phase: 'title', show: true }).pool === 'menu');
+  check('a replay is not the show', new MusicDirector().cue({ ...base, replaying: true, show: true }).pool === 'results');
 }
 
 console.log('Shuffle');

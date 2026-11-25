@@ -13,11 +13,15 @@
  *  4. A car stopped across the road: the player can't drive through it; a big hit retires both cars on full damage
  *  5. A barrier hit damages the car where it landed
  *  6. Damage off: the same hits break nothing
+ *  7. The player's autopilot under the VSC
+ *  8. A damaged car on its own driver (no drive plan) slows as a plan would: its pace takes √ of the grip left
  */
 import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
-import { AiOpponentField, type FieldIncident } from '../../src/lib/sim/ai-opponents';
+import { AiOpponentField, damagedGrip, type FieldIncident } from '../../src/lib/sim/ai-opponents';
+import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
+import { vscReferenceSpeedMs } from '../../src/lib/sim/vsc';
 import type { DamageLevel } from '../../src/lib/sim/car-damage';
 import type { ControlInputs } from '../../src/types/f1';
 import { loadGlbGeometry } from '../lib/glb-geometry';
@@ -179,6 +183,84 @@ function run(setup: Setup) {
 {
   const r = run({ player: [S + 300, 0, 62], ai: [S + 308, 0, 40], damage: 'off', inputs: () => ({ throttle: 0.6 }), frames: 90 });
   check('Damage off: a rear-end breaks nothing', r.field.carInfo('YOU')!.damage.pristine && r.field.carInfo('AIC')!.damage.pristine, '');
+}
+
+// ---- 7. The player's autopilot holds its place under the VSC: a slower car ahead well off its line is followed, not
+// passed (race control doesn't judge the autopilot, so it must keep the rule itself)
+{
+  const lineLat = aiLineOffsetM(track.getSampleAtDistance(S + 330), 'f1');
+  const half = track.getSampleAtDistance(S + 330).width / 2;
+  // The slower car on the far side of the road from the racing line, out of the autopilot's lane
+  const aiLat = lineLat >= 0 ? -(half - 1.5) : half - 1.5;
+  const capBehind = (vsc: boolean) => {
+    const player = new F12026CarSim(track, root);
+    const field = new AiOpponentField(track, player, [{ code: 'AIC', teamColorHex: '#00ff00', pace: 0.96 }], undefined, { seed: 7, learning: false });
+    field.startRace(false);
+    const ai = field.aiSims()[0];
+    player.teleportToDistance(S + 300, 40, lineLat);
+    ai.teleportToDistance(S + 330, 25, aiLat);
+    player.aiAutopilot = true;
+    const internals = field as unknown as {
+      vsc: { _phase: string };
+      rollingFormation: boolean;
+      rollingPaceMs: number;
+      capPlayerAutopilot: (L: number, dt: number) => void;
+    };
+    // Past the rolling start's formation (its own pace cap), racing
+    internals.rollingFormation = false;
+    internals.rollingPaceMs = 0;
+    if (vsc) internals.vsc._phase = 'deployed';
+    internals.capPlayerAutopilot(track.totalLengthM, DT);
+    return player.aiSpeedCapMs ?? Infinity;
+  };
+  const vscRef = vscReferenceSpeedMs(track.getSampleAtDistance(S + 300).optimalSpeedKmh);
+  const green = capBehind(false);
+  const vsc = capBehind(true);
+  check('Autopilot, green flag: a car well off its line does not slow it', green === Infinity, `cap ${f(green)} m/s (line ${f(lineLat)} m, car at ${f(aiLat)} m)`);
+  check('Autopilot under the VSC: it follows that car, below the VSC pace alone', vsc < vscRef - 1, `cap ${f(vsc)} m/s vs VSC pace ${f(vscRef)} m/s`);
+}
+
+// ---- 8. A damaged car on its own driver slows by √ of the grip it has left (corner speed goes with √ grip), as a drive
+// plan does with that grip. Before, it kept full pace: a car with a front tyre at 45 % of its grip left the road at
+// every corner of Sachsenring for two laps. The circuit's plans are taken out so the AI car drives on its own driver
+{
+  const noPlans = structuredClone(raw);
+  const meta = (noPlans as { metadata?: Record<string, unknown> }).metadata;
+  if (meta) {
+    delete meta.aiPlans;
+    delete meta.aiPlansByLine;
+  }
+  setActiveTrack('istanbul_park', noPlans);
+  const ownTrack = getActiveTrackData(1200);
+  const paceWith = (puncture: boolean) => {
+    const player = new F12026CarSim(ownTrack, root);
+    const field = new AiOpponentField(ownTrack, player, [{ code: 'AIC', teamColorHex: '#00ff00', pace: 0.96 }], undefined, { seed: 7, learning: false, damage: 'full' });
+    field.startRace(false);
+    const ai = field.aiSims()[0];
+    player.teleportToDistance(S - 3000, 40, 0);
+    ai.teleportToDistance(S + 234, 60, 0);
+    const damage = field.carInfo('AIC')!.damage;
+    if (puncture) {
+      const snap = damage.snapshot();
+      snap.punctured[0] = true;
+      damage.restore(snap);
+    }
+    for (let i = 0; i < 120; i++) {
+      player.step(DT, { throttle: 0.3 });
+      field.update(DT);
+    }
+    return { pace: ai.aiPaceScale ?? 1, onPlan: !!ai.aiPlan, grip: damagedGrip(damage) };
+  };
+  const clean = paceWith(false);
+  const hurt = paceWith(true);
+  // A front puncture: that tyre at 45 %, the axle 0.7 × 0.45 + 0.3 = 0.615 of its grip
+  check('Damage: a punctured front tyre leaves the car 0.615 of its grip', Math.abs(hurt.grip - 0.615) < 1e-9 && clean.grip === 1, `grip ${f(hurt.grip, 3)} (pristine ${f(clean.grip, 3)})`);
+  const want = clean.pace * Math.sqrt(hurt.grip);
+  check(
+    'Damage: the own driver slows by √ of the grip left',
+    !clean.onPlan && !hurt.onPlan && Math.abs(hurt.pace - want) < 0.002,
+    `pace ${f(clean.pace, 3)} → ${f(hurt.pace, 3)} (want ${f(want, 3)}), on a plan: ${clean.onPlan || hurt.onPlan}`
+  );
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll race contact checks passed.');

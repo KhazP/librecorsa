@@ -16,8 +16,8 @@ import { FlatGroundQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery
 import { VehiclePhysics, type VehicleInputs } from '../../src/lib/sim/f12026-car/VehiclePhysics';
 import { MTR_496R_CONFIG } from '../../src/lib/sim/proto/Mtr496rConfig';
 import { MTR_496R_PROFILE_CAR, createMtr496rSim } from '../../src/lib/sim/proto/Mtr496rSim';
-import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
-import type { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { AMG_GT3_SIM_PROFILE } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { carById } from '../../src/lib/cars/car-registry';
 import { wetnessFromWater } from '../../src/lib/sim/wet-tyres';
 import { loadGlbGeometry } from '../lib/glb-geometry';
@@ -398,7 +398,9 @@ console.log('\n== Autopilot round Rwanda against the GT3');
     return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh };
   };
   const proto = lap(createMtr496rSim(track, root));
-  const gt3 = lap(createAmgGt3Sim(track, root));
+  // The cars compared on the same driving: the GT3's own driver takes the flat kerbs, the MTR's keeps to the asphalt
+  // (`aiOwnKerbShare`), so the GT3 here keeps to it too
+  const gt3 = lap(new F12026CarSim(track, root, { ...AMG_GT3_SIM_PROFILE, aiOwnKerbShare: 0 }));
   check('Flying lap completes, CG within 0.5 m of the edge', proto.done && proto.beyond <= 0.5 && proto.maxSlip < 12,
     `lap ${fmt(proto.lapS, 2)} s, top ${fmt(proto.top, 0)} km/h, CG ${fmt(Math.max(0, proto.beyond), 2)} m past the edge, max body slip ${fmt(proto.maxSlip, 1)}°`);
   // 300 kg lighter, more downforce and a little more power than the GT3

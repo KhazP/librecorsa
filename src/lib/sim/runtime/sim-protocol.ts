@@ -2,6 +2,7 @@
  * Messages between the page and the simulation worker (`sim-worker.ts`, `sim-runtime.ts`). Plain data only:
  * everything here crosses `postMessage`, so no class instances, functions or three.js objects.
  */
+import type { AiDriverDef } from "../ai-opponents";
 import type { QualifyingGridInput } from "../qualifying";
 import type { CarTelemetry, ControlInputs, RaceStatus, VehicleModelId } from "@/types/f1";
 import type { RawTrackJson } from "@/lib/track-data";
@@ -85,6 +86,8 @@ export interface RaceStartSetup {
   lockAidsInYellow?: boolean;
   /** The grid from qualifying (`AiRace.qualifying`); absent: none */
   qualifying?: QualifyingGridInput;
+  /** Pit stops every car has to make (`AiRace.pitStopsRequired`) */
+  pitStops?: number;
 }
 
 /**
@@ -107,11 +110,15 @@ export type RaceCommand =
       realism: SimRealismFlags;
       /** The field's seed (a headless check replays one); a field built ahead with another is built again */
       seed?: number;
+      /** The field's own drivers (a career's rivals); absent: the game's (`aiDriversFor`) */
+      drivers?: AiDriverDef[];
     }
   | { type: "race"; op: "skill"; skill: number }
   | { type: "race"; op: "penalty"; seconds: number; dq?: boolean }
   | { type: "race"; op: "rules"; lockAidsInYellow: boolean }
   | { type: "race"; op: "penalise"; seconds: number; reason: PenaltyReason; detail: string }
+  /** The pit crew repaired the player's car */
+  | { type: "race"; op: "repair" }
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
   | { type: "race"; op: "restore"; poses: FieldCarRestorePose[]; rewindS: number; epoch?: number }

@@ -1,4 +1,6 @@
 "use client";
+import { seriesById } from "@/lib/career/ladder";
+import { seriesName } from "@/components/career/career-ui";
 import { useTranslations } from "use-intl/react";
 
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -117,6 +119,10 @@ export interface TitleMenuProps extends PauseMenuProps {
   onSelectTrack?: (id: string) => void | Promise<void>;
   /** This week's challenge (only with an online board) */
   challengePanel?: ChallengePanelProps;
+  /** Career mode: its screen (career/CareerScreen.tsx) opens over the menu, as Settings does */
+  onOpenCareer?: () => void;
+  /** The career under way, for the menu entry's line: its series and next round (null round: pre-season) */
+  careerStatus?: { seriesId: string; round: number | null; rounds: number } | null;
   /** The note after a drive (support-prompt.ts): the circuit and car just driven whose makers take donations */
   supportNote?: PromptItem[] | null;
   onCloseSupportNote?: () => void;
@@ -610,6 +616,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const musicShown = Boolean(props.onToggleMusicMute) && (Boolean(props.nowPlaying) || props.musicMuted === true);
   const units = useUnits();
   const t = useTranslations("menu.title");
+  const tc = useTranslations("menu.career");
   const tp = useTranslations("menu.prompts");
   const tn = useTranslations("menu.upNext");
   const storeBuild = useStoreBuild();
@@ -695,6 +702,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // Mods are for the offline launcher and a clone's dev server (mod-loader.ts modsAvailable); the page is built without
   // a window, so the entry comes in after the first render
   const modsHere = useSyncExternalStore(noSubscription, modsAvailable, () => false);
+  const careerLine = (status: TitleMenuProps["careerStatus"]): string => {
+    const series = status ? seriesById(status.seriesId) : undefined;
+    if (!status || !series) return t("careerDetail");
+    const name = seriesName(series, tc);
+    return status.round === null ? t("careerDetailPreseason", { series: name }) : t("careerDetailRound", { series: name, round: status.round, rounds: status.rounds });
+  };
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -717,6 +730,17 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
     } satisfies MenuItem]),
+    ...(props.onOpenCareer
+      ? [
+          {
+            id: "career",
+            label: t("career"),
+            detail: careerLine(props.careerStatus),
+            icon: "podium" as const,
+            run: props.onOpenCareer,
+          } satisfies MenuItem,
+        ]
+      : []),
     {
       id: "multiplayer",
       label: t("multiplayer"),
@@ -959,7 +983,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           stays, so the scene behind Settings is as dim as before. Hidden, not removed, it keeps its panel, scroll and
           the entry Settings hands the focus back to */}
       <div
-        className={`flex w-full flex-1 flex-col in-data-[settings-open]:invisible ${panel ? "gap-5.5" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}
+        className={`flex w-full flex-1 flex-col in-data-[settings-open]:invisible in-data-[career-open]:invisible ${panel ? "gap-5.5" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}
       >
         <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
@@ -1018,7 +1042,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
             <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label={t("mainMenu")}>
               <HeroAction id={drive.id} label={drive.label} onClick={drive.run!} size="slim" />
-              {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "md", true))}
+              {byId(["race", "career", "multiplayer", "challenge"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
               {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
@@ -1136,7 +1160,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             >
               <div className="flex flex-col gap-1 phone:gap-0.5">
                 <HeroAction id={drive.id} label={drive.label} detail={drive.detail} onClick={drive.run!} />
-                {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "lg"))}
+                {byId(["race", "career", "multiplayer", "challenge"]).map((item) => row(item, "lg"))}
               </div>
               <div className="flex flex-col gap-3 pt-4 compact:pt-2 short:pt-0">
                 <div className="grid grid-cols-1 gap-1 min-[360px]:grid-cols-2">

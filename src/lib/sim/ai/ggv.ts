@@ -62,10 +62,11 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     compressionGain: 0.2,
     lockKappa: Math.tan((270 / 14) * (Math.PI / 180)) / 3.5684,
   },
-  // Measured 2026-11-08 to its 50 m/s top end (the road car's own grid)
+  // Measured 2026-11-08 to its 50 m/s top end (the road car's own grid); cornering again 2026-11-24, on the tyres retuned
+  // 2026-11-16 (three layers and the gas), 9-15 % above: planned on the old row its plans ran slower than its own driver
   liana: {
     speedsMs: [10, 15, 20, 25, 30, 35, 40, 45, 50],
-    latG: [0.73, 0.73, 0.74, 0.74, 0.74, 0.73, 0.74, 0.74, 0.75],
+    latG: [0.84, 0.84, 0.84, 0.83, 0.83, 0.83, 0.82, 0.82, 0.82],
     brakeG: [0.8, 0.81, 0.87, 0.87, 0.89, 0.92, 0.92, 0.94, 0.96],
     accelG: [0.37, 0.28, 0.24, 0.18, 0.15, 0.12, 0.08, 0.05, 0.02],
     lockKappa: Math.tan(36 * (Math.PI / 180)) / 2.46,

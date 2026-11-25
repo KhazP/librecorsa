@@ -13,7 +13,7 @@ import { getActiveTrackData, setActiveTrack, type BuiltTrackData } from "@/lib/t
 import type * as THREE from "three";
 import type { SimulatorCar } from "../simulator-car";
 import { trackRootFromColliderData } from "../track-colliders";
-import { AiOpponentField, aiDriversFor } from "../ai-opponents";
+import { AiOpponentField, aiDriversFor, type AiDriverDef } from "../ai-opponents";
 import type { OvertakingRaceControl } from "../overtaking-rules";
 import { TrackEnvironment } from "../track-environment";
 import { blankCarState, captureCarState, PAGE_OWNED_TELEMETRY } from "./car-state";
@@ -40,6 +40,8 @@ interface WorkerRace {
   id: number;
   epoch: number;
   opponents: number;
+  /** The drivers it was built with (their codes, joined): a restart with others builds another field */
+  roster: string;
   field: AiOpponentField;
   env: TrackEnvironment;
   /** Ticks since the field last stepped (0 .. FIELD_TICKS - 1) */
@@ -190,12 +192,13 @@ export class SimRuntime {
         this.endRace();
         const spare = this.spare;
         const reuse = command.seed === undefined;
+        const roster = command.drivers?.map((d) => d.code).join(",") ?? "";
         let built: { field: AiOpponentField; env: TrackEnvironment };
-        if (reuse && running?.opponents === command.opponents) built = running;
-        else if (reuse && spare?.car === car && spare.opponents === command.opponents) {
+        if (reuse && running?.opponents === command.opponents && running.roster === roster) built = running;
+        else if (reuse && !roster && spare?.car === car && spare.opponents === command.opponents) {
           built = spare;
           this.spare = null;
-        } else built = this.buildField(car, command.opponents, command.skill, command.seed);
+        } else built = this.buildField(car, command.opponents, command.skill, command.seed, command.drivers);
         const { field, env } = built;
         if (field.skill !== command.skill) field.setSkill(command.skill);
         env.setSimRealism(command.realism);
@@ -204,6 +207,7 @@ export class SimRuntime {
         env.applyWeatherSync(command.weather);
         const setup = command.setup;
         field.raceLaps = setup.laps;
+        field.pitStopsRequired = setup.pitStops ?? 0;
         field.gridOrder = setup.gridOrder;
         field.playerGrid = setup.playerGrid;
         field.damageLevel = setup.damage;
@@ -227,7 +231,7 @@ export class SimRuntime {
             earnedAtDetection: () => field.detectionEarnedFor(car),
           };
         }
-        this.race = { id: command.race, epoch: 0, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, sentRollingCue: "", rosterSent: false, ownRaceControl };
+        this.race = { id: command.race, epoch: 0, opponents: command.opponents, roster, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, sentRollingCue: "", rosterSent: false, ownRaceControl };
         this.epoch = command.epoch;
         this.accumulatorS = 0;
         this.reportRace(true);
@@ -248,6 +252,9 @@ export class SimRuntime {
         return;
       case "penalise":
         this.race?.field.penalisePlayer(command.seconds, command.reason, command.detail);
+        return;
+      case "repair":
+        this.race?.field.repairPlayerDamage();
         return;
       case "conditions":
         this.race?.env.setConditions(command.conditions);
@@ -273,10 +280,16 @@ export class SimRuntime {
   }
 
   /** A field of `opponents` AI cars round `car`, with a track environment of its own */
-  private buildField(car: SimulatorCar, opponents: number, skill: number, seed?: number): { field: AiOpponentField; env: TrackEnvironment } {
+  private buildField(
+    car: SimulatorCar,
+    opponents: number,
+    skill: number,
+    seed?: number,
+    drivers?: AiDriverDef[]
+  ): { field: AiOpponentField; env: TrackEnvironment } {
     const track = this.track as BuiltTrackData;
     const env = new TrackEnvironment(track);
-    const field = new AiOpponentField(track, car, aiDriversFor(opponents), env, { skill, seed });
+    const field = new AiOpponentField(track, car, drivers?.length ? drivers : aiDriversFor(opponents), env, { skill, seed });
     if (this.trackRoot) field.attachTrackRoot(this.trackRoot);
     return { field, env };
   }

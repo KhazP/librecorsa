@@ -69,6 +69,7 @@ import {
 import { anchor, deltaColor, formatOnce, gearLabel, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
 import { revLights, useFuelPerLap, useLapHistory, useSessionClock } from "./third-party-parts";
 import palette from "./irdashies.module.css";
+import { usePitGap } from "../pit-clock";
 
 /** A short window (a landscape tablet or a small laptop window): the standings and the lap history show fewer rows */
 const SHORT_QUERY = "(max-height: 600px)";
@@ -132,10 +133,11 @@ const StandingsRow: React.FC<{
   lengthM: number;
   gaps: "interval" | "leader";
   sessionBest: number | null;
-  /** The row's words for a retired and a finished car */
+  /** The row's words for a retired and a finished car, and its pit clock (`usePitGap`) */
   out: string;
   finished: string;
-}> = ({ e, pos, me, lengthM, gaps, sessionBest, out, finished }) => {
+  pit: string | null;
+}> = ({ e, pos, me, lengthM, gaps, sessionBest, out, finished, pit }) => {
   // A car a lap or more down on the player reads blue, a lap or more up red (the player's own row is amber)
   const lapsUp =
     !e.isPlayer && me && e.raceDistM !== undefined && me.raceDistM !== undefined && lengthM > 0
@@ -163,7 +165,7 @@ const StandingsRow: React.FC<{
         {e.driverCode}
       </span>
       <span className="truncate text-right">
-        {e.retired ? out : e.finished ? <Icon name="chequered" size="xs" label={finished} className="inline size-3.5" /> : gap === null ? "-" : formatGap(gap)}
+        {e.retired ? out : e.finished ? <Icon name="chequered" size="xs" label={finished} className="inline size-3.5" /> : (pit ?? (gap === null ? "-" : formatGap(gap)))}
       </span>
       <span className="hidden text-right lg:inline" style={{ color: lapColor(e.lastLapMs, e.bestLapMs, sessionBest) }}>
         {formatLapTime(e.lastLapMs)}
@@ -192,6 +194,7 @@ const Standings: React.FC<{ t: CarTelemetry; lengthM: number; gaps: "interval" |
   const rows = leaderboardWindow(race.standings, short ? 6 : 10);
   const surface = weather ? SURFACE_WORD[trackSurfaceState(weather.waterMm)] : null;
   const w = useIrDashiesWords();
+  const pitGap = usePitGap();
   return (
     <section aria-label={w.standings} className="w-[244px] lg:w-[330px] rounded-md bg-(--tp-panel) p-1.5 text-(--tp-text)">
       <div className={BAR}>
@@ -217,6 +220,7 @@ const Standings: React.FC<{ t: CarTelemetry; lengthM: number; gaps: "interval" |
             sessionBest={sessionBest}
             out={w.out}
             finished={w.finished}
+            pit={pitGap(e)}
           />
         ))}
       </div>

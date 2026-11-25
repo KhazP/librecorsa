@@ -41,6 +41,7 @@ import { ProximityRadar } from "../ProximityRadar";
 import { anchor, formatOnce, gearLabel, MiniMap, type HudDesignProps } from "./hud-style-parts";
 import palette from "./grand-prix.module.css";
 import { HaloCluster } from "./grand-prix-halo";
+import { usePitGap } from "../pit-clock";
 
 const EDGE = "clamp(14px,2.2vw,24px)";
 const TOUCH_TOP = 68;
@@ -476,6 +477,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
 }) => {
   const units = useUnits();
   const w = useGrandPrixWords();
+  const pitGap = usePitGap();
   const race = t.race;
   const channels = t.f12026;
   const isFormulaCar = carClassOf(channels?.carId) === "openWheel";
@@ -539,11 +541,12 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
               {standings.length > 0 ? (
                 standings.slice(0, 20).map((e, i) => {
                   const gap =
-                    i === 0
+                    pitGap(e) ??
+                    (i === 0
                       ? formatLapTime(e.bestLapMs || e.lastLapMs)
                       : towerGaps === "leader"
                         ? `+${formatGap(e.gapToLeaderS, true)}`
-                        : `+${formatGap(e.intervalS ?? e.gapToLeaderS - standings[i - 1].gapToLeaderS, true)}`;
+                        : `+${formatGap(e.intervalS ?? e.gapToLeaderS - standings[i - 1].gapToLeaderS, true)}`);
                   const cMeta = compoundMeta(e.compound);
                   return (
                     <li
@@ -716,11 +719,12 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                 const cMeta = compoundMeta(e.compound);
                 const st = race.standings;
                 const gap =
-                  i === 0
+                  pitGap(e) ??
+                  (i === 0
                     ? formatLapTime(e.bestLapMs || e.lastLapMs)
                     : towerGaps === "leader"
                       ? `+${formatGap(e.gapToLeaderS, true)}`
-                      : `+${formatGap(e.intervalS ?? e.gapToLeaderS - st[i - 1].gapToLeaderS, true)}`;
+                      : `+${formatGap(e.intervalS ?? e.gapToLeaderS - st[i - 1].gapToLeaderS, true)}`);
                 return (
                   <div key={`${i}-${e.driverCode}`} className={`${palette.stdRow} ${e.isPlayer ? palette.tvRowPlayer : ""}`}>
                     <span className="text-slate-400">{i + 1}</span>

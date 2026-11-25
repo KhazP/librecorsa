@@ -11,6 +11,7 @@
  * detection point; an older car opens the rear flap alone, in a race only once race control (`raceControl`) says it
  * was within 1 s at that zone's detection point.
  */
+import { PitLaneTracker } from '../pit/pit-lane';
 import {
   BRAKE_DUCT_STEP,
   type ChassisSetup,
@@ -46,6 +47,8 @@ import {
   createTrackSampleBuffer,
   evaluateSampleLateralHeightM,
   getActiveSurfaceTable,
+  planCheckFor,
+  racingLineFor,
   RWANDA_DRS_ZONES,
   type TrackProjectionResult,
 } from '@/lib/track-data';
@@ -90,9 +93,12 @@ import {
 import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind, type WallQuery } from './TrackColliderQuery';
 import { trackColliders } from '../track-colliders';
 import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
+import type { ContactBox } from '../contact-box';
+import { contactBoxOfBody } from './body-outline';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
+import { planLookS } from '../ai/plan-tracking';
 import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
@@ -279,7 +285,10 @@ export interface CarSimProfile {
    * Without one the car is shown the circuit's car's (`circuitBrakingGuide`).
    */
   speedProfile?: SpeedProfileCarModel;
-  /** The racing line this car drives, plans on and draws (default: the F1 line) */
+  /**
+   * The racing line this car drives, plans on and draws (default: the F1 line). `road` is the road cars' line where a
+   * circuit has one and it passed this car's check, else the GT3's (`racingLineFor`)
+   */
   racingLine?: RacingLineId;
   /**
    * The tallest kerb (its rise over the ground it stands on, m) the AI lets this car's outer tyres run onto (default
@@ -287,6 +296,12 @@ export interface CarSimProfile {
    * tracker keep the tyres off anything taller (`lateralRangeAt`)
    */
   aiMaxKerbRiseM?: number;
+  /**
+   * Share of a plan's flat-kerb room this car's own driver takes (default `OWN_KERB_SHARE`, the whole of it). 0 keeps
+   * it on the asphalt exactly as before (`ownRangeAt`, `ownTargetAt`): a car whose fields failed the race gate on the
+   * kerbs, or were never raced on them
+   */
+  aiOwnKerbShare?: number;
   /**
    * The car's understeer gradient (front road-wheel angle beyond the kinematic one, rad per m/s² of lateral
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
@@ -374,6 +389,9 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   // autopilot worked it out from the fronts' cornering stiffness each step, 0.0012-0.0015 at 100-160 km/h, and went to
   // the fronts' whole peak slip angle whenever a front wheel left the ground over a kerb
   understeerRadPerMs2: 0.001,
+  // Its own driver keeps to the asphalt: it races on plans almost everywhere and in no career series, so its own
+  // driver on the kerbs (`OWN_KERB_SHARE`) was never raced against the old one
+  aiOwnKerbShare: 0,
   assistDials: F1_ASSIST_DIALS,
   keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
 };
@@ -639,6 +657,8 @@ interface BiasEdges {
 /** Per collider (or none yet), track and car profile */
 const NO_COLLIDER = {};
 const biasEdgeCache = new WeakMap<object, WeakMap<BuiltTrackData, WeakMap<CarSimProfile, BiasEdges>>>();
+/** Per car profile and drive plan (a plan is one circuit's) */
+const planWallRooms = new WeakMap<CarSimProfile, WeakMap<AiDrivePlan, WallBiasRoom>>();
 
 /**
  * The lateral range (`rangeAt`, a car's `lateralRangeAt`) as the edges a traffic bias may push a tracked plan's target
@@ -717,6 +737,58 @@ function biasEdgesOf(L: number, rangeAt: (s: number) => [number, number]): BiasE
   return { lo, hi, loAhead, hiAhead, ds };
 }
 
+/** How far a traffic bias may take a car off its path toward each side (m, ≥ 0), every `ds` along the lap */
+interface WallBiasRoom {
+  pos: Float32Array;
+  neg: Float32Array;
+  ds: number;
+}
+
+/**
+ * How far a traffic bias may move a car off its path (`offsetAt`, every `ds` = lap / `n`) toward each side and keep its
+ * tyres `BIAS_WALL_ROOM_M` clear of the barriers (`wallLeftM` / `wallRightM`): the room to each barrier less half the
+ * car's tyre footprint, measured from the path, never changing along the lap faster than `TRACK_BIAS_EDGE_SLOPE` (each
+ * point pulled in to within the slope × distance of every point with less room, twice round the lap each way). So a
+ * path swinging toward a barrier takes a car's bias in gradually before the swing, as a narrowing of the edges does,
+ * and gives it back as gradually after. Far from a barrier it is no limit; it never takes a car past its own path
+ */
+function wallBiasRoomOf(track: BuiltTrackData, n: number, offsetAt: (i: number, s: number) => number, halfWidthM: number): WallBiasRoom {
+  const ds = track.totalLengthM / n;
+  const pos = new Float32Array(n);
+  const neg = new Float32Array(n);
+  const keep = halfWidthM + BIAS_WALL_ROOM_M;
+  for (let i = 0; i < n; i++) {
+    const s = i * ds;
+    const smp = track.getSampleAtDistance(s);
+    const off = offsetAt(i, s);
+    pos[i] = smp.wallRightM !== undefined && Number.isFinite(smp.wallRightM) ? smp.wallRightM - keep - off : Infinity;
+    neg[i] = smp.wallLeftM !== undefined && Number.isFinite(smp.wallLeftM) ? smp.wallLeftM - keep + off : Infinity;
+  }
+  const rise = TRACK_BIAS_EDGE_SLOPE * ds;
+  for (let k = 2 * n - 1; k >= 0; k--) {
+    const i = k % n;
+    const j = (i + 1) % n;
+    pos[i] = Math.min(pos[i], pos[j] + rise);
+    neg[i] = Math.min(neg[i], neg[j] + rise);
+  }
+  for (let k = 0; k < 2 * n; k++) {
+    const i = k % n;
+    const j = (i - 1 + n) % n;
+    pos[i] = Math.min(pos[i], pos[j] + rise);
+    neg[i] = Math.min(neg[i], neg[j] + rise);
+  }
+  for (let i = 0; i < n; i++) {
+    pos[i] = Math.max(0, pos[i]);
+    neg[i] = Math.max(0, neg[i]);
+  }
+  return { pos, neg, ds };
+}
+
+/** A traffic bias held to the room the barriers leave it (`wallBiasRoomOf`) at lap distance `s` */
+function wallHeldBias(room: WallBiasRoom, s: number, bias: number): number {
+  return bias > 0 ? Math.min(bias, sampleGrid(room.pos, s, room.ds)) : Math.max(bias, -sampleGrid(room.neg, s, room.ds));
+}
+
 /** The lateral range (m) the autopilot keeps its CG in at distance `s`: the usable road less its edge margin */
 function autopilotLateralRange(
   track: BuiltTrackData,
@@ -756,12 +828,20 @@ const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
  * The f12026-car's own speed limit along the path its autopilot drives (the racing line kept on the asphalt),
  * every `AP_PROFILE_STEP_M`: corner speed from its own grip and downforce, then a backward braking pass on the
  * friction circle, so no braking is planned that the tyres need for turning. The circuit's profile is the LC26's,
- * which corners and brakes harder than this car.
+ * which corners and brakes harder than this car. `ownRangeAt`, where given, is the road the own driver takes onto the
+ * kerbs (`F12026CarSim.ownRangeAt`) in place of the autopilot's usable road.
  */
-function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: AutopilotEdges | null): Float32Array {
+function autopilotProfile(
+  track: BuiltTrackData,
+  profile: CarSimProfile,
+  edges: AutopilotEdges | null,
+  ownRangeAt?: (s: number, smp: TrackSamplePoint) => [number, number]
+): Float32Array {
   let perCar = apProfiles.get(track);
   if (!perCar) apProfiles.set(track, (perCar = new Map()));
-  const key = edges ? `${profile.id}:colliders` : profile.id;
+  // The line this car drives here (`racingLineFor`): fixed for a circuit, as the cache is
+  const line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
+  const key = (edges ? `${profile.id}:${line}:colliders` : `${profile.id}:${line}`) + (ownRangeAt ? ':kerbs' : '');
   const cached = perCar.get(key);
   if (cached) return cached;
   const b = envelopeAt(profile.braking, airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M));
@@ -775,8 +855,8 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance(i * ds);
     bank[i] = smp.bankingRad;
-    const [lo, hi] = autopilotLateralRange(track, smp, i * ds, edges, profile);
-    offs[i] = clamp(aiLineOffsetM(smp, profile.racingLine), lo, hi);
+    const [lo, hi] = ownRangeAt ? ownRangeAt(i * ds, smp) : autopilotLateralRange(track, smp, i * ds, edges, profile);
+    offs[i] = clamp(aiLineOffsetM(smp, line), lo, hi);
   }
   // The clamp kinks the path where the line meets it, and a kink read over ±10 m is a corner twice as tight as the
   // line (82 instead of ~120 km/h planned through Shanghai's turn 13): the path the car drives through it is the
@@ -959,8 +1039,7 @@ const AP_LINE_MAX_MS2 = 3;
  * Tracking a supplied plan (`aiPlan`): pure pursuit on the plan's path with a short look-ahead, a slow integral on
  * the lateral error, and the plan's speed with its own slope as the pedal feed-forward
  */
-/** Pure-pursuit look-ahead on a plan: this many seconds of travel, at least the minimum (m) */
-const TRACK_LOOK_S = 0.22;
+/** Pure-pursuit look-ahead on a plan: the car's seconds of travel (plan-tracking.ts), at least the minimum (m) */
 const TRACK_LOOK_MIN_M = 5;
 /** Lateral acceleration a car metres off its path gets back onto it with (m/s²): sets the look-ahead's stretch */
 const TRACK_REJOIN_MS2 = 6;
@@ -972,12 +1051,33 @@ const TRACK_KERB_ALLOW_M = 0.6;
 /** On a kerb past the track's width, the outer tyres' outer edges stay this far inside where it ends (m): half a tyre's width and 0.1 m to spare */
 const TRACK_KERB_EDGE_ROOM_M = 0.3;
 /**
+ * Share of a plan's flat-kerb room (what `lateralRangeAt` adds to the autopilot's usable road) the own driver takes too
+ * (`ownRangeAt`). At 0 it kept every wheel on the asphalt, its centre half its track and 0.4 m inside the edge, where
+ * the line it follows rides the kerbs: the AMG's own driver ran 1.1-3.6 m inside the edge at Chang's apexes and exits
+ * where the players' fastest laps put the car's centre on the white line or past it
+ */
+const OWN_KERB_SHARE = 1;
+/**
+ * On the kerbs the own driver's far wheels stay on the asphalt: its centre no further past the edge than half its track
+ * less this (m: half a tyre's width and 0.1 m), two wheels on a kerb as a driver takes it. A plan's room on a kerb
+ * running on past the width reached 1.1-1.5 m further at RISE, Spielberg, Watkins Glen and Norisring, all four wheels
+ * over the line, where the own driver's metre or two of tracking error then takes it off the kerb's far side
+ */
+const OWN_KERB_FAR_WHEELS_M = 0.25;
+/**
  * The edges a traffic bias may push a plan's target out to (`biasEdgesOf`): the lateral range drawn no steeper along
  * the lap than this (m per m), its corners rounded over ± this (m), sampled this often (m)
  */
 const TRACK_BIAS_EDGE_SLOPE = 0.025;
 const TRACK_BIAS_EDGE_ROUND_M = 10;
 const TRACK_BIAS_EDGE_STEP_M = 0.5;
+/**
+ * Room a traffic bias leaves between the tyres' outer edges and a barrier (m), there and ahead (`wallBiasRoomOf`). With
+ * none, GT3s at Watkins Glen hit the Esses' Armco about ten times a race: the line swings 6 m right in a second at
+ * 220 km/h toward a barrier 0.2-0.4 m past the edge, and a car held 3 m right of it in traffic came to the road's edge
+ * still 3 m off its line, overshot it by half a metre and touched
+ */
+const BIAS_WALL_ROOM_M = 0.6;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -1115,7 +1215,7 @@ export class F12026CarSim implements SimulatorCar {
   public brakingGuide: BrakingGuide;
   private brakingGuideGripBucket = 20;
   private lastGuideWaterMm = 0;
-  /** The racing line this car follows (`CarSimProfile.racingLine`) */
+  /** The racing line this car follows (`CarSimProfile.racingLine`, as this circuit has it: `racingLineFor`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
   public get cgHeightM(): number {
@@ -1146,6 +1246,8 @@ export class F12026CarSim implements SimulatorCar {
     const ch = this.config.chassis;
     return (ch.inertia.yaw * this.vehicle.totalMassKg) / ch.totalMassKg;
   }
+  /** The box round the outline its barrier probes follow (its own body's, or the one it wears), for car-to-car contact */
+  public readonly contactBox: ContactBox;
   public readonly cgToFrontAxleM: number;
   public readonly cgToRearAxleM: number;
   // The rig's extra pitch / roll / heave (SimulatorCar): none, since the rigid body's pose already carries them.
@@ -1163,7 +1265,7 @@ export class F12026CarSim implements SimulatorCar {
   public get vehicleId(): import('@/types/f1').VehicleModelId {
     return this.profile.model ?? (this.profile.id as import('@/types/f1').VehicleModelId);
   }
-  public get racingLineId(): 'f1' | 'gt3' {
+  public get racingLineId(): RacingLineId {
     return this.line;
   }
   public aiAutopilot = false;
@@ -1190,6 +1292,8 @@ export class F12026CarSim implements SimulatorCar {
   public aiSkill = 70;
   /** Strategic FIA-2026 Boost latch for high-skill AI on long acceleration zones */
   private aiBoostLatched = false;
+  /** Pure-pursuit look-ahead on a plan (s of travel): this car's (plan-tracking.ts) */
+  private readonly planLookS: number;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -1321,6 +1425,15 @@ export class F12026CarSim implements SimulatorCar {
   private walls: WallQuery | null = null;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
+  /** This car against the circuit's pit lane (pit/pit-lane.ts); null on a circuit without one */
+  private pitTracker: PitLaneTracker | null | undefined;
+  /**
+   * Set while the AI field drives this car down the pit lane itself (`placeInPitLane`): its lane spot is the field's,
+   * not found from its position
+   */
+  private pitDriven = false;
+  /** Just put back in the pit lane (`restorePose` with `pitLane`): the next pose finds the car anywhere along it, not only at its entry */
+  private pitRejoin = false;
   private s = 0;
   private lateral = 0;
   private prevS = 0;
@@ -1392,9 +1505,13 @@ export class F12026CarSim implements SimulatorCar {
     opts?: { aiLite?: boolean }
   ) {
     this.track = track;
+    // The circuit's pit lane is built on first use (10-16 ms on a long lane): with the car, while the circuit loads, not
+    // in its first step on the road
+    void track.pitLane;
     this.profile = profile;
     this.fuelFlowCurveLut = profile.fuelFlowCurveKgS ? new Lut(profile.fuelFlowCurveKgS) : null;
-    this.line = profile.racingLine ?? 'f1';
+    this.line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
+    this.planLookS = planLookS(profile.id);
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
       : circuitBrakingGuide(track.samples, this.line);
@@ -1471,6 +1588,7 @@ export class F12026CarSim implements SimulatorCar {
     this.wheelbaseM = v.wheelbaseM;
     this.cgToFrontAxleM = v.cgToFrontM;
     this.cgToRearAxleM = v.cgToRearM;
+    this.contactBox = contactBoxOfBody(v.wallProbePoints, profile.bodyPlan ?? this.config.chassis.bodyPlan);
     const mkWheel = (): AdapterWheel => ({
       worldPos: { x: 0, y: 0, z: 0 },
       zRoad: 0,
@@ -1506,9 +1624,16 @@ export class F12026CarSim implements SimulatorCar {
     return this.collider ? autopilotEdges(this.track, this.collider) : null;
   }
 
-  /** The autopilot's own limit speed along the lap (m/s, every 5 m): what AI tuning scales */
+  /**
+   * The autopilot's own limit speed along the lap (m/s, every 5 m): what AI tuning scales. A car the field puts on
+   * drive plans here (its check passed) reads it as the base its plan's speeds are scaled against, as it always did;
+   * any other car drives it, on its own path onto the kerbs (`ownProfile`)
+   */
   public aiBaseSpeedProfile(): Float32Array {
-    return autopilotProfile(this.track, this.profile, this.autopilotEdges());
+    if (planCheckFor(this.vehicleId, this.racingLineId)?.ok === true) {
+      return autopilotProfile(this.track, this.profile, this.autopilotEdges());
+    }
+    return this.ownProfile();
   }
 
   /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
@@ -2198,7 +2323,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
-  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void {
+  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean; pitLane?: boolean }): void {
     // Put back: the lap under way can't count. Restore recorded outLap state when supplied (so rewinding from lap 1
     // back onto the out-lap does not count the out-lap as a lap), otherwise preserve the current out-lap flag.
     if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
@@ -2213,6 +2338,9 @@ export class F12026CarSim implements SimulatorCar {
     this.progressHintS = this.poseHintS = p.s;
     this.resetVehicle(pose.x, pose.z, pose.yawRad, Math.max(0, pose.speedMs), true);
     this.afterPlacement();
+    // Put back in the pit lane (a flashback to a moment in it, the sim worker's car in it): found anywhere along it.
+    // A car put down off the road beside the lane (at Monaco's Swimming Pool, say) was never in it and is not now
+    this.pitRejoin = pose.pitLane === true && !this.pitDriven;
   }
 
   public teleportToTurn(turnNumber: number): void {
@@ -2715,9 +2843,8 @@ export class F12026CarSim implements SimulatorCar {
     const look = this.track.getSampleAtDistanceInto
       ? this.track.getSampleAtDistanceInto(lookS, _apSample)
       : this.track.getSampleAtDistance(lookS);
-    // the racing line uses the kerbs; the autopilot keeps all four wheels on the asphalt
-    const [lookLo, lookHi] = autopilotLateralRange(this.track, look, look.s, this.autopilotEdges(), this.profile);
-    const off = clamp(aiLineOffsetM(look, this.line) + this.aiLineBiasM, lookLo, lookHi);
+    // the racing line uses the kerbs; the own driver follows it onto the flat ones (`ownTargetAt`)
+    const off = this.ownTargetAt(look.s, look);
     const dx = look.position.x + look.binormal.x * off - v.position.x;
     const dz = look.position.z + look.binormal.z * off - v.position.z;
     const dl = Math.hypot(dx, dz);
@@ -2729,8 +2856,7 @@ export class F12026CarSim implements SimulatorCar {
     // 2 m past its line and the edge on Daytona's banking exits and into Rwanda's turn 1), capped so a car well off
     // the line rejoins it rather than asking the tyres for a second corner
     {
-      const [lo, hi] = autopilotLateralRange(this.track, p.sample, p.s, this.autopilotEdges(), this.profile);
-      const lineNow = clamp(aiLineOffsetM(p.sample, this.line) + this.aiLineBiasM, lo, hi);
+      const lineNow = this.ownTargetAt(p.s, p.sample);
       const b = p.sample.binormal;
       const bl = Math.hypot(b.x, b.z) || 1;
       // + lateral is this far to the car's left
@@ -2783,7 +2909,8 @@ export class F12026CarSim implements SimulatorCar {
     // each reachable by braking at the f12026-car's own deceleration. Aimed a little ahead of the car to cover the
     // pedal's lag.
     const lead = Math.max(5, speed * 0.2);
-    const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
+    // On a plan, the profile its tuning target was built on; the own driver, its own path's
+    const prof = plan ? autopilotProfile(this.track, this.profile, this.autopilotEdges()) : this.ownProfile();
     const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
     const wetBrakeScale =
       v.waterMm > 0
@@ -2924,6 +3051,76 @@ export class F12026CarSim implements SimulatorCar {
     return [lo, hi];
   }
 
+  /**
+   * Where the own driver (a car with no plan) keeps its centre at lap distance `s` (m, + right): the autopilot's usable
+   * road, widened onto the flat kerbs by `OWN_KERB_SHARE` of the room a plan has there (`lateralRangeAt`), its far
+   * wheels still on the asphalt (`OWN_KERB_FAR_WHEELS_M`). Only ever wider: where a plan's road is narrower (a kerb too
+   * tall for the car, a cone lane) the own driver keeps its own, as before. On the sample ground (no colliders: no lips
+   * or kerb heights known) it keeps to the asphalt
+   */
+  public ownRangeAt(s: number, sample: TrackSamplePoint = this.track.getSampleAtDistance(s)): [number, number] {
+    const edges = this.autopilotEdges();
+    const [lo, hi] = autopilotLateralRange(this.track, sample, s, edges, this.profile);
+    const share = this.profile.aiOwnKerbShare ?? OWN_KERB_SHARE;
+    if (!edges || share <= 0) return [lo, hi];
+    const [planLo, planHi] = this.lateralRangeAt(s, sample);
+    const ch = this.profile.config.chassis;
+    const reach = sample.width / 2 + 0.5 * Math.max(ch.trackWidthFront, ch.trackWidthRear) - OWN_KERB_FAR_WHEELS_M;
+    return [
+      Math.min(lo, Math.max(-reach, lo + share * Math.min(0, planLo - lo))),
+      Math.max(hi, Math.min(reach, hi + share * Math.max(0, planHi - hi))),
+    ];
+  }
+
+  /**
+   * Where the own driver aims at lap distance `s` (m, + right): its line in its road onto the kerbs (`ownRangeAt`),
+   * moved by the traffic bias within the asphalt (the autopilot's usable road) and no further onto a kerb than the line
+   * itself goes, as a plan's target is (`planTargetAt`): clamped to the whole kerb room, a pack on lap 1 pushed its
+   * cars out onto kerbs the line never takes (the Scirocco at Bridgehampton: lap-1 offs 2 → 6 in 10 races)
+   */
+  private ownTargetAt(s: number, sample: TrackSamplePoint): number {
+    const [lo, hi] = this.ownRangeAt(s, sample);
+    // No kerb room (`aiOwnKerbShare` 0, or no colliders): the line and its bias kept on the asphalt, as ever
+    // (the bias held to the room the barriers leave it, `wallBiasRoomOf`)
+    const bias = this.aiLineBiasM === 0 ? 0 : wallHeldBias(this.ownWallRoom(), s, this.aiLineBiasM);
+    if ((this.profile.aiOwnKerbShare ?? OWN_KERB_SHARE) <= 0 || !this.autopilotEdges()) {
+      return clamp(aiLineOffsetM(sample, this.line) + bias, lo, hi);
+    }
+    const line = clamp(aiLineOffsetM(sample, this.line), lo, hi);
+    if (bias === 0) return line;
+    const [roadLo, roadHi] = autopilotLateralRange(this.track, sample, s, this.autopilotEdges(), this.profile);
+    return clamp(line + bias, Math.min(line, roadLo), Math.max(line, roadHi));
+  }
+
+  /** The own driver's speed limit along the lap: its path onto the kerbs (`ownRangeAt`), else the autopilot's */
+  private ownProfile(): Float32Array {
+    const edges = this.autopilotEdges();
+    if (!edges || (this.profile.aiOwnKerbShare ?? OWN_KERB_SHARE) <= 0) {
+      return autopilotProfile(this.track, this.profile, edges);
+    }
+    return autopilotProfile(this.track, this.profile, edges, (s, smp) => this.ownRangeAt(s, smp));
+  }
+
+  /** The room the barriers leave a traffic bias off a plan's path (`wallBiasRoomOf`), built on first use per plan */
+  private planWallRoom(plan: AiDrivePlan): WallBiasRoom {
+    let perPlan = planWallRooms.get(this.profile);
+    if (!perPlan) planWallRooms.set(this.profile, (perPlan = new WeakMap()));
+    let room = perPlan.get(plan);
+    if (!room) perPlan.set(plan, (room = wallBiasRoomOf(this.track, plan.n.length, (i) => plan.n[i], this.startFootprint().halfWidthM)));
+    return room;
+  }
+
+  /** The room the barriers leave a traffic bias off the own driver's line (`wallBiasRoomOf`), built on first use */
+  private ownWallRoom(): WallBiasRoom {
+    if (!this.ownWallRoomCache || this.ownWallRoomCache.track !== this.track || this.ownWallRoomCache.line !== this.line) {
+      const n = Math.max(16, Math.ceil(this.track.totalLengthM / TRACK_BIAS_EDGE_STEP_M));
+      const room = wallBiasRoomOf(this.track, n, (_, s) => aiLineOffsetM(this.track.getSampleAtDistance(s), this.line), this.startFootprint().halfWidthM);
+      this.ownWallRoomCache = { track: this.track, line: this.line, room };
+    }
+    return this.ownWallRoomCache.room;
+  }
+  private ownWallRoomCache: { track: BuiltTrackData; line: RacingLineId; room: WallBiasRoom } | null = null;
+
   /** The edges a traffic bias may push this car's plan target out to (`biasEdgesOf`), built on first use */
   private biasEdges(): BiasEdges {
     const key = this.collider ?? NO_COLLIDER;
@@ -2948,8 +3145,9 @@ export class F12026CarSim implements SimulatorCar {
   private planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number {
     const [lo, hi] = this.lateralRangeAt(s, sample);
     const n = sampleGrid(plan.n, s, plan.track.ds);
-    let want = n + this.aiLineBiasM;
-    if (this.aiLineBiasM !== 0) {
+    const bias = this.aiLineBiasM === 0 ? 0 : wallHeldBias(this.planWallRoom(plan), s, this.aiLineBiasM);
+    let want = n + bias;
+    if (bias !== 0) {
       const e = this.biasEdges();
       const loE = Math.min(sampleGrid(e.lo, s, e.ds), Math.max(sampleGrid(e.loAhead, s, e.ds), latNow));
       const hiE = Math.max(sampleGrid(e.hi, s, e.ds), Math.min(sampleGrid(e.hiAhead, s, e.ds), latNow));
@@ -2978,7 +3176,7 @@ export class F12026CarSim implements SimulatorCar {
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
     // On wet roads lengthen the look-ahead and soften rejoin lateral acceleration so lane shifts never excite a tank-slapper
     const lookMin = TRACK_LOOK_MIN_M * (1 + 0.55 * wet);
-    const lookS = TRACK_LOOK_S * (1 + 0.55 * wet);
+    const lookS = this.planLookS * (1 + 0.55 * wet);
     const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.35 * wet);
     const ld = Math.max(lookMin, speed * lookS, Math.sqrt((2 * speed * speed * eFar) / rejoinMs2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
@@ -3202,8 +3400,11 @@ export class F12026CarSim implements SimulatorCar {
     this.lastAxMs2 = this.lastAyMs2 = 0;
     this.chassisG = 1;
     this.stuckS = 0;
-    // The off-track verdict belongs to where the car was: the new spot is judged afresh
+    // The off-track verdict belongs to where the car was: the new spot is judged afresh (so does the pit lane, unless
+    // the field is driving the car down it)
     this.wasOffTrack = false;
+    if (!this.pitDriven) this.pitTracker?.reset();
+    this.pitRejoin = false;
     // So does the barrier contact: zeroed, on the page's car and the sim worker's alike (race control reads a drop as none)
     this.wallContactS = 0;
     const c = this.channels;
@@ -3253,6 +3454,7 @@ export class F12026CarSim implements SimulatorCar {
     this.poseHintS = p.s;
     this.s = p.s;
     this.lateral = p.lateralOffset;
+    this.followPitLane(p.s, p.lateralOffset, p.sample.width);
     this.vyMs = this.bodyVy();
     this.yawRateRadS = this.bodyYawRate();
     this.steerAngleNorm = this.steerCmd;
@@ -3399,6 +3601,63 @@ export class F12026CarSim implements SimulatorCar {
     return Math.min(45_000, ((this.track.pointToPoint?.finishS ?? this.track.totalLengthM) / 90) * 1000);
   }
 
+  /**
+   * The car against the pit lane, after each pose: in the lane its lap position is the lane's (pit-lane.ts), so a lane
+   * that skips a corner neither jumps the lap clock nor reads as a cut, and a lap that went through it does not count
+   * for a best lap (a lane can be the shorter way round)
+   */
+  private followPitLane(projS: number, lateralM: number, roadWidthM: number): void {
+    const lane = this.track.pitLane;
+    if (!lane) {
+      this.pitTracker = null;
+      return;
+    }
+    const tr = this.pitTracker ?? (this.pitTracker = new PitLaneTracker(lane));
+    if (this.pitDriven) {
+      if (tr.spot) this.s = tr.spot.trackS;
+    } else {
+      const offRoadM = Math.abs(lateralM) - roadWidthM / 2;
+      const rejoin = this.pitRejoin;
+      this.pitRejoin = false;
+      if (tr.spot || (offRoadM > 0.5 && (rejoin || lane.nearEntry(projS)))) {
+        const spot = tr.update(this.worldPosition.x, this.worldPosition.z, offRoadM, projS, rejoin);
+        if (spot) this.s = spot.trackS;
+      }
+    }
+    const spot = tr.spot;
+    if (spot && this.lapValid) this.invalidateLap();
+    const t = this.telemetry;
+    if (spot) t.pitLane = { laneM: spot.laneM, offsetM: spot.offsetM, inLimitZone: spot.inLimitZone };
+    else if (t.pitLane) t.pitLane = null;
+  }
+
+  /**
+   * The AI field drives this car down the pit lane on its own path (no forces): placed at `x`/`z` facing `yawRad`,
+   * rolling at `speedMs`, `laneM` along the lane and `offsetM` off its centreline (its lap position is the lane's)
+   */
+  public driveInPitLane(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void {
+    const lane = this.track.pitLane;
+    if (!lane) return;
+    const tr = this.pitTracker ?? (this.pitTracker = new PitLaneTracker(lane));
+    this.pitDriven = true;
+    tr.place(laneM, offsetM);
+    this.vehicle.driveKinematic(x, z, yawRad, speedMs);
+    this.syncPose();
+  }
+
+  /** Out of the pit lane and back on the road at `x`/`z`, rolling at `speedMs`: the physics drive the car again */
+  public leavePitLane(x: number, z: number, yawRad: number, speedMs: number): void {
+    this.endPitDrive();
+    this.restorePose({ x, z, yawRad, speedMs, s: this.s });
+  }
+
+  /** The field no longer drives the car down the lane, and places it itself (a restart, a flashback) */
+  public endPitDrive(): void {
+    this.pitDriven = false;
+    this.pitTracker?.reset();
+    this.vehicle.endKinematic();
+  }
+
   /** Race control deleted the running lap (judged track limits) */
   public invalidateLap(): void {
     this.lapValid = false;
@@ -3440,7 +3699,9 @@ export class F12026CarSim implements SimulatorCar {
       if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
       allOff = false;
     }
-    const offTrack = anyGrounded ? allOff : this.wasOffTrack;
+    // In the pit lane the car is off the racing surface but not off the track
+    const inPitLane = Boolean(this.pitTracker?.spot);
+    const offTrack = !inPitLane && (anyGrounded ? allOff : this.wasOffTrack);
     this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;

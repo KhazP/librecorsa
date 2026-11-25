@@ -1,5 +1,7 @@
 "use client";
 
+import { CareerScreen } from "@/components/career/CareerScreen";
+import { useCareerDrive } from "@/components/career/useCareerDrive";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl/react";
 import { t as tr } from "@/i18n/runtime";
@@ -90,15 +92,16 @@ import { dualShock4Hid } from "@/lib/input/webhid-dualshock4";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
 import { loadCarChoice, saveCarChoice } from "@/lib/settings/car-choice";
-import { clampFov, codeFromName, confirmDriverProfileName, DEFAULT_PLAYER_SETTINGS, loadOnboarded, loadPlayerSettings, loadRumble, needsDriverNamePrompt, pushLibraryRecent, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
+import { clampFov, codeFromName, confirmDriverProfileName, DEFAULT_PLAYER_SETTINGS, loadOnboarded, loadPlayerSettings, loadRumble, needsDriverNamePrompt, parsePlayerSettings, pushLibraryRecent, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
 import { signalBoardLap } from "@/components/hud/BoardWidget";
-import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, PitStrategyState, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
 import { GpuLostNotice } from "@/components/menu/GpuLostNotice";
 import { NowPlayingToast } from "@/components/hud/NowPlayingToast";
 import { browserStore, lostRecently, probeRenderer, settleLoss } from "@/lib/render/gpu-health";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import type { PodiumUi } from "@/lib/render/podium-shot";
+import { idleShowUi } from "@/lib/render/pre-race-show";
 import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
@@ -167,7 +170,12 @@ installErrorLog();
 // polish:B the podium shot's view before the drive exists
 const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
 const idlePodium = () => IDLE_PODIUM;
+const idleShow = () => idleShowUi;
+const noShowTime = () => 0;
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
+/** A career round's car and lap are its own: the pause menu's car picker and corner jumps do nothing in one */
+const noCarChange = () => {};
+const noTurnJump = () => {};
 let pendingRaceStart: RaceStartInfo | null = null;
 /** Private-room qualifying started before this circuit loaded (or while on another circuit) */
 let pendingQualifying: { id: string; trackId: string } | null = null;
@@ -177,10 +185,38 @@ let pendingQualifying: { id: string; trackId: string } | null = null;
  */
 let pendingChallenge: { id: string; race: boolean } | null = null;
 /**
- * The player's own assists, realism and weather while a challenge or a scheduled race has the week's in their place:
- * put back when they leave the car for the menus. (Outside the component: going to the week's circuit reloads it.)
+ * The player's own assists, realism and weather while a challenge, a scheduled race or a career round has its own in
+ * their place: put back when they leave the car for the menus. (Outside the component: going to the week's circuit
+ * reloads it.) A copy is kept in storage too: the drive's rules are saved as the settings, so a tab closed mid-drive
+ * would otherwise keep them; the next start puts the player's own back (`takeOwnRules`)
  */
 let ownRules: Pick<PlayerSettings, "assistPreset" | "realism" | "conditions"> | null = null;
+const OWN_RULES_KEY = "librecorsa.ownRules";
+/** Keeps the player's own rules (`own`: the settings before the drive's) unless they are kept already */
+function keepOwnRules(own: PlayerSettings): void {
+  if (ownRules) return;
+  ownRules = { assistPreset: own.assistPreset, realism: own.realism, conditions: own.conditions };
+  try {
+    localStorage.setItem(OWN_RULES_KEY, JSON.stringify(ownRules));
+  } catch {
+    // Storage refused (private mode, full): kept for this page only
+  }
+}
+/** The player's own rules to put back (this page's, or a closed tab's from storage), and forgets them */
+function takeOwnRules(): Pick<PlayerSettings, "assistPreset" | "realism" | "conditions"> | null {
+  let own = ownRules;
+  ownRules = null;
+  try {
+    if (!own) {
+      const raw = localStorage.getItem(OWN_RULES_KEY);
+      own = raw ? (JSON.parse(raw) as typeof own) : null;
+    }
+    localStorage.removeItem(OWN_RULES_KEY);
+  } catch {
+    // Unreadable: nothing to put back
+  }
+  return own;
+}
 /** The circuit the simulator was last mounted on: a host's room follows the next circuit's own time of day from it */
 let lastMountedTrackId: string | null = null;
 
@@ -189,7 +225,8 @@ export interface LibreCorsaSimulatorProps {
   trackId?: string;
   /** Title menu circuit picker */
   /** Switches circuit: settles once the load lands (the scene remounts) or fails (the old circuit stays) */
-  onSelectTrack?: (id: string) => void | Promise<void>;
+  /** `remember: false`: the circuit is for this drive only (a career round), not the one the game opens on next */
+  onSelectTrack?: (id: string, opts?: { remember?: boolean }) => void | Promise<void>;
   /** Mounts the circuit again from scratch (a new canvas and WebGL context), after the GPU context was lost */
   onRestart?: () => void;
 }
@@ -523,11 +560,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const leaveSession = useCallback(() => {
     endMpRace(true);
     // The week's rules were only for that drive: the player's own assists, realism and weather are back
-    if (ownRules) {
-      const own = ownRules;
-      ownRules = null;
-      setSettings((prev) => ({ ...prev, ...own }));
-    }
+    const own = takeOwnRules();
+    if (own) setSettings((prev) => ({ ...prev, ...own }));
     session?.resetRun("session");
     session?.setRace({ kind: "practice" });
     clearSessionState();
@@ -535,6 +569,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setPhase("title");
     accountActions.pushSoon();
   }, [session, endMpRace, clearSessionState, setPhase]);
+
 
 
   const handleAeroPresetChange = useCallback((preset: AeroSetupPreset) => {
@@ -556,6 +591,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [gamepadRumble]);
 
   const handleTireCompoundChange = useCallback((compound: TireCompound) => session?.setTireCompound(compound), [session]);
+  const handlePitStrategy = useCallback((patch: Partial<PitStrategyState>) => session?.setPitStrategy(patch), [session]);
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
     session?.setTyreSetup(next);
@@ -569,7 +605,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** Swaps the player's car (the run starts over with it); the player's own pick goes through handleChangeCar */
   const changeCar = useCallback(
-    (next: CarId) => {
+    (next: CarId, opts?: { remember?: boolean }) => {
       session?.unlockAudio();
       if (next === carIdRef.current) return;
       carIdRef.current = next;
@@ -577,7 +613,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vehicleModelRef.current = carPhysics(next);
       setVehicleModel(vehicleModelRef.current);
       setSetupBoardNotice(null);
-      saveCarChoice(next);
+      // A career round's car is the round's: the player's own choice stays saved
+      if (opts?.remember !== false) saveCarChoice(next);
       session?.setCar(next);
     },
     [session]
@@ -596,6 +633,33 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [changeCar, showMpCarNotice]
   );
 
+
+  /** The career: its save, its screen and the rounds driven for it (career/useCareerDrive.ts) */
+  const career = useCareerDrive({
+    session,
+    trackId,
+    assetsReady,
+    race: telemetry.race,
+    pit: telemetry.pit,
+    raceIsAi: raceKind === "ai",
+    settingsRef,
+    carIdRef,
+    changeCar,
+    startSession,
+    leaveSession,
+    onSelectTrack,
+    leaveLoading: () => {
+      if (phaseRef.current !== "loading") return;
+      session?.unlockAudio();
+      setLoadingVisible(false);
+    },
+    setLaunchHint,
+    // As the week's challenge does: the player's own conditions are kept and come back on leaving (leaveSession)
+    applyConditions: (c) => {
+      keepOwnRules(settingsRef.current);
+      setSettings((prev) => ({ ...prev, conditions: { ...prev.conditions, weather: c.weather, timeOfDay: c.timeOfDay, weatherNodes: undefined, timeScale: 0 } }));
+    },
+  });
   /** The car picker: fixed for a multiplayer race, and restricted to the lobby's car class/spec while in a locked room */
   const handleChangeCar = useCallback(
     (next: CarId) => {
@@ -697,9 +761,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // polish:A — a flying restart outside a race puts the time trial's conditions on first
       if (race.kind === "practice" && flyingStart) return session.restartFlyingLap();
       const physics = session.car;
+      if (race.kind === "ai" && !session.allowRestart()) return;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
-      if (race.kind === "ai") startAiRace(race.field, settingsRef.current.race, settingsRef.current.profile, flyingStart ? false : undefined);
+      if (race.kind === "ai") startAiRace(race.field, session.raceSetup(), settingsRef.current.profile, flyingStart ? false : undefined);
       else physics.resetToStartGrid(flyingStart);
     },
     [session]
@@ -955,8 +1020,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The week's challenge rules: its assists and realism, a dry track (its car and circuit are the caller's to set) */
   const applyWeekRules = useCallback(() => {
     const week = challengeAt(Date.now());
-    const own = settingsRef.current;
-    ownRules ??= { assistPreset: own.assistPreset, realism: own.realism, conditions: own.conditions };
+    keepOwnRules(settingsRef.current);
     setSettings((prev) => ({
       ...prev,
       assistPreset: week.assists,
@@ -1650,10 +1714,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The circuit loads again on the title menu: as when leaving the car for it, the player's own assists, realism
       // and weather come back if a challenge or a scheduled race had the week's in their place
       let s = settingsRef.current;
-      if (ownRules) {
-        s = { ...s, ...ownRules };
-        ownRules = null;
-      }
+      const own = takeOwnRules();
+      if (own) s = { ...s, ...own };
       savePlayerSettings(lower ? { ...s, graphics: { ...s.graphics, quality: "low" } } : s);
       if (onRestart) onRestart();
       else window.location.reload();
@@ -1706,7 +1768,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // Saved settings and the first-run flag are read after mount (the page is prerendered without storage); the
   // session takes the settings on through applySettings, whether it exists yet or not
   useEffect(() => {
-    setSettings(loadPlayerSettings());
+    // A drive on its own rules (the week's challenge, a career round) that never came back to the menus (the tab closed,
+    // the circuit reloaded): the player's own come back, checked as a save is
+    let loaded = loadPlayerSettings();
+    const own = takeOwnRules();
+    if (own) {
+      const fixed = parsePlayerSettings({ ...loaded, ...own });
+      loaded = { ...loaded, assistPreset: fixed.assistPreset, realism: fixed.realism, conditions: fixed.conditions };
+      // Saved at once: the stored copy is gone, so a second run of this effect must read them from the save
+      savePlayerSettings(loaded);
+    }
+    setSettings(loaded);
     setOnboarded(loadOnboarded());
     setInviteRoom(roomFromUrl());
     setSettingsHydrated(true);
@@ -2069,6 +2141,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       shiftDown: first(k.shiftDown),
       board: first(k.board),
       headlights: first(k.headlights),
+      pitLimiter: first(k.pitLimiter),
     };
   }, [settings.keys]);
   /** The lap board's gear sets when it opens: the same HUD setting as in Settings */
@@ -2119,6 +2192,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // polish:B after the flag: the podium shot, the race kept in this browser, the next open race
   const podiumUi = useSyncExternalStore(session?.podium.subscribe ?? noSubscribe, session?.podium.getSnapshot ?? idlePodium, idlePodium);
+  // The career's pre-race show: its scenes as the drive plays them, and its two buttons
+  const showUi = useSyncExternalStore(session?.preRaceShow.subscribe ?? noSubscribe, session?.preRaceShow.getSnapshot ?? idleShow, idleShow);
+  const preRaceShow = useMemo(
+    () => ({
+      ui: showUi,
+      timeS: session?.preRaceShow.timeS ?? noShowTime,
+      onSkip: () => session?.preRaceShow.skip(),
+      onStart: () => session?.preRaceShow.startNow(),
+    }),
+    [showUi, session]
+  );
   const raceHistory = useRaceHistory(telemetry.race, telemetry.runId, {
     trackId,
     carId,
@@ -2245,20 +2329,22 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onSetAutoGearbox: setAutoGearbox,
     gamepadRumble,
     aiOpponents: raceKind === "ai",
-    onToggleAiOpponents: handleToggleAiOpponents,
+    // A career round is raced on its own terms: its field, skill, setup and car are not the pause menu's to change
+    onToggleAiOpponents: career.driving ? undefined : handleToggleAiOpponents,
     aiSkill: settings.aiSkill,
-    onChangeAiSkill: handleChangeAiSkill,
+    onChangeAiSkill: career.driving ? undefined : handleChangeAiSkill,
     raceSetup: settings.race,
-    onChangeRaceSetup: handleChangeRaceSetup,
+    onChangeRaceSetup: career.driving ? undefined : handleChangeRaceSetup,
     carId,
     vehicleModel,
-    onChangeCar: handleChangeCar,
+    onChangeCar: career.driving ? noCarChange : handleChangeCar,
     onToggleGamepadAssist: handleToggleGamepadAssist,
     onToggleGamepadRumble: handleToggleGamepadRumble,
     p2pStatus,
     onChangeAeroPreset: handleAeroPresetChange,
     onChangeAssistPreset: handleAssistPresetChange,
     onChangeTireCompound: handleTireCompoundChange,
+    onChangePitStrategy: handlePitStrategy,
     tyreSetup,
     defaultTyreSetup,
     onChangeTyreSetup: handleChangeTyreSetup,
@@ -2276,7 +2362,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
     challengeTarget: targetShown ? challengeTargetNow : null,
-    onSelectTurn: handleSelectTurn,
+    // A round is raced from the lights; a test day is practice, round the circuit as the player likes
+    onSelectTurn: career.racing ? noTurnJump : handleSelectTurn,
+    careerRound: career.racing ? { restartNote: career.canRestart ? tx("restartMulligan", { count: career.mulligansLeft }) : null } : undefined,
+    careerDrive: career.driving,
     onHostP2PRoom: handleHostP2PRoom,
     onJoinP2PRoom: handleJoinP2PRoom,
     onCreateManualOffer: handleCreateManualOffer,
@@ -2467,7 +2556,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               ? openSettings("pause", "controls", "wheel")
               : openSettings("pause")
           }
-          onExitToTitle={leaveSession}
+          onExitToTitle={career.driving ? career.backToCareer : leaveSession}
           onOpenSettings={(category?: SettingsCategory, tab?: string) => openSettings("pause", category, tab)}
           hud={settings.hud}
           virtualMirror={virtualMirrorOn}
@@ -2520,13 +2609,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           resultsClosed={resultsClosed}
           onCloseResults={() => setResultsClosed(true)}
           onRestartRace={
-            raceKind === "mp" && !isMpHost ? undefined : () => handleResetCar(false)
+            (raceKind === "mp" && !isMpHost) || !career.canRestart ? undefined : () => handleResetCar(false)
           }
-          onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
-          backToLobbyLabel={inScheduledRace ? tx("backToRaces") : undefined}
+          onBackToLobby={raceKind === "mp" ? handleBackToLobby : career.driving ? career.backToCareer : undefined}
+          backToLobbyLabel={inScheduledRace ? tx("backToRaces") : career.driving ? tx("backToCareer") : undefined}
+          preRaceShow={preRaceShow}
           raceEnd={{
             podium: podiumUi,
             onSkipPodium: () => session?.podium.skip(),
+            podiumTimeS: session?.podium.boardTimeS,
             history: raceHistory,
             nextRace: raceKind === "mp" && inScheduledRace && races.on ? { slotS: races.slotS, onJoin: handleJoinNextRace } : undefined,
           }}
@@ -2596,6 +2687,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onRaceAi={() => handleTitleStart(true)}
           onControls={() => openSettings("title")}
           onOpenSettings={(category?: SettingsCategory) => openSettings("title", category)}
+          onOpenCareer={career.openScreen}
+          careerStatus={career.status}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
           challengePanel={
@@ -2663,6 +2756,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onExit={leaveWizard}
           onSkip={wizardMode === "first-run" ? finishWizard : undefined}
           onStepChange={handleWizardStep}
+        />
+      ) : null}
+
+      {career.open && phase === "title" && !hudEditing ? (
+        <CareerScreen
+          save={career.save}
+          content={career.content}
+          playerCode={settings.profile.code}
+          playerName={settings.profile.name}
+          onSave={career.commit}
+          onClose={career.closeScreen}
+          onRaceNext={career.raceNext}
+          onTestDay={career.testDay}
+          summaries={career.summaries}
+          onCloseSummary={career.closeSummary}
+          unfinished={career.unfinished}
+          onResolveUnfinished={career.resolveUnfinished}
         />
       ) : null}
 

@@ -292,6 +292,12 @@ export interface HudSettings {
   showPlayerNames: boolean;
   /** Advanced bottom-right suspension, grip and aero engineering telemetry widget */
   engineeringTelemetry: boolean;
+  /** The career's pre-race show before each round (the circuit, the weather, the tyres, the grid) */
+  preRaceShow: boolean;
+  /** After an offline AI race, the full-screen podium (the top three, the top ten, the fastest lap) before the table */
+  fullPodium: boolean;
+  /** In an offline AI race: the broadcast's driver cards (winner, new leader, fastest lap, pit stop, retired) and battle strip */
+  raceEventCards: boolean;
 }
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
@@ -456,6 +462,9 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   boardWidget: "lapEnd",
   showPlayerNames: true,
   engineeringTelemetry: false,
+  preRaceShow: true,
+  fullPodium: true,
+  raceEventCards: true,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -855,6 +864,9 @@ function parseHud(v: unknown): HudSettings {
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
     engineeringTelemetry: bool(v.engineeringTelemetry, d.engineeringTelemetry),
+    preRaceShow: bool(v.preRaceShow, d.preRaceShow),
+    fullPodium: bool(v.fullPodium, d.fullPodium),
+    raceEventCards: bool(v.raceEventCards, d.raceEventCards),
   };
 }
 

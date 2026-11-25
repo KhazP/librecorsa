@@ -9,6 +9,8 @@
  *   then plays on through restarts until the player leaves for the menus.
  * - The player's flag: the results pool, through the cool-down lap, the podium and the results. Replays play it too.
  * - Paused (the pause menu, the seat panel, a lost wheel): the same music, ducked and muffled.
+ * - The career's pre-race show: its own cue, from the top (or from the grid's section for the grid alone), in place of
+ *   the silence at the grid; it fades as the show hands the car back. Paused, it stops, and comes back where the show is.
  *
  * It also names the pool coming next while the grid waits (the race's, at the lights or before a practice car moves),
  * so the player can load it beforehand and start it on the lights out, and the engine's load while the race music
@@ -31,6 +33,10 @@ export interface MusicInputs {
   speedMs: number;
   /** How hard the engine works, 0 to 1 (throttle times the share of the rev range) */
   engineLoad: number;
+  /** The career's pre-race show is on screen */
+  show?: boolean;
+  /** Where its cue plays from (s): where the show is on it (the grid alone starts inside the grid's section) */
+  showFromS?: number;
 }
 
 export interface MusicCue {
@@ -44,6 +50,8 @@ export interface MusicCue {
   arm: MusicPool | null;
   /** The engine's load under the race music, 0 to 1 (0 anywhere else) */
   load: number;
+  /** The show's cue: where it starts (s) */
+  fromS?: number;
 }
 
 /** Practice music starts above this speed (m/s): the first metres off the grid, or at once on a flying lap */
@@ -57,6 +65,11 @@ export class MusicDirector {
     if (i.phase !== "driving") {
       this.practiceStarted = false;
       return { pool: i.phase === "loading" ? null : "menu", duck: false, driveEq: false, arm: null, load: 0 };
+    }
+    if (i.show && !i.replaying) {
+      // The show waits under the pause menu, so its cue does too: it comes back in step with the show
+      if (i.frozen) return { pool: null, duck: false, driveEq: false, arm: null, load: 0 };
+      return { pool: "show", duck: false, driveEq: false, arm: null, load: 0, fromS: i.showFromS ?? 0 };
     }
     let pool: MusicPool | null;
     let arm: MusicPool | null = null;

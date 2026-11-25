@@ -487,6 +487,20 @@
     "third": "3.º",
     "skip": "Saltar"
   },
+  "podiumBoard": {
+    "label": "Podio",
+    "close": "Cerrar",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Clasificación",
+    "pointsScored": "{count, plural, one {+# pt} other {+# pts}}",
+    "noPoints": "Sin puntos",
+    "championshipPlace": "Campeonato P{position}",
+    "placesUp": "{count, plural, one {# posición ganada} other {# posiciones ganadas}}",
+    "placesDown": "{count, plural, one {# posición perdida} other {# posiciones perdidas}}",
+    "pointsTotal": "{count, plural, one {# pt en total} other {# pts en total}}"
+  },
   "qualifyingHud": {
     "clock": "Clasificación",
     "lastLap": "Última vuelta",
@@ -521,7 +535,9 @@
       "fuelTag": "COMB",
       "fuelTitle": "Combustible y energía",
       "stndTag": "POS",
-      "stndTitle": "Posiciones"
+      "stndTitle": "Posiciones",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Páginas del MFD",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# vuelta} other {# vueltas}}"
+    },
+    "pit": {
+      "tyres": "Próximos neumáticos",
+      "repair": "Reparar daños",
+      "repairTime": "Daños {damage}% · +{seconds} s",
+      "noDamage": "Sin daños",
+      "box": "Box en esta vuelta",
+      "limit": "Límite {limit} km/h · box {box}",
+      "on": "Sí",
+      "off": "No",
+      "boxCalled": "Entrando",
+      "callBox": "Llamar",
+      "stops": "Paradas",
+      "stopsOf": "{made} de {required}",
+      "stopsShort": "{made, plural, =0 {Sin paradas} one {# parada} other {# paradas}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "Líder",
       "lastVsBestTitle": "Última vuelta frente a tu mejor",
       "lastVsTheirsTitle": "Su última vuelta frente a la tuya",
-      "personalBest": "MP"
+      "personalBest": "MP",
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Vuelta",
@@ -1130,6 +1163,90 @@
     "resetAll": "Restablecer diseño",
     "cancel": "Cancelar",
     "done": "Listo"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limitador",
+    "stop": "Alto",
+    "go": "Adelante",
+    "crew": "Mecánicos",
+    "fitting": "Cambio a {compound}",
+    "fittingRepairing": "Cambio a {compound} · reparando",
+    "stopTime": "Parada {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit lane",
+    "boxIn": "Box {box} a {metres} m",
+    "boxPassed": "Box {box} pasado",
+    "approach": "Entrada al pit lane · límite {limit} km/h",
+    "limiterKey": "Limitador: {key}",
+    "stopsPill": "Paradas {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Box · # parada obligatoria} other {Box · # paradas obligatorias}}"
+  },
+  "preRace": {
+    "label": "Previa de la carrera",
+    "skip": "Saltar",
+    "start": "Iniciar",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "Ronda {round} de {rounds}",
+    "lengthKm": "{value} km",
+    "lengthMi": "{value} mi",
+    "riseM": "{value} m de desnivel",
+    "riseFt": "{value} ft de desnivel",
+    "turns": "{count, plural, one {# curva} other {# curvas}}",
+    "laps": "{count, plural, one {# vuelta} other {# vueltas}}",
+    "stops": "{count, plural, one {# pit stop} other {# pit stops}}",
+    "noStops": "Sin pit stop",
+    "qualifyingMin": "Clasificación de {minutes} min",
+    "gridByPace": "Parrilla por ritmo",
+    "air": "Aire {value}",
+    "track": "Pista {value}",
+    "wind": "Viento {value} {direction}",
+    "humidity": "Humedad {value}%",
+    "wetTrack": "Pista mojada",
+    "dryTrack": "Pista seca",
+    "championship": "Campeonato",
+    "points": "{count, plural, one {# pt} other {# pts}}",
+    "tyres": "Neumáticos",
+    "startingOn": "Montado",
+    "alsoAvailable": "También disponibles",
+    "startingGrid": "Parrilla de salida",
+    "place": "P{position}",
+    "pole": "Pole",
+    "field": "Los pilotos",
+    "startRace": "Iniciar carrera",
+    "startQualifying": "Iniciar clasificación",
+    "testDay": "Día de pruebas",
+    "targetLap": "Objetivo {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% delante",
+    "drivetrain": {
+      "rwd": "Tracción trasera",
+      "fwd": "Tracción delantera",
+      "awd": "Tracción total"
+    },
+    "revLimit": "Corte a {value} rpm",
+    "go": "Adelante",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Eventos de carrera",
+    "event": {
+      "winner": "Ganador",
+      "newLeader": "Nuevo líder",
+      "fastestLap": "Vuelta más rápida",
+      "pitStop": "Parada en boxes",
+      "retired": "Retirado"
+    },
+    "lap": "Vuelta {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "Lucha por P{position}",
+    "attacking": "Atacando",
+    "closing": "Recorta {rate} s/vuelta",
+    "closingCatch": "Recorta {rate} s/vuelta · lo alcanza en {laps, plural, one {# vuelta} other {# vueltas}}",
+    "pullingAway": "Se escapa",
+    "stable": "Diferencia estable"
   },
   "lapTelemetry": {
     "title": "Telemetría de vuelta",

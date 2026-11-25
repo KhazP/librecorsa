@@ -18,6 +18,7 @@ import {
   engineeringTelemetry,
   fieldOfView,
   frameRate,
+  fullPodium,
   headMovement,
   hudAdvanced,
   hudSize,
@@ -26,6 +27,8 @@ import {
   language,
   palette,
   playerNames,
+  preRaceShow,
+  raceEventCards,
   pressureUnit,
   quality,
   radar,
@@ -118,7 +121,7 @@ export function HudTab() {
     <>
       <HudLayoutCard />
       <HudPlacementCard />
-      <SettingsCard title={tx("title")} rows={[deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, engineeringTelemetry, ...hudAdvanced]} />
+      <SettingsCard title={tx("title")} rows={[deltaBar, lapSummary, mirror, radar, playerNames, preRaceShow, fullPodium, raceEventCards, boardWidget, engineeringTelemetry, ...hudAdvanced]} />
     </>
   );
 }

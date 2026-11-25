@@ -204,3 +204,29 @@
 | driver name | 車手名稱 | |
 | ways to sign in | 登入方式 | |
 | Not now | 稍後再說 | |
+
+## Career
+
+| English | 繁體中文 | 備註 |
+|---|---|---|
+| career | 生涯 | 名詞用「生涯」（生涯分數、所有生涯） |
+| career mode | 生涯模式 | 主選單與畫面標題 |
+| ladder | 晉級階梯 | 分頁與標題；「{discipline}晉級階梯」 |
+| tier | 級 | 「第 {tier} 級」 |
+| series | 系列賽 | 系列賽名稱見下列 |
+| discipline | 賽車類型 | 公路賽車／歷史賽車 |
+| promotion / promoted | 晉級／已晉級 | 晉級線、晉級區 |
+| attempt | 挑戰 | 「第 2/3 次挑戰」、挑戰次數倍率 |
+| mulligan | 重賽機會 | 計數用「# 次重賽機會」；歷史紀錄用「# 次重賽」 |
+| bonus objective | 加分目標 | |
+| test day | 測試日 | |
+| pre-season | 季前準備 | 不用「季前賽」（指熱身賽） |
+| season | 賽季 | 「第 {season} 賽季」 |
+| round | 站 | 「第 {round} 站」；不可用「圈」 |
+| standings | 錦標賽積分榜 | 生涯錦標賽；HUD 場上名次仍用「場上排名」 |
+| calendar | 賽曆 | |
+| career score / multiplier | 生涯分數／倍率 | 「{mult}× 分數」 |
+| pit stop(s) | 進站／強制進站 | 比賽設定列用「進站次數」 |
+| clean race | 乾淨比賽 | |
+| series names | 俱樂部盃、房車盃、經典 GT、原型車盃、GT3、耐力原型車、大獎賽、Procar 系列賽、第四組經典賽、Can-Am 傳奇 | |
+| regions | 美洲、歐洲、亞太 | 「{series}（{region}）」 |

@@ -5,11 +5,16 @@
  *   npx tsx scripts/ai/race-ab.ts [--tracks spielberg,istanbul_park] [--car lc26] [--seeds 4] [--seed0 0] [--laps 3] [--ai 7]
  *       [--profiles line,slow,early,weave,autopilot,none] [--jobs 4] [--a '<racecraft json>'] [--b '<racecraft json>']
  *       [--planner on|off] [--skill 0.5] [--weather clear|light_rain|heavy_rain|...] [--json out.json]
+ *       [--a-plans '<plan checks json>'] [--b-plans '<plan checks json>']
  *
  * `--seed0 N` starts at the N-th seed: a held-out set for a final check after knobs were picked on the first ones.
  * Each arm is a set of racecraft knobs (`RacecraftParams`) over the defaults; with no `--b` only the defaults race.
  * Headless races are chaotic (one first-lap pile-up moves a total by 5-10), so read totals over 24+ races, then the
  * per-race rows for where the difference sits.
+ *
+ * `--a-plans` / `--b-plans` give an arm drive-plan checks on top of the circuit's own, by line and car
+ * (`metadata.aiPlansByLine`, e.g. `'{"gt3":{"liana":{"ok":true,"maxGrip":1.08,...}}}'`): plans against the own driver
+ * in one tree, the same code and seeds for both arms.
  *
  * Worker mode (one race, JSON out): --one '<StandInRaceOptions json>'
  */
@@ -38,8 +43,10 @@ const aiCars = Number(opt('ai', '7'));
 const jobsN = Number(opt('jobs', '4'));
 const profiles = opt('profiles', 'line,slow,early,weave,none').split(',') as StandInProfile[];
 for (const p of profiles) if (!(STAND_IN_PROFILES as readonly string[]).includes(p)) throw new Error(`unknown profile ${p}`);
-const arms: { name: string; racecraft: Record<string, number> }[] = [{ name: 'A', racecraft: JSON.parse(opt('a', '{}')) }];
-if (argv.includes('--b')) arms.push({ name: 'B', racecraft: JSON.parse(opt('b', '{}')) });
+type Plans = StandInRaceOptions['plans'];
+const plansOf = (name: string): Plans => (argv.includes(`--${name}`) ? (JSON.parse(opt(name, '{}')) as Plans) : undefined);
+const arms: { name: string; racecraft: Record<string, number>; plans?: Plans }[] = [{ name: 'A', racecraft: JSON.parse(opt('a', '{}')), plans: plansOf('a-plans') }];
+if (argv.includes('--b') || argv.includes('--b-plans')) arms.push({ name: 'B', racecraft: JSON.parse(opt('b', '{}')), plans: plansOf('b-plans') });
 const localPlanner = opt('planner', 'off') === 'on';
 const skill = argv.includes('--skill') ? Number(opt('skill', '0.5')) : undefined;
 const weather = argv.includes('--weather') ? (opt('weather', 'clear') as StandInRaceOptions['weather']) : undefined;
@@ -158,7 +165,7 @@ async function main(): Promise<void> {
     for (const trackId of tracks)
       for (const standIn of profiles)
         for (let k = 0; k < seeds; k++)
-          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner, skill, weather } });
+          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner, skill, weather, plans: arm.plans } });
   console.error(`${races.length} races (${arms.length} arm(s) × ${tracks.length} tracks × ${profiles.length} profiles × ${seeds} seeds), ${jobsN} at once`);
   const started = Date.now();
   const results = await pool(races.map((r) => () => runOne(r.o)), jobsN);
@@ -167,7 +174,10 @@ async function main(): Promise<void> {
   if (argv.includes('--json')) writeFileSync(opt('json', 'race-ab.json'), JSON.stringify({ arms, rows }, null, 1));
 
   console.log(`\n${car} · ${laps} laps · ${aiCars} AI + stand-in · seeds ${seeds} · tracks ${tracks.join(', ')}`);
-  for (const arm of arms) if (Object.keys(arm.racecraft).length) console.log(`arm ${arm.name}: ${JSON.stringify(arm.racecraft)}`);
+  for (const arm of arms) {
+    if (Object.keys(arm.racecraft).length) console.log(`arm ${arm.name}: ${JSON.stringify(arm.racecraft)}`);
+    if (arm.plans) console.log(`arm ${arm.name} plans: ${JSON.stringify(arm.plans)}`);
+  }
   console.log(
     `${padR('', 16)}${pad('races', 7)}${pad('vsSI', 6)}${pad('AIflt', 6)}${pad('SIflt', 6)}${pad('race', 6)}${pad('rear', 5)}${pad('side', 5)}` +
       `${pad('touch', 7)}${pad('lost', 6)}${pad('won', 5)}${pad('AvA', 6)}${pad('AvAf', 6)}${pad('spin', 6)}${pad('off', 5)}${pad('wall', 5)}${pad('dnf', 4)}${pad('passes', 7)}${pad('pen', 5)}${pad('SIpen', 6)}${pad('AI lap', 8)}${pad('SI lap', 8)}`

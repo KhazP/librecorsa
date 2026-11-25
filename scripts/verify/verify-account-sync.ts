@@ -143,6 +143,7 @@ function main1(): void {
         "librecorsa.carSkins",
         "librecorsa.raceHistory",
         "librecorsa.driverStats",
+        "librecorsa.career",
         "librecorsa.f1ModPhysics",
         "bugesera.vehicle",
         "bugesera.track",

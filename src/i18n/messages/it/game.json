@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menu",
     "poolRace": "Gara",
-    "poolResults": "Risultati e replay"
+    "poolResults": "Risultati e replay",
+    "poolShow": "Pre-gara"
   },
   "carQuality": {
     "ownBadge": "FISICA DEDICATA",
@@ -270,7 +271,8 @@
     "hud": "Mostra / nascondi HUD",
     "board": "Apri / chiudi classifica",
     "headlights": "Fari accesi / spenti",
-    "headlightFlash": "Lampeggia fari (tieni premuto)"
+    "headlightFlash": "Lampeggia fari (tieni premuto)",
+    "pitLimiter": "Limitatore box"
   },
   "padActions": {
     "shiftUp": "Marcia su",
@@ -295,7 +297,8 @@
     "hud": "Mostra / nascondi HUD",
     "board": "Apri / chiudi classifica",
     "headlights": "Fari (tocco: lampeggio, pressione lunga: accesi / spenti)",
-    "headlightFlash": "Lampeggia fari (tieni premuto)"
+    "headlightFlash": "Lampeggia fari (tieni premuto)",
+    "pitLimiter": "Limitatore box"
   },
   "pedals": {
     "throttle": "Acceleratore",
@@ -845,6 +848,8 @@
     "launchKey": "Tieni premuto {key} per partire · Esc Menu",
     "noRacesOnHillClimb": "Niente gare in una cronoscalata",
     "backToRaces": "Torna alle gare",
+    "backToCareer": "Torna alla carriera",
+    "restartMulligan": "{count, plural, one {Usa un mulligan: ne resta #} other {Usa un mulligan: ne restano #}}",
     "carAutoSwitched": "Passaggio a {car}: lobby limitata a {rule}",
     "carBlockedByLobby": "In questa lobby l’auto è limitata a {rule}"
   },
@@ -947,5 +952,9 @@
       "saveChanged": "Il salvataggio cloud è cambiato su un altro dispositivo",
       "tooManyLaps": "Il cloud conserva fino a {count} giri migliori"
     }
+  },
+  "pit": {
+    "speeding": "Eccesso di velocità nella corsia dei box (oltre {limit} km/h)",
+    "stopMissed": "{count, plural, one {Sosta obbligatoria non effettuata} other {# soste obbligatorie non effettuate}}"
   }
 }

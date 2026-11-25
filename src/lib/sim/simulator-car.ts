@@ -27,6 +27,7 @@ import {
 } from './f12026-car/TrackColliderQuery';
 import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
+import type { ContactBox } from './contact-box';
 
 /** Per-wheel state used by the skid marks / smoke, multiplayer and AI peers. Order FR, FL, RR, RL. */
 export type SimulatorWheel = Pick<
@@ -96,6 +97,8 @@ export interface SimulatorCar {
   /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
   readonly contactMassKg?: number;
   readonly contactYawInertiaKgM2?: number;
+  /** The car's box for car-to-car contact, round its body's outline (absent: `DEFAULT_CONTACT_BOX`, an F1 car's) */
+  readonly contactBox?: ContactBox;
   /** The car's own braking guidance for the braking line (absent / null: the circuit's LC26 profile) */
   readonly brakingGuide?: BrakingGuide | null;
 
@@ -120,7 +123,7 @@ export interface SimulatorCar {
   /** Identifier of this vehicle model (derived from the car's profile) */
   readonly vehicleId?: import('@/types/f1').VehicleModelId;
   /** Racing line family used by this car ('f1' | 'gt3') */
-  readonly racingLineId?: 'f1' | 'gt3';
+  readonly racingLineId?: import('@/types/f1').RacingLineId;
   aiAutopilot: boolean;
   /** Fraction of the car's limit speed the autopilot runs at */
   aiPaceScale?: number;
@@ -172,7 +175,14 @@ export interface SimulatorCar {
    * Puts the car back at a recorded pose (world x, z and heading, + yaw = atan2(forward.x, forward.z)),
    * on the ground and rolling at `speedMs`, keeping the tyres' heat and wear. `s` is a hint for the track projection.
    */
-  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void;
+  /** `pitLane`: the car is put back in the pit lane (a flashback to a moment in it, a handover from the sim worker) */
+  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean; pitLane?: boolean }): void;
+  /** The AI field drives the car down the pit lane on its own path, no forces (pit/pit-lane.ts) */
+  driveInPitLane?(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void;
+  /** Out of the pit lane, back on the road rolling at `speedMs`: the physics drive the car again */
+  leavePitLane?(x: number, z: number, yawRad: number, speedMs: number): void;
+  /** The field stops driving the car down the lane and places it itself (a restart, a flashback) */
+  endPitDrive?(): void;
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;

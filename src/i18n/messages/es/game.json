@@ -176,7 +176,8 @@
   "music": {
     "poolMenu": "Menú",
     "poolRace": "Carrera",
-    "poolResults": "Resultados y repetición"
+    "poolResults": "Resultados y repetición",
+    "poolShow": "Previa de la carrera"
   },
   "carQuality": {
     "ownBadge": "FÍSICA PROPIA",
@@ -270,7 +271,8 @@
     "hud": "Mostrar / ocultar HUD",
     "board": "Abrir / cerrar clasificación",
     "headlights": "Faros encendidos / apagados",
-    "headlightFlash": "Ráfagas de faros (mantener)"
+    "headlightFlash": "Ráfagas de faros (mantener)",
+    "pitLimiter": "Limitador de pit lane"
   },
   "padActions": {
     "shiftUp": "Subir marcha",
@@ -295,7 +297,8 @@
     "hud": "Mostrar / ocultar HUD",
     "board": "Abrir / cerrar clasificación",
     "headlights": "Faros (toque: ráfaga, mantener: encender / apagar)",
-    "headlightFlash": "Ráfagas de faros (mantener)"
+    "headlightFlash": "Ráfagas de faros (mantener)",
+    "pitLimiter": "Limitador de pit lane"
   },
   "pedals": {
     "throttle": "Acelerador",
@@ -845,6 +848,8 @@
     "launchKey": "Mantén {key} para salir · Esc Menú",
     "noRacesOnHillClimb": "No hay carreras en una subida de montaña",
     "backToRaces": "Volver a las carreras",
+    "backToCareer": "Volver a la trayectoria",
+    "restartMulligan": "{count, plural, one {Usa un mulligan: queda #} other {Usa un mulligan: quedan #}}",
     "carAutoSwitched": "Cambiado a {car}: sala limitada a {rule}",
     "carBlockedByLobby": "Auto limitado a {rule} mientras estés en esta sala"
   },
@@ -947,5 +952,9 @@
       "saveChanged": "Los datos en la nube cambiaron en otro dispositivo",
       "tooManyLaps": "La nube guarda hasta {count} mejores vueltas"
     }
+  },
+  "pit": {
+    "speeding": "Exceso de velocidad en el pit lane (más de {limit} km/h)",
+    "stopMissed": "{count, plural, one {Pit stop obligatorio no realizado} other {# pit stops obligatorios no realizados}}"
   }
 }

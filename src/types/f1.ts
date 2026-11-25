@@ -210,6 +210,8 @@ export interface TrackSamplePoint {
   racingLineOffset: number;
   /** The GT3's own lap-time line, same scale (the F1 line where a track has none) */
   racingLineOffsetGt3?: number;
+  /** The road cars' own lap-time line, same scale, where a track has one (else they drive the GT3's) */
+  racingLineOffsetRoad?: number;
   optimalSpeedKmh: number; // Computed physics target speed at this point
   /** Highest speed here from which the car can still brake for every corner ahead (km/h) */
   brakeLimitKmh?: number;
@@ -293,6 +295,12 @@ export interface RaceStandingEntry {
   dnfReason?: DnfReason;
   /** Damage 0..1 (absent: none) */
   damage?: number;
+  /** In the pit lane now */
+  inPit?: boolean;
+  /** Pit stops made this race (an AI car's by the field; the player's by the page's crew, `withPlayerPit`) */
+  pitStops?: number;
+  /** Stopped in its pit box while the crew works: seconds so far, and the stop's whole length (s) */
+  pitBox?: { elapsedS: number; totalS: number };
 }
 
 /** Specific cause of a DNF or disqualification, shown on the finish banner and race results screen */
@@ -665,6 +673,10 @@ export interface CarTelemetry {
   lapInvalid?: boolean;
   /** True while on the out-lap before the first start/finish crossing starts lap timing */
   outLap?: boolean;
+  /** In the pit lane (pit/pit-lane.ts): where along it, how far off its centreline, and inside the speed-limit zone */
+  pitLane?: { laneM: number; offsetM: number; inLimitZone: boolean } | null;
+  /** The player's pit stop: limiter, the way to the box, the crew's work (pit/pit-stop.ts); absent where there are none */
+  pit?: PitTelemetry;
   /** Verdict on the lap that was just completed (set together with `lapCount` / `lastLapTimeMs`) */
   lastLapValid?: boolean;
   /** Reference hot pressure at which each tyre grips best (psi gauge) */
@@ -673,6 +685,43 @@ export interface CarTelemetry {
   tireOptimalTempC?: [number, number];
   /** Track-limits judging: warnings, penalties and the excursion being judged */
   trackLimits?: TrackLimitsStatus;
+}
+
+/** Where the player is in a pit stop */
+export type PitPhase = "track" | "approach" | "lane" | "box" | "servicing" | "released";
+
+/** What the crew does at the next stop, and whether the player has called it */
+export interface PitStrategyState {
+  nextCompound: TireCompound;
+  repairDamage: boolean;
+  boxRequested: boolean;
+}
+
+export interface PitTelemetry {
+  phase: PitPhase;
+  limiterOn: boolean;
+  /** Switched on by the speed-limit zone (it cannot be switched off there) */
+  limiterAuto: boolean;
+  limitKmh: number;
+  overLimit: boolean;
+  /** Pit-lane speeding calls this race */
+  speedingCount: number;
+  /** Metres to the player's box along the lane (from the lane entry onwards), else null */
+  toBoxM: number | null;
+  /** Sideways error to the box (m, + right), in the lane only */
+  boxSideM: number | null;
+  boxIndex: number;
+  /** Crew at work: seconds left of the whole stop, its length, and the parts of it */
+  serviceLeftS: number;
+  serviceTotalS: number;
+  tyreS: number;
+  repairS: number;
+  /** Damage the crew would repair (0..1) */
+  damage: number;
+  strategy: PitStrategyState;
+  stopsMade: number;
+  /** Stops this race requires (0: none) */
+  stopsRequired: number;
 }
 
 /** Why an excursion counted against the driver */
@@ -843,7 +892,8 @@ export function isVehicleModelId(value: unknown): value is VehicleModelId {
 }
 
 /** Which lap-time racing line a car drives: the F1 cars share one, the GT3 has its own */
-export type RacingLineId = "f1" | "gt3";
+/** A circuit's lap-time lines: the F1 cars', the GT3's (every closed-wheel car's) and, where it has one, the road cars' */
+export type RacingLineId = "f1" | "gt3" | "road";
 
 /**
  * f12026-car engineering telemetry channels. Wheel order LF, RF, LR, RR (= FL, FR, RL, RR).

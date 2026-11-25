@@ -13,6 +13,7 @@ import type {
   DriverAssistPreset,
   LiveTunerPatch,
   LiveryConfig,
+  PitStrategyState,
   TireCompound,
   TyreSetup,
   VehicleModelId,
@@ -57,6 +58,7 @@ import { FfbMeter } from "./hud/FfbMeter";
 import { LapSummary } from "./hud/LapSummary";
 import { RaceResults } from "./hud/RaceResults";
 import { RaceControlBanner } from "./hud/RaceControlBanner";
+import { PitStopOverlay } from "./hud/PitStopOverlay";
 import { QualityNotice } from "./hud/QualityNotice";
 import { RaceIncidentFeed } from "./hud/RaceIncidentFeed";
 import { DamageWidget } from "./hud/DamageWidget";
@@ -99,8 +101,12 @@ import type { BoardWidgetMode, HudPreset } from "@/lib/settings/player-settings"
 import { DEFAULT_HUD_PRESET, showsPhoneHud } from "@/lib/settings/hud-layouts";
 import { BoardWidget, useLargeScreen } from "./hud/BoardWidget";
 import { PodiumOverlay } from "./hud/PodiumOverlay";
+import { PodiumBoard } from "./hud/PodiumBoard";
 import type { NextRaceProps } from "./hud/RaceResults";
 import type { PodiumUi } from "@/lib/render/podium-shot";
+import type { PreRaceShowUi } from "@/lib/render/pre-race-show";
+import { PreRaceShow } from "./hud/pre-race/PreRaceShow";
+import { RaceBroadcast } from "./hud/RaceBroadcast";
 import type { RaceRecord } from "@/lib/sim/race-history";
 
 /** A full-screen HUD style and what the shared layer around it does for it */
@@ -132,6 +138,7 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
 
 const noTelemetrySubscribe = () => () => {};
+const noPodiumTime = () => 0;
 
 export interface TelemetrySource {
   subscribe: (listener: () => void) => () => void;
@@ -174,7 +181,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onSetAutoGearbox?: (enabled: boolean) => void;
   gamepadRumble: boolean;
   aiOpponents: boolean;
-  onToggleAiOpponents: () => void;
+  onToggleAiOpponents?: () => void;
   /** AI opponents' skill 0..100 and its setter (pause menu) */
   aiSkill?: number;
   onChangeAiSkill?: (skill: number) => void;
@@ -199,6 +206,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
   onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
+  /** The MFD Pit page's choices: next tyres, repairs, the box call (pit/pit-stop.ts) */
+  onChangePitStrategy?: (patch: Partial<PitStrategyState>) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   onChangeLivery: (livery: LiveryConfig) => void;
   onToggleRacingLine: () => void;
@@ -230,7 +239,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** The music playing, and the pause menu's skip */
   nowPlaying?: NowPlaying | null;
   onSkipTrack?: () => void;
-  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights" | "pitLimiter", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;
   /** HUD layout preset, size and optional widgets */
@@ -250,7 +259,16 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onBackToLobby?: () => void;
   backToLobbyLabel?: string;
   /** polish:B after the flag: the podium shot (before the table), the player's last races, the next open race */
-  raceEnd?: { podium: PodiumUi; onSkipPodium: () => void; history: readonly RaceRecord[]; nextRace?: NextRaceProps };
+  raceEnd?: {
+    podium: PodiumUi;
+    onSkipPodium: () => void;
+    /** Seconds the full-screen podium has been up */
+    podiumTimeS?: () => number;
+    history: readonly RaceRecord[];
+    nextRace?: NextRaceProps;
+  };
+  /** The career's pre-race show: its scenes, its clock, Skip and Start */
+  preRaceShow?: { ui: PreRaceShowUi; timeS: () => number; onSkip: () => void; onStart: () => void };
   /** Instant replay in progress: only the transport bar shows */
   replay?: React.ComponentProps<typeof ReplayBar> | null;
   /** On-screen pedals and steering (touch screens) */
@@ -423,7 +441,10 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const uiZoom = useUiZoom();
   // polish:B the podium shot comes first: the table waits for it, and the HUD gives it the screen
   const podiumStage = props.raceEnd?.podium.stage;
-  const podiumUp = podiumStage === "playing";
+  // … then, after an offline AI race, the full-screen podium
+  const podiumUp = podiumStage === "playing" || podiumStage === "board";
+  // The pre-race show has the whole screen while it plays
+  const showUp = props.preRaceShow?.ui.stage === "playing";
   const showResults = raceState(race).classified && !props.resultsClosed && podiumStage !== "waiting" && !podiumUp;
   // The layout editor: the HUD stays on screen but takes no input, and draws the editor's copy of the layout's parts
   // until Done saves it
@@ -437,7 +458,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   setActiveHudParts(layoutParts, editMode);
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
   // the results card owns the D-pad and keys while it is up
-  const hudMode: HudMode = editMode || paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
+  const hudMode: HudMode = editMode || paused || props.seatPanel || props.replay || podiumUp || showUp ? "hidden" : showResults ? "results" : "live";
   const hudModeRef = useRef(hudMode);
   hudModeRef.current = hudMode;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
@@ -606,6 +627,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         trackLengthM={track.totalLengthM}
         compound={tireCompound}
         playerCode={props.profile?.code}
+        onChangePitStrategy={props.onChangePitStrategy}
         autoFold={hud?.mfdAutoCollapse ?? false}
         defaultFolded={(hud?.mfdAutoCollapse ?? false) || Boolean(style?.mfdFolded)}
       />
@@ -698,6 +720,19 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       )}
       </HudRunProvider>
 
+      {/* The race's broadcast: driver cards and the battle strip, in an offline AI race (a career round's named by its
+          context); kept mounted through a pause so it loses nothing, shown on the live HUD only. Not on a phone's
+          screen or under the touch controls, where its corner is the controls' */}
+      {race && !race.multiplayer && hud?.raceEventCards !== false && hudMode !== "results" && !phone && !touch ? (
+        <RaceBroadcast
+          race={race}
+          context={props.preRaceShow?.ui.context ?? null}
+          shown={hudMode === "live" && !hudHidden && !lightsPhase}
+          scale={scale}
+          layout={preset}
+        />
+      ) : null}
+
       {/* A frame round the virtual mirror, so its sky never reads as the real one (the renderer places it in window pixels) */}
       {mirrorRect && !hudHidden ? (
         <div
@@ -740,6 +775,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             yellowGiveBack={race?.giveBack}
           />
         ) : null}
+        {!lightsPhase && telemetry.pit ? <PitStopOverlay telemetry={telemetry} limiterKey={props.keyNames?.pitLimiter} /> : null}
         {!lightsPhase && race ? (
           <RaceIncidentFeed
             messages={race.raceControl}
@@ -1019,13 +1055,33 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       ) : null}
     </div>
 
-    {podiumUp && !paused && props.raceEnd ? (
+    {showUp && !paused && props.preRaceShow ? (
+      <PreRaceShow
+        ui={props.preRaceShow.ui}
+        timeS={props.preRaceShow.timeS}
+        onSkip={props.preRaceShow.onSkip}
+        onStart={props.preRaceShow.onStart}
+        weather={props.weather}
+        compound={tireCompound}
+        trackInfo={trackInfo}
+      />
+    ) : null}
+    {podiumStage === "playing" && !paused && props.raceEnd ? (
       <PodiumOverlay rows={props.raceEnd.podium.rows} trackName={trackInfo.name} onSkip={props.raceEnd.onSkipPodium} />
+    ) : null}
+    {podiumStage === "board" && !paused && props.raceEnd && race ? (
+      <PodiumBoard
+        race={race}
+        context={props.raceEnd.podium.context ?? null}
+        trackName={trackInfo.name}
+        timeS={props.raceEnd.podiumTimeS ?? noPodiumTime}
+        onClose={props.raceEnd.onSkipPodium}
+      />
     ) : null}
 
     <CameraToast
       cameraMode={cameraMode}
-      active={!paused && !props.seatPanel && !podiumUp}
+      active={!paused && !props.seatPanel && !podiumUp && !showUp}
       freeCameraKey={props.keyNames?.freeCamera}
     />
 

@@ -141,6 +141,18 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
       <SettingRow label={tx("laps")} hint={distance ?? undefined}>
         <Stepper value={setup.laps} min={1} max={50} onChange={(laps) => onChange({ laps })} />
       </SettingRow>
+      {/* Required stops (pit/ai-pit.ts): the AI cars make them too; a race too short for one has none */}
+      <SettingRow label={tx("pitStops")} hint={setup.pitStops ? tx("pitStopsHint") : undefined}>
+        <Segmented<"0" | "1" | "2">
+          options={[
+            { id: "0", label: tx("pitStopsNone") },
+            { id: "1", label: "1" },
+            { id: "2", label: "2" },
+          ]}
+          value={String(Math.min(2, setup.pitStops ?? 0)) as "0" | "1" | "2"}
+          onChange={(n) => onChange({ pitStops: Number(n) })}
+        />
+      </SettingRow>
       <SettingRow label={tx("qualifying")} hint={setup.qualifying ? tx("qualifyingHint") : undefined}>
         <Segmented<QualifyingOption>
           options={QUALIFYING_MINUTES.map((m) => ({ id: qualifyingOption(m), label: m ? tx("qualifyingMinutes", { minutes: String(m) }) : tx("qualifyingOff") }))}

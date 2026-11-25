@@ -83,6 +83,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   maxSteerAngleRad: "local",
   contactMassKg: "local",
   contactYawInertiaKgM2: "local",
+  contactBox: "local",
   brakingGuide: "local",
   vehicleId: "local",
   racingLineId: "local",
@@ -112,6 +113,10 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   teleportToDistance: "place",
   teleportToTurn: "place",
   restorePose: "place",
+  // AI cars only (the field drives them in the worker or on the page): never the player's remote twin
+  driveInPitLane: "localCall",
+  leavePitLane: "localCall",
+  endPitDrive: "localCall",
 
   getTyreSetup: "localCall",
   getChassisSetup: "localCall",
@@ -215,6 +220,7 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
         s: view.sMeters,
         lapCount: view.telemetry.lapCount,
         ...(view.telemetry.outLap !== undefined ? { outLap: view.telemetry.outLap } : {}),
+        pitLane: Boolean(view.telemetry.pitLane),
       });
     } else twin.teleportToDistance(view.sMeters, view.vxMs, view.lateralOffsetM);
     twinFresh = false;

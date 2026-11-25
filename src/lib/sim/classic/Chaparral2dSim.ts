@@ -99,8 +99,8 @@ const COMMON = {
   electronics: E,
   // 360° of rim lock each way on a 14.1:1 rack [spec car.ini STEER_LOCK, STEER_RATIO]
   steerRatio: 14.1,
-  // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's
-  racingLine: 'gt3' as const,
+  // The road cars' line where a circuit has one for it, else the GT3's: grip well short of a GT3's
+  racingLine: 'road' as const,
   // Levels index the electronics tables from the most intrusive (12): ABS 6 is the data's 13 %; TC 6 its 12 %
   assistDials: {
     pro: { tcLevel: 0, tc2Level: 6, absLevel: 0 },
@@ -125,6 +125,10 @@ export const CHAPARRAL_2D_SIM_PROFILE: CarSimProfile = {
   // As the M1's [est]
   understeerRadPerMs2: 0.007,
   speedProfile: CHAPARRAL_2D_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) the Can-Am fields failed the race gate
+  // (the '66: 3 → 5 contacts the AI was to blame for; the '67: lap-1 offs 412 → 545 in 90 races), and solo they ran past
+  // the kerbs at Chang, Oschersleben and Bridgehampton
+  aiOwnKerbShare: 0,
   // Fuel flow with the engine's speed: 0.00555 l/s per 1000 rpm flat out [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.005553,
 };
@@ -141,6 +145,10 @@ export const CHAPARRAL_2D_67_SIM_PROFILE: CarSimProfile = {
   braking: { lowG: 0.98, aeroG: -0.05, refMs: 80 },
   understeerRadPerMs2: 0.007,
   speedProfile: CHAPARRAL_2D_67_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) the Can-Am fields failed the race gate
+  // (the '66: 3 → 5 contacts the AI was to blame for; the '67: lap-1 offs 412 → 545 in 90 races), and solo they ran past
+  // the kerbs at Chang, Oschersleben and Bridgehampton
+  aiOwnKerbShare: 0,
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.00619,
 };

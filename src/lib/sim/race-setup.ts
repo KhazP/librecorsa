@@ -36,6 +36,8 @@ export interface RaceSetup {
   trackLimits: TrackLimitsChoice;
   /** Qualifying before the race (min, driven alone; it sets the grid): 0 = none, the grid slot and AI grid apply */
   qualifying: QualifyingMinutes;
+  /** Pit stops every car has to make (pit/pit-stop.ts); 0: none required (worn tyres and damage still call stops) */
+  pitStops: number;
 }
 
 export const DEFAULT_RACE_SETUP: RaceSetup = {
@@ -50,6 +52,7 @@ export const DEFAULT_RACE_SETUP: RaceSetup = {
   rulePreset: 'auto',
   trackLimits: 'auto',
   qualifying: 0,
+  pitStops: 0,
 };
 
 export const RACE_LAP_OPTIONS = [3, 5, 10, 20] as const;
@@ -109,6 +112,7 @@ export function parseRaceSetup(raw: unknown): RaceSetup {
     rulePreset: pick(r.rulePreset, ['auto', 'open_wheel', 'endurance_sprint'] as const, d.rulePreset),
     trackLimits: pick(r.trackLimits, ['auto', 'off'] as const, d.trackLimits),
     qualifying: (QUALIFYING_MINUTES as readonly unknown[]).includes(r.qualifying) ? (r.qualifying as QualifyingMinutes) : d.qualifying,
+    pitStops: int(r.pitStops, 0, 3, d.pitStops),
   };
 }
 
@@ -130,6 +134,7 @@ export function startAiRace(
   field.manualStart = standing && setup.launch === 'manual';
   field.playerDriver = driver ? { code: driver.code, color: driver.color } : null;
   field.raceLaps = setup.laps;
+  field.pitStopsRequired = Math.min(setup.pitStops ?? 0, Math.max(0, setup.laps - 2));
   field.gridOrder = setup.aiGrid;
   field.playerGrid = setup.grid;
   field.damageLevel = setup.damage;

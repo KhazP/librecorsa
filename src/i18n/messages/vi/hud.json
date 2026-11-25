@@ -487,6 +487,20 @@
     "third": "Hạng 3",
     "skip": "Bỏ qua"
   },
+  "podiumBoard": {
+    "label": "Bục vinh quang",
+    "close": "Đóng",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Xếp hạng",
+    "pointsScored": "{count, plural, other {+# điểm}}",
+    "noPoints": "Không có điểm",
+    "championshipPlace": "Xếp hạng giải P{position}",
+    "placesUp": "{count, plural, other {Tăng # bậc}}",
+    "placesDown": "{count, plural, other {Tụt # bậc}}",
+    "pointsTotal": "{count, plural, other {Tổng # điểm}}"
+  },
   "qualifyingHud": {
     "clock": "Phân hạng",
     "lastLap": "Vòng cuối",
@@ -521,7 +535,9 @@
       "fuelTag": "FUEL",
       "fuelTitle": "Nhiên liệu & năng lượng",
       "stndTag": "STND",
-      "stndTitle": "Bảng xếp hạng"
+      "stndTitle": "Bảng xếp hạng",
+      "pitTag": "PIT",
+      "pitTitle": "Dừng pit"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Các trang MFD",
@@ -563,6 +579,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {# vòng}}"
+    },
+    "pit": {
+      "tyres": "Lốp kế tiếp",
+      "repair": "Sửa hư hại",
+      "repairTime": "Hư hại {damage}% · +{seconds} s",
+      "noDamage": "Không hư hại",
+      "box": "Vào pit vòng này",
+      "limit": "Giới hạn {limit} km/h · ô pit {box}",
+      "on": "Bật",
+      "off": "Tắt",
+      "boxCalled": "Vào pit",
+      "callBox": "Gọi",
+      "stops": "Lần dừng pit",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {Chưa dừng pit} other {# lần dừng}}"
     }
   },
   "tunerMfdPanel": {
@@ -799,7 +830,9 @@
       "lead": "Dẫn đầu",
       "lastVsBestTitle": "Vòng trước so với vòng tốt nhất của bạn",
       "lastVsTheirsTitle": "Vòng trước của họ so với bạn",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT",
+      "pitClock": "PIT {seconds}"
     },
     "lap": {
       "region": "Vòng đua",
@@ -1130,6 +1163,90 @@
     "resetAll": "Đặt lại bố cục",
     "cancel": "Hủy",
     "done": "Xong"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Giới hạn pit",
+    "stop": "Dừng",
+    "go": "Đi",
+    "crew": "Đội pit",
+    "fitting": "Thay lốp {compound}",
+    "fittingRepairing": "Thay lốp {compound} · sửa xe",
+    "stopTime": "Dừng {seconds} s",
+    "inBox": "Ô pit {box}",
+    "lane": "Làn pit",
+    "boxIn": "Ô pit {box} còn {metres} m",
+    "boxPassed": "Đã qua ô pit {box}",
+    "approach": "Lối vào pit · giới hạn {limit} km/h",
+    "limiterKey": "Giới hạn pit: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, other {Box · bắt buộc dừng pit # lần}}"
+  },
+  "preRace": {
+    "label": "Chương trình trước cuộc đua",
+    "skip": "Bỏ qua",
+    "start": "Bắt đầu",
+    "keySpace": "Space",
+    "keyEnter": "Enter",
+    "roundOf": "Chặng {round}/{rounds}",
+    "lengthKm": "{value} km",
+    "lengthMi": "{value} mi",
+    "riseM": "Chênh độ cao {value} m",
+    "riseFt": "Chênh độ cao {value} ft",
+    "turns": "{count, plural, other {# khúc cua}}",
+    "laps": "{count, plural, other {# vòng}}",
+    "stops": "{count, plural, other {# lần dừng pit}}",
+    "noStops": "Không dừng pit",
+    "qualifyingMin": "Phân hạng {minutes} phút",
+    "gridByPace": "Xếp hàng theo tốc độ",
+    "air": "Không khí {value}",
+    "track": "Mặt đường {value}",
+    "wind": "Gió {value} {direction}",
+    "humidity": "Độ ẩm {value}%",
+    "wetTrack": "Đường ướt",
+    "dryTrack": "Đường khô",
+    "championship": "Xếp hạng giải",
+    "points": "{count, plural, other {# điểm}}",
+    "tyres": "Lốp",
+    "startingOn": "Đang lắp",
+    "alsoAvailable": "Cũng có sẵn",
+    "startingGrid": "Hàng xuất phát",
+    "place": "P{position}",
+    "pole": "Pole",
+    "field": "Danh sách tay đua",
+    "startRace": "Bắt đầu đua",
+    "startQualifying": "Bắt đầu phân hạng",
+    "testDay": "Ngày chạy thử",
+    "targetLap": "Mục tiêu {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% ở cầu trước",
+    "drivetrain": {
+      "rwd": "Dẫn động cầu sau",
+      "fwd": "Dẫn động cầu trước",
+      "awd": "Dẫn động bốn bánh"
+    },
+    "revLimit": "Giới hạn vòng tua {value} rpm",
+    "go": "Đi",
+    "sector": "S{n}"
+  },
+  "raceBroadcast": {
+    "region": "Sự kiện cuộc đua",
+    "event": {
+      "winner": "Chiến thắng",
+      "newLeader": "Dẫn đầu mới",
+      "fastestLap": "Vòng nhanh nhất",
+      "pitStop": "Dừng pit",
+      "retired": "Bỏ cuộc"
+    },
+    "lap": "Vòng {lap}",
+    "stationary": "{seconds} s",
+    "battleFor": "So kè vị trí P{position}",
+    "attacking": "Đang tấn công",
+    "closing": "Rút ngắn {rate} s/vòng",
+    "closingCatch": "Rút ngắn {rate} s/vòng · bắt kịp sau {laps, plural, other {# vòng}}",
+    "pullingAway": "Đang bỏ xa",
+    "stable": "Khoảng cách ổn định"
   },
   "lapTelemetry": {
     "title": "Thông số vòng",
