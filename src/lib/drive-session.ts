@@ -105,7 +105,7 @@ import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAc
 import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
 import { gyroSource } from "@/lib/input/gyro-source";
-import { advanceAsphaltRain, setAsphaltStandingWater, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
+import { advanceAsphaltRain, setAsphaltStandingWater, setAsphaltWetness, setWetRoadProbe } from "@/lib/render/asphalt-sheen";
 import {
   isRainCompound,
   recommendedCompound,
@@ -4929,6 +4929,14 @@ export class DriveSession {
           reflectionProbe.update(podium.focus ?? preRaceShow.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         }
         startupMonitor?.end("probe");
+        // The wet road reflects what the probe filmed round the car (none on Low: the sky's environment map, which the
+        // physical sky's cloudless bake makes far too bright under rain clouds)
+        setWetRoadProbe(
+          reflectionProbe.texture,
+          reflectionProbe.position,
+          scene.environmentIntensity,
+          env.physicalSky?.showing ? 1 - 0.7 * wx.rainIntensity : 1
+        );
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)

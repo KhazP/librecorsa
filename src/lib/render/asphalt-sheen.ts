@@ -10,9 +10,10 @@ import { patchShader, type ShaderPatch } from "./shader-patch";
  * darkening and a world-space aggregate normal bump. The mask is painted once per track on a 2D canvas, so the
  * per-fragment cost is one texture fetch plus a few cheap value-noise taps.
  *
- * Rain (setAsphaltWetness, setAsphaltStandingWater): water in the asphalt's pores darkens it; a film of water then
- * smooths it towards a gloss; standing water collects where the circuit's own water model pools it (the mask's green
- * channel) and turns to a near mirror with raindrop rings. Dry, none of it runs.
+ * Rain (setAsphaltWetness, setAsphaltStandingWater, setWetRoadProbe): water in the asphalt's pores darkens it; a film
+ * of water then smooths it towards a gloss; standing water collects where the circuit's own water model pools it
+ * (the mask's green channel) and turns to a near mirror with raindrop rings; and the wet road reflects the world round
+ * the player's car (the cars' reflection probe) instead of the sky alone. Dry, none of it runs.
  */
 
 export interface RacingLineMask {
@@ -84,6 +85,19 @@ const waterUniforms = {
   uWaterLevel: { value: 0 },
   uLineWaterLevel: { value: 0 },
 };
+/**
+ * The world round the player's car, filmed by the cars' reflection probe (car-reflection-probe.ts), for the wet road
+ * to reflect: its prefiltered cube map, where it was filmed from, its last mip level and its strength. With no probe
+ * (Low, or before its first full turn) the wet road keeps the sky's environment map.
+ */
+const probeUniforms = {
+  uWetProbe: { value: null as THREE.Texture | null },
+  uWetProbeOn: { value: 0 },
+  uWetProbePos: { value: new THREE.Vector3() },
+  uWetProbeLod: { value: 5 },
+  uWetProbeIntensity: { value: 1 },
+  uWetSkyDim: { value: 1 },
+};
 /** Shared across every patched asphalt material: 0 on Low skips aggregate noise + derivative normal bump */
 const qualityUniform = {
   uAsphaltDetail: { value: 1 },
@@ -114,6 +128,26 @@ export function setAsphaltWetness(offLine: number, onLine: number = offLine, rai
 export function setAsphaltStandingWater(offLineMm: number, onLineMm: number = offLineMm): void {
   waterUniforms.uWaterLevel.value = standingWaterLevel(offLineMm);
   waterUniforms.uLineWaterLevel.value = standingWaterLevel(onLineMm);
+}
+
+/**
+ * The reflection probe's map for the wet road (null: none, the sky's environment map is reflected), the point it was
+ * filmed from and its strength (the scene's environment intensity, as the cars take it). Cheap: call every frame.
+ *
+ * `skyDim` scales the sky's environment map where the wet road reflects it instead (no probe). The physical sky's
+ * bake has no clouds: under a rain deck it is several times brighter than the sky on screen (the probe films the
+ * visible sky, and matches it), and a wet road mirroring it shone white, brighter than the sky above it.
+ */
+export function setWetRoadProbe(texture: THREE.Texture | null, position: THREE.Vector3, intensity: number, skyDim = 1): void {
+  const u = probeUniforms;
+  u.uWetProbe.value = texture;
+  u.uWetProbeOn.value = texture ? 1 : 0;
+  u.uWetSkyDim.value = Math.min(1, Math.max(0, skyDim));
+  if (!texture) return;
+  u.uWetProbePos.value.copy(position);
+  u.uWetProbeIntensity.value = intensity;
+  // A prefiltered (PMREM) cube carries its mip levels in `mipmaps`; the last one is the roughest
+  u.uWetProbeLod.value = Math.max(0, (texture.mipmaps?.length ?? 1) - 1);
 }
 
 /** Runs the raindrop ripples' clock; call every frame with the frame time (s), so they animate at frame rate */
@@ -316,7 +350,7 @@ export function createRacingLineMask(
 /**
  * Patches a MeshStandardMaterial in place: rubber-dependent roughness (at least 0.86 -> 0.6) and darkening (x0.85),
  * plus a world-space aggregate normal bump (3 cm + 12 cm value noise, faded by pixel footprint and distance).
- * Rain darkens the asphalt, glosses it and stands water in its hollows.
+ * Rain darkens the asphalt, glosses it, stands water in its hollows and reflects the world round the car in it.
  * Idempotent per material: calling it again simply replaces the earlier patch.
  */
 export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: RacingLineMask): void {
@@ -328,6 +362,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     ...qualityUniform,
     ...wetUniforms,
     ...waterUniforms,
+    ...probeUniforms,
   };
 
   material.onBeforeCompile = (shader) => {
@@ -444,6 +479,12 @@ uniform float uRainIntensity;
 uniform float uWetTime;
 uniform float uWaterLevel;
 uniform float uLineWaterLevel;
+uniform samplerCube uWetProbe;
+uniform float uWetProbeOn;
+uniform vec3 uWetProbePos;
+uniform float uWetProbeLod;
+uniform float uWetProbeIntensity;
+uniform float uWetSkyDim;
 varying vec3 vLc26WorldPos;
 ${WORLD_NOISE_GLSL}
 ${RIPPLE_GLSL}`;
@@ -454,6 +495,8 @@ const WET_ALBEDO = 0.42;
 const DAMP_ROUGHNESS = 0.36;
 const FILM_ROUGHNESS = 0.08;
 const PUDDLE_ROUGHNESS = 0.03;
+/** Sphere round the probe its view is projected onto for the wet road (m): about where the stands and walls are */
+const WET_PROBE_RADIUS_M = 45;
 
 const FRAGMENT_PATCHES: readonly Patch[] = [
 	["#include <common>", "#include <common>\n" + FRAGMENT_HELPERS_GLSL],
@@ -530,6 +573,34 @@ if ( uAsphaltDetail > 0.5 ) {
 		normal = normalize( normal - mat3( viewMatrix ) * vec3( lc26Slope.x, 0.0, lc26Slope.y ) );
 	}
 }
+`,
+	],
+	[
+		"#include <lights_fragment_maps>",
+		/* glsl */ `
+#include <lights_fragment_maps>
+#if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
+	// The wet road reflects the world round the car (the probe's view) instead of the sky alone. A sphere round the
+	// probe stands in for the stands and walls, so what this point reflects is looked up where its ray would meet them;
+	// past it, the probe's view of the distance and the sky is everyone's. With no probe, the sky's map, dimmed to the
+	// sky on screen
+	float lc26Mirror = smoothstep( 0.05, 0.6, lc26Wet );
+	if ( lc26Mirror > 0.0 && uWetProbeOn < 0.5 ) radiance *= mix( 1.0, uWetSkyDim, lc26Mirror );
+	if ( lc26Mirror > 0.0 && uWetProbeOn > 0.5 ) {
+		vec3 lc26V = normalize( cameraPosition - vLc26WorldPos );
+		vec3 lc26N = normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz );
+		vec3 lc26R = reflect( -lc26V, lc26N );
+		lc26R.y = max( lc26R.y, 0.0 );
+		vec3 lc26P = vLc26WorldPos - uWetProbePos;
+		float lc26B = dot( lc26P, lc26R );
+		float lc26C = dot( lc26P, lc26P ) - ${(WET_PROBE_RADIUS_M * WET_PROBE_RADIUS_M).toFixed(1)};
+		vec3 lc26Dir = lc26C < 0.0 ? lc26P + ( sqrt( lc26B * lc26B - lc26C ) - lc26B ) * lc26R : lc26R;
+		float lc26Rgh = material.roughness;
+		lc26Dir = mix( normalize( lc26Dir ), lc26N, lc26Rgh * lc26Rgh * lc26Rgh * lc26Rgh );
+		vec3 lc26Probe = textureLod( uWetProbe, lc26Dir, uWetProbeLod * lc26Rgh * ( 2.0 - lc26Rgh ) ).rgb * uWetProbeIntensity;
+		radiance = mix( radiance, lc26Probe, lc26Mirror );
+	}
+#endif
 `,
 	],
 ];

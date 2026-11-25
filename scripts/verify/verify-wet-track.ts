@@ -12,6 +12,7 @@ import {
   puddleReliefAt,
   setAsphaltStandingWater,
   setAsphaltWetness,
+  setWetRoadProbe,
   standingWaterLevel,
   applyAsphaltSheen,
   type RacingLineMask,
@@ -115,20 +116,30 @@ mat.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
 console.warn = warn;
 const frag = shader.fragmentShader;
 check("Every asphalt shader edit finds its anchor in three's standard material once", warnings.length === 0, warnings.join("; ") || "none missed");
-check("The wet code sits behind the dry guard", frag.includes("if ( lc26WetRaw > 0.0 ) {"), `${frag.length} chars`);
+check(
+  "The wet code sits behind the dry guard; the probe's reflection behind its own switch",
+  frag.includes("if ( lc26WetRaw > 0.0 ) {") && frag.includes("float lc26Mirror = smoothstep( 0.05, 0.6, lc26Wet );") && frag.includes("uWetProbeOn > 0.5") && frag.includes("radiance = mix( radiance, lc26Probe"),
+  `${frag.length} chars`
+);
 check(
   "Raindrop rings only near the camera, on water, in rain, above Low",
   frag.includes("if ( lc26RippleW * lc26RippleFade > 0.01 )") && frag.includes("if ( uAsphaltDetail > 0.5 ) {"),
 );
 const u = shader.uniforms;
 check(
-  "One shared set of wet and water uniforms reaches the material",
-  ["uWetness", "uLineWetness", "uRainIntensity", "uWetTime", "uWaterLevel", "uLineWaterLevel"].every((k) => k in u)
+  "One shared set of wet, water and probe uniforms reaches the material",
+  ["uWetness", "uLineWetness", "uRainIntensity", "uWetTime", "uWaterLevel", "uLineWaterLevel", "uWetProbe", "uWetProbeOn", "uWetProbePos", "uWetProbeLod", "uWetProbeIntensity"].every((k) => k in u)
 );
 setAsphaltWetness(0.9, 0.5, 0.8);
 setAsphaltStandingWater(2.4, 1.0);
 const levelSet = u.uWaterLevel.value === 1 && Math.abs(u.uLineWaterLevel.value - standingWaterLevel(1.0)) < 1e-9;
-check("The water level reaches the shader's uniforms", levelSet);
+const probeTex = new THREE.CubeTexture();
+probeTex.mipmaps = [{}, {}, {}, {}, {}, {}] as unknown as typeof probeTex.mipmaps;
+setWetRoadProbe(probeTex, new THREE.Vector3(1, 2, 3), 0.7);
+const probeOn = u.uWetProbeOn.value === 1 && u.uWetProbe.value === probeTex && u.uWetProbeLod.value === 5 && u.uWetProbeIntensity.value === 0.7;
+setWetRoadProbe(null, new THREE.Vector3(), 1);
+const probeOff = u.uWetProbeOn.value === 0 && u.uWetProbe.value === null;
+check("Water level, probe and probe-off reach the shader's uniforms", levelSet && probeOn && probeOff);
 setAsphaltWetness(0, 0, 0);
 setAsphaltStandingWater(0, 0);
 check("Dry: every wet uniform is back at 0", u.uWetness.value === 0 && u.uLineWetness.value === 0 && u.uWaterLevel.value === 0 && u.uRainIntensity.value === 0);

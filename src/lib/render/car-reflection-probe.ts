@@ -83,6 +83,11 @@ export class CarReflectionProbe {
     return this.quality === "off" || !this.primed ? null : (this.envTarget?.texture ?? null);
   }
 
+  /** Where the probe films from (world): over the car it follows */
+  get position(): THREE.Vector3 {
+    return this.cubeCamera.position;
+  }
+
   setQuality(quality: ReflectionQuality): void {
     if (quality === this.quality) return;
     const wasOff = this.quality === "off";
