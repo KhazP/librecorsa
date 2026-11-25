@@ -280,10 +280,13 @@ export class WingMirrors {
 
     const prevTarget = r.getRenderTarget();
     const prevAutoUpdate = r.shadowMap.autoUpdate;
+    const prevXr = r.xr.enabled;
     const carVisible = this.carModelRoot.visible;
 
     this.carModelRoot.visible = false;
     r.shadowMap.autoUpdate = false;
+    // In a headset every render() draws with the headset's eyes unless XR is off
+    r.xr.enabled = false;
     // Restored even if the render throws, or the player's car would stay hidden
     try {
       r.setRenderTarget(rt);
@@ -292,6 +295,7 @@ export class WingMirrors {
       r.render(this.scene, this.cam);
     } finally {
       r.setRenderTarget(prevTarget);
+      r.xr.enabled = prevXr;
       this.carModelRoot.visible = carVisible;
       r.shadowMap.autoUpdate = prevAutoUpdate;
     }

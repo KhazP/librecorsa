@@ -206,6 +206,12 @@ export interface GoldenHourEnvironment {
    * with the conditions of the next setConditions. Call it before that setConditions. Cheap: no shader change
    */
   setCloudSeed(seed: number): void;
+  /**
+   * In a headset the classic sky dome stands in for the physical sky. The physical sky's material leaves tone mapping
+   * and the output colour space to the composer, which a headset frame skips, so it came out as dark linear values
+   * there; the classic dome does both itself and follows the same conditions
+   */
+  setHeadsetSky(on: boolean): void;
   /** The cloud types the physical sky shows now, lowest first (empty with the classic sky) */
   readonly cloudTypes: string[];
   dispose(): void;
@@ -265,7 +271,9 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   const dprCap = pixelRatioCap(plan);
   const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
   const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
-  renderer.setPixelRatio(pixelRatio);
+  // A headset fixes the size while it presents (three puts the page's back when it ends, and the drive applies the
+  // graphics again then)
+  if (!renderer.xr.isPresenting) renderer.setPixelRatio(pixelRatio);
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
   env.sunLight.castShadow = quality !== "low";
   // Half the texels per side: three resizes the shadow map in place, with no shader change
@@ -694,6 +702,7 @@ export function createGoldenHourEnvironment(
   };
 
   let physicalSkyHeld = options.deferPhysicalSky === true;
+  let headsetSky = false;
   let qualityNow: "low" | "medium" | "high" = "high";
   let aerialAllowedNow = true;
   const setQuality = (quality: "low" | "medium" | "high", aerialAllowed = quality === "high") => {
@@ -814,6 +823,11 @@ export function createGoldenHourEnvironment(
 
       camera.getWorldPosition(scratch);
       sky.position.copy(scratch);
+      if (physicalSky) {
+        const physical = physicalSky.showing && !headsetSky;
+        physicalSky.mesh.visible = physical;
+        sky.visible = !physical;
+      }
       // Drifting clouds (the Sky shader skips them at zero coverage), from where this session's seed starts them
       if (sky.material.uniforms.cloudCoverage.value > 0) sky.material.uniforms.time.value = classicCloudClockS + performance.now() / 1000;
       if (pendingBake && performance.now() - lastBakeMs > REBAKE_MIN_S * 1000) rebake();
@@ -826,6 +840,9 @@ export function createGoldenHourEnvironment(
       setConditions(current);
       // the environment's ground is lit by the key light: bake it again if it is night now
       if (nightShareOf(current.elevationDeg) > 0) pendingBake = true;
+    },
+    setHeadsetSky(on: boolean): void {
+      headsetSky = on;
     },
     setCloudSeed(seed: number): void {
       if (disposed) return;

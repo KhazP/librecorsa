@@ -64,8 +64,11 @@ export class VrPresenter {
     this.baseSpace = null;
     this.pad = null;
     this.hud.visible = false;
-    this.options.onPresenting(false);
-    this.options.onInterrupted();
+    // After three's own handler of the same event, which gives the page its renderer state back
+    setTimeout(() => {
+      this.options.onPresenting(false);
+      this.options.onInterrupted();
+    }, 0);
   };
 
   constructor(

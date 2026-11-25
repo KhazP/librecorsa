@@ -1523,6 +1523,8 @@ export class DriveSession {
       event.preventDefault();
       if (disposed || gpuLost) return;
       gpuLost = true;
+      // In a headset the notice (HTML) cannot be seen: back to the page, where it is
+      void renderer.xr.getSession()?.end().catch(() => {});
       // Lost in the background (or heard of just after coming back): the browser reclaimed it, nothing to remember
       const hidden = document.visibilityState === "hidden" || performance.now() - shownAtMs < BACKGROUND_LOSS_GRACE_MS;
       recordContextLoss(browserStore(), Date.now(), hidden);
@@ -1922,7 +1924,7 @@ export class DriveSession {
       // Phones keep Low's drop count and water map whatever the preset
       windscreenWater.setQuality(touchGraphics ? "low" : g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
-      postFx.setSize(container.clientWidth, container.clientHeight);
+      if (!renderer.xr.isPresenting) postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
       if (lowered !== this.snapshot.autoQualityLowered) this.publish({ autoQualityLowered: lowered });
       sessionPerf?.setRenderState({ settings: graphicsLine(g, lowered), level });
@@ -2093,7 +2095,13 @@ export class DriveSession {
       hudLayer: VR_HUD_LAYER,
       onPresenting: (on) => {
         if (on) clearCameraOverride();
+        env.setHeadsetSky(on);
         setVrState(on ? "on" : "off");
+        // Back on the page: its size and the graphics' pixel ratio, which the headset held while it presented
+        if (!on && !disposed) {
+          onResize();
+          this.applyGraphics();
+        }
       },
       // Taken off, the system menu, or the session over: the drive waits in the pause menu (the page's, after VR)
       onInterrupted: () => {
@@ -2548,7 +2556,8 @@ export class DriveSession {
     window.addEventListener("keyup", onKeyUp);
 
     const onResize = () => {
-      if (!container) return;
+      // A headset fixes the canvas while it presents; the page is sized again when it ends
+      if (!container || renderer.xr.isPresenting) return;
       camera.aspect =
         container.clientWidth / Math.max(1, container.clientHeight);
       camera.updateProjectionMatrix();
@@ -5082,8 +5091,9 @@ export class DriveSession {
           virtualMirrorShown = vmOn;
           setVirtualMirrorOn(vmOn);
         }
-        // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204)
-        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !inVr && !podium.playing, carRig.chassisGroup);
+        // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204), in a headset
+        // too, where they are the only rear view
+        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !podium.playing, carRig.chassisGroup);
         if (inVr) {
           // The head's pose on top of the driver's eye point; the HUD panel shows what the page's HUD would
           const hudModel = inMenu
