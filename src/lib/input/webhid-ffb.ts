@@ -40,6 +40,7 @@ import {
   logitechClassicModel,
   logitechHidppModel,
   isThrustmasterBridgeOnly,
+  isThrustmasterPidWheel,
   THRUSTMASTER_NAMES,
   THRUSTMASTER_STARTUP_PRODUCT_IDS,
   THRUSTMASTER_VENDOR_ID,
@@ -1864,6 +1865,12 @@ const THRUSTMASTER_MESSAGE = `Only the Thrustmaster ${THRUSTMASTER_NAMES} take f
 
 /** Why a Thrustmaster device that is not in THRUSTMASTER_WHEELS is refused */
 function thrustmasterRefusal(device: HidDeviceLike): string {
+  if (isThrustmasterPidWheel(device.vendorId, device.productId)) {
+    return (
+      "The browser drives this Thrustmaster wheel through its HID PID force-feedback reports, and this interface " +
+      "shows none (Chrome on Windows does); use the native FFB bridge for this wheel"
+    );
+  }
   if (!THRUSTMASTER_STARTUP_PRODUCT_IDS.includes(device.productId)) return THRUSTMASTER_MESSAGE;
   return (
     `This Thrustmaster wheel is still in its start-up mode (044f:${device.productId.toString(16).padStart(4, "0")}), ` +
@@ -1897,11 +1904,12 @@ type FfbPick =
  * next to its force-feedback one): the first with a HID PID layout, else the first listed classic Logitech wheel with
  * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report, else the first listed
  * Thrustmaster base with an output report long enough for its commands. Null when there is none, e.g. only a
- * DualSense, a gamepad, an unlisted Logitech wheel or a T150.
+ * DualSense, a gamepad, an unlisted Logitech wheel or a T500RS.
  */
 function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
   for (const device of devices) {
-    // T150, TMX, T500RS and start-up ids stay on the bridge even if Windows exposes a HID PID collection for them (#189)
+    // The T500RS and start-up ids stay on the bridge even if the browser shows a HID PID collection for them (#189);
+    // the T150 and TMX take the PID driver (#144)
     if (isThrustmasterBridgeOnly(device.vendorId, device.productId)) continue;
     const layout = parsePidLayout(device.collections);
     if (layout) return { kind: "pid", device, layout };

@@ -381,7 +381,7 @@ function isThrustmasterWheelPad(id: string): boolean {
   return ids !== null && isThrustmasterWheel(ids.vendorId, ids.productId);
 }
 
-/** A Thrustmaster wheel WebHID refuses and leaves to the native bridge (T150, TMX, T500RS, start-up ids) */
+/** A Thrustmaster wheel WebHID refuses and leaves to the native bridge (T500RS, start-up ids) */
 function isThrustmasterBridgeOnlyPad(id: string): boolean {
   const ids = padUsbIds(id);
   return ids !== null && isThrustmasterBridgeOnly(ids.vendorId, ids.productId);
@@ -671,10 +671,10 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
       ? "belt_gear"
       : "direct_drive";
   const rest = wheelPad.axes[0] ?? 0;
-  // WebHID unless it is a wheel WebHID refuses (unlisted Logitech like PS G923 / G PRO, or bridge-only Thrustmaster
-  // like T150 / TMX / T500RS): those start on the local bridge
+  // WebHID unless it is a wheel WebHID refuses (unlisted Logitech like PS G923 / G PRO, or a bridge-only Thrustmaster:
+  // the T500RS or a start-up id): those start on the local bridge. The T150 and TMX start on WebHID (#144)
   const bridgeOnlyLogitech = LOGITECH_ID.test(wheelPad.id) && !isLogitechClassicPad(wheelPad.id) && !isLogitechHidppPad(wheelPad.id);
-  const bridgeOnlyThrustmaster = isThrustmasterBridgeOnlyPad(wheelPad.id) || /\b(t150|tmx|t500(?:rs)?)\b/i.test(wheelPad.id);
+  const bridgeOnlyThrustmaster = isThrustmasterBridgeOnlyPad(wheelPad.id) || /\bt500(?:rs)?\b/i.test(wheelPad.id);
   return {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],

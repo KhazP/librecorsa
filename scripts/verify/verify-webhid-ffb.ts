@@ -2632,26 +2632,43 @@ async function main() {
     assert.equal(await ffb.connect(), "T300RS PS4");
     assert.deepEqual(tmWrites(ps4), [TMFF2.gain, TMFF2.open, TMFF2.upload0, TMFF2.play].map((c) => tmOut(c, 31)));
   });
-  await check("T150, TMX, T500RS and other Thrustmaster ids are refused for the bridge and never opened", async () => {
-    for (const [productId, name] of [
-      [0xb677, "T150"],
-      [0xb67f, "TMX"],
-      [0xb65e, "T500RS"],
-      [0xb668, "Thrustmaster device"],
+  await check("T150, TMX, T500RS and other Thrustmaster ids with no hid-tmff2 model or HID PID are refused for the bridge and never opened", async () => {
+    for (const [productId, name, message] of [
+      [0xb677, "T150", /HID PID force-feedback reports, and this interface shows none .* bridge/],
+      [0xb67f, "TMX", /HID PID force-feedback reports, and this interface shows none .* bridge/],
+      [0xb65e, "T500RS", /Only the Thrustmaster .* bridge/],
+      [0xb668, "Thrustmaster device", /Only the Thrustmaster .* bridge/],
     ] as const) {
       const dev = thrustmaster(productId, name);
       const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
       assert.equal(await ffb.connect(), null, name);
       assert.equal(ffb.status.state, "unsupported", name);
-      assert.match(ffb.status.message ?? "", /Only the Thrustmaster .* bridge/, name);
+      assert.match(ffb.status.message ?? "", message, name);
       assert.equal(dev.opened, false, name);
       assert.equal(dev.log.length, 0, name);
     }
   });
-  await check("#189: TMX, T150, T500RS and start-up ids stay refused for the bridge even if Windows exposes a HID PID collection", async () => {
+  await check("#144: a T150 or TMX that shows a HID PID collection is driven by the HID PID driver", async () => {
     for (const [productId, name] of [
+      [0xb677, "B677"],
       [0xb67f, "B67F"],
-      [0xb677, "T150"],
+    ] as const) {
+      const cols = pidCollections();
+      const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+      dev.vendorId = 0x044f;
+      dev.productId = productId;
+      dev.productName = name;
+      const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
+      assert.equal(await ffb.connect(), name, `${name} connect`);
+      assert.equal(ffb.status.state, "ready", `${name} status`);
+      assert.equal(dev.opened, true, `${name} opened`);
+      assert.ok(dev.log.some((l) => l.kind === "out" && l.id === 10 && l.data[1] === 1), `${name} constant force started`);
+      assert.doesNotMatch(describeHidDevice(dev), /Refused for the bridge/, `${name} diagnostics`);
+      await ffb.dispose();
+    }
+  });
+  await check("#189: the T500RS and start-up ids stay refused for the bridge even if the browser shows a HID PID collection", async () => {
+    for (const [productId, name] of [
       [0xb65e, "T500RS"],
       [0xb65d, "Thrustmaster FFB Wheel"],
     ] as const) {
@@ -2750,7 +2767,8 @@ async function main() {
   await check("reconnect(): a granted listed Thrustmaster base reopens; describeHidDevice and diagnose() name the driver", async () => {
     const t300 = thrustmaster(0xb66e, "T300RS");
     assert.match(describeHidDevice(t300), /HID PID: none\. Thrustmaster T300RS or T-GT II: driven with the hid-tmff2 commands as report 0x60 \(63 bytes\)/);
-    assert.match(describeHidDevice(thrustmaster(0xb677, "T150")), /HID PID: none\. Only the Thrustmaster .* bridge/);
+    assert.match(describeHidDevice(thrustmaster(0xb677, "T150")), /HID PID: none\. The browser drives this Thrustmaster wheel through its HID PID/);
+    assert.match(describeHidDevice(thrustmaster(0xb65e, "T500RS")), /HID PID: none\. Only the Thrustmaster .* bridge/);
     assert.match(describeHidDevice(thrustmaster(0xb65d, "FFB Wheel")), /HID PID: none\. This Thrustmaster wheel is still in its start-up mode/);
     const ffb = new WebHidFfb(fakeHid([], [t300]).api, new FakeClock().deps);
     ffb.setRotationDeg(540);
