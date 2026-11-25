@@ -165,8 +165,8 @@ function main1(): void {
       same(sorted(ACCOUNT_SETTINGS_FIELDS), sorted(["assistPreset", "racingLine", "autoGearbox", "autoClutch", "autoOvertake", "ghost", "profile", "liveryId", "customLivery", "camera", "aiSkill", "race", "realism", "practiceDamage", "conditions", "timeOfDayChosen", "library", "audio", "ui"]))
     );
     check(
-      "music choices and units follow the account, volumes and scale stay",
-      same(sorted(Object.entries(AUDIO_SPLIT).filter(([, s]) => s === "account").map(([k]) => k)), ["musicMuted", "musicOff", "raceMusicOn"]) &&
+      "music and spotter choices and units follow the account, volumes and scale stay",
+      same(sorted(Object.entries(AUDIO_SPLIT).filter(([, s]) => s === "account").map(([k]) => k)), ["musicMuted", "musicOff", "raceMusicOn", "spotter", "spotterRadio", "spotterVoice"]) &&
         same(sorted(Object.entries(UI_SPLIT).filter(([, s]) => s === "account").map(([k]) => k)), ["palette", "units"])
     );
   }

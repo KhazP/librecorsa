@@ -310,5 +310,10 @@
   "account.showCode.hide": "Button, short.",
   "account.showCode.new": "Button, short: make another code.",
   "account.showCode.aria": "Screen-reader text for the code shown in large letters. {code} is the code spelled out, like “A B C D E F G H”.",
-  "account.showCode.left": "Under the one-time code; =0 is under a minute. The code can be used once."
+  "account.showCode.left": "Under the one-time code; =0 is under a minute. The code can be used once.",
+  "rows.spotter.label": "Settings > Audio switch: a recorded voice that tells the driver where nearby cars are, as a racing spotter does on the radio.",
+  "rows.spotter.hint": "Under the Spotter switch; the quoted calls are examples of what the voice says (it speaks English).",
+  "rows.spotter.off": "Why the spotter's volume, voice and radio rows are greyed out.",
+  "rows.spotterVoice.label": "Picker of the spotter's voice; the options are the voice actors' first names.",
+  "rows.spotterRadio.label": "Switch: filters the spotter's voice to sound like a team radio."
 }

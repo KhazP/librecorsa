@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "Shift beep"
     },
+    "spotter": {
+      "label": "Spotter",
+      "hint": "A voice calls the cars alongside you: car left, car right, three wide, clear",
+      "off": "Spotter is off"
+    },
+    "spotterVolume": {
+      "label": "Spotter volume"
+    },
+    "spotterVoice": {
+      "label": "Spotter voice"
+    },
+    "spotterRadio": {
+      "label": "Radio sound",
+      "hint": "The spotter sounds like a team radio, with a click before each call"
+    },
     "musicOn": {
       "label": "Music"
     },

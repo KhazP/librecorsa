@@ -135,7 +135,7 @@ export interface AudioSettings {
   musicOff: string[];
   /** The music alone is off (the title screen's music button), every other sound playing on */
   musicMuted: boolean;
-  /** Contextual iRacing-style spotter voice callouts */
+  /** A voice calls the cars alongside (sim/spotter.ts) */
   spotter: boolean;
   /** Spotter voice callout volume, 0 to 1 */
   spotterVolume: number;

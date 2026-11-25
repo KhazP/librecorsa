@@ -861,32 +861,36 @@ export const palette = choice("select", {
 export const masterVolume = slider({ id: "volume", get label() { return rt("volume.label"); }, min: 0, max: 1, step: 0.05, format: pct, ...audio("volume") });
 // The kerbs go up to 150 %: the named 100 % keeps it from reading like Master volume, whose 100 % is the end
 export const kerbVolume = slider({ id: "kerbs", get label() { return rt("kerbs.label"); }, min: 0, max: 1.5, step: 0.05, format: pct, mark: 1, ...audio("kerbs") });
+// The spotter: a voice that calls cars alongside (sim/spotter.ts). Its volume is relative to the master's
+export const spotterOn = toggle({ id: "spotter", get label() { return rt("spotter.label"); }, get hint() { return rt("spotter.hint"); }, ...audio("spotter") });
+const spotterOff = (env: SettingsEnv) => (env.settings.audio.spotter ? null : rt("spotter.off"));
 export const spotterVolume = slider({
   id: "spotterVolume",
-  label: "Spotter volume",
-  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  get label() { return rt("spotterVolume.label"); },
+  off: spotterOff,
   min: 0,
   max: 1,
   step: 0.05,
   format: pctOrOff,
   ...audio("spotterVolume"),
 });
-export const spotterOn = toggle({ id: "spotter", label: "Spotter", ...audio("spotter") });
 export const spotterVoice = choice("segmented", {
   id: "spotterVoice",
-  label: "Spotter voice",
-  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
-  options: [
-    { id: "jim", label: "Jim (UK)" },
-    { id: "clare", label: "Clare (UK)" },
-    { id: "geoffrey", label: "Geoffrey (UK)" },
+  get label() { return rt("spotterVoice.label"); },
+  off: spotterOff,
+  // The voice actors' first names, as their packs are called
+  options: () => [
+    { id: "jim", label: "Jim" },
+    { id: "clare", label: "Clare" },
+    { id: "geoffrey", label: "Geoffrey" },
   ],
   ...audio("spotterVoice"),
 });
 export const spotterRadio = toggle({
   id: "spotterRadio",
-  label: "Spotter pit-radio filter",
-  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  get label() { return rt("spotterRadio.label"); },
+  get hint() { return rt("spotterRadio.hint"); },
+  off: spotterOff,
   ...audio("spotterRadio"),
 });
 export const mute = toggle({
