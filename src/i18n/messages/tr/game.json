@@ -884,7 +884,14 @@
     "restart": "Simülatörü yeniden başlat"
   },
   "dash": {
-    "yellowFlag": "Sarı bayrak"
+    "yellowFlag": "Sarı bayrak",
+    "terminalDamage": "Ağır hasar",
+    "puncture": "Patlak",
+    "punctureCorner": "{corner} patlak",
+    "steeringDamage": "Dir. hasarı",
+    "suspensionDamage": "Süsp. hasarı",
+    "aeroDamage": "Aero hasarı",
+    "damage": "Hasar"
   },
   "account": {
     "checking": "Hesabın kontrol ediliyor",

@@ -884,7 +884,14 @@
     "restart": "Riavvia il simulatore"
   },
   "dash": {
-    "yellowFlag": "Bandiera gialla"
+    "yellowFlag": "Bandiera gialla",
+    "terminalDamage": "Danni critici",
+    "puncture": "Foratura",
+    "punctureCorner": "Foratura {corner}",
+    "steeringDamage": "Danni sterzo",
+    "suspensionDamage": "Danni sosp.",
+    "aeroDamage": "Danni aero",
+    "damage": "Danni"
   },
   "account": {
     "checking": "Controllo dell’account",

@@ -884,7 +884,14 @@
     "restart": "重新啟動模擬器"
   },
   "dash": {
-    "yellowFlag": "黃旗"
+    "yellowFlag": "黃旗",
+    "terminalDamage": "嚴重車損",
+    "puncture": "爆胎",
+    "punctureCorner": "{corner} 爆胎",
+    "steeringDamage": "轉向受損",
+    "suspensionDamage": "懸吊受損",
+    "aeroDamage": "空力受損",
+    "damage": "車損"
   },
   "account": {
     "checking": "正在檢查你的帳號",

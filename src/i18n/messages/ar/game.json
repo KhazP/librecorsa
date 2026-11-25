@@ -884,7 +884,14 @@
     "restart": "إعادة تشغيل المحاكي"
   },
   "dash": {
-    "yellowFlag": "علم أصفر"
+    "yellowFlag": "علم أصفر",
+    "terminalDamage": "ضرر نهائي",
+    "puncture": "ثقب",
+    "punctureCorner": "ثقب {corner}",
+    "steeringDamage": "ضرر التوجيه",
+    "suspensionDamage": "ضرر التعليق",
+    "aeroDamage": "ضرر الانسيابية",
+    "damage": "أضرار"
   },
   "account": {
     "checking": "جارٍ التحقق من حسابك",

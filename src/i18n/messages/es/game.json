@@ -884,7 +884,14 @@
     "restart": "Reiniciar simulador"
   },
   "dash": {
-    "yellowFlag": "Bandera amarilla"
+    "yellowFlag": "Bandera amarilla",
+    "terminalDamage": "Daño terminal",
+    "puncture": "Pinchazo",
+    "punctureCorner": "Pinchazo {corner}",
+    "steeringDamage": "Daño dirección",
+    "suspensionDamage": "Daño susp.",
+    "aeroDamage": "Daño aero",
+    "damage": "Daños"
   },
   "account": {
     "checking": "Comprobando tu cuenta",

@@ -884,7 +884,14 @@
     "restart": "시뮬레이터 재시작"
   },
   "dash": {
-    "yellowFlag": "황기"
+    "yellowFlag": "황기",
+    "terminalDamage": "치명적 손상",
+    "puncture": "펑크",
+    "punctureCorner": "{corner} 펑크",
+    "steeringDamage": "조향 손상",
+    "suspensionDamage": "서스펜션 손상",
+    "aeroDamage": "에어로 손상",
+    "damage": "손상"
   },
   "account": {
     "checking": "계정을 확인하는 중",

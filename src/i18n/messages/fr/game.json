@@ -884,7 +884,14 @@
     "restart": "Relancer le simulateur"
   },
   "dash": {
-    "yellowFlag": "Drapeau jaune"
+    "yellowFlag": "Drapeau jaune",
+    "terminalDamage": "Dégâts critiques",
+    "puncture": "Crevaison",
+    "punctureCorner": "Crevaison {corner}",
+    "steeringDamage": "Dégâts direction",
+    "suspensionDamage": "Dégâts susp.",
+    "aeroDamage": "Dégâts aéro",
+    "damage": "Dégâts"
   },
   "account": {
     "checking": "Vérification de votre compte",

@@ -884,7 +884,14 @@
     "restart": "Khởi động lại trình mô phỏng"
   },
   "dash": {
-    "yellowFlag": "Cờ vàng"
+    "yellowFlag": "Cờ vàng",
+    "terminalDamage": "Hỏng hoàn toàn",
+    "puncture": "Thủng lốp",
+    "punctureCorner": "Thủng lốp {corner}",
+    "steeringDamage": "Hư hại tay lái",
+    "suspensionDamage": "Hư hại hệ treo",
+    "aeroDamage": "Hư hại khí động",
+    "damage": "Hư hại"
   },
   "account": {
     "checking": "Đang kiểm tra tài khoản của bạn",

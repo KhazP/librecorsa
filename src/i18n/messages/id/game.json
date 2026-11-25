@@ -884,7 +884,14 @@
     "restart": "Mulai ulang simulator"
   },
   "dash": {
-    "yellowFlag": "Bendera kuning"
+    "yellowFlag": "Bendera kuning",
+    "terminalDamage": "Kerusakan fatal",
+    "puncture": "Ban bocor",
+    "punctureCorner": "Ban bocor {corner}",
+    "steeringDamage": "Kemudi rusak",
+    "suspensionDamage": "Susp. rusak",
+    "aeroDamage": "Aero rusak",
+    "damage": "Kerusakan"
   },
   "account": {
     "checking": "Memeriksa akunmu",

@@ -884,7 +884,14 @@
     "restart": "Simulator neu starten"
   },
   "dash": {
-    "yellowFlag": "Gelbe Flagge"
+    "yellowFlag": "Gelbe Flagge",
+    "terminalDamage": "Totalschaden",
+    "puncture": "Platten",
+    "punctureCorner": "Platten {corner}",
+    "steeringDamage": "Lenkungsschaden",
+    "suspensionDamage": "Fahrw.-Schaden",
+    "aeroDamage": "Aero-Schaden",
+    "damage": "Schaden"
   },
   "account": {
     "checking": "Dein Konto wird geprüft",
