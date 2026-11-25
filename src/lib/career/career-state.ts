@@ -904,9 +904,10 @@ export function parseCareerSave(raw: unknown): CareerSave {
         (c.discipline === "road" || c.discipline === "historic") &&
         Array.isArray(c.rivals) &&
         Array.isArray(c.history) &&
-        (c.season === null || (typeof c.season === "object" && Boolean(seriesById(c.season.seriesId))))
+        (c.season === null || (typeof c.season === "object" && Boolean(seriesById(movedSeriesId(c.season)))))
     )
-    .map(cleanTestDays);
+    .map(cleanTestDays)
+    .map(moveToOwnSeries);
   const removed = Array.isArray(r.removed) ? r.removed.filter((id): id is string => typeof id === "string") : [];
   return {
     v: 1,
@@ -914,6 +915,52 @@ export function parseCareerSave(raw: unknown): CareerSave {
     activeId: typeof r.activeId === "string" && runs.some((c) => c.id === r.activeId) ? r.activeId : (runs[0]?.id ?? null),
     ...(removed.length ? { removed } : {}),
   };
+}
+
+/**
+ * Series a car raced in before it had one of its own: until the Scirocco got the Coupé Cup, the Club Cup was raced in
+ * the Liana or the Scirocco, the player's pick (the whole grid in the same car)
+ */
+const MOVED_SERIES: readonly { from: string; car: CarId; to: string }[] = (["americas", "europe", "asiaPacific"] as const).map((r) => ({
+  from: `clubCup_${r}`,
+  car: "vw-scirocco-gtx",
+  to: `coupeCup_${r}`,
+}));
+
+/** The series a season (or a season's record) in this car belongs to now */
+function movedSeriesId(s: { seriesId: string; car?: CarId; settings?: { car?: CarId } }): string {
+  const car = s.settings?.car ?? s.car;
+  return MOVED_SERIES.find((m) => m.from === s.seriesId && m.car === car)?.to ?? s.seriesId;
+}
+
+/**
+ * A career from before a car had its own series, carried over: its seasons in that car (under way, done and kept for
+ * the next) move to the car's series of the same region with their rounds, results, attempts and test days; a season
+ * still in pre-season takes the new series' calendar (the player's circuits on it kept); a career still choosing its
+ * first series has the new ones to choose from too. A career with nothing to move comes back as it was (the same
+ * object)
+ */
+function moveToOwnSeries(run: CareerRun): CareerRun {
+  const moveSeason = <T extends SeasonState | null | undefined>(season: T): T => {
+    if (!season) return season;
+    const to = movedSeriesId(season);
+    const series = seriesById(to);
+    if (to === season.seriesId || !series) return season;
+    if (season.started) return { ...season, seriesId: to };
+    // Pre-season: the season's length in rounds of the new calendar, the player's circuits on it first
+    const n = roundsFor(season.settings.length, series.calendar.length);
+    const kept = season.settings.circuits.filter((c) => series.calendar.includes(c));
+    const circuits = [...kept, ...series.calendar.filter((c) => !kept.includes(c))].slice(0, n);
+    return { ...season, seriesId: to, settings: { ...season.settings, circuits } };
+  };
+  const season = moveSeason(run.season);
+  const lastSeason = moveSeason(run.lastSeason);
+  const history = run.history.some((h) => movedSeriesId(h) !== h.seriesId) ? run.history.map((h) => ({ ...h, seriesId: movedSeriesId(h) })) : run.history;
+  // Still choosing where to start (a first season's pre-season): the series that came in since are open too
+  const opens = Array.isArray(run.choices) ? MOVED_SERIES.filter((m) => run.choices.includes(m.from) && !run.choices.includes(m.to)).map((m) => m.to) : [];
+  const choices = opens.length ? CAREER_SERIES.filter((s) => run.choices.includes(s.id) || opens.includes(s.id)).map((s) => s.id) : run.choices;
+  if (season === run.season && lastSeason === run.lastSeason && history === run.history && choices === run.choices) return run;
+  return { ...run, season: season ?? null, ...(lastSeason !== undefined ? { lastSeason } : {}), history, choices };
 }
 
 /** A career's test days as saved, anything malformed dropped; a career without any comes back as it was (the same object) */
