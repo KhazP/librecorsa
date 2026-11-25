@@ -862,12 +862,9 @@
     "revsUp": "Suba a rotação"
   },
   "speedCluster": {
-    "region": "Painel de velocidade",
     "minimalRegion": "Velocidade e marcha",
     "shiftLights": "Luzes de troca: {lit} de {total}",
     "gearLabel": "Marcha {gear}",
-    "gear": "Marcha",
-    "shift": "Troque",
     "aeroToggle": "{label}: alternar",
     "drsTitle": "DRS ({key}): flap traseiro, em zona de DRS; em corrida só a menos de 1 s do carro à frente no ponto de detecção, a partir da volta 3",
     "straightModeTitle": "Straight Mode ({key}): os dois flaps abrem nas retas; um toque pouco antes abre assim que ela começa",
@@ -895,10 +892,7 @@
     "throttleTitle": "Entrada do acelerador",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Torque do volante / Force Feedback (vermelho = saturando)",
-    "latG": "{g} g lat.",
-    "ersBattery": "Carga da bateria ERS",
-    "rpmBand": "Faixa de rpm do motor"
+    "forceTitle": "Torque do volante / Force Feedback (vermelho = saturando)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Janela de trabalho da banda",
     "window": "Janela",
     "miniTitle": "{corner}: banda {temps} · {pressure} · freio {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Pneus"
   },
   "weatherBadge": {
     "region": "Clima",

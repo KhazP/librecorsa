@@ -22,14 +22,7 @@
     "circuitMap": "خريطة الحلبة",
     "sector": "القطاع {sector}",
     "sectorTitle": "القطاع {sector} · {corner}",
-    "straight": "مستقيم",
-    "chasing": "تلاحق",
-    "tyreTemps": "حرارة الإطارات، داخلي / أوسط / خارجي؛ الحافة المتقطعة تشير إلى حالة الإطار",
-    "fuel": "الوقود",
-    "delta": "الدلتا",
-    "predicted": "المتوقع",
-    "quicker": "أسرع من أفضل لفة لك",
-    "slower": "أبطأ من أفضل لفة لك"
+    "straight": "مستقيم"
   },
   "wheelDash": {
     "wheelDash": "شاشة المقود",
@@ -48,8 +41,7 @@
     "ahead": "أمامك",
     "last": "الأخيرة",
     "lead": "المتصدر",
-    "fuel": "الوقود",
-    "tagLap": "اللفة"
+    "fuel": "الوقود"
   },
   "telemetry": {
     "lapAnalysis": "تحليل اللفة",

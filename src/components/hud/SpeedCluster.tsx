@@ -4,7 +4,6 @@ import React, { useMemo } from "react";
 import { useTranslations } from "use-intl/react";
 import type { CarTelemetry } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
-import { ClassTag } from "@/components/ui/badges/ClassTag";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import {
   aidsActive,
@@ -13,9 +12,6 @@ import {
   revRangeFor,
   speedUnit,
   HUD_BRAKE,
-  PROTO_CAR_IDS,
-  CLASSIC_CAR_IDS,
-  ROAD_CAR_IDS,
   HUD_GLASS,
   HUD_GREEN,
   HUD_INFO,
@@ -50,8 +46,6 @@ interface SpeedClusterProps {
   /** Use the Overtake earned in a race, or stop using it (a 2026 F1 car) */
   onOvertake?: () => void;
   onToggleXMode: () => void;
-  /** Minimal HUD: a speed and gear pill under a slim status strip */
-  variant?: "full" | "minimal";
 }
 
 /** Vertical input bar (brake / throttle / force) with its letter under it */
@@ -73,19 +67,14 @@ const InputBar: React.FC<{ label: string; pct: number; color: string; labelColor
   </span>
 );
 
-/** Bottom-right LibreCorsa MoTeC-style digital dash pod: rev lights, gear, speed, pedals/FFB, ERS and aero state */
+/** The Minimal HUD's bottom-right pod: a slim strip of rev lights, aero / boost and battery over a speed and gear pill */
 export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   telemetry,
   onToggleBoostLatch,
   onOvertake,
   onToggleXMode,
-  variant = "full",
 }) => {
   const channels = telemetry.f12026;
-  const isGt3 = channels?.carId === "amg-gt3";
-  const isRoad = ROAD_CAR_IDS.has(channels?.carId ?? "");
-  const isProto = PROTO_CAR_IDS.has(channels?.carId ?? "");
-  const isClassic = CLASSIC_CAR_IDS.has(channels?.carId ?? "");
   const [revStart, revFull] = revRangeFor(channels?.carId);
   const hasErs = channels?.hasErs ?? true;
   const lit = Math.round(((telemetry.rpm - revStart) / (revFull - revStart)) * REV_LEDS);
@@ -102,10 +91,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const tx = useTranslations("hud.speedCluster");
   const L = useMemo(
     () => ({
-      region: tx("region"),
       minimalRegion: tx("minimalRegion"),
-      gear: tx("gear"),
-      shift: tx("shift"),
       drsTitle: tx("drsTitle", { key: "X" }),
       straightModeTitle: tx("straightModeTitle", { key: "X" }),
       overtakeLockedTitle: tx("overtakeLockedTitle", { keys: "Space / B" }),
@@ -133,8 +119,6 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
       forceLetter: tx("forceLetter"),
       clip: tx("clip"),
       forceTitle: tx("forceTitle"),
-      ersBattery: tx("ersBattery"),
-      rpmBand: tx("rpmBand"),
     }),
     [tx]
   );
@@ -157,7 +141,6 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const units = useUnits();
   const speed = formatSpeed(telemetry.speedKmh, units);
   const latG = Math.abs(telemetry.lateralG).toFixed(1);
-  const latGText = useMemo(() => tx("latG", { g: latG }), [tx, latG]);
 
   // Energy going out (deploy, boost) is information; harvesting and the plain charge are chalk
   const ersColor = boost || deploying ? HUD_INFO : HUD_WHITE;
@@ -175,7 +158,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
       );
     });
 
-  /** Aero / aids, boost and battery (or longitudinal G) controls shared by both layouts */
+  /** Aero / aids, boost and battery (or longitudinal G) controls */
   const controls = (
     <>
       {channels && !hasAero ? (
@@ -280,110 +263,32 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
 
   const gearRing = flash ? HUD_SHIFT : xMode ? HUD_INFO : HUD_VOLT;
 
-  if (variant === "minimal") {
-    return (
-      <div className="flex flex-col items-end gap-1.5">
-        {/* Slim status strip: rev lights, rpm, aero / boost and battery */}
-        <div className={`flex items-center gap-2 rounded-lc-row py-1.5 pe-3 ps-2 ${HUD_GLASS}`}>
-          {controls}
-          <span className="flex w-22.5 gap-0.5 rounded-lc-nub bg-lc-well p-1" aria-label={shiftLights}>
-            {leds("h-1.5")}
-          </span>
-          {readout}
-        </div>
-        <section aria-label={L.minimalRegion} className={`flex items-center gap-4 rounded-lc-tile py-2 pe-2 ps-4.5 ${HUD_GLASS}`}>
-          {inputBars("h-13")}
-          <div className="flex flex-col items-end">
-            <span className="lc-data text-[52px] leading-[0.9] tracking-[-0.02em] text-lc-chalk">{speed}</span>
-            <span className={HUD_LBL}>
-              {speedUnit(units)} · {Math.round(telemetry.rpm)} rpm · {latG} g
-            </span>
-          </div>
-          <span
-            className="flex size-18 items-center justify-center rounded-lc-row text-lc-void"
-            style={{ backgroundColor: gearRing }}
-            aria-label={gearLabel}
-          >
-            <span className="lc-disp text-[52px] leading-none">{gear}</span>
-          </span>
-        </section>
-      </div>
-    );
-  }
-
   return (
-    <section aria-label={L.region} className={`w-[320px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
-      {/* Car badge, shift call and rpm */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <ClassTag carClass={isGt3 ? "gt3" : isRoad ? "road" : isProto ? "proto" : isClassic ? "classic" : "openWheel"} variant="solid" size="hud" />
-          {flash ? (
-            <Badge tone={{ color: "cyan" }} variant="solid" size="hud" icon="shiftUp">
-              {L.shift}
-            </Badge>
-          ) : null}
-        </div>
-        <span className="lc-data text-[13px] text-lc-chalk">
-          {Math.round(telemetry.rpm)} <span className={HUD_LBL}>rpm</span>
+    <div className="flex flex-col items-end gap-1.5">
+      {/* Slim status strip: rev lights, rpm, aero / boost and battery */}
+      <div className={`flex items-center gap-2 rounded-lc-row py-1.5 pe-3 ps-2 ${HUD_GLASS}`}>
+        {controls}
+        <span className="flex w-22.5 gap-0.5 rounded-lc-nub bg-lc-well p-1" aria-label={shiftLights}>
+          {leds("h-1.5")}
         </span>
-      </div>
-
-      {/* 15-LED shift lights */}
-      <div
-        className="my-2.5 flex gap-1 rounded-lc-nub bg-lc-well px-2 py-1.5"
-        aria-label={shiftLights}
-      >
-        {leds("h-2")}
-      </div>
-
-      {/* Inputs | speed | gear | battery */}
-      <div className="flex items-center gap-3.5">
-        {inputBars("h-16")}
-
-        <div className="flex min-w-0 flex-1 flex-col items-end">
-          <span className="lc-data text-[58px] leading-[0.9] tracking-[-0.02em] text-lc-chalk">{speed}</span>
-          <span className={HUD_LBL}>
-            <span className="text-lc-chalk">{speedUnit(units)}</span> · {latGText}
-          </span>
-        </div>
-
-        <div
-          className="flex h-20 w-17.5 flex-none flex-col items-center justify-center rounded-lc-card border-2 bg-lc-well"
-          style={{ borderColor: gearRing }}
-        >
-          <span className={HUD_LBL}>{L.gear}</span>
-          <span className="lc-data text-[48px] leading-none text-lc-chalk">{gear}</span>
-        </div>
-
-        {hasErs ? (
-          <span
-            className="relative h-20 w-2.5 flex-none overflow-hidden rounded-full bg-lc-titanium"
-            title={L.ersBattery}
-          >
-            {/* Scales from the bottom (transform only, so the bar never re-lays out) */}
-            <span
-              className="absolute inset-0 origin-bottom bg-lc-info transition-transform duration-100 ease-linear"
-              style={{ transform: `scaleY(${ers / 100})` }}
-            />
-          </span>
-        ) : (
-          <span className="relative h-20 w-2.5 flex-none overflow-hidden rounded-full bg-lc-titanium" title={L.rpmBand}>
-            <span
-              className="absolute inset-0 origin-bottom"
-              style={{
-                transform: `scaleY(${Math.min(1, telemetry.rpm / revFull)})`,
-                backgroundColor: flash ? HUD_SHIFT : HUD_INFO,
-              }}
-            />
-          </span>
-        )}
-      </div>
-
-      {/* Aero / aids, boost and battery */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-lc-line pt-2.5">
-        <span className="flex items-center gap-1.5">{controls}</span>
         {readout}
       </div>
-    </section>
+      <section aria-label={L.minimalRegion} className={`flex items-center gap-4 rounded-lc-tile py-2 pe-2 ps-4.5 ${HUD_GLASS}`}>
+        {inputBars("h-13")}
+        <div className="flex flex-col items-end">
+          <span className="lc-data text-[52px] leading-[0.9] tracking-[-0.02em] text-lc-chalk">{speed}</span>
+          <span className={HUD_LBL}>
+            {speedUnit(units)} · {Math.round(telemetry.rpm)} rpm · {latG} g
+          </span>
+        </div>
+        <span
+          className="flex size-18 items-center justify-center rounded-lc-row text-lc-void"
+          style={{ backgroundColor: gearRing }}
+          aria-label={gearLabel}
+        >
+          <span className="lc-disp text-[52px] leading-none">{gear}</span>
+        </span>
+      </section>
+    </div>
   );
 };

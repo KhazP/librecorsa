@@ -22,14 +22,7 @@
     "circuitMap": "Peta sirkuit",
     "sector": "Sektor {sector}",
     "sectorTitle": "Sektor {sector} · {corner}",
-    "straight": "Lurus",
-    "chasing": "Mengejar",
-    "tyreTemps": "Suhu ban, dalam / tengah / luar; tepi putus-putus menandakan kondisi ban",
-    "fuel": "BBM",
-    "delta": "Delta",
-    "predicted": "Prediksi",
-    "quicker": "Lebih cepat dari terbaikmu",
-    "slower": "Lebih lambat dari terbaikmu"
+    "straight": "Lurus"
   },
   "wheelDash": {
     "wheelDash": "Dasbor setir",
@@ -48,8 +41,7 @@
     "ahead": "Depan",
     "last": "Lalu",
     "lead": "Pimpin",
-    "fuel": "BBM",
-    "tagLap": "Lap"
+    "fuel": "BBM"
   },
   "telemetry": {
     "lapAnalysis": "Analisis lap",

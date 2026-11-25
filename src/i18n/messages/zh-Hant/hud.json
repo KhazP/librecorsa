@@ -862,12 +862,9 @@
     "revsUp": "拉高轉速"
   },
   "speedCluster": {
-    "region": "車速錶組",
     "minimalRegion": "車速與檔位",
     "shiftLights": "換檔指示燈：{lit}／{total}",
     "gearLabel": "{gear} 檔",
-    "gear": "檔位",
-    "shift": "升檔",
     "aeroToggle": "{label}：切換",
     "drsTitle": "DRS（{key}）：於 DRS 區開啟尾翼；正賽自第 3 圈起須於偵測點落後前車 1 秒內方可使用",
     "straightModeTitle": "直線模式（{key}）：於直線同時開啟前後翼片；進直線前預按會在進入時自動開啟",
@@ -895,10 +892,7 @@
     "throttleTitle": "油門輸入",
     "forceLetter": "F",
     "clip": "過載",
-    "forceTitle": "轉向扭力／力回饋（紅色表示過載截頂）",
-    "latG": "{g} g 橫向",
-    "ersBattery": "ERS 電池電量",
-    "rpmBand": "引擎 RPM 轉速區間"
+    "forceTitle": "轉向扭力／力回饋（紅色表示過載截頂）"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "胎面最佳工作溫域",
     "window": "溫域",
     "miniTitle": "{corner}：胎面 {temps} · {pressure} · 煞車 {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "輪胎"
   },
   "weatherBadge": {
     "region": "天氣",

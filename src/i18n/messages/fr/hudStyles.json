@@ -22,14 +22,7 @@
     "circuitMap": "Carte du circuit",
     "sector": "Secteur {sector}",
     "sectorTitle": "Secteur {sector} · {corner}",
-    "straight": "Ligne droite",
-    "chasing": "Poursuite",
-    "tyreTemps": "Températures des pneus, intérieur / milieu / extérieur ; un bord en pointillés signale un état du pneu",
-    "fuel": "Carb.",
-    "delta": "Delta",
-    "predicted": "Prévu",
-    "quicker": "Plus rapide que votre meilleur",
-    "slower": "Plus lent que votre meilleur"
+    "straight": "Ligne droite"
   },
   "wheelDash": {
     "wheelDash": "Écran de volant",
@@ -48,8 +41,7 @@
     "ahead": "Devant",
     "last": "Dern.",
     "lead": "Tête",
-    "fuel": "Carb.",
-    "tagLap": "Tour"
+    "fuel": "Carb."
   },
   "telemetry": {
     "lapAnalysis": "Analyse du tour",

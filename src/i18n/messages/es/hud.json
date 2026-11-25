@@ -862,12 +862,9 @@
     "revsUp": "Sube revoluciones"
   },
   "speedCluster": {
-    "region": "Panel de velocidad",
     "minimalRegion": "Velocidad y marcha",
     "shiftLights": "Luces de cambio: {lit} de {total}",
     "gearLabel": "Marcha {gear}",
-    "gear": "Marcha",
-    "shift": "Cambia",
     "aeroToggle": "{label}: alternar",
     "drsTitle": "DRS ({key}): alerón trasero, en zona DRS; en carrera solo a menos de 1 s del auto de delante en el punto de detección, desde la vuelta 3",
     "straightModeTitle": "Straight Mode ({key}): ambos alerones abiertos en las rectas; si lo pulsas justo antes de una, se abren al empezar",
@@ -895,10 +892,7 @@
     "throttleTitle": "Entrada de acelerador",
     "forceLetter": "FF",
     "clip": "Clip",
-    "forceTitle": "Par de dirección / force feedback (rojo = saturación)",
-    "latG": "{g} g lat",
-    "ersBattery": "Carga de la batería del ERS",
-    "rpmBand": "Banda de rpm del motor"
+    "forceTitle": "Par de dirección / force feedback (rojo = saturación)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Ventana de trabajo de la banda",
     "window": "Ventana",
     "miniTitle": "{corner}: banda {temps} · {pressure} · freno {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Neumáticos"
   },
   "weatherBadge": {
     "region": "Clima",

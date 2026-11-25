@@ -324,14 +324,8 @@
     "no": "Tidak"
   },
   "hudLayouts": {
-    "broadcast": "Siaran TV",
-    "broadcastDetail": "Grafis TV: menara posisi, peta, strip telemetri",
-    "dash": "Dasbor setir",
-    "dashDetail": "Layar setir balap, rendah dan di tengah",
     "telemetry": "Telemetri",
     "telemetryDetail": "Dasbor ditambah ban, G, tenaga, dan input",
-    "classic": "Klasik",
-    "classicDetail": "Panel sudut orisinal",
     "minimal": "Minimalis",
     "minimalDetail": "Hanya kecepatan, gigi, dan lap",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "Grafis diatur ke Rendah setelah reset GPU.",
     "loadFailedStaying": "Gagal memuat sirkuit. Tetap di {circuit}.",
     "loadFailedDefault": "Gagal memuat sirkuit. Memuat {circuit}."
-  },
-  "minimap": {
-    "map": "Peta sirkuit",
-    "mapAtTurn": "Peta sirkuit; kamu berada di tikungan {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {# tikungan}}",
-    "sector": "Sektor {sector}",
-    "elevation": "Elevasi",
-    "altitude": "Ktg {height}",
-    "grade": "Kemiringan {grade}%",
-    "profileStart": "Start {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "Sumber dari {title}",

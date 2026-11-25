@@ -324,14 +324,8 @@
     "no": "Không"
   },
   "hudLayouts": {
-    "broadcast": "Truyền hình",
-    "broadcastDetail": "Đồ họa TV: bảng thứ hạng, bản đồ, dải thông số",
-    "dash": "Màn hình vô lăng",
-    "dashDetail": "Màn hình kiểu vô lăng xe đua, đặt thấp ở giữa",
     "telemetry": "Dữ liệu đo từ xa",
     "telemetryDetail": "Màn hình vô lăng kèm lốp, lực G, công suất và thao tác lái",
-    "classic": "Cổ điển",
-    "classicDetail": "Các bảng góc màn hình nguyên bản",
     "minimal": "Tối giản",
     "minimalDetail": "Chỉ hiển thị tốc độ, cấp số và vòng đua",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "Đồ họa đã chuyển về Thấp sau sự cố GPU.",
     "loadFailedStaying": "Tải đường đua thất bại. Tiếp tục ở {circuit}.",
     "loadFailedDefault": "Tải đường đua thất bại. Đã tải {circuit}."
-  },
-  "minimap": {
-    "map": "Bản đồ đường đua",
-    "mapAtTurn": "Bản đồ đường đua; bạn đang ở khúc cua {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {# khúc cua}}",
-    "sector": "Sector {sector}",
-    "elevation": "Độ cao",
-    "altitude": "Cao {height}",
-    "grade": "Độ dốc {grade}%",
-    "profileStart": "Xuất phát {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "Nguồn của {title}",

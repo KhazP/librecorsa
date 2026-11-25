@@ -862,12 +862,9 @@
     "revsUp": "Naikkan RPM"
   },
   "speedCluster": {
-    "region": "Kluster kecepatan",
     "minimalRegion": "Kecepatan dan gigi",
     "shiftLights": "Lampu gigi: {lit} dari {total}",
     "gearLabel": "Gigi {gear}",
-    "gear": "Gigi",
-    "shift": "Naik gigi",
     "aeroToggle": "{label}: alihkan",
     "drsTitle": "DRS ({key}): sayap belakang, di zona DRS; saat balapan hanya jika dalam 1 s di belakang mobil depan di titik deteksi, mulai lap 3",
     "straightModeTitle": "Straight Mode ({key}): kedua flap terbuka di lintasan lurus; menekan tombol sesaat sebelum lintasan lurus membukanya begitu lintasan lurus dimulai",
@@ -895,10 +892,7 @@
     "throttleTitle": "Input gas",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Torsi kemudi / Force Feedback (Merah = Clipping)",
-    "latG": "{g} g lat",
-    "ersBattery": "Muatan baterai ERS",
-    "rpmBand": "Rentang RPM mesin"
+    "forceTitle": "Torsi kemudi / Force Feedback (Merah = Clipping)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Rentang suhu kerja tapak",
     "window": "Rentang",
     "miniTitle": "{corner}: tapak {temps} · {pressure} · rem {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Ban"
   },
   "weatherBadge": {
     "region": "Cuaca",

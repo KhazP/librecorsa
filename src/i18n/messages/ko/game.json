@@ -324,14 +324,8 @@
     "no": "미지원"
   },
   "hudLayouts": {
-    "broadcast": "중계",
-    "broadcastDetail": "TV 중계 그래픽: 순위표, 트랙 맵, 텔레메트리 바",
-    "dash": "휠 대시",
-    "dashDetail": "화면 하단 중앙의 레이싱 휠 디스플레이",
     "telemetry": "텔레메트리",
     "telemetryDetail": "대시보드 + 타이어, 중력 가속도(G), 출력 및 입력",
-    "classic": "클래식",
-    "classicDetail": "오리지널 모서리 패널 구성",
     "minimal": "미니멀",
     "minimalDetail": "속도, 기어, 랩 정보만 표시",
     "touring": "GT 스타일",
@@ -843,17 +837,6 @@
     "graphicsLow": "GPU 재설정 후 그래픽 품질이 낮음으로 설정되었습니다.",
     "loadFailedStaying": "서킷을 불러오지 못했습니다. 현재 서킷({circuit})을 유지합니다.",
     "loadFailedDefault": "서킷을 불러오지 못했습니다. 대신 {circuit}을 불러왔습니다."
-  },
-  "minimap": {
-    "map": "서킷 맵",
-    "mapAtTurn": "서킷 맵; 현재 {turn}번 코너에 있습니다",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {코너 #개}}",
-    "sector": "섹터 {sector}",
-    "elevation": "고도",
-    "altitude": "고도 {height}",
-    "grade": "경사 {grade}%",
-    "profileStart": "출발 {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "{title}의 출처",

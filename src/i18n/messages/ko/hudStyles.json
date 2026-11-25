@@ -22,14 +22,7 @@
     "circuitMap": "서킷 맵",
     "sector": "섹터 {sector}",
     "sectorTitle": "섹터 {sector} · {corner}",
-    "straight": "직선",
-    "chasing": "추격 중",
-    "tyreTemps": "타이어 온도, 내측 / 중앙 / 외측; 점선 테두리는 타이어 상태 이상 표시",
-    "fuel": "연료",
-    "delta": "델타",
-    "predicted": "예상",
-    "quicker": "내 최고 기록보다 빠름",
-    "slower": "내 최고 기록보다 느림"
+    "straight": "직선"
   },
   "wheelDash": {
     "wheelDash": "휠 대시",
@@ -48,8 +41,7 @@
     "ahead": "전방",
     "last": "이전",
     "lead": "선두",
-    "fuel": "연료",
-    "tagLap": "랩"
+    "fuel": "연료"
   },
   "telemetry": {
     "lapAnalysis": "랩 분석",

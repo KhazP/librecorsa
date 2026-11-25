@@ -862,12 +862,9 @@
     "revsUp": "Montez le régime"
   },
   "speedCluster": {
-    "region": "Compteur de vitesse",
     "minimalRegion": "Vitesse et rapport",
     "shiftLights": "Témoins de changement de rapport : {lit} sur {total}",
     "gearLabel": "Rapport {gear}",
-    "gear": "Rapport",
-    "shift": "Montez",
     "aeroToggle": "{label} : basculer",
     "drsTitle": "DRS ({key}) : volet arrière, dans une zone DRS ; en course, seulement à moins de 1 s de la voiture devant au point de détection, à partir du tour 3",
     "straightModeTitle": "Straight Mode ({key}) : les deux volets s’ouvrent dans les lignes droites ; un appui juste avant une ligne droite les ouvre dès son début",
@@ -895,10 +892,7 @@
     "throttleTitle": "Commande d’accélérateur",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Couple de direction / Force Feedback (rouge = saturation)",
-    "latG": "{g} g lat.",
-    "ersBattery": "Charge de la batterie ERS",
-    "rpmBand": "Plage de régime moteur"
+    "forceTitle": "Couple de direction / Force Feedback (rouge = saturation)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Plage de fonctionnement de la gomme",
     "window": "Plage",
     "miniTitle": "{corner} : bande {temps} · {pressure} · frein {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Pneus"
   },
   "weatherBadge": {
     "region": "Météo",

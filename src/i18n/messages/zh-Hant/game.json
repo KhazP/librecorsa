@@ -324,14 +324,8 @@
     "no": "不支援"
   },
   "hudLayouts": {
-    "broadcast": "轉播風格",
-    "broadcastDetail": "電視轉播畫面：名次欄、賽道圖、遙測條",
-    "dash": "方向盤儀錶",
-    "dashDetail": "置中於底部的方向盤液晶螢幕",
     "telemetry": "遙測模式",
     "telemetryDetail": "儀錶板加上輪胎、G 值、動力與操作輸入",
-    "classic": "經典",
-    "classicDetail": "原始的四角面板配置",
     "minimal": "極簡",
     "minimalDetail": "僅顯示車速、檔位與圈數",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "偵測到 GPU 重設，畫質已自動調整為「低」。",
     "loadFailedStaying": "賽道載入失敗，維持在 {circuit}。",
     "loadFailedDefault": "賽道載入失敗，已載入預設賽道 {circuit}。"
-  },
-  "minimap": {
-    "map": "賽道地圖",
-    "mapAtTurn": "賽道地圖；你目前位於第 {turn} 彎",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {# 個彎道}}",
-    "sector": "第 {sector} 賽段",
-    "elevation": "海拔高度",
-    "altitude": "海拔 {height}",
-    "grade": "坡度 {grade}%",
-    "profileStart": "起點 {height}",
-    "profileStartFinish": "起終點 {height}"
   },
   "source": {
     "sourceOf": "{title} 的模型來源",

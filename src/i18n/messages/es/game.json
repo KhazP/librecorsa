@@ -324,14 +324,8 @@
     "no": "No"
   },
   "hudLayouts": {
-    "broadcast": "Broadcast",
-    "broadcastDetail": "Gráficos de TV: torre, mapa, franja de telemetría",
-    "dash": "Pantalla del volante",
-    "dashDetail": "Una pantalla de volante, baja y centrada",
     "telemetry": "Telemetría",
     "telemetryDetail": "El panel más neumáticos, G, potencia y entradas",
-    "classic": "Clásico",
-    "classicDetail": "Los paneles originales en las esquinas",
     "minimal": "Mínimo",
     "minimalDetail": "Solo velocidad, marcha y vuelta",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "Gráficos en Baja tras reiniciar la GPU.",
     "loadFailedStaying": "Falló la carga de la pista. Se mantiene {circuit}.",
     "loadFailedDefault": "Falló la carga de la pista. Se cargó {circuit}."
-  },
-  "minimap": {
-    "map": "Mapa del circuito",
-    "mapAtTurn": "Mapa del circuito; estás en la curva {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, one {# curva} other {# curvas}}",
-    "sector": "Sector {sector}",
-    "elevation": "Elevación",
-    "altitude": "Alt {height}",
-    "grade": "PENDIENTE {grade}%",
-    "profileStart": "Inicio {height}",
-    "profileStartFinish": "S/M {height}"
   },
   "source": {
     "sourceOf": "Fuente de {title}",

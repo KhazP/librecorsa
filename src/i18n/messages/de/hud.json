@@ -862,12 +862,9 @@
     "revsUp": "Drehzahl hoch"
   },
   "speedCluster": {
-    "region": "Tacho-Einheit",
     "minimalRegion": "Tempo und Gang",
     "shiftLights": "Schaltlichter: {lit} von {total}",
     "gearLabel": "Gang {gear}",
-    "gear": "Gang",
-    "shift": "Schalten",
     "aeroToggle": "{label}: umschalten",
     "drsTitle": "DRS ({key}): Heckflügel-Klappe in der DRS-Zone; im Rennen nur innerhalb von 1 s zum Vordermann am Messpunkt, ab Runde 3",
     "straightModeTitle": "Straight Mode ({key}): beide Klappen auf den Geraden offen; kurz davor gedrückt, öffnen sie sich mit Beginn der Geraden",
@@ -895,10 +892,7 @@
     "throttleTitle": "Gaseingabe",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Lenkmoment / Force Feedback (Rot = Clipping)",
-    "latG": "{g} g quer",
-    "ersBattery": "ERS-Batterieladung",
-    "rpmBand": "Motordrehzahlbereich"
+    "forceTitle": "Lenkmoment / Force Feedback (Rot = Clipping)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Arbeitsfenster der Lauffläche",
     "window": "Fenster",
     "miniTitle": "{corner}: Lauffläche {temps} · {pressure} · Bremse {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Reifen"
   },
   "weatherBadge": {
     "region": "Wetter",

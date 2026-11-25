@@ -334,14 +334,18 @@
     "no": "No"
   },
   "hudLayouts": {
-    "broadcast": "Broadcast",
-    "broadcastDetail": "TV graphics: tower, map, telemetry strip",
-    "dash": "Wheel dash",
-    "dashDetail": "A steering-wheel screen, low and centred",
+    "blade": "Blade",
+    "bladeDetail": "One low instrument, the rest out of the way",
+    "trackside": "Trackside",
+    "tracksideDetail": "Readouts in the corners, a rev dial",
+    "pitWall": "Pit wall",
+    "pitWallDetail": "Timing tables and paged detail, no gauges",
+    "endurance": "Endurance",
+    "enduranceDetail": "Full order, tyre wear, dial and car status",
+    "racingLine": "Racing line",
+    "racingLineDetail": "Relative, delta bar and a tight cluster",
     "telemetry": "Telemetry",
     "telemetryDetail": "The dash plus tyres, G, power and inputs",
-    "classic": "Classic",
-    "classicDetail": "The original corner panels",
     "minimal": "Minimal",
     "minimalDetail": "Speed, gear and lap only",
     "touring": "GT-Like",
@@ -862,17 +866,6 @@
     "graphicsLow": "Graphics set to Low after GPU reset.",
     "loadFailedStaying": "Track load failed. Staying on {circuit}.",
     "loadFailedDefault": "Track load failed. Loaded {circuit}."
-  },
-  "minimap": {
-    "map": "Circuit map",
-    "mapAtTurn": "Circuit map; you are at turn {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, one {# turn} other {# turns}}",
-    "sector": "Sector {sector}",
-    "elevation": "Elevation",
-    "altitude": "Alt {height}",
-    "grade": "GRADE {grade}%",
-    "profileStart": "Start {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "Source of {title}",

@@ -897,12 +897,9 @@
     "revsUp": "Revs up"
   },
   "speedCluster": {
-    "region": "Speed cluster",
     "minimalRegion": "Speed and gear",
     "shiftLights": "Shift lights: {lit} of {total}",
     "gearLabel": "Gear {gear}",
-    "gear": "Gear",
-    "shift": "Shift",
     "aeroToggle": "{label}: toggle",
     "drsTitle": "DRS ({key}): rear flap, in a DRS zone; in a race only within 1 s of the car ahead at the detection point, from lap 3",
     "straightModeTitle": "Straight Mode ({key}): both flaps open on the straights; a press just before one opens them as it starts",
@@ -930,10 +927,7 @@
     "throttleTitle": "Throttle input",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Steering Torque / Force Feedback (Red = Clipping)",
-    "latG": "{g} g lat",
-    "ersBattery": "ERS battery charge",
-    "rpmBand": "Engine RPM Band"
+    "forceTitle": "Steering Torque / Force Feedback (Red = Clipping)"
   },
   "hudFormat": {
     "session": {
@@ -1016,9 +1010,6 @@
     "windowTitle": "Working window of the tread",
     "window": "Window",
     "miniTitle": "{corner}: tread {temps} · {pressure} · brake {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Tyres"
   },
   "weatherBadge": {
     "region": "Weather",

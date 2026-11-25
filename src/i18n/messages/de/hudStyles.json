@@ -22,14 +22,7 @@
     "circuitMap": "Streckenkarte",
     "sector": "Sektor {sector}",
     "sectorTitle": "Sektor {sector} · {corner}",
-    "straight": "Gerade",
-    "chasing": "Jagd auf",
-    "tyreTemps": "Reifentemperaturen, innen / Mitte / außen; gestrichelter Rand markiert einen Reifenzustand",
-    "fuel": "Kraftst.",
-    "delta": "Delta",
-    "predicted": "Prognose",
-    "quicker": "Schneller als deine Bestzeit",
-    "slower": "Langsamer als deine Bestzeit"
+    "straight": "Gerade"
   },
   "wheelDash": {
     "wheelDash": "Lenkraddisplay",
@@ -48,8 +41,7 @@
     "ahead": "Vorne",
     "last": "Letzte",
     "lead": "Führ.",
-    "fuel": "Tank",
-    "tagLap": "Rd."
+    "fuel": "Tank"
   },
   "telemetry": {
     "lapAnalysis": "Rundenanalyse",

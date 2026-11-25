@@ -22,14 +22,7 @@
     "circuitMap": "Bản đồ đường đua",
     "sector": "Sector {sector}",
     "sectorTitle": "Sector {sector} · {corner}",
-    "straight": "Đoạn thẳng",
-    "chasing": "Đang bám đuổi",
-    "tyreTemps": "Nhiệt độ lốp, trong / giữa / ngoài; viền nét đứt báo hiệu tình trạng lốp",
-    "fuel": "Nhiên liệu",
-    "delta": "Delta",
-    "predicted": "Dự kiến",
-    "quicker": "Nhanh hơn vòng tốt nhất của bạn",
-    "slower": "Chậm hơn vòng tốt nhất của bạn"
+    "straight": "Đoạn thẳng"
   },
   "wheelDash": {
     "wheelDash": "Màn hình vô lăng",
@@ -48,8 +41,7 @@
     "ahead": "Trước",
     "last": "Trước",
     "lead": "Dẫn đầu",
-    "fuel": "Xăng",
-    "tagLap": "Vòng"
+    "fuel": "Xăng"
   },
   "telemetry": {
     "lapAnalysis": "Phân tích vòng",

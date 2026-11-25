@@ -862,12 +862,9 @@
     "revsUp": "Giri su"
   },
   "speedCluster": {
-    "region": "Cruscotto velocità",
     "minimalRegion": "Velocità e marcia",
     "shiftLights": "Luci di cambiata: {lit} su {total}",
     "gearLabel": "Marcia {gear}",
-    "gear": "Marcia",
-    "shift": "Cambia",
     "aeroToggle": "{label}: attiva/disattiva",
     "drsTitle": "DRS ({key}): flap posteriore, in una zona DRS; in gara solo entro 1 s dall’auto davanti al punto di rilevamento, dal giro 3",
     "straightModeTitle": "Straight Mode ({key}): entrambi i flap si aprono sui rettilinei; premendo poco prima si aprono all’inizio",
@@ -895,10 +892,7 @@
     "throttleTitle": "Input dell’acceleratore",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Coppia sterzo / Force feedback (rosso = saturazione)",
-    "latG": "{g} g lat.",
-    "ersBattery": "Carica della batteria ERS",
-    "rpmBand": "Fascia dei giri motore"
+    "forceTitle": "Coppia sterzo / Force feedback (rosso = saturazione)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Finestra di lavoro del battistrada",
     "window": "Finestra",
     "miniTitle": "{corner}: battistrada {temps} · {pressure} · freno {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Gomme"
   },
   "weatherBadge": {
     "region": "Meteo",

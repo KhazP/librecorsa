@@ -862,12 +862,9 @@
     "revsUp": "ارفع الدورات"
   },
   "speedCluster": {
-    "region": "لوحة السرعة",
     "minimalRegion": "السرعة والترس",
     "shiftLights": "أضواء تبديل التروس: {lit} من {total}",
     "gearLabel": "الترس {gear}",
-    "gear": "الترس",
-    "shift": "بدّل",
     "aeroToggle": "{label}: تبديل",
     "drsTitle": "DRS ({key}): الجناح الخلفي في منطقة DRS؛ وفي السباق فقط ضمن ثانية واحدة من السيارة الأمامية عند نقطة الرصد بدءًا من اللفة 3",
     "straightModeTitle": "Straight Mode ({key}): يُفتح الجناحان على المستقيمات؛ الضغط قبلها مباشرة يفتحهما فور البدء",
@@ -895,10 +892,7 @@
     "throttleTitle": "مدخل التسارع",
     "forceLetter": "F",
     "clip": "تشبع",
-    "forceTitle": "عزم التوجيه / رد الفعل القسري (الأحمر = تشبّع)",
-    "latG": "{g} g جانبي",
-    "ersBattery": "شحن بطارية ERS",
-    "rpmBand": "نطاق دورات المحرك RPM"
+    "forceTitle": "عزم التوجيه / رد الفعل القسري (الأحمر = تشبّع)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "نطاق العمل المثالي للإطار",
     "window": "النطاق",
     "miniTitle": "{corner}: السطح {temps} · {pressure} · المكابح {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "الإطارات"
   },
   "weatherBadge": {
     "region": "الطقس",

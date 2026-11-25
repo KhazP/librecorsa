@@ -862,12 +862,9 @@
     "revsUp": "RPM 올리기"
   },
   "speedCluster": {
-    "region": "속도 클러스터",
     "minimalRegion": "속도 및 기어",
     "shiftLights": "시프트 라이트: {total}개 중 {lit}개",
     "gearLabel": "기어 {gear}",
-    "gear": "기어",
-    "shift": "변속",
     "aeroToggle": "{label}: 전환",
     "drsTitle": "DRS({key}): DRS 구역에서 리어 플랩 개방, 레이스에서는 3랩부터 감지 지점에서 앞차와 1초 이내일 때만 허용",
     "straightModeTitle": "스트레이트 모드({key}): 직선에서 양쪽 플랩 개방, 진입 직전 누르면 시작과 동시에 개방",
@@ -895,10 +892,7 @@
     "throttleTitle": "스로틀 입력",
     "forceLetter": "F",
     "clip": "클립",
-    "forceTitle": "조향 토크 / 포스 피드백(빨간색 = 클리핑)",
-    "latG": "횡 {g} g",
-    "ersBattery": "ERS 배터리 잔량",
-    "rpmBand": "엔진 RPM 대역"
+    "forceTitle": "조향 토크 / 포스 피드백(빨간색 = 클리핑)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "트레드 적정 온도 범위",
     "window": "적정 범위",
     "miniTitle": "{corner}: 트레드 {temps} · {pressure} · 브레이크 {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "타이어"
   },
   "weatherBadge": {
     "region": "날씨",

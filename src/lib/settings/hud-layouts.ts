@@ -35,12 +35,14 @@ export interface HudLayoutInfo<Id extends string = string> {
   credit?: HudLayoutCredit;
 }
 
-/** The game's own layouts, in picker order (Broadcast first: the default) */
+/** The game's own layouts, in picker order (Blade first: the default) */
 export const BUILT_IN_HUD_LAYOUTS = [
-  { id: "broadcast", get label() { return t("game.hudLayouts.broadcast"); }, get detail() { return t("game.hudLayouts.broadcastDetail"); } },
-  { id: "dash", get label() { return t("game.hudLayouts.dash"); }, get detail() { return t("game.hudLayouts.dashDetail"); } },
+  { id: "blade", get label() { return t("game.hudLayouts.blade"); }, get detail() { return t("game.hudLayouts.bladeDetail"); } },
+  { id: "trackside", get label() { return t("game.hudLayouts.trackside"); }, get detail() { return t("game.hudLayouts.tracksideDetail"); } },
+  { id: "pit-wall", get label() { return t("game.hudLayouts.pitWall"); }, get detail() { return t("game.hudLayouts.pitWallDetail"); } },
+  { id: "endurance", get label() { return t("game.hudLayouts.endurance"); }, get detail() { return t("game.hudLayouts.enduranceDetail"); } },
+  { id: "racing-line", get label() { return t("game.hudLayouts.racingLine"); }, get detail() { return t("game.hudLayouts.racingLineDetail"); } },
   { id: "telemetry", get label() { return t("game.hudLayouts.telemetry"); }, get detail() { return t("game.hudLayouts.telemetryDetail"); } },
-  { id: "classic", get label() { return t("game.hudLayouts.classic"); }, get detail() { return t("game.hudLayouts.classicDetail"); } },
   { id: "minimal", get label() { return t("game.hudLayouts.minimal"); }, get detail() { return t("game.hudLayouts.minimalDetail"); } },
   // Laid out the way a road-racing game and a Formula game lay out their race screens, drawn in the game's own look
   { id: "touring", get label() { return t("game.hudLayouts.touring"); }, get detail() { return t("game.hudLayouts.touringDetail"); } },
@@ -100,7 +102,7 @@ export const HUD_LAYOUTS: readonly HudLayoutInfo<HudPreset>[] = [...BUILT_IN_HUD
 export const HUD_PRESETS: readonly HudPreset[] = HUD_LAYOUTS.map((l) => l.id);
 
 /** The layout a new player starts on, and the one a save falls back to */
-export const DEFAULT_HUD_PRESET: HudPreset = "broadcast";
+export const DEFAULT_HUD_PRESET: HudPreset = "blade";
 
 /** A layout's entry; an id this build doesn't know gets the default's */
 export function hudLayout(id: string): HudLayoutInfo<HudPreset> {
@@ -120,10 +122,11 @@ export function showsPhoneHud(preset: HudPreset, screen: { phone: boolean; touch
 export const isHudPreset = (value: unknown): value is HudPreset => HUD_PRESETS.includes(value as HudPreset);
 
 /**
- * A saved layout id as this build reads it: a known id is kept, "engineer" (renamed) moves to Telemetry, and
- * anything else (an older or newer build's layout, a hand-edited save) falls back to Broadcast
+ * A saved layout id as this build reads it: a known id is kept, "engineer" (renamed) and "dash" (retired: Telemetry
+ * is its dash plus tyres, channels and inputs) move to Telemetry, and anything else (the retired Broadcast and
+ * Classic, an older or newer build's layout, a hand-edited save) falls back to the default, Blade
  */
 export function parseHudPreset(value: unknown): HudPreset {
-  if (value === "engineer") return "telemetry";
+  if (value === "engineer" || value === "dash") return "telemetry";
   return isHudPreset(value) ? value : DEFAULT_HUD_PRESET;
 }

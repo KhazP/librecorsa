@@ -862,12 +862,9 @@
     "revsUp": "Tăng vòng tua"
   },
   "speedCluster": {
-    "region": "Cụm tốc độ",
     "minimalRegion": "Tốc độ và cấp số",
     "shiftLights": "Đèn chuyển số: {lit} trên {total} đèn sáng",
     "gearLabel": "Số {gear}",
-    "gear": "Số",
-    "shift": "Lên số",
     "aeroToggle": "{label}: bật/tắt",
     "drsTitle": "DRS ({key}): cánh gió sau, trong vùng DRS; khi đua chính chỉ mở được nếu cách xe trước dưới 1 s tại điểm đo, từ vòng 3",
     "straightModeTitle": "Straight Mode ({key}): mở cả hai cánh gió trên đường thẳng; nhấn ngay trước đoạn thẳng sẽ tự mở khi vào đoạn",
@@ -895,10 +892,7 @@
     "throttleTitle": "Chân ga",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Mô-men lái / Phản hồi lực (Đỏ = Quá ngưỡng)",
-    "latG": "{g} g ngang",
-    "ersBattery": "Mức pin ERS",
-    "rpmBand": "Dải vòng tua động cơ (RPM)"
+    "forceTitle": "Mô-men lái / Phản hồi lực (Đỏ = Quá ngưỡng)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Khoảng nhiệt hoạt động của gai lốp",
     "window": "Ngưỡng",
     "miniTitle": "{corner}: gai lốp {temps} · {pressure} · phanh {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Lốp"
   },
   "weatherBadge": {
     "region": "Thời tiết",

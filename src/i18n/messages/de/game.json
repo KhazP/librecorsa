@@ -324,14 +324,8 @@
     "no": "Nein"
   },
   "hudLayouts": {
-    "broadcast": "Broadcast",
-    "broadcastDetail": "TV-Grafiken: Turm, Karte, Telemetrieleiste",
-    "dash": "Lenkraddisplay",
-    "dashDetail": "Ein Lenkraddisplay, tief und mittig",
     "telemetry": "Telemetrie",
     "telemetryDetail": "Das Display plus Reifen, G, Leistung und Eingaben",
-    "classic": "Klassisch",
-    "classicDetail": "Die ursprünglichen Eckpanels",
     "minimal": "Minimal",
     "minimalDetail": "Nur Tempo, Gang und Runde",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "Grafik nach GPU-Reset auf Niedrig gesetzt.",
     "loadFailedStaying": "Laden der Strecke fehlgeschlagen. {circuit} bleibt geladen.",
     "loadFailedDefault": "Laden der Strecke fehlgeschlagen. {circuit} geladen."
-  },
-  "minimap": {
-    "map": "Streckenkarte",
-    "mapAtTurn": "Streckenkarte; du bist in Kurve {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, one {# Kurve} other {# Kurven}}",
-    "sector": "Sektor {sector}",
-    "elevation": "Höhenprofil",
-    "altitude": "Höhe {height}",
-    "grade": "STEIGUNG {grade} %",
-    "profileStart": "Start {height}",
-    "profileStartFinish": "S/Z {height}"
   },
   "source": {
     "sourceOf": "Quelle von {title}",

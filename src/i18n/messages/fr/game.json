@@ -324,14 +324,8 @@
     "no": "Non"
   },
   "hudLayouts": {
-    "broadcast": "Diffusion TV",
-    "broadcastDetail": "Graphismes TV : tableau des temps, carte, bandeau de télémétrie",
-    "dash": "Écran de volant",
-    "dashDetail": "Un écran de volant, bas et centré",
     "telemetry": "Télémétrie",
     "telemetryDetail": "L’écran de volant plus pneus, G, puissance et commandes",
-    "classic": "Classique",
-    "classicDetail": "Les panneaux d’angle d’origine",
     "minimal": "Minimal",
     "minimalDetail": "Vitesse, rapport et tour uniquement",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "Qualité graphique réglée sur Basse après une réinitialisation du GPU.",
     "loadFailedStaying": "Échec du chargement du circuit. Reste sur {circuit}.",
     "loadFailedDefault": "Échec du chargement du circuit. {circuit} chargé."
-  },
-  "minimap": {
-    "map": "Carte du circuit",
-    "mapAtTurn": "Carte du circuit ; vous êtes au virage {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, one {# virage} other {# virages}}",
-    "sector": "Secteur {sector}",
-    "elevation": "Dénivelé",
-    "altitude": "Alt. {height}",
-    "grade": "PENTE {grade} %",
-    "profileStart": "Départ {height}",
-    "profileStartFinish": "D/A {height}"
   },
   "source": {
     "sourceOf": "Source de {title}",

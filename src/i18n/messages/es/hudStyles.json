@@ -22,14 +22,7 @@
     "circuitMap": "Mapa del circuito",
     "sector": "Sector {sector}",
     "sectorTitle": "Sector {sector} · {corner}",
-    "straight": "Recta",
-    "chasing": "Persiguiendo",
-    "tyreTemps": "Temperaturas de neumáticos, interior / centro / exterior; un borde discontinuo marca una condición del neumático",
-    "fuel": "Combust.",
-    "delta": "Delta",
-    "predicted": "Prevista",
-    "quicker": "Más rápida que tu mejor",
-    "slower": "Más lenta que tu mejor"
+    "straight": "Recta"
   },
   "wheelDash": {
     "wheelDash": "Pantalla del volante",
@@ -48,8 +41,7 @@
     "ahead": "Delante",
     "last": "Última",
     "lead": "Líder",
-    "fuel": "Comb.",
-    "tagLap": "Vuelta"
+    "fuel": "Comb."
   },
   "telemetry": {
     "lapAnalysis": "Análisis de vuelta",

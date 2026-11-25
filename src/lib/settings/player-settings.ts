@@ -235,9 +235,9 @@ export interface KeyboardTuning extends DeviceAssistTuning {
 }
 
 /**
- * In-race HUD style: Broadcast (TV graphics), Wheel Dash (steering-wheel screen), Telemetry (the dash
- * plus tyres, channels and inputs), the earlier Classic layout and its Minimal cut, or a third-party layout
- * (the list and the credits: hud-layouts.ts)
+ * In-race HUD style: Blade (the default), Trackside, Pit wall, Endurance, Racing line, Telemetry (a wheel dash plus
+ * tyres, channels and inputs), Minimal, the GT-like and F1-like layouts, or a third-party layout (the list and the
+ * credits: hud-layouts.ts)
  */
 export type { HudPreset } from "@/lib/settings/hud-layouts";
 export { HUD_PRESETS } from "@/lib/settings/hud-layouts";

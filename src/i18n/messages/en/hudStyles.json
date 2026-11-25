@@ -22,14 +22,7 @@
     "circuitMap": "Circuit map",
     "sector": "Sector {sector}",
     "sectorTitle": "Sector {sector} · {corner}",
-    "straight": "Straight",
-    "chasing": "Chasing",
-    "tyreTemps": "Tyre temperatures, inner / middle / outer; a dashed edge marks a tyre condition",
-    "fuel": "Fuel",
-    "delta": "Delta",
-    "predicted": "Predicted",
-    "quicker": "Quicker than your best",
-    "slower": "Slower than your best"
+    "straight": "Straight"
   },
   "wheelDash": {
     "wheelDash": "Wheel dash",
@@ -48,8 +41,7 @@
     "ahead": "Ahead",
     "last": "Last",
     "lead": "Lead",
-    "fuel": "Fuel",
-    "tagLap": "Lap"
+    "fuel": "Fuel"
   },
   "telemetry": {
     "lapAnalysis": "Lap analysis",

@@ -22,14 +22,7 @@
     "circuitMap": "賽道地圖",
     "sector": "第 {sector} 賽段",
     "sectorTitle": "第 {sector} 賽段 · {corner}",
-    "straight": "直線",
-    "chasing": "追近",
-    "tyreTemps": "輪胎溫度（內／中／外）；虛線邊框代表輪胎有異常狀態",
-    "fuel": "燃油",
-    "delta": "時間差",
-    "predicted": "預測",
-    "quicker": "快於你的最佳單圈",
-    "slower": "慢於你的最佳單圈"
+    "straight": "直線"
   },
   "wheelDash": {
     "wheelDash": "方向盤儀錶",
@@ -48,8 +41,7 @@
     "ahead": "前車",
     "last": "上圈",
     "lead": "領先",
-    "fuel": "燃油",
-    "tagLap": "圈數"
+    "fuel": "燃油"
   },
   "telemetry": {
     "lapAnalysis": "單圈分析",

@@ -148,7 +148,7 @@ const TyreDetail: React.FC<{ t: CarTelemetry; compound: TireCompound }> = ({ t, 
 };
 
 /**
- * Telemetry: the Wheel Dash with the engineer's pit wall around it. Session card and sector
+ * Telemetry: the wheel dash (WheelDashHud.tsx) with the engineer's pit wall around it. Session card and sector
  * analysis top-left, map and the G / power card top-right, inputs and tyre detail bottom-left,
  * the car's channels, wheel force and the tuner bottom-right. The side panels give way on small
  * screens, leaving the dash.

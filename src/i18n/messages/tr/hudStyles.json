@@ -22,14 +22,7 @@
     "circuitMap": "Pist haritası",
     "sector": "Sektör {sector}",
     "sectorTitle": "Sektör {sector} · {corner}",
-    "straight": "Düzlük",
-    "chasing": "Takipte",
-    "tyreTemps": "Lastik sıcaklıkları, iç / orta / dış; kesikli kenar bir lastik durumunu gösterir",
-    "fuel": "Yakıt",
-    "delta": "Delta",
-    "predicted": "Tahmini",
-    "quicker": "En iyinden daha hızlı",
-    "slower": "En iyinden daha yavaş"
+    "straight": "Düzlük"
   },
   "wheelDash": {
     "wheelDash": "Direksiyon ekranı",
@@ -48,8 +41,7 @@
     "ahead": "Önde",
     "last": "Son",
     "lead": "Lider",
-    "fuel": "Yakıt",
-    "tagLap": "Tur"
+    "fuel": "Yakıt"
   },
   "telemetry": {
     "lapAnalysis": "Tur analizi",

@@ -22,14 +22,7 @@
     "circuitMap": "Mappa del circuito",
     "sector": "Settore {sector}",
     "sectorTitle": "Settore {sector} · {corner}",
-    "straight": "Rettilineo",
-    "chasing": "A caccia",
-    "tyreTemps": "Temperature gomme, interno / centro / esterno; un bordo tratteggiato indica una condizione della gomma",
-    "fuel": "Carb.",
-    "delta": "Delta",
-    "predicted": "Previsto",
-    "quicker": "Più veloce del tuo migliore",
-    "slower": "Più lento del tuo migliore"
+    "straight": "Rettilineo"
   },
   "wheelDash": {
     "wheelDash": "Display volante",
@@ -48,8 +41,7 @@
     "ahead": "Davanti",
     "last": "Ult.",
     "lead": "Leader",
-    "fuel": "Carb.",
-    "tagLap": "Giro"
+    "fuel": "Carb."
   },
   "telemetry": {
     "lapAnalysis": "Analisi del giro",

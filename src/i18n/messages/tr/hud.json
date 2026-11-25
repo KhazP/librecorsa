@@ -862,12 +862,9 @@
     "revsUp": "Devri yükselt"
   },
   "speedCluster": {
-    "region": "Hız göstergesi",
     "minimalRegion": "Hız ve vites",
     "shiftLights": "Vites ışıkları: {lit} / {total}",
     "gearLabel": "Vites {gear}",
-    "gear": "Vites",
-    "shift": "Vites at",
     "aeroToggle": "{label}: aç / kapat",
     "drsTitle": "DRS ({key}): arka kanat, DRS bölgesinde; yarışta 3. turdan itibaren algılama noktasında öndeki araçla 1 s içindeyken açılır",
     "straightModeTitle": "Straight Mode ({key}): düzlüklerde her iki kanat açılır; düzlükten hemen önce basarsan başlar başlamaz açılır",
@@ -895,10 +892,7 @@
     "throttleTitle": "Gaz girdisi",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Direksiyon torku / Force Feedback (Kırmızı = Kırpılma)",
-    "latG": "{g} g yanal",
-    "ersBattery": "ERS batarya şarjı",
-    "rpmBand": "Motor RPM bandı"
+    "forceTitle": "Direksiyon torku / Force Feedback (Kırmızı = Kırpılma)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +975,6 @@
     "windowTitle": "Lastik sırtı çalışma aralığı",
     "window": "Aralık",
     "miniTitle": "{corner}: sırt {temps} · {pressure} · fren {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Lastikler"
   },
   "weatherBadge": {
     "region": "Hava durumu",

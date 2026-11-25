@@ -324,14 +324,8 @@
     "no": "Hayır"
   },
   "hudLayouts": {
-    "broadcast": "Yayın",
-    "broadcastDetail": "TV grafikleri: sıra kulesi, harita, telemetri şeridi",
-    "dash": "Direksiyon ekranı",
-    "dashDetail": "Altta ve ortada, yarış direksiyonu ekranı",
     "telemetry": "Telemetri",
     "telemetryDetail": "Direksiyon ekranı artı lastikler, G kuvveti, güç ve girdiler",
-    "classic": "Klasik",
-    "classicDetail": "Orijinal köşe panelleri",
     "minimal": "Minimal",
     "minimalDetail": "Yalnızca hız, vites ve tur",
     "touring": "GT-Like",
@@ -843,17 +837,6 @@
     "graphicsLow": "GPU sıfırlaması sonrası grafikler Düşük olarak ayarlandı.",
     "loadFailedStaying": "Pist yüklenemedi. {circuit} pistinde kalınıyor.",
     "loadFailedDefault": "Pist yüklenemedi. {circuit} yüklendi."
-  },
-  "minimap": {
-    "map": "Pist haritası",
-    "mapAtTurn": "Pist haritası; {turn}. virajdasın",
-    "facts": "{country} · {length} {unit} · {turns, plural, one {# viraj} other {# viraj}}",
-    "sector": "Sektör {sector}",
-    "elevation": "Yükselti",
-    "altitude": "Rakım {height}",
-    "grade": "Eğim %{grade}",
-    "profileStart": "Başlangıç {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "{title} kaynağı",
