@@ -32,8 +32,8 @@ interface PlatePlace {
   heightM: number;
 }
 
-const LEFT: PlatePlace = { distanceM: 0.95, yawDeg: -25, pitchDeg: -12, widthM: 0.22, heightM: 0.11 };
-const RIGHT: PlatePlace = { distanceM: 0.95, yawDeg: 25, pitchDeg: -12, widthM: 0.24, heightM: 0.13 };
+const LEFT: PlatePlace = { distanceM: 0.95, yawDeg: -28, pitchDeg: -12, widthM: 0.22, heightM: 0.11 };
+const RIGHT: PlatePlace = { distanceM: 0.95, yawDeg: 29, pitchDeg: -12, widthM: 0.24, heightM: 0.13 };
 const CENTER: PlatePlace = { distanceM: 1.1, yawDeg: 0, pitchDeg: -6, widthM: 0.5, heightM: 0.2 };
 /** The start lights' plate, just over the horizon where the gantry is */
 const LIGHTS: PlatePlace = { distanceM: 2.2, yawDeg: 0, pitchDeg: 5, widthM: 0.7, heightM: 0.16 };
