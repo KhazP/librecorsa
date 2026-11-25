@@ -626,6 +626,23 @@
         "lime": "Hijau limau"
       }
     },
+    "stats": {
+      "title": "Statistik",
+      "note": "Semua sesimu dijumlahkan. Hanya kamu yang bisa melihatnya.",
+      "timeDriven": "Waktu mengemudi",
+      "distance": "Jarak",
+      "races": "Balapan",
+      "wins": "Kemenangan",
+      "podiums": "Podium",
+      "fastestLaps": "Lap tercepat",
+      "averageFinish": "Rata-rata finis",
+      "retirements": "Gagal finis",
+      "mostDrivenCar": "Mobil paling sering dikemudikan",
+      "mostDrivenCircuit": "Sirkuit paling sering dipakai",
+      "hoursMinutes": "{hours} j {minutes} mnt",
+      "minutes": "{minutes} mnt",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Kunci pembalap",
       "identityKey": "Kunci identitas",

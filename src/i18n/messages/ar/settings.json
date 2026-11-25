@@ -626,6 +626,23 @@
         "lime": "ليموني"
       }
     },
+    "stats": {
+      "title": "الإحصاءات",
+      "note": "مجموع كل جلساتك. لا يراها أحد غيرك.",
+      "timeDriven": "زمن القيادة",
+      "distance": "المسافة",
+      "races": "السباقات",
+      "wins": "الانتصارات",
+      "podiums": "المنصات",
+      "fastestLaps": "أسرع اللفات",
+      "averageFinish": "متوسط المركز",
+      "retirements": "الانسحابات",
+      "mostDrivenCar": "السيارة الأكثر قيادة",
+      "mostDrivenCircuit": "الحلبة الأكثر قيادة",
+      "hoursMinutes": "{hours} س {minutes} د",
+      "minutes": "{minutes} د",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "مفتاح السائق",
       "identityKey": "مفتاح الهوية",

@@ -626,6 +626,23 @@
         "lime": "Lime"
       }
     },
+    "stats": {
+      "title": "Statistiche",
+      "note": "Tutte le tue sessioni sommate. Le vedi solo tu.",
+      "timeDriven": "Tempo di guida",
+      "distance": "Distanza",
+      "races": "Gare",
+      "wins": "Vittorie",
+      "podiums": "Podi",
+      "fastestLaps": "Giri più veloci",
+      "averageFinish": "Piazzamento medio",
+      "retirements": "Ritiri",
+      "mostDrivenCar": "Auto più guidata",
+      "mostDrivenCircuit": "Circuito più percorso",
+      "hoursMinutes": "{hours} h {minutes} min",
+      "minutes": "{minutes} min",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Chiave del pilota",
       "identityKey": "Chiave identità",

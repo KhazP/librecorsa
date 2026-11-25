@@ -95,7 +95,11 @@
     "potential": "{delta} s Potenzial",
     "allBestSectors": "Alle Bestzeiten der Sektoren in einer Runde",
     "offline": "Bestenliste offline. Lokale Zeiten werden angezeigt.",
-    "disabled": "Online-Bestenliste deaktiviert. Lokale Zeiten werden angezeigt."
+    "disabled": "Online-Bestenliste deaktiviert. Lokale Zeiten werden angezeigt.",
+    "viewLabel": "Rundenzeiten-Ansicht",
+    "tabTimes": "Rundenzeiten",
+    "tabAnalysis": "Telemetrie",
+    "analysisEmpty": "Beende eine Runde, um die Rundentelemetrie anzuzeigen."
   },
   "boardWidget": {
     "modes": {
@@ -393,7 +397,6 @@
     "queued": "In Warteschlange",
     "close": "Schließen",
     "saveGhost": "Ghost-Datei speichern",
-    "analyse": "Runde analysieren",
     "signInHint": "Melde dich an, um deine besten Runden und Fahrernamen auf jedem Gerät zu behalten.",
     "signIn": "Anmelden",
     "driver": "Fahrer <b>{name}</b>",
@@ -410,7 +413,8 @@
       "faster": "Schneller",
       "slower": "Langsamer",
       "same": "Gleich"
-    }
+    },
+    "analyzeLap": "Rundentelemetrie"
   },
   "raceResults": {
     "dialog": "Rennergebnis",
@@ -1127,44 +1131,55 @@
     "cancel": "Abbrechen",
     "done": "Fertig"
   },
-  "lapAnalysis": {
-    "viewLabel": "Ansicht der Bestenliste",
-    "tabTimes": "Rundenzeiten",
-    "tabAnalysis": "Analyse",
-    "title": "Rundenvergleich",
-    "description": "Die Referenzrunde ist gestrichelt, die verglichene Runde durchgezogen. Zeige auf ein Diagramm, um beide Runden dort abzulesen.",
-    "reference": "Referenzrunde",
-    "compared": "Verglichene Runde",
-    "versus": "vs.",
-    "lapBest": "Persönliche Bestzeit · {time}",
-    "lapLatest": "Letzte Runde · {time}",
-    "lapNumber": "Runde {lap} · {time}",
-    "emptyNoLaps": "Fahre hier eine Runde zu Ende, um sie mit deiner Bestzeit zu vergleichen.",
-    "emptyOneLap": "Fahre hier eine weitere Runde zu Ende, um beide zu vergleichen.",
-    "brake": "Bremse",
-    "speed": "Geschwindigkeit ({unit})",
-    "throttle": "Gas",
-    "gear": "Gang",
-    "steering": "Lenkung",
-    "gap": "Zeitabstand (s)",
-    "percent": "{value} %",
-    "distance": "{m} m",
-    "sectorEnd": "Ende S{sector} · {m} m",
+  "lapTelemetry": {
+    "title": "Rundentelemetrie",
+    "description": "Referenzrunde (gestrichelt) vs. verglichene Runde (durchgezogen) · Kanal zum Prüfen überfahren",
+    "reference": "Referenz",
+    "compared": "Vergleich",
+    "allTimeBest": "Persönliche Bestzeit",
+    "latestLap": "Letzte Runde",
+    "sessionLap": "Runde {lap}",
+    "invalidTag": "Ungültig",
+    "channels": {
+      "brake": "Bremse",
+      "speed": "Geschwindigkeit",
+      "throttle": "Gas",
+      "gear": "Gang",
+      "steering": "Lenkung",
+      "delta": "Zeitdifferenz"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "s"
+    },
     "drivingLine": "Fahrlinie",
-    "legendMostGained": "Meister Gewinn",
-    "legendGained": "Gewonnen",
-    "legendEven": "Gleichauf",
-    "legendLost": "Verloren",
+    "startFinish": "S/Z",
+    "legend": {
+      "fastest": "Schnellste",
+      "faster": "Schneller",
+      "same": "Gleich",
+      "slower": "Langsamer"
+    },
     "sectors": "Sektoren",
     "sectorShort": "S{sector}",
-    "notes": "Wo die Zeit blieb",
-    "turn": "Kurve {turn}",
-    "turnNamed": "Kurve {turn} ({name})",
-    "noteSectorGained": "Sektor {sector}: {time} s schneller",
-    "noteSectorLost": "Sektor {sector}: {time} s langsamer",
-    "noteApexMore": "{turn}: {speed} {unit} schneller am langsamsten Punkt",
-    "noteApexLess": "{turn}: {speed} {unit} langsamer am langsamsten Punkt",
-    "noteBrakeLater": "{turn}: {distance} m später gebremst",
-    "noteBrakeEarlier": "{turn}: {distance} m früher gebremst"
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "Bei {distance}",
+    "insights": "Wichtigste Beobachtungen",
+    "noInsights": "Die Runden liegen dicht beieinander ohne große Ausreißer.",
+    "insight": {
+      "sectorLossTitle": "Zeitverlust in Sektor {sector}",
+      "sectorLossDetail": "{seconds} s in Sektor {sector} verloren.",
+      "sectorGainTitle": "Zeitgewinn in Sektor {sector}",
+      "sectorGainDetail": "{seconds} s in Sektor {sector} gewonnen.",
+      "apexTitle": "Scheitelgeschwindigkeit Kurve {turn}",
+      "apexNamedTitle": "Scheitelgeschwindigkeit Kurve {turn} ({name})",
+      "apexFasterDetail": "{speed} {unit} höhere Mindestgeschwindigkeit durch Kurve {turn}.",
+      "apexSlowerDetail": "{speed} {unit} niedrigere Mindestgeschwindigkeit durch Kurve {turn}.",
+      "brakeTitle": "Bremspunkt Kurve {turn}",
+      "brakeNamedTitle": "Bremspunkt Kurve {turn} ({name})",
+      "brakeEarlierDetail": "~{distance} {unit} früher für Kurve {turn} gebremst.",
+      "brakeLaterDetail": "~{distance} {unit} später für Kurve {turn} gebremst."
+    }
   }
 }

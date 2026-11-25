@@ -626,6 +626,23 @@
         "lime": "Citron vert"
       }
     },
+    "stats": {
+      "title": "Statistiques",
+      "note": "Toutes vos sessions cumulées. Elles ne sont visibles que par vous.",
+      "timeDriven": "Temps de conduite",
+      "distance": "Distance",
+      "races": "Courses",
+      "wins": "Victoires",
+      "podiums": "Podiums",
+      "fastestLaps": "Tours les plus rapides",
+      "averageFinish": "Classement moyen",
+      "retirements": "Abandons",
+      "mostDrivenCar": "Voiture la plus conduite",
+      "mostDrivenCircuit": "Circuit le plus parcouru",
+      "hoursMinutes": "{hours} h {minutes} min",
+      "minutes": "{minutes} min",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Clé de pilote",
       "identityKey": "Clé d’identité",

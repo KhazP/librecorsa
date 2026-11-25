@@ -95,7 +95,11 @@
     "potential": "{delta} s potansiyel",
     "allBestSectors": "Tüm en iyi sektörler tek turda",
     "offline": "Tur tablosu çevrimdışı. Yerel süreler gösteriliyor.",
-    "disabled": "Çevrimiçi tur tablosu kapalı. Yerel süreler gösteriliyor."
+    "disabled": "Çevrimiçi tur tablosu kapalı. Yerel süreler gösteriliyor.",
+    "viewLabel": "Tur zamanları görünümü",
+    "tabTimes": "Tur zamanları",
+    "tabAnalysis": "Telemetri",
+    "analysisEmpty": "Tur telemetrisini görmek için bir tur tamamlayın."
   },
   "boardWidget": {
     "modes": {
@@ -393,7 +397,6 @@
     "queued": "Sırada",
     "close": "Kapat",
     "saveGhost": "Hayalet dosyasını kaydet",
-    "analyse": "Turu analiz et",
     "signInHint": "En iyi turlarını ve pilot adlarını her cihazda tutmak için giriş yap.",
     "signIn": "Giriş yap",
     "driver": "Pilot <b>{name}</b>",
@@ -410,7 +413,8 @@
       "faster": "Daha hızlı",
       "slower": "Daha yavaş",
       "same": "Aynı"
-    }
+    },
+    "analyzeLap": "Tur telemetrisi"
   },
   "raceResults": {
     "dialog": "Yarış sonucu",
@@ -1127,44 +1131,55 @@
     "cancel": "İptal",
     "done": "Tamam"
   },
-  "lapAnalysis": {
-    "viewLabel": "Tur tablosu görünümü",
-    "tabTimes": "Tur zamanları",
-    "tabAnalysis": "Analiz",
-    "title": "Tur karşılaştırması",
-    "description": "Referans tur kesikli, karşılaştırılan tur düz çizgiyle gösterilir. O noktadaki iki turu da görmek için grafiğin üzerine gel.",
-    "reference": "Referans tur",
-    "compared": "Karşılaştırılan tur",
-    "versus": "vs",
-    "lapBest": "Kişisel en iyi · {time}",
-    "lapLatest": "Son tur · {time}",
-    "lapNumber": "Tur {lap} · {time}",
-    "emptyNoLaps": "En iyi turunla karşılaştırmak için burada bir tur tamamla.",
-    "emptyOneLap": "İkisini karşılaştırmak için burada bir tur daha tamamla.",
-    "brake": "Fren",
-    "speed": "Hız ({unit})",
-    "throttle": "Gaz",
-    "gear": "Vites",
-    "steering": "Direksiyon",
-    "gap": "Zaman farkı (s)",
-    "percent": "%{value}",
-    "distance": "{m} m",
-    "sectorEnd": "S{sector} bitişi · {m} m",
-    "drivingLine": "Sürüş çizgisi",
-    "legendMostGained": "En çok kazanç",
-    "legendGained": "Kazanç",
-    "legendEven": "Eşit",
-    "legendLost": "Kayıp",
+  "lapTelemetry": {
+    "title": "Tur telemetrisi",
+    "description": "Referans tur (kesikli) vs karşılaştırılan tur (düz) · İncelemek için bir kanalın üzerine gelin",
+    "reference": "Referans",
+    "compared": "Karşılaştırılan",
+    "allTimeBest": "Kişisel en iyi",
+    "latestLap": "Son tur",
+    "sessionLap": "Tur {lap}",
+    "invalidTag": "Geçersiz",
+    "channels": {
+      "brake": "Fren",
+      "speed": "Hız",
+      "throttle": "Gaz",
+      "gear": "Vites",
+      "steering": "Direksiyon",
+      "delta": "Zaman farkı"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "sn"
+    },
+    "drivingLine": "Yarış çizgisi",
+    "startFinish": "B/F",
+    "legend": {
+      "fastest": "En hızlı",
+      "faster": "Daha hızlı",
+      "same": "Aynı",
+      "slower": "Daha yavaş"
+    },
     "sectors": "Sektörler",
     "sectorShort": "S{sector}",
-    "notes": "Zaman nerede değişti",
-    "turn": "{turn}. viraj",
-    "turnNamed": "{turn}. viraj ({name})",
-    "noteSectorGained": "Sektör {sector}: {time} s daha hızlı",
-    "noteSectorLost": "Sektör {sector}: {time} s daha yavaş",
-    "noteApexMore": "{turn}: en yavaş noktada {speed} {unit} daha hızlı",
-    "noteApexLess": "{turn}: en yavaş noktada {speed} {unit} daha yavaş",
-    "noteBrakeLater": "{turn}: {distance} m daha geç fren",
-    "noteBrakeEarlier": "{turn}: {distance} m daha erken fren"
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "{distance} noktasında",
+    "insights": "Öne çıkanlar",
+    "noInsights": "Turlar birbirine çok yakın, belirgin bir fark yok.",
+    "insight": {
+      "sectorLossTitle": "Sektör {sector} zaman kaybı",
+      "sectorLossDetail": "Sektör {sector}'de {seconds} sn kaybettiniz.",
+      "sectorGainTitle": "Sektör {sector} zaman kazancı",
+      "sectorGainDetail": "Sektör {sector}'de {seconds} sn kazandınız.",
+      "apexTitle": "Viraj {turn} apeks hızı",
+      "apexNamedTitle": "Viraj {turn} ({name}) apeks hızı",
+      "apexFasterDetail": "Viraj {turn} geçişinde minimum hızınız {speed} {unit} daha yüksekti.",
+      "apexSlowerDetail": "Viraj {turn} geçişinde minimum hızınız {speed} {unit} daha düşüktü.",
+      "brakeTitle": "Viraj {turn} fren noktası",
+      "brakeNamedTitle": "Viraj {turn} ({name}) fren noktası",
+      "brakeEarlierDetail": "Viraj {turn} girişinde ~{distance} {unit} daha erken fren yaptınız.",
+      "brakeLaterDetail": "Viraj {turn} girişinde ~{distance} {unit} daha geç fren yaptınız."
+    }
   }
 }

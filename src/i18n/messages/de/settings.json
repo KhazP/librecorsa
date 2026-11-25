@@ -626,6 +626,23 @@
         "lime": "Limette"
       }
     },
+    "stats": {
+      "title": "Statistik",
+      "note": "Alle Fahrten zusammengerechnet. Nur du siehst diese Werte.",
+      "timeDriven": "Fahrzeit",
+      "distance": "Distanz",
+      "races": "Rennen",
+      "wins": "Siege",
+      "podiums": "Podien",
+      "fastestLaps": "Schnellste Runden",
+      "averageFinish": "Ø Platzierung",
+      "retirements": "Ausfälle",
+      "mostDrivenCar": "Meistgefahrenes Auto",
+      "mostDrivenCircuit": "Meistgefahrene Strecke",
+      "hoursMinutes": "{hours} Std. {minutes} Min.",
+      "minutes": "{minutes} Min.",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Fahrerschlüssel",
       "identityKey": "Identitätsschlüssel",

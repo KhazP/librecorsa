@@ -626,6 +626,23 @@
         "lime": "Lime"
       }
     },
+    "stats": {
+      "title": "Your stats",
+      "note": "Every session added up. Only you see these.",
+      "timeDriven": "Time driven",
+      "distance": "Distance",
+      "races": "Races",
+      "wins": "Wins",
+      "podiums": "Podiums",
+      "fastestLaps": "Fastest laps",
+      "averageFinish": "Average finish",
+      "retirements": "Retirements",
+      "mostDrivenCar": "Most driven car",
+      "mostDrivenCircuit": "Most driven circuit",
+      "hoursMinutes": "{hours} h {minutes} min",
+      "minutes": "{minutes} min",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Driver key",
       "identityKey": "Identity key",

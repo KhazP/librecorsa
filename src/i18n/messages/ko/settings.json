@@ -626,6 +626,23 @@
         "lime": "라임"
       }
     },
+    "stats": {
+      "title": "통계",
+      "note": "모든 세션을 합산한 기록입니다. 본인만 볼 수 있습니다.",
+      "timeDriven": "주행 시간",
+      "distance": "주행 거리",
+      "races": "레이스",
+      "wins": "우승",
+      "podiums": "포디움",
+      "fastestLaps": "패스티스트 랩",
+      "averageFinish": "평균 순위",
+      "retirements": "리타이어",
+      "mostDrivenCar": "최다 주행 차량",
+      "mostDrivenCircuit": "최다 주행 서킷",
+      "hoursMinutes": "{hours}시간 {minutes}분",
+      "minutes": "{minutes}분",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "드라이버 키",
       "identityKey": "신원 키",

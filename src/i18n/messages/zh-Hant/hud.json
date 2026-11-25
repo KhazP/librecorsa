@@ -95,7 +95,11 @@
     "potential": "潛力 {delta} s",
     "allBestSectors": "單圈已囊括全部最佳賽段",
     "offline": "圈速榜目前離線，改為顯示本機圈速。",
-    "disabled": "線上圈速榜已停用，改為顯示本機圈速。"
+    "disabled": "線上圈速榜已停用，改為顯示本機圈速。",
+    "viewLabel": "圈速檢視方式",
+    "tabTimes": "圈速紀錄",
+    "tabAnalysis": "單圈遙測",
+    "analysisEmpty": "完成一圈即可檢視單圈遙測分析。"
   },
   "boardWidget": {
     "modes": {
@@ -393,7 +397,6 @@
     "queued": "已排入佇列",
     "close": "關閉",
     "saveGhost": "儲存幽靈車檔案",
-    "analyse": "分析單圈",
     "signInHint": "登入後，即可在每部裝置上保留你的最佳單圈與車手名稱。",
     "signIn": "登入",
     "driver": "車手 <b>{name}</b>",
@@ -410,7 +413,8 @@
       "faster": "較快",
       "slower": "較慢",
       "same": "相同"
-    }
+    },
+    "analyzeLap": "單圈遙測"
   },
   "raceResults": {
     "dialog": "賽事結果",
@@ -1127,44 +1131,55 @@
     "cancel": "取消",
     "done": "完成"
   },
-  "lapAnalysis": {
-    "viewLabel": "圈速榜檢視",
-    "tabTimes": "圈速紀錄",
-    "tabAnalysis": "分析",
-    "title": "單圈比較",
-    "description": "基準單圈以虛線表示，比較單圈以實線表示。將游標移至圖表上即可查看該處兩圈的數據。",
-    "reference": "基準單圈",
-    "compared": "比較單圈",
-    "versus": "vs",
-    "lapBest": "個人最佳 · {time}",
-    "lapLatest": "最近一圈 · {time}",
-    "lapNumber": "第 {lap} 圈 · {time}",
-    "emptyNoLaps": "在這裡完成一圈即可與你的最佳單圈比較。",
-    "emptyOneLap": "在這裡再完成一圈即可比較兩圈表現。",
-    "brake": "煞車",
-    "speed": "車速（{unit}）",
-    "throttle": "油門",
-    "gear": "檔位",
-    "steering": "轉向",
-    "gap": "時間差（s）",
-    "percent": "{value}%",
-    "distance": "{m} m",
-    "sectorEnd": "S{sector} 終點 · {m} m",
-    "drivingLine": "行駛路線",
-    "legendMostGained": "大幅領先",
-    "legendGained": "領先",
-    "legendEven": "持平",
-    "legendLost": "落後",
-    "sectors": "賽段",
+  "lapTelemetry": {
+    "title": "單圈遙測",
+    "description": "基準圈（虛線）對比分析圈（實線）· 游標移至任一頻道檢視數值",
+    "reference": "基準圈",
+    "compared": "分析圈",
+    "allTimeBest": "個人最佳",
+    "latestLap": "最新一圈",
+    "sessionLap": "第 {lap} 圈",
+    "invalidTag": "無效",
+    "channels": {
+      "brake": "煞車",
+      "speed": "車速",
+      "throttle": "油門",
+      "gear": "檔位",
+      "steering": "轉向",
+      "delta": "時間差"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "秒"
+    },
+    "drivingLine": "行車路線",
+    "startFinish": "起終點",
+    "legend": {
+      "fastest": "最快",
+      "faster": "較快",
+      "same": "相同",
+      "slower": "較慢"
+    },
+    "sectors": "計時區段",
     "sectorShort": "S{sector}",
-    "notes": "時間增減關鍵",
-    "turn": "第 {turn} 彎",
-    "turnNamed": "第 {turn} 彎（{name}）",
-    "noteSectorGained": "第 {sector} 賽段：快 {time} s",
-    "noteSectorLost": "第 {sector} 賽段：慢 {time} s",
-    "noteApexMore": "{turn}：最低速點快 {speed} {unit}",
-    "noteApexLess": "{turn}：最低速點慢 {speed} {unit}",
-    "noteBrakeLater": "{turn}：延後 {distance} m 煞車",
-    "noteBrakeEarlier": "{turn}：提前 {distance} m 煞車"
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "位置 {distance}",
+    "insights": "重點觀察",
+    "noInsights": "兩圈表現非常接近，沒有明顯落差。",
+    "insight": {
+      "sectorLossTitle": "第 {sector} 區段損失時間",
+      "sectorLossDetail": "在第 {sector} 區段慢了 {seconds} 秒。",
+      "sectorGainTitle": "第 {sector} 區段領先時間",
+      "sectorGainDetail": "在第 {sector} 區段快了 {seconds} 秒。",
+      "apexTitle": "第 {turn} 彎彎心車速",
+      "apexNamedTitle": "第 {turn} 彎（{name}）彎心車速",
+      "apexFasterDetail": "通過第 {turn} 彎的最低車速高了 {speed} {unit}。",
+      "apexSlowerDetail": "通過第 {turn} 彎的最低車速低了 {speed} {unit}。",
+      "brakeTitle": "第 {turn} 彎煞車點",
+      "brakeNamedTitle": "第 {turn} 彎（{name}）煞車點",
+      "brakeEarlierDetail": "進第 {turn} 彎時提早約 {distance} {unit} 煞車。",
+      "brakeLaterDetail": "進第 {turn} 彎時延後約 {distance} {unit} 煞車。"
+    }
   }
 }

@@ -95,7 +95,11 @@
     "potential": "Potensi {delta} s",
     "allBestSectors": "Semua sektor terbaik dalam satu lap",
     "offline": "Papan peringkat offline. Menampilkan waktu lokal.",
-    "disabled": "Papan peringkat daring nonaktif. Menampilkan waktu lokal."
+    "disabled": "Papan peringkat daring nonaktif. Menampilkan waktu lokal.",
+    "viewLabel": "Tampilan waktu lap",
+    "tabTimes": "Waktu Lap",
+    "tabAnalysis": "Telemetri",
+    "analysisEmpty": "Selesaikan satu lap untuk melihat telemetri lap."
   },
   "boardWidget": {
     "modes": {
@@ -393,7 +397,6 @@
     "queued": "Dalam antrean",
     "close": "Tutup",
     "saveGhost": "Simpan file ghost",
-    "analyse": "Analisis lap",
     "signInHint": "Masuk agar lap terbaik dan nama pembalapmu tersimpan di semua perangkat.",
     "signIn": "Masuk",
     "driver": "Pembalap <b>{name}</b>",
@@ -410,7 +413,8 @@
       "faster": "Lebih cepat",
       "slower": "Lebih lambat",
       "same": "Sama"
-    }
+    },
+    "analyzeLap": "Telemetri lap"
   },
   "raceResults": {
     "dialog": "Hasil balapan",
@@ -1127,44 +1131,55 @@
     "cancel": "Batal",
     "done": "Selesai"
   },
-  "lapAnalysis": {
-    "viewLabel": "Tampilan papan waktu lap",
-    "tabTimes": "Waktu lap",
-    "tabAnalysis": "Analisis",
-    "title": "Perbandingan lap",
-    "description": "Lap referensi bergaris putus-putus, lap yang dibandingkan bergaris penuh. Arahkan ke grafik untuk melihat kedua lap di titik tersebut.",
-    "reference": "Lap referensi",
-    "compared": "Lap pembanding",
-    "versus": "vs",
-    "lapBest": "Rekor pribadi · {time}",
-    "lapLatest": "Lap terakhir · {time}",
-    "lapNumber": "Lap {lap} · {time}",
-    "emptyNoLaps": "Selesaikan satu lap di sini untuk membandingkannya dengan rekor terbaikmu.",
-    "emptyOneLap": "Selesaikan satu lap lagi di sini untuk membandingkan keduanya.",
-    "brake": "Rem",
-    "speed": "Kecepatan ({unit})",
-    "throttle": "Gas",
-    "gear": "Gigi",
-    "steering": "Kemudi",
-    "gap": "Selisih waktu (s)",
-    "percent": "{value}%",
-    "distance": "{m} m",
-    "sectorEnd": "Akhir S{sector} · {m} m",
-    "drivingLine": "Jalur berkendara",
-    "legendMostGained": "Paling hemat",
-    "legendGained": "Lebih cepat",
-    "legendEven": "Sama",
-    "legendLost": "Lebih lambat",
+  "lapTelemetry": {
+    "title": "Telemetri lap",
+    "description": "Lap referensi (putus-putus) vs lap pembanding (penuh) · Arahkan kursor ke saluran mana pun",
+    "reference": "Referensi",
+    "compared": "Pembanding",
+    "allTimeBest": "Rekor pribadi",
+    "latestLap": "Lap terakhir",
+    "sessionLap": "Lap {lap}",
+    "invalidTag": "Tidak sah",
+    "channels": {
+      "brake": "Rem",
+      "speed": "Kecepatan",
+      "throttle": "Gas",
+      "gear": "Gigi",
+      "steering": "Kemudi",
+      "delta": "Selisih waktu"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "d"
+    },
+    "drivingLine": "Garis balap",
+    "startFinish": "S/F",
+    "legend": {
+      "fastest": "Tercepat",
+      "faster": "Lebih cepat",
+      "same": "Sama",
+      "slower": "Lebih lambat"
+    },
     "sectors": "Sektor",
     "sectorShort": "S{sector}",
-    "notes": "Rincian selisih waktu",
-    "turn": "Tikungan {turn}",
-    "turnNamed": "Tikungan {turn} ({name})",
-    "noteSectorGained": "Sektor {sector}: {time} s lebih cepat",
-    "noteSectorLost": "Sektor {sector}: {time} s lebih lambat",
-    "noteApexMore": "{turn}: {speed} {unit} lebih cepat di titik paling lambat",
-    "noteApexLess": "{turn}: {speed} {unit} lebih lambat di titik paling lambat",
-    "noteBrakeLater": "{turn}: mengerem {distance} m lebih lambat",
-    "noteBrakeEarlier": "{turn}: mengerem {distance} m lebih awal"
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "Di {distance}",
+    "insights": "Temuan utama",
+    "noInsights": "Kedua lap sangat dekat tanpa perbedaan besar.",
+    "insight": {
+      "sectorLossTitle": "Kehilangan waktu di Sektor {sector}",
+      "sectorLossDetail": "Tertinggal {seconds} d di Sektor {sector}.",
+      "sectorGainTitle": "Keunggulan waktu di Sektor {sector}",
+      "sectorGainDetail": "Lebih cepat {seconds} d di Sektor {sector}.",
+      "apexTitle": "Kecepatan apex Tikungan {turn}",
+      "apexNamedTitle": "Kecepatan apex Tikungan {turn} ({name})",
+      "apexFasterDetail": "Kecepatan minimum {speed} {unit} lebih tinggi di Tikungan {turn}.",
+      "apexSlowerDetail": "Kecepatan minimum {speed} {unit} lebih rendah di Tikungan {turn}.",
+      "brakeTitle": "Titik pengereman Tikungan {turn}",
+      "brakeNamedTitle": "Titik pengereman Tikungan {turn} ({name})",
+      "brakeEarlierDetail": "Mengerem ~{distance} {unit} lebih awal memasuki Tikungan {turn}.",
+      "brakeLaterDetail": "Mengerem ~{distance} {unit} lebih lambat memasuki Tikungan {turn}."
+    }
   }
 }

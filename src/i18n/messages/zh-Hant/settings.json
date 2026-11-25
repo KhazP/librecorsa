@@ -626,6 +626,23 @@
         "lime": "萊姆綠"
       }
     },
+    "stats": {
+      "title": "統計",
+      "note": "所有遊玩階段的累計數據，只有你看得到。",
+      "timeDriven": "駕駛時間",
+      "distance": "里程",
+      "races": "賽事",
+      "wins": "勝場",
+      "podiums": "頒獎台",
+      "fastestLaps": "最快單圈",
+      "averageFinish": "平均名次",
+      "retirements": "退賽",
+      "mostDrivenCar": "最常駕駛的車輛",
+      "mostDrivenCircuit": "最常駕駛的賽道",
+      "hoursMinutes": "{hours} 小時 {minutes} 分",
+      "minutes": "{minutes} 分",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "車手金鑰",
       "identityKey": "身分金鑰",

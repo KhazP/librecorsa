@@ -626,6 +626,23 @@
         "lime": "Xanh chanh"
       }
     },
+    "stats": {
+      "title": "Thống kê",
+      "note": "Tổng hợp mọi phiên chơi. Chỉ bạn mới thấy.",
+      "timeDriven": "Thời gian lái",
+      "distance": "Quãng đường",
+      "races": "Cuộc đua",
+      "wins": "Chiến thắng",
+      "podiums": "Bục vinh quang",
+      "fastestLaps": "Vòng nhanh nhất",
+      "averageFinish": "Vị trí về đích trung bình",
+      "retirements": "Bỏ cuộc",
+      "mostDrivenCar": "Xe lái nhiều nhất",
+      "mostDrivenCircuit": "Đường đua lái nhiều nhất",
+      "hoursMinutes": "{hours} giờ {minutes} phút",
+      "minutes": "{minutes} phút",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Khóa tay đua",
       "identityKey": "Khóa định danh",

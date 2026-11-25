@@ -15,7 +15,7 @@ const NOT_GAME_DATA: readonly string[] = ["librecorsa.adminKey"];
 
 /** The IndexedDB database of lap history and ghosts (`src/lib/sim/ghost-store.ts`) */
 export const LAP_DATABASE = "bugesera-laps";
-/** The IndexedDB database of the last lap finished per circuit and car, for the lap board's Analysis view (ghost-store.ts) */
+/** The IndexedDB database an earlier build kept the last lap finished in (now in the lap database): cleared with the rest */
 export const LATEST_LAP_DATABASE = "librecorsa-latest-laps";
 
 export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
@@ -38,6 +38,7 @@ export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
   { key: "librecorsa.boardFilters", holds: "online leaderboard filter toggles" },
   { key: "librecorsa.f1ModPhysics", holds: "physics model of the ported cars" },
   { key: "librecorsa.raceHistory", holds: "race history" },
+  { key: "librecorsa.driverStats", holds: "driver totals: time driven, distance and races" },
   { key: "librecorsa.supportPrompt", holds: "the note after a drive: when it last showed and what it named" },
   { key: "librecorsa.signInHintShown", holds: "the lap card's sign-in note has shown" },
   { key: "librecorsa.ai-learn.v1.<circuit>.<class>.<driver>", holds: "what the AI learnt per corner" },

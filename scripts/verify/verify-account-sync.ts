@@ -142,6 +142,7 @@ function main1(): void {
         "lc.garage.presets.<car>",
         "librecorsa.carSkins",
         "librecorsa.raceHistory",
+        "librecorsa.driverStats",
         "librecorsa.f1ModPhysics",
         "bugesera.vehicle",
         "bugesera.track",
