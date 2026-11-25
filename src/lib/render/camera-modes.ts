@@ -22,12 +22,14 @@ export interface CameraModeSpec {
   blurb?: string;
   /** The car model's anchor this view sits on (placed by the camera code when the rig has none); null outside the car */
   anchor: ViewAnchor | null;
-  /** From inside the helmet: the driver's head is left out of the frame, rain lands on the visor, wing mirrors render */
+  /** From inside the helmet: the driver's head is left out of the frame, rain lands on the visor */
   driverEye: boolean;
   /** At the driver's head: the neck moves it, unless head movement is "static" */
   driverHead: boolean;
   /** The steering wheel is in shot, so its display redraws */
   wheelInShot: boolean;
+  /** The car's own mirrors or dash rear-view monitor can be in shot, so their live rear-view pass runs */
+  mirrorsInShot: boolean;
   /** The player's field-of-view setting shifts it (onboard views only) */
   playerFov: boolean;
   /** Plays the mod's interior engine event; outside views hear the exterior one */
@@ -48,6 +50,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -59,6 +62,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -70,6 +74,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -81,6 +86,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -92,6 +98,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: true,
+    mirrorsInShot: false,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "always",
@@ -102,6 +109,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: true,
     wheelInShot: true,
+    mirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "always",
@@ -113,6 +121,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: true,
     driverHead: true,
     wheelInShot: true,
+    mirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "noSideMirrors",
@@ -124,6 +133,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: true,
+    mirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "always",
@@ -134,6 +144,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: true,
     virtualMirror: "always",
@@ -144,6 +155,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "never",
@@ -154,6 +166,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "never",
@@ -165,6 +178,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverEye: false,
     driverHead: false,
     wheelInShot: false,
+    mirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "never",

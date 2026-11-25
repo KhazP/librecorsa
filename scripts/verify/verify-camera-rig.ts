@@ -473,4 +473,16 @@ check('free camera spawns framing the car, flies with input, clamps to ground, a
   assert.ok(camera.position.distanceTo(spawned) < 1e-4, 'reset respawns near target car');
 });
 
+check('cabin views (cockpit, dash, shoulder) render live car mirrors while keeping driverEye exclusive to cockpit (#204)', () => {
+  for (const mode of ['cockpit', 'dash', 'cockpit_shoulder'] as const) {
+    assert.equal(CAMERA_MODES[mode].mirrorsInShot, true, `${mode} should render live car mirrors`);
+  }
+  for (const mode of ['chase_close', 'chase', 'chase_far', 'chase_low', 'tv_pod', 'nose', 'helicopter', 'tv_side', 'free'] as const) {
+    assert.equal(CAMERA_MODES[mode].mirrorsInShot, false, `${mode} should not render live car mirrors`);
+  }
+  assert.equal(CAMERA_MODES.cockpit.driverEye, true);
+  assert.equal(CAMERA_MODES.dash.driverEye, false);
+  assert.equal(CAMERA_MODES.cockpit_shoulder.driverEye, false);
+});
+
 console.log(`\n${passed} camera rig checks passed`);

@@ -4604,14 +4604,12 @@ export class DriveSession {
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
-        const lowQuality = settingsNow.graphics.quality === "low";
-        const wingMirrorsActive = !lowQuality && Boolean(wingMirrors?.found && wingMirrors.coversSides);
+        const wingMirrorsActive = Boolean(wingMirrors?.found && wingMirrors.coversSides);
         const vmView =
           view.virtualMirror === "always" ||
           (view.virtualMirror === "noSideMirrors" && !wingMirrorsActive) ||
           (view.virtualMirror === "onRequest" && vmSetting === "always");
         const othersAbout = raceNow().kind !== "practice" || peersOnTrack > 0;
-        // On Low graphics wing mirrors are disabled (saving 2 passes), so keep the single virtual mirror available in cockpit/dash
         const vmOn =
           driving &&
           !inVr &&
@@ -4628,8 +4626,8 @@ export class DriveSession {
           virtualMirrorShown = vmOn;
           setVirtualMirrorOn(vmOn);
         }
-        // Rear view into the mirrors' render target (cockpit only; skipped on Low graphics)
-        wingMirrors?.update(mirrorRefresh, view.driverEye && !inVr && !lowQuality, carRig.chassisGroup);
+        // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204)
+        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !inVr && !podium.playing, carRig.chassisGroup);
         if (inVr) {
           // The head pose is added on top of the driver's eye point (a "local" space starts at the head)
           xrRig.position.copy(camera.position);
