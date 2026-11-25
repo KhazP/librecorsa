@@ -12,9 +12,9 @@ import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS, F1_ASSIST_DIALS }
 import { LC25_CAR_CONFIG, LC25_FUEL_FLOW_CURVE_KGS, LC25_STEERING, LC25_TYRE_SETUP_RANGES } from './Lc25Config';
 
 /**
- * kyojinvan's 2025 F1 V6 sound (an Assetto Corsa bank, `scripts/audio/car_configs.json` "lc25-v6") where the hosted
- * files are listed, on librecorsa.org; a plain copy of the repository plays the synthesised 2025 1.6L V6 turbo-hybrid +
- * MGU-H bank (`scripts/audio/synth_f1_2025_bank.py`) that ships with it
+ * hahmad's Red Bull RB21 (Honda RBPT) sound (an Assetto Corsa bank, `scripts/audio/car_configs.json` "lc25-v6", used
+ * with permission) where the hosted files are listed, on librecorsa.org; a plain copy of the repository plays the
+ * synthesised 2025 1.6L V6 turbo-hybrid + MGU-H bank (`scripts/audio/synth_f1_2025_bank.py`) that ships with it
  */
 export const LC25_SOUND: CarSoundSource = {
   id: 'lc25',

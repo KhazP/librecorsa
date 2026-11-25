@@ -658,71 +658,99 @@
   "lc25-v6": {
     "outDir": "public/cars/lc25-v6/audio",
     "limiterRpm": 13000,
-    "sourceDescription": "kyojinvan's 2025 F1 V6 sound for Assetto Corsa (overtake.gg/members/kyojinvan.2113755)",
-    "intBank": "kyojinvan_sound_rework/sfx/car.bank",
-    "rawPcm16": true,
+    "sourceDescription": "hahmad's Red Bull RB21 (Honda RBPT) v1.0 sound for Assetto Corsa (https://www.overtake.gg/members/hahmad.2388716/) — Copyright (c) 2026 hahmad, all rights reserved, used with permission",
+    "intBank": "RB21_Honda_AC_Sound_v1.0/content/cars/vrc_formula_alpha_2024_csp/sfx/vrc_formula_alpha_2024_csp.bank",
     "hideSampleNames": true,
-    "resampleRange": [0.5, 1.65],
+    "resampleRange": [0.58, 1.65],
     "engine": {
       "int": {
         "on": [
-          { "rpm": 4000, "rootRpm": 3505, "sample": 59 },
-          { "rpm": 5700, "rootRpm": 5700, "sample": 14 },
-          { "rpm": 7200, "rootRpm": 7220, "sample": 5 },
-          { "rpm": 10400, "rootRpm": 10410, "sample": 30 },
-          { "rpm": 11200, "rootRpm": 11190, "sample": 32 },
-          { "rpm": 13000, "rootRpm": 11190, "sample": 32 }
+          { "rpm": 4000, "rootRpm": 4646, "sample": 25 },
+          { "rpm": 5550, "rootRpm": 5552, "sample": 67 },
+          { "rpm": 6500, "rootRpm": 6502, "sample": 2 },
+          { "rpm": 7500, "rootRpm": 7500, "sample": 134 },
+          { "rpm": 8500, "rootRpm": 8500, "sample": 108 },
+          { "rpm": 9500, "rootRpm": 9500, "sample": 83 },
+          { "rpm": 10500, "rootRpm": 10500, "sample": 36 },
+          { "rpm": 11000, "rootRpm": 11000, "sample": 42 },
+          { "rpm": 11500, "rootRpm": 11504, "sample": 63 },
+          { "rpm": 12000, "rootRpm": 12000, "sample": 84 },
+          { "rpm": 13000, "rootRpm": 12043, "sample": 0 }
         ],
         "off": [
-          { "rpm": 4000, "rootRpm": 3505, "sample": 59 },
-          { "rpm": 6200, "rootRpm": 6385, "sample": 47 },
-          { "rpm": 7800, "rootRpm": 7840, "sample": 60 },
-          { "rpm": 10400, "rootRpm": 10430, "sample": 9 },
-          { "rpm": 11000, "rootRpm": 11010, "sample": 26 },
-          { "rpm": 13000, "rootRpm": 11010, "sample": 26 }
+          { "rpm": 4000, "rootRpm": 4647, "sample": 135 },
+          { "rpm": 5550, "rootRpm": 5552, "sample": 98 },
+          { "rpm": 6500, "rootRpm": 6502, "sample": 92 },
+          { "rpm": 7500, "rootRpm": 7500, "sample": 10 },
+          { "rpm": 8500, "rootRpm": 8500, "sample": 34 },
+          { "rpm": 9500, "rootRpm": 9500, "sample": 124 },
+          { "rpm": 10500, "rootRpm": 10500, "sample": 148 },
+          { "rpm": 11000, "rootRpm": 11002, "sample": 101 },
+          { "rpm": 11500, "rootRpm": 11513, "sample": 118 },
+          { "rpm": 12000, "rootRpm": 12019, "sample": 43 },
+          { "rpm": 13000, "rootRpm": 12516, "sample": 94 }
         ]
       },
       "ext": {
         "on": [
-          { "rpm": 4000, "rootRpm": 3540, "sample": 2 },
-          { "rpm": 7000, "rootRpm": 6965, "sample": 22 },
-          { "rpm": 9600, "rootRpm": 9380, "sample": 38 },
-          { "rpm": 11700, "rootRpm": 11330, "sample": 29 },
-          { "rpm": 12600, "rootRpm": 12610, "sample": 31 },
-          { "rpm": 13000, "rootRpm": 12610, "sample": 31 }
+          { "rpm": 4000, "rootRpm": 4646, "sample": 25 },
+          { "rpm": 5550, "rootRpm": 5552, "sample": 67 },
+          { "rpm": 6500, "rootRpm": 6502, "sample": 2 },
+          { "rpm": 7500, "rootRpm": 7500, "sample": 134 },
+          { "rpm": 8500, "rootRpm": 8500, "sample": 108 },
+          { "rpm": 9500, "rootRpm": 9500, "sample": 83 },
+          { "rpm": 10500, "rootRpm": 10500, "sample": 36 },
+          { "rpm": 11000, "rootRpm": 11000, "sample": 42 },
+          { "rpm": 11500, "rootRpm": 11504, "sample": 63 },
+          { "rpm": 12000, "rootRpm": 12000, "sample": 84 },
+          { "rpm": 13000, "rootRpm": 12043, "sample": 0 }
         ],
         "off": [
-          { "rpm": 4000, "rootRpm": 3540, "sample": 2 },
-          { "rpm": 5000, "rootRpm": 3980, "sample": 12 },
-          { "rpm": 8600, "rootRpm": 8665, "sample": 10 },
-          { "rpm": 12600, "rootRpm": 12590, "sample": 57 },
-          { "rpm": 13000, "rootRpm": 12590, "sample": 57 }
+          { "rpm": 4000, "rootRpm": 4647, "sample": 135 },
+          { "rpm": 5550, "rootRpm": 5552, "sample": 98 },
+          { "rpm": 6500, "rootRpm": 6502, "sample": 92 },
+          { "rpm": 7500, "rootRpm": 7500, "sample": 10 },
+          { "rpm": 8500, "rootRpm": 8500, "sample": 34 },
+          { "rpm": 9500, "rootRpm": 9500, "sample": 124 },
+          { "rpm": 10500, "rootRpm": 10500, "sample": 148 },
+          { "rpm": 11000, "rootRpm": 11002, "sample": 101 },
+          { "rpm": 11500, "rootRpm": 11513, "sample": 118 },
+          { "rpm": 12000, "rootRpm": 12019, "sample": 43 },
+          { "rpm": 13000, "rootRpm": 12516, "sample": 94 }
         ]
       }
     },
-    "turbo": [
-      { "layer": "on", "boost": 2.0, "sample": 53, "rms": 0.07 },
-      { "layer": "off", "boost": 2.0, "sample": 53, "rms": 0.05 }
-    ],
     "transmission": [
-      { "layer": "on", "drivetrainSpeed": 150, "sample": 20, "rms": 0.05 },
-      { "layer": "off", "drivetrainSpeed": 150, "sample": 20, "rms": 0.035 }
+      { "layer": "on", "drivetrainSpeed": 101, "sample": 61, "rms": 0.044 },
+      { "layer": "on", "drivetrainSpeed": 147, "sample": 104, "rms": 0.048 },
+      { "layer": "on", "drivetrainSpeed": 199, "sample": 56, "rms": 0.052 },
+      { "layer": "on", "drivetrainSpeed": 258, "sample": 130, "rms": 0.055 },
+      { "layer": "off", "drivetrainSpeed": 62, "sample": 52, "rms": 0.030 },
+      { "layer": "off", "drivetrainSpeed": 116, "sample": 74, "rms": 0.033 },
+      { "layer": "off", "drivetrainSpeed": 170, "sample": 48, "rms": 0.036 },
+      { "layer": "off", "drivetrainSpeed": 236, "sample": 69, "rms": 0.038 }
     ],
-    "skid": { "int": 11, "ext": 7 },
-    "tractionControl": 46,
-    "ambient": { "wind": 28, "tyreRolling": 16, "bodywork": 0 },
+    "ambient": { "wind": 128, "tyreRolling": 22 },
     "oneshots": {
-      "backfire_int": [8, 52, 27, 42, 18],
-      "backfire_ext": [35, 55, 39, 51, 37, 48, 36, 21, 24],
-      "blowoff": [43]
+      "gear_up": [112, 149, 38, 87],
+      "gear_down": [96, 6, 89],
+      "shift_cut": [50, 29, 142, 62],
+      "backfire_int": [116, 66, 1, 121],
+      "backfire_ext": [116, 66, 1, 121]
     },
-    "limiterFallbackSample": 33,
-    "limiterRootRpm": 12100,
-    "reuse": { "dir": "public/cars/lc25/audio", "sections": ["mgu", "driveline"], "oneshotRoles": ["gear_up", "gear_down"] },
-    "manifestExtras": { "shift": { "style": "sequential", "cutS": 0.025 } },
+    "limiterFallbackSample": 0,
+    "limiterRootRpm": 12043,
+    "reuse": { "dir": "public/cars/lc25/audio", "sections": ["mgu", "driveline"] },
+    "manifestExtras": {
+      "shift": { "style": "sequential", "cutS": 0.025 },
+      "viewTone": {
+        "int": { "peakHz": 220, "peakDb": 2.0, "peakQ": 1.2, "shelfHz": 5000, "shelfDb": -1.5 },
+        "ext": { "peakHz": 950, "peakDb": 1.5, "peakQ": 1.0, "shelfHz": 5200, "shelfDb": 1.2 }
+      }
+    },
     "throttleCurve": {
-      "ext": [[0, 0], [0.2, 0.15], [0.5, 0.6], [0.8, 0.92], [1, 1]],
-      "int": [[0, 0], [0.2, 0.12], [0.5, 0.55], [0.8, 0.9], [1, 1]]
+      "ext": [[0, 0], [0.1, 0.12], [0.25, 0.35], [0.5, 0.65], [0.75, 0.88], [1, 1]],
+      "int": [[0, 0], [0.1, 0.12], [0.25, 0.35], [0.5, 0.65], [0.75, 0.88], [1, 1]]
     },
     "lift": { "popMinRpm": 8000, "crackleMinRpm": 8800, "downshiftPopChance": 0.55 },
     "limiterRetriggerS": 0.8
