@@ -38,14 +38,26 @@ function check(name: string, cond: boolean, detail = ""): void {
   console.log(`  ok  ${name}${detail ? `  (${detail})` : ""}`);
 }
 
-const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number }> = {
+/**
+ * `authorLevels`: a bank its author levelled and mixed to their own design instead of the repository's level curve
+ * (port_ac_bank.py's): the LC-LMDH's Engine Lab engine gets much quieter towards idle, in the cockpit most, and its
+ * shift and lift-off one-shots sit far under the loops, as its README says. Its loops and one-shots are only checked
+ * to be within full scale; the files themselves are left as their author made them
+ */
+interface ExpectedSound {
+  sound: CarSoundSource;
+  maxIdleRpm: number;
+  authorLevels?: true;
+}
+
+const EXPECTED_SOUNDS: Record<CarId, ExpectedSound> = {
   lc26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
   lc25: { sound: LC25_SOUND, maxIdleRpm: 4200 },
   "amg-gt3": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
   liana: { sound: SUZUKI_LIANA_SOUND, maxIdleRpm: 1000 },
   "mtr-496r": { sound: MTR_496R_SOUND, maxIdleRpm: 2200 },
-  "lc-lmdh": { sound: LC_LMDH_SOUND, maxIdleRpm: 2200 },
+  "lc-lmdh": { sound: LC_LMDH_SOUND, maxIdleRpm: 2200, authorLevels: true },
   // [spec engine.ini MINIMUM]
   "nissan-r33-jgtc": { sound: NISSAN_R33_SOUND, maxIdleRpm: 1400 },
   "nissan-r32-jtcc": { sound: NISSAN_R32_SOUND, maxIdleRpm: 2200 },
@@ -78,7 +90,7 @@ for (const car of CARS) {
 }
 
 console.log("\n2. Manifest schema, anchor coverage, RMS consistency & Ogg file checks");
-const seenBanks = new Map<string, { sound: CarSoundSource; maxIdleRpm: number }>();
+const seenBanks = new Map<string, ExpectedSound>();
 for (const exp of Object.values(EXPECTED_SOUNDS)) {
   if (!seenBanks.has(exp.sound.id)) {
     seenBanks.set(exp.sound.id, exp);
@@ -87,7 +99,7 @@ for (const exp of Object.values(EXPECTED_SOUNDS)) {
 
 // The repository carries only the 2026 prototype's bank; the others are skipped where a clone lacks them
 const repoBanks = new Set([...REPO_CAR_IDS].map((id) => carById(id as CarId).sound.id));
-for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
+for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
   const relDir = join("public", sound.assetDir.replace(/^\/+|\/+$/g, ""));
   const manifestPath = join(relDir, "manifest.json");
   if (!existsSync(manifestPath) && !repoBanks.has(bankId)) {
@@ -133,8 +145,8 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
       for (const e of layerEntries) {
         referencedFiles.add(e.file);
         check(
-          `${bankId} ${e.file}: valid channels (1|2) and consistent RMS`,
-          (e.channels === 1 || e.channels === 2) && e.rms >= 0.05 && e.rms <= 0.35,
+          `${bankId} ${e.file}: valid channels (1|2) and ${authorLevels ? "an RMS within full scale (its author's levels)" : "consistent RMS"}`,
+          (e.channels === 1 || e.channels === 2) && (authorLevels ? e.rms > 0 && e.rms <= 1 : e.rms >= 0.05 && e.rms <= 0.35),
           `ch=${e.channels}, rms=${e.rms}`
         );
       }
@@ -200,8 +212,8 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
     referencedFiles.add(o.file);
     roles.add(o.role);
     check(
-      `${bankId} oneshot ${o.file} (${o.role}): valid duration & peak`,
-      o.seconds > 0.02 && o.seconds <= 4.0 && o.peak > 0.05 && o.peak <= 1.0 && (o.channels === 1 || o.channels === 2)
+      `${bankId} oneshot ${o.file} (${o.role}): valid duration & peak${authorLevels ? " (its author's levels)" : ""}`,
+      o.seconds > 0.02 && o.seconds <= 4.0 && o.peak > (authorLevels ? 0 : 0.05) && o.peak <= 1.0 && (o.channels === 1 || o.channels === 2)
     );
   }
   // AC's "missgear" is the missed-gear grind: a shift built from it sounds like a crunched gearbox on every change

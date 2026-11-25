@@ -198,7 +198,11 @@ async function bankWithoutSections(): Promise<void> {
   bank.dispose();
 }
 
-async function bankWithSections(label: string, dir: string, required = false): Promise<void> {
+/**
+ * `required`: the bank is in the repository, so a missing manifest fails. `viewTone`: the bank has a tone stage per
+ * view (absent: its cockpit and outside buses must feed the engine filter directly)
+ */
+async function bankWithSections(label: string, dir: string, { required, viewTone }: { required: boolean; viewTone: boolean }): Promise<void> {
   console.log(`\n3. A bank built with the sections (${label})`);
   const manifestPath = join("public", dir, "manifest.json");
   if (!existsSync(manifestPath)) {
@@ -213,8 +217,10 @@ async function bankWithSections(label: string, dir: string, required = false): P
   const d = m.driveline;
   check("driveline section: positive axis scale and torque references, floor within 0..1", !!d && d.kmhPerRadS > 0 && d.torqueRefNm > 0 && (d.coastTorqueRefNm ?? 1) > 0 && (d.floor ?? 0) >= 0 && (d.floor ?? 0) < 1);
   check("mgu section: a loop file, a base speed and a full power", !!m.mgu && m.mgu.file.endsWith(".ogg") && m.mgu.baseRpm > 0 && m.mgu.fullKw > 0 && m.mgu.rms > 0.005);
-  check("loadFilter section: opens upwards with load", !!m.loadFilter && m.loadFilter.coastHz > 200 && m.loadFilter.loadHz > m.loadFilter.coastHz && m.loadFilter.loadHz <= 20000);
-  check("viewTone section: sane peak and shelf per view", Object.values(m.viewTone ?? {}).length > 0 && Object.values(m.viewTone ?? {}).every((t) => !!t && t.peakHz > 20 && Math.abs(t.peakDb) <= 9 && t.shelfHz > t.peakHz && Math.abs(t.shelfDb) <= 9));
+  // Open at full load at least as far as on the overrun: the LC-LMDH's Engine Lab engine holds it wide open throughout
+  check("loadFilter section: opens upwards with load, or stays open", !!m.loadFilter && m.loadFilter.coastHz > 200 && m.loadFilter.loadHz >= m.loadFilter.coastHz && m.loadFilter.loadHz <= 20000);
+  if (viewTone) check("viewTone section: sane peak and shelf per view", Object.values(m.viewTone ?? {}).length > 0 && Object.values(m.viewTone ?? {}).every((t) => !!t && t.peakHz > 20 && Math.abs(t.peakDb) <= 9 && t.shelfHz > t.peakHz && Math.abs(t.shelfDb) <= 9));
+  else check("no viewTone section", !m.viewTone);
   check("shift cut length within 20-120 ms", m.shift?.style === "sequential" && (m.shift.cutS ?? 0.06) >= 0.02 && (m.shift.cutS ?? 0.06) <= 0.12, `${m.shift?.cutS} s`);
   const mguFile = join("public", dir, m.mgu?.file ?? "missing");
   check("the machine's loop is an Ogg stream", existsSync(mguFile) && readFileSync(mguFile).subarray(0, 4).toString("ascii") === "OggS");
@@ -222,7 +228,8 @@ async function bankWithSections(label: string, dir: string, required = false): P
 
   const { bank, loaded, inside } = await loadBank(dir, "int");
   check("bank loads from public/", loaded);
-  check("tone stage sits between the cockpit bus and the engine filter", inside.toneNodes.length >= 2 && inside.viewBus.int.outputs[0] !== inside.engineFilter && inside.toneNodes[1].outputs[0] === inside.engineFilter);
+  if (viewTone) check("tone stage sits between the cockpit bus and the engine filter", inside.toneNodes.length >= 2 && inside.viewBus.int.outputs[0] !== inside.engineFilter && inside.toneNodes[1].outputs[0] === inside.engineFilter);
+  else check("no tone stage: both view buses feed the engine filter directly", inside.toneNodes.length === 0 && inside.viewBus.int.outputs[0] === inside.engineFilter && inside.viewBus.ext.outputs[0] === inside.engineFilter);
 
   // No driveshafts and no machine reported: the loops play as in any bank, the machine is silent
   const legacy = settle(bank, inside, base);
@@ -317,8 +324,9 @@ function wakingLoops(): void {
 async function main() {
   mixingMaths();
   await bankWithoutSections();
-  await bankWithSections("the LC25 Prototype's, in the repository", "/cars/lc25/audio/", true);
-  await bankWithSections("the LC-LMDH's", "/cars/lc-lmdh/audio/", false);
+  await bankWithSections("the LC25 Prototype's, in the repository", "/cars/lc25/audio/", { required: true, viewTone: true });
+  // Its Engine Lab engine renders the cockpit and the outside itself, with no tone stage on top
+  await bankWithSections("the LC-LMDH's", "/cars/lc-lmdh/audio/", { required: false, viewTone: false });
   wakingLoops();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
