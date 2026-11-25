@@ -104,6 +104,13 @@ export interface StandInRaceResult {
   aiDnf: number;
   aiPasses: number;
   aiMeanLapS: number;
+  /** The leading AI car at the end (the winner, unless the stand-in won): its mean flying lap and best lap (s) */
+  leaderMeanLapS: number;
+  leaderBestLapS: number;
+  /** The best AI lap of the race (s) */
+  aiBestLapS: number;
+  /** Spins per AI car, in grid order (one car spinning ten times is not ten cars spinning once) */
+  aiSpinsByCar: number[];
   aiPenaltiesS: number;
   /** Where and when (lap m, race s) each AI v AI contact, AI spin and AI off-track happened */
   aiVsAiAt: [number, number][];
@@ -230,7 +237,8 @@ export function runStandInRace(
   const driver = spectate ? null : new StandInDriver(o.standIn, player, track, o.seed);
 
   const DT = 1 / 120;
-  const limitS = 60 + o.laps * 200;
+  // 200 s a lap, or a lap at 72 km/h on a long one (a Scirocco laps Qiddiya's 8.2 km in ~250 s)
+  const limitS = 60 + o.laps * Math.max(200, L / 20);
   const vsStandIn = emptyTally();
   const aiVsAi = emptyTally();
   const lastPairS = new Map<string, number>();
@@ -341,6 +349,9 @@ export function runStandInRace(
   const sum = (k: 'spins' | 'offTracks' | 'wallHits' | 'passes') => ai.reduce((a, c) => a + c.stats[k], 0);
   const flying = ai.flatMap((c) => c.stats.lapTimesMs.slice(1)).filter((x) => x > 0);
   const me = r.cars.find((c) => c.isPlayer);
+  const leader = ai.filter((c) => !c.retired).sort((a, b) => a.position - b.position)[0];
+  const leaderLaps = leader ? leader.stats.lapTimesMs.slice(1).filter((x) => x > 0) : [];
+  const bestS = (ms: number[]) => (ms.length ? Math.min(...ms) / 1000 : NaN);
   return {
     trackId: o.trackId,
     car: o.car,
@@ -363,6 +374,10 @@ export function runStandInRace(
     aiDnf: ai.filter((c) => c.retired).length,
     aiPasses: sum('passes'),
     aiMeanLapS: flying.length ? flying.reduce((a, b) => a + b, 0) / flying.length / 1000 : NaN,
+    leaderMeanLapS: leaderLaps.length ? leaderLaps.reduce((a, b) => a + b, 0) / leaderLaps.length / 1000 : NaN,
+    leaderBestLapS: bestS(leaderLaps),
+    aiBestLapS: bestS(flying),
+    aiSpinsByCar: [...ai].sort((a, b) => a.gridPos - b.gridPos).map((c) => c.stats.spins),
     aiPenaltiesS: ai.reduce((a, c) => a + c.penaltyS, 0),
     aiVsAiAt,
     spinsAt,
