@@ -25,19 +25,19 @@ const tyreRadius = (axle: "front" | "rear") => C.tyreCompounds[C.compoundSlots.s
 
 export const JAGUAR_FE_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
-  downforceCoef: 0.72,
-  dragCoef: 0.44,
+  downforceCoef: 1.55,
+  dragCoef: 0.34,
   rearDownforceShare: 0.54,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-  muLat: 1.42,
-  muLong: 1.38,
+  muLat: 1.62,
+  muLong: 1.50,
   maxBrakeForceN:
     0.92 *
     2 *
     C.brakes.maxTorqueNm *
     (C.brakes.front_bias / tyreRadius("front") + (1 - C.brakes.front_bias) / tyreRadius("rear")),
-  maxDrivePowerW: 350_000,
-  vMaxMs: 90,
+  maxDrivePowerW: 380_000,
+  vMaxMs: 93,
 };
 
 export const JAGUAR_FE_SIM_PROFILE: CarSimProfile = {
@@ -54,7 +54,7 @@ export const JAGUAR_FE_SIM_PROFILE: CarSimProfile = {
   electronics: F12026_ELECTRONICS,
   assistDials: F1_ASSIST_DIALS,
   aeroPackagesDeg: { low_downforce: [-1.5, -2], balanced: [0, 0], high_downforce: [1.5, 2.5] },
-  padLateralMu: 1.42,
+  padLateralMu: 1.68,
   steerRatio: 12.5,
   braking: { lowG: 1.45, aeroG: 0.75, refMs: 65 },
   understeerRadPerMs2: 0.0012,

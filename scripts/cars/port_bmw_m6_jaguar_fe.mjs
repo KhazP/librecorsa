@@ -596,28 +596,25 @@ async function portJaguarFe() {
     }
   }
 
-  // Add a live BMW M6 GT3 digital dashboard screen behind the steering wheel
-  const dashMat = dstDoc
-    .createMaterial("BMW_DASH_SCREEN")
+  // Add explicit FE_STEER_SCREEN quad centered on the steering wheel face in STEER local space
+  const feScreenMat = dstDoc
+    .createMaterial("FE_STEER_SCREEN")
     .setBaseColorFactor([1, 1, 1, 1])
     .setEmissiveFactor([1, 1, 1])
     .setRoughnessFactor(0.15)
     .setMetallicFactor(0);
-  const dw = 0.085, dh = 0.042;
-  const dTilt = (-15 * Math.PI) / 180;
-  const dc = Math.cos(dTilt), ds = Math.sin(dTilt);
-  const dx0 = 0.240, dy0 = 0.755, dz0 = 0.185;
-  const dPos = [
-    dx0 + dw, dy0 - dh * dc, dz0 - dh * ds,
-    dx0 - dw, dy0 - dh * dc, dz0 - dh * ds,
-    dx0 - dw, dy0 + dh * dc, dz0 + dh * ds,
-    dx0 + dw, dy0 + dh * dc, dz0 + dh * ds,
+  const sw = 0.038, sh = 0.021, sz = -0.046;
+  const sPos = [
+    sw, -sh, sz,
+    -sw, -sh, sz,
+    -sw, sh, sz,
+    sw, sh, sz,
   ];
-  const dNrm = [0, ds, -dc, 0, ds, -dc, 0, ds, -dc, 0, ds, -dc];
-  const dUvs = [0, 0, 1, 0, 1, 1, 0, 1];
-  const dIdx = [0, 1, 2, 0, 2, 3];
-  const dashPrim = buildPrim(dstDoc, buf, dPos, dNrm, dUvs, dIdx, dashMat);
-  bodyNode.addChild(dstDoc.createNode("BMW_DASH_SCREEN").setMesh(dstDoc.createMesh("BMW_DASH_SCREEN").addPrimitive(dashPrim)));
+  const sNrm = [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1];
+  const sUvs = [0, 0, 1, 0, 1, 1, 0, 1];
+  const sIdx = [0, 1, 2, 0, 2, 3];
+  const feScreenPrim = buildPrim(dstDoc, buf, sPos, sNrm, sUvs, sIdx, feScreenMat);
+  steerNode.addChild(dstDoc.createNode("FE_STEER_SCREEN").setMesh(dstDoc.createMesh("FE_STEER_SCREEN").addPrimitive(feScreenPrim)));
 
   const wheelNodes = [];
   for (const [corner, wg] of Object.entries(wheelGroups)) {

@@ -12,17 +12,17 @@ import type { LutPoints } from "../lut";
 import type { CarPhysicsConfig, PerformanceModeData, PerformanceModeName } from "../f12026-car/F12026CarConfig";
 import { LC26_CAR_CONFIG } from "../f12026-car/Lc26Config";
 
-/** Base 300 kW (402 hp) electric motor curve with instant low-end launch torque (~2.8s 0-100 km/h) */
+/** Base 260 kW electric motor curve with strong low/mid/high-speed pull */
 const EV_POWER_CURVE: LutPoints = [
   [0, 0],
-  [500, 48],
-  [1200, 115],
-  [2200, 210],
-  [3400, 300],
-  [6000, 300],
-  [10000, 300],
-  [14000, 300],
-  [17500, 296],
+  [500, 52],
+  [1200, 125],
+  [2200, 220],
+  [3400, 260],
+  [6000, 260],
+  [10000, 260],
+  [14000, 260],
+  [17500, 255],
   [18500, 0],
 ];
 
@@ -33,34 +33,33 @@ const EV_COAST_CURVE: LutPoints = [
   [18000, 28],
 ];
 
-/** +50 kW Attack Mode / Boost overlay (350 kW / 469 hp combined peak) */
+/** +120 kW Attack Mode / Boost overlay (380 kW peak) with visible battery depletion and 250 kW regen */
 const EV_BOOST_TORQUE_LUT: LutPoints = [
-  [0, 220],
-  [2500, 210],
-  [4500, 160],
-  [6000, 115],
-  [8000, 80],
-  [10000, 62],
-  [12000, 50],
-  [14000, 42],
-  [16000, 36],
-  [18500, 30],
+  [0, 420],
+  [2500, 380],
+  [4500, 280],
+  [6000, 200],
+  [8000, 150],
+  [10000, 120],
+  [12000, 100],
+  [14000, 85],
+  [16000, 74],
+  [18500, 64],
 ];
 
-/** Real-life Formula E 52 kWh usable battery (187.2 MJ) + 250 kW regen + 50 kW Attack Mode boost */
 const EV_ERS = {
   ...LC26_CAR_CONFIG.ers,
-  regulations: undefined,
+  regulations: "f1-2026" as const,
   torqueLut: EV_BOOST_TORQUE_LUT,
   coastLut: [
     [0, 0],
     [18000, 0],
   ] as LutPoints,
-  ERS_MAX_DEPLOY: 50_000,
+  ERS_MAX_DEPLOY: 120_000,
   maxHarvestW: 250_000,
-  ERS_MAX_CHARGE: 187_200_000,
-  deployPerLapJ: 187_200_000,
-  harvestPerLapJ: 187_200_000,
+  ERS_MAX_CHARGE: 12_000_000,
+  deployPerLapJ: 12_000_000,
+  harvestPerLapJ: 12_000_000,
   deployEfficiency: 0.94,
   harvestEfficiency: 0.90,
   liftThrottle: 0.05,
@@ -155,9 +154,9 @@ export const JAGUAR_FE_CONFIG: CarPhysicsConfig = {
     CHR: evMode("CHR", 0.0, 1.0),
   },
   gearbox: {
-    ratios: [2.25],
+    ratios: [2.10],
     reverse: 3.4,
-    finalDrive: 3.10,
+    finalDrive: 3.05,
     shiftTimeS: 0.03,
     downshiftTimeS: 0.04,
     shiftTorqueFraction: 0.95,
@@ -182,11 +181,11 @@ export const JAGUAR_FE_CONFIG: CarPhysicsConfig = {
   },
   aero: {
     ...LC26_CAR_CONFIG.aero,
-    // Fixed aero (no DRS / Straight Mode flaps); low drag for ~325-330 km/h top speed at 350 kW
+    // Fixed aero (no DRS / Straight Mode flaps); high F1-like downforce with low drag for ~330 km/h top speed
     wings: LC26_CAR_CONFIG.aero.wings.map((w, i) => ({
       ...w,
-      area: w.area * (i === 0 ? 0.34 : 0.38),
-      lutAOA_CD: w.lutAOA_CD.map(([a, cd]) => [a, cd * 0.45] as [number, number]),
+      area: w.area * (i === 0 ? 0.78 : 0.82),
+      lutAOA_CD: w.lutAOA_CD.map(([a, cd]) => [a, cd * 0.28] as [number, number]),
       drsScale: 1,
     })),
   },
