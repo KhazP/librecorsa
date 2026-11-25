@@ -2891,6 +2891,8 @@ export class DriveSession {
     let portedDash: PortedWheelDash | null = null;
     let portedProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
+    /** The run the delta's reference was last kept for: a race starts with none (`clearLapTimes`) */
+    let lapDeltaRun = 0;
     // Race control measures what a course cut saved against this: the best lap, else the car's own speed profile
     const stretchRefS = (fromM: number, toM: number): number | null => {
       const best = lapDelta.referenceGapS(fromM, toM, track.totalLengthM);
@@ -4420,6 +4422,12 @@ export class DriveSession {
       if (view.driverEye) camera.layers.disable(DRIVER_HEAD_LAYER);
       else camera.layers.enable(DRIVER_HEAD_LAYER);
 
+      // A race times its own laps: the car's best lap went at its start (`clearLapTimes`), and the delta's reference
+      // lap with it (in practice a new run keeps it: the same car, the same session)
+      if (lapDeltaRun !== runId) {
+        lapDeltaRun = runId;
+        if (raceNow().kind !== "practice") lapDelta.reset();
+      }
       lapDelta.update(physics.telemetry);
       // The cars as drawn this frame (the podium shot parks them); the opponents' engines play from where they are drawn
       const drawnPeers = podium.drawPeers(renderPeers);
