@@ -730,7 +730,14 @@
       { "layer": "off", "drivetrainSpeed": 170, "sample": 48, "rms": 0.036 },
       { "layer": "off", "drivetrainSpeed": 236, "sample": 69, "rms": 0.038 }
     ],
-    "ambient": { "wind": 128, "tyreRolling": 22 },
+    "viewEq": {
+      "ext": [
+        { "type": "lowshelf", "hz": 120, "db": -10 },
+        { "type": "peaking", "hz": 220, "db": -2.5, "octaves": 1.2 },
+        { "type": "peaking", "hz": 600, "db": 2.5, "octaves": 1.2 },
+        { "type": "highshelf", "hz": 5000, "db": -1.5 }
+      ]
+    },
     "oneshots": {
       "gear_up": [112, 149, 38, 87],
       "gear_down": [96, 6, 89],
@@ -742,15 +749,11 @@
     "limiterRootRpm": 12043,
     "reuse": { "dir": "public/cars/lc25/audio", "sections": ["mgu", "driveline"] },
     "manifestExtras": {
-      "shift": { "style": "sequential", "cutS": 0.025 },
-      "viewTone": {
-        "int": { "peakHz": 220, "peakDb": 2.0, "peakQ": 1.2, "shelfHz": 5000, "shelfDb": -1.5 },
-        "ext": { "peakHz": 950, "peakDb": 1.5, "peakQ": 1.0, "shelfHz": 5200, "shelfDb": 1.2 }
-      }
+      "shift": { "style": "sequential", "cutS": 0.025 }
     },
     "throttleCurve": {
-      "ext": [[0, 0], [0.1, 0.12], [0.25, 0.35], [0.5, 0.65], [0.75, 0.88], [1, 1]],
-      "int": [[0, 0], [0.1, 0.12], [0.25, 0.35], [0.5, 0.65], [0.75, 0.88], [1, 1]]
+      "ext": [[0, 0], [0.05, 0], [0.1, 0.137], [0.2, 0.425], [0.3, 0.713], [0.4, 1], [1, 1]],
+      "int": [[0, 0], [0.05, 0], [0.1, 0.137], [0.2, 0.425], [0.3, 0.713], [0.4, 1], [1, 1]]
     },
     "lift": { "popMinRpm": 8000, "crackleMinRpm": 8800, "downshiftPopChance": 0.55 },
     "limiterRetriggerS": 0.8
