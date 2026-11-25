@@ -348,7 +348,16 @@ def make_seamless_loop(raw_x: np.ndarray, loop_s: float = LOOP_S, xfade_s: float
     tail = y[cut : cut + xf_n]
     head = z[:xf_n].copy()
     t = np.linspace(0.0, 1.0, xf_n, dtype=np.float32)[:, None]
-    z[:xf_n] = tail * np.cos(t * np.pi * 0.5) + head * np.sin(t * np.pi * 0.5)
+    g_out, g_in = np.cos(t * np.pi * 0.5), np.sin(t * np.pi * 0.5)
+    # Equal-power weights keep the level of two unrelated signals, but the tail and head were just lined up to be in
+    # phase: partly the same steady tone, they swelled by up to 3 dB mid-fade, once every loop (a pulse in the engine
+    # every 2.4 s). Their correlation over the fade, per channel, sets how much of that to take back, as
+    # build_custom_soundbank.make_cycle_loop does
+    tc = tail - tail.mean(axis=0, keepdims=True)
+    hc = head - head.mean(axis=0, keepdims=True)
+    corr = np.sum(tc * hc, axis=0) / (np.linalg.norm(tc, axis=0) * np.linalg.norm(hc, axis=0) + 1e-12)
+    comp = 1.0 / np.sqrt(1.0 + 2.0 * np.clip(corr, 0.0, 1.0)[None, :] * g_out * g_in)
+    z[:xf_n] = (tail * g_out + head * g_in) * comp
 
     # Remove DC offset
     z = z - np.mean(z, axis=0, keepdims=True)
