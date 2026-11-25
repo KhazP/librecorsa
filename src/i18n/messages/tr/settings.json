@@ -607,6 +607,23 @@
         "lime": "Fıstık yeşili"
       }
     },
+    "stats": {
+      "title": "İstatistikler",
+      "note": "Tüm sürüşlerinin toplamı. Bunları yalnızca sen görürsün.",
+      "timeDriven": "Sürüş süresi",
+      "distance": "Mesafe",
+      "races": "Yarış",
+      "wins": "Galibiyet",
+      "podiums": "Podyum",
+      "fastestLaps": "En hızlı tur",
+      "averageFinish": "Ortalama bitiş",
+      "retirements": "Yarış dışı kalma",
+      "mostDrivenCar": "En çok sürülen araç",
+      "mostDrivenCircuit": "En çok sürülen pist",
+      "hoursMinutes": "{hours} sa {minutes} dk",
+      "minutes": "{minutes} dk",
+      "km": "{km} km"
+    },
     "data": {
       "driverKey": "Pilot anahtarı",
       "identityKey": "Kimlik anahtarı",
