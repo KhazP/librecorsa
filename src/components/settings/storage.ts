@@ -36,6 +36,7 @@ export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
   { key: "librecorsa.boardFilters", holds: "online leaderboard filter toggles" },
   { key: "librecorsa.f1ModPhysics", holds: "physics model of the ported cars" },
   { key: "librecorsa.raceHistory", holds: "race history" },
+  { key: "librecorsa.driverStats", holds: "driver totals: time driven, distance and races" },
   { key: "librecorsa.supportPrompt", holds: "the note after a drive: when it last showed and what it named" },
   { key: "librecorsa.signInHintShown", holds: "the lap card's sign-in note has shown" },
   { key: "librecorsa.ai-learn.v1.<circuit>.<class>.<driver>", holds: "what the AI learnt per corner" },
