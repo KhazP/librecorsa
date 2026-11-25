@@ -68,6 +68,8 @@ import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import {
   boardFlyingStartPoint,
   boardFlyingStartSpeedMs,
+  fairFlyingStartSpeedMs,
+  flyingStartIsFair,
   FLYING_SLOT_SPACING_M,
   flyingStartPoint,
   rollingStartSlots,
@@ -2207,7 +2209,7 @@ export class F12026CarSim implements SimulatorCar {
    * Standing start from grid slot `gridSlot` (0 = pole), or a flying lap from the run-up of the main
    * straight (further slots queue 28 m apart, alternating sides), as the LC26 does.
    */
-  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false): void {
+  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false, fairStart = false): void {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
     const pointToPoint = !!this.track.pointToPoint;
     if (pointToPoint) flyingStart = false;
@@ -2251,10 +2253,16 @@ export class F12026CarSim implements SimulatorCar {
         start.cornerS === null
           ? 0
           : Math.min(maxStartMs, 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6));
-      const speed =
+      const boardSpeed =
         fieldSize !== undefined
           ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
           : boardFlyingStartSpeedMs(L, start, s, spotSpeed, cornerExit);
+      // A fair flying lap (qualifying, a career test day: `flyingStartIsFair`) from the same spot at no more than this
+      // car carries there on a flying lap of its own
+      const speed =
+        fieldSize === undefined && flyingStartIsFair(this.vehicleId, fairStart)
+          ? fairFlyingStartSpeedMs(this.track, this.vehicleId, this.line, s, boardSpeed)
+          : boardSpeed;
       if (fieldSize === undefined) {
         // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
         // first second (`startPose`), checked as the boards' laps were (`boardFlyingStartPoint`): the barrier

@@ -12,10 +12,14 @@ import type {
   DriverAssistPreset,
   LiveTunerPatch,
   LiveTunerState,
+  RacingLineId,
   TireCompound,
   TrackSamplePoint,
   TyreSetup,
+  VehicleModelId,
 } from '@/types/f1';
+import type { BuiltTrackData } from '@/lib/track-data';
+import { ownPaceFor, ownSpeedAt } from './own-pace';
 import type { VehicleWheelState } from './vehicle-types';
 import {
   createGroundHit,
@@ -166,9 +170,10 @@ export interface SimulatorCar {
   step(dtSeconds: number, inputs: Partial<ControlInputs>): unknown;
   /**
    * `fieldSize`: a race's rolling start, every car of the field at one speed (`rollingStartSpeedMs`). `raceStart`: a
-   * race's grid, after its formation lap (warm tyres and brakes), not a car out of the garage
+   * race's grid, after its formation lap (warm tyres and brakes), not a car out of the garage. `fairStart`: a flying
+   * lap that starts at the car's own pace (`fairFlyingStartSpeedMs`), not the boards' start (`flyingStartIsFair`)
    */
-  resetToStartGrid(flyingStart?: boolean, gridSlot?: number, fieldSize?: number, raceStart?: boolean): void;
+  resetToStartGrid(flyingStart?: boolean, gridSlot?: number, fieldSize?: number, raceStart?: boolean, fairStart?: boolean): void;
   teleportToDistance(sMeters: number, speedMs?: number, lateral?: number): void;
   teleportToTurn(turnNumber: number): void;
   /**
@@ -387,6 +392,41 @@ export function boardFlyingStartSpeedMs(
   if (start.cornerS === null) return speed;
   const d = (((s - start.cornerS) % lapLengthM) + lapLengthM) % lapLengthM;
   return Math.min(speed, flyingExitSpeedMs(cornerExitMs, d));
+}
+
+/**
+ * The cars whose solo flying lap (practice and hot laps: the laps the boards rank) starts at the car's own pace, as a
+ * fair start does (`fairFlyingStartSpeedMs`). Empty: every solo flying lap starts as the boards' laps were set on. A car
+ * comes in here with its board reset (its offset raised in lap-types.ts, the old one kept in `PHYSICS_VERSIONS` for its
+ * awards): its board laps get slower by what the boards' start handed it (scripts/ai/flying-start-impact.ts measures it
+ * per car and layout)
+ */
+export const FAIR_SOLO_FLYING_START_CARS: ReadonlySet<VehicleModelId> = new Set<VehicleModelId>();
+
+/**
+ * Whether a flying lap of `vehicle` starts at its own pace: always when asked (`fairStart`: qualifying, a career test
+ * day, the reference laps their AI times come from), and a solo lap once its car is in `FAIR_SOLO_FLYING_START_CARS`
+ */
+export const flyingStartIsFair = (vehicle: VehicleModelId | undefined, fairStart: boolean): boolean =>
+  fairStart || (vehicle !== undefined && FAIR_SOLO_FLYING_START_CARS.has(vehicle));
+
+/**
+ * A fair flying lap's speed at `s` (m/s): the boards' start speed `boardMs` (at the same spot, pointed the same way) held
+ * to what the car itself carries there on a flying lap (`ownPaceFor`: its drive plan's expected speed on its line, its
+ * traction and top speed included), so its first timed lap is a normal one. The boards' start hands every car the
+ * circuit car's (the LC26's) speed: a Liana 186 km/h at Sachsenring where it carries 86, 4.2 s off its first lap.
+ * Never faster than the boards' start, so a fair lap that goes on a board never beats a solo one.
+ * The boards' start where the car has no own pace (a point-to-point road has no flying lap)
+ */
+export function fairFlyingStartSpeedMs(
+  track: BuiltTrackData,
+  vehicle: VehicleModelId | undefined,
+  line: RacingLineId,
+  s: number,
+  boardMs: number
+): number {
+  const pace = ownPaceFor(track, vehicle, line);
+  return pace ? Math.min(boardMs, ownSpeedAt(pace, s)) : boardMs;
 }
 
 /**
