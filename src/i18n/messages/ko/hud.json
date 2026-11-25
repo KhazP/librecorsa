@@ -95,7 +95,11 @@
     "potential": "단축 가능 {delta}초",
     "allBestSectors": "모든 최고 섹터를 한 랩에 달성",
     "offline": "리더보드가 오프라인입니다. 로컬 기록을 표시합니다.",
-    "disabled": "온라인 리더보드가 비활성화되어 있습니다. 로컬 기록을 표시합니다."
+    "disabled": "온라인 리더보드가 비활성화되어 있습니다. 로컬 기록을 표시합니다.",
+    "viewLabel": "랩 타임 보기",
+    "tabTimes": "랩 타임",
+    "tabAnalysis": "텔레메트리",
+    "analysisEmpty": "랩 텔레메트리를 보려면 랩을 완주하세요."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "빠름",
       "slower": "느림",
       "same": "동일"
-    }
+    },
+    "analyzeLap": "랩 텔레메트리"
   },
   "raceResults": {
     "dialog": "레이스 결과",
@@ -1096,5 +1101,56 @@
     "resetAll": "레이아웃 초기화",
     "cancel": "취소",
     "done": "완료"
+  },
+  "lapTelemetry": {
+    "title": "랩 텔레메트리",
+    "description": "기준 랩(점선) vs 비교 랩(실선) · 채널에 커서를 올려 세부 값 확인",
+    "reference": "기준",
+    "compared": "비교",
+    "allTimeBest": "개인 최고 기록",
+    "latestLap": "최근 랩",
+    "sessionLap": "랩 {lap}",
+    "invalidTag": "무효",
+    "channels": {
+      "brake": "브레이크",
+      "speed": "속도",
+      "throttle": "스로틀",
+      "gear": "기어",
+      "steering": "조향",
+      "delta": "시간 델타"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "초"
+    },
+    "drivingLine": "주행 라인",
+    "startFinish": "출발/결승",
+    "legend": {
+      "fastest": "최고 구간",
+      "faster": "빠름",
+      "same": "동일",
+      "slower": "느림"
+    },
+    "sectors": "섹터",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "{distance} 지점",
+    "insights": "주요 분석",
+    "noInsights": "두 랩이 매우 유사하며 큰 차이가 없습니다.",
+    "insight": {
+      "sectorLossTitle": "섹터 {sector} 시간 손실",
+      "sectorLossDetail": "섹터 {sector}에서 {seconds}초 손실했습니다.",
+      "sectorGainTitle": "섹터 {sector} 시간 단축",
+      "sectorGainDetail": "섹터 {sector}에서 {seconds}초 단축했습니다.",
+      "apexTitle": "코너 {turn} 에이펙스 속도",
+      "apexNamedTitle": "코너 {turn} ({name}) 에이펙스 속도",
+      "apexFasterDetail": "코너 {turn} 최저 속도가 {speed} {unit} 더 높았습니다.",
+      "apexSlowerDetail": "코너 {turn} 최저 속도가 {speed} {unit} 더 낮았습니다.",
+      "brakeTitle": "코너 {turn} 브레이킹 지점",
+      "brakeNamedTitle": "코너 {turn} ({name}) 브레이킹 지점",
+      "brakeEarlierDetail": "코너 {turn} 진입 시 약 {distance} {unit} 더 일찍 제동했습니다.",
+      "brakeLaterDetail": "코너 {turn} 진입 시 약 {distance} {unit} 더 늦게 제동했습니다."
+    }
   }
 }

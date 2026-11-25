@@ -95,7 +95,11 @@
     "potential": "إمكانية تحسين {delta} s",
     "allBestSectors": "جميع أفضل القطاعات في لفة واحدة",
     "offline": "لوحة الأزمنة غير متصلة. تُعرض الأزمنة المحلية.",
-    "disabled": "لوحة الأزمنة عبر الإنترنت معطّلة. تُعرض الأزمنة المحلية."
+    "disabled": "لوحة الأزمنة عبر الإنترنت معطّلة. تُعرض الأزمنة المحلية.",
+    "viewLabel": "عرض أزمنة اللفات",
+    "tabTimes": "أزمنة اللفات",
+    "tabAnalysis": "القياس عن بُعد",
+    "analysisEmpty": "أكمل لفة لعرض قياسات اللفة."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "أسرع",
       "slower": "أبطأ",
       "same": "مطابقة"
-    }
+    },
+    "analyzeLap": "قياسات اللفة"
   },
   "raceResults": {
     "dialog": "نتيجة السباق",
@@ -1096,5 +1101,56 @@
     "resetAll": "إعادة تعيين التخطيط",
     "cancel": "إلغاء",
     "done": "تم"
+  },
+  "lapTelemetry": {
+    "title": "قياسات اللفة",
+    "description": "اللفة المرجعية (متقطع) مقابل اللفة المقارنة (متصل) · مرّر المؤشر على أي قناة للفحص",
+    "reference": "المرجعية",
+    "compared": "المقارنة",
+    "allTimeBest": "أفضل زمن شخصي",
+    "latestLap": "آخر لفة",
+    "sessionLap": "اللفة {lap}",
+    "invalidTag": "ملغاة",
+    "channels": {
+      "brake": "الكبح",
+      "speed": "السرعة",
+      "throttle": "التسارع",
+      "gear": "الترس",
+      "steering": "التوجيه",
+      "delta": "فارق الزمن"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "ث"
+    },
+    "drivingLine": "خط القيادة",
+    "startFinish": "البداية/النهاية",
+    "legend": {
+      "fastest": "الأسرع",
+      "faster": "أسرع",
+      "same": "مطابقة",
+      "slower": "أبطأ"
+    },
+    "sectors": "القطاعات",
+    "sectorShort": "ق{sector}",
+    "sectorSplit": "ق{sector} ({distance})",
+    "cursorAt": "عند {distance}",
+    "insights": "أبرز الملاحظات",
+    "noInsights": "اللفّتان متقاربتان جداً دون فروقات كبيرة.",
+    "insight": {
+      "sectorLossTitle": "خسارة زمن في القطاع {sector}",
+      "sectorLossDetail": "خسرت {seconds} ث في القطاع {sector}.",
+      "sectorGainTitle": "كسب زمن في القطاع {sector}",
+      "sectorGainDetail": "كسبت {seconds} ث في القطاع {sector}.",
+      "apexTitle": "سرعة ذروة المنعطف {turn}",
+      "apexNamedTitle": "سرعة ذروة المنعطف {turn} ({name})",
+      "apexFasterDetail": "حافظت على سرعة دنيا أعلى بمقدار {speed} {unit} في المنعطف {turn}.",
+      "apexSlowerDetail": "حافظت على سرعة دنيا أقل بمقدار {speed} {unit} في المنعطف {turn}.",
+      "brakeTitle": "نقطة الكبح في المنعطف {turn}",
+      "brakeNamedTitle": "نقطة الكبح في المنعطف {turn} ({name})",
+      "brakeEarlierDetail": "كبحت قبل بنحو {distance} {unit} عند دخول المنعطف {turn}.",
+      "brakeLaterDetail": "كبحت بعد بنحو {distance} {unit} عند دخول المنعطف {turn}."
+    }
   }
 }

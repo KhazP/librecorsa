@@ -2,8 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
-import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
-import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { isVehicleModelId, type TurnMetadata, type VehicleModelId } from "@/types/f1";
+import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import type { SessionLapEntry } from "@/lib/sim/lap-analysis";
+import { LapTelemetryView } from "./LapTelemetryView";
 import { boardLabel } from "@/lib/net/leaderboard";
 import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
@@ -33,6 +35,16 @@ export interface LeaderboardPanelProps {
   carTag?: (vehicle: VehicleModelId) => BoardCarTag;
   /** This car's best laps on this circuit, saved in this browser */
   local: LeaderboardEntry[];
+  /** Completed laps from the current driving session, for lap telemetry comparison */
+  sessionLaps?: readonly SessionLapEntry[];
+  /** All-time personal best lap recording for this track and car */
+  allTimeBestLap?: LapRecording | null;
+  /** Most recent completed lap recording (persisted across refreshes) */
+  latestLap?: LapRecording | null;
+  /** Circuit turn metadata for corner-by-corner telemetry observations */
+  turns?: readonly TurnMetadata[];
+  /** Real circuit sector split distances (m) along the lap */
+  sectorSplitsM?: readonly [number, number] | null;
   /** Every personal best saved in this browser, any circuit and car: lets the panel switch circuit and car */
   loadAllLocal?: () => Promise<LeaderboardEntry[]>;
   /** This site has an online board */
@@ -96,6 +108,11 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   vehicleLabel,
   carTag = NEUTRAL_TAG,
   local,
+  sessionLaps,
+  allTimeBestLap = null,
+  latestLap = null,
+  turns,
+  sectorSplitsM = null,
   loadAllLocal,
   remoteEnabled,
   remoteStatus = "off",
@@ -123,6 +140,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   // a refusal also stays here, for one that never reached storage (the lap no longer saved)
   const [posting, setPosting] = useState<ReadonlySet<string>>(() => new Set());
   const [postErrors, setPostErrors] = useState<Readonly<Record<string, string>>>({});
+  const [subTab, setSubTab] = useState<"times" | "analysis">("times");
   const postLap = (e: LeaderboardEntry, id: string) => {
     if (!onPostLap || posting.has(id)) return;
     setPosting((s) => new Set(s).add(id));
@@ -351,6 +369,35 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
 
   return (
     <div className="flex flex-col gap-3 text-lc-chalk">
+      {sessionLaps ? (
+        <div className="flex items-center justify-between gap-2">
+          <Segmented
+            aria-label={tx("viewLabel")}
+            size="sm"
+            value={subTab}
+            onChange={(v) => setSubTab(v as "times" | "analysis")}
+            options={[
+              { id: "times", label: tx("tabTimes") },
+              { id: "analysis", label: tx("tabAnalysis") },
+            ]}
+          />
+        </div>
+      ) : null}
+
+      {subTab === "analysis" && (sessionLaps || allTimeBestLap || latestLap) ? (
+        (sessionLaps && sessionLaps.length > 0) || allTimeBestLap || latestLap ? (
+          <LapTelemetryView
+            sessionLaps={sessionLaps ?? []}
+            bestLap={allTimeBestLap}
+            latestLap={latestLap}
+            turns={turns}
+            sectorSplitsM={sectorSplitsM}
+          />
+        ) : (
+          <EmptyState icon={<Icon name="lapTimes" />}>{tx("analysisEmpty")}</EmptyState>
+        )
+      ) : (
+        <>
       {/* Toolbar: the sheet around the panel already names it, and the board below names the circuit */}
       {onImportGhost || onExportBest ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -485,6 +532,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         <p className="lc-hint m-0 px-1">
           {remoteStatus === "unreachable" ? tx("offline") : tx("disabled")}
         </p>
+      )}
+        </>
       )}
     </div>
   );

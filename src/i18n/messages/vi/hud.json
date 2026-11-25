@@ -95,7 +95,11 @@
     "potential": "Tiềm năng {delta} s",
     "allBestSectors": "Tất cả sector tốt nhất đều trong cùng một vòng",
     "offline": "Bảng xếp hạng ngoại tuyến. Đang hiển thị thành tích cục bộ.",
-    "disabled": "Bảng xếp hạng trực tuyến đã tắt. Đang hiển thị thành tích cục bộ."
+    "disabled": "Bảng xếp hạng trực tuyến đã tắt. Đang hiển thị thành tích cục bộ.",
+    "viewLabel": "Chế độ xem thành tích vòng",
+    "tabTimes": "Thành tích vòng",
+    "tabAnalysis": "Thông số vòng",
+    "analysisEmpty": "Hoàn thành một vòng để xem thông số phân tích."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Nhanh hơn",
       "slower": "Chậm hơn",
       "same": "Bằng nhau"
-    }
+    },
+    "analyzeLap": "Thông số vòng"
   },
   "raceResults": {
     "dialog": "Kết quả cuộc đua",
@@ -1096,5 +1101,56 @@
     "resetAll": "Đặt lại bố cục",
     "cancel": "Hủy",
     "done": "Xong"
+  },
+  "lapTelemetry": {
+    "title": "Thông số vòng",
+    "description": "Vòng chuẩn (nét đứt) so với vòng đối chiếu (nét liền) · Di chuột lên kênh bất kỳ để xem chi tiết",
+    "reference": "Vòng chuẩn",
+    "compared": "Đối chiếu",
+    "allTimeBest": "Kỷ lục cá nhân",
+    "latestLap": "Vòng mới nhất",
+    "sessionLap": "Vòng {lap}",
+    "invalidTag": "Bị hủy",
+    "channels": {
+      "brake": "Phanh",
+      "speed": "Tốc độ",
+      "throttle": "Chân ga",
+      "gear": "Số",
+      "steering": "Đánh lái",
+      "delta": "Chênh lệch thời gian"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "g"
+    },
+    "drivingLine": "Đường chạy",
+    "startFinish": "Vạch XP",
+    "legend": {
+      "fastest": "Nhanh nhất",
+      "faster": "Nhanh hơn",
+      "same": "Bằng nhau",
+      "slower": "Chậm hơn"
+    },
+    "sectors": "Chặng",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "Tại {distance}",
+    "insights": "Điểm đáng chú ý",
+    "noInsights": "Hai vòng khá sát nhau, không có chênh lệch lớn.",
+    "insight": {
+      "sectorLossTitle": "Mất thời gian ở Chặng {sector}",
+      "sectorLossDetail": "Chậm hơn {seconds} g ở Chặng {sector}.",
+      "sectorGainTitle": "Rút ngắn thời gian ở Chặng {sector}",
+      "sectorGainDetail": "Nhanh hơn {seconds} g ở Chặng {sector}.",
+      "apexTitle": "Tốc độ đỉnh cua Khúc cua {turn}",
+      "apexNamedTitle": "Tốc độ đỉnh cua Khúc cua {turn} ({name})",
+      "apexFasterDetail": "Giữ tốc độ thấp nhất cao hơn {speed} {unit} qua Khúc cua {turn}.",
+      "apexSlowerDetail": "Giữ tốc độ thấp nhất thấp hơn {speed} {unit} qua Khúc cua {turn}.",
+      "brakeTitle": "Điểm phanh Khúc cua {turn}",
+      "brakeNamedTitle": "Điểm phanh Khúc cua {turn} ({name})",
+      "brakeEarlierDetail": "Phanh sớm hơn ~{distance} {unit} khi vào Khúc cua {turn}.",
+      "brakeLaterDetail": "Phanh muộn hơn ~{distance} {unit} khi vào Khúc cua {turn}."
+    }
   }
 }
