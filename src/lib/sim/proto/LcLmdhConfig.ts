@@ -851,33 +851,34 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
     },
     // [est]: the launch slips the clutch at 4500 rpm
     clutch: { maxTorqueNm: 1300, biteRpm: 1800, lockRpm: 1900, launchRpm: 4500 },
-    // The spec mechanical plate differential (Art. 9.9) [spec]: six friction faces of μ 0.075 on a 50° drive ramp and a
-    // 36° coast ramp (~38 % drive lock, ~62 % coast lock) with 140 Nm of preload so power-on and lift-off stay
-    // progressive on low-downforce setups [bop]
+    // The spec mechanical plate differential (Art. 9.9) [spec]: six friction faces of μ 0.075, set as the 963 reference
+    // sets it [963]: a 56° drive ramp (~30 % drive lock) so the inside rear can turn on the power, a 34.7° coast ramp
+    // (~65 % coast lock) holding the rear on the brakes and a lift, and 90 Nm of preload
     differential: {
       type: 'LSD_Ramp',
-      settings: { power: 0.075, coast: 0.075, preload: 140, friction_faces: 6, power_ramp_deg: 50, coast_ramp_deg: 36 },
+      settings: { power: 0.075, coast: 0.075, preload: 90, friction_faces: 6, power_ramp_deg: 56, coast_ramp_deg: 34.7 },
       // Steel halfshafts from the transaxle, with their joints [est]
       halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 34 },
     },
     // Carbon discs of up to 381 mm (Art. 11.3.2) [spec], with their weak cold bite: 35 °C out of the garage, 290 °C after
-    // a formation lap [est]. 6400 Nm an axle pair at full pedal, 60 % front in 0.2 % clicks, moving 0.5 % forward over
-    // the pedal's travel, most of it gone early in the release [bop, est]. The brief's 56.4 % of 6800 Nm put 2960 Nm on
-    // each rear, past what the rears hold at low speed under braking: they locked at 70 % pedal at 80 km/h, a few tenths
-    // after the fronts, and a stamp spun the car. 60 % of 6400 keeps the fronts' 3840 Nm (the high-speed stop) and
-    // moves the rears' lock to 82 % (`scripts/verify-lc-lmdh.ts`). The rear ducts get 55 % of the front's air.
+    // a formation lap [est]. 6400 Nm an axle pair at full pedal, 58 % front in 0.2 % clicks [963], the brake-by-wire
+    // moving it forward over the second half of the pedal's travel, 2 % by full pedal [963], so a stamp has the 60 %
+    // that keeps the fronts' 3840 Nm (the high-speed stop) and the rears' lock 25 points of pedal after the fronts'
+    // (`scripts/verify-lc-lmdh.ts`), while a trail of the brake into the corner keeps the rears working. (The bias of an
+    // earlier brief, 56.4 % of 6800 Nm on a car with 48.5 % of its weight on the front, locked the rears at 70 % pedal at
+    // 80 km/h and a stamp spun the car.) The rear ducts get 55 % of the front's air.
     // The rear circuit is brake-by-wire (Art. 5.3.9, 11.7) [spec]: the rear calipers give way to the motor's
     // regeneration and the engine's overrun, so the axle brakes what the pedal asks
     brakes: {
       maxTorqueNm: 6400,
-      front_bias: 0.6,
+      front_bias: 0.58,
       ebbStep: 0.002,
       brakeByWire: true,
       discMaterial: 'endurance-carbon',
       discStartTempC: 290,
       garageDiscTempC: 35,
       rearDuctShare: 0.55,
-      migration: { amount: 0.005, rampStart: 0, exponent: 1.35 },
+      migration: { amount: 0.02, rampStart: 0.5 },
     },
     suspensions: SUSPENSIONS,
     aero: {
