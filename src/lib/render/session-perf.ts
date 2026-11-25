@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 import { percentile } from "./adaptive-quality";
 
 /**
@@ -146,7 +147,7 @@ export class SessionPerfMonitor {
   private hasWorker = false;
   private device = "";
 
-  constructor(private readonly renderer: THREE.WebGLRenderer) {}
+  constructor(private readonly renderer: AnyRenderer) {}
 
   /** Whether the page asked for it (`?perf=1`) */
   static requested(): boolean {
@@ -229,7 +230,12 @@ export class SessionPerfMonitor {
       workerPct: this.hasWorker && w.workerSpanMs > 0 ? (100 * w.workerBusyMs) / w.workerSpanMs : null,
       workerMaxMs: this.hasWorker && w.workerSpanMs > 0 ? w.workerMaxMs : null,
       heapMb: memory ? memory.usedJSHeapSize / 1048576 : null,
-      size: `${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`,
+      size: isWebGPURenderer(this.renderer)
+        ? `${this.renderer.domElement.width}x${this.renderer.domElement.height}`
+        : (() => {
+            const gl = this.renderer.getContext();
+            return `${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`;
+          })(),
       level: this.state.level,
     });
     if (this.rows.length > MAX_ROWS) this.rows.splice(KEEP_FIRST_ROWS, 1);
@@ -238,9 +244,12 @@ export class SessionPerfMonitor {
 
   private deviceLine(): string {
     if (this.device) return this.device;
-    const gl = this.renderer.getContext();
-    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-    const gpu = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    let gpu = "WebGPU";
+    if (!isWebGPURenderer(this.renderer)) {
+      const gl = this.renderer.getContext();
+      const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+      gpu = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    }
     const nav = navigator as Navigator & { deviceMemory?: number };
     const parts = [
       navigator.userAgent,

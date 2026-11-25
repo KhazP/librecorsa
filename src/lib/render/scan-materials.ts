@@ -43,7 +43,7 @@ const SAMPLE_PX = 128;
 
 type AlphaKind = "opaque" | "cutout" | "soft";
 
-const cleaned = new WeakSet<THREE.Material>();
+const cleaned = new WeakMap<THREE.Material, THREE.Material>();
 const alphaKinds = new WeakMap<THREE.Texture, AlphaKind>();
 
 function alphaKind(tex: THREE.Texture): AlphaKind {
@@ -81,11 +81,14 @@ function alphaKind(tex: THREE.Texture): AlphaKind {
   return kind;
 }
 
-export function cleanScanMaterial(mat: THREE.Material): void {
-  if (cleaned.has(mat)) return;
-  cleaned.add(mat);
+export function cleanScanMaterial(mat: THREE.Material): THREE.Material {
+  const prev = cleaned.get(mat);
+  if (prev) return prev;
   const std = mat as THREE.MeshStandardMaterial;
-  if (!std.isMeshStandardMaterial) return;
+  if (!std.isMeshStandardMaterial) {
+    cleaned.set(mat, mat);
+    return mat;
+  }
   const name = mat.name ?? "";
 
   if (!std.metalnessMap) std.metalness = METAL.test(name) ? Math.min(std.metalness, 0.6) : 0;
@@ -104,7 +107,12 @@ export function cleanScanMaterial(mat: THREE.Material): void {
       std.depthWrite = true;
     }
   }
-  if (std.alphaTest > 0 && std.side === THREE.DoubleSide && !SPARSE_CUTOUT.test(name)) leafShading(std);
-  applyGroundDetail(std);
-  std.needsUpdate = true;
+  let out: THREE.Material = std;
+  if (std.alphaTest > 0 && std.side === THREE.DoubleSide && !SPARSE_CUTOUT.test(name)) {
+    out = leafShading(out);
+  }
+  out = applyGroundDetail(out);
+  if (out === std) std.needsUpdate = true;
+  cleaned.set(mat, out);
+  return out;
 }

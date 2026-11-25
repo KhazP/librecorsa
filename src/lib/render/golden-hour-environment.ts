@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
+import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
+import { NodeMaterial, RenderPipeline } from "three/webgpu";
+import { dot, float, min, mix, pass, vec3, vec4 } from "three/tsl";
+import { bloom as tslBloom } from "three/examples/jsm/tsl/display/BloomNode.js";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 import { DRIVER_HEAD_LAYER, SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { setAsphaltQuality } from "@/lib/render/asphalt-sheen";
 import { setSceneryQuality } from "@/lib/render/scenery-detail";
@@ -169,7 +174,7 @@ export const GOLDEN_HOUR_SKY: Readonly<SkyConditions> = {
 };
 
 export interface GoldenHourEnvironment {
-  sunLight: SunLight;
+  sunLight: SunLight | THREE.DirectionalLight;
   /** unit vector from scene towards the sun */
   sunDirection: THREE.Vector3;
   sky: Sky;
@@ -209,7 +214,7 @@ export interface GoldenHourEnvironment {
 }
 
 export interface PostFx {
-  composer: EffectComposer;
+  composer: EffectComposer | null;
   render(dtSeconds: number): void;
   setSize(width: number, height: number): void;
   /** swap the camera used by the render pass (the sim uses a single camera, but keep it safe) */
@@ -246,7 +251,7 @@ export function rcasSharpnessForRatio(effectiveRatio: number): number {
  * shadow, MSAA and bloom, from the preset and what the automatic step-down turned down on top of it
  * (adaptive-quality.ts). Cheap to call again; the caller re-sizes the composer afterwards.
  */
-export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
+export function applyGraphicsQuality(renderer: AnyRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
   const { quality, renderScale } = plan;
   // The automatic quality's Lowest resolution bounds `renderScale`, the multiplier on this cap (adaptive-quality.ts)
   const dprCap = pixelRatioCap(plan);
@@ -274,7 +279,7 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
 // Renderer
 // ---------------------------------------------------------------------------
 
-export function configureRenderer(renderer: THREE.WebGLRenderer): void {
+export function configureRenderer(renderer: AnyRenderer): void {
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = EXPOSURE;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -431,9 +436,9 @@ function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
   u.rayleigh.value = look.rayleigh;
   u.cloudCoverage.value = look.cloudCoverage;
   u.cloudDensity.value = look.cloudDensity;
-  u.skyRadianceScale.value = look.radianceScale;
-  u.nightSky.value = look.nightSky;
-  u.nightStars.value = look.nightStars;
+  if (u.skyRadianceScale) u.skyRadianceScale.value = look.radianceScale;
+  if (u.nightSky) u.nightSky.value = look.nightSky;
+  if (u.nightStars) u.nightStars.value = look.nightStars;
   (u.sunPosition.value as THREE.Vector3).copy(sunDir);
 }
 
@@ -458,12 +463,13 @@ class SkyBaker {
   private readonly cubeCamera = new THREE.CubeCamera(0.1, 1000, this.cubeTarget);
   /** The environment map: one target, filtered again in place by every bake */
   private target: THREE.WebGLCubeRenderTarget | null = null;
+  private fallbackTex: THREE.DataTexture | null = null;
   private readonly clearColor = new THREE.Color();
 
   /** The physical sky's sun-less quad, baked in place of the classic sky while it shows */
   private physicalSky: THREE.Object3D | null = null;
 
-  constructor(private readonly renderer: THREE.WebGLRenderer) {
+  constructor(private readonly renderer: AnyRenderer) {
     this.sky.scale.setScalar(1000);
     configureSkyUniforms(this.sky, false);
     this.scene.add(this.sky);
@@ -472,7 +478,7 @@ class SkyBaker {
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.y = -1.5;
     this.scene.add(this.ground, this.groundSun, this.groundFill);
-    this.pmrem = new THREE.PMREMGenerator(renderer);
+    this.pmrem = isWebGPURenderer(renderer) ? null : new THREE.PMREMGenerator(renderer);
   }
 
   setPhysicalSky(quad: THREE.Object3D): void {
@@ -482,6 +488,25 @@ class SkyBaker {
 
   /** Bakes the sky into the environment map and returns its texture: the same texture on every call */
   bake(sunDir: THREE.Vector3, keyDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.Texture {
+    if (isWebGPURenderer(this.renderer) || !this.pmrem) {
+      if (!this.fallbackTex) {
+        // 2x2 equirectangular sky-to-ground gradient balanced for natural shadow detail without washing out darks
+        const data = new Uint8Array([
+          96, 114, 140, 255,
+          96, 114, 140, 255,
+          32, 30, 27, 255,
+          32, 30, 27, 255,
+        ]);
+        const tex = new THREE.DataTexture(data, 2, 2, THREE.RGBAFormat);
+        tex.mapping = THREE.EquirectangularReflectionMapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        this.fallbackTex = tex;
+      }
+      return this.fallbackTex;
+    }
     applySkyLook(this.sky, sunDir, look);
     // the night sky's glow lights the bake; its stars would only speckle the reflections
     this.sky.material.uniforms.nightStars.value = 0;
@@ -535,7 +560,7 @@ class SkyBaker {
 // ---------------------------------------------------------------------------
 
 export function createGoldenHourEnvironment(
-  renderer: THREE.WebGLRenderer,
+  renderer: AnyRenderer,
   scene: THREE.Scene,
   /**
    * `physicalSky`: allow the physically based sky on Medium and High (default false: the classic sky everywhere).
@@ -549,13 +574,36 @@ export function createGoldenHourEnvironment(
   const scratch = new THREE.Vector3();
 
   // --- Sky (visible dome) ---------------------------------------------------
+  const useWebGpuSky = isWebGPURenderer(renderer);
+  const skyMesh = useWebGpuSky ? new SkyMesh() : null;
   const sky = new Sky();
-  sky.scale.setScalar(SKY_SCALE);
-  sky.frustumCulled = false;
-  // Drawn after opaque geometry so early-Z rejects sky pixels hidden by the car/track.
-  sky.renderOrder = 1000;
-  configureSkyUniforms(sky, true);
-  scene.add(sky);
+  if (skyMesh) {
+    skyMesh.scale.setScalar(SKY_SCALE);
+    skyMesh.frustumCulled = false;
+    skyMesh.renderOrder = 1000;
+    skyMesh.turbidity.value = SKY_TURBIDITY;
+    skyMesh.rayleigh.value = SKY_RAYLEIGH;
+    skyMesh.mieCoefficient.value = 0.005;
+    skyMesh.mieDirectionalG.value = 0.8;
+    skyMesh.sunPosition.value.copy(sunDirection);
+    const skyMat = skyMesh.material as NodeMaterial;
+    if (skyMat.colorNode) {
+      // Match WebGL2 Sky scaling: cap the sun disc and scale radiance by SKY_RADIANCE_SCALE so bloom does not white-out the viewport.
+      const baseSky = skyMat.colorNode as ReturnType<typeof vec4>;
+      skyMat.colorNode = vec4(
+        min(baseSky.rgb, vec3(SUN_DISC_MAX_RADIANCE)).mul(SKY_RADIANCE_SCALE),
+        float(1.0)
+      );
+    }
+    scene.add(skyMesh);
+  } else {
+    sky.scale.setScalar(SKY_SCALE);
+    sky.frustumCulled = false;
+    // Drawn after opaque geometry so early-Z rejects sky pixels hidden by the car/track.
+    sky.renderOrder = 1000;
+    configureSkyUniforms(sky, true);
+    scene.add(sky);
+  }
 
   // The physical sky (Medium / High) is built the first time it is needed and takes over from the classic sky once its
   // lookup tables are computed (a fraction of a second); until then, on Low and if that fails, the classic sky shows
@@ -592,7 +640,16 @@ export function createGoldenHourEnvironment(
   // camera's frustum (out to SHADOW_DISTANCE_M) and snaps them to whole texels, so shadows stay sharp near the
   // car, reach the scenery behind it and do not crawl as the camera moves.
   // A SunLight has no target: it shines from its position towards the origin.
-  const sunLight = new SunLight(SUN_COLOR, SUN_INTENSITY);
+  const sunLight: SunLight | THREE.DirectionalLight = useWebGpuSky
+    ? new THREE.DirectionalLight(SUN_COLOR, SUN_INTENSITY)
+    : new SunLight(SUN_COLOR, SUN_INTENSITY);
+  if (sunLight instanceof THREE.DirectionalLight) {
+    sunLight.shadow.camera.left = -55;
+    sunLight.shadow.camera.right = 55;
+    sunLight.shadow.camera.top = 55;
+    sunLight.shadow.camera.bottom = -55;
+    scene.add(sunLight.target);
+  }
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
   // near: margin in front of the casters nearest the sun; far: the cascades' reach from the camera
@@ -634,7 +691,8 @@ export function createGoldenHourEnvironment(
   /** Shows whichever sky the preset and the physical sky's readiness call for, and re-bakes the environment from it */
   const applySkyChoice = () => {
     if (disposed) return;
-    sky.visible = !physicalSky?.showing;
+    if (skyMesh) skyMesh.visible = !physicalSky?.showing;
+    else sky.visible = !physicalSky?.showing;
     syncFogDensity();
     rebake();
   };
@@ -646,7 +704,7 @@ export function createGoldenHourEnvironment(
     if (disposed) return;
     qualityNow = quality;
     aerialAllowedNow = aerialAllowed;
-    if (!physicalSky && options.physicalSky && !physicalSkyHeld && quality !== "low") {
+    if (!isWebGPURenderer(renderer) && !physicalSky && options.physicalSky && !physicalSkyHeld && quality !== "low") {
       physicalSky = new PhysicalSky(renderer, applySkyChoice);
       scene.add(physicalSky.mesh);
       baker.setPhysicalSky(physicalSky.bakeMesh);
@@ -669,9 +727,14 @@ export function createGoldenHourEnvironment(
   // The probe keeps this switch object; it forwards to the sky on show now
   const sunDiscSwitch = {
     get value(): number {
+      if (skyMesh && !physicalSky?.showing) return skyMesh.showSunDisc.value ? 1 : 0;
       return ((physicalSky?.showing ? physicalSky.mesh : sky).material.uniforms.showSunDisc as { value: number }).value;
     },
     set value(v: number) {
+      if (skyMesh && !physicalSky?.showing) {
+        skyMesh.showSunDisc.value = v !== 0;
+        return;
+      }
       ((physicalSky?.showing ? physicalSky.mesh : sky).material.uniforms.showSunDisc as { value: number }).value = v;
     },
   };
@@ -721,7 +784,7 @@ export function createGoldenHourEnvironment(
     if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)) * (1 - nightShare));
     syncFogDensity();
 
-    scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain);
+    scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain) * (useWebGpuSky ? 0.75 : 1);
     renderer.toneMappingExposure = curve(EXPOSURE_KEYS, e) * (1 + 0.3 * cloud);
     if (flood) {
       // Cloud does not dim a floodlight; rain and cloud keep their share of the haze
@@ -734,7 +797,13 @@ export function createGoldenHourEnvironment(
     }
 
     skyLookFor(current, skyLook);
-    applySkyLook(sky, skySunDir, skyLook);
+    if (skyMesh) {
+      skyMesh.sunPosition.value.copy(skySunDir);
+      skyMesh.turbidity.value = skyLook.turbidity;
+      skyMesh.rayleigh.value = skyLook.rayleigh;
+    } else {
+      applySkyLook(sky, skySunDir, skyLook);
+    }
     physicalSky?.setConditions({ sunDirection: skySunDir, cloud, rain, windVxMs: c.windVxMs, windVzMs: c.windVzMs });
     const dElev = Math.abs(e - baked.elevationDeg);
     const dCloud = Math.abs(cloud - baked.cloud);
@@ -755,11 +824,20 @@ export function createGoldenHourEnvironment(
     probeSky: { material: { uniforms: { showSunDisc: sunDiscSwitch } } },
     fillLight,
 
-    update(_carWorldPos: THREE.Vector3, camera: THREE.Camera): void {
+    update(carWorldPos: THREE.Vector3, camera: THREE.Camera): void {
       if (disposed) return;
 
       camera.getWorldPosition(scratch);
       sky.position.copy(scratch);
+      skyMesh?.position.copy(scratch);
+      if (sunLight instanceof THREE.DirectionalLight) {
+        // Snap shadow target to 0.5 m grid so directional shadows follow the car without texel shimmer
+        const sx = Math.round(carWorldPos.x * 2) * 0.5;
+        const sy = Math.round(carWorldPos.y * 2) * 0.5;
+        const sz = Math.round(carWorldPos.z * 2) * 0.5;
+        sunLight.target.position.set(sx, sy, sz);
+        sunLight.position.set(sx, sy, sz).addScaledVector(sunDirection, SUN_DISTANCE_M);
+      }
       // Drifting clouds (the Sky shader skips them at zero coverage), from where this session's seed starts them
       if (sky.material.uniforms.cloudCoverage.value > 0) sky.material.uniforms.time.value = classicCloudClockS + performance.now() / 1000;
       if (pendingBake && performance.now() - lastBakeMs > REBAKE_MIN_S * 1000) rebake();
@@ -799,6 +877,8 @@ export function createGoldenHourEnvironment(
 
       sky.geometry.dispose();
       sky.material.dispose();
+      skyMesh?.geometry.dispose();
+      skyMesh?.material.dispose();
       sunLight.shadow.dispose();
       // The environment map with it
       baker.dispose();
@@ -937,11 +1017,61 @@ const hexColor = (css: string): THREE.Vector3 | null => {
 };
 
 export function createPostFx(
-  renderer: THREE.WebGLRenderer,
+  renderer: AnyRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera,
   opts?: { multisampling?: number }
 ): PostFx {
+  if (isWebGPURenderer(renderer)) {
+    const pipeline = new RenderPipeline(renderer);
+    let activeCamera = camera;
+    let scenePass = pass(scene, camera);
+    let sceneColor = scenePass.getTextureNode("output");
+    let bloomNode = tslBloom(sceneColor, 0.2, 0.42, 1.3);
+    bloomNode.smoothWidth.value = 0.2;
+    let bloomEnabled = false;
+    const syncOutput = () => {
+      const hdr = bloomEnabled ? sceneColor.add(bloomNode) : sceneColor;
+      // Apply saturation in linear HDR space without shifting the black point before AgX tone mapping
+      const luma = dot(hdr.rgb, vec3(0.2126, 0.7152, 0.0722));
+      const satRgb = mix(vec3(luma), hdr.rgb, 1 + GRADE_SATURATION);
+      pipeline.outputNode = vec4(satRgb, hdr.a);
+      pipeline.needsUpdate = true;
+    };
+    syncOutput();
+    return {
+      composer: null,
+      render() {
+        pipeline.render();
+      },
+      setSize() {
+        // RenderPipeline tracks renderer size automatically
+      },
+      setCamera(next: THREE.Camera) {
+        if (next === activeCamera) return;
+        activeCamera = next;
+        scenePass = pass(scene, next);
+        sceneColor = scenePass.getTextureNode("output");
+        bloomNode = tslBloom(sceneColor, 0.2, 0.42, 1.3);
+        bloomNode.smoothWidth.value = 0.2;
+        syncOutput();
+      },
+      setQuality(quality, _msaa, bloomOpt) {
+        const wantBloom = bloomOpt ?? quality === "high";
+        if (wantBloom !== bloomEnabled) {
+          bloomEnabled = wantBloom;
+          syncOutput();
+        }
+      },
+      setClouds() {},
+      setSharpness() {},
+      setEdgeGlow() {},
+      dispose() {
+        pipeline.dispose();
+      },
+    };
+  }
+
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
     multisampling: opts?.multisampling ?? 4,

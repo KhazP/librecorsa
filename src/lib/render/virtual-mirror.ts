@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * Virtual rear-view mirror: a top-centre strip on screen showing the road behind, for the views where the car's own
@@ -66,7 +67,7 @@ void main() {
 `;
 
 export class VirtualMirror {
-  private readonly renderer: THREE.WebGLRenderer;
+  private readonly renderer: AnyRenderer;
   private readonly scene: THREE.Scene;
   private readonly rt: THREE.WebGLRenderTarget;
   private readonly cam: THREE.PerspectiveCamera;
@@ -85,7 +86,7 @@ export class VirtualMirror {
   private readonly prevScissor = new THREE.Vector4();
   private readonly size = new THREE.Vector2();
 
-  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
+  constructor(renderer: AnyRenderer, scene: THREE.Scene) {
     this.renderer = renderer;
     this.scene = scene;
     this.rt = new THREE.WebGLRenderTarget(RT_W, RT_H, { type: THREE.HalfFloatType, samples: 0, depthBuffer: true });
@@ -116,6 +117,10 @@ export class VirtualMirror {
    * (`MirrorClock`). `hide` is the player's car, kept out of its own mirror.
    */
   update(refresh: boolean, enabled: boolean, chassis: THREE.Object3D, hide: THREE.Object3D): void {
+    if (isWebGPURenderer(this.renderer)) {
+      this.active = false;
+      return;
+    }
     if (enabled !== this.active) {
       this.active = enabled;
       this.renderNext = enabled;
@@ -151,7 +156,7 @@ export class VirtualMirror {
 
   /** After the main render: draw the mirror over the frame (default framebuffer) */
   draw(): void {
-    if (!this.active) return;
+    if (!this.active || isWebGPURenderer(this.renderer)) return;
     const r = this.renderer;
     r.getSize(this.size);
     const rect = virtualMirrorRect(this.size.x, this.size.y);

@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+import type { AnyRenderer } from "./webgpu-renderer";
 import type { GLTFLoaderPlugin, GLTFParser } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { withBasePath } from "@/lib/base-path";
 import { isTouchDevice } from "@/lib/input/touch-input";
@@ -24,7 +25,7 @@ import { isTouchDevice } from "@/lib/input/touch-input";
 
 type Ktx2Mode = "auto" | "on" | "off" | "etc" | "astc";
 
-let renderer: THREE.WebGLRenderer | null = null;
+let renderer: AnyRenderer | null = null;
 let loader: KTX2Loader | null = null;
 let ready: Promise<void> | null = null;
 let users = 0;
@@ -56,7 +57,7 @@ function probe(next: KTX2Loader): Promise<void> {
 }
 
 /** The renderer whose GPU formats the transcoder targets (the drive session's) */
-export function setKtx2Renderer(next: THREE.WebGLRenderer | null): void {
+export function setKtx2Renderer(next: AnyRenderer | null): void {
   renderer = next;
 }
 

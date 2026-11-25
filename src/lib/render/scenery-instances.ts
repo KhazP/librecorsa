@@ -100,11 +100,12 @@ export function attachSceneryInstances(trackRoot: THREE.Object3D, scenery: THREE
     mesh.frustumCulled = true;
     mesh.userData.sceneryFullCount = mesh.count;
     mesh.computeBoundingSphere();
-    for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+    const shadeLeaf = (mat: THREE.Material) => {
       // Leaf cards are alpha-tested and seen from both sides
       mat.side = THREE.DoubleSide;
-      leafShading(mat);
-    }
+      return leafShading(mat);
+    };
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(shadeLeaf) : shadeLeaf(mesh.material);
     meshes.add(mesh);
     applyDensity(mesh);
   });
