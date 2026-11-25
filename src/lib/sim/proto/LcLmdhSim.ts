@@ -25,19 +25,19 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 
 /**
  * The car's planning model for its lap-time line, braking zones, braking urgency and HUD target speed, at ρ 1.07
- * (Rwanda's air, as the other closed-wheel cars' plans are): downforce 2.2 v² (CL·A ≈ 4.1 m² over the speeds a lap
- * uses), drag 0.588 v² (CD·A 1.10 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.365 and brakes on
- * μ 1.3, under what `scripts/ai/measure-ggv.ts` measures (1.59 g at 54 km/h and 3.43 g at 306 in corners, 1.69 and
- * 3.42 g on the brakes), so it never brakes later than the car can stop.
+ * (Rwanda's air, as the other closed-wheel cars' plans are): downforce 2.25 v² (CL·A ≈ 4.2 m² over the speeds a lap
+ * uses), drag 0.588 v² (CD·A 1.10 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.42 and brakes on
+ * μ 1.3, under what `scripts/ai/measure-ggv.ts` measures (1.65 g at 54 km/h and 3.67 g at 306 in corners, 1.73 and
+ * 3.38 g on the brakes), so it never brakes later than the car can stop.
  */
 export const LC_LMDH_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
-  downforceCoef: 2.2,
+  downforceCoef: 2.25,
   // ½ρ·CD·A at ρ 1.07: the endurance trim's ≈ 1.10 m² on the 5.5° wing
   dragCoef: 0.588,
   rearDownforceShare: 0.555,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-  muLat: 1.365,
+  muLat: 1.42,
   muLong: 1.3,
   maxBrakeForceN:
     2 *
@@ -72,9 +72,9 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // minimum so the CoP shifts slightly rearward (~0.5 % behind balanced) to keep low-downforce corners planted without
   // snap oversteer
   aeroPackagesDeg: { low_downforce: [-4.9, -4.5], balanced: [0, 0], high_downforce: [3, 1.5] },
-  // Its grip on the flat per g of weight and downforce, 1.46–1.51 from 80 to 180 km/h: the steering assist's yaw guard
-  // reads this, and the 1.4 it had trimmed a stick's lock short of the grip in slow corners
-  padLateralMu: 1.5,
+  // Its grip on the flat per g of weight and downforce, 1.56–1.64 from 90 to 162 km/h: the steering assist's yaw guard
+  // reads this, and a figure under it trims a stick's lock short of the grip in slow corners
+  padLateralMu: 1.6,
   // 263.5° of rim lock each way on a 13.175 : 1 rack [bop]
   steerRatio: 13.175,
   // The autopilot brakes on 85 % of this and corners on 1.1 × that: 1.45 g at low speed and 3.2 g at 306 km/h, inside
