@@ -398,8 +398,8 @@ const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v
  *    road, more with the rake to ≈ 0.6°, stalling past it
  *  - the rear wing (0.95 m² at 5.5°) gains 0.065 m² of CL·A and 0.022 m² of CD·A a degree over its 1–9° range; it sits
  *    0.72 m behind the rear axle
- * The diffuser and the wing work in the body's wake once the car slides, so the balance comes forward ≈ 0.6 % at 10° of
- * yaw [963].
+ * The diffuser and the wing work in the body's wake once the car slides, so the balance creeps forward with yaw [963],
+ * held under a quarter of a per cent at 8° (verify-car-physics-wave2: the low-drag trim snapped round past that).
  */
 const AERO: AeroData = {
   front_lift: 0,
@@ -455,7 +455,7 @@ const AERO: AeroData = {
         [0.03, 1],
         [0.12, 0.97],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.99], [10, 0.965], [20, 0.89], [30, 0.8]],
+      lutYaw_CL_mult: [[0, 1], [5, 0.988], [10, 0.958], [20, 0.88], [30, 0.79]],
       dragY: -0.2,
     },
     {
@@ -501,7 +501,7 @@ const AERO: AeroData = {
         [0.15, 0.95],
       ],
       // The diffuser works in the body's wake once the car slides [963]
-      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.95], [20, 0.85], [30, 0.72]],
+      lutYaw_CL_mult: [[0, 1], [5, 0.988], [10, 0.957], [20, 0.87], [30, 0.76]],
       dragY: -0.22,
     },
     {
@@ -534,8 +534,8 @@ const AERO: AeroData = {
         [0, 1],
         [0.3, 1],
       ],
-      // Deeper in the body's wake than the floor once the car slides, so the balance moves forward as it yaws [963]
-      lutYaw_CL_mult: [[0, 1], [5, 0.98], [10, 0.935], [20, 0.8], [30, 0.66]],
+      // Deeper in the body's wake than the floor once the car slides, so the balance creeps forward as it yaws [963]
+      lutYaw_CL_mult: [[0, 1], [5, 0.987], [10, 0.952], [20, 0.84], [30, 0.7]],
       dragY: 0.5,
     },
   ],
@@ -630,9 +630,9 @@ const pressureSpring = (rate: number): LutPoints => [18, 22, 26, 30, 34].map((p)
  * simulator's closed-wheel slick estimates. The lateral grip was raised with the downforce (see the aero map's note):
  * braking read off the same footage, about 3.2 g from 280 km/h, already matched, so the longitudinal grip stayed.
  * `grip` scales a compound. Its character is the 963 reference's [963]: a gentle loss of grip with load (≈ 11 % less μ
- * per doubling across the car, 10 % along it), the wider rear peaking earlier in slip angle than the front (6.0° and
- * 6.3°) on its stiffer carcass, and a camber optimum near 3.4° front and 2.7° rear of running camber, where the static
- * camber and the squat at speed put it
+ * per doubling across the car, 10 % along it), slip peaks near 6° (6.1° front, the rear's a little wider at 6.3° with
+ * its gentler falloff, so it lets go progressively: verify-car-physics-wave2), and a camber optimum near 3.4° front and
+ * 2.7° rear of running camber, where the static camber and the squat at speed put it
  */
 function lmdhCompound(
   tyre_compound: PhysicsTyreCompound,
@@ -664,7 +664,7 @@ function lmdhCompound(
       dyCurve: loadCurve(frontLat, 0.83),
       dxCurve: loadCurve(front, 0.85),
       curve: 'brush',
-      friction_limit_angle: 6.3,
+      friction_limit_angle: 6.1,
       peakSlipLoadGain: 0.05,
       peakSlipPressureGain: 0.05,
       combinedExponent: 2,
@@ -732,9 +732,8 @@ function lmdhCompound(
       dcamber0_x: 0,
       dcamber1_x: -6,
     },
-    // The 34 cm rear: its own grip at the same reference load, a little less load-sensitive, its slip peak earlier on
-    // its stiffer carcass with a gentler post-peak falloff for progressive breakaway on low-downforce trims, and its
-    // camber optimum at 2.7° [963]
+    // The 34 cm rear: its own grip at the same reference load, a little less load-sensitive, a wider slip peak and a
+    // gentler post-peak falloff for progressive breakaway on low-downforce trims, and its camber optimum at 2.7° [963]
     rearOverride: {
       modelData: {
         Dy0: rearLat,
@@ -744,7 +743,7 @@ function lmdhCompound(
         lsExpX: 0.86,
         dyCurve: loadCurve(rearLat, 0.84),
         dxCurve: loadCurve(rear, 0.86),
-        friction_limit_angle: 6.0,
+        friction_limit_angle: 6.3,
         longStiffnessMult: 1.19,
         falloff_level: 0.9,
         falloff_slope: 3,
