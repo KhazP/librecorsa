@@ -13,7 +13,7 @@ import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { AMG_GT3_PROFILE_CAR, AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { NISSAN_R32_SIM_PROFILE } from '../src/lib/sim/classic/NissanR32Sim';
+import { BMW_M1_PROCAR_SIM_PROFILE } from '../src/lib/sim/classic/BmwM1ProcarSim';
 import { planCheckFor } from '../src/lib/track-data';
 import { brakingGuideFor, computeSpeedProfile, createLc26ProfileCarModel } from '../src/lib/sim/speed-profile';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
@@ -339,23 +339,24 @@ console.log('\n== Autopilot on the Rwanda colliders');
   const edgeTolM = 0.2;
   check('GT3 autopilot full-pace lap stays on the asphalt and its flat kerbs', gt3.done && gt3.pastKerb <= edgeTolM && gt3.offFrames === 0 && gt3.maxSlip < 10,
     `lap ${fmt(gt3.lapS, 1)} s, top ${fmt(gt3.top, 0)} km/h, CG ${fmt(Math.max(0, gt3.beyond), 2)} m past the edge, ${fmt(Math.max(0, gt3.pastKerb), 2)} m past its kerb room (≤ ${edgeTolM}), ${gt3.offFrames} frames off, max body slip ${fmt(gt3.maxSlip, 1)}°`);
-  // The own driver (a car with no checked plan here: the R32) plans its speeds on its path onto the flat kerbs, a quicker
-  // lap than on the asphalt alone; a car the field puts on plans here (the AMG) keeps the asphalt base its plan's speeds
-  // are scaled against
+  // The own driver (a car with no checked plan here: the M1 Procar; the R32 races a plan at RISE short) plans its speeds
+  // on its path onto the flat kerbs, a quicker lap than on the asphalt alone; a car the field puts on plans here (the AMG)
+  // keeps the asphalt base its plan's speeds are scaled against
   {
     const lapOf = (p: ArrayLike<number>) => {
       let s = 0;
       for (let i = 0; i < p.length; i++) s += track.totalLengthM / p.length / Math.max(1, p[i]);
       return s;
     };
-    const kerbs = lapOf(new F12026CarSim(track, root, NISSAN_R32_SIM_PROFILE).aiBaseSpeedProfile());
-    const asphalt = lapOf(new F12026CarSim(track, root, { ...NISSAN_R32_SIM_PROFILE, aiOwnKerbShare: 0 }).aiBaseSpeedProfile());
+    const m1OnPlans = planCheckFor('bmw-m1-procar', 'gt3')?.ok === true;
+    const kerbs = lapOf(new F12026CarSim(track, root, BMW_M1_PROCAR_SIM_PROFILE).aiBaseSpeedProfile());
+    const asphalt = lapOf(new F12026CarSim(track, root, { ...BMW_M1_PROCAR_SIM_PROFILE, aiOwnKerbShare: 0 }).aiBaseSpeedProfile());
     const amgOnPlans = planCheckFor('amg-gt3', 'gt3')?.ok === true;
     const amg = createAmgGt3Sim(track, root).aiBaseSpeedProfile();
     const amgAsphalt = new F12026CarSim(track, root, { ...AMG_GT3_SIM_PROFILE, aiOwnKerbShare: 0 }).aiBaseSpeedProfile();
     check('Own driver plans on its path onto the flat kerbs; a car on plans keeps its asphalt base',
-      kerbs < asphalt - 0.3 && amgOnPlans && amg === amgAsphalt,
-      `R32 profile lap ${fmt(kerbs, 2)} s on the kerbs vs ${fmt(asphalt, 2)} s on the asphalt; AMG on plans ${amgOnPlans}, base ${amg === amgAsphalt ? 'unchanged' : 'changed'}`);
+      !m1OnPlans && kerbs < asphalt - 0.3 && amgOnPlans && amg === amgAsphalt,
+      `M1 Procar (own driver ${!m1OnPlans}) profile lap ${fmt(kerbs, 2)} s on the kerbs vs ${fmt(asphalt, 2)} s on the asphalt; AMG on plans ${amgOnPlans}, base ${amg === amgAsphalt ? 'unchanged' : 'changed'}`);
   }
   // A GT3 is ~25–35 % slower round a lap than an F1 car
   const ratio = gt3.lapS / f1.lapS;
