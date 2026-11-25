@@ -763,6 +763,70 @@ console.log('\n== Fuel and steering');
   check('Full lock from centre in 0.28–0.31 s (263.5° at 900°/s)', tLock > 0.28 && tLock < 0.31, `${fmt(tLock, 3)} s`);
 }
 
+console.log('\n== The 963\'s systems: its pedal map, a TC that reads the steering, electric out of the pit box');
+{
+  // The pedal map: progressive, as the 963's default is
+  const pedal = new Lut(C.engine.throttleResponseCurve);
+  check('A progressive pedal: half the pedal asks 43–47 % of the torque, full pedal all of it', pedal.evaluate(0.5) > 0.43 && pedal.evaluate(0.5) < 0.47 && pedal.evaluate(1) === 1,
+    `${fmt(pedal.evaluate(0.25), 3)} at a quarter, ${fmt(pedal.evaluate(0.5), 3)} at half`);
+  // A slow corner's exit at full throttle on 184° of rim, TC on: less wheelspin with the steering term than without
+  const exit = (withSteer: boolean) => {
+    const electronics = { ...LC_LMDH_SIM_PROFILE.electronics!, tcSteerTightening: withSteer ? LC_LMDH_SIM_PROFILE.electronics!.tcSteerTightening : undefined };
+    const sim = createLcLmdhSim(pad, null, { ...LC_LMDH_SIM_PROFILE, electronics });
+    sim.assistPreset = 'semi_pro';
+    sim.teleportToDistance(1000, 60 / 3.6);
+    const h = 1 / 240;
+    for (let t = 0; t < 1.5; t += h) sim.step(h, { throttle: 0.25, analogSteer: 0.7 });
+    let slip = 0;
+    let n = 0;
+    for (let t = 0; t < 1.5; t += h) {
+      sim.step(h, { throttle: 1, analogSteer: 0.7 });
+      slip += Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
+      n++;
+    }
+    return slip / n;
+  };
+  const withSteer = exit(true);
+  const without = exit(false);
+  check('The TC lets less wheelspin through on full lock, reading the steering', withSteer < without, `rear slip ${fmt(withSteer, 3)} with the steering term, ${fmt(without, 3)} without`);
+  // Out of the pit box on the motor alone: the engine off, then firing at the pit limiter's steady speed or past 65 km/h
+  const pitCar = (surface: 'pitlane' | 'road', kmh = 0) => {
+    const car = new VehiclePhysics({ ground: new FlatGroundQuery(0, surface), config: C, airDensity: RHO });
+    car.reset(0, 0, 0, kmh / 3.6);
+    car.ersEnergyJ = 0.6 * C.ers.ERS_MAX_CHARGE;
+    return car;
+  };
+  const box = pitCar('pitlane');
+  let enginePower = 0;
+  let motorKw = 0;
+  run(box, 2, () => ({ throttle: 1, brake: 0, steer: 0 }), (c) => {
+    enginePower = Math.max(enginePower, c.iceMechanicalPowerW);
+    motorKw = Math.max(motorKw, c.telemetry.MGUK_POWER / 1000);
+    return false;
+  });
+  const launched = box.telemetry.speedKmh;
+  check('Out of the pit box the motor drives alone: no engine power, the motor\'s up to 50 kW', box.electricOnly && enginePower === 0 && motorKw > 10 && motorKw <= 50.5 && launched > 10,
+    `${fmt(launched, 0)} km/h in 2 s on ${fmt(motorKw, 0)} kW, engine ${fmt(enginePower / 1000, 1)} kW, ${fmt(box.rpm, 0)} rpm`);
+  let firedAt = NaN;
+  run(box, 8, (c) => {
+    const v = c.telemetry.speedKmh;
+    return { throttle: v < 55 ? 1 : Math.max(0, 0.25 - (v - 55) * 0.1), brake: 0, steer: 0 };
+  }, (c, t) => {
+    if (!c.electricOnly && Number.isNaN(firedAt)) firedAt = t;
+    return false;
+  });
+  check('The engine fires at a steady 55 km/h, and stays on down the pit lane', !box.electricOnly && firedAt > 0 && box.iceMechanicalPowerW > 0, `fired ${fmt(firedAt, 2)} s after the launch's first 2 s`);
+  const flatOut = pitCar('pitlane');
+  run(flatOut, 12, () => ({ throttle: 1, brake: 0, steer: 0 }), (c) => !c.electricOnly);
+  check('Flat out it fires past 65 km/h', !flatOut.electricOnly && flatOut.telemetry.speedKmh > 64 && flatOut.telemetry.speedKmh < 72, `${fmt(flatOut.telemetry.speedKmh, 1)} km/h`);
+  const arriving = pitCar('pitlane', 60);
+  const road = pitCar('road');
+  run(arriving, 0.5, () => ({ throttle: 0.3, brake: 0, steer: 0 }));
+  run(road, 1, () => ({ throttle: 1, brake: 0, steer: 0 }));
+  check('Arriving down the pit lane at speed, and on the road, the engine runs', !arriving.electricOnly && !road.electricOnly,
+    `${fmt(arriving.telemetry.speedKmh, 0)} km/h on the pit lane, ${fmt(road.telemetry.speedKmh, 0)} km/h on the road`);
+}
+
 console.log('\n== What the sound hears: driveshaft and motor telemetry');
 {
   const sim = createLcLmdhSim(pad, null);

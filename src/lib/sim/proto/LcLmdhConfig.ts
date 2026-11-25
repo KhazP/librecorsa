@@ -140,11 +140,12 @@ const ENGINE = {
     [N_MAX, 58.5],
     [LIMITER_RPM + 600, 63],
   ] as LutPoints,
-  // A linear pedal: the engine control is torque-based (Art. 5.2.3) [spec]
-  throttleResponseCurve: [
-    [0, 0],
-    [1, 1],
-  ] as LutPoints,
+  // The engine control is torque-based (Art. 5.2.3) [spec], its pedal map progressive as the 963's default is [963]:
+  // ≈ pedal^1.15, so half the pedal asks 45 % of the torque and the first of the travel is gentler out of a slow corner.
+  // The engine maps 3 to 5 soften it further
+  throttleResponseCurve: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1].map(
+    (x) => [x, Number((x ** 1.15).toFixed(4))] as [number, number]
+  ) as LutPoints,
   // Drive-by-wire actuator and intake filling [est]; the turbos' lag is its own (below)
   torqueResponseS: { rise: 0.03, fall: 0.02 },
   // Two turbos on a 4.6 L V8 [963]: 1.2 bar of boost made from 2800 rpm on a fixed wastegate, spooling in ≈ 0.3 s at
@@ -189,6 +190,10 @@ const ERS = {
   liftThrottle: 0,
   topGearLiftHarvestW: 0,
   mguDemandFilter: { maxHz: 50, belowKmh: 160 },
+  // Out of the pit box on the motor alone [963; the class's cars run electric in the garage and the pit lane, and footage
+  // of the 963 leaving its box at Imola has the motor's whine rising for ≈ 4 s before the V8 fires at the pit limiter's
+  // speed]: the engine fires after a second steady over 30 km/h, past 65 km/h, or with a tenth of the store left
+  pitLaneElectric: { cruiseKmh: 30, cruiseS: 1, maxKmh: 65, minSoc: 0.1 },
 };
 
 const FLAT: LutPoints = [
@@ -927,4 +932,7 @@ export const LC_LMDH_ELECTRONICS = {
   tcMinSpeedKmh: 40,
   tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.25 },
   tcDryRearSlide: { gain: 2, from: 0.45 },
+  // It reads the steering too [963]: the wheelspin it allows falls to half by 200° of rim, so a hairpin's exit on full
+  // lock gets less than a straight
+  tcSteerTightening: { fullAtRimDeg: 200, floor: 0.5 },
 };
