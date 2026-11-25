@@ -164,7 +164,8 @@ Only the **MOZA R9 V2 with the KS rim** has been physically tested by the mainta
 | Logitech G920, G923 for Xbox (in PC mode) | Expected | Expected |
 | Logitech G923 for PlayStation, G PRO, Driving Force Pro | No | Expected |
 | Thrustmaster T300RS, T-GT II, T248, TX, TS-XW, TS-PC | Unknown | Expected |
-| Thrustmaster T150, TMX, T500RS | No | Expected |
+| Thrustmaster T150, TMX (HID PID, where Chrome on Windows shows it) | Unknown | Expected |
+| Thrustmaster T500RS | No | Expected |
 | Fanatec CSL Elite | Unknown | Expected |
 
 - **Expected:** The driver implements the wheel's protocol, but hasn't yet been confirmed on physical hardware.

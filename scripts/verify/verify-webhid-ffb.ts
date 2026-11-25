@@ -781,6 +781,153 @@ async function main() {
     assert.deepEqual(dev.log.at(-1), { kind: "out", id: 11, data: [4] });
     assert.ok(!dev.log.some((l) => l.kind === "out" && l.id === 10 && l.data[0] === 4), "damper never started");
   });
+  await check("#144 T150 under Windows: Block Load names block 0, so the force runs on block 0 and the damper on block 1", async () => {
+    // The T150's PID reports as Chrome on Windows listed them in the issue's diagnostics (arrays shuffled; the last two
+    // effect types were cut off there). Its block index fields run 0..255 and Block Load answered 01 00, then 01 01
+    const P = pid;
+    const types = [0x41, 0x40, 0x34, 0x33, 0x31, 0x32, 0x30, 0x26].map(P);
+    const block8 = variable([P(0x22)], 8, 1, 0, 255);
+    const block16 = variable([P(0x22)], 16, 1, 0, 255);
+    const flag = (u: number) => variable([u], 1, 1, 0, 0);
+    const cols: HidCollectionLike[] = [
+      {
+        usagePage: 0x01,
+        usage: 0x04,
+        inputReports: [{ reportId: 7, items: [variable([X], 16, 1, 0, 65535)] }],
+        outputReports: [
+          {
+            reportId: 11, // Set Effect
+            items: [
+              block8,
+              selector(types),
+              variable([P(0x53)], 5, 1, 1, 8),
+              flag(P(0x56)),
+              flag(X),
+              flag(Y),
+              variable([P(0x50)], 16, 1, 0, 65534),
+              variable([P(0x57)], 8, 1, 0, 255),
+              variable([P(0x54)], 16, 1, 0, 65534),
+              variable([ordinalUsage(1)], 16, 1, 0, -1),
+              variable([ordinalUsage(2)], 16, 1, 0, -1),
+              variable([P(0xa7)], 16, 1, 0, 65534),
+              padding(392),
+            ],
+          },
+          { reportId: 13, items: [block16, variable([P(0x70)], 8, 1, -127, 127), padding(480)] }, // Set Constant Force
+          {
+            reportId: 14, // Set Periodic
+            items: [block16, variable([P(0x70)], 8, 1, 0, 127), variable([P(0x6f)], 8, 1, -127, 127), variable([P(0x71)], 8, 1, 0, 255), variable([P(0x72)], 16, 1, 0, 10000), padding(448)],
+          },
+          {
+            reportId: 15, // Set Condition
+            items: [
+              block8,
+              variable([P(0x23)], 8, 1, 0, 1),
+              variable([P(0x61)], 8, 1, -100, 100),
+              variable([P(0x62)], 8, 1, -100, 100),
+              variable([P(0x60)], 16, 1, -500, 500),
+              variable([P(0x65)], 16, 1, 0, 1000),
+              variable([P(0x63)], 8, 1, 0, 100),
+              variable([P(0x64)], 8, 1, 0, 100),
+              padding(424),
+            ],
+          },
+          { reportId: 67, items: [variable([P(0x7e)], 8, 1, 0, 128), padding(496)] }, // Device Gain
+          { reportId: 81, items: [block8, selector([0x7a, 0x79, 0x7b].map(P)), variable([P(0x7c)], 8, 1, 0, 254), padding(480)] },
+          { reportId: 82, items: [selector([0x9c, 0x9b, 0x98, 0x97, 0x99, 0x9a].map(P)), padding(496)] }, // Device Control
+          { reportId: 88, items: [block8, padding(496)] }, // Block Free
+        ],
+        featureReports: [
+          { reportId: 21, items: [selector(types), padding(176)] }, // Create New Effect
+          { reportId: 22, items: [selector([0x8e, 0x8d, 0x8c].map(P)), block8, padding(168)] }, // PID Block Load
+        ],
+      },
+    ];
+    const layout = parsePidLayout(cols, "unordered");
+    assert.ok(layout);
+    /**
+     * A T150-like wheel: Block Load (Chrome's id byte first, Success = 1) answers for the creates so far. "zero": the
+     * newest effect's block, counting from 0. "stale": the first read after a create still shows the earlier answer
+     * (blocks counted from 1), a second read the new one
+     */
+    const t150 = (blocks: "zero" | "stale") => {
+      const dev = new FakeHidDevice(cols, layout.blockLoad);
+      let readsSinceCreate = 0;
+      let creates = 0;
+      const send = dev.sendFeatureReport.bind(dev);
+      dev.sendFeatureReport = async (id, data) => {
+        if (id === 21) {
+          creates++;
+          readsSinceCreate = 0;
+        }
+        return send(id, data);
+      };
+      dev.receiveFeatureReport = async (id) => {
+        dev.reads.push({ id, at: dev.log.length });
+        const index = blocks === "zero" ? creates - 1 : readsSinceCreate === 0 ? creates - 1 : creates;
+        readsSinceCreate++;
+        return new DataView(new Uint8Array([22, 1, index, ...new Array<number>(21).fill(0)]).buffer);
+      };
+      return dev;
+    };
+    const dev = t150("zero");
+    const clock = new FakeClock();
+    const res = await setupPidDevice(dev, { deps: clock.deps, layout });
+    assert.ok(res.ok);
+    if (!res.ok) return;
+    assert.equal(res.session.blockIndex, 0, "the constant force on the block the wheel named");
+    assert.equal(res.session.damperBlockIndex, 1);
+    assert.equal(dev.reads.length, 3, "Block Load read twice for block 0, once for block 1");
+    assert.ok(clock.sleeps.includes(20), "a pause before the second read");
+    const head = (l: Logged) => [l.kind, l.id, ...l.data.slice(0, 6)];
+    // The issue's trace, with the constant force on block 0 instead of 1
+    assert.deepEqual(dev.log.map(head), [
+      ["out", 82, 4, 0, 0, 0, 0, 0], // reset
+      ["out", 82, 3, 0, 0, 0, 0, 0], // stop all
+      ["out", 82, 1, 0, 0, 0, 0, 0], // enable actuators
+      ["out", 67, 128, 0, 0, 0, 0, 0], // gain
+      ["feature", 21, 1, 0, 0, 0, 0, 0], // create: constant force
+      ["out", 11, 0, 1, 0x20, 0xff, 0xff, 0x40], // Set Effect, block 0
+      ["out", 13, 0, 0, 0, 0, 0, 0], // zero force, block 0
+      ["out", 81, 0, 1, 0xfe, 0, 0, 0], // start block 0
+      ["feature", 21, 8, 0, 0, 0, 0, 0], // create: damper
+      ["out", 11, 1, 8, 0x20, 0xff, 0xff, 0x40], // Set Effect, block 1
+      ["out", 15, 1, 0, 0, 0, 0, 0], // Set Condition, block 1
+      ["out", 81, 1, 1, 0xfe, 0, 0, 0], // start block 1
+    ]);
+    // The force stream goes to block 0
+    dev.log.length = 0;
+    res.session.writer.setForce(0.5, true);
+    await settle();
+    assert.deepEqual(dev.log.filter((l) => l.id === 13).map((l) => l.data.slice(0, 3)), [[0, 0, 64]]);
+    // A wheel whose first answer is the earlier one: the second read names block 1 and the force goes there; the
+    // damper's stale answer (block 1 again) is not taken
+    const stale = t150("stale");
+    const res2 = await setupPidDevice(stale, { deps: new FakeClock().deps, layout });
+    assert.ok(res2.ok);
+    if (!res2.ok) return;
+    assert.equal(res2.session.blockIndex, 1);
+    assert.equal(res2.session.damperBlockIndex, null);
+  });
+  await check("block 0 stays no block where the index field starts at 1, or Block Load gives no Success", async () => {
+    const reply = (bytes: number[]) => async () => new DataView(new Uint8Array(bytes).buffer);
+    // pidCollections: Block Load = index (1..40), status, byte count
+    const cols = pidCollections();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.receiveFeatureReport = reply([0, 1, 0, 0]);
+    const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+    assert.ok(res.ok);
+    if (res.ok) assert.equal(res.session.blockIndex, 1, "1..40: a 0 names no block, block 1 is guessed");
+    // A 0..255 index with the status left blank (0, no usage) is a blank report, not block 0
+    const zeroBased = pidCollections();
+    const node = zeroBased[1] as HidCollectionLike & { featureReports: { reportId: number; items: HidReportItemLike[] }[] };
+    node.featureReports[1] = { reportId: 18, items: [variable([pid(0x22)], 8, 1, 0, 255), selector(BL_LIST), variable([pid(0xad)], 16, 1, 0, 65535)] };
+    const blank = new FakeHidDevice(zeroBased, asLayout(zeroBased).blockLoad);
+    blank.receiveFeatureReport = reply([0, 0, 0, 0]);
+    const res2 = await setupPidDevice(blank, { deps: new FakeClock().deps });
+    assert.ok(res2.ok);
+    if (res2.ok) assert.equal(res2.session.blockIndex, 1, "blank Block Load: block 1 is guessed");
+  });
 
   function fakeHid(devices: FakeHidDevice[], granted: FakeHidDevice[] = []) {
     type Listener = (e: { device: HidDeviceLike }) => void;
@@ -2485,26 +2632,43 @@ async function main() {
     assert.equal(await ffb.connect(), "T300RS PS4");
     assert.deepEqual(tmWrites(ps4), [TMFF2.gain, TMFF2.open, TMFF2.upload0, TMFF2.play].map((c) => tmOut(c, 31)));
   });
-  await check("T150, TMX, T500RS and other Thrustmaster ids are refused for the bridge and never opened", async () => {
-    for (const [productId, name] of [
-      [0xb677, "T150"],
-      [0xb67f, "TMX"],
-      [0xb65e, "T500RS"],
-      [0xb668, "Thrustmaster device"],
+  await check("T150, TMX, T500RS and other Thrustmaster ids with no hid-tmff2 model or HID PID are refused for the bridge and never opened", async () => {
+    for (const [productId, name, message] of [
+      [0xb677, "T150", /HID PID force-feedback reports, and this interface shows none .* bridge/],
+      [0xb67f, "TMX", /HID PID force-feedback reports, and this interface shows none .* bridge/],
+      [0xb65e, "T500RS", /Only the Thrustmaster .* bridge/],
+      [0xb668, "Thrustmaster device", /Only the Thrustmaster .* bridge/],
     ] as const) {
       const dev = thrustmaster(productId, name);
       const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
       assert.equal(await ffb.connect(), null, name);
       assert.equal(ffb.status.state, "unsupported", name);
-      assert.match(ffb.status.message ?? "", /Only the Thrustmaster .* bridge/, name);
+      assert.match(ffb.status.message ?? "", message, name);
       assert.equal(dev.opened, false, name);
       assert.equal(dev.log.length, 0, name);
     }
   });
-  await check("#189: TMX, T150, T500RS and start-up ids stay refused for the bridge even if Windows exposes a HID PID collection", async () => {
+  await check("#144: a T150 or TMX that shows a HID PID collection is driven by the HID PID driver", async () => {
     for (const [productId, name] of [
+      [0xb677, "B677"],
       [0xb67f, "B67F"],
-      [0xb677, "T150"],
+    ] as const) {
+      const cols = pidCollections();
+      const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+      dev.vendorId = 0x044f;
+      dev.productId = productId;
+      dev.productName = name;
+      const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
+      assert.equal(await ffb.connect(), name, `${name} connect`);
+      assert.equal(ffb.status.state, "ready", `${name} status`);
+      assert.equal(dev.opened, true, `${name} opened`);
+      assert.ok(dev.log.some((l) => l.kind === "out" && l.id === 10 && l.data[1] === 1), `${name} constant force started`);
+      assert.doesNotMatch(describeHidDevice(dev), /Refused for the bridge/, `${name} diagnostics`);
+      await ffb.dispose();
+    }
+  });
+  await check("#189: the T500RS and start-up ids stay refused for the bridge even if the browser shows a HID PID collection", async () => {
+    for (const [productId, name] of [
       [0xb65e, "T500RS"],
       [0xb65d, "Thrustmaster FFB Wheel"],
     ] as const) {
@@ -2603,7 +2767,8 @@ async function main() {
   await check("reconnect(): a granted listed Thrustmaster base reopens; describeHidDevice and diagnose() name the driver", async () => {
     const t300 = thrustmaster(0xb66e, "T300RS");
     assert.match(describeHidDevice(t300), /HID PID: none\. Thrustmaster T300RS or T-GT II: driven with the hid-tmff2 commands as report 0x60 \(63 bytes\)/);
-    assert.match(describeHidDevice(thrustmaster(0xb677, "T150")), /HID PID: none\. Only the Thrustmaster .* bridge/);
+    assert.match(describeHidDevice(thrustmaster(0xb677, "T150")), /HID PID: none\. The browser drives this Thrustmaster wheel through its HID PID/);
+    assert.match(describeHidDevice(thrustmaster(0xb65e, "T500RS")), /HID PID: none\. Only the Thrustmaster .* bridge/);
     assert.match(describeHidDevice(thrustmaster(0xb65d, "FFB Wheel")), /HID PID: none\. This Thrustmaster wheel is still in its start-up mode/);
     const ffb = new WebHidFfb(fakeHid([], [t300]).api, new FakeClock().deps);
     ffb.setRotationDeg(540);

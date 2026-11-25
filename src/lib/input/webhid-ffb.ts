@@ -40,6 +40,7 @@ import {
   logitechClassicModel,
   logitechHidppModel,
   isThrustmasterBridgeOnly,
+  isThrustmasterPidWheel,
   THRUSTMASTER_NAMES,
   THRUSTMASTER_STARTUP_PRODUCT_IDS,
   THRUSTMASTER_VENDOR_ID,
@@ -946,25 +947,48 @@ async function allocateEffect(
   await device.sendFeatureReport(c.reportId, c.data);
   if (profile.createSettleMs > 0) await deps.sleep(profile.createSettleMs);
 
+  const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
+  const indexMin = getField(load, PID.EFFECT_BLOCK_INDEX)?.min ?? 1;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const view = await device.receiveFeatureReport(load.reportId);
-    let bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-    // Chrome hands a numbered feature report back with its id in byte 0, in a buffer sized to the interface's largest
-    // feature report (so often longer than this one); a stack that leaves the id out returns just the report's bytes.
-    // Read by bit offset, the padding after the report does not matter
-    if (load.reportId !== 0 && bytes.length > Math.ceil(load.bitLength / 8) && bytes[0] === load.reportId) bytes = bytes.subarray(1);
-    const got = unpackReport(load, bytes);
-    const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
-    const status = statusField ? selectedUsage(statusField, got[PID.BLOCK_LOAD_STATUS] ?? 0) : PID.BLOCK_LOAD_SUCCESS;
+    const { status, index } = await readBlockLoad(device, load);
     if (status === PID.BLOCK_LOAD_FULL) throw new Error("The wheel has no free effect memory");
     if (status === PID.BLOCK_LOAD_ERROR) throw new Error(`The wheel refused to create a ${effectName} effect`);
     if (status === PID.BLOCK_LOAD_SUCCESS || status === null) {
-      const idx = got[PID.EFFECT_BLOCK_INDEX];
-      return idx !== undefined && idx > 0 ? idx : null;
+      if (index === undefined) return null;
+      if (index > 0) return index;
+      // Block 0 is a real block on a wheel whose index field starts at 0, once Block Load says Success outright: the
+      // T150 under Windows (#144) answered block 0 for its first effect and block 1 for the next, so a force sent to a
+      // guessed block 1 landed on the damper. Without that Success a 0 is a blank report and names no block
+      if (!(statusField && status === PID.BLOCK_LOAD_SUCCESS && indexMin <= 0)) return null;
+      // That 0 was read 2 ms after the create. Read once more: a wheel still showing its earlier answer names the new
+      // block now, and a second 0 means block 0 (both reads land in the setup trace)
+      await deps.sleep(BLOCK_ZERO_REREAD_MS);
+      const again = await readBlockLoad(device, load);
+      return again.status === PID.BLOCK_LOAD_SUCCESS && again.index !== undefined && again.index > 0 ? again.index : 0;
     }
     await deps.sleep(20);
   }
   throw new Error("The wheel did not confirm the effect it was asked to create");
+}
+
+/** Wait before reading Block Load again after it named block 0 */
+const BLOCK_ZERO_REREAD_MS = 20;
+
+/** One PID Block Load read: the status it selects (null: none / out of range) and the block index */
+async function readBlockLoad(
+  device: HidDeviceLike,
+  load: PidReportLayout
+): Promise<{ status: number | null; index: number | undefined }> {
+  const view = await device.receiveFeatureReport(load.reportId);
+  let bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  // Chrome hands a numbered feature report back with its id in byte 0, in a buffer sized to the interface's largest
+  // feature report (so often longer than this one); a stack that leaves the id out returns just the report's bytes.
+  // Read by bit offset, the padding after the report does not matter
+  if (load.reportId !== 0 && bytes.length > Math.ceil(load.bitLength / 8) && bytes[0] === load.reportId) bytes = bytes.subarray(1);
+  const got = unpackReport(load, bytes);
+  const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
+  const status = statusField ? selectedUsage(statusField, got[PID.BLOCK_LOAD_STATUS] ?? 0) : PID.BLOCK_LOAD_SUCCESS;
+  return { status, index: got[PID.EFFECT_BLOCK_INDEX] };
 }
 
 /** Set Condition report values for a symmetric spring/damper condition (coeff in -1..1, saturation in 0..1) */
@@ -1841,6 +1865,12 @@ const THRUSTMASTER_MESSAGE = `Only the Thrustmaster ${THRUSTMASTER_NAMES} take f
 
 /** Why a Thrustmaster device that is not in THRUSTMASTER_WHEELS is refused */
 function thrustmasterRefusal(device: HidDeviceLike): string {
+  if (isThrustmasterPidWheel(device.vendorId, device.productId)) {
+    return (
+      "The browser drives this Thrustmaster wheel through its HID PID force-feedback reports, and this interface " +
+      "shows none (Chrome on Windows does); use the native FFB bridge for this wheel"
+    );
+  }
   if (!THRUSTMASTER_STARTUP_PRODUCT_IDS.includes(device.productId)) return THRUSTMASTER_MESSAGE;
   return (
     `This Thrustmaster wheel is still in its start-up mode (044f:${device.productId.toString(16).padStart(4, "0")}), ` +
@@ -1874,11 +1904,12 @@ type FfbPick =
  * next to its force-feedback one): the first with a HID PID layout, else the first listed classic Logitech wheel with
  * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report, else the first listed
  * Thrustmaster base with an output report long enough for its commands. Null when there is none, e.g. only a
- * DualSense, a gamepad, an unlisted Logitech wheel or a T150.
+ * DualSense, a gamepad, an unlisted Logitech wheel or a T500RS.
  */
 function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
   for (const device of devices) {
-    // T150, TMX, T500RS and start-up ids stay on the bridge even if Windows exposes a HID PID collection for them (#189)
+    // The T500RS and start-up ids stay on the bridge even if the browser shows a HID PID collection for them (#189);
+    // the T150 and TMX take the PID driver (#144)
     if (isThrustmasterBridgeOnly(device.vendorId, device.productId)) continue;
     const layout = parsePidLayout(device.collections);
     if (layout) return { kind: "pid", device, layout };
