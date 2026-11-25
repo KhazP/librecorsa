@@ -6,9 +6,10 @@ import type * as THREE from "three";
  * renderer draws with reversed depth.
  *
  * three r187 converts its own cameras only. Each eye's projection comes from the headset as is, and the renderer then
- * flags the eye camera as reversed without touching that matrix, so every surface failed the depth test and the
- * headset showed a black view (Reddit, 25 Nov 2026). The near and far planes are read back from the matrix and the
- * depth row rewritten from them; the off-centre terms of each eye's frustum are in other rows and stay.
+ * flags the eye camera as reversed without touching that matrix, so every surface failed the depth test: an emulated
+ * Quest 3 (Meta's IWER runtime) showed a black view, as a Quest player reported on Reddit (25 Nov 2026). The near and
+ * far planes are read back from the matrix and the depth row rewritten from them; the off-centre terms of each eye's
+ * frustum are in other rows and stay.
  */
 export function toReversedDepth(m: THREE.Matrix4, maxFar = Infinity): THREE.Matrix4 {
   // Column-major: row r of column c is e[c * 4 + r]. A perspective view's depth row is (0, 0, C, D) and its w row

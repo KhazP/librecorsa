@@ -1,6 +1,7 @@
 /**
- * The headset (src/lib/vr): the black view a Quest player saw (Reddit, 25 Nov 2026) came from three's headset views
- * keeping the standard depth range under the game's reversed depth buffer. This checks the conversion against three's
+ * The headset (src/lib/vr): in an emulated Quest 3 the view was black, as a Quest player reported (Reddit, 25 Nov 2026),
+ * partly because three's headset views kept the standard depth range under the game's reversed depth buffer. This
+ * checks the conversion against three's
  * own reversed projection (finite and infinite far planes, off-centre eyes) and that culling still keeps what is in
  * front; the hand controllers laid out as a standard pad; the headset's own pause / resume / recentre / leave buttons;
  * the headset detection that gives a Quest the phone graphics; and the HUD's start lights and lap text.
