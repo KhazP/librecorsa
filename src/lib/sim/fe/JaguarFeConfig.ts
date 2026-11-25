@@ -12,16 +12,17 @@ import type { LutPoints } from "../lut";
 import type { CarPhysicsConfig, PerformanceModeData, PerformanceModeName } from "../f12026-car/F12026CarConfig";
 import { LC26_CAR_CONFIG } from "../f12026-car/Lc26Config";
 
-/** Base 100 kW baseline + 200 kW (race: 300 kW / 402 hp) / 250 kW (Attack Mode / Boost: 350 kW / 469 hp) */
+/** Base 300 kW (402 hp) electric motor curve with instant low-end launch torque (~2.8s 0-100 km/h) */
 const EV_POWER_CURVE: LutPoints = [
   [0, 0],
-  [500, 58],
-  [1500, 100],
-  [2500, 100],
-  [6000, 100],
-  [10000, 100],
-  [14000, 100],
-  [17500, 98],
+  [500, 48],
+  [1200, 115],
+  [2200, 210],
+  [3400, 300],
+  [6000, 300],
+  [10000, 300],
+  [14000, 300],
+  [17500, 296],
   [18500, 0],
 ];
 
@@ -32,21 +33,21 @@ const EV_COAST_CURVE: LutPoints = [
   [18000, 28],
 ];
 
-/** EV MGU torque curve: instant low-end EV torque for ~2.8s 0-100 km/h, 300 kW race / 350 kW Attack Mode */
+/** +50 kW Attack Mode / Boost overlay (350 kW / 469 hp combined peak) */
 const EV_BOOST_TORQUE_LUT: LutPoints = [
-  [0, 760],
-  [2500, 740],
-  [4500, 620],
-  [6000, 440],
-  [8000, 298],
-  [10000, 239],
-  [12000, 199],
-  [14000, 171],
-  [16000, 149],
-  [18500, 129],
+  [0, 220],
+  [2500, 210],
+  [4500, 160],
+  [6000, 115],
+  [8000, 80],
+  [10000, 62],
+  [12000, 50],
+  [14000, 42],
+  [16000, 36],
+  [18500, 30],
 ];
 
-/** Real-life Formula E 52 kWh usable battery (187.2 MJ) + 250 kW regen + 350 kW peak Attack/Quali */
+/** Real-life Formula E 52 kWh usable battery (187.2 MJ) + 250 kW regen + 50 kW Attack Mode boost */
 const EV_ERS = {
   ...LC26_CAR_CONFIG.ers,
   regulations: undefined,
@@ -55,7 +56,7 @@ const EV_ERS = {
     [0, 0],
     [18000, 0],
   ] as LutPoints,
-  ERS_MAX_DEPLOY: 250_000,
+  ERS_MAX_DEPLOY: 50_000,
   maxHarvestW: 250_000,
   ERS_MAX_CHARGE: 187_200_000,
   deployPerLapJ: 187_200_000,
@@ -181,11 +182,11 @@ export const JAGUAR_FE_CONFIG: CarPhysicsConfig = {
   },
   aero: {
     ...LC26_CAR_CONFIG.aero,
-    // Fixed aero (no DRS / Straight Mode flaps); tuned for ~322 km/h (89.4 m/s) top speed at 350 kW
+    // Fixed aero (no DRS / Straight Mode flaps); low drag for ~325-330 km/h top speed at 350 kW
     wings: LC26_CAR_CONFIG.aero.wings.map((w, i) => ({
       ...w,
-      area: w.area * (i === 0 ? 0.36 : 0.40),
-      lutAOA_CD: w.lutAOA_CD.map(([a, cd]) => [a, cd * 0.82] as [number, number]),
+      area: w.area * (i === 0 ? 0.34 : 0.38),
+      lutAOA_CD: w.lutAOA_CD.map(([a, cd]) => [a, cd * 0.45] as [number, number]),
       drsScale: 1,
     })),
   },

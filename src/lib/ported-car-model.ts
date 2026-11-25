@@ -520,7 +520,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
             }
           }
         };
-        steerNode.traverse((o) => attachScreen(o, "Material.002", "Object_55"));
+        steerNode.traverse((o) => attachScreen(o, "FE_STEER_SCREEN"));
         bodyGroup.traverse((o) => attachScreen(o, "BMW_DASH_SCREEN"));
       }
     }

@@ -507,7 +507,7 @@ async function portJaguarFe() {
     WHEEL_RR: [-0.7365, 0.3305, -1.9580],
   };
 
-  const steerNodeNames = new Set(["Object_53", "Object_54", "Object_55", "Object_56", "Object_57"]);
+  const steerNodeNames = new Set(["Object_53", "Object_54", "Object_56", "Object_57"]);
   const steerPivot = [0.0, 0.607, 0.237];
   const tilt = (15 * Math.PI) / 180;
   const c = Math.cos(tilt), s = Math.sin(tilt);
@@ -557,6 +557,7 @@ async function portJaguarFe() {
       const mat = srcPrim.getMaterial();
       const dstMat = matMap.get(mat);
       const wInfo = wheelNodeMap.get(nodeName);
+      if (nodeName === "Object_55") continue;
       if (wInfo) {
         const [corner, isTyre] = wInfo;
         const { pos, nrm, uvs, indices } = extractPrimData(srcPrim, worldMat, wheelCentres[corner]);
