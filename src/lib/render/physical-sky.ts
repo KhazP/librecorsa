@@ -26,7 +26,9 @@ import { NIGHT_CLOUD_GLOW, nightShareOfElevation, nightSkyGlsl, starShare } from
  *     by the same SKY_RADIANCE_SCALE, and the visible sun disc is capped like the classic sky's.
  *   - Volumetric clouds run wherever this sky shows: High uses the library's "medium" preset, Medium its "low", and
  *     phones and tablets "low" at half resolution. The environment bake and the reflection probe have no clouds, so
- *     an overcast veil greys their sky with the weather's cloud cover.
+ *     an overcast veil greys their sky with the weather's cloud cover, and in rain the sky goes to a flat deck as
+ *     bright as the clouds on screen (the clear sky's bright horizon band lit walls and wet roads several times
+ *     brighter than the rain clouds above them).
  *   - Which clouds show comes from a seed per session (cloud-recipes.ts): the cloud types, their heights and where
  *     the pattern starts. The caller picks the seed; they drift with the session's wind, faster aloft.
  *   - The clouds' noise volumes are generated on the GPU and their ray-march jitter is our own blue noise
@@ -156,6 +158,13 @@ interface SkyExtraUniforms {
   nightSky: THREE.IUniform<number>;
   /** 0..1: its stars (none in the environment bake) */
   nightStars: THREE.IUniform<number>;
+  /**
+   * 0..1: how far rain flattens the sky above the horizon to one grey deck. The veil keeps the clear sky's bright
+   * horizon band, while the rain clouds on screen are about as bright at the horizon as overhead
+   */
+  rainDeck: THREE.IUniform<number>;
+  /** The deck's radiance scale: the clouds' own (dimmed by rain as they are) */
+  rainDeckScale: THREE.IUniform<number>;
 }
 
 type PatchedSkyMaterial = SkyMaterial & { uniforms: SkyMaterial["uniforms"] & SkyExtraUniforms };
@@ -164,7 +173,7 @@ type PatchedSkyMaterial = SkyMaterial & { uniforms: SkyMaterial["uniforms"] & Sk
 export const SKY_FRAGMENT_PATCHES: readonly ShaderPatch[] = [
   [
     "uniform vec3 groundAlbedo;",
-    "uniform vec3 groundAlbedo;\nuniform float skyRadianceScale;\nuniform float showSunDisc;\nuniform float overcast;\nuniform vec3 overcastTint;\nuniform float nightSky;\nuniform float nightStars;",
+    "uniform vec3 groundAlbedo;\nuniform float skyRadianceScale;\nuniform float showSunDisc;\nuniform float overcast;\nuniform vec3 overcastTint;\nuniform float nightSky;\nuniform float nightStars;\nuniform float rainDeck;\nuniform float rainDeckScale;",
   ],
   ["radiance += transmittance * GetSolarRadiance() * antialias;", "radiance += transmittance * GetSolarRadiance() * antialias * showSunDisc;"],
   [
@@ -172,6 +181,17 @@ export const SKY_FRAGMENT_PATCHES: readonly ShaderPatch[] = [
     /* glsl */ `outputColor.rgb *= skyRadianceScale;
   float skyLuma = dot(outputColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   outputColor.rgb = mix(outputColor.rgb, vec3(skyLuma) * overcastTint, overcast);
+  if (rainDeck > 0.0) {
+    // Under a rain deck the sky above the horizon goes flat grey at the mean of the sky's light from every direction
+    // (its scalar irradiance over 4 pi, the ambient the clouds themselves are lit with), scaled as the clouds are. The
+    // clear sky's bright horizon band, several times the deck on screen, no longer lights walls and grazing reflections
+    vec3 deckUp = normalize(cameraPosition);
+    vec3 deckSky;
+    GetSunAndSkyScalarIrradiance(cameraPosition, sunDirection, deckSky);
+    float deckLuma = dot(deckSky, vec3(0.2126, 0.7152, 0.0722)) * 0.25 * RECIPROCAL_PI * rainDeckScale;
+    float deckAbove = smoothstep(-0.02, 0.02, dot(rayDirection, deckUp));
+    outputColor.rgb = mix(outputColor.rgb, vec3(deckLuma) * overcastTint, rainDeck * deckAbove);
+  }
   ${nightSkyGlsl("outputColor.rgb", "rayDirection", "normalize(vCameraPosition)", "nightSky", "nightStars", "fragmentAngle")}
   outputColor.rgb = min(outputColor.rgb, vec3(${SKY_MAX_RADIANCE.toFixed(1)}));
   outputColor.a = 1.0;`,
@@ -301,6 +321,8 @@ export function createSkyMaterial(sun: boolean, reversedDepth: boolean): Patched
     overcastTint: { value: OVERCAST_TINT.clone() },
     nightSky: { value: 0 },
     nightStars: { value: 0 },
+    rainDeck: { value: 0 },
+    rainDeckScale: { value: SKY_RADIANCE_SCALE },
   } satisfies SkyExtraUniforms);
   material.fragmentShader = patchShader(material.fragmentShader, SKY_FRAGMENT_PATCHES, "physical sky");
   if (reversedDepth) {
@@ -623,7 +645,8 @@ export class PhysicalSky {
     // Rain clouds dark and grey (the visible sky with them, so the horizon below the deck matches); a dry overcast
     // keeps some of the low sun's colour
     const gloom = rain * (0.75 + 0.25 * cloud);
-    this.composite.cloudsRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.45 * gloom);
+    const cloudsScale = SKY_RADIANCE_SCALE * (1 - 0.45 * gloom);
+    this.composite.cloudsRadianceScale.value = cloudsScale;
     this.composite.cloudsGrey.value = Math.min(1, 0.7 * gloom + 0.3 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
     this.mesh.material.uniforms.skyRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.35 * gloom);
     // The bake has no volumetric clouds, so its sky always takes the veil; the visible sky only a little under a full
@@ -631,6 +654,13 @@ export class PhysicalSky {
     const veil = cloud * (0.75 + 0.25 * rain);
     this.bakeMesh.material.uniforms.overcast.value = veil;
     this.mesh.material.uniforms.overcast.value = volumetric ? 0.3 * THREE.MathUtils.smoothstep(cloud, 0.85, 1) + 0.4 * rain : veil;
+    // Rain flattens both to the deck: the bake lights the circuit, and the visible one is what the cars' reflection
+    // probe and the mirrors film, without the clouds (dry: 0, the shader skips it)
+    const deck = THREE.MathUtils.smoothstep(gloom, 0, 0.35);
+    for (const m of [this.mesh.material, this.bakeMesh.material]) {
+      m.uniforms.rainDeck.value = deck;
+      m.uniforms.rainDeckScale.value = cloudsScale;
+    }
     // The night sky's glow, in the bake too; the stars only on the visible sky, and only on a clear night
     const night = nightShareOfElevation(THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(this.sunElevationSin, -1, 1))));
     this.mesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
