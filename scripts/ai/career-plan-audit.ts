@@ -21,6 +21,10 @@
  *  - not clearly worse, with n races per arm: the AI's own mistakes (spins + offs + wall hits) and the AI-v-AI contacts
  *    each at most 1.5 × the own driver's + n / 2 (+4 in 8 races); AI-at-fault contacts with the stand-in and DNFs each at
  *    most the own driver's + max(2, n / 8).
+ * A plan fails early (before 8 races) where its mistakes so far are already past what the gate could allow in 8: more
+ * than 1.5 × (the own driver's so far scaled to 8 races, + 4) + 4, so it fails even if the own driver made 4 more
+ * mistakes than its rate in the races not yet run. Headless races at full career length run at 1.5-3 × real time with ten
+ * at once on a shared machine, so combos are raced in rounds (`--races 2`, then 4, 8) and stop on that.
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -201,6 +205,24 @@ export function gateFails(plan: Totals, own: Totals): string[] {
   return why;
 }
 
+/** The early fail (see the header): '' when the plan could still pass in 8 races */
+function decisiveFail(rows: Row[]): string {
+  const mistakes = (r: Row) => (r.result ? r.result.aiSpins + r.result.aiOffs + r.result.aiWalls : NaN);
+  let plan = 0;
+  let own = 0;
+  let n = 0;
+  for (const p of rows.filter((r) => r.arm === 'plan')) {
+    const o = rows.find((r) => r.arm === 'own' && r.i === p.i);
+    if (!o?.result || !p.result) continue;
+    plan += mistakes(p);
+    own += mistakes(o);
+    n++;
+  }
+  if (n < 2 || n >= 8) return '';
+  const ownAt8 = (own * 8) / n + 4;
+  return plan > 1.5 * ownAt8 + 4 ? `past the gate in ${n}: mistakes ${own} → ${plan} (8 races allow ${(1.5 * ownAt8 + 4).toFixed(0)} at most)` : '';
+}
+
 function report(): void {
   const rows = readFileSync(opt('report', 'career-plan-audit.jsonl'), 'utf8')
     .split('\n')
@@ -211,29 +233,36 @@ function report(): void {
   const head = ['series', 'car', 'circuit', 'level', 'skill', 'laps', 'arm', 'races', 'spins', 'offs', 'walls', 'AvA', 'vsSI', 'SI AI-flt', 'DNF', 'leader lap', 'AI lap', 'best', 'verdict'];
   const lines: string[][] = [];
   const verdicts = new Map<string, string>();
-  const json: { series: string; car: string; track: string; pass: boolean; levels: Record<string, { plan: Totals; own: Totals; fails: string[] }> }[] = [];
+  const json: { series: string; car: string; track: string; pass: boolean; status: string; levels: Record<string, { plan: Totals; own: Totals; fails: string[]; status: string }> }[] = [];
   for (const id of ids) {
     const mine = rows.filter((r) => comboId(r) === id);
     const levels = [...new Set(mine.map((r) => r.level))];
     const fails: string[] = [];
-    const entry = { series: mine[0].series, car: mine[0].car, track: mine[0].track, pass: true, levels: {} as Record<string, { plan: Totals; own: Totals; fails: string[] }> };
+    const open: string[] = [];
+    const entry = { series: mine[0].series, car: mine[0].car, track: mine[0].track, pass: true, status: '', levels: {} as Record<string, { plan: Totals; own: Totals; fails: string[]; status: string }> };
     json.push(entry);
     for (const level of levels) {
       const at = mine.filter((r) => r.level === level);
       const p = totals(at.filter((r) => r.arm === 'plan'));
       const o = totals(at.filter((r) => r.arm === 'own'));
-      const why = gateFails(p, o);
-      entry.levels[level] = { plan: p, own: o, fails: why };
-      if (why.length) entry.pass = false;
+      const n = Math.min(p.n, o.n);
+      const decisive = decisiveFail(at);
+      // Under 8 races a level is decided only by the early fail; else it is open
+      const why = decisive ? [decisive, ...gateFails(p, o)] : n >= 8 ? gateFails(p, o) : [];
+      const status = why.length ? 'FAIL' : n >= 8 ? 'pass' : `open (${n})`;
+      entry.levels[level] = { plan: p, own: o, fails: why, status };
+      if (status !== 'pass') entry.pass = false;
       if (why.length) fails.push(`${level}: ${why.join(', ')}`);
+      else if (status !== 'pass') open.push(`${level} ${status}`);
       for (const [arm, t] of [['plan', p], ['own', o]] as const)
         lines.push([
           at[0].series, at[0].car, at[0].track, level, String(at[0].skill), String(at[0].laps), arm, String(t.n), String(t.spins), String(t.offs), String(t.walls),
           String(t.ava), String(t.vsSi), String(t.vsSiAi), String(t.dnf), t.leaderLapS.toFixed(2), t.aiLapS.toFixed(2), t.bestLapS.toFixed(2),
-          arm === 'plan' ? (why.length ? `FAIL ${why.join('; ')}` : 'pass') : '',
+          arm === 'plan' ? (why.length ? `FAIL ${why.join('; ')}` : status) : '',
         ]);
     }
-    verdicts.set(id, fails.length ? `FAIL (${fails.join(' | ')})` : `pass (${levels.join(', ')})`);
+    entry.status = fails.length ? 'FAIL' : open.length ? 'open' : 'pass';
+    verdicts.set(id, fails.length ? `FAIL (${fails.join(' | ')})` : open.length ? `open (${open.join(', ')})` : `pass (${levels.join(', ')})`);
   }
   if (md) {
     console.log(`| ${head.join(' | ')} |\n|${head.map(() => '---').join('|')}|`);
