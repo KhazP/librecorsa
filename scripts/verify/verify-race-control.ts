@@ -1215,10 +1215,16 @@ console.log("Virtual Safety Car · deployment, delta enforcement and ending");
   check("exceeding VSC delta draws +5 s penalty", fast.some((e) => e.kind === "penalty" && e.seconds === 5), JSON.stringify(fast));
 
   // Clear hazard and run past minimum duration -> ending -> green
-  const toEnd = stepVsc(4.0, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.5 });
+  const toEnd: VscEvent[] = [];
+  for (let i = 0; i < Math.round(4 / DT) && !toEnd.some((e) => e.kind === "ending"); i++) {
+    toEnd.push(...stepVsc(DT, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.5 }));
+  }
   check("clearing hazard after minimum duration transitions to VSC ending", toEnd.some((e) => e.kind === "ending") && vsc.phase === "ending", JSON.stringify(toEnd));
-  const toGreen = stepVsc(8.0, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.8 });
-  check("VSC ending countdown returns to green flag", toGreen.some((e) => e.kind === "green") && !vsc.active, JSON.stringify(toGreen));
+  // "VSC ending" to green: 10 to 15 s (FIA B5.12.4); the median draw is 12.5 s
+  const notYet = stepVsc(9.5, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.8 });
+  check("green does not come within 10 s of VSC ending", !notYet.some((e) => e.kind === "green") && vsc.phase === "ending", JSON.stringify(notYet));
+  const toGreen = stepVsc(5.5, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.8 });
+  check("VSC ending countdown returns to green flag within 15 s", toGreen.some((e) => e.kind === "green") && !vsc.active, JSON.stringify(toGreen));
 
   // Cooldown prevents immediate re-deployment
   const duringCd = stepVsc(5.0, { hasRetiredOnTrack: true });

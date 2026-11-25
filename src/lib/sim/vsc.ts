@@ -10,7 +10,8 @@
  *    After a short initial reaction grace window (`VSC_GRACE_S`), staying below `−VSC_VIOLATION_MARGIN_S` for
  *    `VSC_VIOLATION_HOLD_S` — or crossing into green flag below the delta — draws a +5 s time penalty.
  *  - Once the triggering hazard clears (and at least `VSC_MIN_DURATION_S` has elapsed), race control announces
- *    "VSC ending" for a randomised 5–9 s window before waving green.
+ *    "VSC ending" and waves green at an unannounced moment 10 to 15 s later (FIA 2026 F1 Sporting Regulations
+ *    B5.12.4).
  *
  * No three.js and no DOM: safe for the sim worker and headless verification scripts.
  */
@@ -29,9 +30,9 @@ export const VSC_TRIGGER_S = 3.5;
 /** Minimum and maximum deployed duration before transitioning to ending (s) */
 export const VSC_MIN_DURATION_S = 14;
 export const VSC_MAX_DURATION_S = 30;
-/** Unpredictable "VSC ending" countdown range (s) */
-export const VSC_ENDING_MIN_S = 5;
-export const VSC_ENDING_MAX_S = 9;
+/** "VSC ending" to green: at any time between 10 and 15 s later (FIA 2026 F1 Sporting Regulations B5.12.4) */
+export const VSC_ENDING_MIN_S = 10;
+export const VSC_ENDING_MAX_S = 15;
 /** Cooldown between consecutive VSC periods (s) */
 export const VSC_COOLDOWN_S = 90;
 /** Reaction grace window on initial deployment before delta infringements are penalised (s) */
