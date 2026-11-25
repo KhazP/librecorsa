@@ -21,10 +21,21 @@ export interface SpotterConfig {
 
 const ENTER_LONG_M = 5.4;
 const EXIT_LONG_M = 6.2;
+const MIN_LAT_M = 1.0;
 const ENTER_LAT_M = 3.6;
 const EXIT_LAT_M = 4.3;
 const MIN_CALLOUT_GAP_MS = 1600;
 const STILL_THERE_MS = 2800;
+
+const ALL_CLIP_KEYS: readonly SpotterClipKey[] = [
+  "car_left",
+  "car_right",
+  "three_wide",
+  "clear_left",
+  "clear_right",
+  "clear",
+  "still_there",
+];
 
 function clipPath(voice: SpotterVoiceId, key: SpotterClipKey): string {
   const prefix = voice === "jim" ? "/audio/spotter" : `/audio/spotter/${voice}`;
@@ -35,22 +46,31 @@ function clipPath(voice: SpotterVoiceId, key: SpotterClipKey): string {
  * iRacing-style contextual racing spotter.
  * Uses relative 3D vehicle position projected into the player's local car frame
  * with hysteresis and cooldowns to avoid flickering or repetitive callouts.
- * Plays pre-recorded MIT-licensed spotter voice clips with an optional Web Audio pit-radio filter.
+ * Plays pre-generated Apache-2.0 (Kokoro-82M) spotter voice clips with an optional Web Audio pit-radio filter.
  */
 export class SpotterEngine {
   private state: SpotterSideState = "clear";
   private lastCalloutMs = 0;
   private alongsideSinceMs = 0;
   private saidStillThere = false;
+  private preloadedVoice: SpotterVoiceId | null = null;
   private readonly rel = new THREE.Vector3();
   private readonly invQ = new THREE.Quaternion();
 
   private audioCtx: AudioContext | null = null;
+  private ownsAudioCtx = false;
   private radioChain: { input: AudioNode; gain: GainNode } | null = null;
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly loading = new Set<string>();
   private activeSource: AudioBufferSourceNode | null = null;
   private activeFallback: HTMLAudioElement | null = null;
+
+  constructor(sharedAudioCtx?: AudioContext | null) {
+    if (sharedAudioCtx) {
+      this.audioCtx = sharedAudioCtx;
+      this.ownsAudioCtx = false;
+    }
+  }
 
   private ensureAudioContext(): AudioContext | null {
     if (typeof window === "undefined") return null;
@@ -58,6 +78,7 @@ export class SpotterEngine {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return null;
       this.audioCtx = new Ctx();
+      this.ownsAudioCtx = true;
     }
     if (this.audioCtx.state === "suspended") {
       void this.audioCtx.resume().catch(() => {});
@@ -122,6 +143,38 @@ export class SpotterEngine {
       });
   }
 
+  /** Preloads all 7 callout clips for the given voice so even the first callout routes through the Web Audio filter. */
+  preloadVoice(voice: SpotterVoiceId): void {
+    if (this.preloadedVoice === voice) return;
+    const ctx = this.ensureAudioContext();
+    if (!ctx) return;
+    this.preloadedVoice = voice;
+    for (const key of ALL_CLIP_KEYS) {
+      this.preloadClip(clipPath(voice, key), ctx);
+    }
+  }
+
+  dispose(): void {
+    this.reset();
+    this.buffers.clear();
+    this.loading.clear();
+    this.preloadedVoice = null;
+    if (this.radioChain) {
+      try {
+        this.radioChain.input.disconnect();
+        this.radioChain.gain.disconnect();
+      } catch {
+        // ignore already disconnected
+      }
+      this.radioChain = null;
+    }
+    if (this.audioCtx && this.ownsAudioCtx) {
+      void this.audioCtx.close().catch(() => {});
+    }
+    this.audioCtx = null;
+    this.ownsAudioCtx = false;
+  }
+
   reset(): void {
     this.state = "clear";
     this.alongsideSinceMs = 0;
@@ -147,7 +200,15 @@ export class SpotterEngine {
     peers: readonly InterpolatedPeerState[],
     config: SpotterConfig,
   ): SpotterSideState {
-    if (!config.enabled || playerSpeedMs < 5) {
+    if (!config.enabled) {
+      if (this.state !== "clear") this.state = "clear";
+      return this.state;
+    }
+    const voice = config.voice ?? "jim";
+    if (this.preloadedVoice !== voice) {
+      this.preloadVoice(voice);
+    }
+    if (playerSpeedMs < 5) {
       if (this.state !== "clear") this.state = "clear";
       return this.state;
     }
@@ -163,7 +224,8 @@ export class SpotterEngine {
       const p = peers[i];
       if (p.ghost || p.stale || p.passThrough) continue;
       this.rel.copy(p.position).sub(playerPos).applyQuaternion(this.invQ);
-      if (Math.abs(this.rel.z) <= longThresh && Math.abs(this.rel.x) <= latThresh) {
+      const absLat = Math.abs(this.rel.x);
+      if (Math.abs(this.rel.z) <= longThresh && absLat >= MIN_LAT_M && absLat <= latThresh) {
         if (this.rel.x >= 0) hasLeft = true;
         else hasRight = true;
       }

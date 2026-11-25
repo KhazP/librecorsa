@@ -857,30 +857,30 @@ export const masterVolume = slider({ id: "volume", get label() { return rt("volu
 export const kerbVolume = slider({ id: "kerbs", get label() { return rt("kerbs.label"); }, min: 0, max: 1.5, step: 0.05, format: pct, mark: 1, ...audio("kerbs") });
 export const spotterVolume = slider({
   id: "spotterVolume",
-  label: "Spotter volume",
-  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  get label() { return rt("spotterVolume.label"); },
+  off: (env) => (env.settings.audio.spotter ? null : rt("spotterVolume.off")),
   min: 0,
   max: 1,
   step: 0.05,
   format: pctOrOff,
   ...audio("spotterVolume"),
 });
-export const spotterOn = toggle({ id: "spotter", label: "Spotter", ...audio("spotter") });
+export const spotterOn = toggle({ id: "spotter", get label() { return rt("spotter.label"); }, ...audio("spotter") });
 export const spotterVoice = choice("segmented", {
   id: "spotterVoice",
-  label: "Spotter voice",
-  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
-  options: [
-    { id: "jim", label: "Jim (UK)" },
-    { id: "clare", label: "Clare (UK)" },
-    { id: "geoffrey", label: "Geoffrey (UK)" },
+  get label() { return rt("spotterVoice.label"); },
+  off: (env) => (env.settings.audio.spotter ? null : rt("spotterVoice.off")),
+  options: () => [
+    { id: "jim", label: rt("spotterVoice.options.jim") },
+    { id: "clare", label: rt("spotterVoice.options.clare") },
+    { id: "geoffrey", label: rt("spotterVoice.options.geoffrey") },
   ],
   ...audio("spotterVoice"),
 });
 export const spotterRadio = toggle({
   id: "spotterRadio",
-  label: "Spotter pit-radio filter",
-  off: (env) => (env.settings.audio.spotter ? null : "Spotter is off"),
+  get label() { return rt("spotterRadio.label"); },
+  off: (env) => (env.settings.audio.spotter ? null : rt("spotterRadio.off")),
   ...audio("spotterRadio"),
 });
 export const mute = toggle({

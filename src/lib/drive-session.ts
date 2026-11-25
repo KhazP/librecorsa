@@ -2757,6 +2757,7 @@ export class DriveSession {
     const radarInvQ = new THREE.Quaternion();
     // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
     const spotter = new SpotterEngine();
+    if (settings.audio.spotter) spotter.preloadVoice(settings.audio.spotterVoice);
     let cueDrsAvail = false;
     let cueDrsOpen = false;
     let cueShiftArmed = true;
@@ -4605,6 +4606,7 @@ export class DriveSession {
       haptics.stop();
       dualSense.stop();
       opponentAudio.dispose();
+      spotter.dispose();
       menuIdle.dispose();
       wheelFfb.dispose();
       simHost?.dispose();
