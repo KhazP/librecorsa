@@ -13,7 +13,12 @@ import {
   MFD_REPEAT_DELAY_MS,
   MFD_REPEAT_RATE_MS,
   MfdRepeatController,
+  PIT_ITEMS,
+  pitDial,
+  pitPick,
 } from '../../src/lib/input/mfd-input';
+import { PitStopManager } from '../../src/lib/sim/pit/pit-stop';
+import type { PitLaneModel } from '../../src/lib/sim/pit/pit-lane';
 import { HELD_KEYS, heldActionsOf, PhysicalKeys } from '../../src/lib/input/held-keys';
 import {
   buildKeyLookup,
@@ -832,6 +837,43 @@ check('wheel shift paddles (e.g. Moza R3 buttons 12/13) never adjust TC / MFD di
   // 5. Regression guard: TunerMfdPanel must not poll raw connectedPads() buttons directly
   const tunerSrc = readFileSync(join(process.cwd(), 'src/components/hud/TunerMfdPanel.tsx'), 'utf8');
   assert.ok(!tunerSrc.includes('connectedPads'), 'TunerMfdPanel must not poll raw connectedPads directly');
+});
+
+check("the MFD's Pit page takes the D-pad as Electronics does: left / right pick a setting, up / down change it", () => {
+  assert.deepEqual(PIT_ITEMS, ['tyres', 'repair', 'box']);
+  assert.equal(pitPick('tyres', 1), 'repair');
+  assert.equal(pitPick('box', 1), 'tyres', 'right from the last setting wraps to the first, as the dials do');
+  assert.equal(pitPick('tyres', -1), 'box');
+  const plan = { nextCompound: 'medium' as const, repairDamage: true, boxRequested: false };
+  assert.deepEqual(pitDial(plan, 'tyres', 1), { nextCompound: 'hard' }, 'up: the next compound to the right');
+  assert.deepEqual(pitDial(plan, 'tyres', -1), { nextCompound: 'soft' });
+  assert.equal(pitDial({ ...plan, nextCompound: 'soft' }, 'tyres', -1), null, 'no further than the softest');
+  assert.equal(pitDial({ ...plan, nextCompound: 'wet' }, 'tyres', 1), null, '…or the wets');
+  assert.deepEqual(pitDial(plan, 'repair', -1), { repairDamage: false }, 'down: no repairs');
+  assert.equal(pitDial(plan, 'repair', 1), null, 'up on repairs already on: nothing (a held button never flickers it)');
+  assert.deepEqual(pitDial(plan, 'box', 1), { boxRequested: true }, 'up: box this lap');
+  assert.deepEqual(pitDial({ ...plan, boxRequested: true }, 'box', -1), { boxRequested: false }, 'down: the call taken back');
+  // The tuner hands a page with settings its presses before stepping pages or going back to Electronics
+  const tunerSrc = readFileSync(join(process.cwd(), 'src/components/hud/TunerMfdPanel.tsx'), 'utf8');
+  assert.ok(tunerSrc.includes('if (!m.onPageDial?.("pick", delta)) m.onCyclePage?.(delta);'), 'left / right: the page first');
+  assert.ok(tunerSrc.includes('if (!m.onPageDial?.("change", dir)) interactRef.current?.();'), 'up / down: the page first');
+  // What the page sets is what the crew does at the next stop (pit-stop.ts), on a one-box lane
+  const lane = { limitKmh: 80, boxes: [{ index: 0, laneM: 100, offsetM: 0 }], besideLap: () => false } as unknown as PitLaneModel;
+  const stopWith = (repairDamage: boolean) => {
+    const crew = new PitStopManager(lane, 'soft');
+    // Up twice on the tyres (soft, medium, hard), then repairs set with up or down
+    crew.setStrategy(pitDial({ ...plan, nextCompound: 'soft' }, 'tyres', 1)!);
+    crew.setStrategy(pitDial({ ...plan, nextCompound: 'medium' }, 'tyres', 1)!);
+    crew.setStrategy(pitDial({ ...plan, repairDamage: !repairDamage }, 'repair', repairDamage ? 1 : -1)!);
+    const inBox = { dtS: 0.5, lane: { laneM: 100, offsetM: 0, inLimitZone: true }, trackS: 0, speedMs: 0, damage: 0.2, punctures: 0, canService: true };
+    for (let i = 0; i < 80; i++) {
+      const step = crew.update(inBox);
+      if (step.serviced) return step.serviced;
+    }
+    return null;
+  };
+  assert.deepEqual(stopWith(false), { compound: 'hard', repair: false }, 'the stop fits the hards picked and leaves the damage');
+  assert.deepEqual(stopWith(true), { compound: 'hard', repair: true }, '…and repairs it when asked');
 });
 
 console.log('Wheel detection and force feedback');
