@@ -933,7 +933,7 @@ export const LC_LMDH_ELECTRONICS = {
   tcMinSpeedKmh: 40,
   tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.25 },
   tcDryRearSlide: { gain: 2, from: 0.45 },
-  // It reads the steering too [963]: the wheelspin it allows falls to half by 200° of rim, so a hairpin's exit on full
-  // lock gets less than a straight
-  tcSteerTightening: { fullAtRimDeg: 200, floor: 0.5 },
+  // It reads the steering too [963]: the wheelspin it allows falls to half by 160° of rim (of the rack's 194° each
+  // way), so a hairpin's exit on full lock gets less than a straight
+  tcSteerTightening: { fullAtRimDeg: 160, floor: 0.5 },
 };
