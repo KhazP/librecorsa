@@ -1067,9 +1067,9 @@
     "steady": "Ổn định"
   },
   "deltaBar": {
-    "label": "Delta so với vòng mẫu",
+    "label": "Delta so với vòng tham chiếu",
     "valueText": "{delta} giây, {trend, select, gaining {đang rút ngắn} losing {đang chậm lại} other {ổn định}}",
-    "noReference": "Chưa có vòng mẫu"
+    "noReference": "Chưa có vòng tham chiếu"
   },
   "ffbMeter": {
     "title": "Phản hồi lực",

@@ -667,7 +667,7 @@
     "car": {
       "tc": "TC",
       "tcCut": "Coupure TC",
-      "tcSlip": "Angle de glisse TC",
+      "tcSlip": "Angle de dérive TC",
       "abs": "ABS",
       "off": "Off",
       "active": "Actif",
