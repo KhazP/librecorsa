@@ -29,7 +29,7 @@ import {
   type VehicleClassId,
 } from "@/lib/cars/vehicle-class";
 
-export const BADGE_TYPES = ["goat", "creator", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
+export const BADGE_TYPES = ["creator", "goat", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
 export type BadgeType = (typeof BADGE_TYPES)[number];
 export const isBadgeType = (v: unknown): v is BadgeType => (BADGE_TYPES as readonly unknown[]).includes(v);
 
@@ -158,8 +158,8 @@ export interface HallOfFameAnswer {
   recordHolders: HallOfFameRecordHolders;
 }
 
-/** The badge order everywhere, as BADGE_TYPES: the GOAT (the most prized) first, the Creator, then medals, best first */
-const ORDER: Record<BadgeType, number> = { goat: 0, creator: 1, weekly_gold: 2, weekly_silver: 3, weekly_bronze: 4, track_record: 5, og: 6, bulb: 7 };
+/** The badge order everywhere, as BADGE_TYPES: the Creator (who the driver is) first, the GOAT, then medals, best first */
+const ORDER: Record<BadgeType, number> = { creator: 0, goat: 1, weekly_gold: 2, weekly_silver: 3, weekly_bronze: 4, track_record: 5, og: 6, bulb: 7 };
 export const sortBadges = (badges: readonly DriverBadge[]): DriverBadge[] => [...badges].sort((a, b) => ORDER[a.type] - ORDER[b.type]);
 
 const BADGE_NAME: Record<BadgeType, string> = {

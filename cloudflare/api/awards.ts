@@ -64,7 +64,7 @@ type Answer = { status: number; body: unknown };
 const fail = (error: string, status = 400): Answer => ({ status, body: { ok: false, error } });
 
 /** The same lists as src/lib/net/awards.ts (imported there as types only, so the Worker carries no client code) */
-export const BADGE_TYPES: readonly BadgeType[] = ["goat", "creator", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
+export const BADGE_TYPES: readonly BadgeType[] = ["creator", "goat", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
 export const MANUAL_BADGE_TYPES: readonly ManualBadgeType[] = ["bulb", "og", "track_record"];
 export const MAX_BADGE_NAMES = 64;
 /** Minimum distinct drivers on an open board before its P1 earns a Fastest Lap badge / Hall of Fame record */

@@ -1064,14 +1064,14 @@ async function main(): Promise<void> {
     const goat: DriverBadge = { type: "goat", count: 1 };
     const mixed: DriverBadge[] = [{ type: "og", count: 1 }, { type: "weekly_gold", count: 1 }, { type: "creator", count: 1 }, goat];
     check(
-      "goat: the Worker and the game list the same badge types, the GOAT first",
-      SERVER_BADGE_TYPES.join(",") === BADGE_TYPES.join(",") && BADGE_TYPES[0] === "goat",
+      "goat: the Worker and the game list the same badge types, the Creator first and the GOAT next",
+      SERVER_BADGE_TYPES.join(",") === BADGE_TYPES.join(",") && BADGE_TYPES[0] === "creator" && BADGE_TYPES[1] === "goat",
       SERVER_BADGE_TYPES.join(","),
     );
     check(
-      "goat: parsed, named and sorted first by the game",
+      "goat: parsed, named and sorted ahead of the medals by the game, after the Creator",
       parseBadges({ ok: true, badges: { misk: [{ type: "weekly_gold", count: 1 }, { type: "goat", count: 1 }] } })?.misk.map((b) => b.type).join(",") === "goat,weekly_gold" &&
-        sortBadges(mixed).map((b) => b.type).join(",") === "goat,creator,weekly_gold,og" &&
+        sortBadges(mixed).map((b) => b.type).join(",") === "creator,goat,weekly_gold,og" &&
         badgeLabel(goat) === "GOAT" &&
         badgeDetail(goat).includes("Hall of Fame"),
       badgeDetail(goat),
