@@ -100,7 +100,8 @@
       "gold": "G",
       "silver": "S",
       "bronze": "B",
-      "og": "OG"
+      "og": "OG",
+      "goat": "الأعظم"
     },
     "flCompact": "{count, plural, =1 {FL} zero {FL×#} one {FL} two {FL×#} few {FL×#} many {FL×#} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} zero {FL·{class}×#} one {FL·{class}} two {FL·{class}×#} few {FL·{class}×#} many {FL·{class}×#} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "أسرع لفة",
       "og": "فيزياء V1",
       "bulb": "فكرة للعبة",
-      "creator": "صنع اللعبة"
+      "creator": "صنع اللعبة",
+      "goat": "السائق الأكثر تتويجًا"
     }
   },
   "profile": {

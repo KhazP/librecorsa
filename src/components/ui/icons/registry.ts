@@ -5,6 +5,7 @@ import {
   ArrowDownUp,
   ArrowLeft,
   AudioLines,
+  Award,
   Music2,
   Camera,
   CarFront,
@@ -303,10 +304,12 @@ export const ICONS = {
   podium: Podium,
   chequered: Chequered,
 
-  // Driver badges (DriverBadges.tsx): a weekly challenge medal, an idea that went into the game, and the game's maker
+  // Driver badges (DriverBadges.tsx): a weekly challenge medal, an idea that went into the game, the game's maker, and
+  // the GOAT at the top of the Hall of Fame (its own rosette: the crown is the room's host, the trophy the challenge)
   medal: Medal,
   idea: Lightbulb,
   creator: CodeXml,
+  goat: Award,
 
   // Weather and time of day
   weatherClear: Sun,

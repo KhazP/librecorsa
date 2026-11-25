@@ -100,7 +100,8 @@
       "gold": "G",
       "silver": "S",
       "bronze": "B",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "Lap tercepat",
       "og": "Fisika V1",
       "bulb": "Ide game",
-      "creator": "Membuat game ini"
+      "creator": "Membuat game ini",
+      "goat": "Pembalap peraih medali terbanyak"
     }
   },
   "profile": {

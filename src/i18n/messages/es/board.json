@@ -100,7 +100,8 @@
       "gold": "O",
       "silver": "P",
       "bronze": "B",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {VR} other {VR×#}}",
     "flClassCompact": "{count, plural, =1 {VR·{class}} other {VR·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "Vuelta más rápida",
       "og": "Física V1",
       "bulb": "Idea para el juego",
-      "creator": "Creó el juego"
+      "creator": "Creó el juego",
+      "goat": "Piloto más condecorado"
     }
   },
   "profile": {

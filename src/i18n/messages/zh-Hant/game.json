@@ -149,7 +149,9 @@
     "bulbDetailNote": "點子貢獻者：{note}",
     "bulbDetail": "點子或社群貢獻",
     "creator": "創作者",
-    "creatorDetail": "打造了 LibreCorsa"
+    "creatorDetail": "打造了 LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "名人堂中獎牌最多的車手。並列榜首時，所有並列者共享此徽章。"
   },
   "camera": {
     "chaseClose": "近距追尾",

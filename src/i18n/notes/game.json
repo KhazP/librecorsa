@@ -448,6 +448,8 @@
   "dash.damage": "Amber banner on the in-cockpit dashboard screen (drawn in capitals) when the car has active damage.",
   "badges.creator": "Badge name for the person who made LibreCorsa.",
   "badges.creatorDetail": "What the Creator badge means.",
+  "badges.goat": "Badge name for the driver at the top of the Hall of Fame's Most decorated list (most weekly challenge golds, then silvers, then bronzes). GOAT = Greatest Of All Time, sports slang. Keep it in English if your players use it, or use your language's short word for the greatest ever; it also shows as the short tag (driverBadges.short.goat), so keep it about this short.",
+  "badges.goatDetail": "Tooltip on the GOAT badge: what it means. Most decorated = the Hall of Fame list ranked by weekly challenge medals (same words as hallOfFame.mostDecorated). A tie on golds, silvers and bronzes gives the badge to every tied driver.",
   "account.checking": "Quiet line while the game asks the server about the player's account.",
   "account.passkey": "A passkey on its own, as on its button. A passkey is the standard password-free sign-in (WebAuthn).",
   "account.aPasskey": "A passkey inside a sentence and a list: “Signed in with Discord and a passkey”.",

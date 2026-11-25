@@ -149,7 +149,9 @@
     "bulbDetailNote": "Idea Contributor: {note}",
     "bulbDetail": "Idea or community contribution",
     "creator": "Creator",
-    "creatorDetail": "Made LibreCorsa"
+    "creatorDetail": "Made LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "Most decorated driver in the Hall of Fame. Drivers tied at the top share it."
   },
   "camera": {
     "chaseClose": "Chase close",

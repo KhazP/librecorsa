@@ -30,6 +30,7 @@
 | sector | Sektor | |
 | lap board | Bestenliste | |
 | Hall of Fame | Hall of Fame | |
+| GOAT (badge) | GOAT | Kept in English, as German sports fans say it; name and short tag |
 | weekly challenge | Wochenchallenge | |
 | time trial | Zeitfahren | |
 | practice | Training | |

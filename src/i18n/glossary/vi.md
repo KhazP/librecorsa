@@ -29,6 +29,7 @@
 | sector | sector | Giữ nguyên thuật ngữ quen thuộc với cộng đồng F1/sim racing VN; giữ `S1/S2/S3` |
 | lap board | bảng xếp hạng vòng | Bảng thành tích trực tuyến theo đường đua và xe |
 | Hall of Fame | Đại sảnh Danh vọng | Bảng kỷ lục mọi thời đại |
+| GOAT (badge) | GOAT | Giữ nguyên tiếng Anh (phổ biến trong giới thể thao); tên và nhãn ngắn của huy hiệu |
 | weekly challenge | thử thách tuần | |
 | time trial | đua tính giờ | |
 | practice | luyện tập | |

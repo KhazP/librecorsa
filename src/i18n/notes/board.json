@@ -60,6 +60,7 @@
   "driverBadges.short.silver": "One-letter tag of the silver medal badge. S = Silver.",
   "driverBadges.short.bronze": "One-letter tag of the bronze medal badge. B = Bronze.",
   "driverBadges.short.og": "Tag of the badge for players who drove the first physics version (original). Keep it short.",
+  "driverBadges.short.goat": "Tag of the GOAT badge beside a driver's name: the top of the Hall of Fame's Most decorated list. GOAT = Greatest Of All Time. Use the same word as the badge name (game: badges.goat). Keep it about four letters.",
   "driverBadges.flCompact": "Tag of the Fastest Lap badge in a list row. FL = Fastest Lap. ×# shows how many, only past one.",
   "driverBadges.flClassCompact": "The Fastest Lap tag with the car class's short code, such as FL·GT3. {class} is not translated.",
   "driverBadges.fastestLap": "Badge for holding the fastest lap on a board. ×# shows how many, only past one.",
@@ -114,5 +115,6 @@
   "profile.refreshLabel": "Screen-reader name of the refresh button.",
   "profile.refresh": "Tooltip on the refresh button.",
   "table.viewProfile": "Tooltip on a driver's name on a lap board. {name}: the driver's name.",
-  "driverBadges.legend.creator": "Legend line for the Creator badge: the person who made LibreCorsa."
+  "driverBadges.legend.creator": "Legend line for the Creator badge: the person who made LibreCorsa.",
+  "driverBadges.legend.goat": "Key entry: the GOAT badge marks the driver at the top of the Hall of Fame's Most decorated list (most weekly challenge medals). Same words as hallOfFame.mostDecorated, about a driver."
 }

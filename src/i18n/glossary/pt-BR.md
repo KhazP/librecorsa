@@ -29,6 +29,7 @@
 | sector | setor | |
 | lap board | classificação | "Ranking de tempos" if room |
 | Hall of Fame | Hall da Fama | |
+| GOAT (badge) | GOAT | Kept in English, common in Brazilian sports talk; name and short tag |
 | weekly challenge | desafio semanal | |
 | time trial | contra o relógio | |
 | practice | treino livre | |

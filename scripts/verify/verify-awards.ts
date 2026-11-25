@@ -10,6 +10,8 @@
  *   - Client parsers, formatters and badge cache (src/lib/net/awards.ts)
  *   - The Creator badge: bound to CREATOR_KEY_HASH's driver key (follows a rename, not a lapsed name), never on a
  *     room's typed-in names
+ *   - The GOAT badge (#181): the top of the Most decorated list, ties shared, finished weeks only, never by hand, and
+ *     the same drivers the Hall of Fame card marks
  *
  *   npx tsx scripts/verify/verify-awards.ts
  */
@@ -22,9 +24,11 @@ import { LapConditionBadges } from "../../src/components/board/LapConditionBadge
 import { handleApi, SHARED_ANSWER_S } from "../../cloudflare/api/index";
 import { driverNameKey, renameDriver, type BoardDeps } from "../../cloudflare/api/board";
 import {
+  BADGE_TYPES as SERVER_BADGE_TYPES,
   checkAwardInput,
   hallOfFameEvents,
   invalidateAutoWeeklyAwardsForDriver,
+  MANUAL_BADGE_TYPES as SERVER_MANUAL_BADGE_TYPES,
   MIN_RECORD_DRIVERS,
   parseBadgeNames,
   parseCreatorKeyHashes,
@@ -36,6 +40,7 @@ import {
 } from "../../cloudflare/api/awards";
 import type { AdminAwardsBody } from "../../cloudflare/api/admin";
 import {
+  BADGE_TYPES,
   badgeDetail,
   badgeLabel,
   badgeQueryNames,
@@ -44,6 +49,7 @@ import {
   forgetBadges,
   groupBoardsByClass,
   groupBoardsByVehicle,
+  MANUAL_BADGE_TYPES,
   MAX_BADGE_NAMES,
   parseBadges,
   parseHallOfFame,
@@ -51,13 +57,15 @@ import {
   sortBadges,
   type DriverBadge,
   type HallOfFameAnswer,
+  type HallOfFameEvent,
 } from "../../src/lib/net/awards";
+import { goatKeys } from "../../src/lib/net/goat";
 import { challengeAt } from "../../src/lib/net/weekly-challenge";
 import { boardPhysicsVersion, CIRCUIT_REVISION_STEP, currentBoardBase, lapPhysicsVersion, shippingLapPhysicsVersion } from "../../src/lib/sim/lap-types";
 import type { D1Database, Env, RateLimit } from "../../cloudflare/api/types";
 import type { VehicleModelId } from "../../src/types/f1";
 import { fakeD1, fakeR2 } from "../lib/fake-cloudflare";
-import { NameplateBadgeCache } from "../../src/lib/render/overhead-nameplates";
+import { formatNameplateBadges, NameplateBadgeCache } from "../../src/lib/render/overhead-nameplates";
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = "") => {
@@ -306,10 +314,10 @@ async function main(): Promise<void> {
     const types = (k: string) => (badgesBody.badges[k] ?? []).map((b) => `${b.type}:${b.count}`).join(",");
     const aliceTr = badgesBody.badges.alice?.find((b) => b.type === "track_record");
     check(
-      "badges: Alice has weekly_gold (V1), weekly_silver (V2), and 1 contested track_record (excludes <5 drivers & legacy LC26)",
+      "badges: Alice has the GOAT (sole leader), weekly_gold (V1), weekly_silver (V2), and 1 contested track_record (excludes <5 drivers & legacy LC26)",
       badgesRes.status === 200 &&
         badgesRes.headers.get("Cache-Control") === `public, max-age=${SHARED_ANSWER_S.badges}` &&
-        types("alice") === "weekly_gold:1,weekly_silver:1,track_record:1" &&
+        types("alice") === "goat:1,weekly_gold:1,weekly_silver:1,track_record:1" &&
         aliceTr?.boards?.length === 1 &&
         aliceTr.boards[0].trackId === "sachsenring" &&
         aliceTr.boards[0].vehicle === "lc26" &&
@@ -910,6 +918,183 @@ async function main(): Promise<void> {
     await plates.syncNames(["KhazP"]);
     check("creator: overhead nameplates leave it off", plates.get("KhazP")?.join(",") === "OG", JSON.stringify(plates.get("KhazP")));
     plates.dispose();
+  }
+
+  // 9. The GOAT (#181): the top of the Most decorated list, ties shared, finished weeks only, never by hand ------------
+  {
+    const week = (event: string, names: readonly string[], current = false): HallOfFameEvent => ({
+      event,
+      physics: "v2",
+      trackId: "dunsfold",
+      vehicle: "liana",
+      current,
+      podium: names.map((name, i) => ({ place: (i + 1) as 1 | 2 | 3, name, nameKey: driverNameKey(name), lapTimeMs: 60_000 + i })),
+    });
+    const goatsOf = (events: readonly HallOfFameEvent[]) => [...goatKeys(tallyMostDecorated(events, Infinity))].sort().join(",");
+
+    // Ana 2-1-0, Ben 1-1-0, Cy 0-1-2
+    const sole = [week("2026-W40", ["Ana", "Ben", "Cy"]), week("2026-W41", ["Ben", "Ana", "Cy"]), week("2026-W42", ["Ana", "Cy"])];
+    check("goat: a sole leader gets it", goatsOf(sole) === "ana", goatsOf(sole));
+
+    // Misk and Vixorr 1-1-0 each, as on the live boards when #181 was built
+    const tied = [week("2026-W40", ["Misk", "Vixorr"]), week("2026-W41", ["Vixorr", "Misk"]), week("2026-W42", ["Third"])];
+    check("goat: an exact tie on gold, silver and bronze shares it", goatsOf(tied) === "misk,vixorr", goatsOf(tied));
+
+    // Ana 1-1-1, Ben 1-1-0: level on gold and silver, apart only on bronze
+    const bronzeSplit = [week("2026-W40", ["Ana", "Ben", "Cy"]), week("2026-W41", ["Ben", "Ana", "Dee"]), week("2026-W42", ["Eve", "Fay", "Ana"])];
+    check(
+      "goat: a tie broken only by bronze isn't shared",
+      goatsOf(bronzeSplit) === "ana" && tallyMostDecorated(bronzeSplit).slice(0, 2).map((d) => d.nameKey).join(",") === "ana,ben",
+      goatsOf(bronzeSplit),
+    );
+
+    const silverOnly: HallOfFameEvent = {
+      ...week("2026-W40", []),
+      podium: [
+        { place: 2, name: "Ana", nameKey: "ana", lapTimeMs: 60_000 },
+        { place: 3, name: "Ben", nameKey: "ben", lapTimeMs: 61_000 },
+      ],
+    };
+    check(
+      "goat: no golds means nobody",
+      goatsOf([silverOnly]) === "" &&
+        goatsOf([]) === "" &&
+        goatKeys([{ nameKey: "a", gold: 0, silver: 3, bronze: 1 }, { nameKey: "b", gold: 0, silver: 3, bronze: 1 }]).size === 0,
+      goatsOf([silverOnly]),
+    );
+
+    // Counted, the week running now would tie Ben with Ana (1-1-0 each); a live week alone crowns nobody
+    const withLive = [week(CURRENT_WEEK, ["Ben", "Ana"], true), week("2026-W40", ["Ana", "Ben"])];
+    check(
+      "goat: the week running now (unfinished) is ignored",
+      goatsOf(withLive) === "ana" && goatsOf([week(CURRENT_WEEK, ["Ben"], true)]) === "",
+      goatsOf(withLive),
+    );
+
+    // Eleven winners of one week each: the badge reaches all of them, the Hall of Fame lists (and marks) ten
+    const eleven = Array.from({ length: 11 }, (_, i) => week(`2026-W${30 + i}`, [`D${String(i).padStart(2, "0")}`]));
+    check(
+      "goat: more than ten tied leaders all get it, from the whole tally",
+      goatsOf(eleven).split(",").length === 11 && goatKeys(tallyMostDecorated(eleven)).size === 10,
+      goatsOf(eleven),
+    );
+    check(
+      "goat: the tallies may come in any order",
+      [...goatKeys([...tallyMostDecorated(tied, Infinity)].reverse())].sort().join(",") === "misk,vixorr",
+    );
+
+    // Never by hand: not a manual type on either side, refused by the admin path, and a stored row is never read as one
+    check(
+      "goat: not a manual badge, and checkAwardInput refuses it",
+      !(SERVER_MANUAL_BADGE_TYPES as readonly string[]).includes("goat") &&
+        !(MANUAL_BADGE_TYPES as readonly string[]).includes("goat") &&
+        !checkAwardInput({ name: "Misk", badge: "goat" }).ok &&
+        !checkAwardInput({ name: "Misk", badge_type: "goat" }).ok,
+    );
+    {
+      const db = fakeD1(FULL);
+      const env = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: fakeR2(), ADMIN_KEY: KEY } as unknown as Env;
+      const grant = await apiCall(env, "/api/admin/awards", { method: "POST", key: KEY, body: { name: "Misk", badge: "goat" } });
+      let rowRejected = false;
+      try {
+        await db.prepare("INSERT INTO driver_awards (name_key, badge_type, awarded_at, awarded_by) VALUES ('misk', 'goat', 1, 'owner')").run();
+      } catch {
+        rowRejected = true;
+      }
+      // A table whose CHECK would take a goat row: the badge read still leaves it out
+      const loose = FULL.replace("'og', 'bulb')", "'og', 'bulb', 'goat')");
+      const looseDb = fakeD1(loose);
+      await looseDb.prepare("INSERT INTO driver_awards (name_key, badge_type, awarded_at, awarded_by) VALUES ('nobody', 'goat', 1, 'owner')").run();
+      const looseEnv = { ONLINE_BOARD: "on", BOARD_DB: looseDb, GHOSTS: fakeR2() } as unknown as Env;
+      const looseBadges = ((await (await apiCall(looseEnv, "/api/badges?names=Nobody")).json()) as { badges: Record<string, DriverBadge[]> }).badges;
+      check(
+        "goat: never appears via the manual path (admin grant, stored row)",
+        grant.status === 400 && rowRejected && loose !== FULL && (looseBadges.nobody ?? []).length === 0,
+        `grant=${grant.status} rowRejected=${rowRejected} nobody=${JSON.stringify(looseBadges.nobody)}`,
+      );
+    }
+
+    // End to end: /api/badges gives it to the drivers the Hall of Fame card marks, and the live week stays out
+    {
+      const db = fakeD1(FULL);
+      const env = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: fakeR2() } as unknown as Env;
+      const v2 = lapPhysicsVersion("liana", "dunsfold");
+      const liveWeek = challengeAt(Date.now()).id;
+      const lap = (name: string, event: string, ms: number) => addLap(db, { name, track: "dunsfold", vehicle: "liana", physics: v2, ms, event });
+      await lap("Misk", "2026-W40", 60_000);
+      await lap("Vixorr", "2026-W40", 61_000);
+      await lap("Vixorr", "2026-W41", 60_000);
+      await lap("Misk", "2026-W41", 61_000);
+      await lap("Third", "2026-W42", 60_000);
+      // Counted, this week would make Misk the sole leader (1-2-0) and Live a gold winner
+      await lap("Live", liveWeek, 59_000);
+      await lap("Misk", liveWeek, 59_500);
+
+      const hof = (await (await apiCall(env, "/api/hall-of-fame")).json()) as HallOfFameAnswer;
+      const answer = (await (await apiCall(env, "/api/badges?names=Misk,Vixorr,Third,Live")).json()) as { badges: Record<string, DriverBadge[]> };
+      const types = (k: string) => (answer.badges[k] ?? []).map((b) => `${b.type}:${b.count}`).join(",");
+      const wearing = Object.keys(answer.badges).filter((k) => answer.badges[k].some((b) => b.type === "goat")).sort().join(",");
+      const marked = [...goatKeys(hof.mostDecorated)].sort().join(",");
+      check(
+        "goat: /api/badges gives it to both tied leaders, first, and not to the live week's winner",
+        types("misk") === "goat:1,weekly_gold:1,weekly_silver:1" &&
+          types("vixorr") === "goat:1,weekly_gold:1,weekly_silver:1" &&
+          types("third") === "weekly_gold:1" &&
+          types("live") === "",
+        JSON.stringify(answer.badges),
+      );
+      check("goat: the Hall of Fame card marks the same drivers /api/badges gives it to", wearing === "misk,vixorr" && marked === wearing, `badges=${wearing} card=${marked}`);
+    }
+    {
+      const db = fakeD1(FULL);
+      const env = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: fakeR2() } as unknown as Env;
+      const v2 = lapPhysicsVersion("liana", "dunsfold");
+      const names = Array.from({ length: 11 }, (_, i) => `D${String(i).padStart(2, "0")}`);
+      for (const [i, name] of names.entries()) await addLap(db, { name, track: "dunsfold", vehicle: "liana", physics: v2, ms: 60_000, event: `2026-W${30 + i}` });
+      const answer = (await (await apiCall(env, `/api/badges?names=${names.join(",")}`)).json()) as { badges: Record<string, DriverBadge[]> };
+      const hof = (await (await apiCall(env, "/api/hall-of-fame")).json()) as HallOfFameAnswer;
+      check(
+        "goat: /api/badges reaches all eleven tied leaders though the Hall of Fame lists ten",
+        names.every((n) => answer.badges[driverNameKey(n)]?.[0]?.type === "goat") && hof.mostDecorated.length === 10 && goatKeys(hof.mostDecorated).size === 10,
+        `listed=${hof.mostDecorated.length}`,
+      );
+    }
+
+    // The game's side
+    const goat: DriverBadge = { type: "goat", count: 1 };
+    const mixed: DriverBadge[] = [{ type: "og", count: 1 }, { type: "weekly_gold", count: 1 }, { type: "creator", count: 1 }, goat];
+    check(
+      "goat: the Worker and the game list the same badge types, the Creator first and the GOAT next",
+      SERVER_BADGE_TYPES.join(",") === BADGE_TYPES.join(",") && BADGE_TYPES[0] === "creator" && BADGE_TYPES[1] === "goat",
+      SERVER_BADGE_TYPES.join(","),
+    );
+    check(
+      "goat: parsed, named and sorted ahead of the medals by the game, after the Creator",
+      parseBadges({ ok: true, badges: { misk: [{ type: "weekly_gold", count: 1 }, { type: "goat", count: 1 }] } })?.misk.map((b) => b.type).join(",") === "goat,weekly_gold" &&
+        sortBadges(mixed).map((b) => b.type).join(",") === "creator,goat,weekly_gold,og" &&
+        badgeLabel(goat) === "GOAT" &&
+        badgeDetail(goat).includes("Hall of Fame"),
+      badgeDetail(goat),
+    );
+    check(
+      "goat: shown on every board, room and class (not narrowed like Fastest Lap), and on a room's names",
+      filterBadgesForContext([goat], { scope: "vehicle", vehicle: "amg-gt3" }).length === 1 &&
+        filterBadgesForContext([goat], { scope: "class", classId: "road" }).length === 1 &&
+        roomNameBadges(mixed).some((b) => b.type === "goat") &&
+        formatNameplateBadges([{ type: "weekly_gold", count: 1 }, goat]).join(",") === "GOAT,G",
+    );
+    const pill = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [goat] }));
+    const compactPill = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [goat], compact: true }));
+    const legend = renderToStaticMarkup(React.createElement(BadgeLegend, { badges: [{ type: "weekly_gold", count: 1 }, goat] }));
+    check(
+      "goat: filled amber pill says GOAT (compact too), legend explains it",
+      pill.includes(">GOAT<") &&
+        compactPill.includes(">GOAT<") &&
+        compactPill.includes('aria-label="GOAT"') &&
+        compactPill.includes("bg-lc-amber text-lc-void") &&
+        legend.includes("Most decorated driver"),
+      compactPill.slice(0, 240),
+    );
   }
 
   if (failures.length > 0) {

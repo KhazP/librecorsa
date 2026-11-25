@@ -149,7 +149,9 @@
     "bulbDetailNote": "Kontributor Ide: {note}",
     "bulbDetail": "Ide atau kontribusi komunitas",
     "creator": "Pembuat",
-    "creatorDetail": "Membuat LibreCorsa"
+    "creatorDetail": "Membuat LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "Pembalap peraih medali terbanyak di Hall of Fame. Jika seri di puncak, semua berbagi lencana ini."
   },
   "camera": {
     "chaseClose": "Chase dekat",

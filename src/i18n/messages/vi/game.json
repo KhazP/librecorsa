@@ -149,7 +149,9 @@
     "bulbDetailNote": "Đóng góp ý tưởng: {note}",
     "bulbDetail": "Ý tưởng hoặc đóng góp cho cộng đồng",
     "creator": "Người tạo",
-    "creatorDetail": "Đã tạo ra LibreCorsa"
+    "creatorDetail": "Đã tạo ra LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "Tay đua giàu thành tích nhất Đại sảnh Danh vọng. Nếu đồng hạng đầu, tất cả cùng nhận huy hiệu."
   },
   "camera": {
     "chaseClose": "Sau xe gần",

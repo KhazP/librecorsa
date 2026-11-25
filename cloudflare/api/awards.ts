@@ -27,6 +27,11 @@
  *                              Worker's CREATOR_KEY_HASH, or a name on a player account that such a key is on. Bound to
  *                              the key, not the name, so it follows a rename and never passes to whoever claims the
  *                              name after it lapses. No stored row, never by hand
+ *   goat                       (issue #181) at the top of the Hall of Fame's Most decorated list: the most golds, then
+ *                              silvers, then bronzes of the finished weeks, at least one gold. Drivers tied on all
+ *                              three share it. Worked out from the podiums on each read (src/lib/net/goat.ts, the rule
+ *                              the Hall of Fame card marks its rows by too), so it moves on as soon as someone passes;
+ *                              no stored row, never by hand
  * The owner may also give an OG or a track record by hand (set somewhere the boards don't see); the weekly medals come
  * from the boards alone.
  *
@@ -38,6 +43,7 @@ import { CIRCUIT_REVISION_STEP, PHYSICS_VERSIONS, shippingLapPhysicsVersion } fr
 import { isVehicleModelId, type VehicleModelId } from "../../src/types/f1";
 import { VEHICLE_CLASS_IDS, vehicleClassOf, type VehicleClassId } from "../../src/lib/cars/vehicle-class";
 import { challengeAt } from "../../src/lib/net/weekly-challenge";
+import { compareMedals, goatKeys } from "../../src/lib/net/goat";
 import type {
   BadgeType,
   DecoratedDriver,
@@ -58,7 +64,7 @@ type Answer = { status: number; body: unknown };
 const fail = (error: string, status = 400): Answer => ({ status, body: { ok: false, error } });
 
 /** The same lists as src/lib/net/awards.ts (imported there as types only, so the Worker carries no client code) */
-export const BADGE_TYPES: readonly BadgeType[] = ["creator", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
+export const BADGE_TYPES: readonly BadgeType[] = ["creator", "goat", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
 export const MANUAL_BADGE_TYPES: readonly ManualBadgeType[] = ["bulb", "og", "track_record"];
 export const MAX_BADGE_NAMES = 64;
 /** Minimum distinct drivers on an open board before its P1 earns a Fastest Lap badge / Hall of Fame record */
@@ -271,7 +277,10 @@ function sortEvents<T extends { event: string; physics: string }>(events: T[]): 
   return events.sort((a, b) => (a.event !== b.event ? (a.event < b.event ? 1 : -1) : a.physics < b.physics ? 1 : a.physics > b.physics ? -1 : 0));
 }
 
-/** The most decorated drivers of these podiums, finished weeks only: most golds, then silvers, then bronzes, then name */
+/**
+ * The most decorated drivers of these podiums, finished weeks only: most golds, then silvers, then bronzes (goat.ts
+ * compareMedals), then name. `limit` Infinity keeps every driver (the GOAT is worked out from all of them).
+ */
 export function tallyMostDecorated(events: readonly HallOfFameEvent[], limit = MOST_DECORATED): DecoratedDriver[] {
   const tally = new Map<string, DecoratedDriver>();
   // Newest week first, so a driver is listed under the name they last won with
@@ -287,7 +296,7 @@ export function tallyMostDecorated(events: readonly HallOfFameEvent[], limit = M
     }
   }
   return [...tally.values()]
-    .sort((a, b) => b.gold - a.gold || b.silver - a.silver || b.bronze - a.bronze || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .sort((a, b) => compareMedals(a, b) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
     .slice(0, limit);
 }
 
@@ -466,8 +475,9 @@ async function creatorNames(db: D1Database, keys: readonly string[], creatorKeyH
 }
 
 /**
- * The badges of these drivers (name keys): what their podiums, records and V1 laps say, what was given by hand, and
- * the Creator for a name held by one of `creatorKeyHashes`. `events` is the Hall of Fame, when already read.
+ * The badges of these drivers (name keys): what their podiums, records and V1 laps say, the GOAT for the top of the
+ * Most decorated list, what was given by hand, and the Creator for a name held by one of `creatorKeyHashes`. `events`
+ * is the Hall of Fame, when already read.
  */
 export async function badgesOf(
   db: D1Database,
@@ -527,6 +537,10 @@ export async function badgesOf(
       lapTimeMs: r.lap_time_ms,
       drivers: r.drivers,
     });
+  }
+  // Ranked over every driver's medals, not only the names asked for, nor only the ten the Hall of Fame lists
+  for (const k of goatKeys(tallyMostDecorated(weeks, Infinity))) {
+    if (wanted.has(k)) add(k, "goat").count = 1;
   }
   for (const r of og.results) add(r.name_key, "og").count = 1;
   for (const r of creators.results) add(r.name_key, "creator").count = 1;

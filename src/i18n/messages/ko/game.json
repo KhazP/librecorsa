@@ -149,7 +149,9 @@
     "bulbDetailNote": "아이디어 기여자: {note}",
     "bulbDetail": "아이디어 또는 커뮤니티 기여",
     "creator": "제작자",
-    "creatorDetail": "LibreCorsa 제작"
+    "creatorDetail": "LibreCorsa 제작",
+    "goat": "GOAT",
+    "goatDetail": "명예의 전당 최다 수상 드라이버. 공동 1위는 모두 이 배지를 받음."
   },
   "camera": {
     "chaseClose": "근접 체이스",

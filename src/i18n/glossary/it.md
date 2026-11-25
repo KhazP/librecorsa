@@ -29,6 +29,7 @@
 | sector | settore | |
 | lap board | classifica | "Classifica dei tempi" when space allows |
 | Hall of Fame | Hall of Fame | Kept in English, as in racing games |
+| GOAT (badge) | GOAT | Kept in English, as in Italian sports talk; name and short tag |
 | weekly challenge | sfida settimanale | |
 | time trial | prova a tempo | As in GT7 |
 | practice | prove libere | |

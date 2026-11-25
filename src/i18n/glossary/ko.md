@@ -30,6 +30,7 @@
 | sector | 섹터 | `S1`/`S2`/`S3` 코드 유지 |
 | lap board | 랩 보드 | 서킷·차량별 온라인 랩 타임 기록표 |
 | Hall of Fame | 명예의 전당 | 역대 최고 랩 기록 |
+| GOAT (badge) | GOAT | 영어 그대로 (스포츠 팬 용어); 배지 이름과 짧은 태그 |
 | weekly challenge | 주간 챌린지 | |
 | time trial | 타임 트라이얼 | |
 | practice | 연습 | 전체 명칭이 필요한 경우 `연습 주행` |

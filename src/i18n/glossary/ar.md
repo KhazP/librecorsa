@@ -30,6 +30,7 @@
 | sector | قطاع | pl. قطاعات |
 | lap board | لوحة الأزمنة | Online leaderboard of lap times |
 | Hall of Fame | قاعة المشاهير | All-time lap records |
+| GOAT (badge) | الأعظم | شارة صدارة قائمة الأكثر تتويجًا؛ الاسم والوسم القصير معًا |
 | weekly challenge | التحدي الأسبوعي | |
 | time trial | تجربة الزمن | |
 | practice | تدريب | Free practice: تدريب حر |

@@ -20,6 +20,7 @@ const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
   track_record: "FL",
   og: "OG",
   bulb: "IDEA",
+  goat: "GOAT",
   // Never shown: a room's names are unchecked, so the cache below drops the Creator (awards.ts roomNameBadges)
   creator: "DEV",
 };
@@ -32,7 +33,7 @@ function sameBadgeContext(a: BadgeContext, b: BadgeContext): boolean {
 }
 
 /**
- * Concise uppercase chip codes for overhead nameplates ("G", "G×2", "S", "B", "FL·F1×3", "FL×2", "OG", "IDEA").
+ * Concise uppercase chip codes for overhead nameplates ("GOAT", "G", "G×2", "S", "B", "FL·F1×3", "FL×2", "OG", "IDEA").
  * When `context` narrows to a vehicle or car class, Fastest Lap counts follow that room's car/class.
  */
 export function formatNameplateBadges(badges: readonly DriverBadge[], context?: BadgeContext): string[] {

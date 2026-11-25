@@ -30,6 +30,7 @@
 | sector | sektör | `S1`, `S2`, `S3` aynen korunur |
 | lap board | tur tablosu | Pist ve araç bazlı çevrimiçi tur listesi |
 | Hall of Fame | Onur Listesi | Tüm zamanların tur rekorları |
+| GOAT (badge) | GOAT | Spor dilinde yaygın, İngilizce kalır; rozet adı ve kısa etiket |
 | weekly challenge | haftalık mücadele | |
 | time trial | zamana karşı | |
 | practice | antrenman | |

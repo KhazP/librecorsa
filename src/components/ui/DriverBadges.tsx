@@ -46,11 +46,15 @@ const STYLE: Record<BadgeType, BadgeStyle> = {
   og: { icon: "favouriteOn", tone: { color: "cyan" }, variant: "soft" },
   bulb: { icon: "idea", tone: { color: "lemon" }, variant: "soft" },
   creator: { icon: "creator", tone: { color: "pink" }, variant: "soft" },
+  // Filled, so it stands apart from the soft gold and the outlined bronze beside it
+  goat: { icon: "goat", tone: { color: "amber" }, variant: "solid" },
 };
 
 /** Short tag for compact board rows so every badge is told apart without relying on colour alone (none for the bulb) */
 function shortOf(type: BadgeType): string {
   switch (type) {
+    case "goat":
+      return t("board.driverBadges.short.goat");
     case "weekly_gold":
       return t("board.driverBadges.short.gold");
     case "weekly_silver":
@@ -467,7 +471,7 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
   return pills;
 }
 
-/** A driver's badges (the Creator, weekly podiums, class-colored fastest laps with tap popover, OG, Bulb) */
+/** A driver's badges (the GOAT, the Creator, weekly podiums, class-colored fastest laps with tap popover, OG, Bulb) */
 export const DriverBadges: React.FC<DriverBadgesProps> = ({
   badges,
   compact = false,
@@ -615,6 +619,7 @@ const MEANING: Record<Exclude<BadgeType, WeeklyMedalType>, MessageKey> = {
   og: "board.driverBadges.legend.og",
   bulb: "board.driverBadges.legend.bulb",
   creator: "board.driverBadges.legend.creator",
+  goat: "board.driverBadges.legend.goat",
 };
 
 function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: string } {
