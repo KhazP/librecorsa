@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "Bip pindah gigi"
     },
+    "spotter": {
+      "label": "Spotter",
+      "hint": "Suara memberi tahu mobil di sampingmu (bahasa Inggris): car left, car right, three wide, clear",
+      "off": "Spotter mati"
+    },
+    "spotterVolume": {
+      "label": "Volume spotter"
+    },
+    "spotterVoice": {
+      "label": "Suara spotter"
+    },
+    "spotterRadio": {
+      "label": "Suara radio",
+      "hint": "Spotter terdengar seperti radio tim, dengan bunyi klik sebelum tiap panggilan"
+    },
     "musicOn": {
       "label": "Musik"
     },

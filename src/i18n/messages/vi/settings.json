@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "Tiếng bíp chuyển số"
     },
+    "spotter": {
+      "label": "Spotter",
+      "hint": "Giọng nói báo các xe chạy song song với bạn (tiếng Anh): car left, car right, three wide, clear",
+      "off": "Spotter đang tắt"
+    },
+    "spotterVolume": {
+      "label": "Âm lượng spotter"
+    },
+    "spotterVoice": {
+      "label": "Giọng spotter"
+    },
+    "spotterRadio": {
+      "label": "Âm thanh bộ đàm",
+      "hint": "Giọng spotter nghe như bộ đàm đội đua, có tiếng tách trước mỗi câu báo"
+    },
     "musicOn": {
       "label": "Âm nhạc"
     },

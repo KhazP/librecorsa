@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "Schaltton"
     },
+    "spotter": {
+      "label": "Spotter",
+      "hint": "Eine Stimme meldet Autos neben dir (auf Englisch): car left, car right, three wide, clear",
+      "off": "Spotter ist aus"
+    },
+    "spotterVolume": {
+      "label": "Spotter-Lautstärke"
+    },
+    "spotterVoice": {
+      "label": "Spotter-Stimme"
+    },
+    "spotterRadio": {
+      "label": "Funk-Klang",
+      "hint": "Der Spotter klingt wie Teamfunk, mit einem Klicken vor jeder Durchsage"
+    },
     "musicOn": {
       "label": "Musik"
     },

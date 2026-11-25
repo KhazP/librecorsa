@@ -543,7 +543,7 @@
     "region": {
       "lapTiming": "單圈計時",
       "delta": "與最佳單圈的時間差",
-      "spotter": "車距提示",
+      "spotter": "觀察員",
       "relative": "前後車距",
       "driver": "車速、檔位與踏板",
       "detail": "詳細頁面",

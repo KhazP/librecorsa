@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "변속 알림음"
     },
+    "spotter": {
+      "label": "스포터",
+      "hint": "나란히 달리는 차량 위치를 음성으로 알려 줍니다(영문 음성: car left, car right, three wide, clear)",
+      "off": "스포터가 꺼져 있습니다"
+    },
+    "spotterVolume": {
+      "label": "스포터 볼륨"
+    },
+    "spotterVoice": {
+      "label": "스포터 음성"
+    },
+    "spotterRadio": {
+      "label": "무전 음향",
+      "hint": "매 안내 전 클릭음과 함께 팀 무전처럼 들리게 합니다"
+    },
     "musicOn": {
       "label": "음악"
     },

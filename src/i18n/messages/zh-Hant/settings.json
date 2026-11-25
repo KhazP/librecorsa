@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "升檔提示音"
     },
+    "spotter": {
+      "label": "觀察員",
+      "hint": "以英語語音播報身旁車輛位置：car left、car right、three wide、clear",
+      "off": "觀察員已關閉"
+    },
+    "spotterVolume": {
+      "label": "觀察員音量"
+    },
+    "spotterVoice": {
+      "label": "觀察員語音"
+    },
+    "spotterRadio": {
+      "label": "無線電音效",
+      "hint": "讓觀察員聽起來像車隊無線電，每次播報前會帶有按鍵提示音"
+    },
     "musicOn": {
       "label": "音樂"
     },

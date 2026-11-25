@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "Bipe de troca"
     },
+    "spotter": {
+      "label": "Spotter",
+      "hint": "Uma voz avisa sobre os carros ao seu lado (em inglês): car left, car right, three wide, clear",
+      "off": "Spotter está desligado"
+    },
+    "spotterVolume": {
+      "label": "Volume do spotter"
+    },
+    "spotterVoice": {
+      "label": "Voz do spotter"
+    },
+    "spotterRadio": {
+      "label": "Som de rádio",
+      "hint": "O spotter soa como um rádio de equipe, com um clique antes de cada aviso"
+    },
     "musicOn": {
       "label": "Música"
     },

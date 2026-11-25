@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "تنبيه تبديل الترس"
     },
+    "spotter": {
+      "label": "المراقب الصوتي",
+      "hint": "صوت ينبّهك للسيارات المحاذية لك بالإنجليزية: car left، car right، three wide، clear",
+      "off": "المراقب الصوتي معطّل"
+    },
+    "spotterVolume": {
+      "label": "مستوى صوت المراقب"
+    },
+    "spotterVoice": {
+      "label": "صوت المراقب"
+    },
+    "spotterRadio": {
+      "label": "صوت الراديو",
+      "hint": "يبدو المراقب الصوتي كراديو الفريق، مع نقرة قبل كل نداء"
+    },
     "musicOn": {
       "label": "الموسيقى"
     },

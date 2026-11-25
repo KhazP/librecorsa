@@ -490,6 +490,21 @@
     "shiftBeep": {
       "label": "Vites uyarı sesi"
     },
+    "spotter": {
+      "label": "Gözcü",
+      "hint": "Yanındaki araçları sesli olarak bildirir (İngilizce): car left, car right, three wide, clear",
+      "off": "Gözcü kapalı"
+    },
+    "spotterVolume": {
+      "label": "Gözcü ses düzeyi"
+    },
+    "spotterVoice": {
+      "label": "Gözcü sesi"
+    },
+    "spotterRadio": {
+      "label": "Telsiz sesi",
+      "hint": "Gözcü, her bildirimden önce tıklama sesiyle takım telsizi gibi duyulur"
+    },
     "musicOn": {
       "label": "Müzik"
     },
