@@ -12,6 +12,9 @@
  *  - [est]      an estimate: nothing public gives it (centre of gravity, inertia, gear ratios, spring and damper
  *               rates, the aero map, the tyres)
  *  - [derived]  computed from other values in this file
+ *  - [963]      the project's own Porsche 963 reference set (the car's mass properties, platform, aero sensitivities,
+ *               turbo, fuel use and driveline), read for what each figure means physically and re-derived for this
+ *               engine's model, not copied: its own tyre and aero models differ from the reference's
  *
  * The regulations cap the power at the driveshafts (engine and hybrid together) on a curve against engine speed, so
  * the engine here is trimmed while the motor deploys (`EngineData.outputPowerCap`): the hybrid fills the turbos' lag
@@ -774,16 +777,20 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       trackWidthRear: LC_LMDH_HARDPOINTS.trackWidthRear,
       // [est]
       cgHeight: CG_HEIGHT,
-      // [est]: a radius of gyration of 1.25 m in yaw, the engine and the gearbox close behind the cockpit
-      inertia: { pitch: 1650, roll: 420, yaw: 1780 },
-      // Wheel, tyre, brake, upright and half the links [est]; a rim alone is at least 8.75 / 9.25 kg (Art. 12.5.3)
-      unsprungMassFront: 24.5,
-      unsprungMassRear: 27.5,
-      // The cell sits behind the driver, a little ahead of the CG [est]
-      fuelTank: { y: -0.03, z: 0.1 },
-      // [est]
-      wheelInertiaFront: 1.35,
-      wheelInertiaRear: 1.65,
+      // [963]: radii of gyration of 1.27 m in yaw and 1.22 m in pitch on the sprung mass, the V8 and the transaxle
+      // stretched out behind the cockpit; 0.6 m in roll, the tub, the engine and the driver low on the floor
+      inertia: { pitch: 1700, roll: 380, yaw: 1840 },
+      // A corner's wheel, tyre, brake, upright and half its links [963, derived]: the rim at least 8.75 / 9.25 kg (Art.
+      // 12.5.3), a 29/71-18 slick ≈ 12.5 kg and a 34/71-18 ≈ 14 kg, a 381 mm carbon disc, its bell and a six-piston
+      // caliper ≈ 7 kg, the upright, hub and bearing ≈ 6 kg, and at the rear half a driveshaft
+      unsprungMassFront: 37.5,
+      unsprungMassRear: 41,
+      // The cell sits between the cockpit and the engine, its centre a little behind the CG [963]
+      fuelTank: { y: -0.05, z: -0.12 },
+      // The spinning parts [963, derived]: the tyre's 12.5 / 14 kg at a 0.3 m radius of gyration, the rim's barrel at
+      // 0.21 m, the disc and its bell, the hub (and at the rear the driveshaft's half that turns with the wheel)
+      wheelInertiaFront: 1.65,
+      wheelInertiaRear: 1.82,
       // 20° at the road wheels, 527° of rim lock to lock on a 13.175 : 1 rack [bop]
       maxRoadWheelDeg: 20,
       ffbMechanicalTrailM: 0.02,
