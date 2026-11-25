@@ -473,7 +473,7 @@ console.log("\n== Heavy-rain performance budgets");
       rainSrc.includes("if (a < 0.003) discard;") &&
       visualFxSrc.includes("if (r >= 1.0 || vAlpha < 0.003) discard;") &&
       !visualFxSrc.includes("new THREE.Vector3(0, 0, 1).applyQuaternion(peer.quaternion)") &&
-      asphaltSrc.includes("if ( lc26Dist < 42.0 && uRainIntensity > 0.02") &&
+      asphaltSrc.includes("if ( lc26RippleW * lc26RippleFade > 0.01 )") &&
       scenerySrc.includes("if ( scnDist < 45.0 && uRainIntensity > 0.02"),
     "shader guards verified"
   );
