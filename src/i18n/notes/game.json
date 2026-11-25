@@ -197,6 +197,7 @@
   "wheelSupport.logitechHidpp": "Wheel support table note. Keep driver and product names (WebHID, HID PID, HID++, hid-lg4ff, G HUB, bridge = the separate force-feedback helper program) as they are.",
   "wheelSupport.logitechBridgeOnly": "Wheel support table note. Keep driver and product names (WebHID, HID PID, HID++, hid-lg4ff, G HUB, bridge = the separate force-feedback helper program) as they are.",
   "wheelSupport.thrustmaster": "Wheel support table note. Keep driver and product names (WebHID, HID PID, HID++, hid-lg4ff, G HUB, bridge = the separate force-feedback helper program) as they are.",
+  "wheelSupport.thrustmasterPid": "Wheel support table note. Keep driver and product names (WebHID, HID PID, HID++, hid-lg4ff, G HUB, bridge = the separate force-feedback helper program) as they are.",
   "wheelSupport.thrustmasterBridgeOnly": "Wheel support table note. Keep driver and product names (WebHID, HID PID, HID++, hid-lg4ff, G HUB, bridge = the separate force-feedback helper program) as they are.",
   "wheelSupport.fanatecCslElite": "Wheel support table note. Keep driver and product names (WebHID, HID PID, HID++, hid-lg4ff, G HUB, bridge = the separate force-feedback helper program) as they are.",
   "hudLayouts.blade": "HUD layout name: a blade, for its one long slanted instrument across the bottom of the screen.",
