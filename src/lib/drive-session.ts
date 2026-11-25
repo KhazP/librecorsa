@@ -98,7 +98,7 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, type CockpitRainVolume } from "@/lib/render/rain-fx";
+import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume } from "@/lib/render/rain-fx";
 import { WindscreenWaterPass, type WaterMode } from "@/lib/render/windscreen-water";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
@@ -2999,6 +2999,10 @@ export class DriveSession {
       };
     }
     const rainCamPos = new THREE.Vector3();
+    /** The beams lighting the rain (the player's first) and the order the others' are taken in */
+    const rainBeams: HeadlightBeam[] = Array.from({ length: RAIN_BEAMS }, () => ({ pos: new THREE.Vector3(), dir: new THREE.Vector3(), intensity: 0, range: 1 }));
+    const rainBeamOrder: number[] = [];
+    const rainLamp = new THREE.Color();
     const rainCamPrev = new THREE.Vector3();
     const rainCamVel = new THREE.Vector3();
     let rainCockpitCarId: CarId = carIdNow;
@@ -4890,7 +4894,8 @@ export class DriveSession {
         carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);
-        if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
+        const opponentBeamCount = visualFx.collectBeams(beamScratch);
+        if (opponentBeams) opponentBeams.update(beamScratch, opponentBeamCount, rainCamPos);
         visualFx.setLightLevel(skyLight);
         const hasEye = rainCockpitEye !== null;
         if (
@@ -4916,6 +4921,30 @@ export class DriveSession {
         } else {
           rainFx.setCockpitOcclusion(null, null);
         }
+        // What lights the rain: the player's headlights, the three nearest other cars' beams, a street lamp over the
+        // camera, the sun through the cloud
+        let rainBeamCount = carHeadlights.beam(rainBeams[0]) ? 1 : 0;
+        if (opponentBeamCount > 0) {
+          rainBeamOrder.length = 0;
+          for (let i = 0; i < opponentBeamCount; i++) rainBeamOrder.push(i);
+          rainBeamOrder.sort((a, b) => beamScratch[a].pos.distanceToSquared(rainCamPos) - beamScratch[b].pos.distanceToSquared(rainCamPos));
+          for (let k = 0; k < rainBeamOrder.length && rainBeamCount < RAIN_BEAMS; k++) {
+            const from = beamScratch[rainBeamOrder[k]];
+            const to = rainBeams[rainBeamCount++];
+            to.pos.copy(from.pos);
+            to.dir.copy(from.dir);
+            to.intensity = from.intensity;
+            to.range = from.range;
+          }
+        }
+        rainFx.setLight({
+          beams: rainBeams,
+          beamCount: rainBeamCount,
+          lamp: venueNight?.mode === "lamps" ? venueNight.lightAt(rainCamPos.x, rainCamPos.z, rainLamp) : null,
+          sunDir: env.sunDirection,
+          sunShare: THREE.MathUtils.clamp(skyConditions.elevationDeg / 10, 0, 1) * (1 - wx.cloudCover) * (1 - 0.7 * wx.rainIntensity),
+        });
+        rainFx.setViewportHeight(renderer.domElement.height);
         rainFx.update(
           drawDtS,
           wx.rainIntensity,
