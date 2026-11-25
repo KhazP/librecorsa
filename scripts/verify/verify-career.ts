@@ -71,6 +71,17 @@ for (const d of ["road", "historic"] as const) {
 }
 check("season lengths: 3 rounds at least, never more than the calendar", [3, 5, 7, 10].every((n) => (["short", "medium", "long", "full"] as const).every((l) => roundsFor(l, n) >= Math.min(3, n) && roundsFor(l, n) <= n)));
 
+// ---- The road ladder's start: a one-make series per car, per region
+{
+  const starts = startingSeries("road");
+  const club = starts.filter((s) => s.family === "clubCup");
+  const coupe = starts.filter((s) => s.family === "coupeCup");
+  check("road starts: Club Cup in the Liana alone, Coupé Cup in the Scirocco alone", starts.length === 6 && club.every((s) => s.cars.join() === "liana") && coupe.every((s) => s.cars.join() === "vw-scirocco-gtx"));
+  check("each region has both, and both lead to its Touring Cup", (["americas", "europe", "asiaPacific"] as const).every((r) => [club, coupe].every((f) => f.some((s) => s.region === r && s.next.join() === `touringCup_${r}`))));
+  const r = newCareer("road", "coupeCup_americas", allContent, 77)!;
+  check("a career can start in the Coupé Cup, in the Scirocco", r.season?.seriesId === "coupeCup_americas" && r.season.settings.car === "vw-scirocco-gtx" && r.choices.length === 6);
+}
+
 // ---- Rivals
 const REAL = ["VER", "HAM", "LEC", "NOR", "PIA", "RUS", "SAI", "ALO", "GAS", "OCO", "ALB", "STR", "HUL", "TSU", "BOT", "ANT", "HAD", "BOR"];
 const rivals = makeRivals(1234);
@@ -214,7 +225,7 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
   // The series of a level can be swapped until the season starts
   let run = newCareer("road", "clubCup_europe", allContent, 21)!;
   run = chooseSeries(run, "clubCup_americas", allContent);
-  check("before the first season starts, the other regions can be chosen", run.season?.seriesId === "clubCup_americas" && run.choices.length === 3);
+  check("before the first season starts, the other starting series can be chosen", run.season?.seriesId === "clubCup_americas" && run.choices.length === 6);
   run = startSeason(run);
   check("once it starts, the choice is made", run.choices.length === 0 && chooseSeries(run, "clubCup_europe", allContent) === run);
 }

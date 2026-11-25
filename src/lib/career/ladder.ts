@@ -4,8 +4,9 @@
  * branch where two series lead on. A season in a series is won through by finishing inside its promotion places; the
  * series it leads to then open (`next`).
  *
- * Road: Club Cup (Suzuki Liana) → Touring Cup (VW Scirocco GTX) → Classic GT (Nissan R32 / R33) or Prototype Cup
- * (MTRacing 496R) → GT3 (BMW M4 / Mercedes-AMG) → Endurance Prototypes (LC-LMDH) → Grand Prix (2026 Prototype).
+ * Road: Club Cup (Suzuki Liana) or Coupé Cup (VW Scirocco GTX) → Touring Cup (Nissan R32) → Classic GT (Nissan R33) or
+ * Prototype Cup (MTRacing 496R) → GT3 (BMW M4 / Mercedes-AMG) → Endurance Prototypes (LC-LMDH) → Grand Prix (2026
+ * Prototype).
  * Historic: Procar Series (BMW M1 Procar) → Group 4 Classic (Porsche 934 RSR) → Can-Am Legends (Chaparral 2D).
  *
  * The AI field drives the player's own car (ai-opponents.ts), so a series with two cars is raced in the one the player
@@ -22,6 +23,7 @@ export type CareerRegion = "americas" | "europe" | "asiaPacific";
 /** Series family: the name of a series in every region */
 export type CareerSeriesFamily =
   | "clubCup"
+  | "coupeCup"
   | "touringCup"
   | "classicGt"
   | "protoCup"
@@ -70,17 +72,43 @@ export interface CareerSeries {
 const AMERICAS_SHORT = ["vir_patriot", "watkins_glen_short", "riverside_short", "speedvegas", "vir_south", "bridgehampton", "vir_north"];
 const EUROPE_SHORT = ["sachsenring_short", "spielberg_south", "oschersleben", "norisring", "grobnik", "sachsenring"];
 const ASIA_SHORT = ["rwanda_official_short", "okayama_piper", "barbagallo", "okayama", "chang"];
+/**
+ * The Coupé Cup's calendars: the circuits where a whole grid of Sciroccos races without spins and wall hits piling up.
+ * Headless races (`scripts/ai/race-ab.ts`: 7 AI cars and a stand-in, 3 laps, the drive plans the hosted circuits give
+ * the car), 8 a circuit at the Medium level's skill (62), then 8 on other seeds at High's (70): on the circuits kept,
+ * 0-1 spins and 0-2 wall hits in each 8 (most of them raced on the Scirocco's own driver). Left out with 3-17 spins or
+ * 3-39 wall hits in 8: the club circuits Riverside short, Bridgehampton, Watkins Glen short, Spielberg South,
+ * Oschersleben, Grobnik, RISE short, Okayama, Okayama Piper, and Norisring and Chang at High, Monaco (9 wall hits),
+ * VIR Patriot (34 cars off the track)
+ */
+const COUPE_AMERICAS = ["willow_springs", "vir_south", "speedvegas", "riverside", "vir_north", "vir_patriot_reverse"];
+const COUPE_EUROPE = ["sachsenring_short", "spielberg", "sachsenring", "istanbul_park"];
+const COUPE_ASIA = ["barbagallo", "rwanda_official", "qiddiya"];
 
 export const CAREER_SERIES: readonly CareerSeries[] = [
-  // ---- Road: club racing in a road car, by region (the Liana or the Golf-based Scirocco, the player's pick)
+  // ---- Road: club racing in a road car, by region, a one-make series each: the Liana's, and the Golf-based Scirocco's
   ...(["americas", "europe", "asiaPacific"] as const).map<CareerSeries>((region) => ({
     id: `clubCup_${region}`,
     family: "clubCup",
     discipline: "road",
     tier: 0,
     region,
-    cars: ["liana", "vw-scirocco-gtx"],
+    cars: ["liana"],
     calendar: region === "americas" ? AMERICAS_SHORT : region === "europe" ? EUROPE_SHORT : ASIA_SHORT,
+    raceKm: 40,
+    grid: 8,
+    skill: 70,
+    promoteTop: 3,
+    next: [`touringCup_${region}`],
+  })),
+  ...(["americas", "europe", "asiaPacific"] as const).map<CareerSeries>((region) => ({
+    id: `coupeCup_${region}`,
+    family: "coupeCup",
+    discipline: "road",
+    tier: 0,
+    region,
+    cars: ["vw-scirocco-gtx"],
+    calendar: region === "americas" ? COUPE_AMERICAS : region === "europe" ? COUPE_EUROPE : COUPE_ASIA,
     raceKm: 40,
     grid: 8,
     skill: 70,
