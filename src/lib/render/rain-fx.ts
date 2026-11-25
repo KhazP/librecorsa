@@ -358,7 +358,15 @@ export interface WindscreenWetState {
   wiperPhase: number;
   /** Active wiper mode */
   wiperMode: WiperMode;
+  /** Intermittent wipers: seconds left resting at park before the next stroke */
+  wiperRestS?: number;
 }
+
+/** Wiper strokes per second (out and back) on the slow and fast settings; intermittent strokes at the slow speed */
+const WIPER_SLOW_HZ = 0.8;
+const WIPER_FAST_HZ = 1.3;
+/** Intermittent wipers rest this long at park between strokes (s) */
+const WIPER_REST_S = 2.6;
 
 /**
  * Advances windscreen/visor raindrop accumulation, gravity & airflow run-off (`raindropGravityForce` / `raindropSpeedForce`),
@@ -384,20 +392,26 @@ export function stepWindscreenWipers(
   const netGain = totalInflow * (1 + Math.min(1.2, carSpeedMs / 55)) - (gravityRunoff + airflowRunoff) * state.dropletDensity;
   state.dropletDensity = Math.max(0, Math.min(1, state.dropletDensity + netGain * dt));
 
-  const freqHz =
-    state.wiperMode === "high"
-      ? 1.45
-      : state.wiperMode === "low"
-        ? 0.85
-        : state.wiperMode === "intermittent"
-          ? 0.32
-          : 0;
-  if (freqHz > 0 || state.wiperPhase > 0.01) {
+  const mode = state.wiperMode;
+  const strokeHz = mode === "high" ? WIPER_FAST_HZ : mode === "off" ? 0 : WIPER_SLOW_HZ;
+  // Intermittent: a full-speed stroke, then a rest at park
+  if (mode === "intermittent" && state.wiperPhase === 0 && (state.wiperRestS ?? 0) > 0) {
+    state.wiperRestS = Math.max(0, (state.wiperRestS ?? 0) - dt);
+    return state;
+  }
+  if (strokeHz > 0 || state.wiperPhase > 0.01) {
     const prev = state.wiperPhase;
-    state.wiperPhase = (state.wiperPhase + Math.max(freqHz, 0.85) * dt) % 1;
-    if (freqHz === 0 && state.wiperPhase < prev) state.wiperPhase = 0;
+    let next = prev + Math.max(strokeHz, WIPER_SLOW_HZ) * dt;
+    if (next >= 1) {
+      // A stroke ends back at park: switched off it stays there, intermittent rests there
+      if (mode === "off" || mode === "intermittent") {
+        next = 0;
+        state.wiperRestS = mode === "intermittent" ? WIPER_REST_S : 0;
+      } else next -= 1;
+    }
+    state.wiperPhase = next;
     // Wiper blade sweeps across the glass twice per cycle (out and back)
-    if (Math.floor(prev * 2) !== Math.floor(state.wiperPhase * 2)) {
+    if (Math.floor(prev * 2) !== Math.floor(next * 2) || next < prev) {
       state.dropletDensity *= 0.15;
     }
   } else if (state.wiperPhase > 0) {
