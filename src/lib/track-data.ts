@@ -19,8 +19,13 @@ import type { LapStretches } from "./sim/course-limits";
 import { correctedDrsZones } from "./drs-zone-fixes";
 import { tracksOwnPlanChecks } from "./sim/ai/plan-tracking";
 
-/** Raw `track_data.json` layout shared by every circuit (the bundled circuit's file is the reference schema) */
-export type RawTrackJson = typeof rawTrackJson;
+type BundledTrackJson = typeof rawTrackJson;
+/**
+ * Raw `track_data.json` layout shared by every circuit (the bundled circuit's file is the reference schema), less the
+ * bundled file's own plan checks for this build (`aiPlansByLine`, typed in `TrackMetaExtras`): read as the schema, its
+ * entries would be keys every circuit must have
+ */
+export type RawTrackJson = Omit<BundledTrackJson, "metadata"> & { metadata: Omit<BundledTrackJson["metadata"], "aiPlansByLine"> };
 
 /**
  * The circuit that ships inside the bundle and loads first: RISE Motordrome's short lap. The other circuits (its

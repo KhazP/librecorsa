@@ -25,6 +25,8 @@ check('every listed look-ahead is longer than the default and under a second', o
 
 const raw = JSON.parse(readFileSync('public/tracks/rwanda_official_short/track_data.json', 'utf8')) as { metadata: Record<string, unknown> };
 const meta = raw.metadata;
+// (as a circuit with none of this build's checks: the file may carry some)
+delete meta.aiPlansByLine;
 meta.aiPlans = { ...(meta.aiPlans as object), liana: pass(177), 'amg-gt3': pass(110) };
 setActiveTrack('rwanda_official_short', raw as unknown as RawTrackJson);
 check('an older build\'s check of a car now tracking its own way is not used', planCheckFor('liana', 'gt3') === undefined);
