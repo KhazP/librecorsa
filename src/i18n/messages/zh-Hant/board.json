@@ -100,7 +100,8 @@
       "gold": "金",
       "silver": "銀",
       "bronze": "銅",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "最快單圈",
       "og": "物理 V1",
       "bulb": "遊戲點子",
-      "creator": "打造本遊戲"
+      "creator": "打造本遊戲",
+      "goat": "獎牌最多的車手"
     }
   },
   "profile": {

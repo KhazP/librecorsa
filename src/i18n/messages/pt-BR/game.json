@@ -149,7 +149,9 @@
     "bulbDetailNote": "Colaborador de ideias: {note}",
     "bulbDetail": "Ideia ou contribuição da comunidade",
     "creator": "Criador",
-    "creatorDetail": "Criou o LibreCorsa"
+    "creatorDetail": "Criou o LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "Piloto mais condecorado do Hall da Fama. Em caso de empate no topo, todos dividem o emblema."
   },
   "camera": {
     "chaseClose": "Perseguição próxima",

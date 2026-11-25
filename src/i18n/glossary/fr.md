@@ -30,6 +30,7 @@
 | sector | secteur | |
 | lap board | classement | "Classement des temps" when room |
 | Hall of Fame | Hall of Fame | Kept in English |
+| GOAT (badge) | GOAT | Kept in English, common in French sports talk; name and short tag |
 | weekly challenge | défi hebdomadaire | |
 | time trial | contre-la-montre | |
 | practice | essais libres | |

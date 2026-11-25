@@ -100,7 +100,8 @@
       "gold": "금",
       "silver": "은",
       "bronze": "동",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "패스티스트 랩",
       "og": "물리 V1",
       "bulb": "게임 아이디어",
-      "creator": "게임 제작"
+      "creator": "게임 제작",
+      "goat": "최다 수상 드라이버"
     }
   },
   "profile": {

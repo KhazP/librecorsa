@@ -149,7 +149,9 @@
     "bulbDetailNote": "Colaborador de ideas: {note}",
     "bulbDetail": "Idea o aporte a la comunidad",
     "creator": "Creador",
-    "creatorDetail": "Creó LibreCorsa"
+    "creatorDetail": "Creó LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "Piloto más condecorado del Salón de la Fama. Si hay empate en cabeza, todos comparten la insignia."
   },
   "camera": {
     "chaseClose": "Persecución cercana",

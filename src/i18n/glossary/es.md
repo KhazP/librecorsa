@@ -30,6 +30,7 @@
 | sector | sector | |
 | lap board | clasificación | "Tabla de tiempos" when more room; board of lap times per circuit and car |
 | Hall of Fame | Salón de la Fama | |
+| GOAT (badge) | GOAT | Kept in English, common in Spanish sports talk; name and short tag |
 | weekly challenge | desafío semanal | |
 | time trial | contrarreloj | |
 | practice | práctica libre | |

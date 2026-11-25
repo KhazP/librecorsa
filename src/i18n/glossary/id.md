@@ -28,6 +28,7 @@
 | sector | sektor | — |
 | lap board | papan waktu lap | Daftar catatan waktu lap daring per sirkuit dan mobil |
 | Hall of Fame | Hall of Fame | Rekor waktu lap sepanjang masa; lazim dipertahankan |
+| GOAT (badge) | GOAT | Lazim dipertahankan; nama dan tag pendek lencana |
 | weekly challenge | tantangan mingguan | — |
 | time trial | Time Trial | Lazim dipakai komunitas sim racing Indonesia |
 | practice | Latihan | — |

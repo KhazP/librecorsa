@@ -149,7 +149,9 @@
     "bulbDetailNote": "Fikir Veren: {note}",
     "bulbDetail": "Fikir veya topluluk katkısı",
     "creator": "Yapımcı",
-    "creatorDetail": "LibreCorsa’yı yaptı"
+    "creatorDetail": "LibreCorsa’yı yaptı",
+    "goat": "GOAT",
+    "goatDetail": "Onur Listesi’nin en çok madalyalı pilotu. Zirvede eşitlik varsa rozeti hepsi paylaşır."
   },
   "camera": {
     "chaseClose": "Yakın takip",

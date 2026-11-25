@@ -149,7 +149,9 @@
     "bulbDetailNote": "مساهم بالأفكار: {note}",
     "bulbDetail": "فكرة أو مساهمة مجتمعية",
     "creator": "المُنشئ",
-    "creatorDetail": "صنع LibreCorsa"
+    "creatorDetail": "صنع LibreCorsa",
+    "goat": "الأعظم",
+    "goatDetail": "السائق الأكثر تتويجًا في قاعة المشاهير. يتقاسمه المتعادلون في الصدارة."
   },
   "camera": {
     "chaseClose": "ملاحقة قريبة",

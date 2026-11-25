@@ -100,7 +100,8 @@
       "gold": "G",
       "silver": "S",
       "bronze": "B",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {SR} other {SR×#}}",
     "flClassCompact": "{count, plural, =1 {SR·{class}} other {SR·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "Schnellste Runde",
       "og": "Physik V1",
       "bulb": "Spielidee",
-      "creator": "Hat das Spiel entwickelt"
+      "creator": "Hat das Spiel entwickelt",
+      "goat": "Fahrer mit den meisten Medaillen"
     }
   },
   "profile": {

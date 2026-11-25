@@ -100,7 +100,8 @@
       "gold": "A",
       "silver": "G",
       "bronze": "B",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "En hızlı tur",
       "og": "Fizik V1",
       "bulb": "Oyun fikri",
-      "creator": "Oyunu yaptı"
+      "creator": "Oyunu yaptı",
+      "goat": "En çok madalyalı pilot"
     }
   },
   "profile": {

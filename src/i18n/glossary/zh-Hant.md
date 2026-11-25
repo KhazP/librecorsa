@@ -29,6 +29,7 @@
 | sector | 賽段 | S1/S2/S3 保留 |
 | lap board | 圈速榜 | 依賽道與車輛分類的線上圈速排行榜 |
 | Hall of Fame | 名人堂 | 歷史總圈速紀錄 |
+| GOAT (badge) | GOAT | 保留英文（球迷常用）；徽章名稱與短標籤 |
 | weekly challenge | 每週挑戰 | |
 | time trial | 計時賽 | |
 | practice | 練習賽 | 選項／短標籤可用「練習」 |

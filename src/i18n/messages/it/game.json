@@ -149,7 +149,9 @@
     "bulbDetailNote": "Autore di idee: {note}",
     "bulbDetail": "Idea o contributo della community",
     "creator": "Creatore",
-    "creatorDetail": "Ha creato LibreCorsa"
+    "creatorDetail": "Ha creato LibreCorsa",
+    "goat": "GOAT",
+    "goatDetail": "Il pilota più decorato della Hall of Fame. In caso di parità in vetta, tutti condividono il badge."
   },
   "camera": {
     "chaseClose": "Esterna ravvicinata",

@@ -149,7 +149,9 @@
     "bulbDetailNote": "Ideengeber: {note}",
     "bulbDetail": "Idee oder Beitrag der Community",
     "creator": "Entwickler",
-    "creatorDetail": "Hat LibreCorsa entwickelt"
+    "creatorDetail": "Hat LibreCorsa entwickelt",
+    "goat": "GOAT",
+    "goatDetail": "Fahrer mit den meisten Medaillen in der Hall of Fame. Bei Gleichstand an der Spitze teilen sich alle das Abzeichen."
   },
   "camera": {
     "chaseClose": "Verfolger nah",

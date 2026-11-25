@@ -100,7 +100,8 @@
       "gold": "V",
       "silver": "B",
       "bronze": "Đ",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "Vòng nhanh nhất",
       "og": "Vật lý V1",
       "bulb": "Ý tưởng cho game",
-      "creator": "Đã tạo ra game"
+      "creator": "Đã tạo ra game",
+      "goat": "Tay đua giàu thành tích nhất"
     }
   },
   "profile": {
