@@ -386,6 +386,10 @@ export class SimVisualFxManager {
   private readonly carRight = new THREE.Vector3();
   private readonly carUp = new THREE.Vector3();
   private readonly carForward = new THREE.Vector3();
+  private readonly skidContactScratch = new THREE.Vector3();
+  private readonly skidSlotPool = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private readonly peerFwdScratch = new THREE.Vector3();
+  private readonly peerUpScratch = new THREE.Vector3();
 
   /** Skidmarks and smoke / gravel / spray from the player's four wheels */
   private emitFromCar(
@@ -411,7 +415,7 @@ export class SimVisualFxManager {
       const isSkidding = carSpeedMs > 2.5 && w.fzN > 250 && (isGrass || markLevel > 0.04);
 
       if (isSkidding) {
-        const contactPt = new THREE.Vector3(
+        const contactPt = this.skidContactScratch.set(
           w.worldPos.x,
           w.zRoad + 0.035,
           w.worldPos.z
@@ -427,9 +431,9 @@ export class SimVisualFxManager {
             isGrass ? Math.min(0.85, (w.combinedSlipNorm - 0.62) * 1.1) : 0.12 + 0.73 * markLevel,
             isGrass
           );
-          this.lastWheelSkidPos[wIdx] = contactPt;
+          prevPt.copy(contactPt);
         } else if (!prevPt || prevPt.distanceToSquared(contactPt) >= 16.0) {
-          this.lastWheelSkidPos[wIdx] = contactPt;
+          this.lastWheelSkidPos[wIdx] = this.skidSlotPool[wIdx].copy(contactPt);
         }
       } else {
         this.lastWheelSkidPos[wIdx] = null;
@@ -928,8 +932,8 @@ export class SimVisualFxManager {
       if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {
         const peerSpeedMs = peer.speedKmh / 3.6;
         if (Math.random() < this.wetness * Math.min(1, peerSpeedMs / 48) * 0.65) {
-          const peerFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(peer.quaternion);
-          const peerUp = new THREE.Vector3(0, 1, 0).applyQuaternion(peer.quaternion);
+          const peerFwd = this.peerFwdScratch.set(0, 0, 1).applyQuaternion(peer.quaternion);
+          const peerUp = this.peerUpScratch.set(0, 1, 0).applyQuaternion(peer.quaternion);
           const sideJitter = (Math.random() - 0.5) * 1.3;
           this.spawnParticle(
             peer.position.x - peerFwd.x * 2.1 + peerFwd.z * sideJitter,
