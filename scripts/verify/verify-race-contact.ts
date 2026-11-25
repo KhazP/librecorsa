@@ -192,7 +192,8 @@ function run(setup: Setup) {
   const half = track.getSampleAtDistance(S + 330).width / 2;
   // The slower car on the far side of the road from the racing line, out of the autopilot's lane
   const aiLat = lineLat >= 0 ? -(half - 1.5) : half - 1.5;
-  const capBehind = (vsc: boolean) => {
+  // (both ways the autopilot is driven: by the field's racecraft, `autopilotRacecraft` above 0, and on its own)
+  const capBehind = (vsc: boolean, racecraft?: number) => {
     const player = new F12026CarSim(track, root);
     const field = new AiOpponentField(track, player, [{ code: 'AIC', teamColorHex: '#00ff00', pace: 0.96 }], undefined, { seed: 7, learning: false });
     field.startRace(false);
@@ -204,20 +205,27 @@ function run(setup: Setup) {
       vsc: { _phase: string };
       rollingFormation: boolean;
       rollingPaceMs: number;
+      rc: { autopilotRacecraft: number };
       capPlayerAutopilot: (L: number, dt: number) => void;
+      planTraffic: (dt: number) => void;
     };
+    if (racecraft !== undefined) internals.rc.autopilotRacecraft = racecraft;
     // Past the rolling start's formation (its own pace cap), racing
     internals.rollingFormation = false;
     internals.rollingPaceMs = 0;
     if (vsc) internals.vsc._phase = 'deployed';
     internals.capPlayerAutopilot(track.totalLengthM, DT);
+    if (internals.rc.autopilotRacecraft > 0) internals.planTraffic(DT);
     return player.aiSpeedCapMs ?? Infinity;
   };
   const vscRef = vscReferenceSpeedMs(track.getSampleAtDistance(S + 300).optimalSpeedKmh);
-  const green = capBehind(false);
-  const vsc = capBehind(true);
-  check('Autopilot, green flag: a car well off its line does not slow it', green === Infinity, `cap ${f(green)} m/s (line ${f(lineLat)} m, car at ${f(aiLat)} m)`);
-  check('Autopilot under the VSC: it follows that car, below the VSC pace alone', vsc < vscRef - 1, `cap ${f(vsc)} m/s vs VSC pace ${f(vscRef)} m/s`);
+  for (const racecraft of [undefined, 0]) {
+    const how = racecraft === 0 ? 'on its own' : "raced by the field's rules";
+    const green = capBehind(false, racecraft);
+    const vsc = capBehind(true, racecraft);
+    check(`Autopilot (${how}), green flag: a car well off its line does not slow it`, green === Infinity, `cap ${f(green)} m/s (line ${f(lineLat)} m, car at ${f(aiLat)} m)`);
+    check(`Autopilot (${how}) under the VSC: it follows that car, below the VSC pace alone`, vsc < vscRef - 1, `cap ${f(vsc)} m/s vs VSC pace ${f(vscRef)} m/s`);
+  }
 }
 
 // ---- 8. A damaged car on its own driver slows by √ of the grip it has left (corner speed goes with √ grip), as a drive
