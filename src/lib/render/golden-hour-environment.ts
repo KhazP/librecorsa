@@ -1,11 +1,8 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
-import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
-import { NodeMaterial, RenderPipeline, type UniformNode } from "three/webgpu";
-import { abs, dot, float, length, max, min, mix, pass, screenUV, smoothstep, texture, uniform, vec2, vec3, vec4 } from "three/tsl";
-import { bloom as tslBloom } from "three/examples/jsm/tsl/display/BloomNode.js";
-import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
+import type { Node, NodeMaterial, UniformNode } from "three/webgpu";
+import { getWebGPUBundle, isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 import { DRIVER_HEAD_LAYER, SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { setAsphaltQuality } from "@/lib/render/asphalt-sheen";
 import { setSceneryQuality } from "@/lib/render/scenery-detail";
@@ -23,7 +20,7 @@ import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
 import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
 import { isTouchDevice } from "@/lib/input/touch-input";
-import type { RenderPlan } from "./adaptive-quality";
+import { pixelRatioCap, type RenderPlan } from "./adaptive-quality";
 import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
 import type { CloudsEffect } from "@takram/three-clouds";
 
@@ -187,8 +184,6 @@ export interface GoldenHourEnvironment {
   probeSky: { material: { uniforms: Record<string, { value: unknown }> } };
   /** Graphics preset: the physical sky on Medium and High, the classic sky on Low */
   setQuality(quality: "low" | "medium" | "high", aerialAllowed?: boolean): void;
-  /** Maximum distance (m) from the car at which sun shadows are drawn */
-  setShadowDistance(distanceM: number): void;
   /**
    * With `deferPhysicalSky`: the physical sky may be built from now on (on Medium and High), once the loading's own GPU
    * work is done. Its atmosphere precompute then never runs alongside the circuit's uploads and warm-up frame.
@@ -261,7 +256,8 @@ export function rcasSharpnessForRatio(effectiveRatio: number): number {
  */
 export function applyGraphicsQuality(renderer: AnyRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
   const { quality, renderScale } = plan;
-  const dprCap = quality === "low" && !plan.sharpLow ? 1 : 1.5;
+  // The automatic quality's Lowest resolution bounds `renderScale`, the multiplier on this cap (adaptive-quality.ts)
+  const dprCap = pixelRatioCap(plan);
   const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
   const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
   renderer.setPixelRatio(pixelRatio);
@@ -582,9 +578,10 @@ export function createGoldenHourEnvironment(
 
   // --- Sky (visible dome) ---------------------------------------------------
   const useWebGpuSky = isWebGPURenderer(renderer);
-  const skyMesh = useWebGpuSky ? new SkyMesh() : null;
+  const skyMesh = useWebGpuSky ? new (getWebGPUBundle().SkyMesh)() : null;
   const sky = new Sky();
   if (skyMesh) {
+    const { tsl: { float, min, vec3, vec4 } } = getWebGPUBundle();
     skyMesh.scale.setScalar(SKY_SCALE);
     skyMesh.frustumCulled = false;
     skyMesh.renderOrder = 1000;
@@ -596,7 +593,7 @@ export function createGoldenHourEnvironment(
     const skyMat = skyMesh.material as NodeMaterial;
     if (skyMat.colorNode) {
       // Match WebGL2 Sky scaling: cap the sun disc and scale radiance by SKY_RADIANCE_SCALE so bloom does not white-out the viewport.
-      const baseSky = skyMat.colorNode as ReturnType<typeof vec4>;
+      const baseSky = skyMat.colorNode as Node<"vec4">;
       skyMat.colorNode = vec4(
         min(baseSky.rgb, vec3(SUN_DISC_MAX_RADIANCE)).mul(SKY_RADIANCE_SCALE),
         float(1.0)
@@ -868,25 +865,6 @@ export function createGoldenHourEnvironment(
       return physicalSky?.showing ? physicalSky.cloudTypes : [];
     },
     setQuality,
-    setShadowDistance(distanceM: number): void {
-      if (disposed) return;
-      const d = THREE.MathUtils.clamp(distanceM, 100, 500);
-      if (sunLight instanceof THREE.DirectionalLight) {
-        const cam = sunLight.shadow.camera;
-        if (cam.right === d) return;
-        cam.left = -d;
-        cam.right = d;
-        cam.top = d;
-        cam.bottom = -d;
-        cam.updateProjectionMatrix();
-      } else {
-        const cam = sunLight.shadow.camera;
-        if (cam.far === d) return;
-        cam.far = d;
-        cam.updateProjectionMatrix();
-      }
-      sunLight.shadow.needsUpdate = true;
-    },
     startPhysicalSky(): void {
       if (!physicalSkyHeld) return;
       physicalSkyHeld = false;
@@ -1049,6 +1027,11 @@ export function createPostFx(
   opts?: { multisampling?: number }
 ): PostFx {
   if (isWebGPURenderer(renderer)) {
+    const {
+      webgpu: { RenderPipeline },
+      tsl: { abs, dot, float, length, max, min, mix, pass, screenUV, smoothstep, texture, vec2, vec3, vec4 },
+      bloom: tslBloom,
+    } = getWebGPUBundle();
     const pipeline = new RenderPipeline(renderer);
     let activeCamera = camera;
     let scenePass = pass(scene, camera);

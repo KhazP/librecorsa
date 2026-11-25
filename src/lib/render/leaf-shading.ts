@@ -1,8 +1,7 @@
 import * as THREE from "three";
-import { MeshPhysicalNodeMaterial } from "three/webgpu";
-import { Fn, dFdx, dFdy, dot, faceDirection, float, log2, max, normalView, texture, uv, vec2 } from "three/tsl";
+import type { MeshPhysicalNodeMaterial } from "three/webgpu";
 import { patchShader } from "./shader-patch";
-import { isWebGPUMode } from "./webgpu-renderer";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Leaf cards (Rwanda's instanced foliage, scenery-instances.ts, and the converted circuits' alpha-tested
@@ -29,7 +28,11 @@ export function leafShading(mat: THREE.Material): THREE.Material {
   if (std.userData.leafShading) return mat;
   std.userData.leafShading = true;
   if (isWebGPUMode()) {
-    const out = new MeshPhysicalNodeMaterial();
+    const {
+      webgpu: { MeshPhysicalNodeMaterial: NodeMat },
+      tsl: { Fn, dFdx, dFdy, dot, faceDirection, float, log2, max, normalView, texture, uv, vec2 },
+    } = getWebGPUBundle();
+    const out = new NodeMat();
     out.name = std.name;
     out.color.copy(std.color);
     out.map = std.map;

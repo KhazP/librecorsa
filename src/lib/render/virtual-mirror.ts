@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import type { UniformNode } from "three/webgpu";
-import { uniform } from "three/tsl";
-import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
+import { getWebGPUBundle, isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 
 /**
  * Virtual rear-view mirror: a top-centre strip on screen showing the road behind, for the views where the car's own
@@ -76,9 +75,9 @@ export class VirtualMirror {
   private readonly quadScene = new THREE.Scene();
   private readonly quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly material: THREE.ShaderMaterial | null = null;
-  private readonly tslActive = uniform(0);
-  private readonly tslUvRect = uniform(new THREE.Vector4(0.37, 0.016, 0.26, 0.115));
-  private readonly tslSizePx = uniform(new THREE.Vector2(333, 83));
+  private readonly tslActive: UniformNode<"float", number> | null = null;
+  private readonly tslUvRect: UniformNode<"vec4", THREE.Vector4> | null = null;
+  private readonly tslSizePx: UniformNode<"vec2", THREE.Vector2> | null = null;
   private readonly quad: THREE.Mesh | null = null;
   private active = false;
   private renderNext = false;
@@ -96,7 +95,12 @@ export class VirtualMirror {
     this.scene = scene;
     this.rt = new THREE.WebGLRenderTarget(RT_W, RT_H, { type: THREE.HalfFloatType, samples: 0, depthBuffer: true });
     this.cam = new THREE.PerspectiveCamera(V_FOV_DEG, ASPECT, 0.3, 300);
-    if (!isWebGPURenderer(renderer)) {
+    if (isWebGPURenderer(renderer)) {
+      const { tsl: { uniform } } = getWebGPUBundle();
+      this.tslActive = uniform(0);
+      this.tslUvRect = uniform(new THREE.Vector4(0.37, 0.016, 0.26, 0.115));
+      this.tslSizePx = uniform(new THREE.Vector2(333, 83));
+    } else {
       this.material = new THREE.ShaderMaterial({
         uniforms: {
           map: { value: this.rt.texture },
@@ -120,7 +124,8 @@ export class VirtualMirror {
     UniformNode<"float", number>,
     UniformNode<"vec4", THREE.Vector4>,
     UniformNode<"vec2", THREE.Vector2>
-  ] {
+  ] | null {
+    if (!this.tslActive || !this.tslUvRect || !this.tslSizePx) return null;
     return [this.rt.texture, this.tslActive, this.tslUvRect, this.tslSizePx];
   }
 
@@ -138,7 +143,7 @@ export class VirtualMirror {
       this.renderNext = enabled;
     }
     const r = this.renderer;
-    if (isWebGPURenderer(r)) {
+    if (isWebGPURenderer(r) && this.tslActive && this.tslUvRect && this.tslSizePx) {
       this.tslActive.value = enabled ? 1 : 0;
       if (enabled) {
         r.getSize(this.size);

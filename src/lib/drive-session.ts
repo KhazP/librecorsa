@@ -2,7 +2,7 @@ import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
 import { text as tx } from "@/lib/text";
 import { perLanguage } from "@/lib/per-language";
-import { createSimRendererSync, isWebGPURenderer, type AnyRenderer } from "@/lib/render/webgpu-renderer";
+import { createWebGLRendererSync, isWebGPURenderer, type AnyRenderer, type CreatedSimRenderer } from "@/lib/render/webgpu-renderer";
 import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
@@ -480,6 +480,8 @@ export interface DriveSessionHost {
   settings: PlayerSettings;
   /** Optional ref to the DOM-pooled overhead nameplate overlay, updated directly in the render loop */
   nameplatesRef?: { readonly current: OverheadNameplatesSink | null };
+  /** Pre-initialized renderer from `createSimRenderer()` (WebGPU awaits `init()` before session construction) */
+  precreatedRenderer?: CreatedSimRenderer;
 }
 
 /**
@@ -1320,29 +1322,31 @@ export class DriveSession {
     let renderer: AnyRenderer;
     let rendererBackend: "webgpu" | "webgl2" = "webgl2";
     let gpuName: string | null = null;
-    let rendererReady = false;
-    let rendererInitPromise: Promise<void> = Promise.resolve();
+    let onWebGPUDeviceLost: ((cb: () => void) => void) | undefined;
     try {
-      const created = createSimRendererSync({
-        reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
-      });
+      const created =
+        host.precreatedRenderer ??
+        createWebGLRendererSync({
+          reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
+        });
       renderer = created.renderer;
       rendererBackend = created.backend;
-      rendererInitPromise = created.initPromise.then(async () => {
-        gpuName = await created.getGpuName();
-        noteRenderer(gpuName);
-        const cls = classifyRenderer(gpuName);
-        const plan = safeStartPlan(readLossMemory(browserStore(), Date.now()), cls);
-        console.info(`[gpu] [${rendererBackend}] ${gpuName ?? "renderer not named"} (${cls})${plan.gentle ? ": gentle start" : ""}`);
-        rendererReady = true;
-      });
+      gpuName = created.gpuName;
+      onWebGPUDeviceLost = created.onDeviceLost;
     } catch (reason) {
-      // No WebGPU/WebGL (switched off, or refused after a GPU reset): the worker started above goes with the session
+      // No WebGL (switched off, or refused after a GPU reset): the worker started above goes with the session
       simHost?.dispose();
       throw new WebGLUnavailableError(reason);
     }
+    // The GPU for the bug form, read now: after a context loss the browser may refuse to tell
+    noteRenderer(gpuName);
+    /**
+     * A gentle start on a CPU rasteriser, an older Intel HD / UHD chip, or within two weeks of a context loss: no
+     * physical sky (its GPU precompute), and a loading warm-up of what the camera sees rather than the whole circuit
+     */
     const gpuClass = classifyRenderer(gpuName);
     const { gentle } = safeStartPlan(readLossMemory(browserStore(), Date.now()), gpuClass);
+    console.info(`[gpu] [${rendererBackend}] ${gpuName ?? "renderer not named"} (${gpuClass})${gentle ? ": gentle start" : ""}`);
     /**
      * The context is gone: the frame loop keeps the network and the menus going but draws nothing and moves nothing,
      * and the component offers to load the circuit again on a new context. The old one is never reused: the sky's
@@ -1370,6 +1374,16 @@ export class DriveSession {
     };
     renderer.domElement.addEventListener("webglcontextlost", onContextLost);
     renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
+    onWebGPUDeviceLost?.(() => {
+      if (disposed || gpuLost) return;
+      gpuLost = true;
+      const hidden = document.visibilityState === "hidden" || performance.now() - shownAtMs < BACKGROUND_LOSS_GRACE_MS;
+      recordContextLoss(browserStore(), Date.now(), hidden);
+      console.warn(`[gpu] WebGPU device lost (${appPhaseNow}${hidden ? ", page hidden" : ""}): the drive is paused`);
+      releaseHeldKeys();
+      this.silenceFeedback();
+      this.publish({ gpuLost: { hidden, phase: appPhaseNow } });
+    });
     // AgX exposure, pixel ratio clamp and shadow type; set before the composer is created
     configureRenderer(renderer);
     // The GPU formats the circuit's KTX2 textures transcode to (render/ktx2.ts)
@@ -1446,11 +1460,18 @@ export class DriveSession {
     reflectionProbe.setSky(env.probeSky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
-    postFx.setVirtualMirrorOverlay?.(...virtualMirror.getOverlayArgs());
+    const overlayArgs = virtualMirror.getOverlayArgs();
+    if (overlayArgs) postFx.setVirtualMirrorOverlay?.(...overlayArgs);
     let virtualMirrorShown = false;
 
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
+    /**
+     * The racing line is a driving aid: never drawn behind the title menu, the setup screens or Settings over them
+     * (paused and in a replay the car is still being driven). Behind the opaque loading screen nothing is drawn, and it
+     * stays on there so the shader warm-up compiles it (three's compile skips hidden meshes). The player's setting is
+     * left as it is; each frame sets the line from it and the phase
+     */
     const racingLineShown = (on: boolean) => on && (appPhaseNow === "driving" || appPhaseNow === "loading");
     builtCircuit.racingLineMesh.visible = racingLineShown(settings.racingLine);
     // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
@@ -1714,7 +1735,6 @@ export class DriveSession {
       const level = g.autoQuality ? governor.level : 0;
       const plan = level > 0 ? planAt(g.quality, g.renderScale, level, opts) : presetPlan(g.quality, g.renderScale, opts);
       applyGraphicsQuality(renderer, postFx, env, plan);
-      env.setShadowDistance(g.shadowDistanceM);
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
@@ -2844,7 +2864,6 @@ export class DriveSession {
      * shows. It stops where it is once the session goes, the context is lost or the loading screen was let go anyway.
      */
     const warmUpGpu = async (): Promise<void> => {
-      await rendererInitPromise;
       if (isWebGPURenderer(renderer)) {
         try {
           await renderer.compileAsync(scene, camera);
@@ -2954,7 +2973,6 @@ export class DriveSession {
     checkAssets();
 
     const animate = (nowMs: number) => {
-      if (!rendererReady) return;
       // Dev: a frame that took far longer than a frame is a stall worth knowing about (shader compiles, uploads, builds)
       if (process.env.NODE_ENV !== "production" && lastTimeMs > 0 && nowMs - lastTimeMs > 120 && appPhaseNow !== "loading") {
         console.info(`[load] long frame: ${(nowMs - lastTimeMs).toFixed(0)} ms (${appPhaseNow})`);

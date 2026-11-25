@@ -31,7 +31,6 @@ import {
   renderScale,
   sharpLow,
   sharpen,
-  shadowDistance,
   speedUnit,
   temperatureUnit,
   uiScale,
@@ -64,7 +63,7 @@ export function GraphicsTab() {
   const tx = useTranslations("settings.display.graphics");
   const vrOff = env.vrSupported ? null : tx("vrOff");
   return (
-    <SettingsCard title={tx("title")} rows={[quality, sharpLow, renderScale, sharpen, shadowDistance, frameRate, autoQuality, autoQualityMinScale, driverBody]} first>
+    <SettingsCard title={tx("title")} rows={[quality, sharpLow, renderScale, sharpen, frameRate, autoQuality, autoQualityMinScale, driverBody]} first>
       <SettingRow
         label={tx("vr")}
         disabled={vrOff !== null}

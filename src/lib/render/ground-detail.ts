@@ -1,8 +1,7 @@
 import * as THREE from "three";
-import { MeshPhysicalNodeMaterial } from "three/webgpu";
-import { Fn, If, clamp, float, length, mix, positionView, positionWorld, smoothstep, texture, uniform, uv, vec3 } from "three/tsl";
+import type { MeshPhysicalNodeMaterial } from "three/webgpu";
 import { patchShader } from "./shader-patch";
-import { isWebGPUMode } from "./webgpu-renderer";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Close-range detail on the converted circuits' ground (scripts/tracks/port_ac_track.py). The mods paint their ground
@@ -45,7 +44,11 @@ export function applyGroundDetail(mat: THREE.Material): THREE.Material {
   detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
   detail.anisotropy = 8;
   if (isWebGPUMode()) {
-    const out = new MeshPhysicalNodeMaterial();
+    const {
+      webgpu: { MeshPhysicalNodeMaterial: NodeMat },
+      tsl: { Fn, If, clamp, float, length, mix, positionView, positionWorld, smoothstep, texture, uniform, uv, vec3 },
+    } = getWebGPUBundle();
+    const out = new NodeMat();
     out.name = std.name;
     out.color.copy(std.color);
     out.map = std.map;

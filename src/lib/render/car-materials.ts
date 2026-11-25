@@ -1,43 +1,9 @@
 import * as THREE from "three";
-import { MeshPhysicalNodeMaterial } from "three/webgpu";
-import {
-  Fn,
-  If,
-  abs,
-  clamp,
-  cross,
-  dFdx,
-  dFdy,
-  dot,
-  faceDirection,
-  float,
-  floor,
-  fract,
-  fwidth,
-  length,
-  max,
-  mix,
-  mod,
-  normalLocal,
-  normalView,
-  normalize,
-  positionLocal,
-  positionView,
-  pow,
-  sign,
-  sin,
-  smoothstep,
-  step,
-  texture,
-  uniform,
-  uv,
-  vec2,
-  vec3,
-} from "three/tsl";
+import type { MeshPhysicalNodeMaterial, Node, UniformNode } from "three/webgpu";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 import { toPhysical } from "./to-physical";
 import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
-import { isWebGPUMode } from "./webgpu-renderer";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * PBR upgrades for the LC26 GLB materials (see lc26-car-model.ts; the GLB itself is not edited).
@@ -130,18 +96,34 @@ const liveryUniforms = {
   lc26Secondary: { value: new THREE.Color("#0f172a") },
   lc26Accent: { value: new THREE.Color("#fad201") },
 };
-const tslLiveryPrimary = uniform(new THREE.Vector3(0, 0.63, 0.87));
-const tslLiverySecondary = uniform(new THREE.Vector3(0.06, 0.09, 0.16));
-const tslLiveryAccent = uniform(new THREE.Vector3(0.98, 0.82, 0.004));
+let tslLiveryUniforms: {
+  tslLiveryPrimary: UniformNode<"vec3", THREE.Vector3>;
+  tslLiverySecondary: UniformNode<"vec3", THREE.Vector3>;
+  tslLiveryAccent: UniformNode<"vec3", THREE.Vector3>;
+} | null = null;
+
+function getTslLiveryUniforms() {
+  if (!tslLiveryUniforms) {
+    const { tsl: { uniform } } = getWebGPUBundle();
+    tslLiveryUniforms = {
+      tslLiveryPrimary: uniform(new THREE.Vector3(liveryUniforms.lc26Primary.value.r, liveryUniforms.lc26Primary.value.g, liveryUniforms.lc26Primary.value.b)),
+      tslLiverySecondary: uniform(new THREE.Vector3(liveryUniforms.lc26Secondary.value.r, liveryUniforms.lc26Secondary.value.g, liveryUniforms.lc26Secondary.value.b)),
+      tslLiveryAccent: uniform(new THREE.Vector3(liveryUniforms.lc26Accent.value.r, liveryUniforms.lc26Accent.value.g, liveryUniforms.lc26Accent.value.b)),
+    };
+  }
+  return tslLiveryUniforms;
+}
 
 /** Sets the colours the livery mask mixes (CSS colour strings, sRGB). No shader recompile. */
 export function setLc26LiveryColours(primary: string, secondary: string, accent: string): void {
   liveryUniforms.lc26Primary.value.set(primary);
   liveryUniforms.lc26Secondary.value.set(secondary);
   liveryUniforms.lc26Accent.value.set(accent);
-  tslLiveryPrimary.value.set(liveryUniforms.lc26Primary.value.r, liveryUniforms.lc26Primary.value.g, liveryUniforms.lc26Primary.value.b);
-  tslLiverySecondary.value.set(liveryUniforms.lc26Secondary.value.r, liveryUniforms.lc26Secondary.value.g, liveryUniforms.lc26Secondary.value.b);
-  tslLiveryAccent.value.set(liveryUniforms.lc26Accent.value.r, liveryUniforms.lc26Accent.value.g, liveryUniforms.lc26Accent.value.b);
+  if (tslLiveryUniforms) {
+    tslLiveryUniforms.tslLiveryPrimary.value.set(liveryUniforms.lc26Primary.value.r, liveryUniforms.lc26Primary.value.g, liveryUniforms.lc26Primary.value.b);
+    tslLiveryUniforms.tslLiverySecondary.value.set(liveryUniforms.lc26Secondary.value.r, liveryUniforms.lc26Secondary.value.g, liveryUniforms.lc26Secondary.value.b);
+    tslLiveryUniforms.tslLiveryAccent.value.set(liveryUniforms.lc26Accent.value.r, liveryUniforms.lc26Accent.value.g, liveryUniforms.lc26Accent.value.b);
+  }
 }
 
 function targetFor(name: string): PaintTarget | null {
@@ -151,7 +133,8 @@ function targetFor(name: string): PaintTarget | null {
   return null;
 }
 
-function tslTwill(p: typeof positionLocal.xy) {
+function tslTwill(p: Node<"vec2">) {
+  const { tsl: { floor, fract, mix, mod, sin, step } } = getWebGPUBundle();
   const c = floor(p);
   const f = fract(p);
   const warpOver = step(mod(c.x.add(c.y), 4.0), 1.5);
@@ -160,6 +143,39 @@ function tslTwill(p: typeof positionLocal.xy) {
 }
 
 function upgradeOneWebGpu(src: THREE.MeshStandardMaterial, target: PaintTarget, liveryMask: boolean): MeshPhysicalNodeMaterial {
+  const {
+    webgpu: { MeshPhysicalNodeMaterial },
+    tsl: {
+      Fn,
+      If,
+      abs,
+      clamp,
+      cross,
+      dFdx,
+      dFdy,
+      dot,
+      faceDirection,
+      float,
+      fwidth,
+      length,
+      max,
+      mix,
+      normalLocal,
+      normalView,
+      normalize,
+      positionLocal,
+      positionView,
+      pow,
+      sign,
+      smoothstep,
+      texture,
+      uniform,
+      uv,
+      vec2,
+      vec3,
+    },
+  } = getWebGPUBundle();
+  const { tslLiveryPrimary, tslLiverySecondary, tslLiveryAccent } = getTslLiveryUniforms();
   const out = new MeshPhysicalNodeMaterial();
   out.name = src.name;
   out.color.copy(src.color);

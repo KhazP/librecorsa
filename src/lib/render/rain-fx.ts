@@ -1,7 +1,6 @@
 import * as THREE from "three";
-import { MeshBasicNodeMaterial } from "three/webgpu";
-import { attribute, clamp, float, length, max, mod, smoothstep, uniform, uv, vec2, vec3 } from "three/tsl";
-import { isWebGPUMode } from "./webgpu-renderer";
+import type { UniformNode } from "three/webgpu";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Falling rain around the camera: one LineSegments draw call of up to 6000 streaks, animated entirely on the GPU
@@ -204,22 +203,19 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 4));
   geometry.setDrawRange(0, 0);
 
-  const uTimeNode = uniform(0);
-  const uCamPosNode = uniform(new THREE.Vector3());
-  const uBoxNode = uniform(BOX.clone());
-  const uVelNode = uniform(new THREE.Vector3());
-  const uWindXZNode = uniform(new THREE.Vector2());
-  const uLengthNode = uniform(0.55);
-  const uColorNode = uniform(new THREE.Color(0xb8c2cc));
-  const uOpacityNode = uniform(0.32);
-
-  const uVisorTime = uniform(0);
-  const uVisorDroplets = uniform(0);
-  const uVisorSpray = uniform(0);
-  const uVisorSpeedNorm = uniform(0);
-  const uVisorTint = uniform(new THREE.Color(0xdbe4ee));
-
   const useWebGPU = isWebGPUMode();
+
+  let uTimeNode: UniformNode<"float", number> | null = null;
+  let uCamPosNode: UniformNode<"vec3", THREE.Vector3> | null = null;
+  let uVelNode: UniformNode<"vec3", THREE.Vector3> | null = null;
+  let uWindXZNode: UniformNode<"vec2", THREE.Vector2> | null = null;
+  let uColorNode: UniformNode<"color", THREE.Color> | null = null;
+  let uOpacityNode: UniformNode<"float", number> | null = null;
+  let uVisorTime: UniformNode<"float", number> | null = null;
+  let uVisorDroplets: UniformNode<"float", number> | null = null;
+  let uVisorSpray: UniformNode<"float", number> | null = null;
+  let uVisorSpeedNorm: UniformNode<"float", number> | null = null;
+  let uVisorTint: UniformNode<"color", THREE.Color> | null = null;
 
   let material: THREE.Material;
   let visorMat: THREE.Material;
@@ -227,6 +223,24 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   let glVisorUniforms: Record<string, { value: unknown }> | null = null;
 
   if (useWebGPU) {
+    const {
+      webgpu: { MeshBasicNodeMaterial },
+      tsl: { attribute, clamp, float, length, max, mod, smoothstep, uniform, uv, vec2, vec3 },
+    } = getWebGPUBundle();
+    uTimeNode = uniform(0);
+    uCamPosNode = uniform(new THREE.Vector3());
+    const uBoxNode = uniform(BOX.clone());
+    uVelNode = uniform(new THREE.Vector3());
+    uWindXZNode = uniform(new THREE.Vector2());
+    const uLengthNode = uniform(0.55);
+    uColorNode = uniform(new THREE.Color(0xb8c2cc));
+    uOpacityNode = uniform(0.32);
+
+    uVisorTime = uniform(0);
+    uVisorDroplets = uniform(0);
+    uVisorSpray = uniform(0);
+    uVisorSpeedNorm = uniform(0);
+    uVisorTint = uniform(new THREE.Color(0xdbe4ee));
     const aSeed = attribute("aSeed", "vec4");
     const fallSpeed = float(FALL_MS).mul(float(0.85).add(float(0.3).mul(aSeed.x)));
     const pBase = aSeed.xyz.mul(uBoxNode);
@@ -308,11 +322,11 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   visorMesh.layers.set(RAIN_VISOR_LAYER);
   scene.add(visorMesh);
 
-  const camPos = useWebGPU ? uCamPosNode.value : (glRainUniforms!.uCamPos.value as THREE.Vector3);
-  const vel = useWebGPU ? uVelNode.value : (glRainUniforms!.uVel.value as THREE.Vector3);
-  const windXZ = useWebGPU ? uWindXZNode.value : (glRainUniforms!.uWindXZ.value as THREE.Vector2);
-  const color = useWebGPU ? uColorNode.value : (glRainUniforms!.uColor.value as THREE.Color);
-  const visorTint = useWebGPU ? uVisorTint.value : (glVisorUniforms!.uTint.value as THREE.Color);
+  const camPos = useWebGPU ? uCamPosNode!.value : (glRainUniforms!.uCamPos.value as THREE.Vector3);
+  const vel = useWebGPU ? uVelNode!.value : (glRainUniforms!.uVel.value as THREE.Vector3);
+  const windXZ = useWebGPU ? uWindXZNode!.value : (glRainUniforms!.uWindXZ.value as THREE.Vector2);
+  const color = useWebGPU ? uColorNode!.value : (glRainUniforms!.uColor.value as THREE.Color);
+  const visorTint = useWebGPU ? uVisorTint!.value : (glVisorUniforms!.uTint.value as THREE.Color);
   const baseColor = new THREE.Color(0xb8c2cc);
   let time = 0;
 
@@ -337,10 +351,10 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       visorMesh.visible = showVisor;
       if (showVisor) {
         if (useWebGPU) {
-          uVisorTime.value = time;
-          uVisorDroplets.value = windscreenState.dropletDensity;
-          uVisorSpray.value = spray;
-          uVisorSpeedNorm.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
+          uVisorTime!.value = time;
+          uVisorDroplets!.value = windscreenState.dropletDensity;
+          uVisorSpray!.value = spray;
+          uVisorSpeedNorm!.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
         } else if (glVisorUniforms) {
           glVisorUniforms.uTime.value = time;
           glVisorUniforms.uDroplets.value = windscreenState.dropletDensity;
@@ -353,7 +367,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       const count = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8));
       object.visible = count > 0;
       if (!object.visible) return;
-      if (useWebGPU) uTimeNode.value = time;
+      if (useWebGPU) uTimeNode!.value = time;
       else if (glRainUniforms) glRainUniforms.uTime.value = time;
       camera.getWorldPosition(camPos);
       // Smooth the camera velocity so camera cuts do not flick the streaks
@@ -361,7 +375,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       windXZ.set(Number.isFinite(windVxMs) ? windVxMs : 0, Number.isFinite(windVzMs) ? windVzMs : 0);
       geometry.setDrawRange(0, count * 2);
       color.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.35 + 0.65 * brightness, 0.2, 1));
-      if (useWebGPU) uOpacityNode.value = 0.22 + 0.16 * effectiveIntensity;
+      if (useWebGPU) uOpacityNode!.value = 0.22 + 0.16 * effectiveIntensity;
       else if (glRainUniforms) glRainUniforms.uOpacity.value = 0.22 + 0.16 * effectiveIntensity;
     },
     dispose() {

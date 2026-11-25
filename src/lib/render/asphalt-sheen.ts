@@ -1,41 +1,9 @@
 import * as THREE from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
-import {
-  Fn,
-  abs,
-  clamp,
-  cross,
-  dFdx,
-  dFdy,
-  dot,
-  exp,
-  faceDirection,
-  float,
-  floor,
-  fract,
-  fwidth,
-  If,
-  length,
-  max,
-  mix,
-  normalView,
-  normalize,
-  positionView,
-  positionWorld,
-  pow,
-  sign,
-  sin,
-  smoothstep,
-  texture,
-  uniform,
-  uv,
-  vec2,
-  vec3,
-} from "three/tsl";
+import type { MeshStandardNodeMaterial, Node, UniformNode } from "three/webgpu";
 import type { BuiltTrackData } from "@/lib/track-data";
 import { aiLineOffsetM } from "@/lib/sim/speed-profile";
 import { patchShader, type ShaderPatch } from "./shader-patch";
-import { isWebGPUMode } from "./webgpu-renderer";
+import { getWebGPUBundle, isWebGPUMode } from "./webgpu-renderer";
 
 /**
  * Rubbered-in racing line on the asphalt: a top-down world-XZ mask (white = rubber) drives roughness, a slight
@@ -83,11 +51,27 @@ const wetUniforms = {
 const qualityUniform = {
   uAsphaltDetail: { value: 1 },
 };
-const tslWetness = uniform(0);
-const tslLineWetness = uniform(0);
-const tslRainIntensity = uniform(0);
-const tslWetTime = uniform(0);
-const tslAsphaltDetail = uniform(1);
+let tslUniforms: {
+  tslWetness: UniformNode<"float", number>;
+  tslLineWetness: UniformNode<"float", number>;
+  tslRainIntensity: UniformNode<"float", number>;
+  tslWetTime: UniformNode<"float", number>;
+  tslAsphaltDetail: UniformNode<"float", number>;
+} | null = null;
+
+function getTslWetUniforms() {
+  if (!tslUniforms) {
+    const { tsl: { uniform } } = getWebGPUBundle();
+    tslUniforms = {
+      tslWetness: uniform(wetUniforms.uWetness.value),
+      tslLineWetness: uniform(wetUniforms.uLineWetness.value),
+      tslRainIntensity: uniform(wetUniforms.uRainIntensity.value),
+      tslWetTime: uniform(wetUniforms.uWetTime.value),
+      tslAsphaltDetail: uniform(qualityUniform.uAsphaltDetail.value),
+    };
+  }
+  return tslUniforms;
+}
 /** The same uniform objects, for other surfaces that get wet with the track (scenery-detail) */
 export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
 
@@ -99,7 +83,7 @@ export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
 export function setAsphaltQuality(quality: "low" | "medium" | "high"): void {
   const val = quality === "low" ? 0 : 1;
   qualityUniform.uAsphaltDetail.value = val;
-  tslAsphaltDetail.value = val;
+  if (tslUniforms) tslUniforms.tslAsphaltDetail.value = val;
 }
 
 /**
@@ -113,9 +97,11 @@ export function setAsphaltWetness(offLine: number, onLine: number = offLine, rai
   wetUniforms.uWetness.value = w;
   wetUniforms.uLineWetness.value = lw;
   wetUniforms.uRainIntensity.value = r;
-  tslWetness.value = w;
-  tslLineWetness.value = lw;
-  tslRainIntensity.value = r;
+  if (tslUniforms) {
+    tslUniforms.tslWetness.value = w;
+    tslUniforms.tslLineWetness.value = lw;
+    tslUniforms.tslRainIntensity.value = r;
+  }
 }
 
 /** Runs the raindrop ripples' clock; call every frame with the frame time (s), so they animate at frame rate */
@@ -129,7 +115,7 @@ export function advanceAsphaltRain(dt: number): void {
     // No rain, no ripples drawn: the moment to bring the clock back to zero
     wetUniforms.uWetTime.value = 0;
   }
-  tslWetTime.value = wetUniforms.uWetTime.value;
+  if (tslUniforms) tslUniforms.tslWetTime.value = wetUniforms.uWetTime.value;
 }
 
 /** Racing line in world XZ, using the same lateral convention as the drawn racing line in scene-builder */
@@ -245,15 +231,17 @@ export function createRacingLineMask(
 
 const tslAsphaltCache = new WeakMap<THREE.MeshStandardMaterial, MeshStandardNodeMaterial>();
 
-type Vec2Node = typeof positionWorld.xz;
+type Vec2Node = Node<"vec2">;
 
 function tslHash(p: Vec2Node) {
+  const { tsl: { dot, fract, vec3 } } = getWebGPUBundle();
   const p3 = fract(vec3(p.x, p.y, p.x).mul(0.1031));
   const p3Sum = p3.add(dot(p3, vec3(p3.y, p3.z, p3.x).add(33.33)));
   return fract(p3Sum.x.add(p3Sum.y).mul(p3Sum.z));
 }
 
 function tslValueNoise(p: Vec2Node) {
+  const { tsl: { float, floor, fract, mix, vec2 } } = getWebGPUBundle();
   const i = floor(p);
   const f = fract(p);
   const u = f.mul(f).mul(float(3.0).sub(f.mul(2.0)));
@@ -266,9 +254,10 @@ function tslValueNoise(p: Vec2Node) {
 
 function tslRainSplash(
   worldXZ: Vec2Node,
-  time: typeof tslWetTime,
-  intensity: typeof tslRainIntensity
+  time: UniformNode<"float", number>,
+  intensity: UniformNode<"float", number>
 ) {
+  const { tsl: { exp, float, floor, fract, length, sin, smoothstep, vec2 } } = getWebGPUBundle();
   const cell = floor(worldXZ.mul(2.8));
   const local = fract(worldXZ.mul(2.8)).sub(0.5);
   const h = tslHash(cell);
@@ -285,6 +274,39 @@ function tslRainSplash(
 function createAsphaltNodeMaterial(material: THREE.MeshStandardMaterial, mask: RacingLineMask): MeshStandardNodeMaterial {
   const cached = tslAsphaltCache.get(material);
   if (cached) return cached;
+
+  const {
+    webgpu: { MeshStandardNodeMaterial },
+    tsl: {
+      Fn,
+      abs,
+      clamp,
+      cross,
+      dFdx,
+      dFdy,
+      dot,
+      faceDirection,
+      float,
+      fwidth,
+      If,
+      length,
+      max,
+      mix,
+      normalView,
+      normalize,
+      positionView,
+      positionWorld,
+      pow,
+      sign,
+      smoothstep,
+      texture,
+      uniform,
+      uv,
+      vec2,
+      vec3,
+    },
+  } = getWebGPUBundle();
+  const { tslWetness, tslLineWetness, tslRainIntensity, tslWetTime, tslAsphaltDetail } = getTslWetUniforms();
 
   const nodeMat = new MeshStandardNodeMaterial();
   nodeMat.name = material.name;
