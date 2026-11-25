@@ -28,6 +28,7 @@ import { VEHICLE_MODELS } from '../../../src/lib/cars/vehicle-models';
 import { aiTrackFor } from '../../../src/lib/sim/ai/ai-track';
 import { carLimitsFor } from '../../../src/lib/sim/ai/ggv';
 import { makeDrivePlan, type AiDrivePlan } from '../../../src/lib/sim/ai/drive-plan';
+import { tracksOwnPlanChecks } from '../../../src/lib/sim/ai/plan-tracking';
 import type { SimulatorCar } from '../../../src/lib/sim/simulator-car';
 import type * as THREE from 'three';
 
@@ -153,6 +154,8 @@ function driveLap(
   car.aiAutopilot = true;
   // Its own driver: the field's cap for a car without a plan (ai-opponents.ts), on the line its profile names
   car.aiPaceScale = onPlan ? 1 : 0.999;
+  // Shifting as the field's cars do: the road, classic and prototype cars kick down out of slow corners
+  car.aiKickdown = tracksOwnPlanChecks(vehicle);
   car.aiPlan = onPlan ? plan : null;
   // A hill climb's run starts from rest on the grid, short of the start line
   const p2p = track.pointToPoint;

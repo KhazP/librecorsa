@@ -1158,6 +1158,9 @@ export class AiOpponentField implements AiRace {
       // The field rejoins its own cars after a spin, by driving, not by the car's own teleport
       sim.aiSelfRecovery = false;
       sim.autoGearbox = true;
+      // The road, classic and prototype cars kick down a gear out of a corner the auto box left them a gear high in
+      // (VehiclePhysics `kickdownWanted`); the F1 cars and the GT3 drive their auto box as it is
+      if ('aiKickdown' in sim) sim.aiKickdown = tracksOwnPlanChecks(sim.vehicleId ?? '');
       sim.aiPaceScale = d.pace;
       tuning ??= new AiTrackTuning(track, resolveAiTuning({ classId: this.classId, vehicleId: sim.vehicleId, trackId: this.trackId }, library));
       const car = this.makeCar(`ai_${d.code}`, d.code, d.teamColorHex, sim, sim, d.pace);
