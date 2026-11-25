@@ -325,7 +325,8 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
   const leftColor = hasErs ? HUD_INFO : HUD_BRAKE;
   const leftLit = hasErs ? harvesting : t.brake > 0.05;
   const throttle = Math.max(0, Math.min(1, t.throttle));
-  const rightValue = hasErs ? Math.max(0, Math.min(1, t.mgukPowerKw / 350)) : throttle;
+  const deployScaleKw = t.f12026?.carId === "jaguar-fe" ? 105 : 350;
+  const rightValue = hasErs ? Math.max(0, Math.min(1, t.mgukPowerKw / deployScaleKw)) : throttle;
   const rightLit = hasErs ? deploying : throttle > 0.05;
   const leftOn = Math.round(leftValue * SEGMENTS);
   const rightOn = Math.round(rightValue * SEGMENTS);

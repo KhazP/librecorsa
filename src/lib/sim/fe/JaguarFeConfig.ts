@@ -12,17 +12,17 @@ import type { LutPoints } from "../lut";
 import type { CarPhysicsConfig, PerformanceModeData, PerformanceModeName } from "../f12026-car/F12026CarConfig";
 import { LC26_CAR_CONFIG } from "../f12026-car/Lc26Config";
 
-/** Base 260 kW electric motor curve with strong low/mid/high-speed pull */
+/** Base 300 kW (402 hp) electric motor curve with instant launch & strong mid/high-speed pull */
 const EV_POWER_CURVE: LutPoints = [
   [0, 0],
-  [500, 52],
-  [1200, 125],
-  [2200, 220],
-  [3400, 260],
-  [6000, 260],
-  [10000, 260],
-  [14000, 260],
-  [17500, 255],
+  [500, 60],
+  [1200, 145],
+  [2200, 245],
+  [3400, 300],
+  [6000, 300],
+  [10000, 300],
+  [14000, 300],
+  [17500, 296],
   [18500, 0],
 ];
 
@@ -33,7 +33,7 @@ const EV_COAST_CURVE: LutPoints = [
   [18000, 28],
 ];
 
-/** +120 kW Attack Mode / Boost overlay (380 kW peak) with visible battery depletion and 250 kW regen */
+/** +120 kW Attack Mode / Boost overlay */
 const EV_BOOST_TORQUE_LUT: LutPoints = [
   [0, 420],
   [2500, 380],
@@ -57,9 +57,9 @@ const EV_ERS = {
   ] as LutPoints,
   ERS_MAX_DEPLOY: 120_000,
   maxHarvestW: 250_000,
-  ERS_MAX_CHARGE: 12_000_000,
-  deployPerLapJ: 12_000_000,
-  harvestPerLapJ: 12_000_000,
+  ERS_MAX_CHARGE: 4_600_000,
+  deployPerLapJ: 4_600_000,
+  harvestPerLapJ: 4_600_000,
   deployEfficiency: 0.94,
   harvestEfficiency: 0.90,
   liftThrottle: 0.05,
@@ -148,7 +148,7 @@ export const JAGUAR_FE_CONFIG: CarPhysicsConfig = {
   ers: EV_ERS,
   performanceModes: {
     PSH: evMode("PSH", 1.0, 0.85),
-    RAC: evMode("RAC", 0.80, 0.95),
+    RAC: evMode("RAC", 0.72, 0.95),
     BAL: evMode("BAL", 0.65, 1.0),
     LIC: evMode("LIC", 0.45, 1.0),
     CHR: evMode("CHR", 0.0, 1.0),

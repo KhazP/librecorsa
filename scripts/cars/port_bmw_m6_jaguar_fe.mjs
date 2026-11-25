@@ -462,33 +462,18 @@ async function portJaguarFe() {
   const buf = dstDoc.createBuffer();
   const texMap = new Map();
   const matMap = new Map();
-  const BRIGHT_INTERIOR_MATS = new Set(["interior", "detailplastic", "blackplastic", "blackmatte"]);
-  const CLEAR_WINDOW_MATS = new Set(["window", "windowrear"]);
+  const FE_CHARCOAL_MATS = new Set(["Material.006", "Sidepod_Material", "Material.014", "Halo", "Material.010", "Material.011"]);
   for (const sm of srcDoc.getRoot().listMaterials()) {
     const dm = cloneMaterialTo(dstDoc, sm, texMap);
     const name = sm.getName();
-    if (CLEAR_WINDOW_MATS.has(name)) {
-      dm.setBaseColorTexture(null);
-      dm.setMetallicRoughnessTexture(null);
-      dm.setBaseColorFactor([0.05, 0.07, 0.10, 0.22]);
-      dm.setAlphaMode("BLEND");
-      dm.setMetallicFactor(0.0);
-      dm.setRoughnessFactor(0.08);
-      dm.setDoubleSided(true);
-    } else if (name === "BMW_M6_GT3_by_Alex_Ka") {
-      dm.setMetallicRoughnessTexture(null);
-      dm.setBaseColorFactor([1.0, 1.0, 1.0, 1.0]);
+    if (FE_CHARCOAL_MATS.has(name)) {
+      dm.setBaseColorFactor([0.08, 0.09, 0.11, 1.0]);
+      dm.setMetallicFactor(0.12);
+      dm.setRoughnessFactor(0.45);
+    } else if (name === "Material.005") {
+      dm.setBaseColorFactor([0.04, 0.42, 0.50, 1.0]);
       dm.setMetallicFactor(0.18);
-      dm.setRoughnessFactor(0.32);
-    } else if (BRIGHT_INTERIOR_MATS.has(name)) {
-      dm.setMetallicRoughnessTexture(null);
-      dm.setBaseColorFactor([0.55, 0.55, 0.58, 1.0]);
-      dm.setMetallicFactor(0.0);
-      dm.setRoughnessFactor(0.75);
-    } else if (name === "rim1" || name === "rim2" || name === "chrome") {
-      dm.setMetallicRoughnessTexture(null);
-      dm.setMetallicFactor(0.55);
-      dm.setRoughnessFactor(0.28);
+      dm.setRoughnessFactor(0.35);
     }
     matMap.set(sm, dm);
   }
@@ -603,12 +588,12 @@ async function portJaguarFe() {
     .setEmissiveFactor([1, 1, 1])
     .setRoughnessFactor(0.15)
     .setMetallicFactor(0);
-  const sw = 0.038, sh = 0.021, sz = -0.046;
+  const sw = 0.038, sh0 = 0.031, sh1 = 0.071, sz = -0.053;
   const sPos = [
-    sw, -sh, sz,
-    -sw, -sh, sz,
-    -sw, sh, sz,
-    sw, sh, sz,
+    sw, sh0, sz,
+    -sw, sh0, sz,
+    -sw, sh1, sz,
+    sw, sh1, sz,
   ];
   const sNrm = [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1];
   const sUvs = [0, 0, 1, 0, 1, 1, 0, 1];
