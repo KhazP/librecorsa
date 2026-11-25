@@ -57,6 +57,7 @@ import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
+import { HOSTED_CONTENT } from "@/lib/hosted-content";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { moddersList } from "@/lib/modders";
 import type { PromptItem } from "@/lib/support-prompt";
@@ -370,6 +371,19 @@ const Credits: React.FC = () => {
             sagatron918
             <SagatronDonateLink /> · GT, prototype and classic racing tyres · used with permission
           </CreditRow>
+          {HOSTED_CONTENT ? (
+            <CreditRow title="LC25 Prototype">
+              Engine sound: &ldquo;Red Bull RB21 (Honda RBPT)&rdquo; by{" "}
+              <a href="https://www.overtake.gg/members/hahmad.2388716/" target="_blank" rel="noreferrer" className={linkClass}>
+                hahmad
+              </a>{" "}
+              (
+              <a href="https://www.overtake.gg/members/hahmad.2388716/" target="_blank" rel="noreferrer" className={linkClass}>
+                overtake.gg/members/hahmad.2388716
+              </a>
+              ) · used with permission · all rights reserved (not under AGPL-3.0)
+            </CreditRow>
+          ) : null}
           <CreditRow title="MTRacing 496R">
             Model, sound and physics from &ldquo;MTRacing 496R&rdquo; by{" "}
             <a href="https://www.overtake.gg/members/munyuturbo.1202939/" target="_blank" rel="noreferrer" className={linkClass}>

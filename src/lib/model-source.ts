@@ -22,6 +22,8 @@ export interface ModelSource {
   support?: SupportLink;
   /** Where the 3D model itself comes from, when the modder's work is something else (the Liana's physics) */
   model?: { title: string; author: string; url: string; license: string; licenseUrl?: string };
+  /** Separate sound credit when the car's engine sound is by another author */
+  sound?: { title?: string; author: string; url: string };
 }
 
 /** RISE Motordrome: the project's own circuit, also released for Assetto Corsa on OverTake, with two trackside tree models */
@@ -37,9 +39,10 @@ const RISE_SOURCE: ModelSource = {
 };
 
 /** A car's source: the credited modder's work first, and the model's own origin after it when that is someone else's */
-export const carModelSource = (car: Pick<CarDefinition, "credit" | "modelSource">): ModelSource => {
+export const carModelSource = (car: Pick<CarDefinition, "credit" | "modelSource" | "soundCredit">): ModelSource => {
   const { title, author, authorUrl, url, license, licenseUrl } = car.credit;
   const model = car.modelSource;
+  const sc = car.soundCredit;
   return {
     title,
     author,
@@ -50,6 +53,7 @@ export const carModelSource = (car: Pick<CarDefinition, "credit" | "modelSource"
     note: model?.note ?? car.credit.note,
     support: supportOf(author),
     model: model ? { title: model.title, author: model.author, url: model.url, license: model.license, licenseUrl: model.licenseUrl } : undefined,
+    sound: sc ? { title: sc.engineSound, author: sc.author, url: sc.url } : undefined,
   };
 };
 

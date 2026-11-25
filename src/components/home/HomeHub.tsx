@@ -944,9 +944,16 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                               {storeBuild && m.support && m.url === m.support.url ? (
                                 <span className="self-start text-lc-chalk">{m.name}</span>
                               ) : (
-                                <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
-                                  {m.name}
-                                </a>
+                                <span className="flex flex-wrap items-baseline gap-x-2">
+                                  <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
+                                    {m.name}
+                                  </a>
+                                  {!m.support && m.url.includes("overtake.gg/members/") ? (
+                                    <a href={m.url} target="_blank" rel="noopener" className="lc-hint text-[12px] underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk">
+                                      {m.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                                    </a>
+                                  ) : null}
+                                </span>
                               )}
                               <span className="lc-hint text-[13px]">{m.works.join(", ")}</span>
                             </span>

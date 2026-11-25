@@ -30,6 +30,7 @@ import { withBasePath } from "@/lib/base-path";
 import { CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./menu-content-ui";
 import { SourceChip } from "@/components/SourceChip";
 import { carModelSource } from "@/lib/model-source";
+import { supportOf } from "@/lib/modder-support";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { popularRank, usePopularRanks } from "@/lib/net/use-popular";
 
@@ -351,14 +352,15 @@ export const CarBrowser: React.FC<{
                   })()}
                 </span>
                 {(() => {
-                  // An engine sound credited in its author's words, with their link; the Android app leaves the
-                  // link out with the other donation pages (store-mode.ts)
+                  // An engine sound credited in its author's words, with their link; the Android app leaves
+                  // donation links out (store-mode.ts) while keeping non-donation profile links such as OverTake
                   const sound = c.soundCredit;
                   if (!sound?.engineSound) return null;
+                  const hideLink = storeBuild && supportOf(sound.author)?.url === sound.url;
                   const names = { work: sound.engineSound, author: sound.author };
                   return (
                     <span className="lc-hint">
-                      {storeBuild
+                      {hideLink
                         ? tx("creditEngineSoundNoLink", names)
                         : tx.rich("creditEngineSound", {
                             ...names,
