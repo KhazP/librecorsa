@@ -98,7 +98,6 @@ const probeUniforms = {
   uWetProbePos: { value: new THREE.Vector3() },
   uWetProbeLod: { value: 5 },
   uWetProbeIntensity: { value: 1 },
-  uWetSkyDim: { value: 1 },
 };
 /** Shared across every patched asphalt material: 0 on Low skips aggregate noise + derivative normal bump */
 const qualityUniform = {
@@ -135,16 +134,11 @@ export function setAsphaltStandingWater(offLineMm: number, onLineMm: number = of
 /**
  * The reflection probe's map for the wet road (null: none, the sky's environment map is reflected), the point it was
  * filmed from and its strength (the scene's environment intensity, as the cars take it). Cheap: call every frame.
- *
- * `skyDim` scales the sky's environment map where the wet road reflects it instead (no probe). The physical sky's
- * bake has no clouds: under a rain deck it is several times brighter than the sky on screen (the probe films the
- * visible sky, and matches it), and a wet road mirroring it shone white, brighter than the sky above it.
  */
-export function setWetRoadProbe(texture: THREE.Texture | null, position: THREE.Vector3, intensity: number, skyDim = 1): void {
+export function setWetRoadProbe(texture: THREE.Texture | null, position: THREE.Vector3, intensity: number): void {
   const u = probeUniforms;
   u.uWetProbe.value = texture;
   u.uWetProbeOn.value = texture ? 1 : 0;
-  u.uWetSkyDim.value = Math.min(1, Math.max(0, skyDim));
   if (!texture) return;
   u.uWetProbePos.value.copy(position);
   u.uWetProbeIntensity.value = intensity;
@@ -480,7 +474,6 @@ uniform float uWetProbeOn;
 uniform vec3 uWetProbePos;
 uniform float uWetProbeLod;
 uniform float uWetProbeIntensity;
-uniform float uWetSkyDim;
 uniform vec4 uWetLampPos[ ${WET_LAMP_SLOTS} ];
 uniform vec3 uWetLampColor[ ${WET_LAMP_SLOTS} ];
 uniform vec4 uWetLampDir[ ${WET_LAMP_SLOTS} ];
@@ -587,9 +580,7 @@ if ( uAsphaltDetail > 0.5 ) {
 #if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
 	// The wet road reflects the world round the car (the probe's view) instead of the sky alone. A sphere round the
 	// probe stands in for the stands and walls, so what this point reflects is looked up where its ray would meet them;
-	// past it, the probe's view of the distance and the sky is everyone's. With no probe, the sky's map, dimmed to the
-	// sky on screen
-	if ( lc26Mirror > 0.0 && uWetProbeOn < 0.5 ) radiance *= mix( 1.0, uWetSkyDim, lc26Mirror );
+	// past it, the probe's view of the distance and the sky is everyone's. With no probe, the sky's map
 	if ( lc26Mirror > 0.0 && uWetProbeOn > 0.5 ) {
 		vec3 lc26V = normalize( cameraPosition - vLc26WorldPos );
 		vec3 lc26N = normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz );

@@ -35,7 +35,9 @@ import { NIGHT_SKY_HORIZON, NIGHT_SKY_ZENITH } from "../../src/lib/render/night-
 import { DETAIL_LAYER } from "../../src/lib/render/layers";
 import { FlashTimer, HeadlightButton, LIGHTS_HOLD_MS, MIN_FLASH_MS } from "../../src/lib/input/headlight-button";
 import { DEFAULT_SESSION_CONDITIONS, sunPosition, TIME_OF_DAY_HOURS } from "../../src/lib/sim/weather";
-import { OPPONENT_SPRAY_DIST_M, PARTICLE_BUDGET, SimVisualFxManager } from "../../src/lib/sim/visual-fx";
+import { PARTICLE_BUDGET, SimVisualFxManager } from "../../src/lib/sim/visual-fx";
+import { SPRAY_BUDGET, SPRAY_BUDGET_TOUCH, SPRAY_REACH_M, sprayAmount, TyreSpray } from "../../src/lib/render/tyre-spray";
+import { CONE_CARS, coneVisibility, HeadlightCones } from "../../src/lib/render/headlight-cones";
 import type { CarId } from "../../src/lib/cars/car-registry";
 import type { SimulatorWheel } from "../../src/lib/sim/simulator-car";
 
@@ -346,6 +348,18 @@ console.log("\n== Night lighting & headlights");
     `night key=${clearNight.keyIntensity.toFixed(2)}/fill=${clearNight.fillIntensity.toFixed(2)}, storm key=${stormyNight.keyIntensity.toFixed(2)}/fill=${stormyNight.fillIntensity.toFixed(2)}, contrast=${clearNight.gradeContrast.toFixed(2)}`
   );
 
+  // Rain takes most of the sun's direct light by day (the sky deck carries it), none of the moon's by night
+  const overcastNoon = evaluateSkyLighting(70, 1, 0);
+  const stormNoon = evaluateSkyLighting(70, 1, 0.85);
+  const stormyNightDry = evaluateSkyLighting(nightElev, 1, 0);
+  check(
+    "Rain dims the day's key light under the deck, never the night's",
+    stormNoon.keyIntensity < 0.45 * overcastNoon.keyIntensity &&
+      stormNoon.keyIntensity > 0.2 * overcastNoon.keyIntensity &&
+      Math.abs(stormyNight.keyIntensity - stormyNightDry.keyIntensity) < 1e-9,
+    `noon key overcast=${overcastNoon.keyIntensity.toFixed(3)} storm=${stormNoon.keyIntensity.toFixed(3)}, night storm=${stormyNight.keyIntensity.toFixed(3)}`
+  );
+
   // Opponent lights remain independent of player manual toggle
   const offAtNight = resolveHeadlightStates("off", nightElev, 0);
   check(
@@ -433,33 +447,80 @@ console.log("\n== Heavy-rain performance budgets");
     fx.update(1 / 60, quat, 72, wheels, [], true);
   }
   const fxMs = performance.now() - tFx0;
-  const highActive = fx.activeParticleCount;
-  const highDraw = fx.particleDrawCount;
+  const highActive = fx.spray.activeCount;
+  const highDraw = fx.spray.mesh.geometry.instanceCount;
+  const smokeInWet = fx.activeParticleCount;
 
   fx.setGraphicsQuality("low");
-  const lowAfterTrim = fx.particleDrawCount;
+  const lowAfterTrim = fx.spray.activeCount;
   for (let i = 0; i < 120; i++) {
     fx.update(1 / 60, quat, 72, wheels, [], true);
   }
-  const lowSustained = fx.particleDrawCount;
+  const lowSustained = fx.spray.mesh.geometry.instanceCount;
 
   // Let all particles expire when emission stops
   for (let i = 0; i < 120; i++) {
     fx.update(1 / 60, quat, 0, wheels, [], false);
   }
-  const drainedToZero = fx.activeParticleCount === 0 && fx.particleDrawCount === 0;
+  const drainedToZero = fx.spray.activeCount === 0 && fx.spray.mesh.geometry.instanceCount === 0 && !fx.spray.mesh.visible;
   check(
-    "Spray particles compact tightly, respect quality budgets, and drain to 0 draws",
+    "Spray puffs compact tightly, respect quality budgets, drain to 0 draws, and leave the smoke pool alone",
     highActive > 0 &&
       highActive === highDraw &&
-      highDraw <= PARTICLE_BUDGET.high &&
-      lowAfterTrim <= PARTICLE_BUDGET.low &&
-      lowSustained <= PARTICLE_BUDGET.low &&
-      OPPONENT_SPRAY_DIST_M.low < OPPONENT_SPRAY_DIST_M.high &&
+      highDraw <= SPRAY_BUDGET.high &&
+      lowAfterTrim <= SPRAY_BUDGET.low &&
+      lowSustained <= SPRAY_BUDGET.low &&
+      smokeInWet <= PARTICLE_BUDGET.high &&
+      SPRAY_REACH_M.low < SPRAY_REACH_M.high &&
       drainedToZero &&
       fxMs < 50,
-    `high=${highDraw}/${PARTICLE_BUDGET.high}, low=${lowSustained}/${PARTICLE_BUDGET.low}, 300 wet steps=${fxMs.toFixed(2)} ms`
+    `high=${highDraw}/${SPRAY_BUDGET.high}, low=${lowSustained}/${SPRAY_BUDGET.low}, smoke=${smokeInWet}, 300 wet steps=${fxMs.toFixed(2)} ms`
   );
+  const phone = new TyreSpray({ touch: true });
+  phone.setQuality("high");
+  check(
+    "Spray grows with speed and standing water, none when dry or crawling; phones keep a smaller pool",
+    sprayAmount(5, 1, 2) === 0 &&
+      sprayAmount(40, 0.05, 2) === 0 &&
+      sprayAmount(25, 1, 2) < sprayAmount(45, 1, 2) &&
+      sprayAmount(45, 1, 0.2) < sprayAmount(45, 1, 2) &&
+      sprayAmount(60, 1, 3) <= 1 &&
+      phone.budget === SPRAY_BUDGET_TOUCH &&
+      SPRAY_BUDGET_TOUCH < SPRAY_BUDGET.medium,
+    `25 m/s ${sprayAmount(25, 1, 2).toFixed(2)}, 45 m/s ${sprayAmount(45, 1, 2).toFixed(2)}, damp ${sprayAmount(45, 1, 0.2).toFixed(2)}`
+  );
+  phone.dispose();
+
+  // Headlight beams in the air: from dusk on, in rain; a cone per lamp for as many cars as the tier allows
+  const cones = new HeadlightCones({ touch: false });
+  const beam = { pos: new THREE.Vector3(0, 0.9, 0), dir: new THREE.Vector3(0, -0.02, 1).normalize(), intensity: 400, range: 80 };
+  const beams = [beam, beam, beam, beam, beam];
+  cones.setQuality("high");
+  cones.update(beams, beams.length, 0.85, 0);
+  const nightCones = cones.mesh.count;
+  cones.setQuality("low");
+  cones.update(beams, beams.length, 0.85, 0);
+  const lowCones = cones.mesh.count;
+  cones.update(beams, beams.length, 0.85, 0.6);
+  const dayHidden = !cones.mesh.visible && cones.mesh.count === 0;
+  cones.update(beams, beams.length, 0, 0);
+  const dryHidden = !cones.mesh.visible;
+  cones.dispose();
+  const phoneCones = new HeadlightCones({ touch: true });
+  phoneCones.setQuality("high");
+  check(
+    "Headlight cones show at night in rain only, two per car, the player's alone on Low and phones",
+    coneVisibility(0, 0) === 0 &&
+      coneVisibility(0.85, 0.6) === 0 &&
+      coneVisibility(0.85, 0) > 0.9 &&
+      nightCones === CONE_CARS.high * 2 &&
+      lowCones === 2 &&
+      phoneCones.cars === CONE_CARS.low &&
+      dayHidden &&
+      dryHidden,
+    `night high ${nightCones}, low ${lowCones}, phone cars ${phoneCones.cars}`
+  );
+  phoneCones.dispose();
 
   // Verify shader hot-path guards stay intact
   const rainSrc = readFileSync(resolve(process.cwd(), "src/lib/render/rain-fx.ts"), "utf8");

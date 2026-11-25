@@ -1,7 +1,8 @@
 /**
  * The wet track's look (src/lib/render/asphalt-sheen.ts): standing water from the weather's water depth, puddles where
  * the physics' own water model pools it, the shader edits landing in three's standard material exactly once, and a dry
- * road that runs none of the wet code.
+ * road that runs none of the wet code. The trackside's wet look (src/lib/render/trackside-wet.ts): which surfaces get
+ * which wet, its shader edit chained onto the circuit materials' own, and none on the road.
  *
  *   node scripts/verify/run-verify.mjs wet-track
  */
@@ -17,6 +18,13 @@ import {
   applyAsphaltSheen,
   type RacingLineMask,
 } from "../../src/lib/render/asphalt-sheen";
+import {
+  applyTracksideWetness,
+  setTracksideWetness,
+  tracksideWetKind,
+  tracksideWetUniform,
+  TRACKSIDE_WET_PARAMS,
+} from "../../src/lib/render/trackside-wet";
 import { makeWetLamp, pickWetRoadLamps, WET_LAMP_SLOTS, WET_LAMPS_BY_QUALITY, wetLampUniforms } from "../../src/lib/render/wet-road-lamps";
 import { equilibriumWaterMm, topographicalPuddleFactor } from "../../src/lib/sim/weather";
 import { wetnessFromWater } from "../../src/lib/sim/wet-tyres";
@@ -169,6 +177,68 @@ check(
     pickWetRoadLamps(lamps, lamps.length, cam, WET_LAMPS_BY_QUALITY.high, false) === 0 &&
     wetLampUniforms.uWetLampCount.value === 0
 );
+
+// --- The trackside ----------------------------------------------------------------------------------------------------
+const kinds: Array<[string, boolean, string | null]> = [
+  ["Kerb_RedWhite", false, "paint"],
+  ["Runoff_Paint", false, "paint"],
+  ["Track_Pitlane_Asphalt", false, "asphalt"],
+  ["Service_Asphalt", false, "asphalt"],
+  ["Pit_Apron_Concrete", false, "hard"],
+  ["PitWall", false, "hard"],
+  ["Barrier_Tecpro", false, "hard"],
+  ["Barrier_Armco", false, "metal"],
+  ["Terrain_Grass", false, "soft"],
+  ["Gravel_Trap", false, "soft"],
+  ["Building_Glass", false, null],
+  ["Lake_Water", false, null],
+  ["Light_Lamp", false, null],
+  ["Banner_Kigali", false, "generic"],
+  ["Material #31", true, "auto"],
+  ["02 - Default_buildings", true, "auto"],
+];
+const wrongKinds = kinds.filter(([name, scan, want]) => tracksideWetKind(name, scan) !== want).map(([n, s]) => `${n} -> ${tracksideWetKind(n, s)}`);
+check("Kerbs and run-off paint, concrete, metal, grass by name; a scan's unnamed material by colour", wrongKinds.length === 0, wrongKinds.join("; ") || `${kinds.length} names`);
+check(
+  "Paint goes the glossiest, grass stays matte, every kind only darker and smoother",
+  Object.values(TRACKSIDE_WET_PARAMS).every((p) => p.albedo > 0 && p.albedo < 1 && p.roughness > 0 && p.roughness < 1) &&
+    TRACKSIDE_WET_PARAMS.paint.roughness < TRACKSIDE_WET_PARAMS.hard.roughness &&
+    TRACKSIDE_WET_PARAMS.soft.roughness > 0.5
+);
+// Chained onto a material that already has an edit of its own (as the ground detail and the leaves do)
+const kerb = new THREE.MeshStandardMaterial({ name: "Kerb_RedWhite" });
+kerb.onBeforeCompile = (sh) => {
+  sh.fragmentShader = sh.fragmentShader.replace("#include <lights_physical_fragment>", "#include <lights_physical_fragment>\n\tmaterial.specularF90 *= 0.25;");
+};
+kerb.customProgramCacheKey = () => "ground-detail-v2";
+const kerbKind = applyTracksideWetness(kerb, false);
+const kerbShader = {
+  uniforms: {} as Record<string, THREE.IUniform>,
+  vertexShader: THREE.ShaderLib.standard.vertexShader,
+  fragmentShader: THREE.ShaderLib.standard.fragmentShader,
+} as unknown as THREE.WebGLProgramParametersWithUniforms;
+const kerbWarnings: string[] = [];
+console.warn = (...a: unknown[]) => kerbWarnings.push(a.join(" "));
+kerb.onBeforeCompile(kerbShader, {} as THREE.WebGLRenderer);
+console.warn = warn;
+const kf = kerbShader.fragmentShader;
+check(
+  "The trackside edit chains onto the material's own, behind the dry guard",
+  kerbKind === "paint" && kerbWarnings.length === 0 && kf.includes("material.specularF90 *= 0.25;") && kf.includes("if ( uLcTrackWet > 0.0 ) {") &&
+    kf.indexOf("if ( uLcTrackWet > 0.0 ) {") < kf.indexOf("#include <lights_physical_fragment>") &&
+    kerb.customProgramCacheKey() === "ground-detail-v2|trackside-wet-v1" && kerbShader.uniforms.uLcTrackWet === tracksideWetUniform,
+  kerbWarnings.join("; ") || kerb.customProgramCacheKey()
+);
+check(
+  "The road's asphalt and see-through glass stay out; a material is patched once",
+  applyTracksideWetness(mat, false, "asphalt") === null &&
+    applyTracksideWetness(new THREE.MeshStandardMaterial({ name: "Fence", transparent: true, opacity: 0.3 }), false) === null &&
+    applyTracksideWetness(kerb, false) === null
+);
+setTracksideWetness(0.8);
+const wetNow = tracksideWetUniform.value;
+setTracksideWetness(Number.NaN);
+check("The trackside's wetness clamps to 0..1 and dries with the road", wetNow === 0.8 && tracksideWetUniform.value === 0);
 
 setAsphaltWetness(0, 0, 0);
 setAsphaltStandingWater(0, 0);

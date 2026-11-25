@@ -98,8 +98,9 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume } from "@/lib/render/rain-fx";
+import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume, type RainLight } from "@/lib/render/rain-fx";
 import { WindscreenWaterPass, type WaterMode } from "@/lib/render/windscreen-water";
+import { HeadlightCones } from "@/lib/render/headlight-cones";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER, VR_HUD_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
@@ -107,6 +108,7 @@ import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
 import { gyroSource } from "@/lib/input/gyro-source";
 import { advanceAsphaltRain, setAsphaltStandingWater, setAsphaltWetness, setWetRoadProbe } from "@/lib/render/asphalt-sheen";
+import { setTracksideWetness } from "@/lib/render/trackside-wet";
 import {
   isRainCompound,
   recommendedCompound,
@@ -1557,6 +1559,9 @@ export class DriveSession {
     });
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);
+    // Headlight beams caught by the rain at night (one draw, hidden by day and in the dry)
+    const headlightCones = new HeadlightCones();
+    scene.add(headlightCones.mesh);
     // Scene render + one merged effect pass (mipmap bloom on High, then AgX tone mapping and the grade);
     // applyGraphicsQuality puts the physical sky's clouds in front of it.
     // Read the phone profile once per session so MSAA, the reflection probe, the step-down order and the
@@ -1921,6 +1926,7 @@ export class DriveSession {
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
       rainFx.setQuality(g.quality, plan.renderScale);
+      headlightCones.setQuality(g.quality);
       // Phones keep Low's drop count and water map whatever the preset
       windscreenWater.setQuality(touchGraphics ? "low" : g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
@@ -4894,11 +4900,13 @@ export class DriveSession {
         venueNight?.setNight(nightShare);
         postFx.setNightShare(nightShare);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
+        setTracksideWetness(wetnessFromWater(wx.waterMm));
         setAsphaltStandingWater(wx.waterMm, wx.lineWaterMm);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
         const workerRace = aiFieldOf(raceNow())?.worker;
         visualFx.setWetness((workerRace ? workerRace.playerWetness : trackEnv.weatherSampleFor(physics)?.wetness) ?? wetnessFromWater(wx.lineWaterMm));
+        visualFx.spray.setConditions(wx.waterMm, wx.windVxMs, wx.windVzMs);
       }
       if (nowMs - lastWeatherHudMs > 500) {
         lastWeatherHudMs = nowMs;
@@ -4942,6 +4950,8 @@ export class DriveSession {
         }
         carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
+        // Its rear lamps light its spray red: dim tail lamps by day, brighter with the lights on and braking
+        visualFx.setPlayerLamps((headlights.player ? 1 : 0.3) + (playerBrakingNow ? 0.7 : 0));
         visualFx.setHeadlights(headlights.opponents, camera);
         // Lamps in the wet road (wet-road-lamps.ts): the cars' rear lamps and headlights, the circuit's lamps at night
         const wetRoadNow = wetnessFromWater(wx.waterMm) > 0.05;
@@ -5010,13 +5020,17 @@ export class DriveSession {
             to.range = from.range;
           }
         }
-        rainFx.setLight({
+        const rainLight: RainLight = {
           beams: rainBeams,
           beamCount: rainBeamCount,
           lamp: venueNight?.mode === "lamps" ? venueNight.lightAt(rainCamPos.x, rainCamPos.z, rainLamp) : null,
           sunDir: env.sunDirection,
           sunShare: THREE.MathUtils.clamp(skyConditions.elevationDeg / 10, 0, 1) * (1 - wx.cloudCover) * (1 - 0.7 * wx.rainIntensity),
-        });
+        };
+        rainFx.setLight(rainLight);
+        headlightCones.update(rainBeams, rainBeamCount, wx.rainIntensity, skyLight);
+        // The cars' spray takes the same lights (render/tyre-spray.ts)
+        visualFx.spray.setLight(rainLight, skyLight);
         rainFx.setViewportHeight(renderer.domElement.height);
         rainFx.update(
           drawDtS,
@@ -5057,14 +5071,8 @@ export class DriveSession {
           reflectionProbe.update(podium.focus ?? preRaceShow.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         }
         startupMonitor?.end("probe");
-        // The wet road reflects what the probe filmed round the car (none on Low: the sky's environment map, which the
-        // physical sky's cloudless bake makes far too bright under rain clouds)
-        setWetRoadProbe(
-          reflectionProbe.texture,
-          reflectionProbe.position,
-          scene.environmentIntensity,
-          env.physicalSky?.showing ? 1 - 0.7 * wx.rainIntensity : 1
-        );
+        // The wet road reflects what the probe filmed round the car (none on Low: the sky's environment map)
+        setWetRoadProbe(reflectionProbe.texture, reflectionProbe.position, scene.environmentIntensity);
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
@@ -5283,6 +5291,8 @@ export class DriveSession {
       portedDash?.dispose();
       carHeadlights.dispose();
       visualFx.disposeHeadlights();
+      visualFx.spray.dispose();
+      headlightCones.dispose();
       unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();
