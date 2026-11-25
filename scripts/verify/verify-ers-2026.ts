@@ -499,6 +499,16 @@ console.log('\n== Through the car: the race\'s 250 kW, the Overtake press and it
     sim.vehicle.ersEnergyJ = 2e6;
     sim.step(1 / 60, { throttle: 0.6, manualOverride: true });
     check('CHR mode + Boost at 60 % throttle deploys instead of part-throttle harvesting', sim.vehicle.telemetry.MGUK_POWER > 50_000, kW(sim.vehicle.telemetry.MGUK_POWER));
+    // #219: flat out in CHR the Boost gets the whole curve, as in every other mode (build 8edf230 lit BOOST and gave 0 kW)
+    {
+      const chr = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+      chr.setLiveTuner({ ersMode: 'CHR' });
+      chr.teleportToDistance(2000, 250 / 3.6);
+      chr.vehicle.ersEnergyJ = 3e6;
+      for (let k = 0; k < 120; k++) chr.step(1 / 240, { throttle: 1, manualOverride: true });
+      const flatBoostDc = chr.vehicle.telemetry.MGUK_POWER / ers.deployEfficiency;
+      check('CHR mode + Boost flat out at 250 km/h deploys the whole curve', flatBoostDc > 340_000 && chr.telemetry.ersBoostActive === true, kW(flatBoostDc));
+    }
 
     // Transparent 2026 ICE-to-MGU-K torque arbitration (FIA C5.2.5 / C5.2.10 i):
     // 1) Part-throttle (30 % pedal): harvests into the store while keeping wheel acceleration identical to unarbitrated full-SOC baseline
