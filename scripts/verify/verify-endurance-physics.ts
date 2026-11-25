@@ -236,14 +236,25 @@ console.log('\n== Hybrid dials and the traction cut');
   const a = lap();
   const b = lap();
   check('40 / 170 kW: the battery comes back within 8 % a cycle', Math.abs(b - a) < 0.08 && deployed > 0, `${fmt(a * 100, 1)} → ${fmt(b * 100, 1)} %, ${fmt(deployed / 1e6, 2)} MJ deployed`);
-  // Under the shaft limit (fourth gear at 4500 rpm) half the traction cut's allowance takes half the drive away
+  // Half the traction cut's allowance takes half the drive away: in fourth gear from 140 km/h (≈ 5300 to 6900 rpm, at
+  // or under the shaft limit), the shafts' power averaged over the last half second. The car is put in fourth (a paddle
+  // held from the reset is no press), and the mean keeps a limiter cut or a shift off a single sample
   const pull = (cut: number) => {
     const c = make(LMDH);
     c.reset(0, 0, 0, 140 / 3.6);
     c.autoShift = false;
+    c.gear = 4;
     c.ersEnergyJ = store;
-    run(c, 1.5, (cc) => ({ throttle: 1, brake: 0, steer: 0, shiftUp: cc.gear < 4, shiftDown: cc.gear > 4, ignitionCut: cut }));
-    return c.driveshaftPowerW;
+    let sum = 0;
+    let n = 0;
+    run(c, 1.5, (cc, t) => {
+      if (t >= 1) {
+        sum += cc.driveshaftPowerW;
+        n++;
+      }
+      return { throttle: 1, brake: 0, steer: 0, ignitionCut: cut };
+    });
+    return sum / n;
   };
   const full = pull(1);
   const half = pull(0.5);
