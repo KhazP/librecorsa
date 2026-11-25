@@ -395,6 +395,10 @@
         "closed": "Kapalı"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Süspansiyon ve aero telemetrisi",
+      "hint": "Canlı tekerlek tutuşu, takoz mesafesi, sürüş yüksekliği, aero dengesi ve diferansiyel kilidi"
+    },
     "inputTrace": {
       "label": "Girdi grafiği"
     },

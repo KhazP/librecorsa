@@ -395,6 +395,10 @@
         "closed": "Fermé"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Télémétrie suspension et aéro",
+      "hint": "Adhérence des roues, course de butée, hauteur de caisse, équilibre aéro et blocage de différentiel en direct"
+    },
     "inputTrace": {
       "label": "Tracé des commandes"
     },

@@ -395,6 +395,10 @@
         "closed": "Geschlossen"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Fahrwerks- & Aero-Telemetrie",
+      "hint": "Live: Grip je Rad, Anschlagpuffer-Weg, Fahrhöhe, Aero-Balance und Differenzialsperre"
+    },
     "inputTrace": {
       "label": "Eingabeverlauf"
     },

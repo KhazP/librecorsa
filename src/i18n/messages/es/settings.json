@@ -395,6 +395,10 @@
         "closed": "Cerrada"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Telemetría de suspensión y aero",
+      "hint": "Agarre de cada rueda, recorrido de topes, altura de marcha, balance aerodinámico y bloqueo del diferencial en vivo"
+    },
     "inputTrace": {
       "label": "Traza de entradas"
     },
@@ -784,7 +788,7 @@
     },
     "showCode": {
       "label": "Mostrar un código para otro dispositivo",
-      "hint": "Inicia sesión en esta cuenta desde otro dispositivo, como la app de escritorio",
+      "hint": "Inicia sesión en esta cuenta desde otro dispositivo, como la aplicación de escritorio",
       "hide": "Ocultar",
       "new": "Nuevo código",
       "show": "Mostrar un código",

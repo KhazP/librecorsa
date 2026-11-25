@@ -187,7 +187,10 @@
     "sharedDetail": "Fährt mit der Physik eines anderen Autos derselben Klasse und Ära und hat daher dessen Fahrverhalten statt eines eigenen.",
     "eraBadge": "2026-PHYSIK",
     "era": "Ältere Autos",
-    "eraDetail": "Fährt mit der 2026-Physik, verhält sich also wie ein 2026er-Auto und nicht wie in seiner eigenen Saison."
+    "eraDetail": "Fährt mit der 2026-Physik, verhält sich also wie ein 2026er-Auto und nicht wie in seiner eigenen Saison.",
+    "modBadge": "MOD",
+    "mod": "Installierte Mods",
+    "modDetail": "Aus einem Mod-Paket, das du installiert hast, auf einem der Fahrzeugmodelle des Spiels. LibreCorsa hat es nicht geprüft, und seine Runden bleiben außerhalb der Online-Bestenlisten."
   },
   "carClass": {
     "f1": "Formel",
@@ -209,7 +212,10 @@
     "simDetail": "Eine handgebaute Sim-Strecke mit eigenen Straßen-, Kerb- und Banden-Meshes und Oberflächenphysik.",
     "scanBadge": "SCAN",
     "scan": "Konvertierte Scans",
-    "scanDetail": "Automatisch aus einem 3D-Modell der Community konvertiert: Straße, Kerbs, Auslaufzonen und Banden werden aus dem Mesh nachgezeichnet, Details können also von der echten Strecke abweichen."
+    "scanDetail": "Automatisch aus einem 3D-Modell der Community konvertiert: Straße, Kerbs, Auslaufzonen und Banden werden aus dem Mesh nachgezeichnet, Details können also von der echten Strecke abweichen.",
+    "modBadge": "MOD",
+    "mod": "Installierte Mods",
+    "modDetail": "Aus einem Mod-Paket, das du installiert hast. LibreCorsa hat es nicht geprüft, und seine Runden bleiben außerhalb der Online-Bestenlisten."
   },
   "circuitType": {
     "permanent": "Permanent",
@@ -282,6 +288,10 @@
     "pause": "Pausenmenü",
     "mfd": "MFD öffnen / schließen",
     "mfdPage": "Nächste MFD-Seite",
+    "mfdUp": "MFD-Wert +",
+    "mfdDown": "MFD-Wert −",
+    "mfdPrev": "Vorheriger MFD-Regler",
+    "mfdNext": "Nächster MFD-Regler",
     "hud": "HUD ein- / ausblenden",
     "board": "Bestenliste öffnen / schließen",
     "headlights": "Scheinwerfer (tippen: Lichthupe, halten: an / aus)",
@@ -324,6 +334,16 @@
     "no": "Nein"
   },
   "hudLayouts": {
+    "blade": "Klinge",
+    "bladeDetail": "Ein flaches Instrument, der Rest aus dem Weg",
+    "trackside": "Streckenrand",
+    "tracksideDetail": "Anzeigen in den Ecken, ein Drehzahlmesser",
+    "pitWall": "Boxenmauer",
+    "pitWallDetail": "Zeitentabellen und Details zum Blättern, keine Rundinstrumente",
+    "endurance": "Langstrecke",
+    "enduranceDetail": "Ganze Wertung, Reifenverschleiß, Rundinstrument und Autostatus",
+    "racingLine": "Ideallinie",
+    "racingLineDetail": "Relativ, Deltabalken und ein kompaktes Kombiinstrument",
     "telemetry": "Telemetrie",
     "telemetryDetail": "Das Display plus Reifen, G, Leistung und Eingaben",
     "minimal": "Minimal",
@@ -769,12 +789,19 @@
     "ready": "Bereit. Tabs in diesem Browser finden sich selbst; andere Geräte treten mit einem Raumcode bei."
   },
   "downloads": {
+    "desktopSummary": "Das Spiel im eigenen Fenster, online oder offline. Es nimmt Mods auf, konvertiert Strecken und Autos aus anderen Spielen und aktualisiert sich selbst.",
+    "windowsZipNote": "Entpacke es an einem Ort, an dem du schreiben darfst (nicht Program Files), und starte LibreCorsa.exe im Ordner LibreCorsa. Bis die Codesignierung über SignPath Foundation genehmigt ist, kann SmartScreen es anhalten: Klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.",
     "windowsStatusLabel": "Unsigniert",
+    "windowsZipLabel": ".zip herunterladen",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": "Öffne die .dmg und ziehe LibreCorsa in den Ordner „Programme“. Apple hat die App noch nicht beglaubigt, deshalb hält macOS sie beim ersten Mal an: Öffne Systemeinstellungen > Datenschutz & Sicherheit und klicke auf „Dennoch öffnen“.",
     "macosStatusLabel": "Unsigniert",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "M1–M4-Macs",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel-x64-Macs",
+    "linuxTarNote": "Entpacke es an einem beliebigen Ort und starte librecorsa im Ordner LibreCorsa. Der erste Start fügt LibreCorsa deinem App-Menü hinzu:",
+    "linuxTarLabel": ".tar.gz herunterladen",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "Vollbild-Trusted-Web-Activity mit Sticky-Immersive-Steuerung, Android Game Mode und Launcher-Verknüpfungen. Erfordert Android 7+ und Chrome.",
     "androidInstallNote": "Signierte Release-APK. Erlaube die Installation aus deinem Browser, wenn du dazu aufgefordert wirst; sie wird gegen librecorsa.org geprüft und öffnet sich ohne Adressleiste.",
@@ -817,7 +844,9 @@
     "launchTouch": "Gas halten zum Losfahren",
     "launchKey": "{key} halten zum Losfahren · Esc Menü",
     "noRacesOnHillClimb": "Keine Rennen bei einem Bergrennen",
-    "backToRaces": "Zurück zu den Rennen"
+    "backToRaces": "Zurück zu den Rennen",
+    "carAutoSwitched": "Zu {car} gewechselt: Lobby auf {rule} beschränkt",
+    "carBlockedByLobby": "Auto in dieser Lobby auf {rule} beschränkt"
   },
   "telemetryHud": {
     "menu": "Menü",

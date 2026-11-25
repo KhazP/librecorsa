@@ -187,7 +187,10 @@
     "sharedDetail": "Usa la física de otro auto de la misma clase y época, así que se comporta como ese auto y no como el suyo.",
     "eraBadge": "FÍSICA 2026",
     "era": "Autos antiguos",
-    "eraDetail": "Usa la física de 2026, así que se comporta como un auto de 2026 y no como en su propia temporada."
+    "eraDetail": "Usa la física de 2026, así que se comporta como un auto de 2026 y no como en su propia temporada.",
+    "modBadge": "MOD",
+    "mod": "Mods instalados",
+    "modDetail": "Viene de un paquete de mods que instalaste y usa uno de los modelos de vehículo del juego. LibreCorsa no lo ha revisado y sus vueltas no entran en las clasificaciones en línea."
   },
   "carClass": {
     "f1": "Monoplazas de Fórmula",
@@ -209,7 +212,10 @@
     "simDetail": "Circuito de simulador hecho a mano, con sus propias mallas de pista, pianos y barreras, y física de superficie.",
     "scanBadge": "ESCANEADO",
     "scan": "Escaneos convertidos",
-    "scanDetail": "Convertido automáticamente de un modelo 3D de la comunidad: la pista, los pianos, las zonas de escape y las barreras se trazan a partir de la malla, así que los detalles pueden diferir del lugar real."
+    "scanDetail": "Convertido automáticamente de un modelo 3D de la comunidad: la pista, los pianos, las zonas de escape y las barreras se trazan a partir de la malla, así que los detalles pueden diferir del lugar real.",
+    "modBadge": "MOD",
+    "mod": "Mods instalados",
+    "modDetail": "Viene de un paquete de mods que instalaste. LibreCorsa no lo ha revisado y sus vueltas no entran en las clasificaciones en línea."
   },
   "circuitType": {
     "permanent": "Permanente",
@@ -282,6 +288,10 @@
     "pause": "Menú de pausa",
     "mfd": "Abrir / cerrar MFD",
     "mfdPage": "Siguiente página del MFD",
+    "mfdUp": "Valor del MFD +",
+    "mfdDown": "Valor del MFD −",
+    "mfdPrev": "Dial anterior del MFD",
+    "mfdNext": "Dial siguiente del MFD",
     "hud": "Mostrar / ocultar HUD",
     "board": "Abrir / cerrar clasificación",
     "headlights": "Faros (toque: ráfaga, mantener: encender / apagar)",
@@ -324,6 +334,16 @@
     "no": "No"
   },
   "hudLayouts": {
+    "blade": "Hoja",
+    "bladeDetail": "Un instrumento bajo, el resto no estorba",
+    "trackside": "Pie de pista",
+    "tracksideDetail": "Datos en las esquinas, un dial de revoluciones",
+    "pitWall": "Muro de boxes",
+    "pitWallDetail": "Tablas de tiempos y detalle por páginas, sin diales",
+    "endurance": "Resistencia",
+    "enduranceDetail": "Clasificación completa, desgaste de neumáticos, dial y estado del auto",
+    "racingLine": "Línea de carrera",
+    "racingLineDetail": "Relativo, barra de delta y un grupo compacto",
     "telemetry": "Telemetría",
     "telemetryDetail": "El panel más neumáticos, G, potencia y entradas",
     "minimal": "Mínimo",
@@ -769,12 +789,19 @@
     "ready": "Listo. Las pestañas de este navegador se encuentran solas; otros dispositivos se unen con un código de sala."
   },
   "downloads": {
+    "desktopSummary": "El juego en su propia ventana, con o sin conexión. Admite mods, convierte circuitos y autos de otros juegos y se actualiza solo.",
+    "windowsZipNote": "Descomprímelo en cualquier carpeta donde puedas escribir (no en Program Files) y ejecuta LibreCorsa.exe en la carpeta LibreCorsa. Hasta que se apruebe su firma de código a través de SignPath Foundation, SmartScreen puede detenerlo: haz clic en Más información y luego en Ejecutar de todas formas.",
     "windowsStatusLabel": "Sin firmar",
+    "windowsZipLabel": "Descargar .zip",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": "Abre el .dmg y arrastra LibreCorsa a Aplicaciones. Apple aún no lo ha certificado, así que la primera vez macOS lo detiene: abre Configuración del Sistema > Privacidad y seguridad y haz clic en Abrir de todos modos.",
     "macosStatusLabel": "Sin firmar",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Macs M1–M4",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Macs Intel x64",
+    "linuxTarNote": "Descomprímelo en cualquier lugar y ejecuta librecorsa en la carpeta LibreCorsa. Al iniciarse por primera vez, añade LibreCorsa a tu menú de aplicaciones:",
+    "linuxTarLabel": "Descargar .tar.gz",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "Trusted Web Activity a pantalla completa con controles inmersivos fijos, Android Game Mode y accesos directos del launcher. Requiere Android 7+ y Chrome.",
     "androidInstallNote": "APK de lanzamiento firmado. Permite la instalación desde tu navegador cuando se te pida; se verifica con librecorsa.org y se abre sin barra de URL.",
@@ -817,7 +844,9 @@
     "launchTouch": "Mantén el acelerador para salir",
     "launchKey": "Mantén {key} para salir · Esc Menú",
     "noRacesOnHillClimb": "No hay carreras en una subida de montaña",
-    "backToRaces": "Volver a las carreras"
+    "backToRaces": "Volver a las carreras",
+    "carAutoSwitched": "Cambiado a {car}: sala limitada a {rule}",
+    "carBlockedByLobby": "Auto limitado a {rule} mientras estés en esta sala"
   },
   "telemetryHud": {
     "menu": "Menú",

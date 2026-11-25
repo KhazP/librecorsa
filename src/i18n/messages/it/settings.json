@@ -395,6 +395,10 @@
         "closed": "Chiusa"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Telemetria sospensioni e aero",
+      "hint": "In tempo reale: aderenza delle ruote, corsa dei tamponi, altezza da terra, bilanciamento aero e bloccaggio del differenziale"
+    },
     "inputTrace": {
       "label": "Traccia degli input"
     },
