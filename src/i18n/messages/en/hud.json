@@ -559,6 +559,9 @@
     "fuel": {
       "battery": "Battery",
       "ersPerLap": "ERS / lap",
+      "rechargeLeft": "Recharge left",
+      "deployLeft": "Deploy left",
+      "ofLimit": "of {mj}",
       "treadPerLap": "Tread / lap",
       "fuel": "Fuel",
       "lapsOfFuel": "{laps} laps",

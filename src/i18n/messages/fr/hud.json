@@ -557,6 +557,9 @@
     "fuel": {
       "battery": "Batterie",
       "ersPerLap": "ERS / tour",
+      "rechargeLeft": "À recharger",
+      "deployLeft": "À déployer",
+      "ofLimit": "sur {mj}",
       "treadPerLap": "Gomme / tour",
       "fuel": "Carburant",
       "lapsOfFuel": "{laps} tours",

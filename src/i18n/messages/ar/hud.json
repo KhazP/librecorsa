@@ -557,6 +557,9 @@
     "fuel": {
       "battery": "البطارية",
       "ersPerLap": "ERS / لفة",
+      "rechargeLeft": "المتبقي للشحن",
+      "deployLeft": "المتبقي للإطلاق",
+      "ofLimit": "من {mj}",
       "treadPerLap": "تآكل / لفة",
       "fuel": "الوقود",
       "lapsOfFuel": "{laps} لفة",

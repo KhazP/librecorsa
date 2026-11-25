@@ -557,6 +557,9 @@
     "fuel": {
       "battery": "Pin",
       "ersPerLap": "ERS / vòng",
+      "rechargeLeft": "Còn được sạc",
+      "deployLeft": "Còn được xả",
+      "ofLimit": "/ {mj}",
       "treadPerLap": "Mòn lốp / vòng",
       "fuel": "Nhiên liệu",
       "lapsOfFuel": "{laps} vòng",

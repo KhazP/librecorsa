@@ -557,6 +557,9 @@
     "fuel": {
       "battery": "電池",
       "ersPerLap": "ERS／圈",
+      "rechargeLeft": "可回充",
+      "deployLeft": "可釋放",
+      "ofLimit": "／{mj}",
       "treadPerLap": "胎耗／圈",
       "fuel": "燃油",
       "lapsOfFuel": "{laps} 圈",

@@ -557,6 +557,9 @@
     "fuel": {
       "battery": "Bateria",
       "ersPerLap": "ERS / volta",
+      "rechargeLeft": "Falta recarregar",
+      "deployLeft": "Falta liberar",
+      "ofLimit": "de {mj}",
       "treadPerLap": "Banda / volta",
       "fuel": "Combustível",
       "lapsOfFuel": "{laps} voltas",

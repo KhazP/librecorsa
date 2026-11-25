@@ -557,6 +557,9 @@
     "fuel": {
       "battery": "Batarya",
       "ersPerLap": "ERS / tur",
+      "rechargeLeft": "Şarj edilebilir",
+      "deployLeft": "Dağıtılabilir",
+      "ofLimit": "/ {mj}",
       "treadPerLap": "Aşınma / tur",
       "fuel": "Yakıt",
       "lapsOfFuel": "{laps} tur",
