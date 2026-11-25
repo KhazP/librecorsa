@@ -37,9 +37,19 @@ const ALL_CLIP_KEYS: readonly SpotterClipKey[] = [
   "still_there",
 ];
 
-function clipPath(voice: SpotterVoiceId, key: SpotterClipKey): string {
-  const prefix = voice === "jim" ? "/audio/spotter" : `/audio/spotter/${voice}`;
-  return `${prefix}/${key}.wav`;
+function clipPath(_voice: SpotterVoiceId, key: SpotterClipKey): string {
+  return `/audio/spotter/${key}.mp3`;
+}
+
+function makeWalkieDistortionCurve(amount = 14): Float32Array<ArrayBuffer> {
+  const n = 256;
+  const buf = new ArrayBuffer(n * 4);
+  const curve = new Float32Array(buf);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
 }
 
 /**
@@ -63,6 +73,7 @@ export class SpotterEngine {
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly loading = new Set<string>();
   private activeSource: AudioBufferSourceNode | null = null;
+  private activeSfx: AudioScheduledSourceNode[] = [];
   private activeFallback: HTMLAudioElement | null = null;
 
   constructor(sharedAudioCtx?: AudioContext | null) {
@@ -87,45 +98,100 @@ export class SpotterEngine {
       const ctx = this.audioCtx;
       const hp = ctx.createBiquadFilter();
       hp.type = "highpass";
-      hp.frequency.value = 360;
-      hp.Q.value = 0.8;
+      hp.frequency.value = 380;
+      hp.Q.value = 0.85;
 
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
-      lp.frequency.value = 3100;
+      lp.frequency.value = 2850;
       lp.Q.value = 0.9;
 
       const peak = ctx.createBiquadFilter();
       peak.type = "peaking";
       peak.frequency.value = 1450;
-      peak.Q.value = 1.2;
+      peak.Q.value = 1.3;
       peak.gain.value = 4.5;
+
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = makeWalkieDistortionCurve(14);
+      shaper.oversample = "2x";
 
       const gain = ctx.createGain();
       hp.connect(lp);
       lp.connect(peak);
-      peak.connect(gain);
+      peak.connect(shaper);
+      shaper.connect(gain);
       gain.connect(ctx.destination);
       this.radioChain = { input: hp, gain };
     }
     return this.audioCtx;
   }
 
-  private playRadioClick(ctx: AudioContext, dest: AudioNode, volume: number): void {
-    const dur = 0.032;
-    const len = Math.floor(ctx.sampleRate * dur);
+  private stopActiveSfx(): void {
+    for (const node of this.activeSfx) {
+      try {
+        node.stop();
+      } catch {
+        // ignore already stopped
+      }
+    }
+    this.activeSfx = [];
+  }
+
+  private scheduleWalkieSquawk(ctx: AudioContext, dest: AudioNode, volume: number, kind: "on" | "off", atTime: number): void {
+    const v = Math.max(0, Math.min(1, volume));
+    const dur = kind === "on" ? 0.036 : 0.048;
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const ch = buf.getChannelData(0);
     for (let i = 0; i < len; i++) {
-      ch[i] = (Math.random() * 2 - 1) * (1 - i / len) * 0.25;
+      const t = i / len;
+      const env = kind === "on" ? Math.sin(Math.PI * t) : Math.pow(1 - t, 1.8);
+      ch[i] = (Math.random() * 2 - 1) * env * 0.28;
     }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const g = ctx.createGain();
-    g.gain.value = Math.max(0, Math.min(1, volume)) * 0.35;
-    src.connect(g);
-    g.connect(dest);
-    src.start();
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    const nGain = ctx.createGain();
+    nGain.gain.value = v * 0.38;
+    noise.connect(nGain);
+    nGain.connect(dest);
+    noise.start(atTime);
+    this.activeSfx.push(noise);
+
+    // Subtle PTT chirp (rising on key-up, falling roger-click on release)
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(kind === "on" ? 1150 : 1520, atTime);
+    osc.frequency.exponentialRampToValueAtTime(kind === "on" ? 1750 : 880, atTime + dur * 0.85);
+    const oGain = ctx.createGain();
+    oGain.gain.setValueAtTime(0.0001, atTime);
+    oGain.gain.linearRampToValueAtTime(v * 0.08, atTime + 0.006);
+    oGain.gain.exponentialRampToValueAtTime(0.0001, atTime + dur);
+    osc.connect(oGain);
+    oGain.connect(dest);
+    osc.start(atTime);
+    osc.stop(atTime + dur + 0.005);
+    this.activeSfx.push(osc);
+  }
+
+  private scheduleWalkieGrain(ctx: AudioContext, dest: AudioNode, startTime: number, durationS: number, volume: number): void {
+    const dur = Math.max(0.05, durationS);
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      // Subtle radio hiss + occasional micro-crackle grain
+      const crackle = Math.random() < 0.004 ? (Math.random() * 2 - 1) * 0.35 : 0;
+      ch[i] = (Math.random() * 2 - 1) * 0.055 + crackle;
+    }
+    const grain = ctx.createBufferSource();
+    grain.buffer = buf;
+    const gGain = ctx.createGain();
+    gGain.gain.value = Math.max(0, Math.min(1, volume)) * 0.75;
+    grain.connect(gGain);
+    gGain.connect(dest);
+    grain.start(startTime);
+    this.activeSfx.push(grain);
   }
 
   private preloadClip(url: string, ctx: AudioContext): void {
@@ -185,6 +251,7 @@ export class SpotterEngine {
       // ignore already stopped
     }
     this.activeSource = null;
+    this.stopActiveSfx();
     if (this.activeFallback) {
       this.activeFallback.pause();
       this.activeFallback.currentTime = 0;
@@ -273,20 +340,28 @@ export class SpotterEngine {
         } catch {
           // ignore
         }
+        this.stopActiveSfx();
         const src = ctx.createBufferSource();
         src.buffer = buf;
+        const now = ctx.currentTime;
         if (config.radioFilter !== false && this.radioChain) {
           this.radioChain.gain.gain.value = vol;
-          this.playRadioClick(ctx, ctx.destination, vol);
+          const voiceStart = now + 0.038;
+          const voiceEnd = voiceStart + buf.duration;
+          this.scheduleWalkieSquawk(ctx, ctx.destination, vol, "on", now);
+          this.scheduleWalkieGrain(ctx, this.radioChain.input, voiceStart, buf.duration, vol);
+          this.scheduleWalkieSquawk(ctx, ctx.destination, vol, "off", voiceEnd);
           src.connect(this.radioChain.input);
+          this.activeSource = src;
+          src.start(voiceStart);
         } else {
           const g = ctx.createGain();
           g.gain.value = vol;
           src.connect(g);
           g.connect(ctx.destination);
+          this.activeSource = src;
+          src.start(now);
         }
-        this.activeSource = src;
-        src.start();
         return;
       } catch {
         // fall through to HTMLAudioElement
