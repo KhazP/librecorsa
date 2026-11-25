@@ -138,7 +138,9 @@ export interface AudioSettings {
   musicMuted: boolean;
   /** Contextual iRacing-style spotter voice callouts */
   spotter: boolean;
-  /** Spotter voice callout volume, 0 to 1 */
+  /** Race engineer event callouts (overtake, flags, VSC, penalties, DNF, win) */
+  raceEngineer: boolean;
+  /** Shared voice callout volume (Spotter & Race engineer), 0 to 1 */
   spotterVolume: number;
   /** Spotter voice pack */
   spotterVoice: "jim" | "clare" | "geoffrey";
@@ -539,6 +541,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   musicOff: [],
   musicMuted: false,
   spotter: true,
+  raceEngineer: true,
   spotterVolume: 1,
   spotterVoice: "jim",
   spotterRadio: true,
@@ -935,6 +938,7 @@ function parseAudio(v: unknown): AudioSettings {
     musicOff: Array.isArray(v.musicOff) ? [...new Set(v.musicOff.filter((id) => isStr(id) && MUSIC_TRACK_IDS.has(id)))] : [],
     musicMuted: bool(v.musicMuted, d.musicMuted),
     spotter: bool(v.spotter, d.spotter),
+    raceEngineer: bool(v.raceEngineer, d.raceEngineer),
     spotterVolume: num(v.spotterVolume, 0, 1, d.spotterVolume),
     spotterVoice: oneOf(v.spotterVoice, ["jim", "clare", "geoffrey"] as const, d.spotterVoice),
     spotterRadio: bool(v.spotterRadio, d.spotterRadio),

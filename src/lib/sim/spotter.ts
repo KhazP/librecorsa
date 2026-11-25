@@ -10,7 +10,13 @@ export type SpotterClipKey =
   | "clear_left"
   | "clear_right"
   | "clear"
-  | "still_there";
+  | "still_there"
+  | "overtake"
+  | "dnf"
+  | "win"
+  | "yellow"
+  | "VSC"
+  | "penalty";
 
 export interface SpotterConfig {
   enabled: boolean;
@@ -35,6 +41,12 @@ const ALL_CLIP_KEYS: readonly SpotterClipKey[] = [
   "clear_right",
   "clear",
   "still_there",
+  "overtake",
+  "dnf",
+  "win",
+  "yellow",
+  "VSC",
+  "penalty",
 ];
 
 function clipPath(_voice: SpotterVoiceId, key: SpotterClipKey): string {
@@ -323,6 +335,14 @@ export class SpotterEngine {
     }
 
     return this.state;
+  }
+
+  /** Plays an explicit race-engineer event clip when enabled (uses the shared pit-radio chain). */
+  playEvent(clipKey: SpotterClipKey, config: SpotterConfig): void {
+    if (!config.enabled) return;
+    const voice = config.voice ?? "jim";
+    if (this.preloadedVoice !== voice) this.preloadVoice(voice);
+    this.play(clipKey, config);
   }
 
   private play(clipKey: SpotterClipKey, config: SpotterConfig): void {

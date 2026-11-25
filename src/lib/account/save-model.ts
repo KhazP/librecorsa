@@ -183,6 +183,7 @@ export const AUDIO_SPLIT = {
   spotterVolume: "device",
   spotterVoice: "account",
   spotterRadio: "account",
+  raceEngineer: "account",
 } as const satisfies Record<keyof AudioSettings, "account" | "device">;
 
 export const UI_SPLIT = {

@@ -479,13 +479,16 @@
     "spotter": {
       "label": "Spotter"
     },
+    "raceEngineer": {
+      "label": "Race engineer"
+    },
     "spotterVolume": {
-      "label": "Spotter volume",
-      "off": "Spotter is off"
+      "label": "Voices",
+      "off": "Voices are off"
     },
     "spotterRadio": {
       "label": "Spotter pit-radio filter",
-      "off": "Spotter is off"
+      "off": "Voices are off"
     },
     "muted": {
       "label": "Mute",

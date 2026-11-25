@@ -2757,11 +2757,16 @@ export class DriveSession {
     const radarInvQ = new THREE.Quaternion();
     // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
     const spotter = new SpotterEngine();
-    if (settings.audio.spotter) spotter.preloadVoice(settings.audio.spotterVoice);
+    if (settings.audio.spotter || settings.audio.raceEngineer) spotter.preloadVoice(settings.audio.spotterVoice);
     let cueDrsAvail = false;
     let cueDrsOpen = false;
     let cueShiftArmed = true;
     let cueGear = 0;
+    let cueRaceDnf = false;
+    let cueRaceWin = false;
+    let cueRaceYellow = false;
+    let cueRaceVsc = false;
+    let cueRacePenaltyS = 0;
     const radarRel = new THREE.Vector3();
     const radarFwd = new THREE.Vector3();
     const ghostQuat = new THREE.Quaternion();
@@ -4285,11 +4290,13 @@ export class DriveSession {
         );
       }
       if (driving) {
+        const voiceVol = settingsNow.audio.volume * settingsNow.audio.spotterVolume;
+        const radioFilter = settingsNow.audio.spotterRadio;
         spotter.update(nowMs, physics.worldPosition, physics.worldQuaternion, physics.vxMs, drawnPeers, {
           enabled: !settingsNow.audio.muted && settingsNow.audio.spotter,
-          volume: settingsNow.audio.volume * settingsNow.audio.spotterVolume,
+          volume: voiceVol,
           voice: settingsNow.audio.spotterVoice,
-          radioFilter: settingsNow.audio.spotterRadio,
+          radioFilter,
         });
         audio?.update(physics.telemetry, dtSeconds);
         // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
@@ -4303,6 +4310,29 @@ export class DriveSession {
           if (drsAvail && !cueDrsAvail) audio?.cue("drs_available");
           if (drsOpen && !cueDrsOpen) audio?.cue("drs_open");
         }
+        const engCfg = {
+          enabled: !settingsNow.audio.muted && settingsNow.audio.raceEngineer,
+          volume: voiceVol,
+          voice: settingsNow.audio.spotterVoice,
+          radioFilter,
+        };
+        if (drsAvail && !cueDrsAvail && !tc.aiAutopilot) spotter.playEvent("overtake", engCfg);
+        const playerRes = tc.race?.results?.find((r) => r.isPlayer);
+        const dnfNow = Boolean(tc.race?.damage?.terminal || (tc.race?.damage?.overall ?? 0) >= 0.65 || playerRes?.dnf);
+        const winNow = Boolean(tc.race?.phase === "finished" && tc.race.position === 1 && !playerRes?.dnf);
+        const yellowNow = Boolean(tc.race?.yellow || tc.race?.doubleYellow);
+        const vscNow = Boolean(tc.race?.vsc);
+        const penaltyNow = trackLimits.penaltyTotalS + (playerRes?.penaltyS ?? 0);
+        if (dnfNow && !cueRaceDnf) spotter.playEvent("dnf", engCfg);
+        if (winNow && !cueRaceWin) spotter.playEvent("win", engCfg);
+        if (vscNow && !cueRaceVsc) spotter.playEvent("VSC", engCfg);
+        else if (yellowNow && !cueRaceYellow) spotter.playEvent("yellow", engCfg);
+        if (penaltyNow > cueRacePenaltyS + 0.01) spotter.playEvent("penalty", engCfg);
+        cueRaceDnf = dnfNow;
+        cueRaceWin = winNow;
+        cueRaceYellow = yellowNow;
+        cueRaceVsc = vscNow;
+        cueRacePenaltyS = penaltyNow;
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
         const limiter = vehicleModelSpec(vehicleNow).limiterRpm;

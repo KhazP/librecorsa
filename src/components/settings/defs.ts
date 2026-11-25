@@ -858,7 +858,7 @@ export const kerbVolume = slider({ id: "kerbs", get label() { return rt("kerbs.l
 export const spotterVolume = slider({
   id: "spotterVolume",
   get label() { return rt("spotterVolume.label"); },
-  off: (env) => (env.settings.audio.spotter ? null : rt("spotterVolume.off")),
+  off: (env) => (env.settings.audio.spotter || env.settings.audio.raceEngineer ? null : rt("spotterVolume.off")),
   min: 0,
   max: 1,
   step: 0.05,
@@ -866,10 +866,11 @@ export const spotterVolume = slider({
   ...audio("spotterVolume"),
 });
 export const spotterOn = toggle({ id: "spotter", get label() { return rt("spotter.label"); }, ...audio("spotter") });
+export const raceEngineerOn = toggle({ id: "raceEngineer", get label() { return rt("raceEngineer.label"); }, ...audio("raceEngineer") });
 export const spotterRadio = toggle({
   id: "spotterRadio",
   get label() { return rt("spotterRadio.label"); },
-  off: (env) => (env.settings.audio.spotter ? null : rt("spotterRadio.off")),
+  off: (env) => (env.settings.audio.spotter || env.settings.audio.raceEngineer ? null : rt("spotterRadio.off")),
   ...audio("spotterRadio"),
 });
 export const mute = toggle({
