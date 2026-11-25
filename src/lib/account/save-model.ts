@@ -50,6 +50,7 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "lc.garage.presets.<car>": "synced",
   "librecorsa.carSkins": "synced",
   "librecorsa.raceHistory": "synced",
+  "librecorsa.driverStats": "synced",
   "librecorsa.f1ModPhysics": "synced",
   // Credentials and network: each device keeps its own key and registers it with the account
   "bugesera.driverKey": "device",

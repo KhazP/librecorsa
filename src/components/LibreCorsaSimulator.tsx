@@ -27,6 +27,7 @@ import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
+import { recordDrivingTime, recordLapDistance } from "@/lib/sim/driver-stats";
 import {
   boardKeyOf,
   boardStatusOf,
@@ -1014,6 +1015,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
+      // The driver's totals (driver-stats.ts): the lap's distance
+      if (recording.data.length > 0) recordLapDistance(recording.trackLengthM ?? 0);
       if (settingsRef.current.hud.lapSummary) {
         // A new card: an upload still out for the last one must not land on it
         submitReqRef.current++;
@@ -1979,7 +1982,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const pair = `${trackId}|${carId}`;
     const d = driveTime.current;
     const now = performance.now();
-    if (d.since !== null) d.ms += now - d.since;
+    if (d.since !== null) {
+      const sliceMs = now - d.since;
+      d.ms += sliceMs;
+      // And to the driver's totals (driver-stats.ts), in the car and circuit it was driven in
+      const [drivenTrack, drivenCar] = d.pair.split("|");
+      recordDrivingTime(sliceMs / 1000, drivenCar || carId, drivenTrack || trackId);
+    }
     d.since = phase === "driving" && !paused ? now : null;
     if (d.pair !== pair) {
       d.pair = pair;
