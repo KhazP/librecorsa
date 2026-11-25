@@ -128,6 +128,61 @@ export interface ViewToneSpec {
   shelfDb: number;
 }
 
+/**
+ * Per-car tuning for downshift and lift-off exhaust pops/crackles.
+ * Keeps overrun exhaust texture organic across cars whose oneshot recordings already contain multi-pop bursts.
+ */
+export interface SoundBankPopTuning {
+  /** Base gain for a downshift blip pop */
+  downshiftGain: number;
+  /** Base gain for a lift-off backfire pop */
+  liftGain: number;
+  /** Base gain for an overrun crackle pop */
+  crackleGain: number;
+  /** Multiplicative random gain range [min, max] applied to each pop */
+  gainJitter: readonly [number, number];
+  /** Playback-rate randomization [min, max] per pop */
+  pitchRange: readonly [number, number];
+  /** Optional override for manifest `lift.downshiftPopChance` */
+  downshiftChance?: number;
+  /** Delay [min, max] (s) after a downshift blip before firing the pop */
+  downshiftDelayRangeS: readonly [number, number];
+  /** Cooldown [min, max] (s) between consecutive pops */
+  cooldownRangeS: readonly [number, number];
+  /** Cooldown (s) after a lift-off burst */
+  liftCooldownS: number;
+  /** Maximum number of pops stacked in a single lift-off burst */
+  maxLiftBurstCount: number;
+  /** Inter-pop gap [min, max] (s) inside a lift-off burst */
+  liftBurstGapRangeS: readonly [number, number];
+  /** Poisson rate (events/s) for overrun crackles while coasting */
+  crackleRatePerS: number;
+  /** Lift-off crackle window (s) armed by a downshift */
+  liftTimerOnDownshiftS: number;
+}
+
+export const DEFAULT_POP_TUNING: SoundBankPopTuning = {
+  downshiftGain: 0.42,
+  liftGain: 0.4,
+  crackleGain: 0.28,
+  gainJitter: [0.88, 1.08],
+  pitchRange: [0.95, 1.05],
+  downshiftDelayRangeS: [0.04, 0.08],
+  cooldownRangeS: [0.12, 0.18],
+  liftCooldownS: 0.25,
+  maxLiftBurstCount: 3,
+  liftBurstGapRangeS: [0.06, 0.15],
+  crackleRatePerS: 3.5,
+  liftTimerOnDownshiftS: 0.65,
+};
+
+export function resolvePopTuning(overrides?: Partial<SoundBankPopTuning>): SoundBankPopTuning {
+  return overrides ? { ...DEFAULT_POP_TUNING, ...overrides } : DEFAULT_POP_TUNING;
+}
+
+const sampleRange = (range: readonly [number, number], rng: () => number): number =>
+  range[0] + rng() * Math.max(0, range[1] - range[0]);
+
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
 /**
@@ -371,6 +426,8 @@ export class Lc26SoundBank {
   private transOn: LoopGrid | null = null;
   private transOff: LoopGrid | null = null;
   private readonly oneshots = new Map<string, AudioBuffer[]>();
+  private readonly lastOneshotIdx = new Map<string, number>();
+  private readonly popTuning: SoundBankPopTuning;
   private skidVoices: Partial<Record<Lc26View, LoopVoice>> = {};
   private tcVoice: LoopVoice | null = null;
   private windVoice: LoopVoice | null = null;
@@ -402,8 +459,11 @@ export class Lc26SoundBank {
   constructor(
     private readonly ctx: AudioContext,
     destination: AudioNode,
-    private readonly assetDir = LC26_AUDIO_DIR
+    private readonly assetDir = LC26_AUDIO_DIR,
+    popTuning?: Partial<SoundBankPopTuning>,
+    private readonly rng: () => number = Math.random
   ) {
+    this.popTuning = resolvePopTuning(popTuning);
     this.bus = ctx.createGain();
     this.bus.gain.value = 1.0;
     this.bus.connect(destination);
@@ -620,7 +680,12 @@ export class Lc26SoundBank {
     // A bank without separate exterior pops (the GT3's) uses its exterior backfires
     const list = this.oneshots.get(role) ?? (role === 'pop_ext' ? this.oneshots.get('backfire_ext') : undefined);
     if (!list || list.length === 0) return;
-    const buf = list[Math.floor(Math.random() * list.length)];
+    let idx = Math.floor(this.rng() * list.length);
+    if (list.length > 1 && idx === this.lastOneshotIdx.get(role)) {
+      idx = (idx + 1 + Math.floor(this.rng() * (list.length - 1))) % list.length;
+    }
+    this.lastOneshotIdx.set(role, idx);
+    const buf = list[idx];
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = rate;
@@ -633,6 +698,13 @@ export class Lc26SoundBank {
       src.disconnect();
       g.disconnect();
     };
+  }
+
+  /** Plays an exhaust pop/crackle with subtle gain and pitch randomization */
+  private playExhaustPop(role: string, baseGain: number, when = 0): void {
+    const gain = baseGain * sampleRange(this.popTuning.gainJitter, this.rng);
+    const rate = sampleRange(this.popTuning.pitchRange, this.rng);
+    this.playOneshot(role, gain, when, rate);
   }
 
   public update(inp: Lc26AudioInputs, dt: number): void {
@@ -680,13 +752,17 @@ export class Lc26SoundBank {
           this.upshiftTimer = 0;
           if (!manual) this.playOneshot('gear_down', 0.55);
           // Downshift blip on the overrun: unburnt fuel bangs in the exhaust and overrun crackle carries on
-          const blipPop = m.lift?.downshiftPopChance ?? 0.5;
+          const blipPop = this.popTuning.downshiftChance ?? m.lift?.downshiftPopChance ?? 0.5;
           if (blipPop > 0 && inp.throttle < 0.2 && inp.rpm > (m.lift?.popMinRpm ?? 8200)) {
-            this.liftTimer = Math.max(this.liftTimer, 0.65);
+            this.liftTimer = Math.max(this.liftTimer, this.popTuning.liftTimerOnDownshiftS);
             // Every pop, like the crackle, waits out the last one's cooldown
-            if (this.popCooldown === 0 && Math.random() < blipPop) {
-              this.playOneshot(inp.view === 'int' ? 'backfire_int' : 'pop_ext', 0.42, 0.04 + Math.random() * 0.04);
-              this.popCooldown = 0.12;
+            if (this.popCooldown === 0 && this.rng() < blipPop) {
+              this.playExhaustPop(
+                inp.view === 'int' ? 'backfire_int' : 'pop_ext',
+                this.popTuning.downshiftGain,
+                sampleRange(this.popTuning.downshiftDelayRangeS, this.rng)
+              );
+              this.popCooldown = sampleRange(this.popTuning.cooldownRangeS, this.rng);
             }
           }
         }
@@ -803,17 +879,22 @@ export class Lc26SoundBank {
       if (boost > 0.8) this.playOneshot('blowoff', 0.35 * Math.min(1, boost / 2));
       // Not on top of a downshift's pop this frame or a moment ago
       if (rpm > (m.lift?.popMinRpm ?? 8500) && this.popCooldown === 0) {
-        const role = inp.view === 'int' ? 'backfire_int' : Math.random() < 0.5 ? 'backfire_ext' : 'pop_ext';
-        const count = 1 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < count; i++) this.playOneshot(role, 0.4, i * (0.06 + Math.random() * 0.09));
-        this.popCooldown = 0.25;
+        const role = inp.view === 'int' ? 'backfire_int' : this.rng() < 0.5 ? 'backfire_ext' : 'pop_ext';
+        const maxBurst = Math.max(1, Math.round(this.popTuning.maxLiftBurstCount));
+        const count = maxBurst === 1 ? 1 : maxBurst === 2 ? (this.rng() < 0.7 ? 1 : 2) : 1 + Math.floor(this.rng() * maxBurst);
+        let delay = 0;
+        for (let i = 0; i < count; i++) {
+          this.playExhaustPop(role, this.popTuning.liftGain, delay);
+          delay += sampleRange(this.popTuning.liftBurstGapRangeS, this.rng);
+        }
+        this.popCooldown = this.popTuning.liftCooldownS;
       }
     }
     this.liftTimer = Math.max(0, this.liftTimer - dt);
     const crackleMinRpm = m.lift?.crackleMinRpm ?? 9000;
-    if (this.liftTimer > 0 && foot < 0.1 && rpm > crackleMinRpm && this.popCooldown === 0 && Math.random() < dt * 3.5) {
-      this.playOneshot(inp.view === 'int' ? 'backfire_int' : 'pop_ext', 0.28);
-      this.popCooldown = 0.12;
+    if (this.liftTimer > 0 && foot < 0.1 && rpm > crackleMinRpm && this.popCooldown === 0 && this.rng() < dt * this.popTuning.crackleRatePerS) {
+      this.playExhaustPop(inp.view === 'int' ? 'backfire_int' : 'pop_ext', this.popTuning.crackleGain);
+      this.popCooldown = sampleRange(this.popTuning.cooldownRangeS, this.rng);
     }
     this.prevThrottle = foot;
 

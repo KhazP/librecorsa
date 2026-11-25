@@ -32,7 +32,7 @@ import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
 import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { ContactAcousticsRig } from './contact-acoustics';
-import { LC26_AUDIO_DIR, Lc26SoundBank } from './lc26-audio';
+import { LC26_AUDIO_DIR, Lc26SoundBank, type SoundBankPopTuning } from './lc26-audio';
 import { LC26_ENGINE } from './lc26-data';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { getActiveSurfaceTable } from '@/lib/track-data';
@@ -48,6 +48,8 @@ export interface CarSoundSource {
    * limiter, e.g. the BMW's 7 000 rpm bank on the AMG GT3 model's 7 900
    */
   physicsLimiterRpm?: number;
+  /** Optional per-car tuning for downshift/lift-off exhaust pops and crackles */
+  popTuning?: Partial<SoundBankPopTuning>;
 }
 
 export const LC26_SOUND: CarSoundSource = { id: 'lc26', assetDir: LC26_AUDIO_DIR, limiterRpm: LC26_ENGINE.limiterRpm };
@@ -608,7 +610,12 @@ export class CarAudioEngine {
   private async loadEngineSounds(ctx: AudioContext): Promise<void> {
     const loadId = ++this.bankLoadId;
     this.setEngineVoice('loading');
-    const bank = new Lc26SoundBank(ctx, this.bankDestination ?? this.masterGain ?? ctx.destination, this.sound.assetDir);
+    const bank = new Lc26SoundBank(
+      ctx,
+      this.bankDestination ?? this.masterGain ?? ctx.destination,
+      this.sound.assetDir,
+      this.sound.popTuning
+    );
     const ok = await bank.load(CAMERA_MODES[this.cameraMode].interiorAudio ? 'int' : 'ext');
     // A later car, or dispose() (a closed context): this load is not wanted any more
     if (loadId !== this.bankLoadId || this.ctx !== ctx) {
