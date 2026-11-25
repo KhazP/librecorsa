@@ -172,6 +172,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   covered?: boolean;
   /** `?perf=1`: the session's performance report as text, which the Session tab copies or saves */
   perfReport?: (() => string) | null;
+  perfJsonReport?: (() => string) | null;
   /** The bug report's facts, read when it opens (`fromDrive`: from the pause menu, with where the car is) */
   reportFacts?: (fromDrive: boolean) => ReportFacts;
   /** The scene's next frame as a picture for a bug report */
@@ -590,7 +591,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
   );
   return (
     <div className="flex flex-col gap-3">
-      {p.perfReport ? <PerfReportCard report={p.perfReport} /> : null}
+      {p.perfReport ? <PerfReportCard report={p.perfReport} jsonReport={p.perfJsonReport} /> : null}
       {cameraCard}
       {rules}
     </div>

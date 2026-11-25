@@ -2164,8 +2164,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onAcceptManualOffer: handleAcceptManualOffer,
     onAcceptManualAnswer: handleAcceptManualAnswer,
     onTogglePause: togglePause,
-    // `?perf=1`: the pause menu copies or saves the session's performance report
+    // The pause menu copies or saves the session's performance report / debug JSON
     perfReport: session?.perfReport ?? null,
+    perfJsonReport: session?.perfJsonReport ?? null,
     // The bug report: what the game knows when it opens, and a picture of the scene from the pause menu
     reportFacts,
     captureScreen: session ? session.captureFrame : undefined,

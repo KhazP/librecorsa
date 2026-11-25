@@ -594,8 +594,10 @@ export class DriveSession {
   readonly applyGraphics: () => void;
   /** The HUD's off-track edge glow, drawn in the last render pass in the HUD's loss colour (the palette's) */
   readonly setOffTrackGlow: (on: boolean) => void;
-  /** `?perf=1`: the whole-session performance report as text, to copy or save; null without `?perf=1` */
+  /** Whole-session performance report as text, to copy or save */
   readonly perfReport: (() => string) | null;
+  /** Whole-session performance debug log as structured JSON */
+  readonly perfJsonReport: (() => string) | null;
   /**
    * The next drawn frame as a PNG, at most `maxWidth` pixels wide, for a bug report (the scene only: the HUD and the
    * menus are page elements on top of it). Null with no frame drawn within 1.5 s (a lost GPU context, a headset).
@@ -1401,15 +1403,14 @@ export class DriveSession {
     // `?perf=1`: a report of the first 30 s on track (startup-monitor.ts), and a line every 10 s for the whole session
     // (session-perf.ts) with the simulation worker's own timing in it
     const startupMonitor = StartupMonitor.requested() ? new StartupMonitor(renderer) : null;
-    const sessionPerf = SessionPerfMonitor.requested() ? new SessionPerfMonitor(renderer) : null;
-    if (sessionPerf) {
-      (window as unknown as { __lcPerfReport?: SessionPerfMonitor }).__lcPerfReport = sessionPerf;
-      simWorker?.listen((event) => {
-        if (event.type === "perf") sessionPerf.worker(event.spanMs, event.busyMs, event.maxWakeMs);
-      });
-      simWorker?.post({ type: "perf", on: true });
-    }
-    this.perfReport = sessionPerf ? () => sessionPerf.report(pageBuild()) : null;
+    const sessionPerf = new SessionPerfMonitor(renderer);
+    (window as unknown as { __lcPerfReport?: SessionPerfMonitor }).__lcPerfReport = sessionPerf;
+    simWorker?.listen((event) => {
+      if (event.type === "perf") sessionPerf.worker(event.spanMs, event.busyMs, event.maxWakeMs);
+    });
+    simWorker?.post({ type: "perf", on: true });
+    this.perfReport = () => sessionPerf.report(pageBuild());
+    this.perfJsonReport = () => sessionPerf.jsonReport(pageBuild());
     /** A capture waiting for the next drawn frame: read in the same task as the draw (the buffer is not preserved) */
     let captureWaiting: ((source: HTMLCanvasElement) => void) | null = null;
     /** The capture under way: a second request meanwhile gets the same picture */
@@ -2355,8 +2356,9 @@ export class DriveSession {
     /** The frame-rate cap: when the scene was last drawn, and the time since that the next drawn frame shows */
     let lastDrawMs = lastTimeMs;
     let pendingDrawS = 0;
-    /** `?perf=1`: the page's own simulation in this frame (ms) */
+    /** The page's own simulation and render time in this frame (ms) */
     let frameSimMs = 0;
+    let frameRenderMs = 0;
     let lastHudSyncMs = 0;
     let lastTelemetryOutMs = 0;
     // Instant / full-race replay: session clock while driving, live pose saved while replaying, and camera target adapter
@@ -2765,6 +2767,50 @@ export class DriveSession {
     const ghostVel = new THREE.Vector3();
     const carVelWorldScratch = new THREE.Vector3();
     const telemetryPeersScratch: NonNullable<CarTelemetry["peers"]> = [];
+    const telemetryPeerObjPool: NonNullable<CarTelemetry["peers"]>[number][] = [];
+    const makeQuad = (): [number, number, number, number] => [0, 0, 0, 0];
+    const makeSurfQuad = (): [
+      CarTelemetry["wheelSurfaces"][number],
+      CarTelemetry["wheelSurfaces"][number],
+      CarTelemetry["wheelSurfaces"][number],
+      CarTelemetry["wheelSurfaces"][number],
+    ] => ["asphalt", "asphalt", "asphalt", "asphalt"];
+    const makeTelemetrySlot = () => ({
+      tireTempsC: makeQuad(),
+      brakeTempsC: makeQuad(),
+      wheelSlipRatios: makeQuad(),
+      wheelSlipAnglesDeg: makeQuad(),
+      wheelLoadsN: makeQuad(),
+      wheelRideHeightsMm: makeQuad(),
+      suspensionTravelMm: makeQuad(),
+      tireWearPct: makeQuad(),
+      tireGripFactor: makeQuad(),
+      wheelSurfaces: makeSurfQuad(),
+      tireBandTempsC: [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+      ] as [[number, number, number], [number, number, number], [number, number, number], [number, number, number]],
+      tirePressuresPsi: makeQuad(),
+      tireOptimalPsi: makeQuad(),
+      tireFlatSpotSeverity: makeQuad(),
+      tireGrainLevel: makeQuad(),
+      tireBlisterLevel: makeQuad(),
+      tireDirtyLevel: makeQuad(),
+      brakeCoreTempsC: makeQuad(),
+      brakePadMuFactor: makeQuad(),
+      peers: [] as NonNullable<CarTelemetry["peers"]>,
+    });
+    const telemetryPool = [makeTelemetrySlot(), makeTelemetrySlot()];
+    let telemetryPoolIdx = 0;
+    const copy4 = <T>(dst: T[], src: readonly T[]): T[] => {
+      dst[0] = src[0];
+      dst[1] = src[1];
+      dst[2] = src[2];
+      dst[3] = src[3];
+      return dst;
+    };
 
     // Loading: once both GLBs have settled (loaded or given up), compile every shader before the
     // first frame is drawn, then let the loading screen offer to continue
@@ -2917,6 +2963,13 @@ export class DriveSession {
           }
           if (stop()) return;
         }
+        step = "mirrors";
+        unculled(() => {
+          virtualMirror.update(true, true, carRig.chassisGroup, carRig.root);
+          wingMirrors?.update(true, settings.graphics.quality !== "low", carRig.chassisGroup);
+        });
+        await gpuFinished(gl);
+        if (stop()) return;
         step = "frame";
         unculled(() => postFx.render(0));
         await gpuFinished(gl);
@@ -3960,15 +4013,28 @@ export class DriveSession {
         if (deltaS > track.totalLengthM * 0.5) deltaS -= track.totalLengthM;
         if (deltaS < -track.totalLengthM * 0.5) deltaS += track.totalLengthM;
         const refSpeedMs = Math.max(25, physics.vxMs, p.speedKmh / 3.6);
-        telemetryPeersScratch.push({
-          peerId: p.peerId,
-          driverCode: p.driverCode,
-          teamColorHex: p.teamColorHex,
-          trackDistanceM: p.trackS,
-          speedKmh: p.speedKmh,
-          gapSeconds: Number((deltaS / refSpeedMs).toFixed(2)),
-          isAiPeer: p.isAiPeer,
-        });
+        const idx = telemetryPeersScratch.length;
+        let slot = telemetryPeerObjPool[idx];
+        if (!slot) {
+          slot = {
+            peerId: "",
+            driverCode: "",
+            teamColorHex: "",
+            trackDistanceM: 0,
+            speedKmh: 0,
+            gapSeconds: 0,
+            isAiPeer: false,
+          };
+          telemetryPeerObjPool[idx] = slot;
+        }
+        slot.peerId = p.peerId;
+        slot.driverCode = p.driverCode;
+        slot.teamColorHex = p.teamColorHex;
+        slot.trackDistanceM = p.trackS;
+        slot.speedKmh = p.speedKmh;
+        slot.gapSeconds = Math.round((deltaS / refSpeedMs) * 100) / 100;
+        slot.isAiPeer = p.isAiPeer;
+        telemetryPeersScratch.push(slot);
       }
       physics.telemetry.peers = telemetryPeersScratch;
 
@@ -4445,10 +4511,12 @@ export class DriveSession {
           xrRig.quaternion.copy(camera.quaternion);
           renderer.render(scene, xrCamera);
         } else {
-          const t0 = loggedFirstFrame ? 0 : performance.now();
+          const renderStartMs = performance.now();
+          const t0 = loggedFirstFrame ? 0 : renderStartMs;
           startupMonitor?.begin();
           postFx.render(drawDtS);
           virtualMirror.draw();
+          frameRenderMs = performance.now() - renderStartMs;
           startupMonitor?.end("render");
           if (captureWaiting) {
             const take = captureWaiting;
@@ -4509,52 +4577,61 @@ export class DriveSession {
             : steerSource === "controller"
               ? (gamepadStick ?? 0)
               : (directSteer ?? 0);
+        telemetryPoolIdx ^= 1;
+        const snap = telemetryPool[telemetryPoolIdx];
+        const pt = physics.telemetry;
+        if (pt.tireBandTempsC) {
+          for (let i = 0; i < 4; i++) {
+            snap.tireBandTempsC[i][0] = pt.tireBandTempsC[i][0];
+            snap.tireBandTempsC[i][1] = pt.tireBandTempsC[i][1];
+            snap.tireBandTempsC[i][2] = pt.tireBandTempsC[i][2];
+          }
+        }
+        snap.peers.length = 0;
+        const srcPeers = pt.peers;
+        if (srcPeers) {
+          for (let i = 0; i < srcPeers.length; i++) snap.peers.push(srcPeers[i]);
+        }
         setTelemetry({
-          ...physics.telemetry,
+          ...pt,
           steerInput,
           steerLockDeg: physics.maxSteerAngleRad * (180 / Math.PI),
-          tireTempsC: [...physics.telemetry.tireTempsC],
-          brakeTempsC: [...physics.telemetry.brakeTempsC],
-          wheelSlipRatios: [...physics.telemetry.wheelSlipRatios],
-          wheelSlipAnglesDeg: [...physics.telemetry.wheelSlipAnglesDeg],
-          wheelLoadsN: [...physics.telemetry.wheelLoadsN],
-          wheelRideHeightsMm: [...physics.telemetry.wheelRideHeightsMm],
-          suspensionTravelMm: [...physics.telemetry.suspensionTravelMm],
-          tireWearPct: [...physics.telemetry.tireWearPct],
-          tireGripFactor: [...physics.telemetry.tireGripFactor],
-          wheelSurfaces: [...physics.telemetry.wheelSurfaces],
-          ...(physics.telemetry.tireBandTempsC
-            ? {
-                tireBandTempsC: physics.telemetry.tireBandTempsC.map(
-                  (b) => [b[0], b[1], b[2]] as [number, number, number],
-                ) as [[number, number, number], [number, number, number], [number, number, number], [number, number, number]],
-              }
+          tireTempsC: copy4(snap.tireTempsC, pt.tireTempsC) as [number, number, number, number],
+          brakeTempsC: copy4(snap.brakeTempsC, pt.brakeTempsC) as [number, number, number, number],
+          wheelSlipRatios: copy4(snap.wheelSlipRatios, pt.wheelSlipRatios) as [number, number, number, number],
+          wheelSlipAnglesDeg: copy4(snap.wheelSlipAnglesDeg, pt.wheelSlipAnglesDeg) as [number, number, number, number],
+          wheelLoadsN: copy4(snap.wheelLoadsN, pt.wheelLoadsN) as [number, number, number, number],
+          wheelRideHeightsMm: copy4(snap.wheelRideHeightsMm, pt.wheelRideHeightsMm) as [number, number, number, number],
+          suspensionTravelMm: copy4(snap.suspensionTravelMm, pt.suspensionTravelMm) as [number, number, number, number],
+          tireWearPct: copy4(snap.tireWearPct, pt.tireWearPct) as [number, number, number, number],
+          tireGripFactor: copy4(snap.tireGripFactor, pt.tireGripFactor) as [number, number, number, number],
+          wheelSurfaces: copy4(snap.wheelSurfaces, pt.wheelSurfaces) as typeof snap.wheelSurfaces,
+          ...(pt.tireBandTempsC ? { tireBandTempsC: snap.tireBandTempsC } : {}),
+          ...(pt.tirePressuresPsi
+            ? { tirePressuresPsi: copy4(snap.tirePressuresPsi, pt.tirePressuresPsi) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.tirePressuresPsi
-            ? { tirePressuresPsi: [...physics.telemetry.tirePressuresPsi] as [number, number, number, number] }
+          ...(pt.tireOptimalPsi
+            ? { tireOptimalPsi: copy4(snap.tireOptimalPsi, pt.tireOptimalPsi) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.tireOptimalPsi
-            ? { tireOptimalPsi: [...physics.telemetry.tireOptimalPsi] as [number, number, number, number] }
+          ...(pt.tireFlatSpotSeverity
+            ? { tireFlatSpotSeverity: copy4(snap.tireFlatSpotSeverity, pt.tireFlatSpotSeverity) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.tireFlatSpotSeverity
-            ? { tireFlatSpotSeverity: [...physics.telemetry.tireFlatSpotSeverity] as [number, number, number, number] }
+          ...(pt.tireGrainLevel
+            ? { tireGrainLevel: copy4(snap.tireGrainLevel, pt.tireGrainLevel) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.tireGrainLevel
-            ? { tireGrainLevel: [...physics.telemetry.tireGrainLevel] as [number, number, number, number] }
+          ...(pt.tireBlisterLevel
+            ? { tireBlisterLevel: copy4(snap.tireBlisterLevel, pt.tireBlisterLevel) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.tireBlisterLevel
-            ? { tireBlisterLevel: [...physics.telemetry.tireBlisterLevel] as [number, number, number, number] }
+          ...(pt.tireDirtyLevel
+            ? { tireDirtyLevel: copy4(snap.tireDirtyLevel, pt.tireDirtyLevel) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.tireDirtyLevel
-            ? { tireDirtyLevel: [...physics.telemetry.tireDirtyLevel] as [number, number, number, number] }
+          ...(pt.brakeCoreTempsC
+            ? { brakeCoreTempsC: copy4(snap.brakeCoreTempsC, pt.brakeCoreTempsC) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.brakeCoreTempsC
-            ? { brakeCoreTempsC: [...physics.telemetry.brakeCoreTempsC] as [number, number, number, number] }
+          ...(pt.brakePadMuFactor
+            ? { brakePadMuFactor: copy4(snap.brakePadMuFactor, pt.brakePadMuFactor) as [number, number, number, number] }
             : {}),
-          ...(physics.telemetry.brakePadMuFactor
-            ? { brakePadMuFactor: [...physics.telemetry.brakePadMuFactor] as [number, number, number, number] }
-            : {}),
-          peers: [...(physics.telemetry.peers ?? [])],
+          peers: snap.peers,
         });
         if (replaying) {
           publishReplayUi();
@@ -4566,8 +4643,8 @@ export class DriveSession {
     const timedAnimate = (nowMs: number) => {
       const startMs = performance.now();
       frameSimMs = 0;
+      frameRenderMs = 0;
       animate(nowMs);
-      if (!sessionPerf) return;
       const phase: PerfPhase =
         appPhaseNow === "loading"
           ? "load"
@@ -4578,10 +4655,10 @@ export class DriveSession {
               : this.snapshot.paused || this.snapshot.seatPanel
                 ? "pause"
                 : "drive";
-      sessionPerf.frame(nowMs, lastDrawMs === nowMs, phase, performance.now() - startMs, frameSimMs);
+      sessionPerf.frame(nowMs, lastDrawMs === nowMs, phase, performance.now() - startMs, frameSimMs, frameRenderMs);
     };
     // setAnimationLoop runs on window rAF normally and on the headset's frame loop in VR
-    renderer.setAnimationLoop(sessionPerf ? timedAnimate : animate);
+    renderer.setAnimationLoop(timedAnimate);
 
     this.teardown = () => {
       disposed = true;

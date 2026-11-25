@@ -28,7 +28,7 @@ function copyByCommand(text: string): boolean {
  * `?perf=1`: the pause menu's way out for the whole-session performance report (render/session-perf.ts). A phone has
  * no console, so the player copies it or saves it as a file and sends it.
  */
-export function PerfReportCard({ report }: { report: () => string }) {
+export function PerfReportCard({ report, jsonReport }: { report: () => string; jsonReport?: (() => string) | null }) {
   const tx = useTranslations("hud.perfReportCard");
   const [done, setDone] = useState<"copied" | "saved" | "failed" | null>(null);
   useEffect(() => {
@@ -37,6 +37,10 @@ export function PerfReportCard({ report }: { report: () => string }) {
     return () => window.clearTimeout(id);
   }, [done]);
 
+  const stamp = () => {
+    const now = new Date();
+    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  };
   const copy = () => {
     // Read now, inside the click: the clipboard only takes a write that a press started
     const text = report();
@@ -44,13 +48,21 @@ export function PerfReportCard({ report }: { report: () => string }) {
     if (!navigator.clipboard?.writeText) return fallback();
     navigator.clipboard.writeText(text).then(() => setDone("copied"), fallback);
   };
-  const save = () => {
-    const now = new Date();
-    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  const saveTxt = () => {
     const url = URL.createObjectURL(new Blob([report()], { type: "text/plain" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `librecorsa-performance-${stamp}.txt`;
+    link.download = `librecorsa-performance-${stamp()}.txt`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    setDone("saved");
+  };
+  const saveJson = () => {
+    if (!jsonReport) return;
+    const url = URL.createObjectURL(new Blob([jsonReport()], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `librecorsa-perf-debug-${stamp()}.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
     setDone("saved");
@@ -65,9 +77,14 @@ export function PerfReportCard({ report }: { report: () => string }) {
         <Button variant="secondary" size="sm" icon={<Icon name={done === "copied" ? "copied" : "copy"} />} onClick={copy}>
           {done === "copied" ? tx("copied") : tx("copy")}
         </Button>
-        <Button variant="secondary" size="sm" icon={<Icon name="download" />} onClick={save}>
+        <Button variant="secondary" size="sm" icon={<Icon name="download" />} onClick={saveTxt}>
           {done === "saved" ? tx("saved") : tx("saveFile")}
         </Button>
+        {jsonReport ? (
+          <Button variant="secondary" size="sm" icon={<Icon name="download" />} onClick={saveJson}>
+            {done === "saved" ? tx("saved") : "Export Debug (.json)"}
+          </Button>
+        ) : null}
       </div>
     </Card>
   );

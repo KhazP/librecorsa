@@ -278,8 +278,9 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   challengeTarget?: import("@/lib/net/challenge-target").ChallengeTarget | null;
   /** The automatic quality's quiet note (drive-session.ts), a new id each time */
   qualityNotice?: { id: number; kind: "lowered" | "floor" } | null;
-  /** `?perf=1`: the session's performance report, for the pause menu to copy or save */
+  /** The session's performance report, for the pause menu to copy or save */
   perfReport?: (() => string) | null;
+  perfJsonReport?: (() => string) | null;
   /** The bug report's facts, read when it opens (`fromDrive`: from the pause menu, with where the car is) */
   reportFacts?: (fromDrive: boolean) => import("@/lib/diagnostics/report-details").ReportFacts;
   /** The scene's next frame as a picture for a bug report */
