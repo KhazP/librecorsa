@@ -148,6 +148,7 @@ import {
   rollingStartSpeedMs,
   START_HANDS_OFF_S,
   startPose,
+  clearLapTimes,
   type TyreVisualState,
 } from './sim/simulator-car';
 import { applySpeedLimiter } from './sim/race-start';
@@ -1149,6 +1150,7 @@ export class F1Physics2026 {
     this.lineCrossingStartsLap = !(raceStart && startedAheadOfLine);
     this.shortStartLap = raceStart && startedAheadOfLine;
     this.telemetry.outLap = this.lineCrossingStartsLap;
+    if (raceStart) clearLapTimes(this.telemetry);
     this.settleSuspension();
     this.finishPlacement();
     this.atRestOnLine = pointToPoint && this.sMeters >= lapLen - 10;

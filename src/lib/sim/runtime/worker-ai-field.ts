@@ -133,7 +133,8 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     // tell for a fixed slot (the twin is shown until the worker's car is there, a frame or two)
     const cars = this.opponents + 1;
     const slot = this.playerGrid === "front" ? 0 : this.playerGrid === "middle" ? Math.floor((cars - 1) / 2) : this.playerGrid === "back" ? cars - 1 : 0;
-    const epoch = this.link.placeTwin((twin) => twin.resetToStartGrid(!standing, slot, standing ? undefined : cars));
+    // A race's grid, as the worker's own car is placed: its lap times start over there and here alike
+    const epoch = this.link.placeTwin((twin) => twin.resetToStartGrid(!standing, slot, standing ? undefined : cars, true));
     this.player.aiAutopilot = false;
     this.sentConditions = this.env.weather.conditions;
     this.sentRealism = this.env.simRealism;
