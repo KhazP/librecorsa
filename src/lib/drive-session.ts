@@ -1446,6 +1446,7 @@ export class DriveSession {
     reflectionProbe.setSky(env.probeSky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
+    postFx.setVirtualMirrorOverlay?.(...virtualMirror.getOverlayArgs());
     let virtualMirrorShown = false;
 
     const builtCircuit = buildCircuitScene(track);

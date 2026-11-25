@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
-import { NodeMaterial, RenderPipeline } from "three/webgpu";
-import { dot, float, min, mix, pass, vec3, vec4 } from "three/tsl";
+import { NodeMaterial, RenderPipeline, type UniformNode } from "three/webgpu";
+import { abs, dot, float, length, max, min, mix, pass, screenUV, smoothstep, texture, uniform, vec2, vec3, vec4 } from "three/tsl";
 import { bloom as tslBloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
 import { DRIVER_HEAD_LAYER, SHADOW_PROXY_LAYER } from "@/lib/render/layers";
@@ -23,7 +23,7 @@ import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
 import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
 import { isTouchDevice } from "@/lib/input/touch-input";
-import { pixelRatioCap, type RenderPlan } from "./adaptive-quality";
+import type { RenderPlan } from "./adaptive-quality";
 import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
 import type { CloudsEffect } from "@takram/three-clouds";
 
@@ -240,6 +240,12 @@ export interface PostFx {
    * off. A colour it cannot read keeps the last one.
    */
   setEdgeGlow(color: string | null): void;
+  setVirtualMirrorOverlay?: (
+    tex: THREE.Texture,
+    active: UniformNode<"float", number>,
+    uvRect: UniformNode<"vec4", THREE.Vector4>,
+    sizePx: UniformNode<"vec2", THREE.Vector2>
+  ) => void;
   dispose(): void;
 }
 
@@ -255,8 +261,7 @@ export function rcasSharpnessForRatio(effectiveRatio: number): number {
  */
 export function applyGraphicsQuality(renderer: AnyRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
   const { quality, renderScale } = plan;
-  // The automatic quality's Lowest resolution bounds `renderScale`, the multiplier on this cap (adaptive-quality.ts)
-  const dprCap = pixelRatioCap(plan);
+  const dprCap = quality === "low" && !plan.sharpLow ? 1 : 1.5;
   const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
   const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
   renderer.setPixelRatio(pixelRatio);
@@ -1051,11 +1056,34 @@ export function createPostFx(
     let bloomNode = tslBloom(sceneColor, 0.2, 0.42, 1.3);
     bloomNode.smoothWidth.value = 0.2;
     let bloomEnabled = false;
+    let mirrorOverlay: {
+      tex: THREE.Texture;
+      active: UniformNode<"float", number>;
+      uvRect: UniformNode<"vec4", THREE.Vector4>;
+      sizePx: UniformNode<"vec2", THREE.Vector2>;
+    } | null = null;
     const syncOutput = () => {
       const hdr = bloomEnabled ? sceneColor.add(bloomNode) : sceneColor;
       // Apply saturation in linear HDR space without shifting the black point before AgX tone mapping
       const luma = dot(hdr.rgb, vec3(0.2126, 0.7152, 0.0722));
-      const satRgb = mix(vec3(luma), hdr.rgb, 1 + GRADE_SATURATION);
+      let satRgb = mix(vec3(luma), hdr.rgb, 1 + GRADE_SATURATION);
+      if (mirrorOverlay) {
+        const { tex, active, uvRect, sizePx } = mirrorOverlay;
+        const localUv = vec2(
+          screenUV.x.sub(uvRect.x).div(uvRect.z),
+          screenUV.y.sub(uvRect.y).div(uvRect.w)
+        );
+        const p = localUv.sub(0.5).mul(sizePx);
+        const q = abs(p).sub(sizePx.mul(0.5)).add(14.0);
+        const d = length(max(q, 0.0)).add(min(max(q.x, q.y), 0.0)).sub(14.0);
+        const sceneCol = texture(tex, vec2(float(1.0).sub(localUv.x), localUv.y)).rgb;
+        const rim = smoothstep(-3.0, -1.5, d);
+        const edge = smoothstep(-4.5, -3.0, d).mul(float(1.0).sub(rim));
+        const col = mix(sceneCol, vec3(0.006), rim);
+        const mirrorRgb = mix(col, vec3(0.6), edge.mul(0.25));
+        const mask = float(1.0).sub(smoothstep(-0.5, 0.5, d)).mul(active);
+        satRgb = mix(satRgb, mirrorRgb, mask);
+      }
       pipeline.outputNode = vec4(satRgb, hdr.a);
       pipeline.needsUpdate = true;
     };
@@ -1087,6 +1115,10 @@ export function createPostFx(
       setClouds() {},
       setSharpness() {},
       setEdgeGlow() {},
+      setVirtualMirrorOverlay(tex, active, uvRect, sizePx) {
+        mirrorOverlay = { tex, active, uvRect, sizePx };
+        syncOutput();
+      },
       dispose() {
         pipeline.dispose();
       },

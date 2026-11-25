@@ -6,7 +6,7 @@ import { isWebGPURenderer, type AnyRenderer } from "./webgpu-renderer";
  * Wing mirrors for the LC26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
  *
  * One rear-facing camera at the driver's eye point renders the scene behind the car into a 256x128 half-float
- * target while the cockpit view is active (every second frame, or every frame at a low frame rate: `MirrorClock`). Both mirror meshes show that image through a
+ * target every second frame while the cockpit view is active. Both mirror meshes show that image through a
  * planar projection in object space, so no per-vertex UVs from the GLB are used.
  *
  * Mapping (derived from the GLB, not guessed):
@@ -226,8 +226,8 @@ export class WingMirrors {
   }
 
   /**
-   * Call once per drawn frame before the main render, with whether the mirrors render this frame (`MirrorClock`),
-   * whether the cockpit view is active, and the chassis group that carries the car's pitch/roll/heave. Renders only
+   * Call once per frame before the main render, with the frame index, whether the cockpit view is active, and
+   * the chassis group that carries the car's pitch/roll/heave. Renders at most every second frame, and only
    * when enabled; when disabled the mirrors go back to their dark glass material.
    */
   update(refresh: boolean, enabled: boolean, chassis: THREE.Object3D): void {
@@ -280,25 +280,25 @@ export class WingMirrors {
     this.cam.updateMatrixWorld(true);
 
     const prevTarget = r.getRenderTarget();
+    const prevAutoClear = r.autoClear;
     const shadowMap = r.shadowMap as { enabled: boolean; autoUpdate?: boolean };
     const prevAutoUpdate = shadowMap.autoUpdate;
-    const prevShadows = shadowMap.enabled;
     const carVisible = this.carModelRoot.visible;
 
     this.carModelRoot.visible = false;
     if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = false;
-    else shadowMap.enabled = false;
     // Restored even if the render throws, or the player's car would stay hidden
     try {
       r.setRenderTarget(rt);
-      // The post-processing chain turns the renderer's autoClear off: without this the depth stays 0 and nothing draws
-      r.clear();
+      r.autoClear = true;
+      // The post-processing chain turns the renderer's autoClear off on WebGL2: without this the depth stays 0 and nothing draws
+      if (!isWebGPURenderer(r)) r.clear();
       r.render(this.scene, this.cam);
     } finally {
       r.setRenderTarget(prevTarget as THREE.WebGLRenderTarget | null);
+      r.autoClear = prevAutoClear;
       this.carModelRoot.visible = carVisible;
       if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = prevAutoUpdate;
-      else shadowMap.enabled = prevShadows;
     }
   }
 
