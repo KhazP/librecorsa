@@ -184,32 +184,28 @@ const RELIEF_EDGE_M = 1.2;
 const RELIEF_STEP_M = 3;
 
 /**
- * Paints puddleReliefAt over the road into the mask's green channel: on a canvas of its own (opaque quads, each
- * overlapping the next, so no seams), then added onto the mask, where only the green channel takes it.
+ * Paints puddleReliefAt over the road into the mask's green channel: green quads blended with "lighten" (the larger
+ * value per channel), so the red channel underneath is left as it is and a quad's overlap with the next never leaves
+ * a dark seam where anti-aliased edges meet.
  */
 function paintPuddleRelief(
   ctx: CanvasRenderingContext2D,
   samples: readonly TrackSamplePoint[],
   originX: number,
   originZ: number,
-  scale: number,
-  size: number
+  scale: number
 ): void {
   const n = samples.length;
   if (n < 2) return;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const pc = canvas.getContext("2d");
-  if (!pc) return;
-  pc.fillStyle = "#000";
-  pc.fillRect(0, 0, size, size);
   // Samples about RELIEF_STEP_M apart, closing the loop
   const picked: TrackSamplePoint[] = [samples[0]];
   for (let i = 1; i < n; i++) if (samples[i].s - picked[picked.length - 1].s >= RELIEF_STEP_M) picked.push(samples[i]);
   const px = (x: number) => (x - originX) * scale;
   const pz = (z: number) => (z - originZ) * scale;
-  // A quad's overlap with the next, so anti-aliased edges never leave a dark seam (m)
+  // A quad's overlap with the next along the road (m): a pixel or so
   const overlapM = 1.2 / scale;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighten";
   for (let i = 0; i < picked.length; i++) {
     const a = picked[i];
     const b = picked[(i + 1) % picked.length];
@@ -232,19 +228,16 @@ function paintPuddleRelief(
       const la1 = (u1 + e) * ha;
       const lb0 = (u0 - e) * hb;
       const lb1 = (u1 + e) * hb;
-      pc.fillStyle = `rgb(0,${Math.round(v * 255)},0)`;
-      pc.beginPath();
-      pc.moveTo(px(a.position.x + a.binormal.x * la0), pz(a.position.z + a.binormal.z * la0));
-      pc.lineTo(px(b.position.x + b.binormal.x * lb0 + ox), pz(b.position.z + b.binormal.z * lb0 + oz));
-      pc.lineTo(px(b.position.x + b.binormal.x * lb1 + ox), pz(b.position.z + b.binormal.z * lb1 + oz));
-      pc.lineTo(px(a.position.x + a.binormal.x * la1), pz(a.position.z + a.binormal.z * la1));
-      pc.closePath();
-      pc.fill();
+      ctx.fillStyle = `rgb(0,${Math.round(v * 255)},0)`;
+      ctx.beginPath();
+      ctx.moveTo(px(a.position.x + a.binormal.x * la0), pz(a.position.z + a.binormal.z * la0));
+      ctx.lineTo(px(b.position.x + b.binormal.x * lb0 + ox), pz(b.position.z + b.binormal.z * lb0 + oz));
+      ctx.lineTo(px(b.position.x + b.binormal.x * lb1 + ox), pz(b.position.z + b.binormal.z * lb1 + oz));
+      ctx.lineTo(px(a.position.x + a.binormal.x * la1), pz(a.position.z + a.binormal.z * la1));
+      ctx.closePath();
+      ctx.fill();
     }
   }
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  ctx.drawImage(canvas, 0, 0);
   ctx.restore();
 }
 
@@ -332,7 +325,7 @@ export function createRacingLineMask(
         ctx.lineWidth = widthM * scale;
         strokeLine();
       }
-      paintPuddleRelief(ctx, track.samples, originX, originZ, scale, size);
+      paintPuddleRelief(ctx, track.samples, originX, originZ, scale);
     }
     const canvasTex = new THREE.CanvasTexture(canvas);
     canvasTex.flipY = false;
