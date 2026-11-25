@@ -100,6 +100,7 @@ import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume, type RainLight } from "@/lib/render/rain-fx";
 import { WindscreenWaterPass, type WaterMode } from "@/lib/render/windscreen-water";
+import { HeadlightCones } from "@/lib/render/headlight-cones";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
@@ -1531,6 +1532,9 @@ export class DriveSession {
     });
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);
+    // Headlight beams caught by the rain at night (one draw, hidden by day and in the dry)
+    const headlightCones = new HeadlightCones();
+    scene.add(headlightCones.mesh);
     // Scene render + one merged effect pass (mipmap bloom on High, then AgX tone mapping and the grade);
     // applyGraphicsQuality puts the physical sky's clouds in front of it.
     // Read the phone profile once per session so MSAA, the reflection probe, the step-down order and the
@@ -1895,6 +1899,7 @@ export class DriveSession {
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
       rainFx.setQuality(g.quality, plan.renderScale);
+      headlightCones.setQuality(g.quality);
       // Phones keep Low's drop count and water map whatever the preset
       windscreenWater.setQuality(touchGraphics ? "low" : g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
@@ -4984,6 +4989,7 @@ export class DriveSession {
           sunShare: THREE.MathUtils.clamp(skyConditions.elevationDeg / 10, 0, 1) * (1 - wx.cloudCover) * (1 - 0.7 * wx.rainIntensity),
         };
         rainFx.setLight(rainLight);
+        headlightCones.update(rainBeams, rainBeamCount, wx.rainIntensity, skyLight);
         // The cars' spray takes the same lights (render/tyre-spray.ts)
         visualFx.spray.setLight(rainLight, skyLight);
         rainFx.setViewportHeight(renderer.domElement.height);
@@ -5243,6 +5249,7 @@ export class DriveSession {
       carHeadlights.dispose();
       visualFx.disposeHeadlights();
       visualFx.spray.dispose();
+      headlightCones.dispose();
       unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();

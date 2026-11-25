@@ -37,6 +37,7 @@ import { FlashTimer, HeadlightButton, LIGHTS_HOLD_MS, MIN_FLASH_MS } from "../..
 import { DEFAULT_SESSION_CONDITIONS, sunPosition, TIME_OF_DAY_HOURS } from "../../src/lib/sim/weather";
 import { PARTICLE_BUDGET, SimVisualFxManager } from "../../src/lib/sim/visual-fx";
 import { SPRAY_BUDGET, SPRAY_BUDGET_TOUCH, SPRAY_REACH_M, sprayAmount, TyreSpray } from "../../src/lib/render/tyre-spray";
+import { CONE_CARS, coneVisibility, HeadlightCones } from "../../src/lib/render/headlight-cones";
 import type { CarId } from "../../src/lib/cars/car-registry";
 import type { SimulatorWheel } from "../../src/lib/sim/simulator-car";
 
@@ -489,6 +490,37 @@ console.log("\n== Heavy-rain performance budgets");
     `25 m/s ${sprayAmount(25, 1, 2).toFixed(2)}, 45 m/s ${sprayAmount(45, 1, 2).toFixed(2)}, damp ${sprayAmount(45, 1, 0.2).toFixed(2)}`
   );
   phone.dispose();
+
+  // Headlight beams in the air: from dusk on, in rain; a cone per lamp for as many cars as the tier allows
+  const cones = new HeadlightCones({ touch: false });
+  const beam = { pos: new THREE.Vector3(0, 0.9, 0), dir: new THREE.Vector3(0, -0.02, 1).normalize(), intensity: 400, range: 80 };
+  const beams = [beam, beam, beam, beam, beam];
+  cones.setQuality("high");
+  cones.update(beams, beams.length, 0.85, 0);
+  const nightCones = cones.mesh.count;
+  cones.setQuality("low");
+  cones.update(beams, beams.length, 0.85, 0);
+  const lowCones = cones.mesh.count;
+  cones.update(beams, beams.length, 0.85, 0.6);
+  const dayHidden = !cones.mesh.visible && cones.mesh.count === 0;
+  cones.update(beams, beams.length, 0, 0);
+  const dryHidden = !cones.mesh.visible;
+  cones.dispose();
+  const phoneCones = new HeadlightCones({ touch: true });
+  phoneCones.setQuality("high");
+  check(
+    "Headlight cones show at night in rain only, two per car, the player's alone on Low and phones",
+    coneVisibility(0, 0) === 0 &&
+      coneVisibility(0.85, 0.6) === 0 &&
+      coneVisibility(0.85, 0) > 0.9 &&
+      nightCones === CONE_CARS.high * 2 &&
+      lowCones === 2 &&
+      phoneCones.cars === CONE_CARS.low &&
+      dayHidden &&
+      dryHidden,
+    `night high ${nightCones}, low ${lowCones}, phone cars ${phoneCones.cars}`
+  );
+  phoneCones.dispose();
 
   // Verify shader hot-path guards stay intact
   const rainSrc = readFileSync(resolve(process.cwd(), "src/lib/render/rain-fx.ts"), "utf8");
