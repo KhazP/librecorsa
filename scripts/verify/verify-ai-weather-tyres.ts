@@ -98,8 +98,8 @@ console.log("hysteresis");
 {
   const th = weatherTyreThresholds(0);
   const k = (mm: number, from: Parameters<typeof weatherTyreKind>[1]) => weatherTyreKind(mm, from, th);
-  check("slicks stay on just under the call, intermediates go on past it", k(0.13, "slick") === "slick" && k(0.15, "slick") === "intermediate");
-  check("intermediates stay on inside the band, slicks go back on under it", k(0.11, "intermediate") === "intermediate" && k(0.1, "intermediate") === "intermediate" && k(0.08, "intermediate") === "slick");
+  check("slicks stay on just under the call, intermediates go on past it", k(0.19, "slick") === "slick" && k(0.21, "slick") === "intermediate");
+  check("intermediates stay on inside the band, slicks go back on under it", k(0.17, "intermediate") === "intermediate" && k(0.14, "intermediate") === "intermediate" && k(0.12, "intermediate") === "slick");
   check("standing water calls full wets from either", k(1.2, "slick") === "wet" && k(1.2, "intermediate") === "wet");
   check("full wets stay on down to 0.8 mm, then intermediates, then slicks", k(0.9, "wet") === "wet" && k(0.7, "wet") === "intermediate" && k(0.05, "wet") === "slick");
   check("no water, or none known, is dry", k(0, "intermediate") === "slick" && k(NaN, "wet") === "slick" && k(-1, "slick") === "slick");
@@ -166,9 +166,9 @@ console.log("calls");
   // Inside the band nothing happens, however long the line hovers there
   const hover = new AiWeatherTyres();
   hover.reset(7);
-  const dueOnSlicks = firstDue(hover, 8, (t) => 0.112 + 0.009 * Math.sin(t / 7), 900);
+  const dueOnSlicks = firstDue(hover, 8, (t) => 0.161 + 0.012 * Math.sin(t / 7), 900);
   hover.reset(7);
-  const dueOnInters = firstDue(hover, 8, (t) => 0.112 + 0.009 * Math.sin(t / 7), 900, {}, "intermediate");
+  const dueOnInters = firstDue(hover, 8, (t) => 0.161 + 0.012 * Math.sin(t / 7), 900, {}, "intermediate");
   check("a line hovering between the thresholds calls no stop, on slicks or intermediates", dueOnSlicks.every((d) => d === null) && dueOnInters.every((d) => d === null));
 
   // Wrong tyre on, conditions turn back before its turn: the call goes, no stop
@@ -178,7 +178,7 @@ console.log("calls");
   let changeAfter = false;
   let sawDue = false;
   for (let t = 0; t < 120; t += 0.25) {
-    const water = t < 20 ? 0.2 : 0.05;
+    const water = t < 20 ? 0.3 : 0.05;
     const call = back.update(t, water, { id: "P9", compound: "soft", rank: 8, lapsDone: 2, lapsLeft: 10, racing: true });
     if (t < 20 && call.change) changeInShower = true;
     if (t > 30 && call.change) changeAfter = true;
