@@ -271,6 +271,46 @@ def pitch_resample(
     return (x[i0] * (1.0 - frac) + x[i1] * frac).astype(np.float32)
 
 
+def biquad_coeffs(stage: dict[str, Any], sr: int = RATE) -> tuple[np.ndarray, np.ndarray]:
+    """
+    One EQ stage as biquad coefficients, by the Audio EQ Cookbook formulas Web Audio's BiquadFilterNode uses:
+    {"type": "lowshelf" | "highshelf", "hz", "db"} (shelf slope 1) or {"type": "peaking", "hz", "db"} with "q" or
+    "octaves" (an FMOD ParamEQ's bandwidth)
+    """
+    kind = stage["type"]
+    w0 = 2.0 * np.pi * float(stage["hz"]) / sr
+    cw, sw = np.cos(w0), np.sin(w0)
+    a = 10.0 ** (float(stage["db"]) / 40.0)
+    if kind == "peaking":
+        if "octaves" in stage:
+            alpha = sw * np.sinh(np.log(2.0) / 2.0 * float(stage["octaves"]) * w0 / sw)
+        else:
+            alpha = sw / (2.0 * float(stage.get("q", 1.0)))
+        b = [1 + alpha * a, -2 * cw, 1 - alpha * a]
+        den = [1 + alpha / a, -2 * cw, 1 - alpha / a]
+    elif kind in ("lowshelf", "highshelf"):
+        alpha = sw / 2.0 * np.sqrt(2.0)
+        k = 2.0 * np.sqrt(a) * alpha
+        if kind == "lowshelf":
+            b = [a * ((a + 1) - (a - 1) * cw + k), 2 * a * ((a - 1) - (a + 1) * cw), a * ((a + 1) - (a - 1) * cw - k)]
+            den = [(a + 1) + (a - 1) * cw + k, -2 * ((a - 1) + (a + 1) * cw), (a + 1) + (a - 1) * cw - k]
+        else:
+            b = [a * ((a + 1) + (a - 1) * cw + k), -2 * a * ((a - 1) + (a + 1) * cw), a * ((a + 1) + (a - 1) * cw - k)]
+            den = [(a + 1) - (a - 1) * cw + k, 2 * ((a - 1) - (a + 1) * cw), (a + 1) - (a - 1) * cw - k]
+    else:
+        raise ValueError(f"Unknown EQ stage type '{kind}'")
+    return np.array(b) / den[0], np.array(den) / den[0]
+
+
+def apply_eq(x: np.ndarray, stages: list[dict[str, Any]], sr: int = RATE) -> np.ndarray:
+    """Runs a recording through EQ stages in order (`viewEq`: the EQ an FMOD event's mixer puts on one view)."""
+    y = ensure_2d(x).astype(np.float64)
+    for stage in stages:
+        b, a = biquad_coeffs(stage, sr)
+        y = signal.lfilter(b, a, y, axis=0)
+    return y.astype(np.float32)
+
+
 def pick_steady_window(x: np.ndarray, need_frames: int) -> np.ndarray:
     """
     Select the steadiest window of length need_frames from x, avoiding start/end fade-ins or transients.
@@ -620,7 +660,9 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
     lo_hi = cfg.get("resampleRange", [0.58, 1.65])
     resample_range = (float(lo_hi[0]), float(lo_hi[1]))
 
-    # 1. Engine loops (ext and int, on and off)
+    # 1. Engine loops (ext and int, on and off). `viewEq`: the EQ the bank's own mixer puts on a view (an outside sound
+    # made from the cockpit recordings), run over each loop as heard at its anchor, before it is looped and levelled
+    view_eq: dict[str, list[dict[str, Any]]] = cfg.get("viewEq", {})
     for view, bank in (("int", int_bank), ("ext", ext_bank)):
         for layer in ("on", "off"):
             items = cfg["engine"][view][layer]
@@ -633,6 +675,8 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
                 used_samples.add(f"{view}:{sname}")
 
                 resampled = pitch_resample(raw_x, anchor_rpm, root_rpm, resample_range)
+                if view_eq.get(view):
+                    resampled = apply_eq(resampled, view_eq[view])
                 loop = make_seamless_loop(resampled, LOOP_S, XFADE_S, RATE)
 
                 # Consistent RMS curve across RPM: rises smoothly from idle to limiter, unless the anchor sets its own
