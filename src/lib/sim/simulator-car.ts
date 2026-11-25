@@ -217,6 +217,8 @@ export interface SimulatorCar {
   setDamageEffects?(effects: Readonly<import('./car-damage').CarDamageEffects> | null): void;
   /** The car puts itself back on the line when stuck on autopilot (default true; a race field rejoins its own cars) */
   aiSelfRecovery?: boolean;
+  /** An AI driver's kickdown on top of the auto box (the race field's own cars only; default false) */
+  aiKickdown?: boolean;
   /** Apply trailing vortex wake / slipstream deficit from cars ahead */
   setAeroWakeState?(wake: import('./aero-wake').AeroWakeState): void;
   /** Apply the dynamic track evolution sample under the car */

@@ -152,7 +152,7 @@ import { bodyOutline } from './body-outline';
 import { queryContactPatch } from './ContactPatch';
 import { CUT_ENERGY_MARGIN_J, DEPLOY_THROTTLE_START, Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
 import { type EnergySession, type F1EnergyCircuit, inStretch } from '../f1-energy-circuits';
-import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
+import { type AutoShiftInput, type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 import {
   contactHalfLengthM,
   driverRackTorqueNm,
@@ -200,6 +200,16 @@ const AUTO_LUG_SHARE = 0.65;
 /** Auto box: brake pedal that counts as braking into a corner, and the least time between its downshifts (s) */
 const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
+/**
+ * AI kickdown (`aiKickdown`): off the brakes with the throttle at least this open, the box goes down a gear where the
+ * lower one gives this much more engine power and lands under this share of the upshift point, no sooner than this
+ * after an upshift or a downshift (s)
+ */
+const AI_KICKDOWN_THROTTLE = 0.6;
+const AI_KICKDOWN_POWER_GAIN = 1.2;
+const AI_KICKDOWN_RPM_SHARE = 0.8;
+const AI_KICKDOWN_AFTER_UPSHIFT_S = 1.5;
+const AI_KICKDOWN_AFTER_DOWNSHIFT_S = 0.5;
 /**
  * Near a standstill (m/s): only under it does a downshift take first gear out into neutral, or put reverse in, so a
  * downshift mashed into a hairpin stays in first and reverse never goes in on the move. Over it out of neutral, either
@@ -1337,6 +1347,8 @@ export class VehiclePhysics {
   public gear = 1;
   public engineOmega: number;
   public autoShift = true;
+  /** An AI driver's kickdown on top of the auto box (`kickdownWanted`); never on a car a player drives */
+  public aiKickdown = false;
   /** Automatic clutch and anti-stall (default true); false with manual gears enables bite point, slip and stalls */
   public autoClutch = true;
   public ersEnergyJ: number;
@@ -2882,10 +2894,31 @@ export class VehiclePhysics {
     a.drivenGrounded = grounded;
     a.drivenSpinning = spin > 0.14;
     const shift = autoShift(a, sched, this.manualShift);
-    if (shift === 0) return;
+    if (shift === 0) {
+      if (this.aiKickdown && this.kickdownWanted(a)) this.requestShift(this.gear - 1);
+      return;
+    }
     const throughSpin = shift > 0 && a.drivenSpinning && road < sched.upshiftRpm;
     // A shift taken through wheelspin is held like the driver's own: the gear below would only spin again
     if (this.requestShift(this.gear + shift) && throughSpin) this.manualShift.shifted(1, this.gear);
+  }
+
+  /**
+   * An AI driver's kickdown (`aiKickdown`): out of a corner the auto box keeps the gear the brakes left it in unless
+   * the engine lugs, and an AI car that braked lightly into a slow corner drove out of it a gear high (a Liana in third
+   * at 3400 rpm out of Sachsenring's last corner, where second gives 40 % more power: half a second a lap). On the
+   * throttle and off the brakes, it takes the gear below where that gives clearly more power at this road speed and
+   * leaves room to accelerate in it before the upshift point (closer to it, a Liana kicked down into a second gear it
+   * left again 12 km/h later and lost a tenth to the two shifts)
+   */
+  private kickdownWanted(a: AutoShiftInput): boolean {
+    if (a.gear < 2 || a.throttle < AI_KICKDOWN_THROTTLE || a.brake > 0.05) return false;
+    if (!a.clutchClosed || !a.drivenGrounded || a.drivenSpinning) return false;
+    if (a.sinceUpshiftS < AI_KICKDOWN_AFTER_UPSHIFT_S || a.sinceDownshiftS < AI_KICKDOWN_AFTER_DOWNSHIFT_S) return false;
+    if (a.lowerGearRpm > AI_KICKDOWN_RPM_SHARE * this.autoShiftSchedule.upshiftRpm) return false;
+    const byGear = this.luts.torqueByGear;
+    const powerIn = (gear: number, rpm: number) => this.luts.power.evaluate(rpm) * (byGear ? byGear.evaluate(gear) : 1);
+    return powerIn(a.gear - 1, a.lowerGearRpm) >= AI_KICKDOWN_POWER_GAIN * powerIn(a.gear, a.roadRpm);
   }
 
   /**

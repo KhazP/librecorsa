@@ -76,6 +76,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   gridHold: "config",
   speedLimiterMs: "config",
   aiSelfRecovery: "config",
+  aiKickdown: "config",
 
   groundQuery: "local",
   wheelbaseM: "local",

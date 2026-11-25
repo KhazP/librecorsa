@@ -1083,6 +1083,12 @@ const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
 /** Autopilot pedal per m/s of speed error, on top of its integral */
 const AP_PEDAL_P = 0.5;
+/**
+ * An AI kickdown (`aiKickdown`) waits until the car turns at under this share of its grip (its braking envelope): a
+ * gear down mid-corner puts more torque through tyres already cornering, and a Scirocco that kicked down at 0.96 g in
+ * Oschersleben's turn 6 ran 2.8 m wide off the road
+ */
+const AI_KICKDOWN_LAT_SHARE = 0.75;
 /** Autopilot: stopped this long (s) → rejoin on the racing line, as the AI cars do */
 const AUTOPILOT_STUCK_S = 4;
 /** This far below the track's surface the car has fallen through the world */
@@ -1271,6 +1277,11 @@ export class F12026CarSim implements SimulatorCar {
   public aiAutopilot = false;
   /** The car puts itself back on the line when stuck (off in a race: the field rejoins its cars, `ai-car-control.ts`) */
   public aiSelfRecovery = true;
+  /**
+   * An AI driver's kickdown on top of the auto box while the autopilot drives (`VehiclePhysics.aiKickdown`): the race
+   * field sets it on its own cars, never on the player's
+   */
+  public aiKickdown = false;
   private lastWake: AeroWakeState | null = null;
   private damage: Readonly<CarDamageEffects> | null = null;
   /** Fraction of the car's own limit speed (see `autopilotProfile`) the autopilot drives at */
@@ -2178,6 +2189,15 @@ export class F12026CarSim implements SimulatorCar {
     return airDensityAt(this.track.baseAltitudeM ?? BASE_ALTITUDE_M);
   }
 
+  /** Whether the car turns gently enough for an AI kickdown (`AI_KICKDOWN_LAT_SHARE` of its braking envelope) */
+  private kickdownRoom(): boolean {
+    const b = this.profile.braking;
+    const v = this.vehicle.speedMs;
+    const aeroG = (b.aeroG * this.circuitAirDensity()) / AIR_DENSITY;
+    const gripMs2 = G * (b.lowG + aeroG * Math.min(1, (v / b.refMs) ** 2));
+    return Math.abs(this.lastAyMs2) <= AI_KICKDOWN_LAT_SHARE * gripMs2;
+  }
+
   /** Simulation realism: tyre wear, temperature grip, fuel use and wet severity */
   public setSimRealism(flags: SimRealismFlags): void {
     this.realism = { ...flags };
@@ -2497,6 +2517,7 @@ export class F12026CarSim implements SimulatorCar {
       this.selectGearPending = 0;
     }
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
+    this.vehicle.aiKickdown = this.aiKickdown && this.aiAutopilot && this.kickdownRoom();
     // Never soft-lock a car when manual clutch is requested but no clutch control is bound on the active device
     this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot || inputs.clutchBound === false;
     // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's ticks, so

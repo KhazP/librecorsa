@@ -42,6 +42,7 @@ export const CAR_SETTABLE = [
   "gridHold",
   "speedLimiterMs",
   "aiSelfRecovery",
+  "aiKickdown",
   "vxMs",
   "sMeters",
   "lateralOffsetM",
