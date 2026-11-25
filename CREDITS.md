@@ -43,6 +43,7 @@ People whose pull requests are in the game (the list the home page's About secti
   | GT / prototype / classic racing tyre sidewall textures (`public/cars/shared/tyres/gt/*.webp`: Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) | By **sagatron918** ([https://www.paypal.me/SagarNaikB](https://www.paypal.me/SagarNaikB)) (Used with permission) |
   | Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
   | LC-LMDH model (`public/cars/lc-lmdh/model/`) | By **kilianhoffmann13**, CC BY 4.0 |
+  | LC-LMDH engine sound (`public/cars/lc-lmdh/audio/`) | Engine sound: Engine Lab by bimbalanch, [https://ko-fi.com/bimbalanch](https://ko-fi.com/bimbalanch). Free for LibreCorsa only, used with the author's permission; the sound stays the author's and is **not licensed for redistribution** (see *Car sounds*) |
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
   | Suzuki Liana model (`public/cars/liana/model/`) | Forza Motorsport 4's (Turn 10 Studios / Microsoft) via a 2015 Assetto Corsa conversion; **not licensed for redistribution** (see *Suzuki Liana*) |
   | Suzuki Liana sounds (`public/cars/liana/audio/`) | The 2015 conversion's sound bank, built from Assetto Corsa (Kunos Simulazioni) samples; **not licensed for redistribution** |
@@ -120,7 +121,7 @@ People whose pull requests are in the game (the list the home page's About secti
 
 ### Car sounds (`public/cars/<id>/audio/`)
 
-Ported from Assetto Corsa FMOD Studio `.bank` (`FSB5`) sound mods into LibreCorsa's Web Audio multi-grid sample format (`scripts/audio/port_ac_bank.py`):
+Most are ported from Assetto Corsa FMOD Studio `.bank` (`FSB5`) sound mods into LibreCorsa's Web Audio multi-grid sample format (`scripts/audio/port_ac_bank.py`):
 
 * **F1 2026 (`lc26`, `f12026-car` → `public/cars/f12026/audio/`)**: Ported from **F1 2026 Sound Pack** (Aston Martin 2026 sound bank; author not listed in archive or bank metadata).
 * **LC25 Prototype (`lc25`)**: on librecorsa.org (`public/cars/lc25-v6/audio/`, not in the repository), ported from **kyojinvan**'s 2025 F1 V6 sound for Assetto Corsa ([https://www.overtake.gg/members/kyojinvan.2113755/](https://www.overtake.gg/members/kyojinvan.2113755/)): the engine in the cockpit and outside, turbo, transmission, tyre skid, traction control, wind, tyre rolling, bodywork, backfires, blow-off and limiter. Its MGU-K whine and gear-change clicks are the project's own, from the bank below. A copy of the repository without the hosted files plays the project's own procedural 2025 1.6L 90° V6 turbo-hybrid + MGU-H/MGU-K sound bank (`public/cars/lc25/audio/`, AGPL-3.0), synthesized by `scripts/audio/synth_f1_2025_bank.py`.
@@ -131,6 +132,7 @@ Ported from Assetto Corsa FMOD Studio `.bank` (`FSB5`) sound mods into LibreCors
 * **BMW M1 Procar, VW Scirocco and Porsche 934 (`bmw-m1-procar`, `vw-scirocco-gtx`, `porsche-934-rsr` → `public/cars/<id>/audio/`)**: Ported from Pfalzdriver's three cars (`sfx/pddw_bmw_procar_m1.bank`, `sfx/pfa_vw_scirocco_53b.bank`, `sfx/pfa_porsche_934t_rsr_rr.bank`), used with the author's permission; the M1's sound is by **Ama FMOD**.
 * **Chaparral 2D (`chaparral-2d`, `chaparral-2d-67` → `public/cars/<id>/audio/`)**: Ported from NPanic's two cars (`sfx/wsc_legends_chaparral_2d_66.bank`, `sfx/wsc_legends_chaparral_2d_67.bank`), used with permission; their sound is by **Felix789**.
 * **Mercedes-AMG GT3 Evo (`amg-gt3` → `public/gt3/audio/`)**: the existing GT3 bank, ported from TRR's "Mercedes-AMG GT3 EVO" Assetto Corsa mod with the author's permission (`scripts/gt3/port_sounds.py`).
+* **LC-LMDH (`lc-lmdh`)**: on librecorsa.org (`public/cars/lc-lmdh/audio/`, not in the repository). Engine sound: Engine Lab by bimbalanch, [https://ko-fi.com/bimbalanch](https://ko-fi.com/bimbalanch): the engine in the cockpit and outside (16 rev points, on and off throttle) and its upshift, downshift and lift-off sounds, all generated (no recorded audio), given to LibreCorsa by its author. Free for LibreCorsa only: the sound stays the author's, is not covered by the code's licence, and is not to be shared or put in the repository. The bank's transmission whine, hybrid motor, rev limiter and shift cut are from the car's earlier bank (`scripts/audio/build_custom_soundbank.py`).
 
 ### Other sounds
 

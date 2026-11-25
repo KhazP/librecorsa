@@ -161,6 +161,8 @@
     "creditPhysicsTyres": "Physics by <link>{author}</link>, tyres by <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, tyres by <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "Engine sound: {work} by {author}, <link>{url}</link>",
+    "creditEngineSoundNoLink": "Engine sound: {work} by {author}",
     "current": "Current car",
     "choose": "Choose car",
     "sortPopular": "Most driven",

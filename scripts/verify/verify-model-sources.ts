@@ -79,7 +79,10 @@ check("Dunsfold's source credits ACU", !dunsfold || trackModelSource(dunsfold)?.
 
 // Every donation link belongs to a credited name: a spelling that differs from the credits just shows no button.
 // Only with the hosted content listed: a copy without it credits only its own car and circuit
-const credited = new Set([...TRACKS.flatMap((t) => (t.credit ? [t.credit.author] : [])), ...CARS.flatMap((c) => [c.credit.author, ...(c.tyreCredit ? [c.tyreCredit.author] : [])])]);
+const credited = new Set([
+  ...TRACKS.flatMap((t) => (t.credit ? [t.credit.author] : [])),
+  ...CARS.flatMap((c) => [c.credit.author, ...(c.tyreCredit ? [c.tyreCredit.author] : []), ...(c.soundCredit ? [c.soundCredit.author] : [])]),
+]);
 const strays = Object.keys(MODDER_SUPPORT).filter((name) => !credited.has(name));
 check("Every donation link matches a credited modder", !HOSTED_CONTENT || strays.length === 0, HOSTED_CONTENT ? strays.join(", ") : "skipped without hosted content");
 const list = moddersList();

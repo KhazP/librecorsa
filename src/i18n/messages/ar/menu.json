@@ -157,6 +157,8 @@
     "creditPhysicsTyres": "الفيزياء من إعداد <link>{author}</link>، والإطارات من <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>، والإطارات من <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "صوت المحرك: {work} من تصميم {author}، <link>{url}</link>",
+    "creditEngineSoundNoLink": "صوت المحرك: {work} من تصميم {author}",
     "current": "السيارة الحالية",
     "choose": "اختيار السيارة",
     "sortPopular": "الأكثر قيادة",

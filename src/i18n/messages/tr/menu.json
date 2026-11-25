@@ -157,6 +157,8 @@
     "creditPhysicsTyres": "Fizik: <link>{author}</link>, lastikler: <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, lastikler: <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "Motor sesi: {work}, yapımcı: {author}, <link>{url}</link>",
+    "creditEngineSoundNoLink": "Motor sesi: {work}, yapımcı: {author}",
     "current": "Mevcut araç",
     "choose": "Aracı seç",
     "sortPopular": "En çok sürülenler",

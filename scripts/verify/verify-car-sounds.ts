@@ -27,6 +27,7 @@ import { PORSCHE_934_RSR_SOUND } from "../../src/lib/sim/classic/Porsche934RsrSi
 import { VW_SCIROCCO_SOUND } from "../../src/lib/sim/road/VwSciroccoSim";
 import type { Lc26AudioManifest } from "../../src/lib/sim/lc26-audio";
 import { noteSkip, REPO_CAR_IDS } from "../lib/hosted-files";
+import { HOSTED_CONTENT } from "../../src/lib/hosted-content";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -260,5 +261,26 @@ for (const dirId of ["f12026", "lc25", "bmw-m4-gt3"]) {
   );
 }
 check("CREDITS.md credits corsamode for BMW M4 GT3 sound mod", credits.includes("corsamode"));
+
+// The LC-LMDH's engine sound is free for LibreCorsa on the terms of its README: this credit, in these words, with its
+// link, in CREDITS.md and in the game (the car card)
+const ENGINE_LAB_CREDIT = "Engine sound: Engine Lab by bimbalanch, https://ko-fi.com/bimbalanch";
+check(
+  "CREDITS.md credits the LC-LMDH's engine sound in its author's words",
+  credits.includes("Engine sound: Engine Lab by bimbalanch, [https://ko-fi.com/bimbalanch](https://ko-fi.com/bimbalanch)")
+);
+if (HOSTED_CONTENT) {
+  const s = carById("lc-lmdh").soundCredit;
+  const card = (JSON.parse(readFileSync("src/i18n/messages/en/menu.json", "utf8")) as { carBrowser: Record<string, string> })
+    .carBrowser.creditEngineSound;
+  const shown = card
+    .replace("{work}", s?.engineSound ?? "?")
+    .replace("{author}", s?.author ?? "?")
+    .replace("{url}", s?.url ?? "?")
+    .replace(/<\/?link>/g, "");
+  check("The LC-LMDH's car card shows the same credit, its address a link", shown === ENGINE_LAB_CREDIT && card.includes("<link>{url}</link>"), shown);
+} else {
+  noteSkip("the LC-LMDH's engine sound credit on its car card", "NEXT_PUBLIC_HOSTED_CONTENT=1");
+}
 
 console.log(`\nCar sounds verification: all ${passed} checks passed.`);

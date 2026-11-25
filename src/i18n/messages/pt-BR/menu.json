@@ -157,6 +157,8 @@
     "creditPhysicsTyres": "Física de <link>{author}</link>, pneus de <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, pneus de <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "Som do motor: {work} por {author}, <link>{url}</link>",
+    "creditEngineSoundNoLink": "Som do motor: {work} por {author}",
     "current": "Carro atual",
     "choose": "Escolher carro",
     "sortPopular": "Mais dirigidos",
