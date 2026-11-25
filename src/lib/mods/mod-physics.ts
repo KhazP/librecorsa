@@ -76,6 +76,9 @@ const POSITIVE_KEYS: ReadonlySet<string> = new Set([
   "spoolUpS",
   "spoolDownS",
   "referenceRpm",
+  // The fuel burnt for the engine's work divides by these
+  "brakeThermalEfficiency",
+  "lowerHeatingValueMJPerKg",
 ]);
 const mustStayPositive = (path: string): boolean => POSITIVE_KEYS.has(keyOf(path)) || /\.inertia\./.test(path) || /[Mm]ass(Kg)?$/.test(keyOf(path));
 

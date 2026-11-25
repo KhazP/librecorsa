@@ -2419,8 +2419,9 @@ export class F12026CarSim implements SimulatorCar {
       const byWork = p.fuelLPerS1000Rpm === undefined && p.fuelFlowCurveKgS === undefined && p.fuelFlowKgS === undefined ? p.fuelFromEngineWork : undefined;
       if (byWork && this.fuelKg > 0 && this.realism.fuelUse) {
         // The engine's work at the crank over its efficiency and the fuel's heating value, and its idle while it runs
-        const running = v.rpm > 0.5 * this.config.engine.idleRpm;
-        const burnKgS = running ? Math.max(byWork.idleKgS, v.iceMechanicalPowerW / (byWork.brakeThermalEfficiency * byWork.lowerHeatingValueMJPerKg * 1e6)) : 0;
+        const running = !v.telemetry.engineStalled && v.rpm > 0.5 * this.config.engine.idleRpm;
+        const fuelJPerKg = byWork.brakeThermalEfficiency * byWork.lowerHeatingValueMJPerKg * 1e6;
+        const burnKgS = running && fuelJPerKg > 0 ? Math.max(byWork.idleKgS, v.iceMechanicalPowerW / fuelJPerKg) : 0;
         if (burnKgS > 0) {
           this.fuelKg = Math.max(0, this.fuelKg - burnKgS * CONTROL_DT_S);
           v.setFuelMass(this.fuelKg);
