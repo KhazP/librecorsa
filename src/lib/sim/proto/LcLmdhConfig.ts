@@ -285,14 +285,15 @@ const FRONT_TARGET_HEIGHT = 0.05;
 const REAR_TARGET_HEIGHT = 0.064;
 
 /**
- * Double wishbones on push rods at both ends, each axle with its corner springs, a third (heave) spring and an anti-roll
- * element; all rates at the wheel [est]. The front is mostly its heave spring (a corner spring of 60 N/mm beside a
- * 480 N/mm heave element, 300 N/mm a wheel in heave), with a roll spring and the anti-roll bar's middle blade as one
- * 85 N/mm roll rate; the rear carries more on its corners (165 N/mm, 200 N/mm third spring, 20 N/mm bar). Ride
- * frequencies ≈ 5.5 Hz front and 4.8 Hz rear on the sprung mass, so the floor holds its height under ≈ 17 kN of
- * downforce. Packers on the heave elements catch the last of the travel. Four-way dampers with their knee at 65 mm/s:
- * the heave dampers carry about half the damping in heave (ζ ≈ 0.6 in bump, ≈ 0.75 in rebound), the corner dampers
- * all of it in roll.
+ * Double wishbones on push rods at both ends; all rates at the wheel. The platform is the 963 reference's [963], re-derived
+ * for this model's springs: a decoupled front, where the third (heave) element carries the ride (30 N/mm corner springs
+ * beside a 470 N/mm heave element, 265 N/mm a wheel in heave) and a stiff blade bar alone carries the roll; a rear on its
+ * corner springs (140 N/mm) with a softer third spring (210 N/mm) and a light bar. ≈ 860 kNm/rad of roll stiffness on the
+ * springs and bars, 68 % of it at the front, so the front takes the lateral load transfer and the rear its traction:
+ * ≈ 0.25° of body roll at 3 g. Ride frequencies ≈ 5.3 Hz front and 4.9 Hz rear on the sprung mass. Packers on the heave
+ * elements catch the last of the travel. Four-way dampers with their knee at 80 mm/s, the corner dampers doing most of
+ * the work as the reference's do (ζ ≈ 0.55 front and 0.6 rear in bump, 0.65 and 0.72 in rebound, in heave), the heave
+ * dampers a light trim; the rear corners damped harder than the front, holding the body on the throttle.
  *
  * The car's own pickup points are not public: the hardpoints are the simulator's GT push-rod wishbone layout [est],
  * `[x inboard, y up, z forward]` from the wheel centre, and the camber gain and roll-centre heights are what the
@@ -306,14 +307,14 @@ const SUSPENSIONS: SuspensionsData = {
     actuation: 'push_rod',
     staticCamber: -2.2,
     camberGainKinematic: -46,
-    springs: { wheel_rate: 60_000, helper_rate: 0, helper_range: 0 },
+    springs: { wheel_rate: 30_000, helper_rate: 0, helper_range: 0 },
     // Third-spring packers 11 mm (front) and 12 mm (rear) from static [bop]
-    heave: { rate: 480_000, gap: 0, packerGap: 0.011, packerRate: 900_000 },
+    heave: { rate: 470_000, gap: 0, packerGap: 0.011, packerRate: 900_000 },
     bumpStop: { range: 0.032, rate: 150_000, progression: 4_000_000 },
     droopTravel: 0.035,
     // The prototype's own uprights put the front roll centre higher than the GT layout's 30 mm [derived]
     rollCentreHeight: 0.0628,
-    arb: 85_000,
+    arb: 190_000,
     allowNoArb: true,
     hardpoints: [
       [0.44, 0.0804, 0.197],
@@ -333,12 +334,12 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -1.6,
     camberGainKinematic: -25,
     springs: { wheel_rate: 140_000, helper_rate: 0, helper_range: 0 },
-    heave: { rate: 250_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
+    heave: { rate: 210_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
     // 8 mm of packers on the rear dampers [bop]
     bumpStop: { range: 0.04, rate: 150_000, progression: 4_000_000, packerGap: 0.008 },
     droopTravel: 0.045,
     rollCentreHeight: 0.0594,
-    arb: 14_000,
+    arb: 34_000,
     allowNoArb: true,
     hardpoints: [
       [0.44, 0.0838, 0.251],
@@ -353,19 +354,18 @@ const SUSPENSIONS: SuspensionsData = {
   },
   dampers_controller: {
     front: {
-      // More bump than rebound at the front corners, so the nose takes a kerb without lifting off the next [bop]
-      base: damper(7000, 3000, 5200, 2300),
-      heave: damper(9600, 4200, 12_400, 5200),
+      base: damper(7800, 3600, 8800, 3800),
+      heave: damper(1800, 1200, 3000, 1800),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
-      fastThresholdMs: 0.065,
+      fastThresholdMs: 0.08,
     },
     rear: {
-      base: damper(6000, 2600, 8200, 3400),
-      heave: damper(8000, 3600, 10_400, 4400),
+      base: damper(8600, 4000, 10_000, 4600),
+      heave: damper(1800, 1200, 2600, 1600),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
-      fastThresholdMs: 0.065,
+      fastThresholdMs: 0.08,
     },
   },
 };
