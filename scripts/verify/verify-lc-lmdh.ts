@@ -703,7 +703,7 @@ console.log('\n== Fuel and steering');
   const burnt = f0 - sim.telemetry.fuelKg;
   // A sprint's fixed 28 kg of ballast: none of it burnt
   check('30 s flat out from rest: the 28 kg of sprint fuel stays aboard', f0 === 28 && burnt === 0, `${fmt(burnt, 3)} kg of ${f0} kg`);
-  // 263.5° of rim lock at the hands' 900°/s
+  // 194.25° of rim lock at the hands' 900°/s (388.5° lock-to-lock prototype rack)
   const steer = createLcLmdhSim(pad);
   steer.teleportToDistance(1000, 50 / 3.6);
   let tLock = NaN;
@@ -711,7 +711,7 @@ console.log('\n== Fuel and steering');
     steer.step(DT / 4, { analogSteer: 1 });
     if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
   }
-  check('Full lock from centre in 0.28–0.31 s (263.5° at 900°/s)', tLock > 0.28 && tLock < 0.31, `${fmt(tLock, 3)} s`);
+  check('Full lock from centre in 0.20–0.24 s (194.25° at 900°/s)', tLock > 0.20 && tLock < 0.24, `${fmt(tLock, 3)} s`);
 }
 
 console.log('\n== What the sound hears: driveshaft and motor telemetry');

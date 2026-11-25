@@ -38,7 +38,7 @@ export const LC_LMDH_PROFILE_CAR: SpeedProfileCarModel = {
   rearDownforceShare: 0.555,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
   muLat: 1.365,
-  muLong: 1.3,
+  muLong: 1.22,
   maxBrakeForceN:
     2 *
     C.brakes.maxTorqueNm *
@@ -74,11 +74,10 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // Its grip on the flat per g of weight and downforce, 1.46–1.51 from 80 to 180 km/h: the steering assist's yaw guard
   // reads this, and the 1.4 it had trimmed a stick's lock short of the grip in slow corners
   padLateralMu: 1.5,
-  // 263.5° of rim lock each way on a 13.175 : 1 rack [bop]
-  steerRatio: 13.175,
-  // The autopilot brakes on 85 % of this and corners on 1.1 × that: 1.45 g at low speed and 3.2 g at 306 km/h, inside
-  // the measured 1.52 and 3.32 g
-  braking: { lowG: 1.55, aeroG: 1.9, refMs: 85 },
+  // 194.25° of rim lock each way (388.5° lock to lock) on a 10.5 : 1 prototype rack
+  steerRatio: 10.5,
+  // The autopilot brakes on 85 % of this and corners on 1.1 × that, matching the calibrated ~3.25-3.35 g peak stop
+  braking: { lowG: 1.44, aeroG: 1.78, refMs: 85 },
   understeerRadPerMs2: 0.003,
   speedProfile: LC_LMDH_PROFILE_CAR,
   // The closed-wheel line

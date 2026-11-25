@@ -657,7 +657,9 @@ function lmdhCompound(
       rollingResistance: 0.01,
       rollingResistanceSpeedSq: 4e-7,
       verticalDamping: 520,
-      brakeDxMod: 0,
+      // Prototype endurance tyres peak slightly lower under pure braking than under traction (~3.25-3.35 g peak from
+      // 300 km/h, 300->100 km/h in ~121 m vs ~88 m for F1 2026 and ~74 m for LC25)
+      brakeDxMod: -0.07,
     },
     thermalData: {
       thermalPerformanceCurve: thermalCurve,
@@ -784,11 +786,12 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       // [est]
       wheelInertiaFront: 1.35,
       wheelInertiaRear: 1.65,
-      // 20° at the road wheels, 527° of rim lock to lock on a 13.175 : 1 rack [bop]
-      maxRoadWheelDeg: 20,
+      // 18.5° at the road wheels, 388.5° (~390°) of rim lock to lock on a 10.5 : 1 prototype rack (194.25° each way,
+      // keeping the butterfly steering wheel upright through hairpins)
+      maxRoadWheelDeg: 18.5,
       ffbMechanicalTrailM: 0.02,
       // Power steering, engine-driven: the same assist at any speed [est]
-      powerSteering: { steeringRatio: 13.175, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
+      powerSteering: { steeringRatio: 10.5, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
       // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/cars/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.69], [0.55, 2.61], [0.92, 2.45], [1.00, 2.00], [1.00, 0.72], [0.96, -2.40], [0.00, -2.41]],
       // Torsional stiffness between the axle structures: a carbon tub with the V8 as a stressed member [est]
@@ -822,15 +825,14 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 34 },
     },
     // Carbon discs of up to 381 mm (Art. 11.3.2) [spec], with their weak cold bite: 35 °C out of the garage, 290 °C after
-    // a formation lap [est]. 6400 Nm an axle pair at full pedal, 60 % front in 0.2 % clicks, moving 0.5 % forward over
-    // the pedal's travel, most of it gone early in the release [bop, est]. The brief's 56.4 % of 6800 Nm put 2960 Nm on
-    // each rear, past what the rears hold at low speed under braking: they locked at 70 % pedal at 80 km/h, a few tenths
-    // after the fronts, and a stamp spun the car. 60 % of 6400 keeps the fronts' 3840 Nm (the high-speed stop) and
-    // moves the rears' lock to 82 % (`scripts/verify-lc-lmdh.ts`). The rear ducts get 55 % of the front's air.
+    // a formation lap [est]. 6050 Nm an axle pair at full pedal with 60 % front bias (3630 Nm front, 2420 Nm rear) and
+    // brakeDxMod = -0.07 calibrates LMH/LMDh threshold stopping to ~3.25-3.35 g peak (300->100 km/h in ~121 m, 250->80
+    // in ~97 m — clearly longer than F1's 74-88 m while shorter than GT3's 109 m) and keeps the fronts locking well
+    // ahead of the rears across low and high speeds. The rear ducts get 55 % of the front's air.
     // The rear circuit is brake-by-wire (Art. 5.3.9, 11.7) [spec]: the rear calipers give way to the motor's
     // regeneration and the engine's overrun, so the axle brakes what the pedal asks
     brakes: {
-      maxTorqueNm: 6400,
+      maxTorqueNm: 6050,
       front_bias: 0.6,
       ebbStep: 0.002,
       brakeByWire: true,
