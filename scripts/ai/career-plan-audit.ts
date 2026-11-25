@@ -7,7 +7,7 @@
  *
  *   npx tsx scripts/ai/career-plan-audit.ts --combos combos.json --levels medium,high --races 8 --jobs 9 --out audit.jsonl
  *       [--only 'clubCup_europe|liana|grobnik,...'] [--length full|long|medium|short]
- *   npx tsx scripts/ai/career-plan-audit.ts --report audit.jsonl [--md]
+ *   npx tsx scripts/ai/career-plan-audit.ts --report audit.jsonl [--md] [--json verdicts.json]
  *
  * combos.json: `[{ "series": "clubCup_europe", "car": "liana", "track": "grobnik", "check": { "ok": true, ... } }]`, the
  * check being the car's plan check on the GT3 line (`metadata.aiPlansByLine.gt3[car]`, as the hosted file has it or a
@@ -23,7 +23,7 @@
  *    most the own driver's + max(2, n / 8).
  */
 import { spawn } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { aiSkillFor, lapsFor, seriesById, type AiLevel, type RaceLength } from '../../src/lib/career/ladder';
 import type { AiPlanCheck } from '../../src/lib/track-data';
 import type { StandInProfile, StandInRaceOptions, StandInRaceResult } from './lib/stand-in-race';
@@ -208,15 +208,20 @@ function report(): void {
   const head = ['series', 'car', 'circuit', 'level', 'skill', 'laps', 'arm', 'races', 'spins', 'offs', 'walls', 'AvA', 'vsSI', 'SI AI-flt', 'DNF', 'leader lap', 'AI lap', 'best', 'verdict'];
   const lines: string[][] = [];
   const verdicts = new Map<string, string>();
+  const json: { series: string; car: string; track: string; pass: boolean; levels: Record<string, { plan: Totals; own: Totals; fails: string[] }> }[] = [];
   for (const id of ids) {
     const mine = rows.filter((r) => comboId(r) === id);
     const levels = [...new Set(mine.map((r) => r.level))];
     const fails: string[] = [];
+    const entry = { series: mine[0].series, car: mine[0].car, track: mine[0].track, pass: true, levels: {} as Record<string, { plan: Totals; own: Totals; fails: string[] }> };
+    json.push(entry);
     for (const level of levels) {
       const at = mine.filter((r) => r.level === level);
       const p = totals(at.filter((r) => r.arm === 'plan'));
       const o = totals(at.filter((r) => r.arm === 'own'));
       const why = gateFails(p, o);
+      entry.levels[level] = { plan: p, own: o, fails: why };
+      if (why.length) entry.pass = false;
       if (why.length) fails.push(`${level}: ${why.join(', ')}`);
       for (const [arm, t] of [['plan', p], ['own', o]] as const)
         lines.push([
@@ -237,6 +242,7 @@ function report(): void {
   }
   console.log('');
   for (const [id, v] of verdicts) console.log(`${id}: ${v}`);
+  if (argv.includes('--json')) writeFileSync(opt('json', 'career-plan-audit.json'), JSON.stringify(json, null, 1));
 }
 
 if (argv.includes('--report')) report();
