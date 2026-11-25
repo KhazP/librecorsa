@@ -174,11 +174,6 @@ export class WingMirrors {
     this.carModelRoot = carModelRoot;
     this.eyeInModel = (options.eyeInModel ?? EYE_IN_MODEL).clone();
     this.coversSides = options.coversSides ?? true;
-    if (isWebGPURenderer(renderer)) {
-      this.found = false;
-      this.coversSides = false;
-      return;
-    }
     const materials = options.materials ?? MIRROR_MATERIALS;
     this.cam = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, RT_ASPECT, CAMERA_NEAR, CAMERA_FAR);
 
@@ -273,7 +268,7 @@ export class WingMirrors {
   private renderRearView(chassis: THREE.Object3D): void {
     const rt = this.rt;
     const r = this.renderer;
-    if (isWebGPURenderer(r) || !rt || !this.cam) return;
+    if (!rt || !this.cam) return;
 
     // Pose from the live chassis (its pitch/roll/heave already applied this frame)
     chassis.updateWorldMatrix(true, false);
@@ -285,11 +280,14 @@ export class WingMirrors {
     this.cam.updateMatrixWorld(true);
 
     const prevTarget = r.getRenderTarget();
-    const prevAutoUpdate = r.shadowMap.autoUpdate;
+    const shadowMap = r.shadowMap as { enabled: boolean; autoUpdate?: boolean };
+    const prevAutoUpdate = shadowMap.autoUpdate;
+    const prevShadows = shadowMap.enabled;
     const carVisible = this.carModelRoot.visible;
 
     this.carModelRoot.visible = false;
-    r.shadowMap.autoUpdate = false;
+    if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = false;
+    else shadowMap.enabled = false;
     // Restored even if the render throws, or the player's car would stay hidden
     try {
       r.setRenderTarget(rt);
@@ -297,9 +295,10 @@ export class WingMirrors {
       r.clear();
       r.render(this.scene, this.cam);
     } finally {
-      r.setRenderTarget(prevTarget);
+      r.setRenderTarget(prevTarget as THREE.WebGLRenderTarget | null);
       this.carModelRoot.visible = carVisible;
-      r.shadowMap.autoUpdate = prevAutoUpdate;
+      if (typeof prevAutoUpdate === "boolean") shadowMap.autoUpdate = prevAutoUpdate;
+      else shadowMap.enabled = prevShadows;
     }
   }
 
