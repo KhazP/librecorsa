@@ -278,7 +278,7 @@ const MASS = DRY_MASS + 80;
 /** [spec Art. 3.1.5] */
 const WHEELBASE = 3.148;
 /** Share of the weight on the front axle: homologated per car (Art. 4.2) [bop] */
-const FRONT_WEIGHT = 0.485;
+const FRONT_WEIGHT = 0.465;
 const CG_HEIGHT = 0.275;
 /** The floor's height at the axles at rest (m) [est] */
 const FRONT_TARGET_HEIGHT = 0.05;
@@ -376,24 +376,29 @@ const REF_AREA = 1.92;
 const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v / REF_AREA).toFixed(4))]);
 
 /**
- * Splitter, underfloor and rear wing, with the body's drag as a constant [est]. Nothing public gives the car's map:
- * the regulations homologate each car inside a window of downforce and drag measured in one wind tunnel (Art. 3.9),
- * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
- * CD·A ≈ 0.99 m² (4.3 : 1) with 44.5 % of the downforce on the front axle from 100 to 300 km/h held steady, running
- * 30 mm front and 42 mm rear at speed on a 5.5° rear wing. The drag is held by the class's speed-trap figures
- * (scripts/verify/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
- * onboard footage of one of the class's cars came out about a tenth above what the car could hold between 110 and
- * 145 km/h (each ± 15 %: the radii are an ideal line's), all of the gain under the floor, where it costs the least drag.
- * The balance stays behind the 46 % of the weight on the front axle as the car settles, so the car keeps its understeer
- * at speed. With the splitter gaining more than the floor as the nose came down, it had moved from 44.4 % at 100 km/h
- * to 46.9 % at 300, ahead of the weight: in a fast corner the rears worked nearly as hard as the fronts, and a lift, a
- * quick change of direction or full throttle at 230 km/h used up what they had left:
- *  - the splitter (CL·A 1.185 m²) works in ground effect: a little more down to 22 mm, losing it quickly below 15 mm as
- *    it chokes
- *  - the underfloor and diffuser (2.115 m²) read the mean ride height and the rake; they take the downforce the splitter
- *    gives up as the car settles
+ * Splitter and front floor, rear floor and diffuser, rear wing, with the body's drag as a constant. Nothing public gives
+ * the car's map: the regulations homologate each car inside a window of downforce and drag measured in one wind tunnel
+ * (Art. 3.9), across ride heights, and the figures for it are in an appendix that was not retrieved. The level is held
+ * where it was [est]: CL·A ≈ 4.25 m² and CD·A ≈ 1.1 m² at 250 km/h on a 5.5° rear wing, near the window's ≈ 4 : 1
+ * efficiency. The drag is held by the class's speed-trap figures (scripts/verify/verify-lc-lmdh.ts); the downforce was
+ * raised from 3.96 m² after the corner speeds read off a race lap's onboard footage of one of the class's cars came out
+ * about a tenth above what the car could hold between 110 and 145 km/h.
+ *
+ * How it moves with the platform is the 963 reference's [963], at about two thirds of its strength and with the stalls
+ * a real floor has: the nose coming down loads the front (≈ 1.1 % of balance forward for 10 mm, the splitter and the
+ * floor's front gaining as they near the road), and the rake feeds the diffuser. So the balance comes forward on the
+ * brakes and goes back as the car squats on the throttle, and it moves forward as the car settles with speed: 42.8 % at
+ * 100 km/h, 44.7 % at 250 and 45.5 % at 300, always behind the 46.5 % of the weight on the front axle. (An earlier map
+ * whose balance passed the weight near 300 km/h lost the rears in fast corners on a lift, a quick change of direction or
+ * full throttle at 230 km/h.) The downforce grows by ≈ 7 % from 100 to 300 km/h:
+ *  - the splitter and the floor's front (CL·A 1.69 m² at 30 mm) gain ≈ 0.5 % a mm as the nose comes down, to 17 mm,
+ *    choking below 13 mm
+ *  - the floor's rear and the diffuser (1.65 m²) read the mean ride height and the rake: a little more down nearer the
+ *    road, more with the rake to ≈ 0.6°, stalling past it
  *  - the rear wing (0.95 m² at 5.5°) gains 0.065 m² of CL·A and 0.022 m² of CD·A a degree over its 1–9° range; it sits
- *    0.8 m behind the rear axle, so a degree moves the balance ≈ 1.1 % rearward
+ *    0.72 m behind the rear axle
+ * The diffuser and the wing work in the body's wake once the car slides, so the balance comes forward ≈ 0.6 % at 10° of
+ * yaw [963].
  */
 const AERO: AeroData = {
   front_lift: 0,
@@ -406,21 +411,22 @@ const AERO: AeroData = {
     {
       name: 'FRONT_WING',
       area: REF_AREA,
-      // 0.3 m ahead of the front axle
-      positionZ: 2.0,
+      // The splitter and the floor's front, 0.38 m ahead of the front axle
+      positionZ: 2.064,
       angleDeg: 0,
       heightRef: 'front',
-      // Against the body's pitch from its static rake (deg, + nose down). Below -3° it is the dive planes and flick coming
-      // off for the low-drag package, shedding front downforce at the rate the splitter does near -2°
+      // Against the body's pitch from its static rake (deg, + nose down): the dive planes and flick, their change an
+      // offset on the front floor's own 1.7 m². Below -3° it is the dive planes and flick coming off for the low-drag
+      // package
       lutAOA_CL: perArea([
-        [-9, 0.61],
-        [-6, 0.79],
-        [-3, 0.99],
-        [-1, 1.125],
-        [0, 1.185],
-        [1, 1.235],
-        [2, 1.275],
-        [4, 1.315],
+        [-9, 1.115],
+        [-6, 1.295],
+        [-3, 1.495],
+        [-1, 1.63],
+        [0, 1.69],
+        [1, 1.74],
+        [2, 1.78],
+        [4, 1.82],
       ]),
       lutAOA_CD: perArea([
         [-9, 0.04],
@@ -428,70 +434,80 @@ const AERO: AeroData = {
         [0, 0.05],
         [4, 0.06],
       ]),
+      // In ground effect [963]: it gains as the nose comes down, ≈ 0.45 % a mm at its running height, until it chokes
+      // under 15 mm
       lutGH_CL_mult: [
-        [0, 0.3],
-        [0.008, 0.58],
-        [0.015, 0.86],
-        [0.022, 0.93],
-        [0.03, 0.915],
-        [0.045, 0.9],
-        [0.06, 0.82],
-        [0.08, 0.72],
-        [0.12, 0.6],
+        [0, 0.62],
+        [0.008, 0.9],
+        [0.013, 1.06],
+        [0.017, 1.07],
+        [0.022, 1.045],
+        [0.03, 1.0],
+        [0.04, 0.95],
+        [0.052, 0.895],
+        [0.065, 0.84],
+        [0.08, 0.785],
+        [0.12, 0.68],
       ],
       lutGH_CD_mult: [
         [0, 1.05],
         [0.03, 1],
         [0.12, 0.97],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.945], [20, 0.83], [30, 0.72]],
+      lutYaw_CL_mult: [[0, 1], [5, 0.99], [10, 0.965], [20, 0.89], [30, 0.8]],
       dragY: -0.2,
     },
     {
       name: 'VENTURI_FLOOR',
       area: REF_AREA,
-      positionZ: -0.1,
+      // The floor's rear and the diffuser, 0.46 m ahead of the rear axle
+      positionZ: -1.0,
       angleDeg: 0,
       heightRef: 'mean',
-      // Against the rake (deg): 0.22° at speed, 0.36° at rest
+      // Against the rake (deg) [963]: the diffuser gains as the rear comes up, to ≈ 0.6°, and stalls past it; 0.18° at
+      // 250 km/h, 0.26° at rest
       lutAOA_CL: perArea([
-        [-1, 1.69],
-        [-0.3, 1.965],
-        [0.2, 2.115],
-        [0.6, 2.185],
-        [1, 2.16],
-        [1.6, 2.01],
-        [2.5, 1.69],
+        [-1, 1.39],
+        [-0.3, 1.57],
+        [0.175, 1.645],
+        [0.6, 1.685],
+        [1, 1.675],
+        [1.6, 1.59],
+        [2.5, 1.39],
       ]),
       lutAOA_CD: perArea([
         [-1, 0.11],
         [0.2, 0.12],
         [2.5, 0.14],
       ]),
+      // A little more down as the floor comes closer, until it chokes under ≈ 16 mm
       lutGH_CL_mult: [
-        [0, 0.2],
-        [0.01, 0.56],
-        [0.02, 1.04],
-        [0.028, 1.11],
-        [0.036, 1.06],
-        [0.05, 0.925],
-        [0.065, 0.78],
-        [0.085, 0.62],
-        [0.11, 0.48],
-        [0.15, 0.35],
+        [0, 0.45],
+        [0.01, 0.8],
+        [0.016, 1.02],
+        [0.022, 1.04],
+        [0.03, 1.02],
+        [0.0353, 1.0],
+        [0.045, 0.985],
+        [0.06, 0.96],
+        [0.08, 0.92],
+        [0.11, 0.86],
+        [0.15, 0.78],
       ],
       lutGH_CD_mult: [
         [0, 1.04],
         [0.036, 1],
         [0.15, 0.95],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.98], [10, 0.93], [20, 0.8], [30, 0.65]],
+      // The diffuser works in the body's wake once the car slides [963]
+      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.95], [20, 0.85], [30, 0.72]],
       dragY: -0.22,
     },
     {
       name: 'REAR_WING',
       area: REF_AREA,
-      positionZ: -2.25,
+      // 0.72 m behind the rear axle
+      positionZ: -2.187,
       // The middle of its 1–9° range
       angleDeg: 5.5,
       heightRef: 'rear',
@@ -517,7 +533,8 @@ const AERO: AeroData = {
         [0, 1],
         [0.3, 1],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.945], [20, 0.82], [30, 0.68]],
+      // Deeper in the body's wake than the floor once the car slides, so the balance moves forward as it yaws [963]
+      lutYaw_CL_mult: [[0, 1], [5, 0.98], [10, 0.935], [20, 0.8], [30, 0.66]],
       dragY: 0.5,
     },
   ],
@@ -868,10 +885,10 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
 export const LC_LMDH_CONFIG = config(LMDH_GEAR_SETS.short, 5.5);
 
 /**
- * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5.8° off,
+ * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 4.9° off,
  * as the garage's gear set and low-drag package make it: `scripts/verify/verify-lc-lmdh.ts` checks its top speed
  */
-export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5.8);
+export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -4.9);
 
 /** What the regulations and the bulletin fix, for the checks: Nmax, the 500 kW line and the car's scale on it */
 export const LC_LMDH_POWER = { nMax: N_MAX, curve500Kw: POWER_CURVE_500, scaleVsKmh: POWER_SCALE_VS_KMH };
