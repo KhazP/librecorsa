@@ -496,8 +496,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // An assisted start's cue: a manual start has its own checklist (LaunchCue), and the throttle with the clutch out
   // there takes the car away early
   const throttleCue = lightsPhase && !telemetry.start;
-  const style = phone ? PHONE_STYLE : HUD_STYLES[preset];
-  const thirdPartySkin = thirdPartySkinOf(preset, phone);
+  const effectivePreset: HudPreset = !phone && props.carId === "jaguar-fe" && cameraMode === "tv_pod" ? "grand-prix" : preset;
+  const style = phone ? PHONE_STYLE : HUD_STYLES[effectivePreset];
+  const thirdPartySkin = thirdPartySkinOf(effectivePreset, phone);
   const isThirdParty = thirdPartySkin !== null;
   const showDelta = Boolean(hud?.deltaBar && !phone && !lightsPhase);
   const showRadar = hud?.radar !== false && !lightsPhase;

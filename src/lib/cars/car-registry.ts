@@ -3,6 +3,8 @@ import type { VehicleModelId } from "@/types/f1";
 import type { CarClassRule } from "@/lib/net/wire";
 import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
+import { BMW_M6_GT3_SOUND } from "@/lib/sim/gt3/BmwM6Gt3Sim";
+import { JAGUAR_FE_SOUND } from "@/lib/sim/fe/JaguarFeSim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
 import { LC_LMDH_SOUND } from "@/lib/sim/proto/LcLmdhSim";
@@ -33,6 +35,8 @@ export type CarId =
   | "lc26"
   | "amg-gt3"
   | "bmw-m4-gt3"
+  | "bmw-m6-gt3"
+  | "jaguar-fe"
   | "mtr-496r"
   | "lc-lmdh"
   | "liana"
@@ -109,6 +113,8 @@ export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
  */
 export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
+  "bmw-m6-gt3": "Calibrated to BMW M6 GT3 P63 twin-turbo V8 specs, wheelbase and endurance BoP.",
+  "jaguar-fe": "Calibrated to Gen2 Formula E Jaguar I-Type 4 specs (200 kW race + 50 kW Attack Mode, no DRS).",
   lc26: "Its physics are checked against the reference data they were built from.",
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
@@ -350,6 +356,43 @@ const ALL_CARS: readonly CarDefinition[] = [
     sound: BMW_M4_GT3_SOUND,
   },
   {
+    id: "bmw-m6-gt3",
+    classId: "gt3",
+    title: "BMW M6 GT3",
+    sub: "F13 GT3 · 4.4L Twin-Turbo V8 · ABS / TC",
+    badge: "M6 GT3",
+    quality: "own",
+    credit: {
+      title: "BMW M6 GT3 Engraving",
+      author: "ᗩᒪE᙭. Kᗩ.🚗",
+      url: "https://sketchfab.com/3d-models/fb5d595766974a57868f84890f4425d2",
+      license: "CC BY-NC 4.0",
+      licenseUrl: "https://creativecommons.org/licenses/by-nc/4.0/",
+    },
+    physics: "bmw-m6-gt3",
+    year: 2016,
+    modelUrl: "/cars/bmw-m6-gt3/model/bmw-m6-gt3.glb",
+    sound: BMW_M6_GT3_SOUND,
+  },
+  {
+    id: "jaguar-fe",
+    classId: "f1",
+    title: "Jaguar I-Type 4 Formula E",
+    sub: "Gen2 Formula E · 250 kW Electric · Attack Mode",
+    badge: "FE GEN2",
+    quality: "own",
+    credit: {
+      title: "Formula E [Jaguar I Type-4]",
+      author: "3dblender_1",
+      url: "https://sketchfab.com/3d-models/c722e175f91240a88eec2d777b6d503f",
+      ...CC_BY,
+    },
+    physics: "jaguar-fe",
+    year: 2019,
+    modelUrl: "/cars/jaguar-fe/model/jaguar-fe.glb",
+    sound: JAGUAR_FE_SOUND,
+  },
+  {
     id: "mtr-496r",
     classId: "proto",
     title: "MTRacing 496R",
@@ -570,8 +613,10 @@ export const carClassYear = (car: Pick<CarDefinition, "classId" | "year">): stri
  * The overtaking aids a car races with: an F1 car's by its year (`overtakingRulesForSeason`), none for any other
  * class (absent: its vehicle model keeps its flaps shut, as a GT3 or road car always has).
  */
-export const carOvertakingRules = (car: Pick<CarDefinition, "classId" | "year">): OvertakingRules | undefined =>
-  car.classId === "f1" ? overtakingRulesForSeason(car.year) : undefined;
+export const carOvertakingRules = (
+  car: Pick<CarDefinition, "classId" | "year"> & { id?: CarId },
+): OvertakingRules | undefined =>
+  car.classId === "f1" && car.id !== "jaguar-fe" ? overtakingRulesForSeason(car.year) : undefined;
 
 const CLASS_ORDER = new Map<CarClassId, number>(CAR_CLASSES.map((k, i) => [k.id, i]));
 const REGISTRY_ORDER = new Map<CarId, number>(KNOWN_CARS.map((c, i) => [c.id, i]));
@@ -589,7 +634,7 @@ export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): n
 export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
 
 const carThumbDir = (id: CarId): string => {
-  if (REPO_CAR_IDS.has(id)) return "/lc26";
+  if (id === "lc26") return "/lc26";
   // Beside the car's model, so a car that took over another's body shows that body's picture
   const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
   return modelDir ?? `/cars/${id}`;

@@ -35,7 +35,9 @@ export const VEHICLE_CLASS_META: Readonly<Record<VehicleClassId, VehicleClassMet
 export const VEHICLE_CLASS_OF: Readonly<Record<VehicleModelId, VehicleClassId>> = {
   lc26: "f1",
   "f12026-car": "f1",
+  "jaguar-fe": "f1",
   "amg-gt3": "gt3",
+  "bmw-m6-gt3": "gt3",
   "mtr-496r": "proto",
   "lc-lmdh": "proto",
   "nissan-r33-jgtc": "classic",
@@ -52,7 +54,9 @@ export const VEHICLE_CLASS_OF: Readonly<Record<VehicleModelId, VehicleClassId>> 
 export const VEHICLE_DISPLAY_NAME: Readonly<Record<VehicleModelId, string>> = {
   lc26: "Proto 26",
   "f12026-car": "F1 Teams",
+  "jaguar-fe": "Jaguar I-Type 4",
   "amg-gt3": "GT3",
+  "bmw-m6-gt3": "BMW M6 GT3",
   "mtr-496r": "MTRacing 496R",
   "lc-lmdh": "LC-LMDH",
   "nissan-r33-jgtc": "Skyline R33 GT500",

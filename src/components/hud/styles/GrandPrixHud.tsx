@@ -588,7 +588,16 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
         </div>
 
         {/* Halo-mounted curved cluster */}
-        <HaloCluster t={t} deltaS={deltaS} hasErs={hasErs} revRange={revRange} scale={scale} />
+        <HaloCluster
+          t={t}
+          deltaS={deltaS}
+          hasErs={hasErs}
+          gearCount={channels?.carId === "jaguar-fe" ? 1 : isFormulaCar ? 8 : 6}
+          hasAero={t.overtakingRules !== undefined && t.overtakingRules !== "none" && (!channels || channels.hasDrs)}
+          offsetX={channels?.carId === "jaguar-fe" ? -86 : 0}
+          revRange={revRange}
+          scale={scale}
+        />
 
         {/* Bottom-left: Compact Driver Timing Card */}
         <div

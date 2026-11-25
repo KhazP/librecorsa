@@ -15,6 +15,8 @@ import { ARB_DETACHED_PCT, type ChassisSetup, CHASSIS_LIMITS, DEFAULT_CHASSIS_SE
 import { LC26_CHASSIS } from "./lc26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
+import { BMW_M6_GT3_CONFIG } from "./gt3/BmwM6Gt3Config";
+import { JAGUAR_FE_CONFIG } from "./fe/JaguarFeConfig";
 import { SUZUKI_LIANA_CONFIG } from "./road/SuzukiLianaConfig";
 import { MTR_496R_CONFIG } from "./proto/Mtr496rConfig";
 import { LC_LMDH_CONFIG } from "./proto/LcLmdhConfig";
@@ -32,6 +34,8 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   lc26: "f1",
   "f12026-car": "f1",
   "amg-gt3": "gt3",
+  "bmw-m6-gt3": "gt3",
+  "jaguar-fe": "f1",
   // A closed road car: the GT3 sheet (tyres, electronics, mechanical grip, dampers, fuel)
   liana: "gt3",
   // A closed-wheel car on a rear wing: the GT3 sheet
@@ -164,6 +168,8 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   },
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
   "amg-gt3": { ...rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"), brakeBiasRangePct: [56, 70] },
+  "bmw-m6-gt3": { ...rigidBaseline(BMW_M6_GT3_CONFIG, "bmw-m6-gt3"), brakeBiasRangePct: [56, 70] },
+  "jaguar-fe": { ...rigidBaseline(JAGUAR_FE_CONFIG, "jaguar-fe"), brakeBiasRangePct: [50, 66] },
   liana: rigidBaseline(SUZUKI_LIANA_CONFIG, "liana"),
   // Its 58 % sits below a GT3's bias range: the mod's adjuster runs from 52 % [spec setup.ini FRONT_BIAS] to the 78 %
   // every car stops at
@@ -191,6 +197,8 @@ const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
   lc26: null,
   "f12026-car": F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
   "amg-gt3": AMG_GT3_CONFIG as unknown as CarPhysicsConfig,
+  "bmw-m6-gt3": BMW_M6_GT3_CONFIG as unknown as CarPhysicsConfig,
+  "jaguar-fe": JAGUAR_FE_CONFIG as unknown as CarPhysicsConfig,
   liana: SUZUKI_LIANA_CONFIG as unknown as CarPhysicsConfig,
   "mtr-496r": MTR_496R_CONFIG as unknown as CarPhysicsConfig,
   "lc-lmdh": LC_LMDH_CONFIG as unknown as CarPhysicsConfig,
@@ -204,7 +212,7 @@ const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
 };
 
 /** Cars whose electronics have the third traction dial, for the driven axle's slide */
-const TC_SLIP_ANGLE_CARS: ReadonlySet<VehicleModelId> = new Set(["amg-gt3", "lc-lmdh"]);
+const TC_SLIP_ANGLE_CARS: ReadonlySet<VehicleModelId> = new Set(["amg-gt3", "bmw-m6-gt3", "lc-lmdh"]);
 
 /**
  * An anti-roll bar on the games' 1–21 scale (11 the baseline, 5 % a step), with 0 "Detached" (the bar off, −100 %) on

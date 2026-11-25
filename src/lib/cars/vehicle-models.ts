@@ -11,6 +11,10 @@ import { createLc26Sim } from "@/lib/sim/f12026-car/Lc26Sim";
 import { lc26OnRigidBody } from "./lc26-engine";
 import { AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
+import { BMW_M6_GT3_SIM_PROFILE, createBmwM6Gt3Sim } from "@/lib/sim/gt3/BmwM6Gt3Sim";
+import { BMW_M6_GT3_CONFIG } from "@/lib/sim/gt3/BmwM6Gt3Config";
+import { JAGUAR_FE_SIM_PROFILE, createJaguarFeSim } from "@/lib/sim/fe/JaguarFeSim";
+import { JAGUAR_FE_CONFIG } from "@/lib/sim/fe/JaguarFeConfig";
 import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/SuzukiLianaSim";
 import { SUZUKI_LIANA_CONFIG } from "@/lib/sim/road/SuzukiLianaConfig";
 import { MTR_496R_SIM_PROFILE, createMtr496rSim } from "@/lib/sim/proto/Mtr496rSim";
@@ -108,6 +112,28 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     tyreSetupRanges: AMG_GT3_SIM_PROFILE,
     rigConfig: AMG_GT3_CONFIG,
     gt3Cockpit: true,
+    floorSparks: false,
+  },
+  "bmw-m6-gt3": {
+    id: "bmw-m6-gt3",
+    classId: "gt3",
+    createSim: (track, trackRoot, bodyPlan) => createBmwM6Gt3Sim(track, trackRoot, bodyPlan),
+    limiterRpm: BMW_M6_GT3_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 7500,
+    tyreSetupRanges: BMW_M6_GT3_SIM_PROFILE,
+    rigConfig: BMW_M6_GT3_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  "jaguar-fe": {
+    id: "jaguar-fe",
+    classId: "f1",
+    createSim: (track, trackRoot) => createJaguarFeSim(track, trackRoot),
+    limiterRpm: JAGUAR_FE_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 18500,
+    tyreSetupRanges: JAGUAR_FE_SIM_PROFILE,
+    rigConfig: JAGUAR_FE_CONFIG,
+    gt3Cockpit: false,
     floorSparks: false,
   },
   liana: {

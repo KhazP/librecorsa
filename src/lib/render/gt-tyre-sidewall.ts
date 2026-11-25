@@ -87,6 +87,7 @@ export const GT_TYRE_PACKS: Readonly<Record<GtTyreBrand, GtTyrePackInfo>> = {
 export const DEFAULT_CAR_GT_TYRE_BRAND: Readonly<Partial<Record<CarId, GtTyreBrand>>> = {
   "amg-gt3": "pirelli",
   "bmw-m4-gt3": "goodyear",
+  "bmw-m6-gt3": "michelin",
   "lc-lmdh": "michelin",
   "mtr-496r": "michelin",
   "nissan-r33-jgtc": "bridgestone",

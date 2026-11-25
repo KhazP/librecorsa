@@ -170,11 +170,17 @@ const RPM_PTS: { p: Pt; u: number }[] = (() => {
   const t2 = angleAt(LINES.rpm[1]);
   return Array.from({ length: 41 }, (_, k) => ({ p: at(t1 + ((t2 - t1) * k) / 40, 0.3), u: k / 40 }));
 })();
+const gearPtsFor = (gearCount: number) => {
+  const row = GEAR_ROW.slice(0, gearCount + 1);
+  const lo = gearCount === 1 ? 1090 : 1020;
+  const hi = gearCount === 1 ? 1192 : 1262;
+  return row.map((g, i) => {
+    const t = angleAt(lo + (i * (hi - lo)) / Math.max(1, row.length - 1));
+    return { g, p: at(t, 0.56), deg: (t * 180) / Math.PI };
+  });
+};
 /** Where each gear sits along the arc, and its tilt */
-const GEAR_PTS = GEAR_ROW.map((g, i) => {
-  const t = angleAt(1020 + (i * (1262 - 1020)) / (GEAR_ROW.length - 1));
-  return { g, p: at(t, 0.56), deg: (t * 180) / Math.PI };
-});
+const GEAR_PTS = gearPtsFor(8);
 /** The two columns round the dial: the battery on the left (round 180°), the throttle on the right (round 0°) */
 const COLUMN_SPAN = 25;
 const COLUMN_R = [115, 141] as const;
@@ -273,6 +279,12 @@ export interface HaloClusterProps {
   revRange: [number, number];
   /** A car without ERS draws its brake in the left column and no battery, Boost or Overtake */
   hasErs: boolean;
+  /** Forward gear count (default 8); adapts the gear row for 1-speed EVs or 6-speed cars */
+  gearCount?: number;
+  /** Whether this car has active aero / DRS / Straight Mode (false hides the aero bubble) */
+  hasAero?: boolean;
+  /** Horizontal pixel offset for aligning with a specific car's Halo in TV pod */
+  offsetX?: number;
   scale?: number;
 }
 
@@ -280,7 +292,7 @@ export interface HaloClusterProps {
  * The halo cluster. Its edge takes the state's colour, as a TV graphic's does: caution under a virtual safety car or a
  * yellow flag, gain while Overtake or Boost is on, info while the active aero is open; otherwise the glass's hairline.
  */
-export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, hasErs, scale }) => {
+export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, hasErs, gearCount = 8, hasAero = true, offsetX = 0, scale }) => {
   const w = useHaloWords();
   const units = useUnits();
   const uid = useId().replace(/:/g, "");
@@ -342,13 +354,19 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
   // The corner the car is in
   const corner = cornerLabel(t.currentTurnNumber, t.currentTurnName);
 
+  const nGears = Math.max(1, Math.min(8, gearCount));
+  const gearPts = nGears === 8 ? GEAR_PTS : gearPtsFor(nGears);
   const gear = gearLabel(t.gear);
-  const gearSlot = t.gear < 0 ? 0 : Math.min(GEAR_ROW.length - 1, Math.max(0, t.gear));
+  const gearSlot = t.gear < 0 ? 0 : Math.min(gearPts.length - 1, Math.max(0, t.gear));
   const left = stripLetters(hasErs ? w.recharge : w.brake, -1);
   const right = stripLetters(hasErs ? w.deploy : w.throttle, 1);
 
+  const xShift = offsetX ? `calc(-50% + ${offsetX}px)` : "-50%";
   return (
-    <div className={palette.haloAnchor} style={scale && scale !== 1 ? { transform: `translateX(-50%) scale(${scale})` } : undefined}>
+    <div
+      className={palette.haloAnchor}
+      style={offsetX || (scale && scale !== 1) ? { transform: `translateX(${xShift}) scale(${scale ?? 1})` } : undefined}
+    >
       {vsc ? <HaloDirector t={t} vsc={vsc} giveBack={Boolean(race?.giveBack)} w={w} /> : null}
       {flash ? <HaloCall key={flash.id} kind={flash.kind} lapMs={t.bestLapTimeMs} w={w} /> : null}
       <svg viewBox={VIEW} className={palette.haloSvg} aria-hidden>
@@ -483,24 +501,30 @@ export const HaloCluster: React.FC<HaloClusterProps> = ({ t, deltaS, revRange, h
         ) : null}
 
         {/* Active aero: the flap lines lie flat when shut and part when open */}
-        <g className={aero.armed && !aero.open ? palette.haloBlink : undefined}>
-          <path
-            d={AERO}
-            fill={aero.open ? HUD_INFO : CHALK}
-            fillOpacity={aero.open ? 0.95 : 0.05}
-            stroke={aero.open || aero.armed ? HUD_INFO : edge}
-            strokeOpacity={aero.open || aero.armed ? 1 : edgeOpacity}
-            strokeWidth={2}
-          />
-        </g>
-        <HaloAero open={aero.open} label={w.activeAero} uid={uid} />
+        {hasAero ? (
+          <>
+            <g className={aero.armed && !aero.open ? palette.haloBlink : undefined}>
+              <path
+                d={AERO}
+                fill={aero.open ? HUD_INFO : CHALK}
+                fillOpacity={aero.open ? 0.95 : 0.05}
+                stroke={aero.open || aero.armed ? HUD_INFO : edge}
+                strokeOpacity={aero.open || aero.armed ? 1 : edgeOpacity}
+                strokeWidth={2}
+              />
+            </g>
+            <HaloAero open={aero.open} label={w.activeAero} uid={uid} />
+          </>
+        ) : (
+          <path d={AERO} fill={CHALK} fillOpacity={0.03} stroke={edge} strokeOpacity={0.12} strokeWidth={1.5} />
+        )}
 
         {/* Gears along the arc over the rev line */}
         <path d={GEARS} fill={CHALK} fillOpacity={0.05} stroke={edge} strokeOpacity={edgeOpacity} strokeWidth={2} />
         <ArcText id={`${uid}-gl`} d={LINES.gearsLabel} size={17} fill={SLATE} className="lc-disp" spacing={1}>
           {w.gears}
         </ArcText>
-        {GEAR_PTS.map(({ g, p, deg }, i) => {
+        {gearPts.map(({ g, p, deg }, i) => {
           const on = i === gearSlot;
           return (
             <g key={g} transform={`translate(${p2(p)}) rotate(${deg.toFixed(1)})`}>

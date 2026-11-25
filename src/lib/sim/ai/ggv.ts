@@ -41,6 +41,20 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.805, 0.718, 0.551, 0.403, 0.272, 0.157, 0.046, -0.397],
     lockKappa: Math.tan((320 / 12.6) * (Math.PI / 180)) / 2.65,
   },
+  'bmw-m6-gt3': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.61, 1.70, 1.79, 1.92, 2.07, 2.24, 2.40, 2.48],
+    brakeG: [1.67, 1.75, 1.85, 1.98, 2.12, 2.25, 2.33, 2.40],
+    accelG: [0.83, 0.74, 0.58, 0.43, 0.29, 0.17, 0.06, -0.35],
+    lockKappa: Math.tan((270 / 12.6) * (Math.PI / 180)) / 2.771,
+  },
+  'jaguar-fe': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.45, 1.52, 1.62, 1.74, 1.88, 2.02, 2.15, 2.20],
+    brakeG: [1.55, 1.65, 1.78, 1.92, 2.05, 2.15, 2.22, 2.25],
+    accelG: [1.10, 1.05, 0.90, 0.72, 0.54, 0.35, 0.12, -0.25],
+    lockKappa: Math.tan(19 * (Math.PI / 180)) / 3.2505,
+  },
   // Measured 2026-11-12 on the rigid-body engine the LC26 ships on (`lc26-engine.ts`); traction again 2026-11-23 under
   // the 2026 F1 rules' energy (`ers-2026.ts`: the FIA's power curve, Overtake's in practice)
   lc26: {

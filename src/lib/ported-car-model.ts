@@ -380,6 +380,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const corners: RigCorner[] = [];
   let steerPivot: THREE.Object3D | null = null;
   const steerRest = new THREE.Quaternion();
+  let steerScreen: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; lastDrawMs: number; isGt3?: boolean } | null = null;
   let opponentLod: OpponentLodController | null = null;
   let lastLod: 0 | 1 = 0;
   let disposed = false;
@@ -498,6 +499,29 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         steerPivot = steerNode;
         steerRest.copy(steerNode.quaternion);
         if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
+        const attachScreen = (o: THREE.Object3D, matName: string, nodeName?: string) => {
+          const m = (o as THREE.Mesh).material;
+          if (!m || Array.isArray(m)) return;
+          if (m.name === matName && (!nodeName || o.name === nodeName) && typeof document !== "undefined") {
+            const canvas = document.createElement("canvas");
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              const tex = new THREE.CanvasTexture(canvas);
+              tex.colorSpace = THREE.SRGBColorSpace;
+              const std = m as THREE.MeshStandardMaterial;
+              std.map = tex;
+              std.emissiveMap = tex;
+              std.emissive.setHex(0xffffff);
+              std.emissiveIntensity = 0.85;
+              std.needsUpdate = true;
+              steerScreen = { canvas, ctx, tex, lastDrawMs: 0, isGt3: matName === "BMW_DASH_SCREEN" };
+            }
+          }
+        };
+        steerNode.traverse((o) => attachScreen(o, "Material.002", "Object_55"));
+        bodyGroup.traverse((o) => attachScreen(o, "BMW_DASH_SCREEN"));
       }
     }
     for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
@@ -618,6 +642,31 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       // About the column (local +Z): a positive angle takes the top of the rim to -X, i.e. right
       steerPivot.quaternion.copy(steerRest);
       steerPivot.rotateZ(t.steering * steerLockRad);
+    }
+    if (steerScreen) {
+      const nowMs = performance.now();
+      if (nowMs - steerScreen.lastDrawMs >= 66) {
+        steerScreen.lastDrawMs = nowMs;
+        const { ctx, canvas, tex } = steerScreen;
+        ctx.fillStyle = "#080b12";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const boost = Boolean(t.manualOverrideActive || t.ersBoostActive);
+        ctx.fillStyle = boost ? "#22c55e" : "#00e5ff";
+        ctx.fillRect(0, 0, canvas.width, 14);
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "bold 46px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`${Math.round(t.speedKmh)}`, 105, 76);
+        ctx.fillStyle = "#ccff00";
+        ctx.font = "bold 44px monospace";
+        ctx.fillText(t.gear < 0 ? "R" : t.gear === 0 ? "N" : String(t.gear), 205, 76);
+        const soc = Math.max(0, Math.min(1, steerScreen.isGt3 ? t.rpm / 7000 : t.ersBatteryPercent / 100));
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(14, 96, 228, 18);
+        ctx.fillStyle = steerScreen.isGt3 ? (soc > 0.85 ? "#ef4444" : "#22c55e") : soc > 0.2 ? "#00e5ff" : "#ef4444";
+        ctx.fillRect(14, 96, Math.round(228 * soc), 18);
+        tex.needsUpdate = true;
+      }
     }
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
     if (options.opponent) {

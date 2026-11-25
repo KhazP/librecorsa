@@ -24,6 +24,8 @@ const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
   // Both GT3 cameras sit ahead of everything the wheel sweeps (the near plane is 12 cm), so no grip crosses the lens
   "amg-gt3": { fromEye: [0, 0.02, 0.56], pitchDeg: -4, fovDeg: 58 },
   "bmw-m4-gt3": { fromEye: [0, 0.02, 0.62], pitchDeg: -7, fovDeg: 58 },
+  "bmw-m6-gt3": { fromEye: [0, 0.02, 0.52], pitchDeg: -5, fovDeg: 58 },
+  "jaguar-fe": { fromEye: [0, -0.04, 0.42], pitchDeg: -6, fovDeg: 58 },
   // Just past its wheel (whose screen and paddles reach 0.70 m ahead of the eye), 5 cm under the windscreen
   "mtr-496r": { fromEye: [0, -0.05, 0.7], pitchDeg: -4, fovDeg: 58 },
   "lc-lmdh": { fromEye: [0, -0.04, 0.14], pitchDeg: -10, fovDeg: 58 },
