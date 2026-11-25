@@ -57,8 +57,9 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   turbo: true,
   // Cold pressures at the garage's 25 °C (no blankets): 131–172 kPa [bop]
   coldPsiRange: [19, 25],
-  frontCamberRange: [-3.2, -0.8],
-  rearCamberRange: [-2.6, -0.6],
+  // The garage's camber ranges round the 963's statics [963]
+  frontCamberRange: [-4, -1],
+  rearCamberRange: [-3.4, -0.6],
   setupPressureRefC: 25,
   // Three traction dials
   tcSlipAngleDial: true,

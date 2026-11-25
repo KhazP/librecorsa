@@ -305,7 +305,7 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
-    staticCamber: -2.2,
+    staticCamber: -3.0,
     camberGainKinematic: -46,
     springs: { wheel_rate: 30_000, helper_rate: 0, helper_range: 0 },
     // Third-spring packers 11 mm (front) and 12 mm (rear) from static [bop]
@@ -331,7 +331,7 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
-    staticCamber: -1.6,
+    staticCamber: -2.2,
     camberGainKinematic: -25,
     springs: { wheel_rate: 140_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 210_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
@@ -568,8 +568,13 @@ const LMDH_REAR: TyreGeometry = { width: LC_LMDH_HARDPOINTS.tyreWidthRear, radiu
 
 /** The tyres' reference load (N) [est] */
 const FZ0 = 3500;
-/** Lateral grip over longitudinal [est] */
-const LATERAL_GRIP = 1.05;
+/**
+ * Lateral grip over longitudinal [derived]: what this engine's brush tyre needs to give a slick's real cornering grip,
+ * as the GT3's slick fitted to its logs needs 1.131. At 1.05 the class's slick held 9 % less μ across the car than the
+ * GT3's at the same load, and the car's planned laps of Watkins Glen came out 3 % behind the GT3's against the 2024
+ * qualifying times (1:32.3 and 1:44.2, a ratio of 0.886); at 1.12 they are 0.894
+ */
+const LATERAL_GRIP = 1.12;
 
 /**
  * Peak grip against load (N → μ) [est]: μ0 · (Fz / Fz0)^(n − 1), held below a fifth of the reference load, with the
@@ -620,10 +625,13 @@ const pressureSpring = (rate: number): LutPoints => [18, 22, 26, 30, 34].map((p)
 
 /**
  * The class's spec slick [est]: nothing of the supplier's data is public. A brush tyre of μ 1.68 front and 1.72 rear at
- * 3.5 kN along the car and 5 % more across it, losing a fifth of that per doubling of the load, peaking near 6.5° of
- * slip angle and 10 % of slip ratio; the thermal, pressure and camber terms are the simulator's closed-wheel slick
- * estimates. The lateral grip was raised with the downforce (see the aero map's note): braking read off the same
- * footage, about 3.2 g from 280 km/h, already matched, so the longitudinal grip stayed. `grip` scales a compound
+ * 3.5 kN along the car and 12 % more across it, peaking near 10 % of slip ratio; the thermal and pressure terms are the
+ * simulator's closed-wheel slick estimates. The lateral grip was raised with the downforce (see the aero map's note):
+ * braking read off the same footage, about 3.2 g from 280 km/h, already matched, so the longitudinal grip stayed.
+ * `grip` scales a compound. Its character is the 963 reference's [963]: a gentle loss of grip with load (≈ 11 % less μ
+ * per doubling across the car, 10 % along it), the wider rear peaking earlier in slip angle than the front (6.0° and
+ * 6.3°) on its stiffer carcass, and a camber optimum near 3.4° front and 2.7° rear of running camber, where the static
+ * camber and the squat at speed put it
  */
 function lmdhCompound(
   tyre_compound: PhysicsTyreCompound,
@@ -649,13 +657,13 @@ function lmdhCompound(
     modelData: {
       Dy0: frontLat,
       Dx0: front,
-      lsExpY: 0.8,
-      lsExpX: 0.82,
+      lsExpY: 0.83,
+      lsExpX: 0.85,
       Fz0: FZ0,
-      dyCurve: loadCurve(frontLat, 0.8),
-      dxCurve: loadCurve(front, 0.82),
+      dyCurve: loadCurve(frontLat, 0.83),
+      dxCurve: loadCurve(front, 0.85),
       curve: 'brush',
-      friction_limit_angle: 6.5,
+      friction_limit_angle: 6.3,
       peakSlipLoadGain: 0.05,
       peakSlipPressureGain: 0.05,
       combinedExponent: 2,
@@ -716,25 +724,31 @@ function lmdhCompound(
       camberGain: 0.14,
       contact_camber_c1: 1,
       contact_camber_c2: 40,
-      dcamber0: 0.8,
-      dcamber1: -4.6,
+      // Lateral grip peaks at 3.4° of camber leaning into the force, 3.6 % over upright [963]; along the car it costs
+      // 2 % there
+      dcamber0: 1.2,
+      dcamber1: -10,
       dcamber0_x: 0,
       dcamber1_x: -6,
     },
-    // The 34 cm rear: its own grip at the same reference load, wider slip peak and gentler post-peak falloff for
-    // progressive breakaway on low-downforce trims, and a stiffer carcass
+    // The 34 cm rear: its own grip at the same reference load, a little less load-sensitive, its slip peak earlier on
+    // its stiffer carcass with a gentler post-peak falloff for progressive breakaway on low-downforce trims, and its
+    // camber optimum at 2.7° [963]
     rearOverride: {
       modelData: {
         Dy0: rearLat,
         Dx0: rear,
         Fz0: FZ0,
-        dyCurve: loadCurve(rearLat, 0.8),
-        dxCurve: loadCurve(rear, 0.82),
-        friction_limit_angle: 6.8,
+        lsExpY: 0.84,
+        lsExpX: 0.86,
+        dyCurve: loadCurve(rearLat, 0.84),
+        dxCurve: loadCurve(rear, 0.86),
+        friction_limit_angle: 6.0,
         longStiffnessMult: 1.19,
         falloff_level: 0.9,
         falloff_slope: 3,
       },
+      camberData: { dcamber0: 1.5, dcamber1: -16 },
       pressureData: { pressureSpringCurve: pressureSpring(320_000), setPsi: 19.58 },
     },
   };
