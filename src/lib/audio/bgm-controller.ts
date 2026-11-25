@@ -67,6 +67,8 @@ export const ARM_LEAD_S = 20;
 export const END_LEAD_S = 0.3;
 /** The track ending fades over this once the next one sounds: its tail is all but silent by then */
 export const TAIL_FADE_S = 1;
+/** The pre-race show's cue jumping with its picture (a skip): a quick crossfade, under a cut */
+export const SHOW_JUMP_S = 0.25;
 export const DUCK_S = 0.15;
 /** -6 dB */
 export const DUCK_GAIN = 0.5;
@@ -209,6 +211,20 @@ export class AudioBGMController {
     const deck = this.decks[this.active];
     if (!deck?.track || deck.pool !== "show" || deck.leaving || !deck.started || deck.el.paused) return null;
     return deck.el.currentTime - (deck.track.startS ?? 0);
+  }
+
+  /**
+   * The pre-race show moved on (a press to its next graphic or its start card): its cue goes to `cueS` (s into the cue,
+   * from its start point) with the picture, crossfaded on the other deck. The show's clock follows the music, so without
+   * this it would wait for the music to catch up. Nothing when the show's cue is not what plays.
+   */
+  jumpShow(cueS: number): void {
+    const deck = this.decks[this.active];
+    const track = deck?.track;
+    if (this.playing !== "show" || !deck || !track || deck.pool !== "show" || deck.leaving) return;
+    const atS = (track.startS ?? 0) + Math.max(0, cueS);
+    if (Math.abs(deck.el.currentTime - atS) < SHOW_JUMP_S) return;
+    this.play(track, "show", atS, false, SHOW_JUMP_S, SHOW_JUMP_S, true);
   }
 
   /**
@@ -558,9 +574,10 @@ export class AudioBGMController {
    * Plays `track` from `atS`: picked up on a deck that still holds it (a resume), or loaded on a silent deck (the one
    * loaded beforehand when it is this track), with the music before it fading once it sounds
    */
-  private play(track: MusicTrack, pool: MusicPool, atS: number, announce: boolean, outS: number, entryS: number): void {
+  private play(track: MusicTrack, pool: MusicPool, atS: number, announce: boolean, outS: number, entryS: number, seek = false): void {
     const url = musicUrl(track);
-    if (!announce) {
+    // A seek (the show's cue jumping) takes the other deck even though this one holds the track, and is no new track
+    if (!announce && !seek) {
       const holder = this.decks.find(
         (d) => d.track?.id === track.id && d.pool === pool && !d.armed && d.ready && d.el.getAttribute("src") === url
       );
