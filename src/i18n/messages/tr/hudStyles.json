@@ -16,6 +16,7 @@
     "outLap": "Çıkış turu",
     "raceLap": "Tur {lap}",
     "raceLapOfTotal": "Tur {lap}<dim>/{total}</dim>",
+    "finalLap": "Son tur",
     "sessionLap": "{session} <dim>· {kind, select, run {Tırmanış {lap}} other {Tur {lap}}}</dim>",
     "best": "En iyi",
     "last": "Son",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "VSC bitiyor",
       "blue": "Mavi bayrak",
+      "finalLap": "Son tur",
       "finish": "Bitiş"
     },
     "invalid": "Geçersiz",

@@ -310,6 +310,8 @@
       "gridStart": "Départ sur la grille",
       "rollingStart": "Départ lancé",
       "flyingLap": "Tour lancé",
+      "endQualifying": "Terminer les qualifications",
+      "endingQualifying": "Établissement de la grille…",
       "watchReplay": "Voir le replay",
       "skipTrack": "Piste suivante",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "Appeler",
       "stops": "Pit stops",
       "stopsOf": "{made} sur {required}",
-      "stopsShort": "{made, plural, =0 {Aucun pit stop} one {# pit stop} other {# pit stops}}"
+      "stopsShort": "{made, plural, =0 {Aucun pit stop} one {# pit stop} other {# pit stops}}",
+      "pick": "Choisir",
+      "change": "Régler"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "Tableau des temps",
       "lap": "Tour {lap}",
       "lapOf": "Tour {lap}<dim>/{total}</dim>",
+      "finalLap": "Dernier tour",
       "driver": "Pilote",
       "gap": "Écart",
       "interval": "Intervalle",
@@ -883,6 +888,9 @@
       "doubleYellow": "Double jaune",
       "yellow": "Jaune"
     }
+  },
+  "finalLapNotice": {
+    "title": "Dernier tour"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "Avant-course",
+    "next": "Suivant",
     "skip": "Passer",
+    "skipHint": "Appuyez deux fois pour passer l’avant-course",
     "start": "Lancer",
     "keySpace": "Space",
     "keyEnter": "Enter",

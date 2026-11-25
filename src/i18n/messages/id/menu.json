@@ -720,6 +720,7 @@
     },
     "series": {
       "clubCup": "Club Cup",
+      "coupeCup": "Coupé Cup",
       "touringCup": "Touring Cup",
       "classicGt": "Classic GT",
       "protoCup": "Prototype Cup",

@@ -310,6 +310,8 @@
       "gridStart": "Start grid",
       "rollingStart": "Start bergulir",
       "flyingLap": "Flying lap",
+      "endQualifying": "Akhiri kualifikasi",
+      "endingQualifying": "Menyusun grid…",
       "watchReplay": "Tonton tayangan ulang",
       "skipTrack": "Lewati lagu",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "Panggil",
       "stops": "Pit stop",
       "stopsOf": "{made} dari {required}",
-      "stopsShort": "{made, plural, =0 {Belum pit stop} other {# pit stop}}"
+      "stopsShort": "{made, plural, =0 {Belum pit stop} other {# pit stop}}",
+      "pick": "Pilih",
+      "change": "Atur"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "Menara waktu",
       "lap": "Lap {lap}",
       "lapOf": "Lap {lap}<dim>/{total}</dim>",
+      "finalLap": "Lap terakhir",
       "driver": "Pembalap",
       "gap": "Gap",
       "interval": "Interval",
@@ -883,6 +888,9 @@
       "doubleYellow": "Kuning ganda",
       "yellow": "Kuning"
     }
+  },
+  "finalLapNotice": {
+    "title": "Lap terakhir"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "Tayangan prabalapan",
+    "next": "Lanjut",
     "skip": "Lewati",
+    "skipHint": "Tekan dua kali untuk melewati tayangan",
     "start": "Mulai",
     "keySpace": "Space",
     "keyEnter": "Enter",

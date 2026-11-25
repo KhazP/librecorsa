@@ -16,6 +16,7 @@
     "outLap": "Vòng xuất pit",
     "raceLap": "Vòng {lap}",
     "raceLapOfTotal": "Vòng {lap}<dim>/{total}</dim>",
+    "finalLap": "Vòng cuối",
     "sessionLap": "{session} <dim>· {kind, select, run {Lượt {lap}} other {Vòng {lap}}}</dim>",
     "best": "Tốt nhất",
     "last": "Trước",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "VSC hết",
       "blue": "Xanh dương",
+      "finalLap": "Vòng cuối",
       "finish": "Về đích"
     },
     "invalid": "Bị hủy",

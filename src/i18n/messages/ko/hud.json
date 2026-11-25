@@ -310,6 +310,8 @@
       "gridStart": "그리드 스타트",
       "rollingStart": "롤링 스타트",
       "flyingLap": "플라잉 랩",
+      "endQualifying": "예선 종료",
+      "endingQualifying": "그리드 구성 중…",
       "watchReplay": "리플레이 보기",
       "skipTrack": "트랙 건너뛰기",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "요청",
       "stops": "피트 스톱",
       "stopsOf": "{made} / {required}",
-      "stopsShort": "{made, plural, =0 {스톱 없음} other {스톱 #회}}"
+      "stopsShort": "{made, plural, =0 {스톱 없음} other {스톱 #회}}",
+      "pick": "선택",
+      "change": "설정"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "타이밍 타워",
       "lap": "랩 {lap}",
       "lapOf": "랩 {lap}<dim>/{total}</dim>",
+      "finalLap": "마지막 랩",
       "driver": "드라이버",
       "gap": "격차",
       "interval": "간격",
@@ -883,6 +888,9 @@
       "doubleYellow": "이중 황기",
       "yellow": "황기"
     }
+  },
+  "finalLapNotice": {
+    "title": "마지막 랩"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "프리 레이스 쇼",
+    "next": "다음",
     "skip": "건너뛰기",
+    "skipHint": "프리 레이스 쇼를 건너뛰려면 두 번 누르십시오",
     "start": "시작",
     "keySpace": "Space",
     "keyEnter": "Enter",

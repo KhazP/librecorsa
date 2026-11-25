@@ -16,6 +16,7 @@
     "outLap": "لفة الخروج",
     "raceLap": "اللفة {lap}",
     "raceLapOfTotal": "اللفة {lap}<dim>/{total}</dim>",
+    "finalLap": "اللفة الأخيرة",
     "sessionLap": "{session} <dim>· {kind, select, run {المحاولة {lap}} other {اللفة {lap}}}</dim>",
     "best": "الأفضل",
     "last": "الأخيرة",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "انتهاء VSC",
       "blue": "علم أزرق",
+      "finalLap": "آخر لفة",
       "finish": "النهاية"
     },
     "invalid": "ملغاة",

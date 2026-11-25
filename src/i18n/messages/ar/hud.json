@@ -310,6 +310,8 @@
       "gridStart": "انطلاق من الشبكة",
       "rollingStart": "انطلاق متحرك",
       "flyingLap": "لفة طائرة",
+      "endQualifying": "إنهاء التصفيات",
+      "endingQualifying": "جارٍ تحديد شبكة الانطلاق…",
       "watchReplay": "مشاهدة الإعادة",
       "skipTrack": "تخطي المقطع",
       "nowPlaying": "{title}، {composer}",
@@ -597,7 +599,9 @@
       "callBox": "استدعاء",
       "stops": "التوقفات",
       "stopsOf": "{made} من {required}",
-      "stopsShort": "{made, plural, =0 {لا توقفات} one {توقف واحد} two {توقفان} few {# توقفات} many {# توقفًا} other {# توقف}}"
+      "stopsShort": "{made, plural, =0 {لا توقفات} one {توقف واحد} two {توقفان} few {# توقفات} many {# توقفًا} other {# توقف}}",
+      "pick": "اختيار",
+      "change": "ضبط"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "برج التوقيت",
       "lap": "اللفة {lap}",
       "lapOf": "اللفة {lap}<dim>/{total}</dim>",
+      "finalLap": "اللفة الأخيرة",
       "driver": "السائق",
       "gap": "الفارق",
       "interval": "الفاصل",
@@ -883,6 +888,9 @@
       "doubleYellow": "أصفر مزدوج",
       "yellow": "أصفر"
     }
+  },
+  "finalLapNotice": {
+    "title": "اللفة الأخيرة"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "عرض ما قبل السباق",
+    "next": "التالي",
     "skip": "تخطي",
+    "skipHint": "اضغط مرتين لتخطي العرض",
     "start": "ابدأ",
     "keySpace": "Space",
     "keyEnter": "Enter",

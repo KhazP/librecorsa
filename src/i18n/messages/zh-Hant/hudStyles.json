@@ -16,6 +16,7 @@
     "outLap": "出場圈",
     "raceLap": "第 {lap} 圈",
     "raceLapOfTotal": "第 {lap}<dim>/{total}</dim> 圈",
+    "finalLap": "最後一圈",
     "sessionLap": "{session} <dim>· {kind, select, run {第 {lap} 趟} other {第 {lap} 圈}}</dim>",
     "best": "最佳",
     "last": "上圈",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "VSC 結束",
       "blue": "藍旗",
+      "finalLap": "最後一圈",
       "finish": "完賽"
     },
     "invalid": "無效",

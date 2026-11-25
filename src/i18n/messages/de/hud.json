@@ -310,6 +310,8 @@
       "gridStart": "Startaufstellung",
       "rollingStart": "Fliegender Start",
       "flyingLap": "Fliegende Runde",
+      "endQualifying": "Qualifying beenden",
+      "endingQualifying": "Startaufstellung wird festgelegt…",
       "watchReplay": "Replay ansehen",
       "skipTrack": "Titel überspringen",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "Rufen",
       "stops": "Stopps",
       "stopsOf": "{made} von {required}",
-      "stopsShort": "{made, plural, =0 {Keine Stopps} one {# Stopp} other {# Stopps}}"
+      "stopsShort": "{made, plural, =0 {Keine Stopps} one {# Stopp} other {# Stopps}}",
+      "pick": "Wählen",
+      "change": "Ändern"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "Zeitenturm",
       "lap": "Runde {lap}",
       "lapOf": "Runde {lap}<dim>/{total}</dim>",
+      "finalLap": "Letzte Runde",
       "driver": "Fahrer",
       "gap": "Abstand",
       "interval": "Intervall",
@@ -883,6 +888,9 @@
       "doubleYellow": "Doppelgelb",
       "yellow": "Gelb"
     }
+  },
+  "finalLapNotice": {
+    "title": "Letzte Runde"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "Vorprogramm",
+    "next": "Weiter",
     "skip": "Überspringen",
+    "skipHint": "Zweimal drücken, um das Vorprogramm zu überspringen",
     "start": "Starten",
     "keySpace": "Space",
     "keyEnter": "Enter",

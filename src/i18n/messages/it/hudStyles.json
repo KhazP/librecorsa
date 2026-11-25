@@ -16,6 +16,7 @@
     "outLap": "Giro di uscita",
     "raceLap": "Giro {lap}",
     "raceLapOfTotal": "Giro {lap}<dim>/{total}</dim>",
+    "finalLap": "Ultimo giro",
     "sessionLap": "{session} <dim>· {kind, select, run {Salita {lap}} other {Giro {lap}}}</dim>",
     "best": "Migl.",
     "last": "Ult.",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "Fine VSC",
       "blue": "Band. blu",
+      "finalLap": "Ult. giro",
       "finish": "Arrivo"
     },
     "invalid": "Non valido",

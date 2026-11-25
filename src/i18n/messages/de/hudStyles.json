@@ -16,6 +16,7 @@
     "outLap": "Outlap",
     "raceLap": "Runde {lap}",
     "raceLapOfTotal": "Runde {lap}<dim>/{total}</dim>",
+    "finalLap": "Letzte Runde",
     "sessionLap": "{session} <dim>· {kind, select, run {Lauf {lap}} other {Runde {lap}}}</dim>",
     "best": "Beste",
     "last": "Letzte",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "VSC endet",
       "blue": "Blau",
+      "finalLap": "Letzte Rd.",
       "finish": "Ziel"
     },
     "invalid": "Ungültig",

@@ -310,6 +310,8 @@
       "gridStart": "Partenza da griglia",
       "rollingStart": "Partenza lanciata",
       "flyingLap": "Giro lanciato",
+      "endQualifying": "Termina la qualifica",
+      "endingQualifying": "Definizione della griglia…",
       "watchReplay": "Guarda il replay",
       "skipTrack": "Salta brano",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "Chiama",
       "stops": "Soste",
       "stopsOf": "{made} su {required}",
-      "stopsShort": "{made, plural, =0 {Nessuna sosta} one {# sosta} other {# soste}}"
+      "stopsShort": "{made, plural, =0 {Nessuna sosta} one {# sosta} other {# soste}}",
+      "pick": "Scegli",
+      "change": "Imposta"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "Torre dei tempi",
       "lap": "Giro {lap}",
       "lapOf": "Giro {lap}<dim>/{total}</dim>",
+      "finalLap": "Ultimo giro",
       "driver": "Pilota",
       "gap": "Distacco",
       "interval": "Intervallo",
@@ -883,6 +888,9 @@
       "doubleYellow": "Doppia gialla",
       "yellow": "Gialla"
     }
+  },
+  "finalLapNotice": {
+    "title": "Ultimo giro"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "Pre-gara",
+    "next": "Avanti",
     "skip": "Salta",
+    "skipHint": "Premi due volte per saltare il pre-gara",
     "start": "Avvia",
     "keySpace": "Space",
     "keyEnter": "Enter",

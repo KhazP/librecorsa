@@ -16,6 +16,7 @@
     "outLap": "Tour de sortie",
     "raceLap": "Tour {lap}",
     "raceLapOfTotal": "Tour {lap}<dim>/{total}</dim>",
+    "finalLap": "Dernier tour",
     "sessionLap": "{session} <dim>· {kind, select, run {Montée {lap}} other {Tour {lap}}}</dim>",
     "best": "Meil.",
     "last": "Dern.",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "Fin VSC",
       "blue": "Drap. bleu",
+      "finalLap": "Dern. tour",
       "finish": "Arrivée"
     },
     "invalid": "Invalide",

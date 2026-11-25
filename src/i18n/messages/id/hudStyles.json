@@ -16,6 +16,7 @@
     "outLap": "Out lap",
     "raceLap": "Lap {lap}",
     "raceLapOfTotal": "Lap {lap}<dim>/{total}</dim>",
+    "finalLap": "Lap terakhir",
     "sessionLap": "{session} <dim>· {kind, select, run {Run {lap}} other {Lap {lap}}}</dim>",
     "best": "Terbaik",
     "last": "Lalu",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "VSC akhir",
       "blue": "Bdr biru",
+      "finalLap": "Lap final",
       "finish": "Finis"
     },
     "invalid": "Tak sah",

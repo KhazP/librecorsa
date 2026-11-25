@@ -16,6 +16,7 @@
     "outLap": "Vuelta de salida",
     "raceLap": "Vuelta {lap}",
     "raceLapOfTotal": "Vuelta {lap}<dim>/{total}</dim>",
+    "finalLap": "Última vuelta",
     "sessionLap": "{session} <dim>· {kind, select, run {Intento {lap}} other {Vuelta {lap}}}</dim>",
     "best": "Mejor",
     "last": "Última",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "Fin VSC",
       "blue": "Band. azul",
+      "finalLap": "Vta. final",
       "finish": "Meta"
     },
     "invalid": "Anulada",

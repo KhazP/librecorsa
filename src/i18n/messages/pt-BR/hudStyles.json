@@ -16,6 +16,7 @@
     "outLap": "Volta de saída",
     "raceLap": "Volta {lap}",
     "raceLapOfTotal": "Volta {lap}<dim>/{total}</dim>",
+    "finalLap": "Última volta",
     "sessionLap": "{session} <dim>· {kind, select, run {Subida {lap}} other {Volta {lap}}}</dim>",
     "best": "Melhor",
     "last": "Última",
@@ -927,6 +928,7 @@
       "vsc": "VSC",
       "vscEnding": "Fim do VSC",
       "blue": "Band. azul",
+      "finalLap": "Últ. volta",
       "finish": "Fim"
     },
     "invalid": "Inválida",

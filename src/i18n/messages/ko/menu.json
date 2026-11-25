@@ -720,6 +720,7 @@
     },
     "series": {
       "clubCup": "클럽 컵",
+      "coupeCup": "쿠페 컵",
       "touringCup": "투어링 컵",
       "classicGt": "클래식 GT",
       "protoCup": "프로토타입 컵",

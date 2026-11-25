@@ -310,6 +310,8 @@
       "gridStart": "Xuất phát từ vạch",
       "rollingStart": "Xuất phát lăn bánh",
       "flyingLap": "Vòng chạy đà",
+      "endQualifying": "Kết thúc phân hạng",
+      "endingQualifying": "Đang xếp hàng xuất phát…",
       "watchReplay": "Xem phát lại",
       "skipTrack": "Qua bài nhạc",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "Gọi",
       "stops": "Lần dừng pit",
       "stopsOf": "{made} / {required}",
-      "stopsShort": "{made, plural, =0 {Chưa dừng pit} other {# lần dừng}}"
+      "stopsShort": "{made, plural, =0 {Chưa dừng pit} other {# lần dừng}}",
+      "pick": "Chọn",
+      "change": "Chỉnh"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "Bảng thứ hạng",
       "lap": "Vòng {lap}",
       "lapOf": "Vòng {lap}<dim>/{total}</dim>",
+      "finalLap": "Vòng cuối",
       "driver": "Tay đua",
       "gap": "Khoảng cách",
       "interval": "Cách xe trước",
@@ -883,6 +888,9 @@
       "doubleYellow": "Cờ vàng kép",
       "yellow": "Cờ vàng"
     }
+  },
+  "finalLapNotice": {
+    "title": "Vòng cuối"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "Chương trình trước cuộc đua",
+    "next": "Tiếp theo",
     "skip": "Bỏ qua",
+    "skipHint": "Nhấn hai lần để bỏ qua chương trình",
     "start": "Bắt đầu",
     "keySpace": "Space",
     "keyEnter": "Enter",

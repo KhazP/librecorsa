@@ -310,6 +310,8 @@
       "gridStart": "Grid kalkışı",
       "rollingStart": "Hareketli kalkış",
       "flyingLap": "Uçan tur",
+      "endQualifying": "Sıralamayı bitir",
+      "endingQualifying": "Grid belirleniyor…",
       "watchReplay": "Tekrarı izle",
       "skipTrack": "Parçayı atla",
       "nowPlaying": "{title}, {composer}",
@@ -597,7 +599,9 @@
       "callBox": "Çağır",
       "stops": "Pit stop",
       "stopsOf": "{made} / {required}",
-      "stopsShort": "{made, plural, =0 {Pit stop yok} one {# pit stop} other {# pit stop}}"
+      "stopsShort": "{made, plural, =0 {Pit stop yok} one {# pit stop} other {# pit stop}}",
+      "pick": "Seç",
+      "change": "Ayarla"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "Zamanlama kulesi",
       "lap": "Tur {lap}",
       "lapOf": "Tur {lap}<dim>/{total}</dim>",
+      "finalLap": "Son tur",
       "driver": "Pilot",
       "gap": "Fark",
       "interval": "Ara",
@@ -883,6 +888,9 @@
       "doubleYellow": "Çift sarı",
       "yellow": "Sarı"
     }
+  },
+  "finalLapNotice": {
+    "title": "Son tur"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "Yarış öncesi yayını",
+    "next": "İleri",
     "skip": "Atla",
+    "skipHint": "Yayını atlamak için iki kez bas",
     "start": "Başlat",
     "keySpace": "Space",
     "keyEnter": "Enter",

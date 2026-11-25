@@ -310,6 +310,8 @@
       "gridStart": "起跑格起步",
       "rollingStart": "動態起跑",
       "flyingLap": "飛行單圈",
+      "endQualifying": "結束排位賽",
+      "endingQualifying": "正在決定起跑排位……",
       "watchReplay": "觀看重播",
       "skipTrack": "跳至下一首",
       "nowPlaying": "{title}，{composer}",
@@ -597,7 +599,9 @@
       "callBox": "呼叫",
       "stops": "進站次數",
       "stopsOf": "{made} / {required}",
-      "stopsShort": "{made, plural, =0 {未進站} other {已進站 # 次}}"
+      "stopsShort": "{made, plural, =0 {未進站} other {已進站 # 次}}",
+      "pick": "選擇",
+      "change": "設定"
     }
   },
   "tunerMfdPanel": {
@@ -819,6 +823,7 @@
       "region": "即時排名欄",
       "lap": "第 {lap} 圈",
       "lapOf": "第 {lap}<dim>/{total}</dim> 圈",
+      "finalLap": "最後一圈",
       "driver": "車手",
       "gap": "差距",
       "interval": "間隔",
@@ -883,6 +888,9 @@
       "doubleYellow": "雙黃旗",
       "yellow": "黃旗"
     }
+  },
+  "finalLapNotice": {
+    "title": "最後一圈"
   },
   "raceControlBanner": {
     "decisions": {
@@ -1188,7 +1196,9 @@
   },
   "preRace": {
     "label": "賽前節目",
+    "next": "下一步",
     "skip": "略過",
+    "skipHint": "連按兩次以略過節目",
     "start": "開始",
     "keySpace": "Space",
     "keyEnter": "Enter",
