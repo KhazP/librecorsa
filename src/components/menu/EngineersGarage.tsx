@@ -165,7 +165,7 @@ export const EngineersGarage: React.FC<
   }
 > = (p) => {
   const tx = useTranslations("menu.garage");
-  const sheet = useMemo(() => setupSheet(p.vehicleModel, TYRE_SETUP_LIMITS[p.vehicleModel], p.defaultTyreSetup), [p.vehicleModel, p.defaultTyreSetup]);
+  const sheet = useMemo(() => setupSheet(p.vehicleModel, TYRE_SETUP_LIMITS[p.vehicleModel] ?? TYRE_SETUP_LIMITS["f12026-car"], p.defaultTyreSetup), [p.vehicleModel, p.defaultTyreSetup]);
   const [tabId, setTab] = useState(sheet[0].id);
   const group: SetupGroup = sheet.find((g) => g.id === tabId) ?? sheet[0];
   const chassis = p.chassisSetup ?? DEFAULT_CHASSIS_SETUP;
@@ -281,7 +281,7 @@ export const EngineersGarage: React.FC<
         tyre: x.tyre ?? p.tyreSetup,
         tuner: { ...currentTuner, ...(x.tuner ?? {}) },
       },
-      TYRE_SETUP_LIMITS[p.vehicleModel],
+      TYRE_SETUP_LIMITS[p.vehicleModel] ?? TYRE_SETUP_LIMITS["f12026-car"],
       p.defaultTyreSetup,
     );
     p.onChangeChassisSetup?.(loaded.chassis);

@@ -260,7 +260,7 @@ function rebaseSavedFuel(vehicle: VehicleModelId, saved: unknown): unknown {
   if (before === undefined || !saved || typeof saved !== "object" || "tyreBlankets" in saved) return saved;
   const delta = (saved as { fuelDeltaKg?: unknown }).fuelDeltaKg;
   if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) return saved;
-  const f = FUEL_LOAD[vehicle];
+  const f = FUEL_LOAD[vehicle] ?? { defaultKg: 20, minKg: 5, maxKg: 100 };
   const kg = Math.max(f.minKg, Math.min(f.maxKg, before + delta));
   return { ...saved, fuelDeltaKg: kg - f.defaultKg };
 }
@@ -270,7 +270,7 @@ export const FUEL_KG_PER_L = 0.74;
 
 /** The fuel a car starts a run with under a garage setup (kg) */
 export function startingFuelKg(vehicle: VehicleModelId, setup: Pick<ChassisSetup, "fuelDeltaKg">): number {
-  const f = FUEL_LOAD[vehicle];
+  const f = FUEL_LOAD[vehicle] ?? { defaultKg: 20, minKg: 5, maxKg: 100 };
   const delta = Number.isFinite(setup.fuelDeltaKg) ? setup.fuelDeltaKg : 0;
   return Math.max(f.minKg, Math.min(f.maxKg, f.defaultKg + delta));
 }

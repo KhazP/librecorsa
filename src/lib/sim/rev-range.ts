@@ -7,6 +7,16 @@ import { LC26_ENGINE } from "./lc26-data";
 /** The shift beep sounds this far short of the car's rev limiter (rpm) */
 export const SHIFT_BEEP_BELOW_LIMITER_RPM = 150;
 
+const CUSTOM_REV_RANGES = new Map<string, [number, number]>();
+
+export function registerCarRevRange(carId: string, range: [number, number]): void {
+  CUSTOM_REV_RANGES.set(carId, range);
+}
+
+export function unregisterCarRevRange(carId: string): void {
+  CUSTOM_REV_RANGES.delete(carId);
+}
+
 /**
  * The 2026 Formula car's lights: the first at 10,500 rpm, where the fuel energy flow reaches its 3000 MJ/h cap
  * (FIA 2026 PU regulations, art. 5.4.3 / 5.4.4) [regulation], all lit at the shift beep, 150 rpm short of the
@@ -19,6 +29,8 @@ const F1_REV_RANGE: [number, number] = [10_500, LC26_ENGINE.limiterRpm - SHIFT_B
  * the Liana's 6500, the 496R's dash LEDs from 8000 to 9400)
  */
 export function revRangeFor(carId: string | undefined): [number, number] {
+  const custom = carId && CUSTOM_REV_RANGES.get(carId);
+  if (custom) return [...custom];
   if (carId === "liana") return [5200, 6500];
   if (carId === "mtr-496r") return [8000, 9400];
   // The LC-LMDH up to the engine speed its regulated power curve is set on (the lights' last stage) [claim]

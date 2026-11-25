@@ -323,7 +323,7 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
   const absSpeed = Math.abs(t.speedKmh);
   const speedBand = absSpeed < 5 ? 0 : absSpeed <= 15 ? 10 : 20;
   return {
-    hasErs: channels?.hasErs ?? true,
+    hasErs: channels?.hasErsOverride ?? channels?.hasErs ?? true,
     hasAero: (!channels || channels.hasDrs) && t.overtakingRules !== "none",
     aeroOpen: aero.open,
     // A car without the DRS channel cannot say where the flaps may open: its button never looks unusable

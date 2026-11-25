@@ -229,7 +229,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
   useEffect(() => {
     const { trackId, carId: stored, f1LiveryId: savedF1, customLivery: savedCustom, carSkins: savedSkins } = storedPicks();
     if (trackId && data.venues.some((v) => v.layouts.some((l) => l.id === trackId))) setLayoutId(trackId);
-    if (stored && data.cars.some((c) => c.id === stored)) setCarId(stored);
+    if (stored && (stored.startsWith("custom_") || data.cars.some((c) => c.id === stored))) setCarId(stored);
     if (savedF1) setF1LiveryId(savedF1);
     if (savedCustom) setCustomLivery(savedCustom);
     if (Object.keys(savedSkins).length) setCarSkins(savedSkins);
@@ -257,7 +257,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
   const venue = data.venues.find((v) => v.layouts.some((l) => l.id === layoutId)) ?? data.venues[0];
   const layout = venue.layouts.find((l) => l.id === layoutId) ?? venue.layouts[0];
   const car = data.cars.find((c) => c.id === carId) ?? data.cars[0];
-  const picks = { trackId: layout.id, carId: car.id };
+  const picks = { trackId: layout.id, carId: carId.startsWith("custom_") ? carId : car.id };
 
   // Keep per-venue layout memory seeded from restored/default picks so switching venues and back restores it
   useEffect(() => {

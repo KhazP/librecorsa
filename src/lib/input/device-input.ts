@@ -161,6 +161,10 @@ export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
 /** Range of a player-set steering lock (deg, lock to lock): never slower than the real car's */
 export const STEER_LOCK_MIN_DEG = 180;
 
+export function registerDynamicCarWheelLock(vehicle: string, lockDeg: number): void {
+  (CAR_WHEEL_LOCKS_DEG as Record<string, number>)[vehicle] = lockDeg;
+}
+
 /**
  * Steering-wheel lock-to-lock rotation (degrees) for a vehicle model: the player's own lock for it when set (and
  * quicker than the real car's), else the real car's

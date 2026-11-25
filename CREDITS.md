@@ -14,7 +14,8 @@ People whose pull requests are in the game (the list the home page's About secti
 
 ## 1. Licensing
 
-* **Source Code (`src/`, `scripts/`)**: Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later) since 15 November 2026. The code's licence covers the code only: the circuit that `scripts/rwanda-official/` builds has its own licence (see *RISE Motordrome*).
+* **Source Code (`src/`, `scripts/`)**: Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later) since 15 November 2026, except where noted. The code's licence covers the code only: the circuit that `scripts/rwanda-official/` builds has its own licence (see *RISE Motordrome*).
+* **CSP KN5 reconstruction**: adapted from [Kn5Decrypt by SeizureSaladd](THIRD_PARTY_NOTICES.md#kn5decrypt); the adapted files keep the [GNU General Public License v3.0](THIRD_PARTY_NOTICES.md#gnu-general-public-license-v30).
 * **Code released under MIT**: until 15 November 2026 the code was under the MIT License. Those releases stay MIT, and so does the code contributed under it, such as the tyre gas law fix by **dardalo-si** (`fc9081a4`). Its notice:
 
   > MIT License

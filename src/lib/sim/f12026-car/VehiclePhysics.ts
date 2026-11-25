@@ -43,6 +43,8 @@
  */
 
 import * as THREE from 'three';
+import { wingAngleOfAttack } from './wing-angle';
+import { ImportedController } from './imported-controller';
 import { Lut, type LutPoints } from '../lut';
 import {
   CLUTCH_BITE_LOCK,
@@ -375,6 +377,8 @@ export interface VehicleInputs {
   neutral?: boolean;
   /** DRS button (edge-triggered toggle) */
   drs?: boolean;
+  /** The AC kinetic unit's authored manual override, not a 2026 race rule. */
+  importedBoost?: boolean;
 }
 
 export type VehicleEvent =
@@ -425,6 +429,8 @@ export interface VehiclePhysicsOptions {
   lapLengthM?: number;
   /** Asked at each detection point whether DRS is earned (e.g. within 1 s of the car ahead); default yes */
   drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
+  /** Imported DRS still needs a zone in practice, but need not cross its race detection point after a reset. */
+  drsFreePractice?: () => boolean;
   /** Race control shuts the flaps here whatever the zone says (a yellow flag under the open-wheel rules) */
   flapsBarred?: () => boolean;
   /** Barrier walls (`Track_Collider_Wall_*`); none = no barriers */
@@ -623,6 +629,8 @@ export interface VehicleTelemetry {
   ERS_MAX_DEPLOY: number;
   /** MGU-K mechanical power (W, + = deploy, − = harvest) */
   MGUK_POWER: number;
+  /** Imported MGU-H power actually used by the battery or the MGU-K (W). */
+  MGUH_POWER: number;
   ERS_CHARGING: boolean;
   lapDeployJ: number;
   lapHarvestJ: number;
@@ -665,6 +673,7 @@ interface WingRuntime {
   /** Body yaw (|deg|) → CL / CD multipliers; null = insensitive */
   yawCl: Lut | null;
   yawCd: Lut | null;
+  controller?: ImportedController;
 }
 
 export interface TyreRuntime {
@@ -1454,6 +1463,7 @@ export class VehiclePhysics {
   private readonly frontKin = createAxleKinematicsState();
   private readonly rearKin = createAxleKinematicsState();
   private readonly wings: WingRuntime[];
+  private readonly importedErsMaps: Partial<Record<PerformanceModeName, ImportedController>>;
   private tyres: [TyreRuntime, TyreRuntime];
   private readonly tyreByCompound = new Map<PhysicsTyreCompound, [TyreRuntime, TyreRuntime]>();
   private readonly inertiaBody: THREE.Vector3;
@@ -1483,6 +1493,7 @@ export class VehiclePhysics {
   private readonly locateProgress?: (x: number, z: number) => number;
   private readonly lapLengthM: number;
   private readonly drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
+  private readonly drsFreePractice?: () => boolean;
   private readonly flapsBarred?: () => boolean;
   /**
    * Where the flaps may open as one list (`flapStretches`), for the rules it was made for, with the lap fraction at
@@ -1578,6 +1589,8 @@ export class VehiclePhysics {
   private rollTorqueFront = 0;
   private rollTorqueRear = 0;
   private mgukTorque = 0;
+  private mguhPowerW = 0;
+  private mguhCharging = false;
   private aeroFrontN = 0;
   private aeroDownN = 0;
   private aeroDragN = 0;
@@ -1613,6 +1626,7 @@ export class VehiclePhysics {
     this.locateProgress = options.locateProgress;
     this.lapLengthM = options.lapLengthM ?? 0;
     this.drsEligibleAtDetection = options.drsEligibleAtDetection;
+    this.drsFreePractice = options.drsFreePractice;
     this.flapsBarred = options.flapsBarred;
     this.walls = options.walls;
     this.onEvent = options.onEvent;
@@ -1689,7 +1703,13 @@ export class VehiclePhysics {
       ghCd: new Lut(spec.lutGH_CD_mult),
       yawCl: spec.lutYaw_CL_mult ? new Lut(spec.lutYaw_CL_mult) : null,
       yawCd: spec.lutYaw_CD_mult ? new Lut(spec.lutYaw_CD_mult) : null,
+      ...(spec.activeControllers?.length ? { controller: new ImportedController(spec.activeControllers) } : {}),
     }));
+    this.importedErsMaps = {};
+    for (const mode of ['PSH', 'RAC', 'BAL', 'LIC', 'CHR'] as const) {
+      const stages = cfg.ers.importedDrive?.maps[mode];
+      if (stages?.length) this.importedErsMaps[mode] = new ImportedController(stages);
+    }
     this.dragAtElements = cfg.aero.wings.some((w) => w.dragY !== undefined);
 
     const modes = cfg.performanceModes;
@@ -2140,6 +2160,8 @@ export class VehiclePhysics {
     this.turboBoost = 0;
     this.drsOpen = false;
     this.drsBlend = 0;
+    for (const wing of this.wings) wing.controller?.reset();
+    for (const map of Object.values(this.importedErsMaps)) map.reset();
     this.drsRequested = false;
     this.drsQueue = null;
     this.drsArmedZone = null;
@@ -2357,6 +2379,8 @@ export class VehiclePhysics {
     this.rollTorqueFront = 0;
     this.rollTorqueRear = 0;
     this.mgukTorque = 0;
+    this.mguhPowerW = 0;
+    this.mguhCharging = false;
     this.lastIceDriveNm = 0;
     this.lastMotorDriveNm = 0;
     this.aeroFrontN = 0;
@@ -2688,6 +2712,7 @@ export class VehiclePhysics {
       shiftDown: !!i.shiftDown,
       neutral: !!i.neutral,
       drs: !!i.drs,
+      importedBoost: !!i.importedBoost,
     };
   }
 
@@ -2852,6 +2877,8 @@ export class VehiclePhysics {
   }
 
   private updateDrs(inp: VehicleInputs, dt: number): void {
+    const imported = this.config.aero.importedDrs;
+    const detectionRequired = this.drsGatedByDetection && !this.drsFreePractice?.();
     let inZone = true;
     let armed = true;
     let p = Number.NaN;
@@ -2865,7 +2892,7 @@ export class VehiclePhysics {
         if (d > 0.5) d -= 1;
         else if (d < -0.5) d += 1;
         // A car without DRS (a pre-2011 season) is never judged at the detection points: no "DRS enabled" call
-        if (d > 0 && d < 0.05 && this.drsFitted) {
+        if (d > 0 && d < 0.05 && this.drsFitted && !imported?.ignoreZones) {
           for (const zone of this.drsZones) {
             const ahead = (((zone.detection - prev) % 1) + 1) % 1;
             if (ahead > 0 && ahead <= d) {
@@ -2901,18 +2928,20 @@ export class VehiclePhysics {
         Number.isFinite(p) &&
         this.straightZones.some((z) => inDelayedLapWindow(p, z.start, z.end, delay));
       inZone = zone !== undefined || straight;
-      armed = straight || (zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id));
+      armed = straight || (zone !== undefined && (!detectionRequired || this.drsArmedZone === zone.id));
     }
+    if (imported?.ignoreZones) inZone = armed = true;
     if (!this.drsFitted) inZone = armed = false;
     // Too wet, or race control's yellow flag: the flaps stay shut (and an open one closes). Under race control's grip
     // call (2026) the call decides: Low Grip Conditions leave the front flaps (`openFlaps`)
     const dryEnoughForDrs = (this.flapsLowGrip !== null || isRearFlapAllowedInWet(this.wetness)) && !this.flapsBarred?.();
     this.telemetry.drsZone = inZone;
-    this.telemetry.drsAvailable = inZone && armed && dryEnoughForDrs;
+    const lateralOk = imported?.lateralLimitG === undefined || Math.abs(this.telemetry.latG) < imported.lateralLimitG;
+    this.telemetry.drsAvailable = inZone && armed && dryEnoughForDrs && lateralOk;
     // Closes on the brake, a lift, or when track wetness exceeds the rear flap threshold
     const braking = inp.brake > 0.05;
     const lifted = braking || inp.throttle < this.config.aero.drsCloseThrottle;
-    const canOpen = inZone && armed && dryEnoughForDrs && !lifted;
+    const canOpen = inZone && armed && dryEnoughForDrs && lateralOk && !lifted;
     // A press the flaps can't answer yet (before the zone, or in it off the throttle) is kept for the stretch the car
     // is on or the next one within reach; elsewhere it does nothing, as before. Never for a stretch where they can't
     // open on this pass whatever the driver does: too wet, or a DRS zone whose detection point the car passed without
@@ -2920,7 +2949,7 @@ export class VehiclePhysics {
     // stretches' ends are the zones' own, give or take the rounding of the join)
     const barred = (w: LapWindow): boolean =>
       !dryEnoughForDrs ||
-      (this.drsGatedByDetection &&
+      (detectionRequired &&
         this.drsZones.some(
           (z) =>
             this.drsArmedZone !== z.id &&
@@ -2929,7 +2958,8 @@ export class VehiclePhysics {
         ));
     if (this.drsRequested && !this.drsOpen && !canOpen) {
       this.drsRequested = false;
-      const target = this.drsFitted && this.lapLengthM > 0 ? lapWindowFor(p, this.flapStretches(), this.lapLengthM, FLAP_PRESS_REACH_M) : null;
+      const target = this.drsFitted && !imported?.ignoreZones && this.lapLengthM > 0
+        ? lapWindowFor(p, this.flapStretches(), this.lapLengthM, FLAP_PRESS_REACH_M) : null;
       if (target && !barred(target.window)) this.drsQueue = { window: target.window, reached: false, waitedS: 0 };
     }
     const q = this.drsQueue;
@@ -3639,7 +3669,7 @@ export class VehiclePhysics {
 
     // ---- aero, then the plank if the floor reaches the road
     if (this.config.aero.rhMap) this.applyMapAero(h, this.config.aero.rhMap);
-    else this.applyAero();
+    else this.applyAero(h, inp);
     this.applyPlankContact(h);
 
     // ---- gravity and integration
@@ -3915,12 +3945,13 @@ export class VehiclePhysics {
     const eng = cfg.engine;
     const gb = cfg.gearbox;
     const ers = cfg.ers;
+    const electric = ers.importedDrive?.electric === true;
     const mode = cfg.performanceModes[this.performanceMode];
     const W = this.wheels;
     const ratio = this.totalRatio();
     const rpm = this.rpm;
     const omegaE = Math.max(50, this.engineOmega);
-    const manualClutch = !this.autoClutch && !this.autoShift;
+    const manualClutch = !electric && !this.autoClutch && !this.autoShift;
     const stallRpm = stallSpeedRpm(eng.idleRpm);
     const idleOmega = eng.idleRpm * RPM2RADS;
     const stallOmega = stallRpm * RPM2RADS;
@@ -3937,7 +3968,10 @@ export class VehiclePhysics {
     const cl = cfg.clutch;
     let engage = 0;
     if (this.gear !== 0) {
-      if (manualClutch) {
+      if (electric) {
+        // The motor is coupled through the selected reduction even at zero rpm; it cannot stall or idle.
+        engage = 1 - (inp.clutch ?? 0);
+      } else if (manualClutch) {
         // Full manual clutch: pedal maps through free play and a progressive bite zone directly to torque capacity
         engage = clutchPedalEngagement(inp.clutch ?? 0);
       } else {
@@ -4062,13 +4096,15 @@ export class VehiclePhysics {
     // asked for) / (1 + the full-load boost)
     const turbo = eng.turbo;
     let boostShare = 1;
+    let effectiveBoost = 0;
     // Share of the curve's torque the lag costs
     let lagShare = 0;
     if (turbo && this.turbocharged) {
       if (turbo.throttleInBoostLaw) {
         const full = 1 + turboSteadyBoost(turbo, rpm);
         const asked = turboBoostAsked(turbo, rpm, plate);
-        boostShare = (1 + Math.min(this.turboBoost, asked)) / full;
+        effectiveBoost = Math.min(this.turboBoost, asked);
+        boostShare = (1 + effectiveBoost) / full;
         lagShare = Math.max(0, asked - this.turboBoost) / full;
       } else {
         boostShare = Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate));
@@ -4142,7 +4178,7 @@ export class VehiclePhysics {
     let brakeWantW = 0;
     const everyGear = ers.liftHarvestEveryGear;
     const coupled = engage > 0.9 && this.gear > 0 && !this.stall.stalled;
-    if (coupled) {
+    if (coupled && !ers.importedDrive) {
       if (everyGear && inp.throttle < ers.liftThrottle) {
         liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
       }
@@ -4236,12 +4272,31 @@ export class VehiclePhysics {
     const bias = this.dynamicBrakeBias;
 
     let tK = 0;
-    // Under the 2026 rules a power limit binds the motor (C5.2.8): its torque is sized on the engine speed this step ends
-    // at, as the last step's change carries on (out of a shift the engine speeds up 2 % in a step), so the power the
-    // store gives it never runs over the limit
+    // Under the 2026 rules a power limit binds the motor at the engine speed this step ends at.
     const kOmega = this.ers2026 ? omegaE + Math.max(0, this.ersOmegaStep) : omegaE;
-    if (pK > 0) tK = Math.min(pK / kOmega, this.luts.mgukDeploy.evaluate(rpm)) * motorShare;
-    else if (pK < 0) {
+    let heatToBatteryW = 0;
+    let heatToMotorW = 0;
+    if (ers.importedDrive) {
+      const heat = ers.importedDrive.heat;
+      if (heat && !this.pinnedForSettle && effectiveBoost > 0 && tCombustion > 0 && inp.throttle > 0.05) {
+        // AC documents boost in percent, but not the conversion to joules. Use that gain as a share of the
+        // MGU-K's available power at this RPM, capped by the authored torque share and available engine power.
+        const fraction = Math.min(heat.torqueFraction, 100 * effectiveBoost * heat.chargeK);
+        const motorW = Math.min(ers.ERS_MAX_DEPLOY, Math.max(0, this.luts.mgukDeploy.evaluate(rpm)) * this.engineOmega);
+        const heatW = Math.min(fraction * motorW, tCombustion * boostShare * this.engineOmega);
+        if (this.performanceMode === 'PSH' || this.performanceMode === 'LIC' || (inp.importedBoost && ers.importedDrive.buttonOverride)) {
+          heatToMotorW = heatW;
+        } else {
+          heatToBatteryW = heatW;
+        }
+      }
+      tK = this.importedMotorTorque(h, inp, engage, ratio, rpm, speedKmh, bias, motorShare, heatToMotorW);
+    } else if (pK > 0) {
+      // Under the 2026 rules a power limit binds the motor (C5.2.8): its torque is sized on the engine speed this step ends
+      // at, as the last step's change carries on (out of a shift the engine speeds up 2 % in a step), so the power the
+      // store gives it never runs over the limit
+      tK = Math.min(pK / kOmega, this.luts.mgukDeploy.evaluate(rpm)) * motorShare;
+    } else if (pK < 0) {
       let cap = this.luts.mgukHarvest.evaluate(rpm);
       // On the pedal the brake-by-wire never lets the drivetrain brake the rear axle past its share of the demand:
       // harvest fills what the engine overrun leaves of it, the rear calipers the rest
@@ -4359,7 +4414,9 @@ export class VehiclePhysics {
     // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
     // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify-powertrain.ts)
     // (a lift's harvest is on from the first of the pedal, so the rear calipers give way to it from there too)
-    const driveBrake = (inp.brake > 0.05 || liftW > 0) && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
+    const driveBrake = ers.importedDrive
+      ? (inp.brake > 0.05 ? Math.max(0, -tK) * engage * Math.abs(ratio) / 2 : 0)
+      : (inp.brake > 0.05 || liftW > 0) && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
     const [dl, dr] = this.drivenWheels;
     for (let i = 0; i < 4; i++) {
       const w = W[i];
@@ -4589,15 +4646,19 @@ export class VehiclePhysics {
 
     // ---- energy store
     let pMech = tK * this.engineOmega;
+    // Only the battery's share spends charge and the per-lap allowance. The direct path can also run without charge.
+    const directHeatW = Math.min(heatToMotorW, Math.max(0, pMech));
+    pMech -= directHeatW;
     if (pMech > 0) {
       // Never overrun the per-lap allowance or the store inside a sub-step (the 2026 rules have no deploy limit a lap)
       const room = this.ers2026 ? this.ersEnergyJ : Math.min(ers.deployPerLapJ - this.lapDeployJ, this.ersEnergyJ);
       const want = (pMech / ers.deployEfficiency) * h;
       if (want > room) {
         const scale = Math.max(0, room) / want;
+        const totalScale = directHeatW > 0 ? (directHeatW + pMech * scale) / (directHeatW + pMech) : scale;
         pMech *= scale;
-        this.mgukTorque *= scale;
-        this.lastMotorDriveNm *= scale;
+        this.mgukTorque *= totalScale;
+        this.lastMotorDriveNm *= totalScale;
       }
       const e = (pMech / ers.deployEfficiency) * h;
       this.ersEnergyJ = Math.max(0, this.ersEnergyJ - e);
@@ -4630,6 +4691,50 @@ export class VehiclePhysics {
         this.lapBrakeHarvestJ[Math.min(ERS_LAP_BINS - 1, Math.max(0, Math.floor(this.trackProgress * ERS_LAP_BINS)))] += w * ers.harvestEfficiency * h;
       }
     }
+    this.mguhPowerW = directHeatW;
+    this.mguhCharging = false;
+    if (heatToBatteryW > 0) {
+      const e = Math.min(heatToBatteryW * h, ers.ERS_MAX_CHARGE - this.ersEnergyJ);
+      this.ersEnergyJ += e;
+      this.mguhPowerW = e / h;
+      this.mguhCharging = this.mguhPowerW > Math.max(0, pMech) / ers.deployEfficiency;
+    }
+  }
+
+  private importedMotorTorque(
+    h: number, inp: VehicleInputs, engage: number, ratio: number, rpm: number,
+    speedKmh: number, bias: number, motorShare: number, heatToMotorW: number,
+  ): number {
+    const { ers, engine, brakes, drivenAxle } = this.config;
+    const drive = ers.importedDrive!;
+    const map = this.importedErsMaps[this.performanceMode];
+    const requested = map?.step(0, inp, speedKmh, this.gear, rpm, h) ?? (drive.buttonOverride ? 0 : inp.throttle);
+    if (this.pinnedForSettle || engage <= 0.9 || ratio === 0 || (!drive.electric && (this.gear < 1 || this.stall.stalled))) return 0;
+
+    if (drive.regenerative && (inp.brake > 0.05 || (inp.throttle < 0.05 && requested < 0))) {
+      const omega = this.engineOmega;
+      const room = ers.ERS_MAX_CHARGE - this.ersEnergyJ;
+      if (omega <= 1 || room <= 0) return 0;
+      const [l, r] = this.drivenWheels;
+      const brakeScale = inp.brakeWheelScale ? Math.min(inp.brakeWheelScale[l], inp.brakeWheelScale[r]) : 1;
+      const axleDemand = 2 * inp.brake * brakes.maxTorqueNm * (drivenAxle === 'front' ? bias : 1 - bias) * brakeScale;
+      const fraction = inp.brake > 0.05 ? Math.min(1, inp.brake * 3) : clamp(-requested, 0, 1);
+      const demandNm = inp.brake > 0.05 ? axleDemand / Math.abs(ratio) : Infinity;
+      return -Math.min(
+        fraction * this.luts.mgukHarvest.evaluate(rpm), demandNm,
+        room / (h * omega * ers.harvestEfficiency), omega * engine.inertia / h,
+      );
+    }
+    if (inp.brake > 0.05 || inp.throttle <= 0 || motorShare <= 0 || this.limiterTimer > 0) return 0;
+    const room = Math.max(0, Math.min(this.ersEnergyJ, ers.deployPerLapJ - this.lapDeployJ));
+    if (room <= 0 && heatToMotorW <= 0) return 0;
+    const demand = drive.electric || (inp.importedBoost && drive.buttonOverride) ? inp.throttle : clamp(requested, 0, 1);
+    const maxTorque = Math.max(0, this.luts.mgukDeploy.evaluate(rpm));
+    const heatTorque = heatToMotorW / Math.max(1, this.engineOmega);
+    const torque = Math.min(maxTorque, maxTorque * demand + heatTorque) * motorShare * this.damagePowerMult;
+    // Bound the energy before the torque reaches the wheels, including the first tick of an EV launch at zero rpm.
+    const omega = Math.max(1, this.engineOmega + torque * h / engine.inertia);
+    return Math.min(torque, ers.ERS_MAX_DEPLOY / omega, room * ers.deployEfficiency / (h * omega) + heatToMotorW / omega);
   }
 
   /** The wake's multipliers as this car feels them (`AeroData.wakeSensitivity`), into a scratch state */
@@ -4661,7 +4766,7 @@ export class VehiclePhysics {
   }
 
   /** Front wing, venturi floor and rear wing on the current ride heights, with wake and body-yaw sensitivity */
-  private applyAero(): void {
+  private applyAero(dt: number, inp: VehicleInputs): void {
     const aero = this.config.aero;
     const W = this.wheels;
     const a = this.cgToFrontM;
@@ -4679,7 +4784,6 @@ export class VehiclePhysics {
     this.rideRear = ry - gR;
     const hMean = 0.5 * (this.rideFront + this.rideRear);
     const rakeDeg = Math.atan2(this.rideRear - this.rideFront, L) * RAD2DEG;
-    const pitchDelta = rakeDeg - this.staticRakeDeg;
     const wake = this.carWake();
 
     const air = _air.copy(this.velocity).sub(this.windWorld);
@@ -4700,7 +4804,15 @@ export class VehiclePhysics {
     for (const wing of this.wings) {
       const s = wing.spec;
       const h = s.heightRef === 'front' ? this.rideFront : s.heightRef === 'rear' ? this.rideRear : hMean;
-      const aoa = s.name === 'VENTURI_FLOOR' ? rakeDeg : s.angleDeg + pitchDelta;
+      let aoa = wingAngleOfAttack(s, rakeDeg, this.staticRakeDeg);
+      if (wing.controller || s.importedDrs) {
+        let angle = wing.controller?.step(s.angleDeg, inp, this.velocity.length() * 3.6, this.gear, this.rpm, dt) ?? s.angleDeg;
+        if (s.importedDrs && this.drsBlend > 0) {
+          const open = 'angleDeg' in s.importedDrs ? s.importedDrs.angleDeg : angle * s.importedDrs.effect;
+          angle += (open - angle) * this.drsBlend;
+        }
+        aoa = angle + (rakeDeg - this.staticRakeDeg);
+      }
       let cl = wing.aoaCl.evaluate(aoa) * wing.ghCl.evaluate(h);
       let cd = wing.aoaCd.evaluate(aoa) * wing.ghCd.evaluate(h);
       if (wing.yawCl) cl *= wing.yawCl.evaluate(yawDeg);
@@ -5177,7 +5289,8 @@ export class VehiclePhysics {
     t.ERS_MAX_CHARGE = ers.ERS_MAX_CHARGE;
     t.ERS_MAX_DEPLOY = ers.ERS_MAX_DEPLOY;
     t.MGUK_POWER = this.mgukTorque * this.engineOmega;
-    t.ERS_CHARGING = t.MGUK_POWER < 0;
+    t.MGUH_POWER = this.mguhPowerW;
+    t.ERS_CHARGING = t.MGUK_POWER < 0 || this.mguhCharging;
     t.lapDeployJ = this.lapDeployJ;
     t.lapHarvestJ = this.lapHarvestJ;
     t.performanceMode = this.performanceMode;
@@ -5239,6 +5352,7 @@ export class VehiclePhysics {
       ERS_MAX_CHARGE: this.config.ers.ERS_MAX_CHARGE,
       ERS_MAX_DEPLOY: this.config.ers.ERS_MAX_DEPLOY,
       MGUK_POWER: 0,
+      MGUH_POWER: 0,
       ERS_CHARGING: false,
       lapDeployJ: 0,
       lapHarvestJ: 0,

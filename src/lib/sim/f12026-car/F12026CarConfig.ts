@@ -13,6 +13,8 @@
 
 import type { LutPoints } from '../lut';
 import type { EnergyManagementData } from './ers-2026';
+import type { AcCameraLayout } from '@/lib/mods/ac-cameras';
+import type { ImportedControllerData } from './imported-controller';
 import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
@@ -283,6 +285,15 @@ export interface ERSData {
    * traction control's cut reaches the motor through a filter there. Absent: the motor's share of a cut acts at once
    */
   mguDemandFilter?: { maxHz: number; belowKmh: number };
+  /** AC kinetic unit: no 2026 deployment rules or ICE turbo torque fill. */
+  importedDrive?: {
+    electric: boolean;
+    buttonOverride: boolean;
+    regenerative: boolean;
+    maps: Partial<Record<PerformanceModeName, ImportedControllerData[]>>;
+    /** AC [HEAT]: boost-based recovery and its ceiling as a share of MGU-K torque. */
+    heat?: { chargeK: number; torqueFraction: number };
+  };
 }
 
 /** `PerformanceModeData`: one ERS / engine map selectable from the wheel */
@@ -640,8 +651,10 @@ export interface WingData {
   area: number;
   /** Longitudinal centre of pressure from the CG (m, + = forward) */
   positionZ: number;
-  /** Setup angle of attack (deg); body rake is added at run time */
+  /** Setup angle of attack (deg); other than default built-in floors, pitch change is added at run time */
   angleDeg: number;
+  /** Imported floors use their setup angle and pitch change, rather than the built-in floor's absolute rake. */
+  aoaReference?: 'setup';
   /** Ride height that drives the ground-height LUTs */
   heightRef: 'front' | 'rear' | 'mean';
   /** Lift coefficient vs angle of attack (deg → CL, + = downforce) */
@@ -652,6 +665,10 @@ export interface WingData {
   lutGH_CD_mult: LutPoints;
   /** DRS multipliers on this element (only the rear wing has a flap) */
   drs?: { clMult: number; cdMult: number };
+  /** AC wing controllers run on its setup angle before pitch is added. */
+  activeControllers?: ImportedControllerData[];
+  /** Open DRS uses an absolute setup angle or a multiplier on the controlled angle. */
+  importedDrs?: { angleDeg: number } | { effect: number };
   /**
    * Body yaw (air slip angle, |deg|) → CL / CD multipliers on this element: a wing working in the body's wake loses
    * load when the car slides. Absent = no yaw sensitivity (the map-aero cars carry theirs in `rhMap.yawCl`).
@@ -717,6 +734,8 @@ export interface AeroData {
   drsTransitionS: number;
   /** DRS closes when the throttle falls below this (a lift), as well as on the brake */
   drsCloseThrottle: number;
+  /** Authored DRS behavior for imported wings only. */
+  importedDrs?: { ignoreZones: boolean; lateralLimitG?: number };
   /** Air density (kg/m³) */
   airDensity: number;
   /**
@@ -1150,6 +1169,14 @@ export interface CarPhysicsConfig {
    * holds. Absent: the one set
    */
   gearSets?: ReadonlyArray<{ label: string; ratios: readonly number[]; reverse: number; finalDrive: number }>;
+  revRange?: [number, number];
+  revLeds?: {
+    leds: Array<{ node: string; rpm: number; color: [number, number, number] }>;
+    blinkRpm?: number;
+    blinkHz?: number;
+  };
+  /** Authored imported model views; not used by the physics. */
+  cameras?: AcCameraLayout;
 }
 
 /**

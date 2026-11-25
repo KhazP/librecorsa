@@ -1,7 +1,7 @@
 import { text as t } from "@/lib/text";
 import type { VehicleModelId } from "@/types/f1";
 import type { CarClassRule } from "@/lib/net/wire";
-import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
+import { BMW_M4_GT3_SOUND, F1_2026_SOUND, LC26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
@@ -20,7 +20,7 @@ import { LC_LMDH_SKINS } from "./lmdh-skins";
 import { LIANA_SKINS } from "./liana-skins";
 import type { PortedSkin } from "@/lib/car-builder-2026";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
-import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
+import { carListed, HOSTED_CONTENT, REPO_CAR_IDS } from "@/lib/hosted-content";
 
 /**
  * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
@@ -275,6 +275,8 @@ export interface CarDefinition {
    * link (`?car=<id>`) in a copy that has its files. Absent: listed
    */
   preview?: boolean;
+  /** Local thumbnail supplied by an imported car. */
+  thumbUrl?: string;
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
@@ -532,7 +534,24 @@ export const CARS: readonly CarDefinition[] = KNOWN_CARS.filter((c) => !c.previe
 
 const BY_ID = new Map<string, CarDefinition>(KNOWN_CARS.map((c) => [c.id, c]));
 
-export const isCarId = (value: unknown): value is CarId => typeof value === "string" && BY_ID.has(value);
+const DYNAMIC_CARS: CarDefinition[] = [];
+export const getRegisteredCars = (): readonly CarDefinition[] => [...CARS, ...DYNAMIC_CARS];
+
+export function registerDynamicCar(car: CarDefinition): void {
+  BY_ID.set(car.id, car);
+  const index = DYNAMIC_CARS.findIndex((c) => c.id === car.id);
+  if (index < 0) DYNAMIC_CARS.push(car);
+  else DYNAMIC_CARS[index] = car;
+}
+
+export function unregisterDynamicCar(id: string): void {
+  BY_ID.delete(id);
+  const index = DYNAMIC_CARS.findIndex((c) => c.id === id);
+  if (index >= 0) DYNAMIC_CARS.splice(index, 1);
+}
+
+export const isCarId = (value: unknown): value is CarId =>
+  typeof value === "string" && (BY_ID.has(value) || value.startsWith("custom_"));
 
 /** Cars folded into another: a saved choice or a `?car=` link to one opens the car that took its place */
 const FOLDED_CAR_IDS: Readonly<Record<string, CarId>> = {
@@ -553,6 +572,14 @@ export const anyCarById = (id: CarId): CarDefinition | undefined => ALL_CARS.fin
 export const carById = (id: CarId): CarDefinition => {
   const car = BY_ID.get(id);
   if (car) return car;
+  if (typeof id === "string" && id.startsWith("custom_")) {
+    return {
+      id, classId: "f1", title: "Custom Mod", sub: "Assetto Corsa Mod", badge: "MOD", quality: "own",
+      credit: { title: "Custom Mod", author: "Assetto Corsa Mod", url: "", license: "Custom Mod", licenseUrl: "" },
+      physics: id as unknown as VehicleModelId, year: 2020, modelUrl: `custom:${id}`,
+      sound: HOSTED_CONTENT ? SUZUKI_LIANA_SOUND : LC26_SOUND,
+    };
+  }
   // Typed ids make this a stale save or a removed car; say so rather than quietly driving another one
   console.warn(`Unknown car "${id}", using ${CARS[0].id}`);
   return CARS[0];
@@ -600,7 +627,7 @@ const carThumbDir = (id: CarId): string => {
  * R2 with them (`npm run upload-hosted`), in the folder of the car's model; the repository car drives the 2026
  * prototype's body, whose pictures are in the repository. A copy without the file shows the card without a picture.
  */
-export const carThumbUrl = (id: CarId): string => `${carThumbDir(id)}/thumb.webp`;
+export const carThumbUrl = (id: CarId): string => BY_ID.get(id)?.thumbUrl ?? `${carThumbDir(id)}/thumb.webp`;
 
 /** Picture of a car wearing a specific procedural livery (`npm run car-thumbs`), beside its default thumb */
 export const carLiveryThumbUrl = (id: CarId, liveryId: string): string => `${carThumbDir(id)}/thumbs/${liveryId}.webp`;
@@ -616,7 +643,8 @@ export const carSkin = (id: CarId, skinId: string | null | undefined): CarSkin |
 };
 
 /** Where a skin's files are: beside the car's model, so they go up to R2 with it */
-export const carSkinBaseUrl = (id: CarId, skinId: string): string => `/cars/${id}/skins/${skinId}`;
+export const carSkinBaseUrl = (id: CarId, skinId: string): string =>
+  id.startsWith("custom_") ? `custom-skin://${id}/${skinId}` : `/cars/${id}/skins/${skinId}`;
 
 /**
  * Resolves a car's selected `CarSkin` into the `PortedSkin` consumed by `createPortedCarRig`:
@@ -626,6 +654,7 @@ export const carSkinBaseUrl = (id: CarId, skinId: string): string => `/cars/${id
  */
 export function portedSkinFor(id: CarId, skin: CarSkin | null | undefined): PortedSkin | null {
   if (!skin) return null;
+  if (id.startsWith("custom_")) return { baseUrl: carSkinBaseUrl(id, skin.id), files: skin.files, variant: skin.variant };
   if (skin.procedural) return { baseUrl: "", procedural: skin.procedural, variant: skin.variant };
   if (skin.useModelPaint) return null;
   const skins = anyCarById(id)?.skins;
@@ -646,7 +675,7 @@ export function carSkinSwatchBackground(skin: Pick<CarSkin, "swatch">): string {
 export const FACTORY_LIVERY_NOTE = "Factory livery: this car keeps its original paint.";
 
 /** The classes that have cars, in picker order */
-export const carClassesInUse = (): CarClass[] => CAR_CLASSES.filter((k) => CARS.some((c) => c.classId === k.id));
+export const carClassesInUse = (): CarClass[] => CAR_CLASSES.filter((k) => getRegisteredCars().some((c) => c.classId === k.id));
 
 /** A class's cars in registry order */
 export const carsInClass = (id: CarClassId): CarDefinition[] => CARS.filter((c) => c.classId === id);

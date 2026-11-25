@@ -72,7 +72,7 @@ export const CarQualityBadge: React.FC<{
     <QualityBadge
       label={q.badge}
       tone={CAR_TONE[car.quality]}
-      description={`${q.description} ${PHYSICS_CHECK[physics]}`}
+      description={`${q.description} ${PHYSICS_CHECK[physics] ?? "Assetto Corsa mod physics"}`}
       size={BADGE_SIZE[size]}
       className={className}
     />

@@ -1073,10 +1073,10 @@ export class DriveSession {
       // A body that is not its vehicle model's own brings its own outline for the barriers
       const bodyPlan = carById(carId).bodyPlan;
       const built = vehicleModelSpec(vehicle).createSim(track, trackRoot, bodyPlan);
-      const car = simHost ? simHost.adopt(built, vehicle, trackRoot, bodyPlan) : built;
-      // An F1 car's overtaking aids by its year, and race control for them while a race is on (free in practice);
-      // other classes have none
-      const rules = carOvertakingRules(carById(carId));
+      const isCustom = typeof vehicle === "string" && vehicle.startsWith("custom_");
+      const car = simHost && !isCustom ? simHost.adopt(built, vehicle, trackRoot, bodyPlan) : built;
+      // Official F1 cars take their rules from the season; imported cars use the hardware declared in their files.
+      const rules = isCustom ? undefined : carOvertakingRules(carById(carId));
       if (rules !== undefined) car.setOvertakingRules?.(rules);
       if (car.overtakingRules) {
         const self = car;
@@ -1190,7 +1190,8 @@ export class DriveSession {
      * The worker can run the next race: it has the car ready, and the player is not on a wheel (whose force feedback
      * still goes from the page a frame at a time)
      */
-    const workerRaceLink = () => (simHost && settings.device !== "wheel" ? simHost.raceLink() : null);
+    const workerRaceLink = () =>
+      simHost && settings.device !== "wheel" && !String(vehicleNow).startsWith("custom_") ? simHost.raceLink() : null;
     /** The car and field size the worker was last asked to build a spare field for */
     let workerPrepared: { physics: SimulatorCar; opponents: number } | null = null;
     this.prepareAiField = () => {
@@ -1552,14 +1553,15 @@ export class DriveSession {
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
-            pirelliSidewall: def.classId === "f1" && def.year >= 2018,
+            pirelliSidewall: !def.id.startsWith("custom_") && def.classId === "f1" && def.year >= 2018,
             // Non-F1 racing cars wear sagatron918's GT sidewall packs (optional `?tyres=<brand>` override for testing)
             gtSidewall:
-              def.classId === "f1" || def.classId === "road"
+              def.id.startsWith("custom_") || def.classId === "f1" || def.classId === "road"
                 ? null
                 : (resolveGtTyreBrand(typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tyres") : null) ??
                   defaultGtTyreBrand(def.id, def.classId)),
             skin: skinFor(car),
+            customMod: def.id.startsWith("custom_"),
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
@@ -3399,7 +3401,8 @@ export class DriveSession {
         const was = simHost.remote;
         // Not with a steering wheel yet: its force feedback is still sent from the page, a frame at a time (a race
         // that started in the worker stays there)
-        simHost.endFrame(raceInWorker || (raceNow().kind === "practice" && settingsNow.device !== "wheel"));
+        const isCustom = typeof vehicleNow === "string" && vehicleNow.startsWith("custom_");
+        simHost.endFrame(!isCustom && (raceInWorker || (raceNow().kind === "practice" && settingsNow.device !== "wheel")));
         if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !frozen) {

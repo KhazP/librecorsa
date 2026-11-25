@@ -24,6 +24,7 @@ export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
   { key: "bugesera.vehicle", holds: "the car last chosen" },
   { key: "bugesera.track", holds: "the circuit last chosen" },
   { key: "bugesera.tyreSetup.<car>", holds: "tyre setup per car" },
+  { key: "librecorsa.tyreSetup.<car>", holds: "local tyre setup per imported car" },
   { key: "bugesera.turn", holds: "own relay server for multiplayer" },
   { key: "bugesera.driverKey", holds: "the driver key that signs online laps" },
   { key: "lc.garage.chassis.<car>", holds: "car setup per car" },

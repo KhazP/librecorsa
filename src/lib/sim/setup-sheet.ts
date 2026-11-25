@@ -480,7 +480,7 @@ const blanketParam = (vehicle: VehicleModelId): SetupParam => {
 
 /** Starting fuel (kg on the F1 cars, litres beside it on the GT3s, which are fuelled by the litre) */
 const fuelGroup = (vehicle: VehicleModelId): SetupGroup => {
-  const f = FUEL_LOAD[vehicle];
+  const f = FUEL_LOAD[vehicle] ?? { defaultKg: 20, minKg: 5, maxKg: 100 };
   const litres = SETUP_CLASS[vehicle] === "gt3";
   const format = (v: number) => (litres ? `${Math.round(v / FUEL_KG_PER_L)} L · ${Math.round(v)} kg` : `${Math.round(v)} kg`);
   return {
@@ -578,7 +578,7 @@ function f1Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyre
  * that has a wing.
  */
 function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
-  const hasWing = WING_CLICK_DEG[vehicle].rear > 0;
+  const hasWing = (WING_CLICK_DEG[vehicle]?.rear ?? 0) > 0;
   const cfg = CONFIGS[vehicle];
   const susp = cfg?.suspensions;
   const hasThird = (susp?.front.heave.rate ?? 0) > 0 || (susp?.rear.heave.rate ?? 0) > 0;
@@ -712,8 +712,8 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
 
 /** The setup sheet of a car: its class's parameters on that car's baseline */
 export function setupSheet(vehicle: VehicleModelId, tyreRanges: TyreRanges, tyreDefaults: TyreSetup): SetupGroup[] {
-  const b = BASELINES[vehicle];
-  return SETUP_CLASS[vehicle] === "gt3" ? gt3Sheet(vehicle, b, tyreRanges, tyreDefaults) : f1Sheet(vehicle, b, tyreRanges, tyreDefaults);
+  const b = BASELINES[vehicle] ?? BASELINES["f12026-car"];
+  return (SETUP_CLASS[vehicle] ?? "f1") === "gt3" ? gt3Sheet(vehicle, b, tyreRanges, tyreDefaults) : f1Sheet(vehicle, b, tyreRanges, tyreDefaults);
 }
 
 const DUMMY_TYRE_RANGES: TyreRanges = {

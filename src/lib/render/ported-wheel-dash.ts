@@ -64,7 +64,7 @@ export class PortedWheelDash {
       this.blinkRpm = table.blinkRpm ?? Infinity;
       this.blinkHz = table.blinkHz ?? 5;
       for (const led of table.leds) {
-        const node = steer.getObjectByName(led.node);
+        const node = steer.getObjectByName(led.node) ?? steer.getObjectByName(`STEER_${led.node}`);
         if (!node) continue;
         const meshes: THREE.Mesh[] = [];
         node.traverse((o) => {

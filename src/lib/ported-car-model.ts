@@ -18,6 +18,10 @@ import {
 } from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
 import { bodyFloorClearance, type StaticFloor } from "@/lib/render/body-floor";
+import { getCustomCarSkinRecord } from "@/lib/mods/dynamic-vehicle";
+import { createTextureAsync } from "@/lib/mods/kn5-loader";
+import { isCspProtectedKn5Blob } from "@/lib/mods/kn5-protection";
+import type { AcCameraPose } from "@/lib/mods/ac-cameras";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import { mergeStaticMeshesByMaterial } from "@/lib/render/merge-static-meshes";
 import { createOpponentLodController, type OpponentLodController } from "@/lib/render/car-lod";
@@ -64,6 +68,8 @@ export interface PortedCarOptions {
    * the textures of the materials the GLB's `skinMaps` extras name
    */
   skin?: PortedSkin | null;
+  /** Imported KN5 models already have their authored ground alignment. */
+  customMod?: boolean;
   /** Opponent car: casts shadows through a 1-draw proxy on SHADOW_PROXY_LAYER instead of its full mesh hierarchy */
   opponent?: boolean;
 }
@@ -80,7 +86,8 @@ interface PortedExtras {
   wheelCentres?: Record<string, [number, number, number]>;
   tyreRadius?: Record<string, number>;
   tyreHalfWidth?: Record<string, number>;
-  cameras?: Partial<Record<string, { pos: [number, number, number]; pitchDeg: number; fov: number }>>;
+  cameras?: Partial<Record<string, AcCameraPose>>;
+  authoredDash?: boolean;
   /** The wheel's shift lights (ported-wheel-dash.ts), handed on to the `STEER` node */
   revLeds?: unknown;
   /** GLB material name -> the file of a livery that replaces its colour texture */
@@ -95,6 +102,34 @@ const skinTextures = new Map<string, Promise<THREE.Texture | null>>();
 function loadSkinTexture(url: string, like: THREE.Texture | null): Promise<THREE.Texture | null> {
   let tex = skinTextures.get(url);
   if (!tex) {
+    if (url.startsWith("custom-skin://")) {
+      const [carId, skinId, ...path] = url.slice("custom-skin://".length).split("/");
+      const file = path.join("/");
+      const skins = getCustomCarSkinRecord(carId);
+      const index = skinId.startsWith("skin_") ? Number.parseInt(skinId.slice(5), 10) : -1;
+      const target = index >= 0 && index < (skins?.length ?? 0) ? skins?.[index] : skins?.find((s) => s.name === skinId) ?? skins?.[0];
+      const lower = file.toLowerCase();
+      const basename = lower.split(/[/\\]/).pop() || lower;
+      const noExt = basename.replace(/\.[^.]+$/, "");
+      const blob = target?.textures[lower] ?? target?.textures[basename] ??
+        Object.entries(target?.textures ?? {}).find(([key]) => {
+          const base = key.split(/[/\\]/).pop()?.toLowerCase() || key.toLowerCase();
+          return base === basename || base.replace(/\.[^.]+$/, "") === noExt;
+        })?.[1];
+      tex = blob ? blob.arrayBuffer().then(async (data) => {
+        const texture = await createTextureAsync(file, new Uint8Array(data));
+        if (texture) {
+          texture.flipY = false;
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+          texture.anisotropy = like?.anisotropy ?? 4;
+          texture.needsUpdate = true;
+        }
+        return texture;
+      }).catch(() => null) : Promise.resolve(null);
+      skinTextures.set(url, tex);
+      return tex;
+    }
     tex = new THREE.TextureLoader()
       .loadAsync(withBasePath(url))
       .then(async (t) => {
@@ -154,6 +189,33 @@ const PRESERVED_BODY_NODE_RE = /head|light|lamp|tail|brake|stop|rear_?led|mirror
 export function loadTemplate(url: string): Promise<THREE.Group | null> {
   let template = templates.get(url);
   if (!template) {
+    if (url.startsWith("custom:")) {
+      let customPromise: Promise<THREE.Group | null> | null = null;
+      customPromise = (async () => {
+        try {
+          const { initCustomMods, registerCustomCarMod } = await import("@/lib/mods/dynamic-vehicle");
+          await initCustomMods();
+          const existing = templates.get(url);
+          if (existing && existing !== customPromise) return await existing;
+          const { getCustomCar } = await import("@/lib/mods/mod-store");
+          const record = await getCustomCar(url.slice(7));
+          if (record) {
+            const protectedModel = await isCspProtectedKn5Blob(record.kn5Blob);
+            const pending = templates.get(url);
+            if (pending !== customPromise) return pending ? await pending : null;
+            if (protectedModel) return null;
+            registerCustomCarMod(record);
+            const loaded = templates.get(url);
+            if (loaded && loaded !== customPromise) return await loaded;
+          }
+        } catch (error) {
+          console.error(`Failed to resolve custom mod template for ${url}:`, error);
+        }
+        return null;
+      })();
+      templates.set(url, customPromise);
+      return customPromise;
+    }
     template = (async () => {
       if (typeof window === "undefined") return null;
       const full = withBasePath(url);
@@ -215,7 +277,20 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
  * The axle is the tyre's least-spread direction; the geometry is turned to put it on X and the node takes the
  * inverse turn, so the wheel looks the same at rest and spins true. Done once on the template.
  */
-function alignWheelAxles(scene: THREE.Object3D): void {
+export function registerPortedCarTemplate(url: string, template: THREE.Group | Promise<THREE.Group | null>): void {
+  templates.set(url, Promise.resolve(template).then((scene) => {
+    if (!scene) return null;
+    alignWheelAxles(scene);
+    scene.updateMatrixWorld(true);
+    return scene;
+  }));
+}
+
+export function unregisterPortedCarTemplate(url: string): void {
+  templates.delete(url);
+}
+
+export function alignWheelAxles(scene: THREE.Object3D): void {
   for (const name of WHEELS) {
     const wheel = scene.getObjectByName(name);
     if (!wheel) continue;
@@ -401,6 +476,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       // No livery, procedural GT3 livery, or one that leaves this file as the model has it
       if (!wearing || wearing.procedural || (wearing.files && !wearing.files.includes(slot.file))) {
         slot.mat.map = slot.own;
+        if (slot.own && options.customMod) slot.mat.color.setHex(0xffffff);
         slot.mat.needsUpdate = true;
         continue;
       }
@@ -408,6 +484,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         loadSkinTexture(`${wearing.baseUrl}/${slot.file}`, slot.own).then((tex) => {
           if (disposed || skin !== wearing || !tex) return;
           slot.mat.map = tex;
+          if (options.customMod) slot.mat.color.setHex(0xffffff);
           slot.mat.needsUpdate = true;
         })
       );
@@ -435,7 +512,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // The body, and everything placed on it, moves on its wheels to put its floor on the physics'; the wheels keep
     // `offset`
     const bodyOffset = offset.clone();
-    bodyOffset.y -= bodyDropOf(model, car, offset, lf[2], lr[2], options);
+    if (!options.customMod && !(extras as Record<string, unknown>).customMod) {
+      bodyOffset.y -= bodyDropOf(model, car, offset, lf[2], lr[2], options);
+    }
     const bodyGroup = new THREE.Group();
     bodyGroup.name = "PORTED_BODY";
     bodyGroup.position.copy(bodyOffset);
@@ -594,7 +673,13 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         pitchRad: c.pitchDeg * THREE.MathUtils.DEG2RAD,
         fovDeg: c.fov,
       };
+      if (c.orientation) {
+        const { forward, up } = c.orientation;
+        const basis = new THREE.Matrix4().lookAt(new THREE.Vector3(), new THREE.Vector3(...forward), new THREE.Vector3(...up));
+        anchors[key].rotation = new THREE.Quaternion().setFromRotationMatrix(basis);
+      }
     }
+    if (extras.authoredDash) anchors.dash.authoredDash = true;
     // Behind and above the eye point, for the sim's shoulder view
     anchors.shoulder = {
       pos: anchors.cockpit.pos.clone().add(new THREE.Vector3(0, 0.18, -0.3)),

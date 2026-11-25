@@ -6,7 +6,7 @@ export type OnboardAnchor = "cockpit" | "shoulder" | "tcam" | "bumper";
 
 /**
  * Where a view sits: one of the model's anchors, or "overWheel", placed per car from the driver's eye
- * (`onboard-views.ts`; the models' own "dash" anchors are forward-facing dashboard cameras that leave the dash out)
+ * (`onboard-views.ts`; an imported, authored dashboard position takes precedence over the generic placement)
  */
 export type ViewAnchor = OnboardAnchor | "overWheel";
 

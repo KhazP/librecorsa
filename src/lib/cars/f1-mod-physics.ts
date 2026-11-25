@@ -62,6 +62,7 @@ export function useF1ModPhysics(): F1ModPhysics {
 
 /** Whether the physics switch applies to this car: a ported F1 car (its own GLB on the generic rig) */
 export const carTakesPhysicsSwitch = (id: CarId): boolean => {
+  if (typeof id === "string" && id.startsWith("custom_")) return false;
   const def = carById(id);
   return def.classId === "f1" && !!def.modelUrl;
 };

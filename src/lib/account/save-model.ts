@@ -56,6 +56,8 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "bugesera.driverKey": "device",
   "bugesera.turn": "device",
   "lc.roomHostToken": "device",
+  // Imported cars are local to this browser, so their tyre setups stay here too
+  "librecorsa.tyreSetup.<car>": "device",
   // Hardware
   "bugesera.gpu": "device",
   "bugesera.gpuLoss": "device",

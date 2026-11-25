@@ -55,6 +55,10 @@ export interface Lc26CameraAnchor {
   pos: THREE.Vector3;
   pitchRad: number;
   fovDeg: number;
+  /** A complete rig-local lens orientation, when provided instead of a pitch-only view. */
+  rotation?: THREE.Quaternion;
+  /** An imported dash anchor intended for the dash view rather than a generic model fallback. */
+  authoredDash?: boolean;
 }
 
 export interface Lc26ModelInstance {

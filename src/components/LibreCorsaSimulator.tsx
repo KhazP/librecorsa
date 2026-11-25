@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { initCustomMods, selectedCustomCarActionForRegistryChange, subscribeCustomCars } from "@/lib/mods/dynamic-vehicle";
 import { useTranslations } from "use-intl/react";
 import { t as tr } from "@/i18n/runtime";
 import { DEFAULT_TRACK_ID, TURN_METADATA, getActivePointToPoint, getActiveTrackData, resolveLivery } from "@/lib/track-data";
@@ -564,6 +565,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }),
     [session]
   );
+
+  useEffect(() => {
+    void initCustomMods();
+    return subscribeCustomCars((change) => {
+      const action = selectedCustomCarActionForRegistryChange(carIdRef.current, change);
+      if (action?.type === "fallback") {
+        changeCar(action.carId);
+        return;
+      }
+      if (action?.type === "reload") session?.setCar(action.carId as CarId);
+    });
+  }, [changeCar, session]);
 
   const handleLiveryChange = useCallback((livery: LiveryConfig) => {
     if (livery.id === "custom") {

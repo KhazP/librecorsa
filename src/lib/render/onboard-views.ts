@@ -42,6 +42,7 @@ const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
 
 /** A car not in the table: a little ahead of and below the eye */
 const FALLBACK: OverWheelView = { fromEye: [0, -0.05, 0.25], pitchDeg: -8, fovDeg: 58 };
+const LENS_X = new THREE.Vector3(1, 0, 0);
 
 /** The dash view's own field of view in a car (before the base FOV and the player's seat) */
 export const dashViewFovDeg = (car: CarId): number => (OVER_WHEEL[car] ?? FALLBACK).fovDeg;
@@ -54,6 +55,8 @@ export const dashViewFovDeg = (car: CarId): number => (OVER_WHEEL[car] ?? FALLBA
 export class OnboardViews {
   private readonly overWheel: Lc26CameraAnchor = { pos: new THREE.Vector3(), pitchRad: 0, fovDeg: 58 };
   private readonly nudged: Lc26CameraAnchor = { pos: new THREE.Vector3(), pitchRad: 0, fovDeg: 58 };
+  private readonly nudgedRotation = new THREE.Quaternion();
+  private readonly lensTilt = new THREE.Quaternion();
 
   resolve(
     anchors: Lc26ModelInstance["cameraAnchors"] | null,
@@ -64,7 +67,7 @@ export class OnboardViews {
     const view = CAMERA_MODES[mode];
     if (!anchors || !view.anchor) return null;
     let base: Lc26CameraAnchor;
-    if (view.anchor === "overWheel") {
+    if (view.anchor === "overWheel" && !anchors.dash.authoredDash) {
       // From the eye before the player's cockpit nudge: moving one view leaves the other where it was
       const spec = OVER_WHEEL[car] ?? FALLBACK;
       base = this.overWheel;
@@ -73,14 +76,18 @@ export class OnboardViews {
       base.pitchRad = spec.pitchDeg * THREE.MathUtils.DEG2RAD;
       base.fovDeg = spec.fovDeg;
     } else {
-      base = anchors[view.anchor];
+      base = anchors[view.anchor === "overWheel" ? "dash" : view.anchor];
     }
     if (!isNudgeView(mode)) return base;
     const n = nudgeOf(nudges, car, mode);
     if (isZeroNudge(n)) return base;
     const out = this.nudged;
     out.pos.set(base.pos.x - n.right, base.pos.y + n.up, base.pos.z + n.fwd);
-    out.pitchRad = base.pitchRad + n.tiltDeg * THREE.MathUtils.DEG2RAD;
+    const tilt = n.tiltDeg * THREE.MathUtils.DEG2RAD;
+    out.pitchRad = base.pitchRad + tilt;
+    out.rotation = base.rotation
+      ? this.nudgedRotation.copy(base.rotation).multiply(this.lensTilt.setFromAxisAngle(LENS_X, tilt))
+      : undefined;
     // The base FOV every car shares shifts this again in the camera rig
     out.fovDeg = base.fovDeg + n.fovDeg;
     return out;

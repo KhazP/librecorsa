@@ -3,6 +3,16 @@
 LibreCorsa is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`). Some of its code is derived
 from other open-source projects. Each is listed here with its copyright notice and licence, as those licences ask.
 
+## Kn5Decrypt
+
+- Source: [Kn5Decrypt by SeizureSaladd](https://github.com/SeizureSaladd/Kn5Decrypt/tree/38dd6443b642266c72731a6ccac44c4f43295888).
+- Licence: [GNU General Public License v3.0](#gnu-general-public-license-v30). Under Section 13 of the GPLv3 and AGPLv3,
+  the adapted files stay GPLv3 and the combined game is under the AGPLv3.
+- Modified 25 November 2026: `src/lib/mods/kn5-csp-rebuild.ts` adapts `Kn5CspDecryptor.cs` and `Kn5BodyDecryptor.cs`
+  for the browser with Web Crypto, native decompression, binary bounds checks and in-memory reconstruction for CSP v1.
+  `src/lib/mods/kn5-csp-keys.ts` adapts `CspKeyTable.cs`, keeping the same entries in base64.
+- The code licence does not grant rights to third-party mods or their assets.
+
 ## HUD layouts
 
 Five of the in-race HUD layouts (Settings > Display > HUD, under Third-party) recreate the look and layout of other
@@ -148,6 +158,8 @@ SOFTWARE.
 - Modified 15 November 2026 for LibreCorsa: rewritten from Lua to React and TypeScript, reading LibreCorsa's
   telemetry. It keeps the leaderboard, sectors, delta, session, timing, essentials, inputs, fuel and tyre blocks,
   and leaves out the app's settings window, updater, turn indicators, decorations, logo and icons.
+
+## GNU General Public License v3.0
 
 <details>
 <summary>GNU General Public License v3.0 (full text)</summary>

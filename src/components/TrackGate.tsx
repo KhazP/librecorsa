@@ -11,6 +11,7 @@ import { useLiveHeartbeat } from "@/lib/net/live-heartbeat";
 import { Toast } from "@/components/ui";
 import { browserStore, takeSafeStart } from "@/lib/render/gpu-health";
 import { loadPlayerSettings, savePlayerSettings } from "@/lib/settings/player-settings";
+import { initCustomMods } from "@/lib/mods/dynamic-vehicle";
 
 /** How long the "couldn't load" notice stays up (ms) */
 const ERROR_NOTICE_MS = 6000;
@@ -82,6 +83,7 @@ export const TrackGate: React.FC = () => {
 
   useEffect(() => {
     registerAssetCache();
+    void initCustomMods();
     // Before the simulator reads the settings
     const notice = applySafeStart();
     if (notice) setSafeStartNotice(notice);

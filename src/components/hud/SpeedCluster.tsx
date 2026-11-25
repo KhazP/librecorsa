@@ -189,12 +189,20 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
           onClick={onToggleXMode}
           className="pointer-events-auto cursor-pointer rounded-full outline-none focus-visible:shadow-lc-focus pointer-coarse:py-2.5"
           aria-label={aeroToggle}
-          title={telemetry.overtakingRules === "drs-rear" ? L.drsTitle : L.straightModeTitle}
+          title={
+            channels?.authoredDrs === "unrestricted"
+              ? "DRS (X): opens the car's adjustable flaps; closes on braking or lifting"
+              : channels?.authoredDrs === "zones"
+                ? "DRS (X): opens the car's adjustable flaps in eligible DRS zones"
+                : telemetry.overtakingRules === "drs-rear"
+                  ? L.drsTitle
+                  : L.straightModeTitle
+          }
         >
           <AeroBadge open={aero.open} armed={aero.armed} label={aero.label} size="md" />
         </button>
       )}
-      {hasErs ? (
+      {hasErs && channels?.hasErsOverride !== false ? (
         <button
           type="button"
           onClick={onToggleBoostLatch}

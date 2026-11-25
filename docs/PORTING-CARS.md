@@ -7,6 +7,24 @@ The repository includes one circuit (RISE Motordrome) and one car, the 2026 prot
 
 Each porting script was written for particular cars, so expect to read it and adjust it.
 
+## Browser importer: DRS, active aero and electric drive
+
+The in-game Assetto Corsa importer reads `data.acd` or unpacked `data/`. Reimport a car to pick up new physics mappings; existing records are left alone.
+
+If a large archive still runs out of browser memory, extract it locally and use the **Folder** picker on the car's own directory (the one containing the `.kn5` and `data.acd` or `data/`). You do not need to delete the installed car first. The browser reads compressed 7z files in chunks and shares identical large textures without removing any liveries.
+
+For mods you own or have explicit permission to decrypt, the browser importer can restore the main KN5 protected by Custom Shaders Patch (CSP) encoding version 1. Import the complete original package, keeping the original car folder name and `data.acd` if supplied. LibreCorsa rebuilds the textures and geometry locally on HTTPS or localhost, saves a separate copy in the browser (up to 256 MiB per rebuilt model), and leaves the original unchanged. Nothing is uploaded.
+
+Other protection versions and recovery failures are rejected before saving, rather than showing the scrambled preview. To replace an older protected entry, reimport the complete original package or use an unprotected copy from the author. You do not need to delete the installed entry first.
+
+- **Zero-reference turbos:** `REFERENCE_RPM=0` now means boost is available from the first rev, without an invalid 0 RPM power sample. Installed copies with that invalid sample are repaired on reload.
+- **Bike-shaped mods such as the Ducati Panigale V4 P Spec:** the importer can align and spin two visible centreline wheels when the mod uses a four-wheel AC chassis underneath. The simulation still uses the authored four-wheel setup, not independent motorcycle balance or CSP's rider and lean animations.
+- **DRS:** `drs.ini` binds `ANGLE` or `EFFECT` to the numbered wings in `aero.ini`. The same flap control opens it, but the HUD reads **DRS** instead of **X-mode**. It works in the circuit's DRS zones (with detection in races), unless the car declares `IGNORE_ZONES=1`. Braking, lifting, a wet track, or the car's configured lateral-G limit can close it.
+- **Active aero:** `DYNAMIC_CONTROLLER_n` in `aero.ini` drives wing angle from supported inputs (speed, gas, brake, steer, gear, RPM or a constant). Add/multiply stages, limits and filtering are applied to forces. This does not import `.ksanim` wing animation.
+- **Hybrids (MGU-K):** the `[KINETIC]` torque and coast curves in `ers.ini`, the supported `ctrl_ers_n.ini` chains, the lap allowance and the authored boost button drive deployment and braking regeneration on the main driven axle. Braking recovery uses braking demand and the coast curve rather than Assetto Corsa's exact `CHARGE_K` formula. Auxiliary motors on a separate axle are not imported.
+- **Turbo hybrids (MGU-H):** `[HEAT]` in `ers.ini` supplies a boost-based `CHARGE_K` gain and a `TORQUE_PERC` ceiling relative to the MGU-K. BAL, RAC and CHR charge the battery; PSH, LIC and the car's supported boost override send power directly to the MGU-K without spending the battery's lap allowance. Direct power shares the MGU-K's existing torque and power limits. Recovery is an approximation; it does not electrically spin the turbo or change its boost response.
+- **Electric:** a mod that puts all its drive torque in the kinetic unit and has a placeholder-only combustion curve runs on the battery alone. It can launch at zero RPM and recover energy under braking when configured. A finite battery uses an explicit `MAX_KJ` where supplied, otherwise the lap-energy value or the deployment-power × discharge-time estimate. Other electric layouts and CSP Lua powertrains are not inferred.
+
 ## What you need
 
 - Node.js, then `npm install` once (the game, the checks and the compressor).

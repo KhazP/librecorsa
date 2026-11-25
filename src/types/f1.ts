@@ -476,6 +476,8 @@ export interface CarTelemetry {
   // 2026 Power Unit (~540 kW ICE + 350 kW MGU-K)
   icePowerKw: number;
   mgukPowerKw: number; // -350 (harvest) to +350 (deploy)
+  /** Exhaust recovery actually used by an imported MGU-H; included in MGU-K output when routed directly. */
+  mguhPowerKw?: number;
   /** Electric machine speed (rpm), where it differs from the engine's (a unit that can drive with the engine off) */
   mguRpm?: number;
   /** Mean speed of the driven shafts (rad/s) and the torque they carry (Nm, negative on the overrun and under
@@ -850,6 +852,8 @@ export interface F12026Channels {
   carId: string;
   hasErs: boolean;
   hasDrs: boolean;
+  hasErsOverride?: boolean;
+  authoredDrs?: "zones" | "unrestricted";
   /** Traction control cutting the throttle / ABS releasing the brakes this step */
   tcActive: boolean;
   absActive: boolean;
@@ -866,4 +870,3 @@ export interface F12026Channels {
 }
 
 export type TelemetryData = CarTelemetry;
-

@@ -76,6 +76,17 @@ check("the car model's anchor wins over the view's own placement, at the anchor'
   assert.equal(camera.fov, 70, 'the nose view keeps the anchor FOV (no player shift)');
 });
 
+check('a complete onboard orientation follows the chassis and retains yaw and roll', () => {
+  const { camera, rig, chassis, frame } = setup();
+  const orientation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.17, 2.8, -0.27));
+  const anchor = { pos: new THREE.Vector3(0.1, 0.8, -0.3), pitchRad: -0.4, fovDeg: 60, rotation: orientation };
+  chassis.quaternion.setFromEuler(new THREE.Euler(0.05, -0.4, 0.08));
+  const expected = chassis.getWorldQuaternion(new THREE.Quaternion()).multiply(orientation);
+  rig.update(frame('cockpit', { anchor, headMovement: 'static', driving: false }));
+  assert.ok(camera.getWorldDirection(new THREE.Vector3()).distanceTo(new THREE.Vector3(0, 0, -1).applyQuaternion(expected)) < 1e-9);
+  assert.ok(new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).distanceTo(new THREE.Vector3(0, 1, 0).applyQuaternion(expected)) < 1e-9);
+});
+
 check('the menu orbit pushes the car right of a wide viewport, and the offset is cleared on track', () => {
   const { camera, rig, frame } = setup();
   rig.update(frame('chase', { driving: false, menu: { close: false, width: 1600, height: 900 } }));

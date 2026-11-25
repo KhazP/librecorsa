@@ -235,7 +235,32 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
   },
 };
 
-export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => VEHICLE_MODELS[id];
+export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => {
+  const model = VEHICLE_MODELS[id];
+  if (model) return model;
+  if (typeof id === "string" && id.startsWith("custom_")) {
+    return {
+      id,
+      classId: "road",
+      createSim: (track, trackRoot) => new F12026CarSim(track, trackRoot),
+      limiterRpm: 8000,
+      telemetryMaxRpm: 9000,
+      tyreSetupRanges: VEHICLE_MODELS["f12026-car"].tyreSetupRanges,
+      rigConfig: VEHICLE_MODELS["f12026-car"].rigConfig,
+      gt3Cockpit: false,
+      floorSparks: false,
+    };
+  }
+  return VEHICLE_MODELS["f12026-car"];
+};
+
+export function registerDynamicVehicleModel(model: VehicleModel): void {
+  (VEHICLE_MODELS as Record<string, VehicleModel>)[model.id] = model;
+}
+
+export function unregisterDynamicVehicleModel(id: string): void {
+  delete (VEHICLE_MODELS as Record<string, VehicleModel>)[id];
+}
 
 export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
   typeof value === "string" && Object.hasOwn(VEHICLE_MODELS, value);
@@ -243,6 +268,6 @@ export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
 /** The vehicle models an online room's class rule lets in: "any" every model, a class its own models */
 export function vehicleModelsFor(rule: CarClassRule): VehicleModelId[] {
   return Object.values(VEHICLE_MODELS)
-    .filter((m) => rule === "any" || m.classId === rule)
+    .filter((m) => !m.id.startsWith("custom_") && (rule === "any" || m.classId === rule))
     .map((m) => m.id);
 }

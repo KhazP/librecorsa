@@ -6,7 +6,7 @@ import type { LiveryConfig } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import {
   CAR_QUALITY_META,
-  CARS,
+  getRegisteredCars,
   carClass,
   carClassesInUse,
   carLiveryThumbUrl,
@@ -22,7 +22,7 @@ import {
 } from "@/lib/cars/car-registry";
 import { useCarSkinId } from "@/lib/cars/car-skins";
 import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS } from "@/lib/cars/f1-mod-physics";
-import { Skeleton } from "@/components/ui";
+import { Button, Skeleton } from "@/components/ui";
 import { StateBadge } from "@/components/ui/badges/StateBadge";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
@@ -32,6 +32,10 @@ import { SourceChip } from "@/components/SourceChip";
 import { carModelSource } from "@/lib/model-source";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { popularRank, usePopularRanks } from "@/lib/net/use-popular";
+import { CustomModBadge } from "@/components/mods/CustomModBadge";
+import { ImportModModal } from "@/components/mods/ImportModModal";
+import { initCustomMods, subscribeCustomCars } from "@/lib/mods/dynamic-vehicle";
+import { FolderArchive } from "lucide-react";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
@@ -88,7 +92,7 @@ export const CarThumb: React.FC<{
   const variantUrl =
     liveryId && liveryId !== "custom" && carTakesLivery(car.id)
       ? carLiveryThumbUrl(car.id, liveryId)
-      : effectiveSkinId && car.skins?.length
+      : effectiveSkinId && car.skins?.length && !car.id.startsWith("custom_")
         ? carSkinThumbUrl(car.id, effectiveSkinId)
         : null;
   const desiredSrc = variantUrl ? withBasePath(variantUrl) : fallbackSrc;
@@ -168,10 +172,16 @@ export const CarBrowser: React.FC<{
 }> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
   const storeBuild = useStoreBuild();
   const tx = useTranslations("menu.carBrowser");
+  const [carsList, setCarsList] = useState<readonly CarDefinition[]>(getRegisteredCars);
+  const [importOpen, setImportOpen] = useState(false);
+  useEffect(() => {
+    void initCustomMods();
+    return subscribeCustomCars(() => setCarsList(getRegisteredCars()));
+  }, []);
   const classes = carClassesInUse();
   const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
   const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
-  const qualities = QUALITIES.filter((q) => CARS.some((c) => c.quality === q));
+  const qualities = QUALITIES.filter((q) => carsList.some((c) => c.quality === q));
   const favs = library?.library.favorites.cars ?? [];
   const recent = library?.library.recent.cars ?? [];
   const recentRank = (c: CarDefinition) => {
@@ -230,10 +240,11 @@ export const CarBrowser: React.FC<{
   ];
 
   return (
+    <>
     <ContentBrowser<CarDefinition>
       label={tx("label")}
       kind="cars"
-      items={CARS}
+      items={carsList}
       idOf={(c) => c.id}
       searchText={(c) => {
         const k = carClass(c.classId);
@@ -247,7 +258,14 @@ export const CarBrowser: React.FC<{
       isFavorite={(c) => favs.includes(c.id)}
       onToggleFavorite={library ? (c) => library.onToggleFavorite("cars", [c.id]) : undefined}
       onClose={onClose}
-      toolbar={toolbar}
+      toolbar={
+        <div className="flex items-center gap-2">
+          {toolbar}
+          <Button variant="secondary" size="md" disabled={Boolean(lockedReason)} onClick={() => setImportOpen(true)}>
+            <FolderArchive className="mr-1.5 size-4" />Importar Mod
+          </Button>
+        </div>
+      }
       renderCard={(c) => ({
         media: <CarThumb car={c} liveryId={carTakesLivery(c.id) ? selectedLivery.id : undefined} className="p-2.5 pt-9" />,
         title: c.title,
@@ -255,7 +273,7 @@ export const CarBrowser: React.FC<{
         badges: (
           <>
             <CarClassTag car={c} />
-            <CarQualityBadge car={c} size="sm" />
+            {c.id.startsWith("custom_") ? <CustomModBadge size="sm" /> : <CarQualityBadge car={c} size="sm" />}
           </>
         ),
         overlay: c.id === carId ? <StateBadge state="inUse" size="sm" /> : undefined,
@@ -280,7 +298,7 @@ export const CarBrowser: React.FC<{
               {facts ? <p className="lc-body m-0">{facts}</p> : null}
               <span className="mt-1 flex flex-wrap gap-1.5">
                 <CarClassTag car={c} />
-                <CarQualityBadge car={c} size="sm" />
+                {c.id.startsWith("custom_") ? <CustomModBadge size="sm" /> : <CarQualityBadge car={c} size="sm" />}
               </span>
             </div>
             {carTakesPhysicsSwitch(c.id) ? <CarPhysicsSwitch /> : null}
@@ -366,5 +384,10 @@ export const CarBrowser: React.FC<{
             }
       }
     />
+    <ImportModModal open={importOpen} onClose={() => setImportOpen(false)} selectedCarId={carId} onSelectCar={lockedReason ? undefined : (id) => {
+      onChangeCar(id);
+      onClose?.();
+    }} />
+    </>
   );
 };

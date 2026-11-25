@@ -25,7 +25,7 @@ These are the default keys. They follow the key's position, so on an AZERTY keyb
 | Gear up, gear down, neutral | E, Q, N |
 | Boost (hold), boost (latch) | Space or either Shift, B |
 | Overtake Mode (2026 race toggle) | Z |
-| Active aero X / Z | X |
+| DRS / Active aero | X |
 | Half throttle, half brake (hold) | F, G |
 | Clutch (hold) | none until you add one |
 | Camera (hold: seat & camera), free camera, trackside TV camera | C, F7, F8 |

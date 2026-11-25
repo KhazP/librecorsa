@@ -232,12 +232,13 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
 
 /** The compound every lap of a challenge in this car is driven on */
 export function challengeCompound(vehicle: VehicleModelId): TireCompound {
-  return CHALLENGE_TYRES[vehicle].compound;
+  return CHALLENGE_TYRES[vehicle]?.compound ?? "soft";
 }
 
 /** The challenge's rules in a few words: "Dry track · Soft tyres · Low fuel" */
 export function challengeConditionsLabel(vehicle: VehicleModelId): string {
-  return t("game.challenge.conditions", { tyres: t(CHALLENGE_TYRE_LABEL[CHALLENGE_TYRES[vehicle].tyres]) });
+  const tyres = CHALLENGE_TYRES[vehicle]?.tyres ?? "slicks";
+  return t("game.challenge.conditions", { tyres: t(CHALLENGE_TYRE_LABEL[tyres]) });
 }
 
 /** True when a lap driven on this circuit and car under these conditions is a lap of the challenge */

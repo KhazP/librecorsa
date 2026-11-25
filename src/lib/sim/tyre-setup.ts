@@ -77,7 +77,7 @@ function readPressures(value: unknown, limits: TyreSetupLimits): WheelPressures 
 
 /** Clamps a tyre setup cleanly into a vehicle model's allowed cold-pressure and camber ranges */
 export function clampTyreSetup(vehicle: VehicleModelId, setup: TyreSetup): TyreSetup {
-  const limits = TYRE_SETUP_LIMITS[vehicle];
+  const limits = TYRE_SETUP_LIMITS[vehicle] ?? TYRE_SETUP_LIMITS["f12026-car"];
   const r = limits.pressurePsi;
   const p = setup.coldPressurePsi;
   return {
@@ -97,10 +97,10 @@ export function clampTyreSetup(vehicle: VehicleModelId, setup: TyreSetup): TyreS
 /** The tyre setup saved from an earlier session, inside today's ranges; null when none is saved or it is unusable */
 export function loadTyreSetup(vehicle: VehicleModelId): TyreSetup | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS[vehicle]);
+    const raw = localStorage.getItem(STORAGE_KEYS[vehicle] ?? `librecorsa.tyreSetup.${vehicle}`);
     if (!raw) return null;
     const saved = JSON.parse(raw) as { coldPressurePsi?: unknown; camberDeg?: unknown } | null;
-    const limits = TYRE_SETUP_LIMITS[vehicle];
+    const limits = TYRE_SETUP_LIMITS[vehicle] ?? TYRE_SETUP_LIMITS["f12026-car"];
     const coldPressurePsi = readPressures(saved?.coldPressurePsi, limits);
     const camberDeg = readCamber(saved?.camberDeg, limits);
     return coldPressurePsi && camberDeg ? { coldPressurePsi, camberDeg } : null;
@@ -112,7 +112,7 @@ export function loadTyreSetup(vehicle: VehicleModelId): TyreSetup | null {
 
 export function saveTyreSetup(vehicle: VehicleModelId, setup: TyreSetup): void {
   try {
-    localStorage.setItem(STORAGE_KEYS[vehicle], JSON.stringify(setup));
+    localStorage.setItem(STORAGE_KEYS[vehicle] ?? `librecorsa.tyreSetup.${vehicle}`, JSON.stringify(setup));
   } catch {
     // Storage unavailable: the setup still applies for this session
   }

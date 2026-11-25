@@ -240,10 +240,13 @@ export const F1_ASSIST_DIALS: Readonly<Record<DriverAssistPreset, AidDials>> = {
  */
 export interface CarSimProfile {
   id: string;
+  classId?: import('@/lib/cars/car-registry').CarClassId;
   config: CarPhysicsConfig;
   /** MGU-K / push mode */
   hasErs: boolean;
   hasDrs: boolean;
+  /** Overrides the season-derived rules for profiles with authored flap hardware. */
+  initialOvertakingRules?: OvertakingRules;
   /** Turbocharged (telemetry boost pressure) */
   turbo: boolean;
   coldPsiRange: [number, number];
@@ -1411,6 +1414,7 @@ export class F12026CarSim implements SimulatorCar {
       },
       lapLengthM: L,
       drsEligibleAtDetection: (zone) => (this.raceControl?.racing ? this.raceControl.earnedAtDetection(zone.id) : true),
+      ...(this.config.aero.importedDrs ? { drsFreePractice: () => !this.raceControl?.racing } : {}),
       flapsBarred: () => !!this.raceControl?.racing && !!this.raceControl.aidsLocked,
       bodyPlan: profile.bodyPlan,
       onEvent: (e) => this.onVehicleEvent(e),
@@ -1452,6 +1456,16 @@ export class F12026CarSim implements SimulatorCar {
     this.channels.carId = profile.id;
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
+    const importedDrive = this.config.ers.importedDrive;
+    if (importedDrive) {
+      this.userErsMode = 'BAL';
+      v.setPerformanceMode('BAL');
+      this.channels.hasErsOverride = importedDrive.buttonOverride;
+    }
+    if (this.config.aero.importedDrs) {
+      this.channels.authoredDrs = this.config.aero.importedDrs.ignoreZones ? 'unrestricted' : 'zones';
+    }
+    if (profile.initialOvertakingRules !== undefined) this.setOvertakingRules(profile.initialOvertakingRules);
     this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
     // On the colliders without the re-seat `attachTrackRoot` gives a car at rest: the grid placement below seats it,
     // and a settle where it stands now would be thrown away
@@ -1501,6 +1515,10 @@ export class F12026CarSim implements SimulatorCar {
   /** 2026 Overtake Mode (the override): usable now — always in practice, in a race once earned at the detection point */
   private get overtakeAvailable(): boolean {
     return this.rules !== 'straight-mode-2026' || this.overtake.available(this.raceControl);
+  }
+
+  private get hasBoost(): boolean {
+    return this.profile.hasErs && (this.config.ers.importedDrive?.buttonOverride ?? true);
   }
 
   /** Switch to the GLB's road / surface colliders and barriers (no-op when they cannot be built) */
@@ -1638,7 +1656,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /** The garage's starting fuel into the car, with the spring preloads set for that load */
   private fillFuel(): void {
-    this.fuelKg = startingFuelKg(this.setupCar, this.chassis);
+    this.fuelKg = this.config.ers.importedDrive?.electric ? 0 : startingFuelKg(this.setupCar, this.chassis);
     this.vehicle.setFuelMass(this.fuelKg);
     this.vehicle.refreshStaticGeometry();
     this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
@@ -1656,13 +1674,13 @@ export class F12026CarSim implements SimulatorCar {
     // A new fuel load is put in the car now (and at every restart); other changes leave the fuel burnt so far.
     // The spring preloads below are set for the load on board.
     if (refuel) {
-      this.fuelKg = startingFuelKg(car, s);
+      this.fuelKg = this.config.ers.importedDrive?.electric ? 0 : startingFuelKg(car, s);
       this.vehicle.setFuelMass(this.fuelKg);
       this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
     }
     // Blankets on or off take effect where the tyres are next put back to their start temperature (the next start)
     this.vehicle.tyreBlankets = s.tyreBlankets === 0 ? null : s.tyreBlankets > 0;
-    const click = WING_CLICK_DEG[car];
+    const click = WING_CLICK_DEG[car] ?? { front: 0, rear: 0 };
     this.wingTrimDeg = { front: s.frontWingClicks * click.front, rear: s.rearWingClicks * click.rear };
     this.aeroPreset = this.aero;
     const base = this.chassisBase;
@@ -1801,7 +1819,7 @@ export class F12026CarSim implements SimulatorCar {
       // The setting the player picked, not the push mode an override runs: the tuner steps from what it reads back
       ersMode: this.userErsMode,
       // A prototype's hybrid runs from its kW dials: the F1 modes do nothing on it, so they are not offered
-      hasErs: this.profile.hasErs && !this.config.hybridDials,
+      hasErs: this.profile.hasErs && !this.config.hybridDials && !this.config.ers.importedDrive?.electric,
       tcCutFraction: Number(Math.max(0, 1 - this.tcCut).toFixed(3)),
       absCutPerWheel: [
         Number(Math.max(0, 1 - cut[0]).toFixed(3)),
@@ -1837,7 +1855,7 @@ export class F12026CarSim implements SimulatorCar {
       v.regenKw = nearestStep(dials.regenStepsKw, patch.regenKw);
     }
     // The mode before the bias: the bias the driver dials is set as their offset on top of the mode's own
-    if (patch.ersMode !== undefined && this.profile.hasErs && !this.config.hybridDials) {
+    if (patch.ersMode !== undefined && this.profile.hasErs && !this.config.hybridDials && !this.config.ers.importedDrive?.electric) {
       const m = patch.ersMode as PerformanceModeName;
       if (m === 'PSH' || m === 'RAC' || m === 'BAL' || m === 'LIC' || m === 'CHR') {
         this.userErsMode = m;
@@ -1925,7 +1943,8 @@ export class F12026CarSim implements SimulatorCar {
    */
   public activateBoostOverride(): boolean {
     if (this.config.ers.regulations === 'f1-2026') return this.profile.hasErs && this.vehicle.ersCanBoost;
-    if (this.profile.hasErs && this.overtakeAvailable && this.vehicle.ersEnergyJ > 200_000 && this.boostCooldownS <= 0) {
+    const reserveJ = this.config.ers.importedDrive ? 0 : 200_000;
+    if (this.hasBoost && this.overtakeAvailable && this.vehicle.ersEnergyJ > reserveJ && this.boostCooldownS <= 0) {
       this.boostRemainingS = BOOST_S;
       return true;
     }
@@ -2244,6 +2263,7 @@ export class F12026CarSim implements SimulatorCar {
     const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
     v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
+    const importedDrive = this.config.ers.importedDrive;
     if (this.config.ers.regulations === 'f1-2026') {
       // The 2026 rules: the Boost and Overtake are two things (FIA 2026 Section C5.12.5, B7.2.3). The Boost: the driver's,
       // any time, held or latched, capped in a race (`ers-2026.ts`). Overtake: all the time outside a race; in one, from
@@ -2268,9 +2288,9 @@ export class F12026CarSim implements SimulatorCar {
       this.pushActive = boost || (racing && (this.overtakeInUse || aiOvertake || autoOt));
     } else {
       if (!overtakeOk) this.boostRemainingS = 0;
-      const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
+      const push = this.hasBoost && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
       this.pushActive = push;
-      v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
+      v.setPerformanceMode(push && !importedDrive ? 'PSH' : this.userErsMode);
       v.ersOvertake = push;
     }
     const progressBefore = v.trackProgress;
@@ -2305,11 +2325,12 @@ export class F12026CarSim implements SimulatorCar {
         throttle: pinned && this.aiAutopilot ? 0 : cmd.throttle,
         // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
         // spared: it starts on a load nobody chose and has no pit stop to take
-        ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
+        ignitionCut: importedDrive?.electric || this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
         brake: pinned ? 1 : cmd.brake,
         brakeWheelScale: pinned ? undefined : cmd.brakeWheelScale,
         steer: pinned && this.aiAutopilot ? 0 : cmd.steer,
         drs: !held && (drsPress || cmd.drs),
+        ...(importedDrive?.buttonOverride && this.pushActive ? { importedBoost: true } : {}),
         shiftUp: !held && shiftUp,
         shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
@@ -3306,6 +3327,7 @@ export class F12026CarSim implements SimulatorCar {
     t.dragN = vt.dragN;
     t.icePowerKw = iceKw;
     t.mgukPowerKw = mgukKw;
+    if (this.config.ers.importedDrive?.heat) t.mguhPowerKw = vt.MGUH_POWER / 1000;
     // The driven shafts: their mean speed and the torque they carry (negative on the overrun and under regeneration)
     const [shaftL, shaftR] = v.drivenWheels;
     t.driveshaftRadS = 0.5 * (W[shaftL].omega + W[shaftR].omega);
