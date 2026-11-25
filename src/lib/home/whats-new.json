@@ -1,19 +1,23 @@
 [
   {
     "date": "2026-11-25",
-    "title": "LC25 Prototype, Porsche 963 LMDh rework, new HUD lineup, voice spotter and lap analysis",
+    "title": "Career mode, pit stops, LC25 Prototype, Porsche 963 LMDh rework and new HUD lineup",
     "items": [
-      "Added the LC25 Prototype, a 2025-spec F1 car (body by shunqi, CC BY 4.0) with MGU-H energy flow rules, rear DRS, a ride-height ground-effect map, and physics calibrated against OpenF1, FIA and Pirelli data. On librecorsa.org it runs kyojinvan's 2025 F1 V6 sound (with a built-in synthesised V6 and MGU-H bank in local clones), alongside new wind, tyre rolling and bodywork audio layers. The 2026 Prototype is now named LC26 Prototype.",
+      "Added a career mode raced from the title menu, with ladders, rivals and seasons (from the Club Cup in a Liana or Scirocco and the Touring Cup in the R32 up through Classic GT, the Prototype Cup, GT3, Endurance Prototypes and Grand Prix, plus Procar, Group 4 Classic and Can-Am Legends), along with pre-season test days with a target lap.",
+      "Added the game's own TV-style pre-race show before each career round (circuit intro, weather, tyres, starting grid with black silhouettes and a public-domain classical music cue from Dvořák's New World Symphony), a full-screen podium after offline AI races, and broadcast-style driver event cards (winner, new leader, fastest lap, pit stop, retired) with a battle strip, each with a toggle under Settings > Display.",
+      "Added pit stops for the player and AI cars using each circuit's pit lane and real pit boxes, with a pit speed limiter, required pit stops in an AI race's setup, a PIT marker and live pit clock on the timing tower, the MFD's Pit page, and AI cars pitting for rain tyres as the line gets wet and dries. Built per-car contact boxes from each car's body outline and improved AI racecraft: road and classic cars race their own drive plans on their own grip, circuits support a road-car racing line, AI cars use flat kerbs and slow for damage, the GT3 career field races at skill 88, and Watkins Glen Esses barrier hits were cut down.",
+      "Added the LC25 Prototype, a 2025-spec F1 car (body by shunqi, CC BY 4.0) with MGU-H energy flow rules, rear DRS, a ride-height ground-effect map, and physics calibrated against OpenF1, FIA and Pirelli data. On librecorsa.org it runs the Red Bull RB21 (Honda RBPT) sound by hahmad, used with permission (with a built-in synthesised V6 and MGU-H bank in local clones), alongside new wind, tyre rolling and bodywork audio layers. The 2026 Prototype is now named LC26 Prototype.",
       "Added Nuzzi-designed F1 rain-tyre physics and full-wet tread artwork for F1 wet compounds, and printed tyre sidewall art on the inner sidewalls too.",
       "Rebuilt the LC-LMDH around the Porsche 963 reference: weight split, pitch-sensitive aero, decoupled front platform, corner masses and damping, slick tyre character, turbos and rotating inertia, work-based fuel burn, differential and brake migration, steering-reading traction control, pedal map, late shift lights and electric pit-box launch. Reset LC-LMDH leaderboards to revision 18.",
-      "Fitted the LC-LMDH with a live Bosch-style steering-wheel LCD and in-car damage banners, tightened its steering rack to 390°, opened up the cockpit sightline with a parked wiper and cleaner seat adjustment, and replaced its engine layer with Engine Lab by bimbalanch's 963 V8 sound over its rising gear whine and electric motor launch.",
+      "Fitted the LC-LMDH with a live Bosch-style steering-wheel LCD and in-car damage banners (translated into all 11 languages so every language is complete again), tightened its steering rack to 390°, opened up the cockpit sightline with a parked wiper and cleaner seat adjustment, and replaced its engine layer with Engine Lab by bimbalanch's 963 V8 sound over its rising gear whine and electric motor launch.",
       "Replaced the default HUD with a five-layout sim-style lineup: Blade (the new default), Trackside, Endurance, Pit wall and Racing line, translated into all 11 languages, with per-device layout page choices and wheel damage read in the right order.",
       "Added an iRacing-style voice spotter under Settings > Audio (by adamikoo, #198) calling cars alongside with three CrewChief voices (Jim, Clare and Geoffrey) and an optional pit-radio filter, routed through the car audio output and synced with your account.",
-      "Added post-lap telemetry analysis (by adamikoo, #200) comparing your latest lap against the car's saved personal best with real sector splits, speed and input traces, and corner notes, stored locally and cleared with your saved data.",
+      "Added a lap telemetry view (by adamikoo, #200) in the lap board's Analysis tab and as a window from the lap card's button, comparing your personal best, latest lap or any lap of the session with real sector splits, speed, throttle, brake, gear and steering traces, a driving line map and key observations per corner, stored locally and cleared with your saved data.",
+      "Added Driver Profile 2.0 career stats (by adamikoo, #201) showing driver totals for time driven, distance and races, hydrated from race history and best laps, synced with your account and translated into all 11 languages.",
       "Auto-configured wheel bases that report their own pedals such as the MOZA R3 bundle and included wheel setups in wheel reports (#206), added progressive brake curve defaults for controllers and wheels, rendered live car mirrors in dash and shoulder views and on Low quality (#204), toned down and randomised AMG GT3 downshift pops, and fixed waking audio loops starting at the wrong pitch."
     ],
-    "commits": 74,
-    "lastSha": "47fd7482734c16c2560fb78cd1737ee8499d7b18"
+    "commits": 96,
+    "lastSha": "d485f14f4c14a916fab03fca838f06f7566aface"
   },
   {
     "date": "2026-11-24",
