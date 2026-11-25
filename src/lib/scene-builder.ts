@@ -16,6 +16,7 @@ import { assetProgress } from "@/lib/loading/asset-progress";
 import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
+import { applyTracksideWetness } from "@/lib/render/trackside-wet";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import { fitVisualRoad, inheritedTag } from "@/lib/render/fit-visual-road";
 import { fillRoadSeams, type SeamFillOptions } from "@/lib/render/seam-fill";
@@ -434,6 +435,9 @@ function loadTrackGlb(
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
           if (!isDecal && !mat.transparent && (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name)))) {
             applyAsphaltSheen(mat, sheenMask);
+          } else if (sceneryKind(mat) === null) {
+            // Kerbs, run-off, pit lane, walls, grass: wet with the road (the flat scenery has its own wet look)
+            applyTracksideWetness(mat, topName === "Track_Model");
           }
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
             if (tex) tex.anisotropy = 8;
@@ -880,6 +884,7 @@ export function buildCircuitScene(
     })
   );
   runoffMesh.receiveShadow = true;
+  applyTracksideWetness(runoffMesh.material, false, "paint");
   fallbackGroup.add(runoffMesh);
 
   kerbGeom.setAttribute(
@@ -903,6 +908,7 @@ export function buildCircuitScene(
       roughness: 0.45,
     })
   );
+  applyTracksideWetness(kerbMesh.material, false, "paint");
   fallbackGroup.add(kerbMesh);
 
   // ============================================================================

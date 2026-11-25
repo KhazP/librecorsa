@@ -107,6 +107,7 @@ import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
 import { gyroSource } from "@/lib/input/gyro-source";
 import { advanceAsphaltRain, setAsphaltStandingWater, setAsphaltWetness, setWetRoadProbe } from "@/lib/render/asphalt-sheen";
+import { setTracksideWetness } from "@/lib/render/trackside-wet";
 import {
   isRainCompound,
   recommendedCompound,
@@ -4855,6 +4856,7 @@ export class DriveSession {
         venueNight?.setNight(nightShare);
         postFx.setNightShare(nightShare);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
+        setTracksideWetness(wetnessFromWater(wx.waterMm));
         setAsphaltStandingWater(wx.waterMm, wx.lineWaterMm);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
