@@ -718,5 +718,127 @@
       "cornerRL": "RL",
       "cornerRR": "RR"
     }
+  },
+  "endurance": {
+    "order": "Running order",
+    "session": "Session",
+    "race": "Race",
+    "lapOf": "Lap {lap} / {total}",
+    "lap": "Lap {lap}",
+    "run": "Run {lap}",
+    "outLap": "Out lap",
+    "flag": {
+      "green": "Green",
+      "yellow": "Yellow",
+      "doubleYellow": "Double yellow",
+      "blue": "Blue flag",
+      "vsc": "VSC",
+      "vscEnding": "VSC ending",
+      "finalLap": "Final lap",
+      "finished": "Finished",
+      "grid": "Grid"
+    },
+    "leader": "Leader",
+    "interval": "Interval",
+    "out": "Out",
+    "disqualified": "DSQ",
+    "finished": "Finished",
+    "penalty": "+{seconds} s",
+    "penaltyTitle": "{seconds} second penalty",
+    "fastestLap": "Fastest lap of the race",
+    "row": "Position {position}, {driver}",
+    "map": "Circuit map",
+    "timing": "Lap timing",
+    "last": "Last",
+    "best": "Best",
+    "current": "Current",
+    "invalid": "Invalid",
+    "lapCut": "Cut",
+    "sector": "S{sector}",
+    "mark": {
+      "best": "Best",
+      "pb": "PB"
+    },
+    "vsBest": "To best lap",
+    "faster": "Faster",
+    "slower": "Slower",
+    "level": "Level",
+    "limits": "Limits",
+    "limitsOf": "{count} / {of}",
+    "weather": {
+      "label": "Weather",
+      "airTrack": "Air {air}, track {track}",
+      "rain": "Rain",
+      "heavyRain": "Heavy rain"
+    },
+    "pages": {
+      "label": "Pages",
+      "tyres": "Tyres",
+      "relative": "Relative",
+      "laps": "Laps"
+    },
+    "window": "Window {low}–{high}",
+    "corner": {
+      "fl": "Front left",
+      "fr": "Front right",
+      "rl": "Rear left",
+      "rr": "Rear right"
+    },
+    "tyre": "{corner}: {tread} % tread, {temp}, {pressure}, brake {brake}",
+    "brake": "Brk",
+    "hot": "Hot",
+    "cold": "Cold",
+    "flat": "Flat",
+    "noCars": "No cars near",
+    "lapsUp": "+{count} L",
+    "lapsDown": "−{count} L",
+    "noLaps": "No laps yet",
+    "lapShort": "L{lap}",
+    "lapHead": "Lap",
+    "timeHead": "Time",
+    "dial": "Speed, gear and revs",
+    "rpm": "rpm",
+    "car": "Car condition",
+    "damage": {
+      "none": "No damage",
+      "out": "Out",
+      "line": "{part} · {level}",
+      "minor": "Minor",
+      "heavy": "Heavy",
+      "front": "Front",
+      "rear": "Rear",
+      "left": "Left",
+      "right": "Right",
+      "suspension": "Suspension",
+      "puncture": "Puncture"
+    },
+    "fuel": "Fuel",
+    "fuelLaps": "{laps} laps until empty",
+    "fuelShort": "{laps} laps short of the flag",
+    "fuelKg": "{kg} kg",
+    "ers": "ERS",
+    "ersMode": {
+      "charge": "Charge",
+      "lowSpeed": "Low speed",
+      "balanced": "Balanced",
+      "race": "Race",
+      "attack": "Attack"
+    },
+    "overtake": {
+      "ready": "Overtake ready",
+      "on": "Overtake on",
+      "locked": "Overtake not earned",
+      "boost": "Boost on",
+      "lowGrip": "Low grip"
+    },
+    "electronics": {
+      "label": "Electronics",
+      "tc": "TC",
+      "abs": "ABS",
+      "bias": "Bias",
+      "map": "Map",
+      "off": "Off",
+      "working": "{aid} working"
+    }
   }
 }
