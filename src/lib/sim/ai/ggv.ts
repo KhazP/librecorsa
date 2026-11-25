@@ -81,9 +81,9 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
   // Measured 2026-11-25 on the 963 reference's platform, aero and slicks; its lock is 263.5° of rim on a 13.175 : 1 rack
   'lc-lmdh': {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
-    latG: [1.65, 1.87, 2.04, 2.27, 2.56, 2.91, 3.31, 3.67],
-    brakeG: [1.73, 1.83, 2.02, 2.26, 2.56, 2.87, 3.12, 3.38],
-    accelG: [0.78, 0.98, 0.81, 0.66, 0.49, 0.35, 0.2, 0.05],
+    latG: [1.66, 1.87, 2.03, 2.27, 2.56, 2.91, 3.29, 3.66],
+    brakeG: [1.73, 1.83, 2.02, 2.26, 2.55, 2.86, 3.12, 3.37],
+    accelG: [0.77, 0.97, 0.81, 0.66, 0.49, 0.35, 0.2, 0.05],
     lockKappa: Math.tan((263.5 / 13.175) * (Math.PI / 180)) / 3.148,
   },
   // Measured 2026-11-13

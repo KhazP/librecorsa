@@ -27,8 +27,9 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
  * The car's planning model for its lap-time line, braking zones, braking urgency and HUD target speed, at ρ 1.07
  * (Rwanda's air, as the other closed-wheel cars' plans are): downforce 2.25 v² (CL·A ≈ 4.2 m² over the speeds a lap
  * uses), drag 0.588 v² (CD·A 1.10 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.42 and brakes on
- * μ 1.3, under what `scripts/ai/measure-ggv.ts` measures (1.65 g at 54 km/h and 3.67 g at 306 in corners, 1.73 and
- * 3.38 g on the brakes), so it never brakes later than the car can stop.
+ * μ 1.21, under what `scripts/ai/measure-ggv.ts` measures (1.66 g at 54 km/h and 3.66 g at 306 in corners, 1.73 and
+ * 3.37 g on the brakes): with the drag the plan adds to its braking, 3.36 g at 306 km/h and 2.9 g at 270 against the
+ * measured 3.37 and 3.12, so it never brakes later than the car can stop.
  */
 export const LC_LMDH_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
@@ -38,7 +39,7 @@ export const LC_LMDH_PROFILE_CAR: SpeedProfileCarModel = {
   rearDownforceShare: 0.555,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
   muLat: 1.42,
-  muLong: 1.3,
+  muLong: 1.21,
   maxBrakeForceN:
     2 *
     C.brakes.maxTorqueNm *
