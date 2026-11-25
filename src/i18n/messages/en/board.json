@@ -100,7 +100,8 @@
       "gold": "G",
       "silver": "S",
       "bronze": "B",
-      "og": "OG"
+      "og": "OG",
+      "goat": "GOAT"
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -130,7 +131,8 @@
       "trackRecord": "Fastest lap",
       "og": "Physics V1",
       "bulb": "Game idea",
-      "creator": "Made the game"
+      "creator": "Made the game",
+      "goat": "Most decorated driver"
     }
   },
   "profile": {

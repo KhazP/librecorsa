@@ -306,10 +306,10 @@ async function main(): Promise<void> {
     const types = (k: string) => (badgesBody.badges[k] ?? []).map((b) => `${b.type}:${b.count}`).join(",");
     const aliceTr = badgesBody.badges.alice?.find((b) => b.type === "track_record");
     check(
-      "badges: Alice has weekly_gold (V1), weekly_silver (V2), and 1 contested track_record (excludes <5 drivers & legacy LC26)",
+      "badges: Alice has the GOAT (sole leader), weekly_gold (V1), weekly_silver (V2), and 1 contested track_record (excludes <5 drivers & legacy LC26)",
       badgesRes.status === 200 &&
         badgesRes.headers.get("Cache-Control") === `public, max-age=${SHARED_ANSWER_S.badges}` &&
-        types("alice") === "weekly_gold:1,weekly_silver:1,track_record:1" &&
+        types("alice") === "goat:1,weekly_gold:1,weekly_silver:1,track_record:1" &&
         aliceTr?.boards?.length === 1 &&
         aliceTr.boards[0].trackId === "sachsenring" &&
         aliceTr.boards[0].vehicle === "lc26" &&
