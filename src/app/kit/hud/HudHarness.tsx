@@ -55,6 +55,8 @@ interface HarnessQuery {
   edit: boolean;
   /** A force-feedback wheel in use: its meter is drawn where the layout puts it */
   ffb: boolean;
+  /** The player's Input trace setting on */
+  trace: boolean;
 }
 
 /**
@@ -91,14 +93,16 @@ function readQuery(): HarnessQuery {
     parts: readParts(q.get("parts")),
     edit: q.get("edit") === "1",
     ffb: q.get("ffb") === "1",
+    trace: q.get("trace") === "1",
   };
 }
 
 /**
  * The HUD test page: one layout over a still game frame, fed a fixed moment of a session (hud-fixture.ts).
- * `?style=blade&scenario=race|practice|gt3|lights|final&bg=/path.jpg&mfd=0&extras=1&map=local&chrome=0&ffb=1`.
- * `ffb=1` draws a force-feedback wheel's meter (without it, the HUD is a controller's or the keyboard's). The MFD's
- * Pit page takes its choices (pointer, D-pad keys , . − =), and the top centre calls the last lap (`scenario=final`).
+ * `?style=blade&scenario=race|practice|gt3|lights|final&bg=/path.jpg&mfd=0&extras=1&map=local&chrome=0&ffb=1&trace=1`.
+ * `ffb=1` draws a force-feedback wheel's meter (without it, the HUD is a controller's or the keyboard's), `trace=1`
+ * turns the Input trace setting on. The MFD's Pit page takes its choices (pointer, D-pad keys , . − =), and the top
+ * centre calls the last lap (`scenario=final`).
  * `size=0.75..1.5` is the HUD size, `parts=shrunk|grown|moved|<json>` the layout editor's moved and resized parts, and
  * `edit=1` puts the layout editor over it. `chrome=0` drops the page's own switcher, for screenshots; `?previews=1`
  * shows every layout's picker picture instead.
@@ -116,6 +120,7 @@ export function HudHarness() {
     const next = { ...query, ...q };
     const params = new URLSearchParams({ style: next.style, scenario: next.scenario, mfd: next.mfd ? "1" : "0", extras: next.extras ? "1" : "0", map: next.map });
     if (next.ffb) params.set("ffb", "1");
+    if (next.trace) params.set("trace", "1");
     if (next.bg !== DEFAULT_BG) params.set("bg", next.bg);
     window.history.replaceState(null, "", `?${params}`);
     setQuery(next);
@@ -180,6 +185,7 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
             leftExtra={leftExtra}
             showDeltaBar
             showRadar
+            showTrace={query.trace}
             cameraMode="chase"
             carId={query.scenario === "gt3" ? "amg-gt3" : "lc26"}
           />
