@@ -3,8 +3,8 @@
 /*
  * Hall of Fame (issue #129): live Fastest Lap record holders (overall and per car class, on contested boards),
  * plus completed (and in-progress) weekly challenge podiums grouped by event and physics version (V1 and V2
- * preserved side by side) and the most decorated weekly drivers tally. Free of the simulator, so both
- * ChallengePanel (in-game) and HomeBoards (home page) render it.
+ * preserved side by side) and the most decorated weekly drivers tally, its leaders wearing the GOAT badge (#181).
+ * Free of the simulator, so both ChallengePanel (in-game) and HomeBoards (home page) render it.
  */
 import React, { useEffect, useState } from "react";
 import { useTranslations } from "use-intl/react";
@@ -26,6 +26,7 @@ import {
   type VehicleClassId,
 } from "@/lib/cars/vehicle-class";
 import { driverNameKey } from "@/lib/net/board-client";
+import { goatKeys } from "@/lib/net/goat";
 import type { VehicleModelId } from "@/types/f1";
 import { formatLapTime } from "@/components/hud/hud-format";
 import { Card, EmptyState, Segmented } from "@/components/ui";
@@ -51,6 +52,9 @@ export interface HallOfFameProps {
 }
 
 const humanize = (id: string): string => id.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** The badge the Most decorated list's leaders wear on their rows, as the boards show it beside their names */
+const GOAT_BADGES: readonly DriverBadge[] = [{ type: "goat", count: 1 }];
 
 /** Each place's medal; `place` is its select value in the messages (board.hallOfFame.medal) */
 const MEDAL_STYLE: Record<1 | 2 | 3, { place: string; icon: IconName; tone: BadgeToneProp; variant: BadgeVariant }> = {
@@ -283,6 +287,8 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
   }
 
   const versions = [...new Set(data.events.map((e) => e.physics))].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+  // The same rule the server gives the badge by (goat.ts), so the rows marked here are the drivers wearing it
+  const goats = goatKeys(data.mostDecorated);
   const activeFilter = physicsFilter === "all" || versions.includes(physicsFilter) ? physicsFilter : "all";
   const visibleEvents = activeFilter === "all" ? data.events : data.events.filter((e) => e.physics === activeFilter);
 
@@ -314,6 +320,7 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
                     <span dir="auto" className={`truncate text-[14px] font-semibold ${mine ? "text-lc-volt" : "text-lc-chalk"}`} title={d.name}>
                       {d.name}
                     </span>
+                    {goats.has(d.nameKey) ? <DriverBadges badges={GOAT_BADGES} compact /> : null}
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     {d.gold > 0 ? (
