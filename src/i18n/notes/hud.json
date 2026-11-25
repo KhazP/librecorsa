@@ -804,6 +804,8 @@
   "multiPageMfd.pit.stops": "MFD Pit page: label of the pit stops made count.",
   "multiPageMfd.pit.stopsOf": "MFD Pit page: pit stops made out of the stops the race requires.",
   "multiPageMfd.pit.stopsShort": "Folded MFD one-line summary on the Pit page: pit stops made so far.",
+  "multiPageMfd.pit.pick": "MFD Pit page, bottom left beside the D-pad or keys that move the cursor between its settings: pick one. One short word, the HUD is small.",
+  "multiPageMfd.pit.change": "MFD Pit page, bottom left beside the D-pad up / down or keys that change the setting under the cursor: set it. One short word, the HUD is small.",
   "pit.boxBox": "HUD badge on the way into the pits after calling the stop (racing radio 'box, box'). One short word.",
   "pit.limiter": "HUD badge: the pit speed limiter is on; the limit in km/h follows it.",
   "pit.stop": "HUD badge in the pit box: stop the car now.",

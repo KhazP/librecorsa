@@ -593,7 +593,9 @@
       "callBox": "Call",
       "stops": "Stops",
       "stopsOf": "{made} of {required}",
-      "stopsShort": "{made, plural, =0 {No stops} one {# stop} other {# stops}}"
+      "stopsShort": "{made, plural, =0 {No stops} one {# stop} other {# stops}}",
+      "pick": "Pick",
+      "change": "Set"
     }
   },
   "tunerMfdPanel": {
