@@ -3795,6 +3795,17 @@ export class F12026CarSim implements SimulatorCar {
     t.manualOverrideActive = this.pushActive;
     const rules2026 = this.config.ers.regulations === 'f1-2026' && this.profile.hasErs;
     t.ersBoostActive = rules2026 ? this.ersBoostNow : undefined;
+    // The lap's energy left (#196): under the 2026 rules the recharge the lap may still have and the whole store (no
+    // deploy limit a lap); on a car with a per-lap deploy limit what is left of it, as far as the store holds it
+    const ers = v.config.ers;
+    const deployCapped = this.profile.hasErs && !rules2026 && ers.deployPerLapJ > 0 && Number.isFinite(ers.deployPerLapJ);
+    t.ersRechargeLimitJ = rules2026 ? v.lapRechargeLimitJ : undefined;
+    t.ersRechargeLeftJ = rules2026 ? Math.max(0, v.lapRechargeLimitJ - v.lapHarvestJ) : undefined;
+    t.ersDeployLeftJ = rules2026
+      ? v.ersEnergyJ
+      : deployCapped
+        ? Math.max(0, Math.min(ers.deployPerLapJ - v.lapDeployJ, v.ersEnergyJ))
+        : undefined;
     t.overtakeRace = rules2026 && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing;
     t.overtakeInUse = t.overtakeRace && (this.overtakeInUse || this.overtakeAutoNow);
     t.overtakeAuto = t.overtakeRace && this.overtakeAutoNow;

@@ -532,6 +532,17 @@ export interface CarTelemetry {
   boostRemainingS: number;
   /** A 2026 F1 car's Boost held (it keeps or raises the motor's power; in a race to its power when pressed or 150 kW) */
   ersBoostActive?: boolean;
+  /**
+   * A 2026 F1 car's recharge this lap (J): what the lap may still recover and the lap's limit (the circuit's for the
+   * session, with Overtake's extra). Undefined on other cars
+   */
+  ersRechargeLeftJ?: number;
+  ersRechargeLimitJ?: number;
+  /**
+   * Energy the motor may still deploy this lap (J): a 2026 F1 car's store (the rules cap no lap), or on a car with a
+   * per-lap deploy limit what is left of it, as far as the store holds it. Undefined without such a limit
+   */
+  ersDeployLeftJ?: number;
   /** A 2026 F1 car's Overtake in use in a race (the higher speed curve), and whether the assist is using it */
   overtakeInUse?: boolean;
   overtakeAuto?: boolean;
