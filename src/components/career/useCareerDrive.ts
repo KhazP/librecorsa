@@ -246,6 +246,8 @@ export function useCareerDrive(d: CareerDriveDeps) {
       const ownCar = careerDrive?.ownCar ?? d.carIdRef.current;
       d.startSession({ kind: "practice" });
       d.changeCar(season.settings.car, { remember: false });
+      // A test day's flying laps start at the car's own pace: the boards' start hands a slow car the circuit car's speed
+      session.setFairFlyingStart(true);
       const at = plan ?? testAt;
       const round = at ? roundConditions(run, season.seriesId, at.roundIndex, trackDefaultTimeOfDay(at.trackId) === "night") : null;
       // A test day runs dry (its target is a dry lap), at the time of day of the round there
@@ -451,6 +453,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
     careerDrive = null;
     setDriving(false);
     d.session?.setRaceOverride(null);
+    d.session?.setFairFlyingStart(false);
     d.session?.preRaceShow.arm(null);
     if (cur && cur.ownCar !== d.carIdRef.current) d.changeCar(cur.ownCar, { remember: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -52,7 +52,8 @@ export class ReferenceLap {
     try {
       const own = vehicleModelSpec(vehicle).createSim(track, null, carById(carId).bodyPlan);
       const car = own.createAiPeerCar?.() ?? own;
-      car.resetToStartGrid(true);
+      // From the fair start a test day's laps take (`fairStart`): the line check's lap starts at the car's own pace too
+      car.resetToStartGrid(true, 0, undefined, false, true);
       car.aiAutopilot = true;
       if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
       this.car = car;
