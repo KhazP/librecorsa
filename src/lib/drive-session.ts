@@ -2759,6 +2759,7 @@ export class DriveSession {
     const spotter = new SpotterEngine();
     if (settings.audio.spotter || settings.audio.raceEngineer) spotter.preloadVoice(settings.audio.spotterVoice);
     let cueDrsAvail = false;
+    let cueOvertakeDetAtMs = -1;
     let cueDrsOpen = false;
     let cueShiftArmed = true;
     let cueGear = 0;
@@ -4316,7 +4317,12 @@ export class DriveSession {
           voice: settingsNow.audio.spotterVoice,
           radioFilter,
         };
-        if (drsAvail && !cueDrsAvail && !tc.aiAutopilot) spotter.playEvent("overtake", engCfg);
+        const ot = tc.f12026?.overtakeDetection;
+        const overtakeEarned = Boolean(tc.overtakeAvailable && ot?.earned);
+        if (overtakeEarned && ot && ot.atMs !== cueOvertakeDetAtMs && !tc.aiAutopilot) {
+          spotter.playEvent("overtake", engCfg);
+          cueOvertakeDetAtMs = ot.atMs;
+        }
         const playerRes = tc.race?.results?.find((r) => r.isPlayer);
         const dnfNow = Boolean(tc.race?.damage?.terminal || (tc.race?.damage?.overall ?? 0) >= 0.65 || playerRes?.dnf);
         const winNow = Boolean(tc.race?.phase === "finished" && tc.race.position === 1 && !playerRes?.dnf);
