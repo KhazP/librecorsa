@@ -788,7 +788,8 @@ const CarStatus: React.FC<{ t: CarTelemetry; compound: TireCompound; w: Words }>
         {/* Four corner radial tyre-life rings with subtle leader ticks */}
         {RING_AT.map(([x, y, tickTo], i) => {
           const tread = Math.max(0, Math.min(100, 100 - t.tireWearPct[i]));
-          const punctured = Boolean(damage?.punctured[i]);
+          // The damage lists its corners FR, FL, RR, RL; the rings go FL, FR, RL, RR
+          const punctured = Boolean(damage?.punctured[i ^ 1]);
           const ringColor = punctured || tread < 25 ? HUD_LOSS : tread < 55 ? HUD_CAUTION : "var(--color-lc-chalk)";
           const leftSide = i % 2 === 0;
           const tickStart = leftSide ? x + TYRE_R + 3 : x - TYRE_R - 3;
