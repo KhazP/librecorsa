@@ -20,6 +20,7 @@
 | fastest lap | 패스티스트 랩 | 레이스 전체 최고 랩 |
 | personal best | 개인 최고 기록 | HUD 약어는 `PB` 유지 |
 | last lap | 이전 랩 | 직전 완료 랩(최종 랩 문맥에서는 `마지막 랩`) |
+| final lap | 마지막 랩 | 최종 랩 알림·타워·HUD |
 | out lap | 아웃 랩 | 피트 아웃 직후 랩 |
 | optimal lap | 이론 | HUD 짧은 라벨(이론 최고 랩) |
 | predicted lap | 예상 | 짧은 HUD 라벨도 `예상` |
@@ -228,5 +229,5 @@
 | career score / multiplier | 커리어 점수 / 배율 | `점수 {mult}×` |
 | pit stop(s) | 피트 스톱 / 의무 피트 스톱 | |
 | clean race | 클린 레이스 | |
-| series names | 클럽 컵, 투어링 컵, 클래식 GT, 프로토타입 컵, GT3, 내구 프로토타입, 그랑프리, 프로카 시리즈, 그룹 4 클래식, 캔암 레전드 | |
+| series names | 클럽 컵, 쿠페 컵, 투어링 컵, 클래식 GT, 프로토타입 컵, GT3, 내구 프로토타입, 그랑프리, 프로카 시리즈, 그룹 4 클래식, 캔암 레전드 | |
 | regions | 아메리카, 유럽, 아시아 태평양 | `{series} {region}` |

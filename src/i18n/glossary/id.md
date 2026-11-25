@@ -18,6 +18,7 @@
 | fastest lap | lap tercepat | — |
 | personal best | rekor pribadi | — |
 | last lap | lap sebelumnya / lap terakhir | *Lap sebelumnya* untuk waktu lap yang baru selesai di HUD/statistik; *lap terakhir* untuk lap final balapan |
+| final lap | lap terakhir | HUD singkat (Blade): *Lap final* |
 | out lap | out lap | Lap keluar dari pit; baku di komunitas balap Indonesia |
 | optimal lap | optimal | Label singkat HUD |
 | predicted lap | prediksi | Singkat di HUD: *Pred* |
@@ -230,4 +231,4 @@
 | multiplier | pengali | — |
 | points (pts) | poin | — |
 | regions: Americas, Europe, Asia-Pacific | Amerika, Eropa, Asia-Pasifik | — |
-| series names | Club Cup, Touring Cup, Classic GT, Prototype Cup, GT3, Prototipe Ketahanan, Grand Prix, Procar Series, Group 4 Classic, Can-Am Legends | Nama tetap; hanya nama deskriptif yang diterjemahkan |
+| series names | Club Cup, Coupé Cup, Touring Cup, Classic GT, Prototype Cup, GT3, Prototipe Ketahanan, Grand Prix, Procar Series, Group 4 Classic, Can-Am Legends | Nama tetap; hanya nama deskriptif yang diterjemahkan |

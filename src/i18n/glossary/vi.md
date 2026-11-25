@@ -19,6 +19,7 @@
 | fastest lap | vòng nhanh nhất | Giữ `FL` khi ở dạng mã HUD |
 | personal best | kỷ lục cá nhân | Giữ `PB` khi ở dạng mã HUD |
 | last lap | vòng trước | |
+| final lap | vòng cuối | Vòng cuối cùng của cuộc đua; phân biệt với *vòng trước* (last lap) |
 | out lap | vòng xuất pit | Vòng chạy ra từ làn pit |
 | optimal lap | lý tưởng | Nhãn HUD ngắn |
 | predicted lap | dự kiến | Dạng ngắn trên HUD cũng là *Dự kiến* |
@@ -230,5 +231,5 @@
 | pit stop(s) | dừng pit / dừng pit bắt buộc | |
 | clean race | cuộc đua sạch | |
 | podium (count) | lên bục | *{podiums} lên bục* |
-| series names | Club Cup, Touring Cup, Classic GT, Prototype Cup, GT3, Nguyên mẫu Sức bền, Grand Prix, Procar Series, Group 4 Classic, Can-Am Legends | Chỉ dịch tên mang tính mô tả |
+| series names | Club Cup, Coupé Cup, Touring Cup, Classic GT, Prototype Cup, GT3, Nguyên mẫu Sức bền, Grand Prix, Procar Series, Group 4 Classic, Can-Am Legends | Chỉ dịch tên mang tính mô tả |
 | regions | Châu Mỹ, Châu Âu, Châu Á-Thái Bình Dương | *{series} {region}* |

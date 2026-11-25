@@ -20,6 +20,7 @@
 | fastest lap | أسرع لفة | |
 | personal best | أفضل زمن شخصي | Short HUD: PB or أفضل شخصي |
 | last lap | اللفة الأخيرة | |
+| final lap | اللفة الأخيرة | HUD قصير (Blade): آخر لفة |
 | out lap | لفة الخروج | |
 | optimal lap | المثالية | Short HUD label for theoretical best lap |
 | predicted lap | المتوقع / متوقع | Short HUD: المتوقع or متوقع |
@@ -230,4 +231,4 @@
 | multiplier | المضاعف | |
 | points (pts) | نقطة / النقاط | "{points} نقطة" |
 | regions: Americas, Europe, Asia-Pacific | الأمريكتان، أوروبا، آسيا والمحيط الهادئ | "{series} ({region})" |
-| series names | كأس الأندية، كأس السيارات السياحية، GT الكلاسيكية، كأس النماذج الأولية، GT3، نماذج التحمل الأولية، الجائزة الكبرى، سلسلة Procar، كلاسيكيات المجموعة 4، أساطير Can-Am | |
+| series names | كأس الأندية، كأس الكوبيه، كأس السيارات السياحية، GT الكلاسيكية، كأس النماذج الأولية، GT3، نماذج التحمل الأولية، الجائزة الكبرى، سلسلة Procar، كلاسيكيات المجموعة 4، أساطير Can-Am | |

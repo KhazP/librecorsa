@@ -20,6 +20,7 @@
 | fastest lap | en hızlı tur | |
 | personal best | kişisel en iyi | Dar HUD alanlarında `PB` korunur |
 | last lap | son tur | |
+| final lap | son tur | Yarışın son turu; HUD ve bildirimlerde |
 | out lap | çıkış turu | Pit çıkış turu |
 | optimal lap | ideal | Kısa HUD etiketi |
 | predicted lap | tahmini | Kısa HUD’da da `Tahmini` |
@@ -213,7 +214,7 @@
 | career | kariyer | |
 | career mode | kariyer modu | |
 | ladder | basamaklar | Seri basamakları; tek adım için `basamak` |
-| series | seri | Seri adları ad olarak kalır: Club Cup, Touring Cup, Classic GT, GT3, Grand Prix, Procar Series, Can-Am Legends; tanımlayıcı olanlar çevrilir: Prototip Kupası, Dayanıklılık Prototipleri, Grup 4 Classic |
+| series | seri | Seri adları ad olarak kalır: Club Cup, Coupé Cup, Touring Cup, Classic GT, GT3, Grand Prix, Procar Series, Can-Am Legends; tanımlayıcı olanlar çevrilir: Prototip Kupası, Dayanıklılık Prototipleri, Grup 4 Classic |
 | discipline | disiplin | Pist yarışları, Tarihi yarışlar |
 | tier | basamak | `{tier}. basamak` |
 | promotion / promoted | yükselme / yükseldi | `üst seriye çıkma` uzun anlatımda |

@@ -19,6 +19,7 @@
 | fastest lap | volta mais rápida | |
 | personal best | recorde pessoal | |
 | last lap | última volta | |
+| final lap | última volta | Short HUD (Blade): Últ. volta |
 | out lap | volta de saída | |
 | optimal lap | ideal | Short HUD label |
 | predicted lap | previsto | Short HUD: Prev. |
@@ -268,7 +269,7 @@
 | career | carreira | |
 | career mode | modo carreira | |
 | ladder | escada | The ladder of series; "degrau" for one step |
-| series | categoria | Series names stay as names: Club Cup, Touring Cup, Classic GT, GT3, Grand Prix, Procar Series, Can-Am Legends; descriptive ones translated: Copa Protótipos, Protótipos de Endurance, Grupo 4 Classic |
+| series | categoria | Series names stay as names: Club Cup, Coupé Cup, Touring Cup, Classic GT, GT3, Grand Prix, Procar Series, Can-Am Legends; descriptive ones translated: Copa Protótipos, Protótipos de Endurance, Grupo 4 Classic |
 | discipline | disciplina | Corridas de circuito, Corridas históricas |
 | tier | nível | "Nível 2" |
 | promotion / promoted | acesso / promovido | Verb "subir"; never bare "promoção" |

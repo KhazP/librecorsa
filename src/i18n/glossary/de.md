@@ -20,6 +20,7 @@
 | fastest lap | Schnellste Runde | |
 | personal best | Persönliche Bestzeit | |
 | last lap | Letzte Runde | |
+| final lap | Letzte Runde | Short HUD (Blade): Letzte Rd. |
 | out lap | Outlap | English term is normal |
 | optimal lap | Optimal | Short HUD label |
 | predicted lap | Prognose | Short HUD: Prog. |
@@ -269,7 +270,7 @@
 | ladder | Leiter | "Karriereleiter" in prose; tab "Leiter" |
 | tier | Stufe | "Stufe {tier}" on the ladder |
 | discipline | Disziplin | Road racing = Rundstreckensport, Historic racing = Historischer Rennsport |
-| series | Serie | Series names stay English (Club Cup, GT3, Can-Am Legends); "Prototypen-Cup", "Langstrecken-Prototypen", "Gruppe 4 Classic" |
+| series | Serie | Series names stay English (Club Cup, Coupé Cup, Touring Cup, GT3, Can-Am Legends); "Prototypen-Cup", "Langstrecken-Prototypen", "Gruppe 4 Classic" |
 | promotion / promoted | Aufstieg / aufgestiegen | Verb "aufsteigen"; never "Promotion" or "Beförderung". Cut line: "über dem Strich" |
 | attempt | Versuch | |
 | mulligan | Mulligan (pl. Mulligans) | Golf loanword: restart a round left early |

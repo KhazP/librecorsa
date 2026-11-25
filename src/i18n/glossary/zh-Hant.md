@@ -19,6 +19,7 @@
 | fastest lap | 最快單圈 | 場上／賽事最快圈速 |
 | personal best | 個人最佳 | HUD 縮寫 PB 可保留 |
 | last lap | 上一圈 | |
+| final lap | 最後一圈 | 賽事最終圈通知與 HUD 標籤 |
 | out lap | 出場圈 | |
 | optimal lap | 理想 | HUD 短標籤 |
 | predicted lap | 預測 | HUD 短標籤亦為「預測」 |
@@ -229,5 +230,5 @@
 | career score / multiplier | 生涯分數／倍率 | 「{mult}× 分數」 |
 | pit stop(s) | 進站／強制進站 | 比賽設定列用「進站次數」 |
 | clean race | 乾淨比賽 | |
-| series names | 俱樂部盃、房車盃、經典 GT、原型車盃、GT3、耐力原型車、大獎賽、Procar 系列賽、第四組經典賽、Can-Am 傳奇 | |
+| series names | 俱樂部盃、雙門跑車盃、房車盃、經典 GT、原型車盃、GT3、耐力原型車、大獎賽、Procar 系列賽、第四組經典賽、Can-Am 傳奇 | |
 | regions | 美洲、歐洲、亞太 | 「{series}（{region}）」 |

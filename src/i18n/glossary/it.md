@@ -19,6 +19,7 @@
 | fastest lap | giro più veloce | Race-wide fastest |
 | personal best | record personale | |
 | last lap | ultimo giro | |
+| final lap | ultimo giro | Short HUD (Blade): Ult. giro |
 | out lap | giro di uscita | |
 | optimal lap | ottimale | Short HUD label |
 | predicted lap | previsto | Short HUD: Prev. |
@@ -270,7 +271,7 @@
 | ladder | percorso | Tab "Percorso"; "Percorso: {discipline}" |
 | tier | livello | "Livello {tier}" |
 | discipline | disciplina | Road racing = Corse su pista, Historic racing = Corse storiche |
-| series | serie | Series names stay English (Club Cup, GT3, Can-Am Legends); "Coppa Prototipi", "Prototipi Endurance", "Gruppo 4 Classic" |
+| series | serie | Series names stay English (Club Cup, Coupé Cup, Touring Cup, GT3, Can-Am Legends); "Coppa Prototipi", "Prototipi Endurance", "Gruppo 4 Classic" |
 | promotion / promoted | promozione / promosso | Cut line: "soglia promozione" |
 | attempt | tentativo | |
 | mulligan | mulligan | Golf loanword, invariable plural: restart a round left early |
