@@ -84,8 +84,14 @@ export function lapPhysicsVersion(vehicle: VehicleModelId | undefined, trackId: 
  * other cars keep their boards. A version and its offset stay under CIRCUIT_REVISION_STEP.
  */
 const LC26_RIGID_BODY_OFFSET = 530;
+/**
+ * The LC-LMDH's own offset, raised by ten when that car alone changes, as the LC26's is: 10 for its rework on the 963
+ * reference, whose lap times are not comparable with the ones before (25 Nov 2026). Its laps from before stay under
+ * `PHYSICS_VERSION` itself, off the current boards
+ */
+const LC_LMDH_OFFSET = 10;
 export function carPhysicsVersion(vehicle?: VehicleModelId): number {
-  return revisionIn(PHYSICS_VERSION, LC26_RIGID_BODY_OFFSET, vehicle);
+  return revisionIn(PHYSICS_VERSION, LC26_RIGID_BODY_OFFSET, LC_LMDH_OFFSET, vehicle);
 }
 
 /**
@@ -106,9 +112,13 @@ export function circuitRevision(trackId: string, physics: number = PHYSICS_VERSI
   return resetsOf(trackId).filter((r) => r.physics <= physics).length;
 }
 
-/** A car's revision under a physics version: the version itself, and for the LC26 on its rigid-body engine, plus its offset */
-function revisionIn(physics: number, lc26Offset: number, vehicle?: VehicleModelId): number {
-  return vehicle === "lc26" && lc26OnRigidBody() ? physics + lc26Offset : physics;
+/**
+ * A car's revision under a physics version: the version itself, and for the LC26 on its rigid-body engine and the
+ * LC-LMDH, plus their offsets
+ */
+function revisionIn(physics: number, lc26Offset: number, lmdhOffset: number, vehicle?: VehicleModelId): number {
+  if (vehicle === "lc26" && lc26OnRigidBody()) return physics + lc26Offset;
+  return vehicle === "lc-lmdh" ? physics + lmdhOffset : physics;
 }
 
 /**
@@ -118,9 +128,16 @@ function revisionIn(physics: number, lc26Offset: number, vehicle?: VehicleModelI
  * its number (scripts/verify/verify-leaderboard.ts holds the two together).
  */
 export const PHYSICS_VERSIONS = [
-  { name: "V1", physics: 7, lc26Offset: 520 },
-  { name: "V2", physics: 8, lc26Offset: 530, priorLc26Offsets: [520] },
-] as const satisfies readonly { name: string; physics: number; lc26Offset: number; priorLc26Offsets?: readonly number[] }[];
+  { name: "V1", physics: 7, lc26Offset: 520, lmdhOffset: 0 },
+  { name: "V2", physics: 8, lc26Offset: 530, priorLc26Offsets: [520], lmdhOffset: 10, priorLmdhOffsets: [0] },
+] as const satisfies readonly {
+  name: string;
+  physics: number;
+  lc26Offset: number;
+  priorLc26Offsets?: readonly number[];
+  lmdhOffset: number;
+  priorLmdhOffsets?: readonly number[];
+}[];
 export type NamedPhysicsVersion = (typeof PHYSICS_VERSIONS)[number];
 
 /** The named version whose PHYSICS_VERSION is `physics`; null for one the boards don't name */
@@ -139,10 +156,11 @@ export function physicsVersionLabel(physics: number, opts: { short?: boolean } =
  * version it is `carPhysicsVersion`.
  */
 export function boardPhysicsVersion(physics: number, vehicle?: VehicleModelId): number {
-  return revisionIn(physics, lc26OffsetIn(physics), vehicle);
+  return revisionIn(physics, lc26OffsetIn(physics), lmdhOffsetIn(physics), vehicle);
 }
 
 const lc26OffsetIn = (physics: number): number => namedPhysicsVersion(physics)?.lc26Offset ?? LC26_RIGID_BODY_OFFSET;
+const lmdhOffsetIn = (physics: number): number => namedPhysicsVersion(physics)?.lmdhOffset ?? LC_LMDH_OFFSET;
 
 /**
  * One board of a circuit the picker offers: a physics version, and the circuit's revision under it. Its `base` is the
@@ -207,10 +225,14 @@ export function revisionOnBoard(base: number, vehicle?: VehicleModelId): number 
 
 /**
  * The board (`BoardChoice.id`) a lap of this revision on this circuit was ranked on, the LC26's on either engine; null
- * for one older than every board the picker names
+ * for one older than every board the picker names (an LC-LMDH lap from before its own offset was raised)
  */
 export function boardChoiceOfLap(trackId: string, vehicle: VehicleModelId, revision: number): string | null {
-  const on = boardChoices(trackId).find((c) => revision === c.base || (vehicle === "lc26" && revision === c.base + lc26OffsetIn(c.physics)));
+  const on = boardChoices(trackId).find((c) =>
+    vehicle === "lc-lmdh"
+      ? revision === c.base + lmdhOffsetIn(c.physics)
+      : revision === c.base || (vehicle === "lc26" && revision === c.base + lc26OffsetIn(c.physics)),
+  );
   return on?.id ?? null;
 }
 
@@ -221,15 +243,16 @@ export function boardChoiceOfLap(trackId: string, vehicle: VehicleModelId, revis
  */
 export function shippingLapPhysicsVersion(vehicle: VehicleModelId, trackId: string): number {
   const base = currentBoardBase(trackId);
-  return vehicle === "lc26" ? base + LC26_RIGID_BODY_OFFSET : base;
+  return vehicle === "lc26" ? base + LC26_RIGID_BODY_OFFSET : vehicle === "lc-lmdh" ? base + LC_LMDH_OFFSET : base;
 }
 
 /**
  * True when a lap of this revision on this circuit may go on a board now: the current physics version and the
- * circuit's current revision only, the LC26's on either engine
+ * circuit's current revision only, the LC26's on either engine, the LC-LMDH's on its own offset
  */
 export function isCurrentLapPhysics(vehicle: VehicleModelId, revision: number, trackId: string): boolean {
   const base = currentBoardBase(trackId);
+  if (vehicle === "lc-lmdh") return revision === base + LC_LMDH_OFFSET;
   return revision === base || (vehicle === "lc26" && revision === base + LC26_RIGID_BODY_OFFSET);
 }
 

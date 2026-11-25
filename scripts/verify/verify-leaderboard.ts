@@ -205,6 +205,23 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
     'versions: a version and the LC26\'s offset stay under a circuit\'s step',
     PHYSICS_VERSIONS.every((v) => v.physics + v.lc26Offset < CIRCUIT_REVISION_STEP)
   );
+  // The LC-LMDH's boards started again for its rework on the 963 reference: its laps go up on its own offset, and the
+  // ones from before (revision 8) are off every board the picker names, as the LC26's 528 went
+  check(
+    'versions: the LC-LMDH ranks on its own offset, its laps from before its rework off the boards',
+    newest.lmdhOffset === 10 && carPhysicsVersion('lc-lmdh') === PHYSICS_VERSION + 10 && lapPhysicsVersion('lc-lmdh', TRACK) === 18 &&
+      isCurrentLapPhysics('lc-lmdh', 18, TRACK) && !isCurrentLapPhysics('lc-lmdh', 8, TRACK) && !isCurrentLapPhysics('amg-gt3', 18, TRACK) &&
+      boardChoiceOfLap(TRACK, 'lc-lmdh', 18) === '8' && boardChoiceOfLap(TRACK, 'lc-lmdh', 8) === null && boardChoiceOfLap(TRACK, 'lc-lmdh', 7) === '7' &&
+      boardPhysicsVersion(v1.physics, 'lc-lmdh') === 7 && boardChoiceOfLap(TRACK, 'amg-gt3', 18) === null,
+    `p${lapPhysicsVersion('lc-lmdh', TRACK)}`
+  );
+  check(
+    'versions: the LC-LMDH\'s offset stays under a circuit\'s step, clear of the LC26\'s',
+    PHYSICS_VERSIONS.every((v) => {
+      const r: number = v.physics + v.lmdhOffset;
+      return r < CIRCUIT_REVISION_STEP && PHYSICS_VERSIONS.every((w) => r !== w.physics + w.lc26Offset);
+    })
+  );
   const plain = boardChoices(TRACK);
   check(
     'versions: a circuit that never started again has one board per version, the two the picker shows',
