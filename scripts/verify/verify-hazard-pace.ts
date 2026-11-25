@@ -156,9 +156,19 @@ console.log('\n== AiOpponentField on RISE short (road cars)');
     // The player's car on autopilot under the VSC drives to that pace, not to the circuit's share (over its top speed)
     me.sim.aiAutopilot = true;
     f.vsc._phase = 'deployed';
-    (field as unknown as { capPlayerAutopilot(L: number, dt: number): void }).capPlayerAutopilot(track.totalLengthM, 1 / 120);
-    const cap = me.sim.aiSpeedCapMs ?? Infinity;
-    check('the autopilot\'s VSC cap is its own VSC pace', Math.abs(cap - vscReferenceSpeedMs(ownStraight * 3.6)) < 0.5 && cap < vscReferenceSpeedMs(circuit * 3.6) - 5, `cap ${f1(cap)} vs circuit share ${f1(vscReferenceSpeedMs(circuit * 3.6))} m/s`);
+    // (both ways the autopilot is driven: by the field's racecraft, `autopilotRacecraft` above 0, and on its own)
+    const inner = field as unknown as { rc: { autopilotRacecraft: number }; capPlayerAutopilot(L: number, dt: number): void; planTraffic(dt: number): void };
+    const racecraftWas = inner.rc.autopilotRacecraft;
+    for (const racecraft of [racecraftWas, 0]) {
+      inner.rc.autopilotRacecraft = racecraft;
+      me.sim.aiSpeedCapMs = undefined;
+      inner.capPlayerAutopilot(track.totalLengthM, 1 / 120);
+      if (racecraft > 0) inner.planTraffic(1 / 120);
+      me.sim.teleportToDistance(400, 40, 0);
+      const cap = me.sim.aiSpeedCapMs ?? Infinity;
+      check(`the autopilot's VSC cap is its own VSC pace (${racecraft > 0 ? 'raced by the field\'s rules' : 'on its own'})`, Math.abs(cap - vscReferenceSpeedMs(ownStraight * 3.6)) < 0.5 && cap < vscReferenceSpeedMs(circuit * 3.6) - 5, `cap ${f1(cap)} vs circuit share ${f1(vscReferenceSpeedMs(circuit * 3.6))} m/s`);
+    }
+    inner.rc.autopilotRacecraft = racecraftWas;
     // Driven at full pace under the VSC, the delta runs out (it used to grow: the circuit's share was over its top speed)
     me.sim.aiAutopilot = false;
     const delta = () => (field as unknown as { vsc: { deltaS: number } }).vsc.deltaS;

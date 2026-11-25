@@ -2734,7 +2734,9 @@ export class AiOpponentField implements AiRace {
         // lapping car's lifts are caps at that share of the speed the circuit asks for here at that pace
         const lift = Math.min(vscActive ? VSC_PACE_SHARE : 1, yellowFlag === 2 ? DOUBLE_YELLOW_PACE : yellowFlag > 0 ? YELLOW_PACE : 1) * blueLift;
         if (lift < 1) speedCap = Math.min(speedCap, (sample.optimalSpeedKmh / 3.6) * clamp(me.aiPaceScale ?? 1, 0.3, 1.1) * lift);
-        if (vscActive) speedCap = Math.min(speedCap, vscReferenceSpeedMs(sample.optimalSpeedKmh));
+        // Under the VSC: the car's own VSC pace, the one its delta is judged by (`updateVsc`), not a share of the circuit's
+        // (the fastest car's) speed, which is over a slow car's top end
+        if (vscActive) speedCap = Math.min(speedCap, vscReferenceSpeedMs(this.ownSpeedMs(car) * 3.6));
         me.aiSpeedCapMs = speedCap;
         continue;
       }

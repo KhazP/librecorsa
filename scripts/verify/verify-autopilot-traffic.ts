@@ -7,6 +7,9 @@
  * out of the autopilot's lane now (it came down the outside into a pack braking for the hairpin at racing speed, and
  * turned in across it); a car beside it that its line would squeeze is given room or, with none, it lifts to drop in
  * behind. A clear road, and a car well off its path, leave it alone.
+ *
+ * With `autopilotRacecraft` above 0 (the default) a racing autopilot is driven by the field's own racecraft instead
+ * (planTraffic, verify-race-craft.ts); these checks are for the path the autopilot takes without it.
  */
 import { readFileSync } from 'node:fs';
 import { vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
@@ -33,7 +36,7 @@ type Car = { isPlayer: boolean; sim: SimulatorCar; biasM: number; startLaneM: nu
 /** A GT3 field of one AI car and the player's car on autopilot, racing; the cap and bias the autopilot is given */
 function autopilotWith(me: [number, number, number], other: [number, number, number] | null): { capMs: number; biasM: number } {
   const player = vehicleModelSpec('amg-gt3').createSim(track, null);
-  const field = new AiOpponentField(track, player, aiDriversFor(1), undefined, { seed: 5, learning: false, trackId: 'rwanda_official_short' });
+  const field = new AiOpponentField(track, player, aiDriversFor(1), undefined, { seed: 5, learning: false, trackId: 'rwanda_official_short', racecraft: { autopilotRacecraft: 0 } });
   field.startRace(false);
   const f = field as unknown as { cars: Car[]; phase: string; raceTimeS: number; rollingFormation: boolean; capPlayerAutopilot(L: number, dt: number): void };
   f.phase = 'racing';
