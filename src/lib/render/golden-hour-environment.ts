@@ -313,8 +313,9 @@ function configureSkyUniforms(sky: Sky, showSunDisc: boolean): void {
   // quarter of the frame crossed the bloom threshold. Scaled, only the glow around the sun blooms.
   u.nightSky = { value: 0 };
   u.nightStars = { value: 0 };
+  u.rainVeil = { value: 0 };
   sky.material.fragmentShader = patchShader(
-    "uniform float skyRadianceScale;\nuniform float nightSky;\nuniform float nightStars;\n" + sky.material.fragmentShader,
+    "uniform float skyRadianceScale;\nuniform float nightSky;\nuniform float nightStars;\nuniform float rainVeil;\n" + sky.material.fragmentShader,
     [
       [
         "vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );",
@@ -323,6 +324,8 @@ function configureSkyUniforms(sky: Sky, showSunDisc: boolean): void {
       [
         "gl_FragColor = vec4( texColor, 1.0 );",
         `vec3 lcSkyOut = texColor * skyRadianceScale;
+	// Rain clouds close the sky: its blue goes to a cool grey of the same brightness
+	lcSkyOut = mix( lcSkyOut, vec3( dot( lcSkyOut, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * vec3( 0.93, 0.96, 1.0 ), rainVeil );
 ${nightSkyGlsl("lcSkyOut", "direction", "vec3( 0.0, 1.0, 0.0 )", "nightSky", "nightStars", "length( fwidth( direction ) )")}
 	gl_FragColor = vec4( lcSkyOut, 1.0 );`,
       ],
@@ -441,6 +444,11 @@ interface SkyLook {
   /** The night sky's glow and its stars, 0..1 (night-sky.ts) */
   nightSky: number;
   nightStars: number;
+  /**
+   * Rain greys the classic sky (0 dry .. 0.95): its cloud pass leaves blue gaps even at full cover, and a wet road
+   * mirrored them as a pale blue sheet on Low (and on Medium / High until the physical sky is ready)
+   */
+  rainVeil: number;
 }
 
 function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
@@ -455,6 +463,7 @@ function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
   out.radianceScale = SKY_RADIANCE_SCALE * (1 - 0.35 * rain) * (1 - 0.94 * nightShare);
   out.nightSky = nightShare * (1 - 0.4 * rain);
   out.nightStars = starShare(nightShare, cloud, rain);
+  out.rainVeil = Math.min(0.95, 1.1 * rain);
   return out;
 }
 
@@ -467,6 +476,7 @@ function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
   u.skyRadianceScale.value = look.radianceScale;
   u.nightSky.value = look.nightSky;
   u.nightStars.value = look.nightStars;
+  u.rainVeil.value = look.rainVeil;
   (u.sunPosition.value as THREE.Vector3).copy(sunDir);
 }
 

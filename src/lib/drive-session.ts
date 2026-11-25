@@ -105,7 +105,7 @@ import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAc
 import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
 import { gyroSource } from "@/lib/input/gyro-source";
-import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
+import { advanceAsphaltRain, setAsphaltStandingWater, setAsphaltWetness, setWetRoadProbe } from "@/lib/render/asphalt-sheen";
 import {
   isRainCompound,
   recommendedCompound,
@@ -121,6 +121,7 @@ import { loadTyreSetup } from "@/lib/sim/tyre-setup";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/lc26-audio";
 import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
+import { makeWetLamp, pickWetRoadLamps, WET_LAMPS_BY_QUALITY, type WetLamp } from "@/lib/render/wet-road-lamps";
 import { StartupMonitor } from "@/lib/render/startup-monitor";
 import { browserStore, classifyRenderer, noteRenderer, readLossMemory, recordContextLoss, rendererName, safeStartPlan } from "@/lib/render/gpu-health";
 import { gpuFinished, partsByNewKeys, slicesByBytes, textureBytes } from "@/lib/render/gpu-pace";
@@ -1639,6 +1640,8 @@ export class DriveSession {
     // The other cars' headlights on the road (opponent-beams.ts): set up with the night, on every circuit
     let opponentBeams: OpponentBeams | null = null;
     const beamScratch: HeadlightBeam[] = [];
+    /** The lamps a wet road could mirror this frame (wet-road-lamps.ts), reused frame to frame */
+    const wetLampScratch: WetLamp[] = [];
     const ensureOpponentBeams = (root: THREE.Object3D) => {
       if (opponentBeams || disposed || !canSessionGetDark(getTrackEnv().weather.conditions)) return;
       opponentBeams = createOpponentBeams(root, MAX_BEAMS[settings.graphics.quality]);
@@ -4840,6 +4843,7 @@ export class DriveSession {
         venueNight?.setNight(nightShare);
         postFx.setNightShare(nightShare);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
+        setAsphaltStandingWater(wx.waterMm, wx.lineWaterMm);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
         const workerRace = aiFieldOf(raceNow())?.worker;
@@ -4891,7 +4895,30 @@ export class DriveSession {
         carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);
-        if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
+        // Lamps in the wet road (wet-road-lamps.ts): the cars' rear lamps and headlights, the circuit's lamps at night
+        const wetRoadNow = wetnessFromWater(wx.waterMm) > 0.05;
+        const beamCount = opponentBeams || wetRoadNow ? visualFx.collectBeams(beamScratch) : 0;
+        if (opponentBeams) opponentBeams.update(beamScratch, beamCount, rainCamPos);
+        let wetLampCount = 0;
+        if (wetRoadNow) {
+          wetLampCount = carHeadlights.wetRoadLamps(wetLampScratch, 0);
+          wetLampCount = visualFx.collectWetRoadLamps(wetLampScratch, wetLampCount, beamScratch, beamCount);
+          const lampNight = venueNight ? nightShareOf(skyConditions.elevationDeg) : 0;
+          if (venueNight && lampNight > 0.02) {
+            for (const v of venueNight.wetLamps) {
+              const dx = v.x - rainCamPos.x;
+              const dz = v.z - rainCamPos.z;
+              if (dx * dx + dz * dz > 150 * 150) continue;
+              const lamp = (wetLampScratch[wetLampCount++] ??= makeWetLamp());
+              lamp.pos.set(v.x, v.y, v.z);
+              lamp.color.copy(v.color).multiplyScalar(lampNight);
+              lamp.radiusM = v.radiusM;
+              lamp.dir = null;
+              lamp.coneCos = -2;
+            }
+          }
+        }
+        pickWetRoadLamps(wetLampScratch, wetLampCount, rainCamPos, WET_LAMPS_BY_QUALITY[settings.graphics.quality], wetRoadNow);
         visualFx.setLightLevel(skyLight);
         const hasEye = rainCockpitEye !== null;
         if (
@@ -4934,6 +4961,14 @@ export class DriveSession {
           reflectionProbe.update(podium.focus ?? preRaceShow.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         }
         startupMonitor?.end("probe");
+        // The wet road reflects what the probe filmed round the car (none on Low: the sky's environment map, which the
+        // physical sky's cloudless bake makes far too bright under rain clouds)
+        setWetRoadProbe(
+          reflectionProbe.texture,
+          reflectionProbe.position,
+          scene.environmentIntensity,
+          env.physicalSky?.showing ? 1 - 0.7 * wx.rainIntensity : 1
+        );
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)

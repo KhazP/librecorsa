@@ -34,6 +34,7 @@ import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
 import { CarHeadlights, type HeadlightBeam } from '@/lib/render/car-headlights';
+import { makeWetLamp, type WetLamp } from '@/lib/render/wet-road-lamps';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES, liveryForDriverCode, resolveLivery } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
@@ -45,6 +46,10 @@ import { tyreMarkLevel, tyreSmokeLevel } from './tyre-slide-fx';
 const MAX_SKID_SEGMENTS = 900; // Ring buffer of 4-vertex quad segments across all 4 wheels
 const MAX_PARTICLES = 360;
 /** Quality-scaled active puff particle budgets (caps overdraw in heavy multi-car wet races) */
+/** Share of an opponent's merged headlight beam lighting its reflection in a wet road, and the beam's cone (cos) */
+const WET_HEADLIGHT_SHARE = 0.06;
+const WET_HEADLIGHT_CONE_COS = Math.cos(0.58);
+
 export const PARTICLE_BUDGET = { low: 120, medium: 220, high: MAX_PARTICLES } as const;
 /** Maximum distance (m) from the player at which opponents emit rooster-tail spray puffs */
 export const OPPONENT_SPRAY_DIST_M = { low: 90, medium: 125, high: 165 } as const;
@@ -238,6 +243,30 @@ export class SimVisualFxManager {
       if (!hl) continue;
       const slot = (out[n] ??= { pos: new THREE.Vector3(), dir: new THREE.Vector3(), intensity: 0, range: 1 });
       if (hl.beam(slot)) n++;
+    }
+    return n;
+  }
+
+  /**
+   * The solid opponents' lit lamps for the wet road to mirror (wet-road-lamps.ts), into `out` from `start`: their rear
+   * lamps, and the headlight beams in `beams[0..beamCount)` (this frame's collectBeams) as lamps lighting their cone.
+   * Returns the next free slot
+   */
+  public collectWetRoadLamps(out: WetLamp[], start: number, beams: readonly HeadlightBeam[], beamCount: number): number {
+    let n = start;
+    for (const entry of this.opponentCars.values()) {
+      if (entry.ghost || !entry.rig.root.visible) continue;
+      const hl = this.rigHeadlights.get(entry.rig);
+      if (hl) n += hl.wetRoadLamps(out, n);
+    }
+    for (let i = 0; i < beamCount; i++) {
+      const b = beams[i];
+      const lamp = (out[n++] ??= makeWetLamp());
+      lamp.pos.copy(b.pos);
+      lamp.color.setRGB(1, 0.97, 0.92).multiplyScalar(b.intensity * WET_HEADLIGHT_SHARE);
+      lamp.radiusM = 0.25;
+      lamp.dir = (lamp.dir ?? new THREE.Vector3()).copy(b.dir);
+      lamp.coneCos = WET_HEADLIGHT_CONE_COS;
     }
     return n;
   }

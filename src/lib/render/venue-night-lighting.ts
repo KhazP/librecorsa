@@ -55,11 +55,29 @@ export interface VenueNightLighting {
    * For the cars (car-lamp-light.ts), which the map does not reach
    */
   lightAt(x: number, z: number, out: THREE.Color): THREE.Color;
+  /**
+   * The lamps as lights for a wet road to mirror (wet-road-lamps.ts), at full night strength: the masts' heads and
+   * the model's own lamps (scale by the night share)
+   */
+  readonly wetLamps: readonly VenueWetLamp[];
   /** 0 by day .. 1 at night (the environment's night share) */
   setNight(share: number): void;
   setQuality(quality: "low" | "medium" | "high"): void;
   dispose(): void;
 }
+
+/** A circuit lamp for a wet road to mirror: where its light comes from, its linear colour times strength, its size */
+export interface VenueWetLamp {
+  x: number;
+  y: number;
+  z: number;
+  color: THREE.Color;
+  radiusM: number;
+}
+
+/** A mast's and a model lamp's light for their reflection in a wet road (as a point light's intensity) */
+const WET_MAST_LAMP = 90;
+const WET_MODEL_LAMP = 30;
 
 /** Share of the key light left away from the circuit, per channel: a readable cool moonlight floor */
 const MOONLIGHT_FLOOR = "vec3( 0.028, 0.044, 0.078 )";
@@ -659,6 +677,7 @@ export function createVenueNightLighting(
   visitVenue(root);
 
   // --- Masts --------------------------------------------------------------------
+  const wetLamps: VenueWetLamp[] = [];
   const lamps = def.lamps ?? [];
   let headMaterial: THREE.MeshStandardMaterial | null = null;
   let glowMaterial: THREE.PointsMaterial | null = null;
@@ -690,6 +709,13 @@ export function createVenueNightLighting(
       mtx.compose(pos, quat, scl.set(1, 1, 1));
       heads.setMatrixAt(i, mtx);
       glowPositions.set([pos.x + tx * 0.2, pos.y - 0.1, pos.z + tz * 0.2], i * 3);
+      wetLamps.push({
+        x: pos.x + tx * 0.2,
+        y: pos.y - 0.1,
+        z: pos.z + tz * 0.2,
+        color: new THREE.Color(LAMP_COLOR).multiplyScalar(WET_MAST_LAMP),
+        radiusM: 0.9,
+      });
     });
     for (const mesh of [poles, heads]) {
       mesh.instanceMatrix.needsUpdate = true;
@@ -721,6 +747,18 @@ export function createVenueNightLighting(
     group.add(glow);
     disposables.push(poleGeometry, poleMaterial, headGeometry, headMaterial, glowGeometry, glowMaterial);
     if (sprite) disposables.push(sprite);
+  }
+
+  // The model's own lamps, as lights for a wet road: just under the head, toward the road
+  for (const l of modelLamps) {
+    if (l.pool <= 0) continue;
+    wetLamps.push({
+      x: l.x + l.towardX * 0.3,
+      y: l.y - 0.35,
+      z: l.z + l.towardZ * 0.3,
+      color: new THREE.Color(l.color).multiplyScalar(WET_MODEL_LAMP * l.pool),
+      radiusM: 0.35,
+    });
   }
 
   // --- The model's own lamps: a glow point under each head (one draw per size and colour) -------------
@@ -783,6 +821,7 @@ export function createVenueNightLighting(
     group,
     look: VENUE_NIGHT_LOOK,
     mode,
+    wetLamps,
     lightAt(x: number, z: number, out: THREE.Color): THREE.Color {
       const k = Math.max(0, night);
       if (!map || mode !== "lamps" || k <= 0) return out.setRGB(0, 0, 0);

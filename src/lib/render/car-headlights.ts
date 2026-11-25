@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { makeWetLamp, type WetLamp } from "./wet-road-lamps";
 import { anyCarById, type CarClassId, type CarId } from "@/lib/cars/car-registry";
 import type { GraphicsQuality } from "@/lib/settings/player-settings";
 import { SKY_COVER_SPECS, type SessionConditions } from "@/lib/sim/weather";
@@ -40,6 +41,10 @@ export const HIGH_BEAM_FLARE_GAIN = 7;
 /** Running tail light and brake light glow of a lamp material (its own emissive map / a plain red one) */
 const TAIL_GLOW = { own: 1.1, plain: 0.85 } as const;
 const BRAKE_GLOW = { own: 4.2, plain: 3.6 } as const;
+/** A rear lamp's light for its reflection in a wet road (as a point light's intensity): running, and braking */
+const WET_TAIL_LAMP = 0.35;
+const WET_BRAKE_LAMP = 1.3;
+const _wetLampSum = new THREE.Vector3();
 /** Lens glow of the headlight materials: low beam, high beam */
 const LENS_GLOW_LOW = 4.5;
 const LENS_GLOW_HIGH = 10;
@@ -986,6 +991,38 @@ export class CarHeadlights {
    */
   setFlash(on: boolean): void {
     this.flashing = on;
+  }
+
+  /**
+   * The lit rear lamps (tail, rain or brake light) as lamps for the wet road to mirror (wet-road-lamps.ts): each at its
+   * place at the last drawn pose, into `out` from `start`; returns how many were written. None while they are dark.
+   */
+  wetRoadLamps(out: WetLamp[], start: number): number {
+    if (!this.rearActive) return 0;
+    const strength = this.braking ? WET_BRAKE_LAMP : WET_TAIL_LAMP;
+    // One lamp per side (a quad or twin cluster merged at its middle), and a middle one (an F1 rain light)
+    let n = 0;
+    for (const side of [-1, 0, 1]) {
+      let count = 0;
+      let size = 0;
+      _wetLampSum.set(0, 0, 0);
+      for (let i = 0; i < this.rearFlares.length; i++) {
+        const x = this.rearFlares[i].position.x;
+        if ((side === 0 && Math.abs(x) > 0.05) || (side !== 0 && x * side <= 0.05)) continue;
+        _wetLampSum.add(_flarePos.setFromMatrixPosition(this.rearFlares[i].matrixWorld));
+        size = Math.max(size, this.rearFlareBaseSizes[i]);
+        count++;
+      }
+      if (count === 0) continue;
+      const lamp = (out[start + n] ??= makeWetLamp());
+      lamp.pos.copy(_wetLampSum).divideScalar(count);
+      lamp.color.setRGB(1, 0.07, 0.035).multiplyScalar(strength * Math.min(2, count));
+      lamp.radiusM = size * 0.5;
+      lamp.dir = null;
+      lamp.coneCos = -2;
+      n++;
+    }
+    return n;
   }
 
   get isOn(): boolean {
