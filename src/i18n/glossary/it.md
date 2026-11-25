@@ -32,6 +32,7 @@
 | pole position | pole position | |
 | pit lane | corsia dei box | Short form "box" |
 | pit limiter | limitatore box | |
+| limiter | limitatore | Speed limiter; Limiter on: Limitatore attivo |
 | track limits | limiti della pista | |
 | lap deleted | giro cancellato | |
 | racing line | traiettoria ideale | "linea ideale" acceptable in short labels |
@@ -45,12 +46,15 @@
 | point-to-point | punto a punto | |
 | car | auto | |
 | class | classe | |
+| livery | livrea | |
 | ghost | ghost | English loanword is the norm; "fantasma" only in prose |
+| ghost mode | modalità ghost | Multiplayer no-contact mode |
 | share code | codice di condivisione | |
 | room | stanza | |
 | room code | codice stanza | |
 | host | host | |
 | join | unisciti | Button; noun form "partecipa" not used |
+| lobby | lobby | |
 | driver | pilota | |
 | force feedback | force feedback | |
 | steering wheel | volante | |
@@ -76,6 +80,7 @@
 | keyboard | tastiera | |
 | touch controls | comandi touch | |
 | bind | assegna | Verb on a button; "assegnazione" as noun |
+| unbind | rimuovi | e.g. «Rimuovi {key} da {action}» |
 | axis | asse | |
 | calibrate | calibra | |
 | driving assists | aiuti alla guida | |
@@ -102,6 +107,8 @@
 | rebound | estensione | |
 | fast bump | compressione rapida | |
 | slow rebound | estensione lenta | |
+| bumpstop | tampone | Telemetry legend: Tampone |
+| bumpstop travel | corsa dei tamponi | |
 | anti-roll bar | barra antirollio | |
 | camber | campanatura | |
 | toe | convergenza | |
@@ -110,12 +117,15 @@
 | front wing | ala anteriore | |
 | active aero | aerodinamica attiva | |
 | drag | resistenza aerodinamica | |
+| aero balance | bilanciamento aero | Short telemetry label: Bil. aero |
 | grip | aderenza | |
 | front grip | aderenza anteriore | |
 | rear grip | aderenza posteriore | |
+| slip | slittamento | Telemetry legend: Slittamento |
 | understeer | sottosterzo | |
 | oversteer | sovrasterzo | |
 | differential | differenziale | |
+| diff lock | bloccaggio del differenziale | Short telemetry label: Blocco LSD |
 | gear ratios | rapporti del cambio | |
 | fuel | carburante | |
 | yellow flag | bandiera gialla | |
@@ -128,8 +138,11 @@
 | penalty | penalità | |
 | time penalty | penalità di tempo | |
 | drive-through | drive-through | |
+| retired | ritirato | DNF stays in English |
+| disqualified | squalificato | DSQ stays in English |
 | lights out | semafori spenti | Race start |
 | jump start | falsa partenza | |
+| formation | formazione | Rolling start |
 | overtake (verb) | sorpassare | |
 | overtake mode | Modalità sorpasso | F1 2026 |
 | ERS | ERS | |
@@ -138,6 +151,11 @@
 | harvest | recupero | Energy |
 | battery | batteria | |
 | HUD | HUD | |
+| Blade | Lama | HUD layout name |
+| Trackside | Bordo pista | HUD layout name |
+| Pit wall | Muretto box | HUD layout name |
+| Endurance | Endurance | HUD layout name |
+| Racing line | Traiettoria ideale | HUD layout name |
 | proximity radar | radar di prossimità | |
 | shift lights | luci di cambiata | |
 | rev lights | luci dei giri | |
@@ -187,6 +205,22 @@
 | post | pubblica | Lap to the online board |
 | upload | carica | |
 | Lap times | Tempi sul giro | |
+| mod | mod | Fem., invariable plural «le mod»; badge: MOD |
+| mod package | pacchetto mod | |
+| mods folder | cartella mods | |
+| import folder | cartella di importazione | Noun; action button Import folder: Importa cartella |
+| converter | convertitore | Mod converter |
+| converter log | log del convertitore | |
+| fingerprint | impronta | SHA-256 checksum |
+| launcher | launcher | |
+| offline launcher | launcher offline | |
+| desktop app | app desktop | |
+| licence | licenza | |
+| «More info» (Windows SmartScreen) | Ulteriori informazioni | Quote Windows Italian wording |
+| «Run anyway» (Windows SmartScreen) | Esegui comunque | Quote Windows Italian wording |
+| «Applications» (macOS) | Applicazioni | Quote macOS Italian wording |
+| «System Settings > Privacy & Security» (macOS) | Impostazioni di Sistema > Privacy e sicurezza | Quote macOS Italian wording |
+| «Open Anyway» (macOS) | Apri comunque | Quote macOS Italian wording |
 
 ## Accounts
 | English | Italian | Note |

@@ -33,6 +33,7 @@
 | pole position | Pole-Position | |
 | pit lane | Boxengasse | |
 | pit limiter | Boxenlimiter | |
+| limiter | Limiter | Speed limiter; Limiter on: Limiter an |
 | track limits | Streckenlimits | |
 | lap deleted | Runde gestrichen | |
 | racing line | Ideallinie | |
@@ -46,12 +47,15 @@
 | point-to-point | Punkt-zu-Punkt | Adjective form "Punkt-zu-Punkt-Strecke" |
 | car | Auto | |
 | class | Klasse | |
+| livery | Lackierung | |
 | ghost | Ghost | |
+| ghost mode | Ghost-Modus | Multiplayer no-contact mode |
 | share code | Teilen-Code | |
 | room | Raum | |
 | room code | Raumcode | |
 | host | Host | |
 | join | Beitreten | |
+| lobby | Lobby | |
 | driver | Fahrer | |
 | force feedback | Force Feedback | |
 | steering wheel | Lenkrad | |
@@ -77,6 +81,7 @@
 | keyboard | Tastatur | |
 | touch controls | Touch-Steuerung | |
 | bind | Belegen | |
+| unbind | Lösen | e.g. „{key} von {action} lösen“ |
 | axis | Achse | |
 | calibrate | Kalibrieren | |
 | driving assists | Fahrhilfen | |
@@ -103,6 +108,8 @@
 | rebound | Zugstufe | |
 | fast bump | Schnelle Druckstufe | |
 | slow rebound | Langsame Zugstufe | |
+| bumpstop | Anschlagpuffer | Short telemetry legend: Anschlag |
+| bumpstop travel | Anschlagpuffer-Weg | |
 | anti-roll bar | Stabilisator | |
 | camber | Sturz | |
 | toe | Spur | |
@@ -111,12 +118,15 @@
 | front wing | Frontflügel | |
 | active aero | Aktive Aerodynamik | |
 | drag | Luftwiderstand | |
+| aero balance | Aero-Balance | Short telemetry label: Aero-Bal. |
 | grip | Grip | |
 | front grip | Grip vorne | |
 | rear grip | Grip hinten | |
+| slip | Schlupf | Telemetry legend |
 | understeer | Untersteuern | |
 | oversteer | Übersteuern | |
 | differential | Differenzial | |
+| diff lock | Differenzialsperre | Short telemetry label: LSD-Sperre |
 | gear ratios | Übersetzungen | |
 | fuel | Kraftstoff | |
 | yellow flag | Gelbe Flagge | |
@@ -129,8 +139,11 @@
 | penalty | Strafe | |
 | time penalty | Zeitstrafe | |
 | drive-through | Durchfahrtsstrafe | |
+| retired | Ausgeschieden | DNF stays in English |
+| disqualified | Disqualifiziert | DSQ stays in English |
 | lights out | Lichter aus | |
 | jump start | Frühstart | |
+| formation | Formation | Rolling start |
 | overtake (verb) | Überholen | |
 | overtake mode | Überholmodus | |
 | ERS | ERS | |
@@ -139,6 +152,11 @@
 | harvest | Rekuperieren | |
 | battery | Batterie | |
 | HUD | HUD | |
+| Blade | Klinge | HUD layout name |
+| Trackside | Streckenrand | HUD layout name |
+| Pit wall | Boxenmauer | HUD layout name |
+| Endurance | Langstrecke | HUD layout name |
+| Racing line | Ideallinie | HUD layout name |
 | proximity radar | Näherungsradar | |
 | shift lights | Schaltlichter | |
 | rev lights | Drehzahllichter | |
@@ -188,6 +206,22 @@
 | post | Einreichen | Lap to the online board |
 | upload | Hochladen | |
 | Lap times | Rundenzeiten | |
+| mod | Mod | Fem. „die Mod“, pl. „Mods“; badge: MOD |
+| mod package | Mod-Paket | |
+| mods folder | Mods-Ordner | |
+| import folder | Importordner | Noun; action button Import folder: Ordner importieren |
+| converter | Konverter | Mod converter |
+| converter log | Protokoll des Konverters | Log: Protokoll |
+| fingerprint | Fingerabdruck | SHA-256 checksum |
+| launcher | Launcher | |
+| offline launcher | Offline-Launcher | |
+| desktop app | Desktop-App | |
+| licence | Lizenz | |
+| „More info“ (Windows SmartScreen) | Weitere Informationen | Quote Windows German wording |
+| „Run anyway“ (Windows SmartScreen) | Trotzdem ausführen | Quote Windows German wording |
+| „Applications“ (macOS) | Programme | Quote macOS German wording |
+| „System Settings > Privacy & Security“ (macOS) | Systemeinstellungen > Datenschutz & Sicherheit | Quote macOS German wording |
+| „Open Anyway“ (macOS) | Dennoch öffnen | Quote macOS German wording |
 
 ## Accounts
 | English | German | Note |

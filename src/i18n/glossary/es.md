@@ -33,6 +33,7 @@
 | pole position | pole position | |
 | pit lane | pit lane | Neutral; "calle de boxes" is Spain-leaning |
 | pit limiter | limitador de pit lane | |
+| limiter | limitador | Speed limiter; Limiter on: Limitador activo |
 | track limits | límites de pista | |
 | lap deleted | vuelta anulada | |
 | racing line | línea de carrera | "línea ideal" acceptable |
@@ -46,12 +47,15 @@
 | point-to-point | punto a punto | |
 | car | auto | Neutral; "coche" is Spain-leaning |
 | class | clase | |
+| livery | librea | |
 | ghost | fantasma | |
+| ghost mode | modo fantasma | Multiplayer no-contact mode |
 | share code | código para compartir | |
 | room | sala | |
 | room code | código de sala | |
 | host | anfitrión | |
 | join | unirse | |
+| lobby | sala | Same word as room |
 | driver | piloto | |
 | force feedback | force feedback | |
 | steering wheel | volante | |
@@ -77,6 +81,7 @@
 | keyboard | teclado | |
 | touch controls | controles táctiles | |
 | bind | asignar | |
+| unbind | desasignar | Remove a button or key binding |
 | axis | eje | |
 | calibrate | calibrar | |
 | driving assists | ayudas a la conducción | |
@@ -103,6 +108,8 @@
 | rebound | rebote | |
 | fast bump | compresión rápida | |
 | slow rebound | rebote lento | |
+| bumpstop | tope | Telemetry legend: Tope |
+| bumpstop travel | recorrido de topes | |
 | anti-roll bar | barra estabilizadora | |
 | camber | caída | |
 | toe | convergencia | |
@@ -111,12 +118,15 @@
 | front wing | alerón delantero | |
 | active aero | aerodinámica activa | |
 | drag | resistencia aerodinámica | |
+| aero balance | balance aerodinámico | Short telemetry label: Bal aero |
 | grip | agarre | |
 | front grip | agarre delantero | |
 | rear grip | agarre trasero | |
+| slip | deslizamiento | Short telemetry legend: Desliz. |
 | understeer | subviraje | |
 | oversteer | sobreviraje | |
 | differential | diferencial | |
+| diff lock | bloqueo del diferencial | Short telemetry label: Bloq LSD |
 | gear ratios | relaciones de marcha | |
 | fuel | combustible | |
 | yellow flag | bandera amarilla | |
@@ -129,8 +139,11 @@
 | penalty | sanción | |
 | time penalty | sanción de tiempo | |
 | drive-through | paso por boxes | |
+| retired | retirado | DNF stays in English |
+| disqualified | descalificado | DSQ stays in English |
 | lights out | semáforo apagado | |
 | jump start | salida en falso | |
+| formation | formación | Rolling start |
 | overtake (verb) | adelantar | |
 | overtake mode | modo de adelantamiento | |
 | ERS | ERS | |
@@ -139,6 +152,11 @@
 | harvest | recuperación | Energy |
 | battery | batería | |
 | HUD | HUD | |
+| Blade | Hoja | HUD layout name |
+| Trackside | Pie de pista | HUD layout name |
+| Pit wall | Muro de boxes | HUD layout name |
+| Endurance | Resistencia | HUD layout name |
+| Racing line | Línea de carrera | HUD layout name |
 | proximity radar | radar de proximidad | |
 | shift lights | luces de cambio | |
 | rev lights | luces de revoluciones | |
@@ -188,6 +206,22 @@
 | post | publicar | Lap to the online board |
 | upload | subir | |
 | Lap times | Tiempos de vuelta | |
+| mod | mod | pl. mods; badge: MOD |
+| mod package | paquete de mods | |
+| mods folder | carpeta de mods | |
+| import folder | carpeta de importación | Noun; action button Import folder: Importar carpeta |
+| converter | conversor | Mod converter |
+| converter log | registro del conversor | Log: registro |
+| fingerprint | huella digital | SHA-256 checksum |
+| launcher | launcher | |
+| offline launcher | launcher sin conexión | |
+| desktop app | aplicación de escritorio | |
+| licence | licencia | |
+| «More info» (Windows SmartScreen) | Más información | Quote Windows Spanish wording |
+| «Run anyway» (Windows SmartScreen) | Ejecutar de todas formas | Quote Windows Spanish wording |
+| «Applications» (macOS) | Aplicaciones | Quote macOS Spanish wording |
+| «System Settings > Privacy & Security» (macOS) | Configuración del Sistema > Privacidad y seguridad | Quote macOS Spanish wording |
+| «Open Anyway» (macOS) | Abrir de todos modos | Quote macOS Spanish wording |
 
 ## Accounts
 | English | Spanish | Note |

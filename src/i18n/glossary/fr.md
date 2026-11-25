@@ -33,6 +33,7 @@
 | pole position | pole position | |
 | pit lane | voie des stands | |
 | pit limiter | limiteur de vitesse | In the pit lane |
+| limiter | limiteur | Speed limiter; Limiter on: Limiteur actif |
 | track limits | limites de piste | |
 | lap deleted | tour annulé | |
 | racing line | trajectoire idéale | |
@@ -46,12 +47,15 @@
 | point-to-point | point à point | |
 | car | voiture | |
 | class | catégorie | "classe" also used; choose catégorie |
+| livery | livrée | |
 | ghost | fantôme | |
+| ghost mode | mode fantôme | Multiplayer no-contact mode |
 | share code | code de partage | |
 | room | salon | Online lobby |
 | room code | code du salon | |
 | host | hôte | |
 | join | rejoindre | |
+| lobby | salon | Same word as room |
 | driver | pilote | |
 | force feedback | Force Feedback | |
 | steering wheel | volant | |
@@ -77,6 +81,7 @@
 | keyboard | clavier | |
 | touch controls | commandes tactiles | |
 | bind | assigner | |
+| unbind | retirer | e.g. « Retirer {key} de {action} » |
 | axis | axe | |
 | calibrate | calibrer | |
 | driving assists | aides à la conduite | |
@@ -103,6 +108,8 @@
 | rebound | détente | |
 | fast bump | compression rapide | |
 | slow rebound | détente lente | |
+| bumpstop | butée | Telemetry legend: Butée |
+| bumpstop travel | course de butée | |
 | anti-roll bar | barre antiroulis | |
 | camber | carrossage | |
 | toe | pincement | |
@@ -111,12 +118,16 @@
 | front wing | aileron avant | |
 | active aero | aéro active | |
 | drag | traînée | |
+| aero balance | équilibre aéro | Short telemetry label: Équil. aéro |
 | grip | adhérence | |
 | front grip | adhérence avant | |
 | rear grip | adhérence arrière | |
+| grip (short per-wheel label) | Adh. | Short telemetry label; full word: adhérence |
+| slip | glissement | Telemetry legend: Glissement |
 | understeer | sous-virage | |
 | oversteer | survirage | |
 | differential | différentiel | |
+| diff lock | blocage de différentiel | Short telemetry label: Verr. LSD |
 | gear ratios | rapports de boîte | |
 | fuel | carburant | |
 | yellow flag | drapeau jaune | |
@@ -129,8 +140,11 @@
 | penalty | pénalité | |
 | time penalty | pénalité de temps | |
 | drive-through | passage par les stands | |
+| retired | abandon | DNF stays in English |
+| disqualified | disqualifié | DSQ stays in English |
 | lights out | extinction des feux | |
 | jump start | faux départ | |
+| formation | formation | Rolling start |
 | overtake (verb) | dépasser | |
 | overtake mode | Mode dépassement | |
 | ERS | ERS | |
@@ -139,6 +153,11 @@
 | harvest | récupération | Energy |
 | battery | batterie | |
 | HUD | HUD | |
+| Blade | Lame | HUD layout name |
+| Trackside | Bord de piste | HUD layout name |
+| Pit wall | Mur des stands | HUD layout name |
+| Endurance | Endurance | HUD layout name |
+| Racing line | Trajectoire idéale | HUD layout name |
 | proximity radar | radar de proximité | |
 | shift lights | témoins de changement de rapport | "voyants de rapport" if too long |
 | rev lights | témoins de régime | |
@@ -188,6 +207,22 @@
 | post | publier | Lap to the online board |
 | upload | envoyer | |
 | Lap times | Temps au tour | |
+| mod | mod | pl. mods; badge: MOD |
+| mod package | pack de mods | Short: pack |
+| mods folder | dossier mods | |
+| import folder | dossier d’importation | Noun; action button Import folder: Importer un dossier |
+| converter | convertisseur | Mod converter |
+| converter log | journal du convertisseur | Log: journal |
+| fingerprint | empreinte | SHA-256 checksum |
+| launcher | lanceur | |
+| offline launcher | lanceur hors ligne | |
+| desktop app | application de bureau | |
+| licence | licence | |
+| « More info » (Windows SmartScreen) | Informations complémentaires | Quote Windows French wording |
+| « Run anyway » (Windows SmartScreen) | Exécuter quand même | Quote Windows French wording |
+| « Applications » (macOS) | Applications | Quote macOS French wording |
+| « System Settings > Privacy & Security » (macOS) | Réglages Système > Confidentialité et sécurité | Quote macOS French wording |
+| « Open Anyway » (macOS) | Ouvrir quand même | Quote macOS French wording |
 
 ## Accounts
 | English | French | Note |

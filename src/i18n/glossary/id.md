@@ -31,6 +31,7 @@
 | pole position | pole position | Baku dalam pemberitaan & komunitas motorsport Indonesia |
 | pit lane | pit lane | Baku di komunitas F1/sim racing Indonesia |
 | pit limiter | pit limiter | Pembatas kecepatan pit lane |
+| limiter | limiter | Pembatas kecepatan; Limiter on: Limiter aktif |
 | track limits | batas trek | Pelanggaran keluar lintasan |
 | lap deleted | lap dibatalkan | — |
 | racing line | racing line | Garis balap ideal yang ditampilkan di trek |
@@ -44,9 +45,12 @@
 | point-to-point | titik-ke-titik | Lintasan yang titik finisnya berbeda dari titik start |
 | car | mobil | — |
 | class | kelas | Kelas mobil |
+| livery | livery | Dipertahankan dalam bahasa Inggris |
 | ghost | ghost | Rekaman lap dalam bentuk mobil transparan |
+| ghost mode | mode ghost | Mode multipemain tanpa kontak |
 | share code | kode berbagi | Kode teks untuk membagikan lap atau setup |
 | room / room code / host / join | ruang / kode ruang / host / gabung | Ruang multipemain daring |
+| lobby | lobi | |
 | driver | pembalap | — |
 | force feedback | force feedback | Singkatan: `FFB` |
 | steering wheel / wheel | setir | — |
@@ -68,6 +72,7 @@
 | keyboard | keyboard | — |
 | touch controls | kontrol sentuh | — |
 | bind | tetapkan | Menetapkan tombol atau sumbu kontrol |
+| unbind | lepas penetapan | |
 | axis | sumbu | — |
 | calibrate | kalibrasi | — |
 | driving assists | bantuan mengemudi | — |
@@ -87,6 +92,8 @@
 | springs | pegas | — |
 | dampers | damper | Peredam kejut suspensi |
 | bump / rebound | bump / rebound | Mis. *bump cepat*, *rebound lambat* |
+| bumpstop | bumpstop | Dipertahankan; *bump rubber* di tooltip |
+| bumpstop travel | jarak main bumpstop | |
 | anti-roll bar | anti-roll bar | — |
 | camber | camber | — |
 | toe | toe | — |
@@ -94,20 +101,32 @@
 | rear wing / front wing | sayap belakang / sayap depan | — |
 | active aero | aero aktif | — |
 | drag | hambatan udara | Singkat di label sempit: *drag* |
+| aero balance | keseimbangan aero | Label singkat telemetri: *Bal aero* |
 | grip / front grip / rear grip | cengkeraman / cengkeraman depan / cengkeraman belakang | — |
+| grip (label singkat per roda) | Grip | Label singkat telemetri; bentuk penuh: *cengkeraman* |
+| slip | slip | Legenda telemetri |
 | understeer / oversteer | understeer / oversteer | Baku di otomotif & sim racing Indonesia |
 | differential | diferensial | — |
+| diff lock | penguncian diferensial | Label singkat telemetri: *Kunci LSD* |
 | gear ratios | rasio gigi | — |
 | fuel | bahan bakar | — |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | bendera kuning / bendera kuning ganda / bendera biru / bendera hitam / bendera finis / bendera hijau | — |
 | safety car | Safety Car | Baku di motorsport Indonesia |
 | penalty / time penalty / drive-through | penalti / penalti waktu / penalti drive-through | — |
+| retired | gagal finis | `DNF` tetap dipertahankan |
+| disqualified | didiskualifikasi | `DSQ` tetap dipertahankan |
 | lights out | lampu padam | Isyarat start balapan |
 | jump start | jump start | Start mendahului lampu padam |
+| formation | formasi | Start bergulir |
 | overtake / overtake mode | menyalip / Mode Overtake | Kata kerja: *menyalip*; fitur dorongan energi F1 2026: *Mode Overtake* |
 | ERS / DRS / deploy / harvest | ERS / DRS / salurkan / pulihkan | *Salurkan* (deploy energi), *pulihkan* (harvest energi) |
 | battery | baterai | — |
 | HUD | HUD | Tetap |
+| Blade | Blade | Nama tata letak HUD |
+| Trackside | Sisi trek | Nama tata letak HUD |
+| Pit wall | Pit wall | Nama tata letak HUD |
+| Endurance | Endurance | Nama tata letak HUD |
+| Racing line | Racing line | Nama tata letak HUD |
 | proximity radar | radar jarak | — |
 | shift lights / rev lights | lampu gigi / lampu RPM | — |
 | delta | delta | Selisih waktu terhadap lap referensi |
@@ -129,6 +148,22 @@
 | physics / physics version | fisika / versi fisika | — |
 | post / upload | kirim / unggah | Mengirim/mengunggah catatan lap ke papan waktu lap daring |
 | Lap times | Waktu Lap | Layar daftar waktu lap |
+| mod | mod | Lencana: `MOD` |
+| mod package | paket mod | |
+| mods folder | folder mod | |
+| import folder | folder impor | Kata benda; tombol aksi Import folder: *Impor folder* |
+| converter | konverter | Konverter mod |
+| converter log | log konverter | |
+| fingerprint | sidik jari | Checksum SHA-256 |
+| launcher | peluncur | |
+| offline launcher | peluncur offline | |
+| desktop app | aplikasi desktop | |
+| licence | lisensi | |
+| "More info" (Windows SmartScreen) | Info selengkapnya | Kutip istilah resmi Windows bahasa Indonesia |
+| "Run anyway" (Windows SmartScreen) | Tetap jalankan | Kutip istilah resmi Windows bahasa Indonesia |
+| "Applications" (macOS) | Aplikasi | Kutip istilah resmi macOS bahasa Indonesia |
+| "System Settings > Privacy & Security" (macOS) | Pengaturan Sistem > Privasi & Keamanan | Kutip istilah resmi macOS bahasa Indonesia |
+| "Open Anyway" (macOS) | Tetap Buka | Kutip istilah resmi macOS bahasa Indonesia |
 
 ## Accounts
 

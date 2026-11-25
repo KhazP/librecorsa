@@ -32,6 +32,7 @@
 | pole position | vị trí pole | Thuật ngữ chuẩn cộng đồng đua xe VN |
 | pit lane | làn pit | |
 | pit limiter | giới hạn tốc độ pit | HUD ngắn: *Giới hạn pit* |
+| limiter | giới hạn tốc độ | `Đang giới hạn tốc độ` cho Limiter on |
 | track limits | giới hạn đường đua | |
 | lap deleted | vòng bị hủy | Thành tích vòng bị hủy do vượt giới hạn đường đua |
 | racing line | đường chạy lý tưởng | Nhãn ngắn: *Đường chạy* |
@@ -45,9 +46,12 @@
 | point-to-point | điểm-đến-điểm | Cung đường không khép kín |
 | car | xe | |
 | class | hạng xe | Nhãn ngắn: *Hạng* |
+| livery | màu sơn | |
 | ghost | xe bóng ma | Xe mờ ghi lại vòng chạy mẫu; nhãn ngắn: *Bóng ma* |
+| ghost mode | chế độ bóng ma | Chế độ chơi mạng không va chạm |
 | share code | mã chia sẻ | Mã văn bản chia sẻ vòng đua hoặc thiết lập xe |
 | room / room code / host / join | phòng / mã phòng / chủ phòng / tham gia | Động từ *host*: *tạo phòng* hoặc *làm chủ phòng* |
+| lobby | sảnh chờ | Ngắn: *sảnh* |
 | driver | tay đua | |
 | force feedback | phản hồi lực | Giữ `FFB` khi viết tắt |
 | steering wheel / wheel | vô lăng | |
@@ -69,6 +73,7 @@
 | keyboard | bàn phím | |
 | touch controls | điều khiển cảm ứng | |
 | bind | gán | Gán phím / gán nút / gán trục |
+| unbind | gỡ gán | |
 | axis | trục | |
 | calibrate | hiệu chỉnh | |
 | driving assists | hỗ trợ lái | |
@@ -88,6 +93,8 @@
 | springs | lò xo | |
 | dampers | giảm chấn | |
 | bump / rebound | nén / hồi | *nén nhanh*, *nén chậm*, *hồi nhanh*, *hồi chậm* |
+| bumpstop | đệm chặn | Chú giải telemetri: *Đệm chặn* |
+| bumpstop travel | hành trình đệm chặn | |
 | anti-roll bar | thanh cân bằng | |
 | camber | góc camber | Ngắn: *Camber* |
 | toe | độ chụm | *chụm vào* (toe-in), *loe ra* (toe-out) |
@@ -95,20 +102,31 @@
 | rear wing / front wing | cánh gió sau / cánh gió trước | |
 | active aero | khí động học chủ động | |
 | drag | lực cản gió | Ngắn: *Lực cản* |
+| aero balance | cân bằng khí động | Nhãn telemetri ngắn: *Cân bằng* |
 | grip / front grip / rear grip | độ bám / độ bám trước / độ bám sau | |
+| slip | trượt | Chú giải telemetri: *Trượt* |
 | understeer / oversteer | thiếu lái / thừa lái | |
 | differential | vi sai | |
+| diff lock | khóa vi sai | Nhãn telemetri ngắn: *Khóa LSD* |
 | gear ratios | tỉ số truyền | |
 | fuel | nhiên liệu | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | cờ vàng / cờ vàng kép / cờ xanh dương / cờ đen / cờ ca-rô / cờ xanh lá | |
 | safety car | xe an toàn | |
 | penalty / time penalty / drive-through | án phạt / phạt thời gian / phạt chạy qua làn pit | Ngắn: *Phạt* / *Chạy qua pit* |
+| retired | bỏ cuộc | Giữ nguyên `DNF` |
+| disqualified | bị truất quyền thi đấu | Giữ nguyên `DSQ` |
 | lights out | tắt đèn xuất phát | |
 | jump start | xuất phát sớm | |
+| formation | xếp đội hình | Xuất phát lăn bánh |
 | overtake / overtake mode | vượt / chế độ vượt | Chế độ tăng năng lượng F1 2026 |
 | ERS / DRS / deploy / harvest | ERS / DRS / xả năng lượng / thu hồi năng lượng | Ngắn: *Xả* / *Thu hồi* |
 | battery | pin | |
 | HUD | HUD | Giữ nguyên |
+| Blade | Thanh nghiêng | Tên bố cục HUD |
+| Trackside | Ven đường đua | Tên bố cục HUD |
+| Pit wall | Tường pit | Tên bố cục HUD |
+| Endurance | Đua bền bỉ | Tên bố cục HUD |
+| Racing line | Đường chạy lý tưởng | Tên bố cục HUD |
 | proximity radar | radar khoảng cách | |
 | shift lights / rev lights | đèn chuyển số / đèn vòng tua | |
 | delta | delta / chênh lệch | Giữ *Delta* trong HUD; dùng *chênh lệch* khi giải thích |
@@ -130,6 +148,22 @@
 | physics / physics version | vật lý / phiên bản vật lý | |
 | post / upload | đăng / tải lên | Đăng thành tích vòng lên bảng trực tuyến |
 | Lap times | Thành tích vòng | Màn hình danh sách thành tích vòng |
+| mod | mod | Nhãn: `MOD` |
+| mod package | gói mod | |
+| mods folder | thư mục mod | |
+| import folder | thư mục nhập | Danh từ; nút hành động Import folder: *Nhập thư mục* |
+| converter | trình chuyển đổi | Trình chuyển đổi mod |
+| converter log | nhật ký trình chuyển đổi | Nhật ký = log |
+| fingerprint | mã xác thực | Mã kiểm tra SHA-256 |
+| launcher | trình khởi chạy | |
+| offline launcher | trình khởi chạy ngoại tuyến | |
+| desktop app | ứng dụng máy tính | |
+| licence | giấy phép | |
+| "More info" (Windows SmartScreen) | Thông tin thêm | Dùng đúng tên tiếng Việt của Windows |
+| "Run anyway" (Windows SmartScreen) | Vẫn chạy | Dùng đúng tên tiếng Việt của Windows |
+| "Applications" (macOS) | Ứng dụng | Dùng đúng tên tiếng Việt của macOS |
+| "System Settings > Privacy & Security" (macOS) | Cài đặt hệ thống > Quyền riêng tư & Bảo mật | Dùng đúng tên tiếng Việt của macOS |
+| "Open Anyway" (macOS) | Vẫn mở | Dùng đúng tên tiếng Việt của macOS |
 
 ## Accounts
 

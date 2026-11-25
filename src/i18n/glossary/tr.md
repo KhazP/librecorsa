@@ -33,6 +33,7 @@
 | pole position | pole pozisyonu | |
 | pit lane | pit yolu | |
 | pit limiter | pit hız sınırlayıcı | Dar HUD’da `Pit sınırlayıcı` |
+| limiter | sınırlayıcı | Hız sınırlayıcı (`Sınırlayıcı açık`) |
 | track limits | pist sınırları | |
 | lap deleted | tur silindi | |
 | racing line | yarış çizgisi | İdeal çizgi göstergesi |
@@ -46,9 +47,12 @@
 | point-to-point | noktadan noktaya | |
 | car | araç | Genel arayüz/ayar terimi |
 | class | sınıf | Araç sınıfı |
+| livery | kaplama | |
 | ghost | hayalet | Bağlama göre `hayalet araç` |
+| ghost mode | hayalet modu | Çok oyunculu temassız mod |
 | share code | paylaşım kodu | |
 | room / room code / host / join | oda / oda kodu / kurucu (oda kur) / katıl | Çok oyunculu oda terimleri |
+| lobby | lobi | |
 | driver | pilot | Motor sporları bağlamında (`sürücü` yerine) |
 | force feedback | force feedback | Kısaltma: `FFB` |
 | steering wheel / wheel | direksiyon | Araç tekeri için `tekerlek` |
@@ -70,6 +74,7 @@
 | keyboard | klavye | |
 | touch controls | dokunmatik kontroller | |
 | bind | ata | Tuş veya eksen atama |
+| unbind | atamayı kaldır | Klavye kısayollarında `kaldır` |
 | axis | eksen | |
 | calibrate | kalibre et | İsim: `kalibrasyon` |
 | driving assists | sürüş destekleri | |
@@ -89,6 +94,8 @@
 | springs | yaylar | |
 | dampers | amortisörler | |
 | bump / rebound (fast bump, slow rebound) | sıkıştırma / geri sekme (hızlı sıkıştırma, yavaş geri sekme) | |
+| bumpstop | takoz | |
+| bumpstop travel | takoz mesafesi | |
 | anti-roll bar | viraj demiri | |
 | camber | kamber | |
 | toe | toe | Bağlama göre `toe açısı` |
@@ -96,20 +103,31 @@
 | rear wing / front wing | arka kanat / ön kanat | |
 | active aero | aktif aero | |
 | drag | hava direnci | |
+| aero balance | aero dengesi | Kısa telemetri etiketi: `Denge` |
 | grip / front grip / rear grip | yol tutuşu / ön tutuş / arka tutuş | Kısa: `tutuş` |
+| slip | kayma | Telemetri açıklaması |
 | understeer / oversteer | önden kayma / arkadan kayma | |
 | differential | diferansiyel | |
+| diff lock | diferansiyel kilidi | Kısa telemetri etiketi: `LSD kilit` |
 | gear ratios | vites oranları | |
 | fuel | yakıt | |
 | yellow / double yellow / blue / black / chequered / green flag | sarı bayrak / çift sarı / mavi bayrak / siyah bayrak / damalı bayrak / yeşil bayrak | |
 | safety car | güvenlik aracı | |
 | penalty / time penalty / drive-through | ceza / zaman cezası / pitten geçme cezası | |
+| retired | yarış dışı | `DNF` aynen korunur |
+| disqualified | diskalifiye | `DSQ` aynen korunur |
 | lights out | ışıklar söndü | |
 | jump start | erken çıkış | |
+| formation | formasyon | Hareketli başlangıç |
 | overtake / overtake mode | geçiş yap (solla) / geçiş modu | F1 2026 enerji takviyesi: `geçiş modu` |
 | ERS / DRS / deploy / harvest | ERS / DRS / dağıtım (kullan) / geri kazanım (şarj) | `ERS` ve `DRS` korunur |
 | battery | batarya | |
 | HUD | HUD | Aynen korunur |
+| Blade | Bıçak | HUD düzeni adı |
+| Trackside | Pist kenarı | HUD düzeni adı |
+| Pit wall | Pit duvarı | HUD düzeni adı |
+| Endurance | Dayanıklılık | HUD düzeni adı |
+| Racing line | Yarış çizgisi | HUD düzeni adı |
 | proximity radar | yakınlık radarı | |
 | shift lights / rev lights | vites ışıkları / devir ışıkları | |
 | delta | delta | Referans tura göre zaman farkı |
@@ -131,6 +149,22 @@
 | physics / physics version | fizik / fizik sürümü | |
 | post (a lap) / upload | gönder / yükle | Tur tablosuna gönderme: `gönder` |
 | Lap times | Tur zamanları | Tur zamanları ekranı |
+| mod | mod | Çoğul: `modlar`; rozet: `MOD` |
+| mod package | mod paketi | |
+| mods folder | mod klasörü | |
+| import folder | içe aktarma klasörü | Ad; eylem düğmesi Import folder: `Klasör içe aktar` |
+| converter | dönüştürücü | Mod dönüştürücü |
+| converter log | dönüştürücünün günlüğü | Günlük = log |
+| fingerprint | parmak izi | SHA-256 sağlama toplamı |
+| launcher | başlatıcı | |
+| offline launcher | çevrimdışı başlatıcı | |
+| desktop app | masaüstü uygulaması | |
+| licence | lisans | |
+| "More info" (Windows SmartScreen) | Ek bilgi | Windows Türkçe resmi ifadesi |
+| "Run anyway" (Windows SmartScreen) | Yine de çalıştır | Windows Türkçe resmi ifadesi |
+| "Applications" (macOS) | Uygulamalar | macOS Türkçe resmi ifadesi |
+| "System Settings > Privacy & Security" (macOS) | Sistem Ayarları > Gizlilik ve Güvenlik | macOS Türkçe resmi ifadesi |
+| "Open Anyway" (macOS) | Yine de Aç | macOS Türkçe resmi ifadesi |
 
 ## Accounts
 

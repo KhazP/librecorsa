@@ -33,6 +33,7 @@
 | pole position | مركز الانطلاق الأول | |
 | pit lane | حارة الصيانة | |
 | pit limiter | محدد سرعة الصيانة | |
+| limiter | المحدد | Speed limiter; Limiter on: المحدد مفعّل |
 | track limits | حدود الحلبة | |
 | lap deleted | أُلغيت اللفة | Short badge: لفة ملغاة |
 | racing line | خط السباق | Drawn ideal line |
@@ -46,9 +47,12 @@
 | point-to-point | من نقطة إلى نقطة | |
 | car | سيارة | pl. سيارات |
 | class | فئة | Car class; pl. فئات |
+| livery | الطلاء | indef. طلاء، pl. طلاءات |
 | ghost | الشبح | Recorded translucent lap car (سيارة الشبح) |
+| ghost mode | وضع الشبح | Multiplayer no-contact mode |
 | share code | رمز المشاركة | |
 | room / room code / host / join | غرفة / رمز الغرفة / المضيف (استضافة) / انضمام | Online multiplayer room |
+| lobby | الغرفة | Same word as room |
 | driver | سائق | pl. سائقون / سائقين |
 | force feedback | رد الفعل القسري | Keep FFB when abbreviated |
 | steering wheel / wheel | عجلة القيادة / المقود | Use المقود in short UI/HUD |
@@ -70,6 +74,7 @@
 | keyboard | لوحة المفاتيح | |
 | touch controls | التحكم باللمس | |
 | bind | تعيين | Assign a button or axis |
+| unbind | إلغاء تعيين | Remove a button or key binding |
 | axis | محور | pl. محاور |
 | calibrate | معايرة | |
 | driving assists | مساعدات القيادة | |
@@ -89,6 +94,8 @@
 | springs | النوابض | |
 | dampers | المخمدات | |
 | bump / rebound (fast bump, slow rebound) | الانضغاط / الارتداد (انضغاط سريع، ارتداد بطيء) | |
+| bumpstop | المصدّ | Tooltip bump rubber: المصد المطاطي |
+| bumpstop travel | شوط المصدّ | |
 | anti-roll bar | قضيب التوازن | |
 | camber | زاوية الميلان | |
 | toe | زاوية التقارب | |
@@ -96,20 +103,31 @@
 | rear wing / front wing | الجناح الخلفي / الجناح الأمامي | |
 | active aero | الانسيابية النشطة | |
 | drag | السحب الهوائي | Short: السحب |
+| aero balance | التوازن الهوائي | Short HUD: توازن |
 | grip / front grip / rear grip | التماسك / التماسك الأمامي / التماسك الخلفي | |
+| slip | الانزلاق | Telemetry legend |
 | understeer / oversteer | قصور التوجيه / فرط التوجيه | |
 | differential | الترس التفاضلي | Short: التفاضلي |
+| diff lock | قفل التفاضلي | Short telemetry label: قفل LSD |
 | gear ratios | نسب التروس | |
 | fuel | الوقود | Distinct from throttle (التسارع) |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | علم أصفر / علم أصفر مزدوج / علم أزرق / علم أسود / علم الشطرنج / علم أخضر | |
 | safety car | سيارة الأمان | |
 | penalty / time penalty / drive-through | عقوبة / عقوبة زمنية / المرور بحارة الصيانة | |
+| retired | انسحب | Status in results; start lights: انسحاب؛ DNF stays in Latin |
+| disqualified | مستبعد | DSQ stays in Latin |
 | lights out | انطفاء الأضواء | Race start |
 | jump start | انطلاق مبكر | |
+| formation | التشكيل | Rolling start |
 | overtake (verb) / overtake mode | تجاوز / وضع التجاوز | F1 2026 energy boost |
 | ERS / DRS / deploy / harvest | ERS / DRS / إطلاق الطاقة / استعادة الطاقة | Keep ERS and DRS in Latin |
 | battery | البطارية | |
 | HUD | HUD | Keep in Latin |
+| Blade | النصل | HUD layout name |
+| Trackside | جانب الحلبة | HUD layout name |
+| Pit wall | جدار الصيانة | HUD layout name |
+| Endurance | التحمّل | HUD layout name |
+| Racing line | خط السباق | HUD layout name |
 | proximity radar | رادار القرب | |
 | shift lights / rev lights | أضواء تبديل التروس | |
 | delta | الفارق الزمني | Short HUD: الفارق or دلتا |
@@ -131,6 +149,22 @@
 | physics / physics version | الفيزياء / إصدار الفيزياء | |
 | post / upload | نشر / رفع | Post a lap to the board / upload |
 | Lap times | أزمنة اللفات | Screen listing lap times |
+| mod | مود | pl. مودات؛ badge: مود |
+| mod package | حزمة مود | pl. حزم المودات |
+| mods folder | مجلد المودات | |
+| import folder | مجلد الاستيراد | Noun; action button Import folder: استيراد مجلد |
+| converter | المحوّل | Mod converter |
+| converter log | سجل المحوّل | |
+| fingerprint | بصمة | SHA-256 checksum |
+| launcher | المشغّل | |
+| offline launcher | المشغّل غير المتصل | |
+| desktop app | تطبيق سطح المكتب | |
+| licence | الترخيص | indef. ترخيص، pl. تراخيص |
+| "More info" (Windows SmartScreen) | مزيد من المعلومات | Quote Windows Arabic wording |
+| "Run anyway" (Windows SmartScreen) | التشغيل على أي حال | Quote Windows Arabic wording |
+| "Applications" (macOS) | التطبيقات | Quote macOS Arabic wording |
+| "System Settings > Privacy & Security" (macOS) | إعدادات النظام > الخصوصية والأمن | Quote macOS Arabic wording |
+| "Open Anyway" (macOS) | فتح على أي حال | Quote macOS Arabic wording |
 
 ## Accounts
 
