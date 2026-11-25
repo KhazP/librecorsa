@@ -148,6 +148,12 @@ export interface CarElectronicsProfile {
    */
   tcDryRearSlide?: { gain: number; from: number };
   /**
+   * TC1 slip target tightening with the steering: × 1 − (1 − `floor`)·min(1, rim angle / `fullAtRimDeg`), so the more
+   * lock the driver holds the less wheelspin the control lets through (a 963's TC reads the steering), held over the
+   * lateral tightening's floor. Absent: no steering term
+   */
+  tcSteerTightening?: { fullAtRimDeg: number; floor: number };
+  /**
    * ABS rear channels: the lock target × max(`floor`, 1 − `gain`·(|slip angle| − `deadbandRad`)), so a trail-braked rear
    * that already slides is held off the brakes. Default (an F1 calibration): gain 1.4, dead band 0.03 rad, floor 0.72.
    * Gain 0 = the rears regulate slip ratio only.
@@ -2603,7 +2609,11 @@ export class F12026CarSim implements SimulatorCar {
       }
       const slideTerm = slideGain > 0 ? slideGain * Math.max(0, saDriven - slideFrom) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
-      const tcEffTarget = tcBaseTarget * latFactor;
+      const steerTight = elec.tcSteerTightening;
+      const ratio = this.profile.steerRatio ?? this.config.chassis.powerSteering?.steeringRatio ?? 12;
+      const rimDeg = Math.abs(this.steerAngleNorm) * this.config.chassis.maxRoadWheelDeg * ratio;
+      const steerFactor = steerTight ? 1 - (1 - steerTight.floor) * Math.min(1, rimDeg / steerTight.fullAtRimDeg) : 1;
+      const tcEffTarget = tcBaseTarget * Math.max(tight.floor, latFactor * steerFactor);
       // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)); on a four-wheel-drive car the
       // axle that spins the more (the slide term above stays with the axle the engine drives directly)
       const axleSlip = (l: number, r: number) => {
