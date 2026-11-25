@@ -20,6 +20,12 @@
 | personal best | recorde pessoal | |
 | last lap | última volta | |
 | out lap | volta de saída | |
+| optimal lap | ideal | Short HUD label |
+| predicted lap | previsto | Short HUD: Prev. |
+| on a PB | Ritmo RP | Short HUD tag (RP = recorde pessoal) |
+| reference lap | volta de referência | |
+| compared lap | volta comparada | |
+| lap comparison | comparação de voltas | |
 | sector | setor | |
 | lap board | classificação | "Ranking de tempos" if room |
 | Hall of Fame | Hall da Fama | |
@@ -36,6 +42,7 @@
 | track limits | limites de pista | |
 | lap deleted | volta anulada | |
 | racing line | linha ideal | |
+| driving line | traçado | Line the car drove, distinct from linha ideal |
 | braking point | ponto de frenagem | |
 | apex | ápice | |
 | kerb | zebra | Brazilian term for kerb |
@@ -85,10 +92,14 @@
 | calibrate | calibrar | |
 | driving assists | assistências de pilotagem | |
 | traction control | controle de tração | |
+| TC slip angle | ângulo de deslizamento do TC | Short HUD: Ângulo desliz. TC |
 | ABS | ABS | |
 | stability control | controle de estabilidade | |
 | brake bias | balanço de freio | |
+| brake migration | migração do freio | Short HUD: Migração |
 | tyre wear | desgaste dos pneus | |
+| tread | banda | Tread left: banda restante |
+| flat / puncture | furo / furado | Short HUD tag: Furo (or Furado in pitWall/blade) |
 | tyre temperatures | temperaturas dos pneus | |
 | tyre pressure | pressão dos pneus | |
 | soft | macio | |
@@ -129,18 +140,23 @@
 | diff lock | bloqueio do diferencial | Short telemetry label: Trava LSD |
 | gear ratios | relações de marcha | |
 | fuel | combustível | |
+| fuel margin: spare / short | sobra / falta | |
 | yellow flag | bandeira amarela | |
 | double yellow | amarela dupla | |
+| double yellow (short) | Am. dupla | Short HUD tag |
 | blue flag | bandeira azul | |
+| blue flag (short) | Band. azul / Azul | Short HUD tag (Azul in tightest badge) |
 | black flag | bandeira preta | |
 | chequered flag | bandeira quadriculada | |
 | green flag | bandeira verde | |
 | safety car | safety car | |
+| VSC ending | Fim do VSC | |
 | penalty | punição | |
 | time penalty | punição de tempo | |
 | drive-through | drive-through | |
 | retired | abandonou | DNF stays in English |
 | disqualified | desqualificado | DSQ stays in English |
+| damage: minor / heavy | leve / grave | |
 | lights out | luzes apagadas | |
 | jump start | queima de largada | |
 | formation | formação | Rolling start |
@@ -150,6 +166,8 @@
 | DRS | DRS | |
 | deploy | liberação | Energy |
 | harvest | recuperação | Energy |
+| MGU-K | MGU-K | Keep in English |
+| regeneration / regen | regeneração / Regen. | Short HUD: Regen. |
 | battery | bateria | |
 | HUD | HUD | |
 | Blade | Lâmina | HUD layout name |
@@ -158,10 +176,15 @@
 | Endurance | Endurance | HUD layout name |
 | Racing line | Linha ideal | HUD layout name |
 | proximity radar | radar de proximidade | |
+| spotter | spotter | |
+| team radio / radio sound | rádio de equipe / som de rádio | |
 | shift lights | luzes de troca de marcha | |
 | rev lights | luzes de rotação | |
 | delta | delta | |
 | gap | diferença | |
+| interval | intervalo | Short HUD: Int. |
+| gap to leader | diferença para o líder | Short: Para o líder (settings: Até o líder) |
+| relative | relativo | Table of cars ahead and behind on track |
 | position | posição | |
 | mirror | retrovisor | |
 | chase camera | câmera de perseguição | |

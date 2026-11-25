@@ -19,6 +19,12 @@
 | personal best | rekor pribadi | — |
 | last lap | lap sebelumnya / lap terakhir | *Lap sebelumnya* untuk waktu lap yang baru selesai di HUD/statistik; *lap terakhir* untuk lap final balapan |
 | out lap | out lap | Lap keluar dari pit; baku di komunitas balap Indonesia |
+| optimal lap | optimal | Label singkat HUD |
+| predicted lap | prediksi | Singkat di HUD: *Pred* |
+| on a PB | Laju PB | Label singkat HUD |
+| reference lap | lap referensi | |
+| compared lap | lap pembanding | Dalam kalimat: *lap yang dibandingkan* |
+| lap comparison | perbandingan lap | |
 | sector | sektor | — |
 | lap board | papan waktu lap | Daftar catatan waktu lap daring per sirkuit dan mobil |
 | Hall of Fame | Hall of Fame | Rekor waktu lap sepanjang masa; lazim dipertahankan |
@@ -35,6 +41,7 @@
 | track limits | batas trek | Pelanggaran keluar lintasan |
 | lap deleted | lap dibatalkan | — |
 | racing line | racing line | Garis balap ideal yang ditampilkan di trek |
+| driving line | jalur berkendara | Garis yang ditempuh mobil, dibedakan dari *racing line* |
 | braking point | titik pengereman | — |
 | apex | apex | Titik puncak tikungan; baku di sim racing Indonesia |
 | kerb | kerb | Pembatas tepi tikungan; baku di sim racing Indonesia |
@@ -77,10 +84,14 @@
 | calibrate | kalibrasi | — |
 | driving assists | bantuan mengemudi | — |
 | traction control | kontrol traksi | Singkatan: `TC` |
+| TC slip angle | sudut slip TC | |
 | ABS | ABS | Tetap |
 | stability control | kontrol stabilitas | — |
 | brake bias | brake bias | Distribusi pengereman depan-belakang; baku di sim racing |
+| brake migration | migrasi rem | Singkat di HUD: *Migrasi* |
 | tyre wear | keausan ban | — |
+| tread | tapak | Sisa tapak: *sisa tapak* |
+| flat / puncture | bocor / ban bocor | Label singkat HUD: *Bocor* (flat), *Ban bocor* atau *Bocor* (puncture) |
 | tyre temperatures | suhu ban | — |
 | tyre pressure | tekanan ban | — |
 | tyre compound: soft, medium, hard, intermediate, wet | kompon ban: Soft, Medium, Hard, Intermediate, Wet | Nama kompon dipertahankan sesuai kode ban dan siaran F1 Indonesia |
@@ -110,16 +121,23 @@
 | diff lock | penguncian diferensial | Label singkat telemetri: *Kunci LSD* |
 | gear ratios | rasio gigi | — |
 | fuel | bahan bakar | — |
+| fuel margin: spare / short | lebih / kurang | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | bendera kuning / bendera kuning ganda / bendera biru / bendera hitam / bendera finis / bendera hijau | — |
+| double yellow (short) | Kuning ganda | Sangat sempit di HUD: *Kng ganda* |
+| blue flag (short) | Biru | Sangat sempit di HUD: *Bdr biru* |
 | safety car | Safety Car | Baku di motorsport Indonesia |
+| VSC ending | VSC berakhir | Singkat di HUD: *VSC akhir* |
 | penalty / time penalty / drive-through | penalti / penalti waktu / penalti drive-through | — |
 | retired | gagal finis | `DNF` tetap dipertahankan |
 | disqualified | didiskualifikasi | `DSQ` tetap dipertahankan |
+| damage: minor / heavy | ringan / berat | |
 | lights out | lampu padam | Isyarat start balapan |
 | jump start | jump start | Start mendahului lampu padam |
 | formation | formasi | Start bergulir |
 | overtake / overtake mode | menyalip / Mode Overtake | Kata kerja: *menyalip*; fitur dorongan energi F1 2026: *Mode Overtake* |
 | ERS / DRS / deploy / harvest | ERS / DRS / salurkan / pulihkan | *Salurkan* (deploy energi), *pulihkan* (harvest energi) |
+| MGU-K | MGU-K | Tetap |
+| regeneration / regen | regenerasi / Regen | Singkat di HUD: *Regen* |
 | battery | baterai | — |
 | HUD | HUD | Tetap |
 | Blade | Blade | Nama tata letak HUD |
@@ -128,9 +146,14 @@
 | Endurance | Endurance | Nama tata letak HUD |
 | Racing line | Racing line | Nama tata letak HUD |
 | proximity radar | radar jarak | — |
+| spotter | spotter | Tetap |
+| team radio / radio sound | radio tim / suara radio | |
 | shift lights / rev lights | lampu gigi / lampu RPM | — |
 | delta | delta | Selisih waktu terhadap lap referensi |
 | gap | gap / selisih waktu | *Gap* di HUD sempit; *selisih waktu* di penjelasan |
+| interval | interval | Singkat di HUD: *Int* |
+| gap to leader | gap ke pemimpin | Singkat: *Ke pemimpin* |
+| relative | relatif | Tabel mobil di depan dan belakang di lintasan |
 | position | posisi | — |
 | mirror | spion | — |
 | camera: chase camera, cockpit, bonnet camera, Trackside TV, free camera | kamera: kamera chase, kokpit, kamera kap mesin, TV Sisi Trek, kamera bebas | — |

@@ -21,6 +21,12 @@
 | personal best | أفضل زمن شخصي | Short HUD: PB or أفضل شخصي |
 | last lap | اللفة الأخيرة | |
 | out lap | لفة الخروج | |
+| optimal lap | المثالية | Short HUD label for theoretical best lap |
+| predicted lap | المتوقع / متوقع | Short HUD: المتوقع or متوقع |
+| on a PB | نحو PB | Short HUD tag for personal-best pace |
+| reference lap | اللفة المرجعية | indef. لفة مرجعية |
+| compared lap | اللفة المقارَنة | |
+| lap comparison | مقارنة اللفات | |
 | sector | قطاع | pl. قطاعات |
 | lap board | لوحة الأزمنة | Online leaderboard of lap times |
 | Hall of Fame | قاعة المشاهير | All-time lap records |
@@ -37,6 +43,7 @@
 | track limits | حدود الحلبة | |
 | lap deleted | أُلغيت اللفة | Short badge: لفة ملغاة |
 | racing line | خط السباق | Drawn ideal line |
+| driving line | مسار القيادة | Line the car drove, distinct from خط السباق |
 | braking point | نقطة الكبح | |
 | apex | قمة المنعطف | |
 | kerb | رصيف الحلبة | pl. أرصفة |
@@ -79,10 +86,14 @@
 | calibrate | معايرة | |
 | driving assists | مساعدات القيادة | |
 | traction control | التحكم بالجر | Keep TC when abbreviated |
+| TC slip angle | زاوية انزلاق TC | |
 | ABS | ABS | Explain as مانع انغلاق المكابح if needed |
 | stability control | التحكم بالثبات | |
 | brake bias | توزيع المكابح | |
+| brake migration | انتقال توازن المكابح | Short HUD: انتقال التوازن |
 | tyre wear | تآكل الإطارات | |
+| tread | النقشة | Tread left: النقشة المتبقية؛ tyre surface widget uses سطح الإطار |
+| flat / puncture | مثقوب / ثقب | Short HUD tag: مثقوب (flat/punctured), ثقب (puncture) |
 | tyre temperatures | حرارة الإطارات | |
 | tyre pressure | ضغط الإطارات | |
 | tyre compound: soft, medium, hard, intermediate, wet | مركّب الإطارات: ناعم، متوسط، صلب، وسيط، مبلل | Intermediate = وسيط (مطر خفيف) |
@@ -111,16 +122,23 @@
 | diff lock | قفل التفاضلي | Short telemetry label: قفل LSD |
 | gear ratios | نسب التروس | |
 | fuel | الوقود | Distinct from throttle (التسارع) |
+| fuel margin: spare / short | فائض / نقص | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | علم أصفر / علم أصفر مزدوج / علم أزرق / علم أسود / علم الشطرنج / علم أخضر | |
+| double yellow (short) | أصفر مزدوج | Short HUD tag |
+| blue flag (short) | أزرق | Short HUD tag |
 | safety car | سيارة الأمان | |
+| VSC ending | انتهاء VSC | |
 | penalty / time penalty / drive-through | عقوبة / عقوبة زمنية / المرور بحارة الصيانة | |
 | retired | انسحب | Status in results; start lights: انسحاب؛ DNF stays in Latin |
 | disqualified | مستبعد | DSQ stays in Latin |
+| damage: minor / heavy | طفيف / كبير | |
 | lights out | انطفاء الأضواء | Race start |
 | jump start | انطلاق مبكر | |
 | formation | التشكيل | Rolling start |
 | overtake (verb) / overtake mode | تجاوز / وضع التجاوز | F1 2026 energy boost |
 | ERS / DRS / deploy / harvest | ERS / DRS / إطلاق الطاقة / استعادة الطاقة | Keep ERS and DRS in Latin |
+| MGU-K | MGU-K | Keep in Latin |
+| regeneration / regen | استعادة الطاقة / استعادة | Short HUD: استعادة |
 | battery | البطارية | |
 | HUD | HUD | Keep in Latin |
 | Blade | النصل | HUD layout name |
@@ -129,9 +147,14 @@
 | Endurance | التحمّل | HUD layout name |
 | Racing line | خط السباق | HUD layout name |
 | proximity radar | رادار القرب | |
+| spotter | المراقب الصوتي | Short HUD and compounds: المراقب |
+| team radio / radio sound | راديو الفريق / صوت الراديو | |
 | shift lights / rev lights | أضواء تبديل التروس | |
 | delta | الفارق الزمني | Short HUD: الفارق or دلتا |
 | gap | الفارق | Time gap to car ahead/behind |
+| interval | الفاصل | Full and short HUD |
+| gap to leader | الفارق عن المتصدر | Short: عن المتصدر |
+| relative | النسبي | Cars ahead/behind on track |
 | position | المركز | |
 | mirror | المرآة | |
 | camera: chase camera, cockpit, bonnet camera, Trackside TV, free camera | الكاميرا: كاميرا الملاحقة، قمرة القيادة، كاميرا غطاء المحرك، البث التلفزيوني، كاميرا حرة | |

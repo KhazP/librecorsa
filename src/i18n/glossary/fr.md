@@ -21,6 +21,12 @@
 | personal best | record personnel | |
 | last lap | dernier tour | |
 | out lap | tour de sortie | |
+| optimal lap | optimal | Short HUD label |
+| predicted lap | prévu | Short HUD: Prév. |
+| on a PB | Sur un RP | Short HUD tag (RP = record personnel) |
+| reference lap | tour de référence | |
+| compared lap | tour comparé | |
+| lap comparison | comparaison de tours | |
 | sector | secteur | |
 | lap board | classement | "Classement des temps" when room |
 | Hall of Fame | Hall of Fame | Kept in English |
@@ -37,6 +43,7 @@
 | track limits | limites de piste | |
 | lap deleted | tour annulé | |
 | racing line | trajectoire idéale | |
+| driving line | trajectoire | Line the car drove, distinct from trajectoire idéale |
 | braking point | point de freinage | |
 | apex | point de corde | "corde" in short labels |
 | kerb | vibreur | |
@@ -86,10 +93,14 @@
 | calibrate | calibrer | |
 | driving assists | aides à la conduite | |
 | traction control | antipatinage | Real-car term and what games show |
+| TC slip angle | angle de dérive TC | |
 | ABS | ABS | |
 | stability control | contrôle de stabilité | |
 | brake bias | répartition de freinage | |
+| brake migration | migration du freinage | Short HUD: Migration |
 | tyre wear | usure des pneus | |
+| tread | gomme | Tread left: gomme restante; tread zones use bande |
+| flat / puncture | crevé / crevaison | Short HUD tag: Crevé (flat), Crevaison (puncture) |
 | tyre temperatures | températures des pneus | |
 | tyre pressure | pression des pneus | |
 | soft | tendre | |
@@ -130,18 +141,23 @@
 | diff lock | blocage de différentiel | Short telemetry label: Verr. LSD |
 | gear ratios | rapports de boîte | |
 | fuel | carburant | |
+| fuel margin: spare / short | marge / manque | |
 | yellow flag | drapeau jaune | |
 | double yellow | double jaune | |
+| double yellow (short) | Dbl jaune | Short HUD tag |
 | blue flag | drapeau bleu | |
+| blue flag (short) | Bleu / Drap. bleu | Short HUD tag |
 | black flag | drapeau noir | |
 | chequered flag | drapeau à damier | |
 | green flag | drapeau vert | |
 | safety car | voiture de sécurité | |
+| VSC ending | Fin VSC | Longer form: Fin de la VSC |
 | penalty | pénalité | |
 | time penalty | pénalité de temps | |
 | drive-through | passage par les stands | |
 | retired | abandon | DNF stays in English |
 | disqualified | disqualifié | DSQ stays in English |
+| damage: minor / heavy | léger / lourd | |
 | lights out | extinction des feux | |
 | jump start | faux départ | |
 | formation | formation | Rolling start |
@@ -151,6 +167,8 @@
 | DRS | DRS | |
 | deploy | déploiement | Energy |
 | harvest | récupération | Energy |
+| MGU-K | MGU-K | Keep in English |
+| regeneration / regen | régénération / Régén. | Short HUD: Régén. |
 | battery | batterie | |
 | HUD | HUD | |
 | Blade | Lame | HUD layout name |
@@ -159,10 +177,15 @@
 | Endurance | Endurance | HUD layout name |
 | Racing line | Trajectoire idéale | HUD layout name |
 | proximity radar | radar de proximité | |
+| spotter | spotter | |
+| team radio / radio sound | radio d’équipe / son radio | |
 | shift lights | témoins de changement de rapport | "voyants de rapport" if too long |
 | rev lights | témoins de régime | |
 | delta | delta | |
 | gap | écart | |
+| interval | intervalle | Short HUD: Int (or Interv. in blocks) |
+| gap to leader | écart avec le leader | Short: Au leader |
+| relative | relatif | Table of cars ahead and behind; layout descriptions use voitures proches |
 | position | position | |
 | mirror | rétroviseur | |
 | chase camera | caméra poursuite | |

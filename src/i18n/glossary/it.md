@@ -20,6 +20,12 @@
 | personal best | record personale | |
 | last lap | ultimo giro | |
 | out lap | giro di uscita | |
+| optimal lap | ottimale | Short HUD label |
+| predicted lap | previsto | Short HUD: Prev. |
+| on a PB | Passo RP | Short HUD tag (RP = record personale) |
+| reference lap | giro di riferimento | |
+| compared lap | giro confrontato | |
+| lap comparison | confronto giri | |
 | sector | settore | |
 | lap board | classifica | "Classifica dei tempi" when space allows |
 | Hall of Fame | Hall of Fame | Kept in English, as in racing games |
@@ -36,6 +42,7 @@
 | track limits | limiti della pista | |
 | lap deleted | giro cancellato | |
 | racing line | traiettoria ideale | "linea ideale" acceptable in short labels |
+| driving line | traiettoria | Line the car drove, distinct from traiettoria ideale |
 | braking point | punto di frenata | |
 | apex | corda | |
 | kerb | cordolo | |
@@ -85,10 +92,14 @@
 | calibrate | calibra | |
 | driving assists | aiuti alla guida | |
 | traction control | controllo di trazione | |
+| TC slip angle | angolo di slittamento TC | Short HUD: Angolo slitt. TC |
 | ABS | ABS | |
 | stability control | controllo di stabilità | |
 | brake bias | bilanciamento dei freni | ACC Italian; not "ripartizione" |
+| brake migration | migrazione della frenata | Short HUD: Migrazione |
 | tyre wear | usura gomme | |
+| tread | battistrada | Tread left: battistrada residuo |
+| flat / puncture | forata / foratura | Short HUD tag: Forata (flat/punctured, agrees with gomma), Foratura (puncture) |
 | tyre temperatures | temperature gomme | |
 | tyre pressure | pressione gomme | |
 | soft | morbida | Compound |
@@ -128,18 +139,23 @@
 | diff lock | bloccaggio del differenziale | Short telemetry label: Blocco LSD |
 | gear ratios | rapporti del cambio | |
 | fuel | carburante | |
+| fuel margin: spare / short | avanzo / manca | |
 | yellow flag | bandiera gialla | |
 | double yellow | doppia gialla | |
+| double yellow (short) | 2× gialla | Short HUD tag |
 | blue flag | bandiera blu | |
+| blue flag (short) | Blu / Band. blu | Short HUD tag |
 | black flag | bandiera nera | |
 | chequered flag | bandiera a scacchi | |
 | green flag | bandiera verde | |
 | safety car | safety car | |
+| VSC ending | Fine VSC | |
 | penalty | penalità | |
 | time penalty | penalità di tempo | |
 | drive-through | drive-through | |
 | retired | ritirato | DNF stays in English |
 | disqualified | squalificato | DSQ stays in English |
+| damage: minor / heavy | lievi / gravi | Plural agreeing with danni |
 | lights out | semafori spenti | Race start |
 | jump start | falsa partenza | |
 | formation | formazione | Rolling start |
@@ -149,6 +165,8 @@
 | DRS | DRS | |
 | deploy | erogazione | Energy |
 | harvest | recupero | Energy |
+| MGU-K | MGU-K | Keep in English |
+| regeneration / regen | rigenerazione / Rigen. | Short HUD: Rigen. |
 | battery | batteria | |
 | HUD | HUD | |
 | Blade | Lama | HUD layout name |
@@ -157,10 +175,15 @@
 | Endurance | Endurance | HUD layout name |
 | Racing line | Traiettoria ideale | HUD layout name |
 | proximity radar | radar di prossimità | |
+| spotter | spotter | |
+| team radio / radio sound | radio di squadra / suono radio | |
 | shift lights | luci di cambiata | |
 | rev lights | luci dei giri | |
 | delta | delta | |
 | gap | distacco | |
+| interval | intervallo | Short HUD: Int. (or Int / Interv.) |
+| gap to leader | distacco dal leader | Short: Dal leader |
+| relative | relativo | Table of cars ahead and behind on track |
 | position | posizione | |
 | mirror | specchietto | |
 | chase camera | camera esterna | |

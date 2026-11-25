@@ -21,6 +21,12 @@
 | personal best | Persönliche Bestzeit | |
 | last lap | Letzte Runde | |
 | out lap | Outlap | English term is normal |
+| optimal lap | Optimal | Short HUD label |
+| predicted lap | Prognose | Short HUD: Prog. |
+| on a PB | PB-Kurs | Short HUD tag |
+| reference lap | Referenzrunde | |
+| compared lap | verglichene Runde | |
+| lap comparison | Rundenvergleich | |
 | sector | Sektor | |
 | lap board | Bestenliste | |
 | Hall of Fame | Hall of Fame | |
@@ -37,6 +43,7 @@
 | track limits | Streckenlimits | |
 | lap deleted | Runde gestrichen | |
 | racing line | Ideallinie | |
+| driving line | Fahrlinie | Line the car drove, distinct from Ideallinie |
 | braking point | Bremspunkt | |
 | apex | Scheitelpunkt | |
 | kerb | Kerb | |
@@ -86,10 +93,14 @@
 | calibrate | Kalibrieren | |
 | driving assists | Fahrhilfen | |
 | traction control | Traktionskontrolle | |
+| TC slip angle | TC-Schlupfwinkel | |
 | ABS | ABS | |
 | stability control | Stabilitätskontrolle | |
 | brake bias | Bremsbalance | Not "Bremskraftverteilung" (the real-car term); sims say Bremsbalance |
+| brake migration | Bremsbalance-Verlagerung | Short HUD: Verlagerung |
 | tyre wear | Reifenverschleiß | |
+| tread | Profil | Tread left: Restprofil; tread surface/temp uses Lauffläche |
+| flat / puncture | Platt / Platten | Short HUD tag: Platt (flat), Platten (puncture) |
 | tyre temperatures | Reifentemperaturen | |
 | tyre pressure | Reifendruck | |
 | soft | Soft | Compound; English is standard |
@@ -129,18 +140,22 @@
 | diff lock | Differenzialsperre | Short telemetry label: LSD-Sperre |
 | gear ratios | Übersetzungen | |
 | fuel | Kraftstoff | |
+| fuel margin: spare / short | Reserve / Fehlt | |
 | yellow flag | Gelbe Flagge | |
 | double yellow | Doppelgelb | |
 | blue flag | Blaue Flagge | |
+| blue flag (short) | Blau | Short HUD tag |
 | black flag | Schwarze Flagge | |
 | chequered flag | Zielflagge | |
 | green flag | Grüne Flagge | |
 | safety car | Safety Car | |
+| VSC ending | VSC endet | |
 | penalty | Strafe | |
 | time penalty | Zeitstrafe | |
 | drive-through | Durchfahrtsstrafe | |
 | retired | Ausgeschieden | DNF stays in English |
 | disqualified | Disqualifiziert | DSQ stays in English |
+| damage: minor / heavy | Leicht / Stark | |
 | lights out | Lichter aus | |
 | jump start | Frühstart | |
 | formation | Formation | Rolling start |
@@ -150,6 +165,8 @@
 | DRS | DRS | |
 | deploy | Einsatz | Energy; "Abgabe" is also seen but Einsatz is shorter |
 | harvest | Rekuperieren | |
+| MGU-K | MGU-K | Keep in English |
+| regeneration / regen | Rekuperation / Rekup. | Short HUD: Rekup. |
 | battery | Batterie | |
 | HUD | HUD | |
 | Blade | Klinge | HUD layout name |
@@ -158,10 +175,15 @@
 | Endurance | Langstrecke | HUD layout name |
 | Racing line | Ideallinie | HUD layout name |
 | proximity radar | Näherungsradar | |
+| spotter | Spotter | |
+| team radio / radio sound | Teamfunk / Funk-Klang | |
 | shift lights | Schaltlichter | |
 | rev lights | Drehzahllichter | |
 | delta | Delta | |
 | gap | Abstand | |
+| interval | Intervall | Short HUD: Int. (or Int in tight columns) |
+| gap to leader | Abstand zum Führenden | Short: Zum Führenden |
+| relative | Relativ | Table of cars ahead and behind on track |
 | position | Position | |
 | mirror | Spiegel | |
 | chase camera | Verfolgerkamera | |

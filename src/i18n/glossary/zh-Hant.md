@@ -20,6 +20,12 @@
 | personal best | 個人最佳 | HUD 縮寫 PB 可保留 |
 | last lap | 上一圈 | |
 | out lap | 出場圈 | |
+| optimal lap | 理想 | HUD 短標籤 |
+| predicted lap | 預測 | HUD 短標籤亦為「預測」 |
+| on a PB | 刷新 PB | HUD 短標籤 |
+| reference lap | 基準單圈 | 簡稱「基準圈」 |
+| compared lap | 比較單圈 | |
+| lap comparison | 單圈比較 | |
 | sector | 賽段 | S1/S2/S3 保留 |
 | lap board | 圈速榜 | 依賽道與車輛分類的線上圈速排行榜 |
 | Hall of Fame | 名人堂 | 歷史總圈速紀錄 |
@@ -36,6 +42,7 @@
 | track limits | 賽道邊界 | |
 | lap deleted | 單圈已取消 | 亦可用「單圈無效」（依語境精簡） |
 | racing line | 行車線 | 理想行車路線指示 |
+| driving line | 行駛路線 | 車輛實際行駛軌跡，與「行車線」區隔 |
 | braking point | 煞車點 | |
 | apex | 彎心 | |
 | kerb | 路緣石 | |
@@ -78,10 +85,14 @@
 | calibrate | 校準 | |
 | driving assists | 駕駛輔助 | |
 | traction control | 循跡控制 | TC 保留 |
+| TC slip angle | TC 側滑角 | |
 | ABS | ABS | 保留英文縮寫；說明處可稱「ABS 防鎖死煞車」 |
 | stability control | 車身穩定控制 | 簡稱「穩定控制」 |
 | brake bias | 煞車平衡 | |
+| brake migration | 煞車平衡轉移 | |
 | tyre wear | 輪胎磨耗 | |
+| tread | 胎紋 | 剩餘量用「剩餘胎紋」；胎面溫度語境用「胎面」 |
+| flat / puncture | 爆胎 | 短標籤亦為「爆胎」（與平斑區隔） |
 | tyre temperatures | 輪胎溫度 | 簡稱「胎溫」 |
 | tyre pressure | 胎壓 | |
 | tyre compound: soft, medium, hard, intermediate, wet | 輪胎配方：軟胎、中性胎、硬胎、半雨胎、全雨胎 | |
@@ -110,16 +121,21 @@
 | diff lock | 差速器鎖定 | 遙測短標籤「LSD 鎖定」 |
 | gear ratios | 齒比 | |
 | fuel | 燃油 | 剩餘量語境可用「油量」 |
+| fuel margin: spare / short | 餘裕／不足 | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | 黃旗／雙黃旗／藍旗／黑旗／方格旗／綠旗 | |
 | safety car | 安全車 | |
+| VSC ending | VSC 結束 | 完整提示用「VSC 即將結束」 |
 | penalty / time penalty / drive-through | 處罰／加時處罰／通過維修區處罰 | |
 | retired | 退賽 | `DNF` 保留英文 |
 | disqualified | 取消資格 | 賽事結果與起跑燈號中用「已取消資格」；`DSQ` 保留英文 |
+| damage: minor / heavy | 輕微／嚴重 | |
 | lights out | 燈滅起跑 | |
 | jump start | 搶跑 | |
 | formation | 編隊 | 動態起跑編隊 |
 | overtake / overtake mode | 超車／超車模式 | |
 | ERS / DRS, deploy, harvest | ERS／DRS、釋放、回收 | ERS/DRS 保留 |
+| MGU-K | MGU-K | 保留英文縮寫 |
+| regeneration / regen | 動能回收／回充 | HUD 短標籤「回充」 |
 | battery | 電池 | 剩餘電力語境可用「電量」 |
 | HUD | HUD | 保留英文縮寫 |
 | Blade | 刀鋒 | HUD 佈局名稱 |
@@ -128,9 +144,14 @@
 | Endurance | 耐力賽 | HUD 佈局名稱 |
 | Racing line | 行車線 | HUD 佈局名稱 |
 | proximity radar | 車距雷達 | |
+| spotter | 觀察員 | |
+| team radio / radio sound | 車隊無線電／無線電音效 | |
 | shift lights / rev lights | 換檔指示燈／轉速燈 | |
 | delta | 時間差 | HUD 窄版可保留「Delta」或用「時間差」 |
 | gap | 差距 | 與前後車的時間差 |
+| interval | 間隔 | 設定選項用「與前車差距」 |
+| gap to leader | 與領先者差距 | 短標籤「距領先」 |
+| relative | 前後車距 | 賽道上前後相鄰車輛列表 |
 | position | 名次 | |
 | mirror | 後視鏡 | |
 | camera: chase camera, cockpit, bonnet camera, Trackside TV, free camera | 視角：追尾視角、駕駛艙視角、引擎蓋視角、場邊轉播視角、自由視角 | |

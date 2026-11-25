@@ -21,6 +21,12 @@
 | personal best | 개인 최고 기록 | HUD 약어는 `PB` 유지 |
 | last lap | 이전 랩 | 직전 완료 랩(최종 랩 문맥에서는 `마지막 랩`) |
 | out lap | 아웃 랩 | 피트 아웃 직후 랩 |
+| optimal lap | 이론 | HUD 짧은 라벨(이론 최고 랩) |
+| predicted lap | 예상 | 짧은 HUD 라벨도 `예상` |
+| on a PB | PB 페이스 | HUD 짧은 태그 |
+| reference lap | 기준 랩 | |
+| compared lap | 비교 랩 | |
+| lap comparison | 랩 비교 | |
 | sector | 섹터 | `S1`/`S2`/`S3` 코드 유지 |
 | lap board | 랩 보드 | 서킷·차량별 온라인 랩 타임 기록표 |
 | Hall of Fame | 명예의 전당 | 역대 최고 랩 기록 |
@@ -37,6 +43,7 @@
 | track limits | 트랙 리밋 | 트랙 이탈로 인한 랩 무효 규정 |
 | lap deleted | 랩 무효 | 트랙 리밋 위반 등으로 삭제된 랩 |
 | racing line | 레이싱 라인 | 화면에 표시되는 이상 주행선 |
+| driving line | 주행 라인 | 차량이 실제 주행한 궤적(`레이싱 라인`과 구분) |
 | braking point | 브레이킹 포인트 | 제동 지점 |
 | apex | 에이펙스 | 코너 정점 |
 | kerb | 연석 | |
@@ -79,10 +86,14 @@
 | calibrate | 보정 | |
 | driving assists | 주행 보조 | |
 | traction control | 트랙션 컨트롤 | 약어 `TC` 유지 |
+| TC slip angle | TC 슬립 각도 | HUD 짧은 라벨: `TC 슬립각` |
 | ABS | ABS | 영문 유지 |
 | stability control | 자세 제어 | 스태빌리티 컨트롤 |
 | brake bias | 브레이크 바이어스 | 전후 제동력 배분 |
+| brake migration | 브레이크 마이그레이션 | HUD 짧은 라벨: `마이그레이션` |
 | tyre wear | 타이어 마모 | |
+| tread | 트레드 | 잔여 트레드: `트레드 잔량` |
+| flat / puncture | 펑크 | 플랫/펑크 짧은 HUD 태그 모두 `펑크`(플랫스폿과 구분) |
 | tyre temperatures | 타이어 온도 | |
 | tyre pressure | 타이어 공기압 | |
 | tyre compound | 타이어 컴파운드 | 소프트, 미디엄, 하드, 인터미디어트, 웻 |
@@ -111,16 +122,21 @@
 | diff lock | 디퍼렌셜 잠금 | 텔레메트리 짧은 라벨: `LSD 잠금` |
 | gear ratios | 기어비 | |
 | fuel | 연료 | |
+| fuel margin: spare / short | 여유 / 부족 | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | 황기 / 이중 황기 / 청기 / 흑기 / 체커기 / 녹기 | 국제 모터스포츠 한국어 표준 |
 | safety car | 세이프티 카 | |
+| VSC ending | VSC 종료 | 긴 알림에서는 `VSC 종료 임박` |
 | penalty / time penalty / drive-through | 페널티 / 시간 페널티 / 드라이브 스루 | |
 | retired | 리타이어 | `DNF`는 영문 유지 |
 | disqualified | 실격 | `DSQ`는 영문 유지 |
+| damage: minor / heavy | 경미 / 심각 | |
 | lights out | 라이트 아웃 | 레이스 스타트 신호 |
 | jump start | 부정 출발 | |
 | formation | 포메이션 | 롤링 스타트 |
 | overtake / overtake mode | 추월 / 오버테이크 모드 | 동사: 추월, F1 2026 에너지 부스트: 오버테이크 모드 |
 | ERS / DRS / deploy / harvest | ERS / DRS / 방출 / 회생 | `ERS`·`DRS` 유지, 에너지 방출·회생 |
+| MGU-K | MGU-K | 영문 유지 |
+| regeneration / regen | 회생 제동 / 회생 | HUD 짧은 라벨: `회생` |
 | battery | 배터리 | |
 | HUD | HUD | 영문 유지 |
 | Blade | 블레이드 | HUD 레이아웃 이름 |
@@ -129,9 +145,14 @@
 | Endurance | 인듀어런스 | HUD 레이아웃 이름 |
 | Racing line | 레이싱 라인 | HUD 레이아웃 이름 |
 | proximity radar | 근접 레이더 | |
+| spotter | 스포터 | |
+| team radio / radio sound | 팀 무전 / 무전 음향 | |
 | shift lights / rev lights | 시프트 라이트 / RPM 라이트 | |
 | delta | 델타 | 기준 랩과의 시간 차 |
 | gap | 격차 | 앞뒤 차량과의 시간 차 |
+| interval | 간격 | 설정 선택지에서는 `앞차 간격` |
+| gap to leader | 선두와의 격차 | 짧은 라벨: `선두 대비` 또는 `선두 격차` |
+| relative | 상대 거리 | 트랙 위 앞뒤 차량 표 |
 | position | 순위 | |
 | mirror | 미러 | |
 | camera (chase / cockpit / bonnet / Trackside TV / free) | 카메라 (체이스 카메라 / 콕핏 / 보닛 카메라 / 트랙사이드 TV / 자유 카메라) | 짧은 HUD/선택지에서는 `체이스`, `콕핏`, `보닛`, `트랙사이드 TV`, `자유` |

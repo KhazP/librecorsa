@@ -21,6 +21,12 @@
 | personal best | kişisel en iyi | Dar HUD alanlarında `PB` korunur |
 | last lap | son tur | |
 | out lap | çıkış turu | Pit çıkış turu |
+| optimal lap | ideal | Kısa HUD etiketi |
+| predicted lap | tahmini | Kısa HUD’da da `Tahmini` |
+| on a PB | PB temposu | Kısa HUD etiketi |
+| reference lap | referans tur | |
+| compared lap | karşılaştırılan tur | |
+| lap comparison | tur karşılaştırması | |
 | sector | sektör | `S1`, `S2`, `S3` aynen korunur |
 | lap board | tur tablosu | Pist ve araç bazlı çevrimiçi tur listesi |
 | Hall of Fame | Onur Listesi | Tüm zamanların tur rekorları |
@@ -37,6 +43,7 @@
 | track limits | pist sınırları | |
 | lap deleted | tur silindi | |
 | racing line | yarış çizgisi | İdeal çizgi göstergesi |
+| driving line | sürüş çizgisi | Aracın izlediği çizgi (`yarış çizgisi`nden ayrı) |
 | braking point | fren noktası | |
 | apex | apeks | |
 | kerb | kerb | Sim yarışçıları arasında yerleşik |
@@ -79,10 +86,14 @@
 | calibrate | kalibre et | İsim: `kalibrasyon` |
 | driving assists | sürüş destekleri | |
 | traction control | çekiş kontrolü | Kısaltma: `TC` |
+| TC slip angle | TC kayma açısı | |
 | ABS | ABS | Aynen korunur |
 | stability control | denge kontrolü | |
 | brake bias | fren dengesi | |
+| brake migration | fren kaydırma | |
 | tyre wear | lastik aşınması | |
+| tread | diş | Kalan diş: `kalan diş`; yüzey sıcaklığı bağlamında `sırt` |
+| flat / puncture | patlak | Kısa HUD etiketi de `Patlak` |
 | tyre temperatures | lastik sıcaklıkları | |
 | tyre pressure | lastik basıncı | |
 | tyre compound: soft, medium, hard, intermediate, wet | lastik hamuru: yumuşak, orta, sert, geçiş, yağmur | Standart Türkçe F1 hamur adları |
@@ -111,16 +122,22 @@
 | diff lock | diferansiyel kilidi | Kısa telemetri etiketi: `LSD kilit` |
 | gear ratios | vites oranları | |
 | fuel | yakıt | |
+| fuel margin: spare / short | fazla / eksik | |
 | yellow / double yellow / blue / black / chequered / green flag | sarı bayrak / çift sarı / mavi bayrak / siyah bayrak / damalı bayrak / yeşil bayrak | |
+| blue flag (short) | Mavi | Kısa HUD etiketi |
 | safety car | güvenlik aracı | |
+| VSC ending | VSC bitiyor | |
 | penalty / time penalty / drive-through | ceza / zaman cezası / pitten geçme cezası | |
 | retired | yarış dışı | `DNF` aynen korunur |
 | disqualified | diskalifiye | `DSQ` aynen korunur |
+| damage: minor / heavy | hafif / ağır | |
 | lights out | ışıklar söndü | |
 | jump start | erken çıkış | |
 | formation | formasyon | Hareketli başlangıç |
 | overtake / overtake mode | geçiş yap (solla) / geçiş modu | F1 2026 enerji takviyesi: `geçiş modu` |
 | ERS / DRS / deploy / harvest | ERS / DRS / dağıtım (kullan) / geri kazanım (şarj) | `ERS` ve `DRS` korunur |
+| MGU-K | MGU-K | Aynen korunur |
+| regeneration / regen | enerji geri kazanımı / geri kazanım | Kısa HUD: `Geri kazanım` |
 | battery | batarya | |
 | HUD | HUD | Aynen korunur |
 | Blade | Bıçak | HUD düzeni adı |
@@ -129,9 +146,14 @@
 | Endurance | Dayanıklılık | HUD düzeni adı |
 | Racing line | Yarış çizgisi | HUD düzeni adı |
 | proximity radar | yakınlık radarı | |
+| spotter | gözcü | |
+| team radio / radio sound | takım telsizi / telsiz sesi | |
 | shift lights / rev lights | vites ışıkları / devir ışıkları | |
 | delta | delta | Referans tura göre zaman farkı |
 | gap | fark | Öndeki/arkadaki araçla fark |
+| interval | ara | Ayar seçeneğinde `Öndekine` |
+| gap to leader | lidere fark | Kısa: `Lidere` |
+| relative | yakın araçlar | Pistteki öndeki ve arkadaki araçlar tablosu; kısa: `Yakın` |
 | position | sıra | Bağlama göre `pozisyon` |
 | mirror | ayna | Bağlama göre `dikiz aynası` |
 | camera: chase camera, cockpit, bonnet camera, Trackside TV, free camera | kamera: takip kamerası, kokpit, kaput kamerası, Pist Kenarı TV, serbest kamera | |

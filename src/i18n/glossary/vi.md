@@ -20,6 +20,12 @@
 | personal best | kỷ lục cá nhân | Giữ `PB` khi ở dạng mã HUD |
 | last lap | vòng trước | |
 | out lap | vòng xuất pit | Vòng chạy ra từ làn pit |
+| optimal lap | lý tưởng | Nhãn HUD ngắn |
+| predicted lap | dự kiến | Dạng ngắn trên HUD cũng là *Dự kiến* |
+| on a PB | Vượt PB | Nhãn HUD ngắn |
+| reference lap | vòng tham chiếu | |
+| compared lap | vòng so sánh | |
+| lap comparison | so sánh vòng | |
 | sector | sector | Giữ nguyên thuật ngữ quen thuộc với cộng đồng F1/sim racing VN; giữ `S1/S2/S3` |
 | lap board | bảng xếp hạng vòng | Bảng thành tích trực tuyến theo đường đua và xe |
 | Hall of Fame | Đại sảnh Danh vọng | Bảng kỷ lục mọi thời đại |
@@ -36,6 +42,7 @@
 | track limits | giới hạn đường đua | |
 | lap deleted | vòng bị hủy | Thành tích vòng bị hủy do vượt giới hạn đường đua |
 | racing line | đường chạy lý tưởng | Nhãn ngắn: *Đường chạy* |
+| driving line | đường chạy | Quỹ đạo xe đã chạy, phân biệt với *đường chạy lý tưởng* |
 | braking point | điểm phanh | |
 | apex | đỉnh cua | |
 | kerb | gờ lề | Gờ lề đỏ-trắng ở mép đường đua (không dùng *gờ giảm tốc*) |
@@ -78,10 +85,14 @@
 | calibrate | hiệu chỉnh | |
 | driving assists | hỗ trợ lái | |
 | traction control | kiểm soát lực kéo | Giữ `TC` |
+| TC slip angle | góc trượt TC | |
 | ABS | ABS | Giữ nguyên |
 | stability control | kiểm soát ổn định | |
 | brake bias | phân bổ lực phanh | HUD ngắn: *Phân bổ phanh* |
+| brake migration | dịch chuyển lực phanh | HUD ngắn: *Dịch chuyển phanh* |
 | tyre wear | độ mòn lốp | Ngắn: *Mòn lốp* |
+| tread | gai lốp | Gai lốp còn lại: *gai lốp còn*; bề mặt nhiệt độ lốp dùng *mặt lốp* |
+| flat / puncture | thủng / thủng lốp | Nhãn HUD ngắn: *Thủng* (flat), *Thủng lốp* (puncture) |
 | tyre temperatures | nhiệt độ lốp | |
 | tyre pressure | áp suất lốp | |
 | tyre compound: soft, medium, hard, intermediate, wet | loại lốp: Mềm, Trung bình, Cứng, Trung gian, Mưa | Chuẩn F1 & sim racing tiếng Việt |
@@ -110,16 +121,23 @@
 | diff lock | khóa vi sai | Nhãn telemetri ngắn: *Khóa LSD* |
 | gear ratios | tỉ số truyền | |
 | fuel | nhiên liệu | |
+| fuel margin: spare / short | dư / thiếu | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | cờ vàng / cờ vàng kép / cờ xanh dương / cờ đen / cờ ca-rô / cờ xanh lá | |
+| double yellow (short) | Vàng kép | Nhãn HUD ngắn |
+| blue flag (short) | Xanh dương | Nhãn HUD ngắn |
 | safety car | xe an toàn | |
+| VSC ending | VSC sắp hết | Dạng đầy đủ: *VSC sắp kết thúc*; cực ngắn: *VSC hết* |
 | penalty / time penalty / drive-through | án phạt / phạt thời gian / phạt chạy qua làn pit | Ngắn: *Phạt* / *Chạy qua pit* |
 | retired | bỏ cuộc | Giữ nguyên `DNF` |
 | disqualified | bị truất quyền thi đấu | Giữ nguyên `DSQ` |
+| damage: minor / heavy | nhẹ / nặng | |
 | lights out | tắt đèn xuất phát | |
 | jump start | xuất phát sớm | |
 | formation | xếp đội hình | Xuất phát lăn bánh |
 | overtake / overtake mode | vượt / chế độ vượt | Chế độ tăng năng lượng F1 2026 |
 | ERS / DRS / deploy / harvest | ERS / DRS / xả năng lượng / thu hồi năng lượng | Ngắn: *Xả* / *Thu hồi* |
+| MGU-K | MGU-K | Giữ nguyên |
+| regeneration / regen | thu hồi năng lượng / Thu hồi | HUD ngắn: *Thu hồi* |
 | battery | pin | |
 | HUD | HUD | Giữ nguyên |
 | Blade | Thanh nghiêng | Tên bố cục HUD |
@@ -128,9 +146,14 @@
 | Endurance | Đua bền bỉ | Tên bố cục HUD |
 | Racing line | Đường chạy lý tưởng | Tên bố cục HUD |
 | proximity radar | radar khoảng cách | |
+| spotter | spotter | Giữ nguyên |
+| team radio / radio sound | bộ đàm đội đua / âm thanh bộ đàm | |
 | shift lights / rev lights | đèn chuyển số / đèn vòng tua | |
 | delta | delta / chênh lệch | Giữ *Delta* trong HUD; dùng *chênh lệch* khi giải thích |
 | gap | khoảng cách | Khoảng cách thời gian với xe trước/sau |
+| interval | cách trước | Dạng đầy đủ: *cách xe trước*; cột hẹp `blade` dùng `INT` |
+| gap to leader | cách xe dẫn đầu | Dài hơn: *khoảng cách với xe dẫn đầu*; ngắn: *Cách đầu* |
+| relative | xe lân cận | Bảng các xe ngay phía trước và phía sau trên đường đua |
 | position | vị trí | |
 | mirror | gương chiếu hậu | Ngắn: *Gương* |
 | camera: chase camera, cockpit, bonnet camera, Trackside TV, free camera | camera: camera sau xe, buồng lái, camera nắp ca-pô, TV ven đường đua, camera tự do | |
