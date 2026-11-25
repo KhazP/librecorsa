@@ -2,9 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
-import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
+import { isVehicleModelId, type TurnMetadata, type VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
-import { AcTelemetryAnalysis } from "./AcTelemetryAnalysis";
+import type { SessionLapEntry } from "@/lib/sim/lap-analysis";
+import { LapTelemetryView } from "./LapTelemetryView";
 import { boardLabel } from "@/lib/net/leaderboard";
 import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
@@ -34,12 +35,16 @@ export interface LeaderboardPanelProps {
   carTag?: (vehicle: VehicleModelId) => BoardCarTag;
   /** This car's best laps on this circuit, saved in this browser */
   local: LeaderboardEntry[];
-  /** Completed laps from the current driving session, for Assetto Corsa-style telemetry analysis */
-  sessionLaps?: LapRecording[];
-  /** All-time personal best lap recording for this track/car */
+  /** Completed laps from the current driving session, for lap telemetry comparison */
+  sessionLaps?: readonly SessionLapEntry[];
+  /** All-time personal best lap recording for this track and car */
   allTimeBestLap?: LapRecording | null;
   /** Most recent completed lap recording (persisted across refreshes) */
   latestLap?: LapRecording | null;
+  /** Circuit turn metadata for corner-by-corner telemetry observations */
+  turns?: readonly TurnMetadata[];
+  /** Real circuit sector split distances (m) along the lap */
+  sectorSplitsM?: readonly [number, number] | null;
   /** Every personal best saved in this browser, any circuit and car: lets the panel switch circuit and car */
   loadAllLocal?: () => Promise<LeaderboardEntry[]>;
   /** This site has an online board */
@@ -106,6 +111,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   sessionLaps,
   allTimeBestLap = null,
   latestLap = null,
+  turns,
+  sectorSplitsM = null,
   loadAllLocal,
   remoteEnabled,
   remoteStatus = "off",
@@ -365,13 +372,13 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       {sessionLaps ? (
         <div className="flex items-center justify-between gap-2">
           <Segmented
-            aria-label="Lap times view"
+            aria-label={tx("viewLabel")}
             size="sm"
             value={subTab}
             onChange={(v) => setSubTab(v as "times" | "analysis")}
             options={[
-              { id: "times", label: "Lap times" },
-              { id: "analysis", label: "Analysis" },
+              { id: "times", label: tx("tabTimes") },
+              { id: "analysis", label: tx("tabAnalysis") },
             ]}
           />
         </div>
@@ -379,11 +386,15 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
 
       {subTab === "analysis" && (sessionLaps || allTimeBestLap || latestLap) ? (
         (sessionLaps && sessionLaps.length > 0) || allTimeBestLap || latestLap ? (
-          <AcTelemetryAnalysis laps={sessionLaps ?? []} bestLap={allTimeBestLap} latestLap={latestLap} />
+          <LapTelemetryView
+            sessionLaps={sessionLaps ?? []}
+            bestLap={allTimeBestLap}
+            latestLap={latestLap}
+            turns={turns}
+            sectorSplitsM={sectorSplitsM}
+          />
         ) : (
-          <EmptyState icon={<Icon name="lapTimes" />}>
-            Complete a lap to view telemetry analysis.
-          </EmptyState>
+          <EmptyState icon={<Icon name="lapTimes" />}>{tx("analysisEmpty")}</EmptyState>
         )
       ) : (
         <>

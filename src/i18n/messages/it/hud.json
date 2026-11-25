@@ -95,7 +95,11 @@
     "potential": "{delta} s di potenziale",
     "allBestSectors": "Tutti i settori migliori in un solo giro",
     "offline": "Classifica offline. Visualizzati i tempi locali.",
-    "disabled": "Classifica online disattivata. Visualizzati i tempi locali."
+    "disabled": "Classifica online disattivata. Visualizzati i tempi locali.",
+    "viewLabel": "Vista tempi sul giro",
+    "tabTimes": "Tempi sul giro",
+    "tabAnalysis": "Telemetria",
+    "analysisEmpty": "Completa un giro per analizzare la telemetria."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Più veloce",
       "slower": "Più lento",
       "same": "Uguale"
-    }
+    },
+    "analyzeLap": "Telemetria giro"
   },
   "raceResults": {
     "dialog": "Risultato della gara",
@@ -1096,5 +1101,56 @@
     "resetAll": "Reimposta layout",
     "cancel": "Annulla",
     "done": "Fatto"
+  },
+  "lapTelemetry": {
+    "title": "Telemetria giro",
+    "description": "Giro di riferimento (tratteggiato) vs giro confrontato (continuo) · Passa il cursore su un canale",
+    "reference": "Riferimento",
+    "compared": "Confronto",
+    "allTimeBest": "Record personale",
+    "latestLap": "Ultimo giro",
+    "sessionLap": "Giro {lap}",
+    "invalidTag": "Non valido",
+    "channels": {
+      "brake": "Freno",
+      "speed": "Velocità",
+      "throttle": "Acceleratore",
+      "gear": "Marcia",
+      "steering": "Sterzo",
+      "delta": "Delta tempo"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "s"
+    },
+    "drivingLine": "Traiettoria",
+    "startFinish": "T/A",
+    "legend": {
+      "fastest": "Record",
+      "faster": "Più veloce",
+      "same": "Uguale",
+      "slower": "Più lento"
+    },
+    "sectors": "Settori",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "A {distance}",
+    "insights": "Osservazioni principali",
+    "noInsights": "I giri sono molto vicini, senza scostamenti rilevanti.",
+    "insight": {
+      "sectorLossTitle": "Tempo perso nel Settore {sector}",
+      "sectorLossDetail": "Persi {seconds} s nel Settore {sector}.",
+      "sectorGainTitle": "Tempo guadagnato nel Settore {sector}",
+      "sectorGainDetail": "Guadagnati {seconds} s nel Settore {sector}.",
+      "apexTitle": "Velocità al punto di corda Curva {turn}",
+      "apexNamedTitle": "Velocità al punto di corda Curva {turn} ({name})",
+      "apexFasterDetail": "{speed} {unit} di velocità minima in più in Curva {turn}.",
+      "apexSlowerDetail": "{speed} {unit} di velocità minima in meno in Curva {turn}.",
+      "brakeTitle": "Punto di frenata Curva {turn}",
+      "brakeNamedTitle": "Punto di frenata Curva {turn} ({name})",
+      "brakeEarlierDetail": "Frenata ~{distance} {unit} prima in ingresso di Curva {turn}.",
+      "brakeLaterDetail": "Frenata ~{distance} {unit} più tardi in ingresso di Curva {turn}."
+    }
   }
 }

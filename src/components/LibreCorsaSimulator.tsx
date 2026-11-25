@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl/react";
 import { t as tr } from "@/i18n/runtime";
-import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, resolveLivery } from "@/lib/track-data";
+import { DEFAULT_TRACK_ID, TURN_METADATA, getActivePointToPoint, getActiveTrackData, resolveLivery } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
@@ -27,7 +27,8 @@ import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, loadLatestLap, saveBestLapIfFaster, saveLatestLap } from "@/lib/sim/ghost-store";
-import { LapAnalysisModal } from "@/components/hud/LapAnalysisModal";
+import { sectorSplitsFromSamples, selectCarBestLap, type SessionLapEntry } from "@/lib/sim/lap-analysis";
+import { LapTelemetryModal } from "@/components/hud/LapTelemetryModal";
 import {
   boardKeyOf,
   boardStatusOf,
@@ -307,10 +308,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // ---- Laps, ghosts, leaderboards
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
-  const [sessionLaps, setSessionLaps] = useState<LapRecording[]>([]);
+  const [sessionLaps, setSessionLaps] = useState<SessionLapEntry[]>([]);
   const [allTimeBestLap, setAllTimeBestLap] = useState<LapRecording | null>(null);
   const [latestLap, setLatestLap] = useState<LapRecording | null>(null);
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const trackTurns = useMemo(() => [...TURN_METADATA], [track]);
+  const trackSectorSplitsM = useMemo(
+    () => sectorSplitsFromSamples(track.samples, track.pointToPoint?.finishS ?? track.totalLengthM),
+    [track],
+  );
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error" | "waiting">("idle");
   /** Place of the uploaded lap on its board, and how many drivers that board has */
   const [submitRank, setSubmitRank] = useState<ReturnType<typeof placeOf>>(null);
@@ -998,19 +1004,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const refreshLeaderboard = useCallback(async () => {
     // Several refreshes can overlap (car change, a saved lap): only the latest may land
     const req = ++leaderboardReqRef.current;
-    const local = await localLeaderboard(trackId, vehicleModelRef.current).catch((): LeaderboardEntry[] => []);
+    const vehicleNow = vehicleModelRef.current;
+    const [local, all] = await Promise.all([
+      localLeaderboard(trackId, vehicleNow).catch((): LeaderboardEntry[] => []),
+      listBestLaps().catch((): LapRecording[] => []),
+    ]);
     if (req !== leaderboardReqRef.current) return;
     setLocalLaps(local);
     setBoardVersion((v) => v + 1);
-    void listBestLaps()
-      .then((all) => {
-        const match =
-          all.find((l) => l.trackId === trackId && l.vehicle === vehicleModelRef.current) ??
-          all.find((l) => l.trackId === trackId) ??
-          null;
-        setAllTimeBestLap(match);
-      })
-      .catch(() => {});
+    setAllTimeBestLap(selectCarBestLap(all, trackId, vehicleNow));
   }, [trackId]);
 
   /** Races the personal best of this car as the ghost, replacing whichever lap was chosen */
@@ -1028,6 +1030,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   useEffect(() => {
     let cancelled = false;
+    setSessionLaps([]);
+    setAnalysisOpen(false);
     void loadLatestLap(trackId, vehicleModel)
       .then((rec) => {
         if (!cancelled) setLatestLap(rec);
@@ -1043,9 +1047,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
       if (recording.data.length > 0) {
-        setSessionLaps((prev) => [recording, ...prev].slice(0, 20));
+        const valid = summary.valid && !summary.autopilot;
+        setSessionLaps((prev) => [{ recording, valid, lapNumber: summary.lapNumber }, ...prev].slice(0, 20));
         setLatestLap(recording);
-        setAllTimeBestLap((prev) => (!prev || recording.lapTimeMs < prev.lapTimeMs ? recording : prev));
+        if (valid) {
+          setAllTimeBestLap((prev) => (!prev || recording.lapTimeMs < prev.lapTimeMs ? recording : prev));
+        }
         void saveLatestLap(recording);
       }
       if (settingsRef.current.hud.lapSummary) {
@@ -2207,6 +2214,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       sessionLaps,
       allTimeBestLap,
       latestLap,
+      turns: trackTurns,
+      sectorSplitsM: trackSectorSplitsM,
       remoteEnabled: boardOn,
       remoteStatus: boardState === null ? ("unknown" as const) : boardState === "unreachable" ? ("unreachable" as const) : ("off" as const),
       boardVersion,
@@ -2351,7 +2360,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   summary: lapSummary.summary,
                   onClose: closeLapSummary,
                   onSaveGhost: () => exportLapFile(lapSummary.recording),
-                  onAnalyze: sessionLaps.length > 0 ? () => setAnalysisOpen(true) : undefined,
+                  onAnalyze: sessionLaps.length > 0 || allTimeBestLap || latestLap ? () => setAnalysisOpen(true) : undefined,
                   // Laps post themselves: the button is there with that turned off, or to retry a failed upload (a board
                   // that hasn't answered yet is asked again by the press)
                   onSubmit:
@@ -2565,13 +2574,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onReloadPage={() => window.location.reload()}
         />
       ) : null}
-      {analysisOpen && (sessionLaps.length > 0 || allTimeBestLap || latestLap) ? (
-        <LapAnalysisModal
-          laps={sessionLaps.length > 0 ? sessionLaps : ([allTimeBestLap, latestLap].filter(Boolean) as LapRecording[])}
-          trackName={getTrackInfo(trackId).name}
-          onClose={() => setAnalysisOpen(false)}
-        />
-      ) : null}
+      <LapTelemetryModal
+        open={analysisOpen && (sessionLaps.length > 0 || Boolean(allTimeBestLap) || Boolean(latestLap))}
+        sessionLaps={sessionLaps}
+        bestLap={allTimeBestLap}
+        latestLap={latestLap}
+        turns={trackTurns}
+        sectorSplitsM={trackSectorSplitsM}
+        trackName={getTrackInfo(trackId).name}
+        onClose={() => setAnalysisOpen(false)}
+      />
     </div>
   );
 };

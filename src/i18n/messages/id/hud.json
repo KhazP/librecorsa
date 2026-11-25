@@ -95,7 +95,11 @@
     "potential": "Potensi {delta} s",
     "allBestSectors": "Semua sektor terbaik dalam satu lap",
     "offline": "Papan peringkat offline. Menampilkan waktu lokal.",
-    "disabled": "Papan peringkat daring nonaktif. Menampilkan waktu lokal."
+    "disabled": "Papan peringkat daring nonaktif. Menampilkan waktu lokal.",
+    "viewLabel": "Tampilan waktu lap",
+    "tabTimes": "Waktu Lap",
+    "tabAnalysis": "Telemetri",
+    "analysisEmpty": "Selesaikan satu lap untuk melihat telemetri lap."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Lebih cepat",
       "slower": "Lebih lambat",
       "same": "Sama"
-    }
+    },
+    "analyzeLap": "Telemetri lap"
   },
   "raceResults": {
     "dialog": "Hasil balapan",
@@ -1096,5 +1101,56 @@
     "resetAll": "Reset tata letak",
     "cancel": "Batal",
     "done": "Selesai"
+  },
+  "lapTelemetry": {
+    "title": "Telemetri lap",
+    "description": "Lap referensi (putus-putus) vs lap pembanding (penuh) · Arahkan kursor ke saluran mana pun",
+    "reference": "Referensi",
+    "compared": "Pembanding",
+    "allTimeBest": "Rekor pribadi",
+    "latestLap": "Lap terakhir",
+    "sessionLap": "Lap {lap}",
+    "invalidTag": "Tidak sah",
+    "channels": {
+      "brake": "Rem",
+      "speed": "Kecepatan",
+      "throttle": "Gas",
+      "gear": "Gigi",
+      "steering": "Kemudi",
+      "delta": "Selisih waktu"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "d"
+    },
+    "drivingLine": "Garis balap",
+    "startFinish": "S/F",
+    "legend": {
+      "fastest": "Tercepat",
+      "faster": "Lebih cepat",
+      "same": "Sama",
+      "slower": "Lebih lambat"
+    },
+    "sectors": "Sektor",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "Di {distance}",
+    "insights": "Temuan utama",
+    "noInsights": "Kedua lap sangat dekat tanpa perbedaan besar.",
+    "insight": {
+      "sectorLossTitle": "Kehilangan waktu di Sektor {sector}",
+      "sectorLossDetail": "Tertinggal {seconds} d di Sektor {sector}.",
+      "sectorGainTitle": "Keunggulan waktu di Sektor {sector}",
+      "sectorGainDetail": "Lebih cepat {seconds} d di Sektor {sector}.",
+      "apexTitle": "Kecepatan apex Tikungan {turn}",
+      "apexNamedTitle": "Kecepatan apex Tikungan {turn} ({name})",
+      "apexFasterDetail": "Kecepatan minimum {speed} {unit} lebih tinggi di Tikungan {turn}.",
+      "apexSlowerDetail": "Kecepatan minimum {speed} {unit} lebih rendah di Tikungan {turn}.",
+      "brakeTitle": "Titik pengereman Tikungan {turn}",
+      "brakeNamedTitle": "Titik pengereman Tikungan {turn} ({name})",
+      "brakeEarlierDetail": "Mengerem ~{distance} {unit} lebih awal memasuki Tikungan {turn}.",
+      "brakeLaterDetail": "Mengerem ~{distance} {unit} lebih lambat memasuki Tikungan {turn}."
+    }
   }
 }

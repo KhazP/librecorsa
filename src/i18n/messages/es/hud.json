@@ -95,7 +95,11 @@
     "potential": "{delta} s de potencial",
     "allBestSectors": "Todos los mejores sectores en una vuelta",
     "offline": "Clasificación sin conexión. Se muestran los tiempos locales.",
-    "disabled": "Clasificación en línea desactivada. Se muestran los tiempos locales."
+    "disabled": "Clasificación en línea desactivada. Se muestran los tiempos locales.",
+    "viewLabel": "Vista de tiempos de vuelta",
+    "tabTimes": "Tiempos de vuelta",
+    "tabAnalysis": "Telemetría",
+    "analysisEmpty": "Completa una vuelta para consultar la telemetría."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Más rápido",
       "slower": "Más lento",
       "same": "Igual"
-    }
+    },
+    "analyzeLap": "Telemetría de vuelta"
   },
   "raceResults": {
     "dialog": "Resultado de la carrera",
@@ -1096,5 +1101,56 @@
     "resetAll": "Restablecer diseño",
     "cancel": "Cancelar",
     "done": "Listo"
+  },
+  "lapTelemetry": {
+    "title": "Telemetría de vuelta",
+    "description": "Vuelta de referencia (discontinua) vs. vuelta comparada (continua) · Pasa el cursor por cualquier canal",
+    "reference": "Referencia",
+    "compared": "Comparada",
+    "allTimeBest": "Mejor marca personal",
+    "latestLap": "Última vuelta",
+    "sessionLap": "Vuelta {lap}",
+    "invalidTag": "Anulada",
+    "channels": {
+      "brake": "Freno",
+      "speed": "Velocidad",
+      "throttle": "Acelerador",
+      "gear": "Marcha",
+      "steering": "Dirección",
+      "delta": "Diferencia"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "s"
+    },
+    "drivingLine": "Trazada",
+    "startFinish": "Meta",
+    "legend": {
+      "fastest": "Más rápido",
+      "faster": "Rápido",
+      "same": "Igual",
+      "slower": "Más lento"
+    },
+    "sectors": "Sectores",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "En {distance}",
+    "insights": "Observaciones clave",
+    "noInsights": "Las vueltas son muy parecidas y sin grandes diferencias.",
+    "insight": {
+      "sectorLossTitle": "Pérdida en Sector {sector}",
+      "sectorLossDetail": "Perdiste {seconds} s en el Sector {sector}.",
+      "sectorGainTitle": "Ganancia en Sector {sector}",
+      "sectorGainDetail": "Ganaste {seconds} s en el Sector {sector}.",
+      "apexTitle": "Velocidad en vértice de Curva {turn}",
+      "apexNamedTitle": "Velocidad en vértice de Curva {turn} ({name})",
+      "apexFasterDetail": "Pasaste {speed} {unit} más rápido por el vértice de la Curva {turn}.",
+      "apexSlowerDetail": "Pasaste {speed} {unit} más lento por el vértice de la Curva {turn}.",
+      "brakeTitle": "Punto de frenada en Curva {turn}",
+      "brakeNamedTitle": "Punto de frenada en Curva {turn} ({name})",
+      "brakeEarlierDetail": "Frenaste ~{distance} {unit} antes al entrar en la Curva {turn}.",
+      "brakeLaterDetail": "Frenaste ~{distance} {unit} más tarde al entrar en la Curva {turn}."
+    }
   }
 }

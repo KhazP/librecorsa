@@ -95,7 +95,11 @@
     "potential": "{delta} s potential",
     "allBestSectors": "All best sectors in one lap",
     "offline": "Leaderboard offline. Showing local times.",
-    "disabled": "Online leaderboard disabled. Showing local times."
+    "disabled": "Online leaderboard disabled. Showing local times.",
+    "viewLabel": "Lap times view",
+    "tabTimes": "Lap times",
+    "tabAnalysis": "Telemetry",
+    "analysisEmpty": "Complete a lap to inspect lap telemetry."
   },
   "boardWidget": {
     "modes": {
@@ -400,7 +404,8 @@
       "faster": "Faster",
       "slower": "Slower",
       "same": "Same"
-    }
+    },
+    "analyzeLap": "Lap telemetry"
   },
   "raceResults": {
     "dialog": "Race result",
@@ -1096,5 +1101,56 @@
     "resetAll": "Reset layout",
     "cancel": "Cancel",
     "done": "Done"
+  },
+  "lapTelemetry": {
+    "title": "Lap telemetry",
+    "description": "Reference lap (dashed) vs compared lap (solid) · Hover any channel to inspect",
+    "reference": "Reference",
+    "compared": "Compared",
+    "allTimeBest": "Personal best",
+    "latestLap": "Latest lap",
+    "sessionLap": "Lap {lap}",
+    "invalidTag": "Invalid",
+    "channels": {
+      "brake": "Brake",
+      "speed": "Speed",
+      "throttle": "Throttle",
+      "gear": "Gear",
+      "steering": "Steering",
+      "delta": "Time delta"
+    },
+    "units": {
+      "percent": "%",
+      "gear": "#",
+      "seconds": "s"
+    },
+    "drivingLine": "Driving line",
+    "startFinish": "S/F",
+    "legend": {
+      "fastest": "Fastest",
+      "faster": "Faster",
+      "same": "Same",
+      "slower": "Slower"
+    },
+    "sectors": "Sectors",
+    "sectorShort": "S{sector}",
+    "sectorSplit": "S{sector} ({distance})",
+    "cursorAt": "At {distance}",
+    "insights": "Key observations",
+    "noInsights": "Laps are closely matched with no major outliers.",
+    "insight": {
+      "sectorLossTitle": "Sector {sector} time loss",
+      "sectorLossDetail": "Lost {seconds} s in Sector {sector}.",
+      "sectorGainTitle": "Sector {sector} time gain",
+      "sectorGainDetail": "Gained {seconds} s in Sector {sector}.",
+      "apexTitle": "Turn {turn} apex speed",
+      "apexNamedTitle": "Turn {turn} ({name}) apex speed",
+      "apexFasterDetail": "Carried {speed} {unit} more minimum speed through Turn {turn}.",
+      "apexSlowerDetail": "Carried {speed} {unit} less minimum speed through Turn {turn}.",
+      "brakeTitle": "Turn {turn} braking point",
+      "brakeNamedTitle": "Turn {turn} ({name}) braking point",
+      "brakeEarlierDetail": "Braked ~{distance} {unit} earlier into Turn {turn}.",
+      "brakeLaterDetail": "Braked ~{distance} {unit} later into Turn {turn}."
+    }
   }
 }
