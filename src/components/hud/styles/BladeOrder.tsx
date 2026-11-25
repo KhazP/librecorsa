@@ -13,6 +13,7 @@ import { useUnits } from "@/lib/settings/ui-prefs";
 import { HUD_VOLT, formatDeltaFit, formatGap, formatLapTime, formatTemp, raceState, sessionWord } from "../hud-format";
 import { SURFACE_WORD, dayClock, driverLabel, leaderboardWindow, referenceLapS, trackSurfaceState } from "../third-party-data";
 import { mapPoint, raceNeighbours, type HudMap } from "./hud-style-parts";
+import { onFinalLap } from "./game-style-parts";
 import { DEEP, HARD, LBL, LBL_TYPE, PLATE, type Words } from "./BladeParts";
 
 /** The Blade layout's top left: the order window and, under it, the circuit as bare numbered dots */
@@ -44,6 +45,8 @@ function flagState(t: CarTelemetry, w: Words): FlagState | null {
   if (race.doubleYellow) return { flag: "doubleYellow", word: w.flags.doubleYellow, fill: "bg-lc-amber" };
   if (race.yellow) return { flag: "yellow", word: w.flags.yellow, fill: "bg-lc-amber" };
   if (race.blueFlag) return { flag: "blue", word: w.flags.blue, fill: "bg-lc-cyan" };
+  // The player's own last lap (a lap down, the one after the leader's)
+  if (onFinalLap(t)) return { flag: "chequered", word: w.flags.finalLap, fill: "bg-lc-chalk" };
   return { flag: "green", word: w.flags.green, fill: "bg-lc-green" };
 }
 

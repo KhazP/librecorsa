@@ -71,6 +71,7 @@ import {
   type LapRecord,
 } from "../third-party-data";
 import { revLedBand } from "@/lib/sim/rev-range";
+import { onFinalLap } from "./game-style-parts";
 import palette from "./blocks.module.css";
 import { usePitGap } from "../pit-clock";
 
@@ -306,7 +307,7 @@ const FlagRow: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInv
                 text: w.blueFlag(Boolean(race.blueFlagWarn), race.blueFlag),
                 cls: "bg-(--blk-flag-blue) text-(--blk-ink-on)",
               }
-            : race?.totalLaps && race.lap === race.totalLaps && race.phase === "racing"
+            : onFinalLap(t)
               ? { text: w.lastLap, cls: "bg-(--blk-flag-white) text-(--blk-ink-on)" }
               : null;
   if (!row) return null;

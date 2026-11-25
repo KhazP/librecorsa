@@ -58,6 +58,7 @@ import { FfbMeter } from "./hud/FfbMeter";
 import { LapSummary } from "./hud/LapSummary";
 import { RaceResults } from "./hud/RaceResults";
 import { RaceControlBanner } from "./hud/RaceControlBanner";
+import { FinalLapNotice } from "./hud/FinalLapNotice";
 import { PitStopOverlay } from "./hud/PitStopOverlay";
 import { QualityNotice } from "./hud/QualityNotice";
 import { RaceIncidentFeed } from "./hud/RaceIncidentFeed";
@@ -766,6 +767,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {/* The ±1 s ribbon sits under every preset except the Phone HUD, whose speed pod owns this spot, and the
             layouts that show the delta up here themselves */}
         {hud?.deltaBar && !phone && !style?.ownDeltaBar && !lightsPhase && !rollingPhase ? <DeltaBar deltaS={deltaS} runId={telemetry.runId ?? 0} /> : null}
+        {/* The race's last lap, called as the leader starts it (mounted through the lights, which arm it) */}
+        {race ? <FinalLapNotice race={race} /> : null}
         {!lightsPhase ? (
           <RaceControlBanner
             status={telemetry.trackLimits}

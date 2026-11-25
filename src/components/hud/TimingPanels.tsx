@@ -35,6 +35,7 @@ import { InvalidTag, LapMarkGlyph } from "./styles/hud-style-parts";
 import { usePitGap } from "./pit-clock";
 import { skinCss, SkinPanel, useHudSkin } from "./styles/third-party-skin";
 import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-target";
+import { finalLapState } from "@/lib/broadcast/final-lap";
 
 
 /** The tower's columns: position, livery bar, driver, gap, last lap against yours (the header and the rows share them) */
@@ -195,19 +196,30 @@ export const TowerRows: React.FC<{
 export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?: "interval" | "leader" }> = ({ race, trackCode, gaps }) => {
   const tx = useTranslations("hud.timingPanels.tower");
   const region = useMemo(() => tx("region"), [tx]);
+  // The player's own last lap (a lap down, the one after the leader's) says so in place of the count
+  const final = finalLapState(race).player;
   const lapText = useMemo(
     () =>
-      race.totalLaps
-        ? tx.rich("lapOf", { lap: race.lap, total: race.totalLaps, dim: (chunks) => <span className="opacity-40">{chunks}</span> })
-        : tx("lap", { lap: race.lap }),
-    [tx, race.lap, race.totalLaps]
+      final
+        ? tx("finalLap")
+        : race.totalLaps
+          ? tx.rich("lapOf", { lap: race.lap, total: race.totalLaps, dim: (chunks) => <span className="opacity-40">{chunks}</span> })
+          : tx("lap", { lap: race.lap }),
+    [tx, final, race.lap, race.totalLaps]
   );
   return (
     <section aria-label={region} className={`w-[264px] overflow-hidden rounded-lc-tile ${HUD_GLASS}`}>
       {/* Pitboard header: mark, lap of laps, position and track code */}
       <div className="flex h-11 items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pe-3 ps-2 text-lc-void">
         <LibreCorsaMark className="h-7 w-7 shrink-0" />
-        <span className="lc-disp flex-1 text-[18px] leading-none">{lapText}</span>
+        {final ? (
+          <span className="lc-disp flex flex-1 items-center gap-1.5 text-[18px] leading-none">
+            <FlagIcon flag="chequered" size={18} className="shrink-0" />
+            {lapText}
+          </span>
+        ) : (
+          <span className="lc-disp flex-1 text-[18px] leading-none">{lapText}</span>
+        )}
         <span className="inline-flex items-center gap-1">
           <PositionBadge position={race.position} player size="sm" />
           <span className="lc-data text-[11px] text-lc-void/60">/{race.fieldSize}</span>

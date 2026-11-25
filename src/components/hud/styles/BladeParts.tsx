@@ -102,6 +102,7 @@ export function useBladeWords() {
         vsc: tx("flags.vsc"),
         vscEnding: tx("flags.vscEnding"),
         blue: tx("flags.blue"),
+        finalLap: tx("flags.finalLap"),
         finish: tx("flags.finish"),
       },
       invalid: tx("invalid"),

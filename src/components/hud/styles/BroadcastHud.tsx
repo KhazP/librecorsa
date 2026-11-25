@@ -26,6 +26,8 @@ import {
   type HudDesignProps,
 } from "./hud-style-parts";
 import { TowerHeader, TowerRows } from "../TimingPanels";
+import { FlagIcon } from "@/components/ui/badges/FlagIcon";
+import { onFinalLap } from "./game-style-parts";
 
 /** The words of the timing tower and map the Telemetry layout draws (once the Broadcast layout's), resolved once per language */
 function useBroadcastWords() {
@@ -37,6 +39,7 @@ function useBroadcastWords() {
       outLap: tx("outLap"),
       best: tx("best"),
       last: tx("last"),
+      finalLap: tx("finalLap"),
       circuitMap: tx("circuitMap"),
       straight: tx("straight"),
       raceLap: formatOnce((lap: number, total: number) =>
@@ -71,7 +74,15 @@ export const BroadcastTower: React.FC<{
         <LibreCorsaMark className="h-7 w-7 shrink-0" />
         <div className="lc-disp flex-1 truncate text-[18px]">
           {race ? (
-            w.raceLap(race.lap, race.totalLaps ?? 0)
+            // The player's own last lap (a lap down, the one after the leader's) says so in place of the count
+            onFinalLap(t) ? (
+              <span className="inline-flex max-w-full items-center gap-1.5 align-middle">
+                <FlagIcon flag="chequered" size={18} className="shrink-0" />
+                <span className="truncate">{w.finalLap}</span>
+              </span>
+            ) : (
+              w.raceLap(race.lap, race.totalLaps ?? 0)
+            )
           ) : (
             <>
               {/* On the out-lap no lap is timed yet: the header says so on its own (the session word would not fit

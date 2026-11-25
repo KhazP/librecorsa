@@ -815,6 +815,7 @@
       "region": "Timing tower",
       "lap": "Lap {lap}",
       "lapOf": "Lap {lap}<dim>/{total}</dim>",
+      "finalLap": "Final lap",
       "driver": "Driver",
       "gap": "Gap",
       "interval": "Interval",
@@ -879,6 +880,9 @@
       "doubleYellow": "Double yellow",
       "yellow": "Yellow"
     }
+  },
+  "finalLapNotice": {
+    "title": "Final lap"
   },
   "raceControlBanner": {
     "decisions": {
