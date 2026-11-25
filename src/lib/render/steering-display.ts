@@ -180,8 +180,14 @@ export class SteeringWheelDisplay {
     // Clone so the shared template material (and every other car's wheel) keeps its dark base
     const mat = src.clone();
     // A screen borrowed from a generic material (a ported body's `light_004`) is named as a dash, so the headlights,
-    // which light the models' generic light materials, leave it alone
-    if (screen) mat.name = "wheel_display";
+    // which light the models' generic light materials, leave it alone, and darkened so sunlight never washes out the LCD
+    if (screen) {
+      mat.name = "wheel_display";
+      mat.map = null;
+      mat.color.setRGB(0.02, 0.02, 0.025);
+      mat.roughness = 0.18;
+      mat.metalness = 0;
+    }
     mat.emissive.set(0xffffff);
     mat.emissiveIntensity = 1.6;
     mat.emissiveMap = tex;

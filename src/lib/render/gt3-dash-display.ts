@@ -5,8 +5,78 @@ import type { GlassPatch } from "./wing-mirrors";
 import { perLanguage } from "@/lib/per-language";
 import { text as tx, upperText } from "@/lib/text";
 
-/** The dash's yellow-flag banner, once per language (the dash is drawn every frame) */
-const yellowFlag = perLanguage(() => tx("game.dash.yellowFlag"));
+/** In-car dash banner labels, once per language (the dash is drawn every frame) */
+const dashWords = perLanguage(() => ({
+  yellowFlag: tx("game.dash.yellowFlag"),
+  terminalDamage: tx("game.dash.terminalDamage"),
+  puncture: tx("game.dash.puncture"),
+  steeringDamage: tx("game.dash.steeringDamage"),
+  suspensionDamage: tx("game.dash.suspensionDamage"),
+  aeroDamage: tx("game.dash.aeroDamage"),
+  damage: tx("game.dash.damage"),
+}));
+
+/** Corner codes in `PlayerDamageStatus` wheel order (FR, FL, RR, RL) */
+const DAMAGE_CORNER_CODES = ["FR", "FL", "RR", "RL"] as const;
+
+export type DashBannerTone = "critical" | "warning" | "yellow";
+
+export interface DashBanner {
+  text: string;
+  tone: DashBannerTone;
+}
+
+/**
+ * Resolves the highest-priority in-car dash banner for AMG GT3, BMW M4 GT3, and LC-LMDH displays:
+ * 1. Terminal damage / tyre puncture (red critical)
+ * 2. Race-control track-limits message (penalty = red, warning = yellow)
+ * 3. Yellow flag (yellow)
+ * 4. Active handling / suspension / aero damage (amber warning, escalating to red when severe)
+ */
+export function resolveDashBanner(t: CarTelemetry): DashBanner | null {
+  const words = dashWords();
+  const damage = t.race?.damage ?? t.practiceDamage;
+
+  if (damage?.terminal) {
+    return { text: upperText(words.terminalDamage), tone: "critical" };
+  }
+  if (damage?.punctured.some(Boolean)) {
+    const puncturedCorners = DAMAGE_CORNER_CODES.filter((_, i) => damage.punctured[i]);
+    const label =
+      puncturedCorners.length === 1
+        ? tx("game.dash.punctureCorner", { corner: puncturedCorners[0] })
+        : words.puncture;
+    return { text: upperText(label), tone: "critical" };
+  }
+
+  const message = t.trackLimits?.message;
+  if (message) {
+    return { text: upperText(message.text), tone: message.kind === "penalty" ? "critical" : "yellow" };
+  }
+  if (t.race?.yellow) {
+    return { text: upperText(words.yellowFlag), tone: "yellow" };
+  }
+
+  if (damage) {
+    const frontSusp = Math.max(damage.suspension[0] ?? 0, damage.suspension[1] ?? 0);
+    const rearSusp = Math.max(damage.suspension[2] ?? 0, damage.suspension[3] ?? 0);
+    const aero = Math.max(damage.front, damage.rear, damage.left, damage.right);
+    const severe = damage.overall >= 0.55 || frontSusp >= 0.55 || rearSusp >= 0.55 || aero >= 0.55;
+    if (frontSusp >= 0.15) {
+      return { text: upperText(words.steeringDamage), tone: severe ? "critical" : "warning" };
+    }
+    if (rearSusp >= 0.15) {
+      return { text: upperText(words.suspensionDamage), tone: severe ? "critical" : "warning" };
+    }
+    if (aero >= 0.18) {
+      return { text: upperText(words.aeroDamage), tone: severe ? "critical" : "warning" };
+    }
+    if (damage.overall >= 0.06) {
+      return { text: upperText(words.damage), tone: severe ? "critical" : "warning" };
+    }
+  }
+  return null;
+}
 
 /**
  * Live dash screens for the GT3 bodies, whose models only carry a still photo of a page.
@@ -33,6 +103,9 @@ const EVO_SCREEN_MATERIAL = "MI_Mercedes_AMG_GT3_Evo_Cockpit_Screen";
 const EVO_LIGHTS_MATERIAL = "MI_Mercedes_AMG_GT3_Evo_Interactive_Lights";
 /** The export's placeholder material, on the Evo's wing mirrors, interior mirror and rear-view monitor */
 const EVO_MIRROR_MATERIAL = "WorldGridMaterial";
+/** LC-LMDH steering-wheel LCD mesh material (`light_004`, 102 x 66 mm, 1.54:1) and static right-edge bar overlays */
+export const LMDH_WHEEL_SCREEN_MATERIAL = "light_004";
+export const LMDH_WHEEL_HIDE_MATERIALS = ["light_005", "light_006", "light_007"] as const;
 
 /** The BMW's screen: the triangles of its interior material sampling the atlas' dash photo, behind the wheel */
 const BMW_SCREEN = {
@@ -63,6 +136,8 @@ const OUTLINE = "#e8ecf2";
 const GREEN = "#36e07a";
 const RED = "#ff3b3b";
 const AMBER = "#ffb020";
+const WARN_ORANGE = "#ff8c1a";
+const CYAN = "#38d9ff";
 const BLUE = "#2f7bff";
 const TC_LIT = "#add8e6";
 const ABS_LIT = "#ffe600";
@@ -199,7 +274,7 @@ class Painter {
   }
 
   /** The rpm bar: white below the shift lights' range, amber in it, red past the shift point */
-  rpmBar(bar: Box, rpm: number, fullScaleK: number, numerals: boolean): void {
+  rpmBar(bar: Box, rpm: number, fullScaleK: number, numerals: boolean, numeralSize = 30): void {
     const ctx = this.ctx;
     const [start, shift] = this.revRange;
     this.rect(bar, "#14171c");
@@ -210,12 +285,14 @@ class Painter {
       const x = bar.x + (bar.w * k) / fullScaleK;
       ctx.fillStyle = WHITE;
       ctx.fillRect(x - 1.5, bar.y, 3, bar.h);
-      if (numerals) this.text(Math.min(bar.x + bar.w - 10, Math.max(bar.x + 10, x)), bar.y - 22, String(k), 30, WHITE);
+      if (numerals) {
+        this.text(Math.min(bar.x + bar.w - 10, Math.max(bar.x + 10, x)), bar.y - numeralSize * 0.72, String(k), numeralSize, WHITE);
+      }
     }
   }
 
   /** Tread temperatures, each corner coloured against the compound's window: blue cold, green in it, red hot */
-  tyres(area: Box, t: CarTelemetry, size: number): void {
+  tyres(area: Box, t: CarTelemetry, size: number, showWear = false): void {
     const [lo, hi] = t.tireOptimalTempC ?? [80, 105];
     const gap = 8;
     const cw = (area.w - gap) / 2;
@@ -223,8 +300,23 @@ class Painter {
     for (let i = 0; i < 4; i++) {
       const temp = t.tireTempsC[i];
       const cell = { x: area.x + (i % 2) * (cw + gap), y: area.y + Math.floor(i / 2) * (ch + gap), w: cw, h: ch };
-      this.rect(cell, !Number.isFinite(temp) ? "#30343b" : temp < lo ? "#4a9dff" : temp > hi ? RED : GREEN);
-      this.text(cell.x + cw / 2, cell.y + ch / 2, Number.isFinite(temp) ? String(Math.round(temp)) : "--", size, "#000", cw - 8);
+      const bg = !Number.isFinite(temp) ? "#30343b" : temp < lo ? "#4a9dff" : temp > hi ? RED : GREEN;
+      this.rect(cell, bg);
+      if (showWear) {
+        const wear = Number.isFinite(t.tireWearPct?.[i]) ? Math.max(0, Math.min(100, t.tireWearPct[i])) : 0;
+        const life = Math.round(100 - wear);
+        this.text(cell.x + cw / 2, cell.y + ch * 0.38, Number.isFinite(temp) ? String(Math.round(temp)) : "--", size, "#000", cw - 8);
+        const barH = 10;
+        const barY = cell.y + ch - barH - 4;
+        this.rect({ x: cell.x + 5, y: barY, w: cw - 10, h: barH }, "rgba(0,0,0,0.45)");
+        this.rect(
+          { x: cell.x + 5, y: barY, w: ((cw - 10) * life) / 100, h: barH },
+          life < 35 ? RED : life < 65 ? AMBER : "#0c1118"
+        );
+        this.text(cell.x + cw / 2, barY - 10, `${life}%`, 16, "#0b0d10", cw - 8);
+      } else {
+        this.text(cell.x + cw / 2, cell.y + ch / 2, Number.isFinite(temp) ? String(Math.round(temp)) : "--", size, "#000", cw - 8);
+      }
     }
   }
 
@@ -243,14 +335,14 @@ class Painter {
     this.text(box.x + box.w / 2, box.y + box.h / 2 + 18, value, Math.min(130, box.h * 0.6), style.fg, box.w - 20);
   }
 
-  /** Race control's message across `box`: a penalty in red, anything else in yellow; false when there is none */
+  /** Race control / flag / damage warning banner across `box`; false when there is none */
   banner(box: Box, t: CarTelemetry): boolean {
-    const message = t.trackLimits?.message;
-    const text = message ? message.text : t.race?.yellow ? yellowFlag() : null;
-    if (!text) return false;
-    const penalty = message?.kind === "penalty";
-    this.rect(box, penalty ? RED : ABS_LIT);
-    this.text(box.x + box.w / 2, box.y + box.h / 2, upperText(text), Math.min(50, box.h * 0.55), penalty ? WHITE : "#000", box.w - 24);
+    const b = resolveDashBanner(t);
+    if (!b) return false;
+    const bg = b.tone === "critical" ? RED : b.tone === "warning" ? WARN_ORANGE : ABS_LIT;
+    const fg = b.tone === "critical" ? WHITE : "#000";
+    this.rect(box, bg);
+    this.text(box.x + box.w / 2, box.y + box.h / 2, b.text, Math.min(50, box.h * 0.55), fg, box.w - 24);
     return true;
   }
 
@@ -437,6 +529,91 @@ const BMW_PAGE: PageSpec = {
 };
 
 /**
+ * The LC-LMDH's Bosch/Cosworth-style prototype steering-wheel page: 800 x 520 (matching the 101.6 x 66.0 mm = 1.54:1
+ * `light_004` LCD embedded in the wheel, full-bleed with no letterboxing).
+ */
+const LMDH = {
+  rpm: { x: 20, y: 38, w: 760, h: 30 },
+  band: { x: 8, y: 4, w: 784, h: 72 },
+  lap: { x: 16, y: 94, w: 108, h: 90 },
+  pos: { x: 136, y: 94, w: 108, h: 90 },
+  delta: { x: 256, y: 94, w: 288, h: 90 },
+  speed: { x: 556, y: 94, w: 228, h: 90 },
+  tyres: { x: 16, y: 206, w: 228, h: 188 },
+  gear: { x: 256, y: 206, w: 288, h: 188 },
+  tc: { x: 556, y: 206, w: 70, h: 88 },
+  abs: { x: 635, y: 206, w: 70, h: 88 },
+  ersMode: { x: 714, y: 206, w: 70, h: 88 },
+  bias: { x: 556, y: 312, w: 112, h: 82 },
+  ersKw: { x: 676, y: 312, w: 108, h: 82 },
+  lapTime: { x: 16, y: 416, w: 300, h: 90 },
+  soc: { x: 328, y: 416, w: 296, h: 90 },
+  fuel: { x: 636, y: 416, w: 148, h: 90 },
+  popup: { x: 556, y: 200, w: 228, h: 194 },
+} satisfies Record<string, Box>;
+
+const LMDH_PAGE: PageSpec = {
+  width: 800,
+  height: 520,
+  canvasW: 640,
+  canvasH: 416,
+  draw(p, t, deltaMs, nowMs, s) {
+    const rpm = t?.rpm ?? 0;
+    const fullScaleK = Math.max(1, Math.ceil(p.revRange[1] / 1000));
+    if (rpm >= p.revRange[1] && Math.floor(nowMs / 60) % 2 === 0) p.rect(LMDH.band, BLUE);
+    p.rpmBar(LMDH.rpm, rpm, fullScaleK, true, 24);
+    if (!t) return;
+
+    p.field(LMDH.lap, "LAP", String(Math.max(1, t.race?.lap ?? t.lapCount)), 52, { labelSize: 18 });
+    p.field(LMDH.pos, "POS", t.race ? String(t.race.position) : "--", 52, { color: t.race ? WHITE : DIM, labelSize: 18 });
+    if (nowMs < s.lastLapUntilMs) {
+      const best = t.bestLapTimeMs !== null && t.lastLapTimeMs !== null && t.lastLapTimeMs <= t.bestLapTimeMs;
+      p.field(LMDH.delta, "LAST LAP", formatLapTime(t.lastLapTimeMs), 48, { color: best ? GREEN : WHITE, labelSize: 18 });
+    } else if (deltaMs === null || !Number.isFinite(deltaMs)) {
+      p.field(LMDH.delta, "DELTA", "--.--", 58, { color: DIM, labelSize: 18 });
+    } else {
+      p.field(LMDH.delta, "DELTA", formatDelta(deltaMs), 58, { color: deltaMs > 0 ? RED : GREEN, labelSize: 18 });
+    }
+    p.field(LMDH.speed, "KM/H", String(Math.round(t.speedKmh)), 66, { labelSize: 18 });
+
+    p.field(LMDH.tyres, "TYRES °C / %", "", 10, { labelSize: 18 });
+    p.tyres({ x: LMDH.tyres.x + 12, y: LMDH.tyres.y + 14, w: LMDH.tyres.w - 24, h: LMDH.tyres.h - 24 }, t, 38, true);
+    p.field(LMDH.gear, "GEAR", t.gear < 0 ? "R" : t.gear === 0 ? "N" : String(t.gear), 166, { labelSize: 18 });
+
+    const tuner = t.liveTuner;
+    const aids = t.f12026;
+    p.field(LMDH.tc, "TC", p.aidValue(tuner?.tcLevel), 44, { fill: aids?.tcActive ? TC_LIT : undefined, labelSize: 17 });
+    p.field(LMDH.abs, "ABS", p.aidValue(tuner?.absLevel), 44, { fill: aids?.absActive ? ABS_LIT : undefined, labelSize: 17 });
+    const mode = (tuner?.ersMode ?? "BAL").slice(0, 3).toUpperCase();
+    const modeColor = mode === "PSH" || mode === "OVT" ? RED : mode === "CHR" ? CYAN : mode === "RAC" ? GREEN : AMBER;
+    p.field(LMDH.ersMode, "ERS", mode, 30, { color: modeColor, labelSize: 17 });
+
+    p.field(LMDH.bias, "BB %", tuner ? tuner.brakeBiasPct.toFixed(1) : "--", 36, { labelSize: 17 });
+    const kw = Number.isFinite(t.mgukPowerKw) ? Math.round(t.mgukPowerKw) : 0;
+    const kwStr = kw > 0 ? `+${kw}` : String(kw);
+    const kwColor = kw > 2 ? GREEN : kw < -2 ? CYAN : DIM;
+    p.field(LMDH.ersKw, "MGU kW", kwStr, 34, { color: kwColor, labelSize: 17 });
+
+    p.field(LMDH.lapTime, "LAP TIME", formatLapTime(t.currentLapTimeMs), 50, { labelSize: 18 });
+
+    // ERS state-of-charge gauge + percentage
+    const soc = Number.isFinite(t.ersBatteryPercent) ? Math.max(0, Math.min(100, t.ersBatteryPercent)) : 0;
+    const socColor = soc < 18 ? RED : soc < 40 ? AMBER : GREEN;
+    p.field(LMDH.soc, "ERS SOC", "", 10, { labelSize: 18 });
+    const barBox = { x: LMDH.soc.x + 14, y: LMDH.soc.y + 52, w: LMDH.soc.w - 28, h: 24 };
+    p.rect(barBox, "#161b22");
+    p.rect({ ...barBox, w: (barBox.w * soc) / 100 }, socColor);
+    p.text(LMDH.soc.x + LMDH.soc.w / 2, LMDH.soc.y + 30, `${Math.round(soc)}%`, 32, socColor, LMDH.soc.w - 24);
+
+    p.field(LMDH.fuel, "FUEL L", (t.fuelKg / FUEL_KG_PER_L).toFixed(1), 46, { labelSize: 18 });
+
+    const popup = s.popupAt(nowMs);
+    if (popup) p.popup(LMDH.popup, popup);
+    p.banner(LMDH.band, t);
+  },
+};
+
+/**
  * Where a page is shown: the Evo's screen mesh itself (its own UVs and material), or a copy of the BMW's photo
  * triangles laid over them
  */
@@ -465,6 +642,32 @@ function evoSurface(root: THREE.Object3D): Surface | null {
     geometry,
     base,
     attach: (material) => {
+      mesh.geometry = geometry;
+      mesh.material = material;
+    },
+    detach: () => {
+      mesh.geometry = originalGeometry;
+      mesh.material = base;
+    },
+  };
+}
+
+/**
+ * The LC-LMDH steering-wheel LCD surface (`light_004` under `STEER`): planar UVs facing the driver so the 1.54:1
+ * Bosch/Cosworth prototype page fills the full glass without grey tint or letterboxing.
+ */
+export function lmdhSurface(steer: THREE.Object3D): Surface | null {
+  const mesh = findMesh(steer, LMDH_WHEEL_SCREEN_MATERIAL);
+  const base = mesh?.material as THREE.MeshStandardMaterial | undefined;
+  if (!mesh || !base?.isMeshStandardMaterial) return null;
+  const geometry = screenUvs(mesh.geometry);
+  if (!geometry) return null;
+  const originalGeometry = mesh.geometry;
+  return {
+    geometry,
+    base,
+    attach: (material) => {
+      material.name = "wheel_display";
       mesh.geometry = geometry;
       mesh.material = material;
     },
@@ -729,6 +932,41 @@ class ShiftLights {
 export interface Gt3DashExtra {
   /** Live delta to the best lap, ms (+ = slower) */
   deltaMs?: number | null;
+}
+
+/** Common interface for live wheel/dash displays driven by `PortedWheelDash` */
+export interface LiveWheelScreen {
+  update(t: CarTelemetry, nowMs: number, extra?: Gt3DashExtra): void;
+  dispose(): void;
+}
+
+/** Creates the live Bosch/Cosworth-style steering-wheel LCD for the LC-LMDH (`light_004` under `STEER`). */
+export function createLmdhWheelScreen(steer: THREE.Object3D, revRange: readonly [number, number]): LiveWheelScreen | null {
+  const screen = LiveScreen.create(lmdhSurface(steer), LMDH_PAGE, revRange);
+  if (!screen) return null;
+  return {
+    update: (t, nowMs, extra) => screen.update(t, nowMs, extra?.deltaMs ?? null),
+    dispose: () => screen.dispose(),
+  };
+}
+
+export type DashPageId = "ddu" | "bmw" | "lmdh";
+
+/** Headless/test helper: draws one dash page onto a supplied 2D canvas context. */
+export function drawDashPage(
+  pageId: DashPageId,
+  ctx: CanvasRenderingContext2D,
+  t: CarTelemetry | null,
+  revRange: readonly [number, number],
+  deltaMs: number | null = null,
+  nowMs = 0
+): void {
+  const page = pageId === "ddu" ? DDU_PAGE : pageId === "bmw" ? BMW_PAGE : LMDH_PAGE;
+  const painter = new Painter(ctx, revRange);
+  const state = new DashState();
+  if (t) state.track(t, nowMs);
+  painter.rect({ x: 0, y: 0, w: page.width, h: page.height }, "#000");
+  page.draw(painter, t, deltaMs, nowMs, state);
 }
 
 /** A GT3 body's live dash (the Evo's screen and shift lights, or the BMW's screen), on a rig whose model has loaded */

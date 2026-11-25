@@ -2702,10 +2702,9 @@ export class DriveSession {
     let lc26ExtrasFor: THREE.Object3D | null = null;
     // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
-    // A ported body's wheel screen and shift lights (the 496R's), once its GLB has loaded under the rig
+    // A ported body's wheel screen and shift lights (the 496R's, LC-LMDH's), once its GLB has loaded under the rig
     let portedDash: PortedWheelDash | null = null;
     let portedProbeFrame = 0;
-    let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
     // Race control measures what a course cut saved against this: the best lap, else the car's own speed profile
     const stretchRefS = (fromM: number, toM: number): number | null => {
@@ -4172,14 +4171,14 @@ export class DriveSession {
           if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
           wingMirrors = new WingMirrors(renderer, scene, lc26Body);
         }
-        if (!lc26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
-          portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics), carRigCar);
-        }
-        // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
-        // gets an empty display and no mirrors, so it is probed once
-        if (!lc26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
+        // Probe ported wheel and GT3 cockpit dashes as soon as the GLB attaches (anchors become non-null on load),
+        // rather than waiting up to 30 frames with an uninitialized grey screen
+        if (!lc26Body && carById(carRigCar).modelUrl) {
           const anchors = carRig.getCameraAnchors();
-          if (anchors) {
+          if (!portedDash && (anchors || portedProbeFrame++ % 30 === 0)) {
+            portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics), carRigCar);
+          }
+          if (!gt3Dash && anchors) {
             gt3Dash = new Gt3DashDisplay(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
             const glassPatches = gt3MirrorPatches(carRig.chassisGroup);
             if (glassPatches.length) {

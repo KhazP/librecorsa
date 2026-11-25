@@ -886,7 +886,14 @@
     "restart": "Restart simulator"
   },
   "dash": {
-    "yellowFlag": "Yellow flag"
+    "yellowFlag": "Yellow flag",
+    "terminalDamage": "Terminal damage",
+    "puncture": "Puncture",
+    "punctureCorner": "Puncture {corner}",
+    "steeringDamage": "Steering damage",
+    "suspensionDamage": "Susp damage",
+    "aeroDamage": "Aero damage",
+    "damage": "Damage"
   },
   "account": {
     "checking": "Checking your account",
