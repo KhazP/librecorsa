@@ -142,6 +142,8 @@ import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_
 import {
   boardFlyingStartPoint,
   boardFlyingStartSpeedMs,
+  fairFlyingStartSpeedMs,
+  flyingStartIsFair,
   FLYING_SLOT_SPACING_M,
   flyingStartPoint,
   rollingStartSlots,
@@ -1052,7 +1054,7 @@ export class F1Physics2026 {
    * of the main straight for a flying lap (further slots queue up 28 m apart, alternating sides). With `fieldSize`
    * (a race's rolling start) every car of the field takes the one speed `rollingStartSpeedMs` gives.
    */
-  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false): void {
+  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false, fairStart = false): void {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
     const pointToPoint = !!this.track.pointToPoint;
     if (pointToPoint) flyingStart = false;
@@ -1084,10 +1086,15 @@ export class F1Physics2026 {
         return Math.min(75, (0.9 * (sample.brakeLimitKmh ?? sample.optimalSpeedKmh)) / 3.6);
       };
       const cornerExit = start.cornerS === null ? 0 : (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
-      const speed =
+      const boardSpeed =
         fieldSize !== undefined
           ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
           : boardFlyingStartSpeedMs(lapLen, start, s, spotSpeed, cornerExit);
+      // A fair flying lap (`flyingStartIsFair`) at no more than the car carries there on a flying lap of its own
+      const speed =
+        fieldSize === undefined && flyingStartIsFair(this.vehicleId, fairStart)
+          ? fairFlyingStartSpeedMs(this.track, this.vehicleId, this.racingLineId, s, boardSpeed)
+          : boardSpeed;
       if (fieldSize === undefined) {
         // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
         // first second (`startPose`, checked as the boards' laps were: `F12026CarSim`); a race's rolling start is left

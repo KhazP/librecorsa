@@ -648,6 +648,11 @@ export class DriveSession {
   readonly setTimeTrial: (rules: TimeTrialRules | null) => void;
   /** Outside a race: the run starts over on a flying lap, under the time trial's conditions when one is driven */
   readonly restartFlyingLap: () => void;
+  /**
+   * A career drive's flying laps (its test day's) start at the car's own pace, not as the boards' laps were set on
+   * (`fairStart`, simulator-car.ts); qualifying's always do. Off: the player's own practice again
+   */
+  readonly setFairFlyingStart: (on: boolean) => void;
   /** The replay bar's play / pause (from the start again once at the end), seek, speed, frame step, and car focus */
   readonly replayTogglePlay: () => void;
   readonly replaySeek: (timeS: number) => void;
@@ -1053,13 +1058,15 @@ export class DriveSession {
       } else {
         // A copy of the car on the page, on its autopilot at full pace, alone on a flying lap
         const car = createVehicleSim(vehicleNow, track, trackRoot, carById(carIdNow).bodyPlan, ownProfile(carIdNow, vehicleNow));
-        car.resetToStartGrid(true);
+        // From the fair start the player's laps take (the line check's lap starts at the car's own pace too)
+        car.resetToStartGrid(true, 0, undefined, false, true);
         car.aiAutopilot = true;
         if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
         ref = { lapMs: null, base: AUTOPILOT_REF_BASE, car, lap0: car.telemetry.lapCount, simS: 0 };
       }
       quali = { field, session: new QualifyingSession(minutes * 60), ref };
-      physics.resetToStartGrid(true);
+      // Its laps never go on a board: a flying lap at the car's own pace, the first one as quick as the next
+      physics.resetToStartGrid(true, 0, undefined, false, true);
     };
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
     /** The AI race's rules close the overtaking aids inside a yellow zone (set with the track-limits ladder) */
@@ -1976,12 +1983,18 @@ export class DriveSession {
       putTimeTrialOn();
       this.publish({ timeTrial: rules });
     };
+    /** A career drive's flying laps start at the car's own pace (`setFairFlyingStart`) */
+    let careerFairStart = false;
+    this.setFairFlyingStart = (on) => {
+      careerFairStart = on;
+    };
     this.restartFlyingLap = () => {
       if (disposed || raceNow().kind !== "practice") return;
       // Out of a replay first (the reset does that), then the conditions, then the car moves
       this.resetRun("restart");
       putTimeTrialOn();
-      physics.resetToStartGrid(true);
+      // A solo lap from the boards' start; qualifying's and a career drive's at the car's own pace
+      physics.resetToStartGrid(true, 0, undefined, false, careerFairStart || quali !== null);
     };
     this.setLiveTuner = (patch) => {
       if (disposed) return;

@@ -15,6 +15,11 @@
  * way a timed lap begins moves those times. The reworked start (`flyingStartPoint`, `flyingStartSpeedMs`, the barrier
  * clearance; the unit checks below) waits for the next board reset; a race's rolling start already uses it. Layouts
  * where the boards' start is known to be wrong are listed in `BOARD_START_FAULTS` and printed, not checked.
+ *
+ * A fair flying lap (`fairStart`: qualifying, a career test day) starts at the boards' spot at no more than the car's
+ * own pace there (`fairFlyingStartSpeedMs`), while a solo lap keeps the boards' start until its car is in
+ * `FAIR_SOLO_FLYING_START_CARS`: checked against main's start at 13f9168d (the live one, 76151977) on both
+ * Sachsenring layouts, and a Liana's first lap there from each start against a normal lap (~20 s).
  */
 import fs from 'node:fs';
 import * as THREE from 'three';
@@ -22,6 +27,8 @@ import { VEHICLE_MODELS } from '../../src/lib/cars/vehicle-models';
 import { createGroundHit, WALL_SEGMENT_STRIDE, type GroundQuery, type WallQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
 import {
   boardFlyingStartPoint,
+  FAIR_SOLO_FLYING_START_CARS,
+  flyingStartIsFair,
   flyingStartPoint,
   flyingStartSpeedMs,
   START_HANDS_OFF_S,
@@ -34,6 +41,8 @@ import { type BuiltTrackData, getActiveTrackData, type RawTrackJson, setActiveTr
 import type { VehicleModelId } from '../../src/types/f1';
 import { loadGlbGeometry, trackModelFiles } from '../lib/glb-geometry';
 import { hasFile, noteSkip } from '../lib/hosted-files';
+import { flyingStartLap } from '../ai/lib/flying-start-lap';
+import { ownPaceFor, ownSpeedAt } from '../../src/lib/sim/own-pace';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -42,6 +51,11 @@ const check = (name: string, ok: boolean, detail: string) => {
 };
 
 const DT = 1 / 120;
+/**
+ * How far a fair first lap may be from a normal one (s): its own pace at the spot is its drive plan's, which a Liana's
+ * autopilot doesn't quite carry at Sachsenring (92 against 86 km/h, 0.37 s; the boards' start there is worth 3.2 s)
+ */
+const FAIR_LAP_TOLERANCE_S = 0.5;
 const CARS = Object.keys(VEHICLE_MODELS) as VehicleModelId[];
 const ASPHALT = new Set(['road', 'kerb']);
 const hit = createGroundHit();
@@ -225,7 +239,38 @@ console.log('Flying-start placement, exit-speed cap, and barrier-clearance unit 
     poseNoWalls.lateral === 3.6 && maxRightEdge <= 4.78 - 0.5 + 1e-3,
     `no-walls lat=${poseNoWalls.lateral.toFixed(2)}m, with-walls lat=${poseWithWalls.lateral.toFixed(2)}m, maxRight=${maxRightEdge.toFixed(2)}m (wall 4.78m)`
   );
+
+  // 5. Fair or not: asked for (qualifying, a career test day) always; a solo lap once its car's boards were reset for it
+  const soloFair = CARS.filter((m) => flyingStartIsFair(m, false));
+  check(
+    'unit: a fair start when asked; a solo one only for the cars reset for it',
+    CARS.every((m) => flyingStartIsFair(m, true)) && soloFair.every((m) => FAIR_SOLO_FLYING_START_CARS.has(m)),
+    `solo laps start fair for: ${soloFair.join(', ') || 'no car (every board keeps its start)'}`
+  );
 }
+
+/**
+ * Main's solo flying start at 13f9168d, the one the boards' laps were set on (76151977: as live c5e9e8b8): lap distance
+ * (m), speed (m/s), lateral offset (m) and heading (rad, atan2(forward.x, forward.z)) on the full physics with colliders
+ */
+const LIVE_SOLO_START: Readonly<Record<string, Readonly<Partial<Record<VehicleModelId, readonly [number, number, number, number]>>>>> = {
+  sachsenring_short: {
+    liana: [1465.3220129639585, 52.00523741870629, 6.158895271226575, 2.1802526169589345],
+    'vw-scirocco-gtx': [1465.3226397263388, 52.00604164041937, 6.157688182569422, 2.1802425204601636],
+    'amg-gt3': [1465.307406638457, 52.00553791892608, 6.164671662940581, 2.180113673014847],
+    lc26: [1465.3029362459174, 52.00561812483757, 6.182086511984585, 2.182590264386659],
+  },
+  sachsenring: {
+    liana: [3600.96511810447, 51.602966501673265, 6.206053366563675, 2.1987796341303514],
+    'vw-scirocco-gtx': [3600.9655589087415, 51.603799140270155, 6.204813095185647, 2.19875393202759],
+    'amg-gt3': [3600.9509501485545, 51.603240394800096, 6.211726005757774, 2.1986466745549165],
+    lc26: [3600.944639694435, 51.603299070851506, 5.965146747907004, 2.2050779460501047],
+  },
+};
+const yawOf = (car: SimulatorCar) => {
+  const q = car.worldQuaternion;
+  return Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+};
 
 /**
  * Layouts whose solo flying start, kept as the boards' laps were set on it (`boardFlyingStartPoint`), is known to be
@@ -301,6 +346,33 @@ for (const id of CIRCUITS) {
   // Within 0.5 m: a car set down off the centreline reads its lap distance a few centimetres from the point
   const moved = runs.filter((r) => Math.abs(r.s + L - boardS) > 0.5);
   check(`${id}: a solo flying lap starts where the boards' laps did`, moved.length === 0, moved.map((r) => `${r.model} at L${r.s.toFixed(1)} m`).join(', ') || `L${(boardS - L).toFixed(1)} m`);
+  // A fair flying lap: the same spot, no faster than the boards' start nor the car's own pace there
+  const fairRuns = runs.map((r) => {
+    const car = VEHICLE_MODELS[r.model].createSim(track, root);
+    car.resetToStartGrid(true, 0, undefined, false, true);
+    const pace = ownPaceFor(track, r.model, car.racingLineId ?? 'f1');
+    const ownKmh = pace ? ownSpeedAt(pace, car.sMeters) * 3.6 : Infinity;
+    return { model: r.model, ds: car.sMeters - L - r.s, kmh: car.vxMs * 3.6, soloKmh: r.speedKmh, ownKmh };
+  });
+  const unfair = fairRuns.filter((f) => Math.abs(f.ds) > 0.5 || f.kmh > f.soloKmh + 1e-6 || f.kmh > f.ownKmh + 0.01);
+  check(
+    `${id}: a fair flying lap starts there at no more than its own pace`,
+    unfair.length === 0,
+    unfair.map((f) => `${f.model} ${f.ds.toFixed(1)} m on at ${f.kmh.toFixed(1)} km/h (solo ${f.soloKmh.toFixed(1)}, own ${f.ownKmh.toFixed(1)})`).join(', ') ||
+      fairRuns.filter((f) => f.kmh < f.soloKmh - 0.5).map((f) => `${f.model} ${f.soloKmh.toFixed(0)}→${f.kmh.toFixed(0)}`).join(', ') ||
+      'every car at the boards\' speed'
+  );
+  const live = LIVE_SOLO_START[id];
+  if (live) {
+    const moved = Object.entries(live).flatMap(([model, want]) => {
+      if (FAIR_SOLO_FLYING_START_CARS.has(model as VehicleModelId)) return [];
+      const car = VEHICLE_MODELS[model as VehicleModelId].createSim(track, root);
+      car.resetToStartGrid(true);
+      const got = [car.sMeters, car.vxMs, car.lateralOffsetM, yawOf(car)];
+      return got.some((g, i) => Math.abs(g - want![i]) > 1e-6) ? [`${model} ${got.map((g) => g.toFixed(4)).join('/')} (live ${want!.map((w) => w.toFixed(4)).join('/')})`] : [];
+    });
+    check(`${id}: a solo flying lap starts as the live game's`, moved.length === 0, moved.join(', ') || `${Object.keys(live).join(', ')}: lap distance, speed, line and heading`);
+  }
   const fault = BOARD_START_FAULTS[id];
   const checkOrNote = (name: string, ok: boolean, detail: string) => {
     if (fault === undefined) check(name, ok, detail);
@@ -344,6 +416,25 @@ for (const id of CIRCUITS) {
       return headingOffRoadDeg(car, track);
     });
     check(`${id}: rolling-start slots along the road`, slots.every((d) => Math.abs(d) < 0.2), slots.map((d) => `${d.toFixed(2)}°`).join(', '));
+  }
+}
+
+// A Liana's first lap: the boards' start hands it the circuit car's speed out of the last corner (187 km/h where it
+// carries ~86); the fair one starts it at its own pace, so its first lap is a normal one
+console.log(`\nA Liana's first timed lap from each start, the autopilot driving`);
+{
+  const c = load('sachsenring_short');
+  if (c) {
+    const board = flyingStartLap(c.track, c.root, 'liana', { fairStart: false });
+    const fair = flyingStartLap(c.track, c.root, 'liana', { fairStart: true });
+    const normal = fair.spotKmh !== null ? flyingStartLap(c.track, c.root, 'liana', { fairStart: true, speedKmh: fair.spotKmh }) : null;
+    const s = (ms: number | null | undefined) => (ms == null ? NaN : ms / 1000);
+    const [b, f, n] = [s(board.lapMs), s(fair.lapMs), s(normal?.lapMs)];
+    console.log(
+      `INFO  ${'sachsenring_short: liana start / lap'.padEnd(64)} boards' ${board.startKmh.toFixed(0)} km/h ${b.toFixed(3)} s, fair ${fair.startKmh.toFixed(0)} km/h ${f.toFixed(3)} s, normal (carried ${fair.spotKmh?.toFixed(0)} km/h) ${n.toFixed(3)} s`
+    );
+    check('sachsenring_short: a Liana starts fair at its own pace, not the boards\'', fair.startKmh < 0.6 * board.startKmh, `${board.startKmh.toFixed(0)} → ${fair.startKmh.toFixed(0)} km/h`);
+    check(`sachsenring_short: its fair first lap is within ${FAIR_LAP_TOLERANCE_S} s of a normal one`, Math.abs(f - n) <= FAIR_LAP_TOLERANCE_S, `${(f - n).toFixed(3)} s (the boards' start: ${(b - n).toFixed(3)} s)`);
   }
 }
 
