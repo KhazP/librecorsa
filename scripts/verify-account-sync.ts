@@ -970,8 +970,25 @@ async function main2(): Promise<void> {
 // ---------------------------------------------------------------------------------------------------------------
 // The store
 
-async function settle(until: () => boolean = () => false, rounds = 200): Promise<void> {
-  for (let i = 0; i < rounds && !until(); i++) await new Promise((r) => setImmediate(r));
+/** How long a wait for a condition may take in real time before it gives up (a busy CI runner can be slow) */
+const SETTLE_TIMEOUT_MS = 5000;
+
+/**
+ * Lets the store's promise chains run. Without a condition: `rounds` turns of the event loop. With one: until it holds,
+ * or `rounds` turns and SETTLE_TIMEOUT_MS have both passed. A count of turns alone gave up too soon on the deploy's
+ * runner: the first-sync question came after the wait for it had ended, about one run in two
+ */
+async function settle(until?: () => boolean, rounds = 200): Promise<void> {
+  if (!until) {
+    for (let i = 0; i < rounds; i++) await new Promise((r) => setImmediate(r));
+    return;
+  }
+  const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+  for (let i = 0; !until(); i++) {
+    if (i >= rounds && Date.now() > deadline) return;
+    // Now and then a timer turn, so work that waits on a real timer or the thread pool comes in too
+    await new Promise((r) => (i % 50 === 49 ? setTimeout(r, 1) : setImmediate(r)));
+  }
 }
 
 function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolean; hash?: string; storage?: StorageLike; laps?: LocalGhosts; providers?: string[] }) {
@@ -1265,9 +1282,12 @@ async function main3(): Promise<void> {
       const again = fakeEnv(server, { accounts: true, storage: f.storage });
       again.env.loadingScreen = () => loading;
       const restarted = createAccountStore(() => again.env);
+      const calls = server.calls.length;
       restarted.actions.start();
       // The answer comes back after the window
       again.clock.t += RELOAD_WINDOW_MS + 1;
+      // Until the sync on start has read the cloud's save and is done with it
+      await settle(() => server.calls.slice(calls).includes("GET /account/save") && restarted.getState().sync.status !== "syncing");
       await settle();
       const applied = f.storage.getItem("bugesera.vehicle") === "chaparral-2d";
       if (loading) check("a late sync on start while the loading screen is up uses the newer save", applied && again.log.reloads === 1);
