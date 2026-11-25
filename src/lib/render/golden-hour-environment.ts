@@ -187,6 +187,8 @@ export interface GoldenHourEnvironment {
   probeSky: { material: { uniforms: Record<string, { value: unknown }> } };
   /** Graphics preset: the physical sky on Medium and High, the classic sky on Low */
   setQuality(quality: "low" | "medium" | "high", aerialAllowed?: boolean): void;
+  /** Maximum distance (m) from the car at which sun shadows are drawn */
+  setShadowDistance(distanceM: number): void;
   /**
    * With `deferPhysicalSky`: the physical sky may be built from now on (on Medium and High), once the loading's own GPU
    * work is done. Its atmosphere precompute then never runs alongside the circuit's uploads and warm-up frame.
@@ -644,10 +646,10 @@ export function createGoldenHourEnvironment(
     ? new THREE.DirectionalLight(SUN_COLOR, SUN_INTENSITY)
     : new SunLight(SUN_COLOR, SUN_INTENSITY);
   if (sunLight instanceof THREE.DirectionalLight) {
-    sunLight.shadow.camera.left = -55;
-    sunLight.shadow.camera.right = 55;
-    sunLight.shadow.camera.top = 55;
-    sunLight.shadow.camera.bottom = -55;
+    sunLight.shadow.camera.left = -SHADOW_DISTANCE_M;
+    sunLight.shadow.camera.right = SHADOW_DISTANCE_M;
+    sunLight.shadow.camera.top = SHADOW_DISTANCE_M;
+    sunLight.shadow.camera.bottom = -SHADOW_DISTANCE_M;
     scene.add(sunLight.target);
   }
   sunLight.castShadow = true;
@@ -861,6 +863,25 @@ export function createGoldenHourEnvironment(
       return physicalSky?.showing ? physicalSky.cloudTypes : [];
     },
     setQuality,
+    setShadowDistance(distanceM: number): void {
+      if (disposed) return;
+      const d = THREE.MathUtils.clamp(distanceM, 100, 500);
+      if (sunLight instanceof THREE.DirectionalLight) {
+        const cam = sunLight.shadow.camera;
+        if (cam.right === d) return;
+        cam.left = -d;
+        cam.right = d;
+        cam.top = d;
+        cam.bottom = -d;
+        cam.updateProjectionMatrix();
+      } else {
+        const cam = sunLight.shadow.camera;
+        if (cam.far === d) return;
+        cam.far = d;
+        cam.updateProjectionMatrix();
+      }
+      sunLight.shadow.needsUpdate = true;
+    },
     startPhysicalSky(): void {
       if (!physicalSkyHeld) return;
       physicalSkyHeld = false;

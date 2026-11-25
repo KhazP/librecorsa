@@ -343,6 +343,8 @@ export interface GraphicsSettings {
   sharpLow: boolean;
   /** Contrast-adaptive sharpening in the final post-processing pass (on by default on touch screens) */
   sharpen: boolean;
+  /** Maximum distance (m) from the car at which sun shadows are drawn */
+  shadowDistanceM: number;
 }
 
 export type FpsCap = 0 | 30;
@@ -493,6 +495,7 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
   fpsCap: 0,
   sharpLow: false,
   sharpen: false,
+  shadowDistanceM: 250,
 };
 
 /**
@@ -882,6 +885,7 @@ function parseGraphics(v: unknown): GraphicsSettings {
     fpsCap: FPS_CAPS.includes(v.fpsCap as FpsCap) ? (v.fpsCap as FpsCap) : d.fpsCap,
     sharpLow: bool(v.sharpLow, d.sharpLow),
     sharpen: bool(v.sharpen, d.sharpen),
+    shadowDistanceM: num(v.shadowDistanceM, 100, 500, d.shadowDistanceM),
   };
 }
 

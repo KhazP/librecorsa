@@ -341,6 +341,10 @@
       "label": "Sharpen",
       "hint": "Crisps edges and tarmac after scaling"
     },
+    "shadowDistance": {
+      "label": "Shadow distance",
+      "hint": "How far ahead sun shadows reach"
+    },
     "fpsCap": {
       "label": "Frame rate",
       "hint": "30 fps lowers heat on mobile",

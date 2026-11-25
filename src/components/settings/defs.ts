@@ -633,6 +633,17 @@ export const sharpen = toggle({
   ...graphics("sharpen"),
 });
 
+export const shadowDistance = slider({
+  id: "shadowDistance",
+  get label() { return rt("shadowDistance.label"); },
+  hint: () => rt("shadowDistance.hint"),
+  min: 100,
+  max: 500,
+  step: 25,
+  format: (v) => `${Math.round(v)} m`,
+  ...graphics("shadowDistanceM"),
+});
+
 export const frameRate = choice("segmented", {
   id: "fpsCap",
   get label() { return rt("fpsCap.label"); },

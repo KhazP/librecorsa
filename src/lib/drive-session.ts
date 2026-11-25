@@ -1713,6 +1713,7 @@ export class DriveSession {
       const level = g.autoQuality ? governor.level : 0;
       const plan = level > 0 ? planAt(g.quality, g.renderScale, level, opts) : presetPlan(g.quality, g.renderScale, opts);
       applyGraphicsQuality(renderer, postFx, env, plan);
+      env.setShadowDistance(g.shadowDistanceM);
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
