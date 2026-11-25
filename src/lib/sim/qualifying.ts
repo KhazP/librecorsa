@@ -5,7 +5,8 @@
  * Every lap is timed from a flying start, under the strict limits of practice (any excursion deletes the lap, one in
  * the last sector the next lap too: track-limits.ts). A lap the autopilot drove any of never counts. When the clock
  * runs out, a lap already under way and still clean may be finished: the session ends at the next line crossing.
- * Anything else ends it at once.
+ * Anything else ends it at once. The player may also end it early (the pause menu): the grid is then drawn as when the
+ * clock runs out, the AI cars' times being made from their pace and not from the time left (`aiQualifyingMs`).
  *
  * No three.js and no DOM.
  */
@@ -53,6 +54,15 @@ export class QualifyingSession {
 
   get remainingS(): number {
     return Math.max(0, this.durationS - this.elapsedS);
+  }
+
+  /**
+   * The player ends the session before its clock does: it is over at once, with the laps completed so far (a lap
+   * under way is not finished, so it does not count)
+   */
+  end(): QualifyingState {
+    this.state = "done";
+    return this.state;
   }
 
   /** One frame of driving (the clock stands still while paused or in the menus: not called then) */

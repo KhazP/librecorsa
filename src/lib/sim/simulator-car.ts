@@ -170,8 +170,9 @@ export interface SimulatorCar {
   step(dtSeconds: number, inputs: Partial<ControlInputs>): unknown;
   /**
    * `fieldSize`: a race's rolling start, every car of the field at one speed (`rollingStartSpeedMs`). `raceStart`: a
-   * race's grid, after its formation lap (warm tyres and brakes), not a car out of the garage. `fairStart`: a flying
-   * lap that starts at the car's own pace (`fairFlyingStartSpeedMs`), not the boards' start (`flyingStartIsFair`)
+   * race's grid, after its formation lap (warm tyres and brakes), not a car out of the garage, and the race's own lap
+   * times from nothing (`clearLapTimes`). `fairStart`: a flying lap that starts at the car's own pace
+   * (`fairFlyingStartSpeedMs`), not the boards' start (`flyingStartIsFair`)
    */
   resetToStartGrid(flyingStart?: boolean, gridSlot?: number, fieldSize?: number, raceStart?: boolean, fairStart?: boolean): void;
   teleportToDistance(sMeters: number, speedMs?: number, lateral?: number): void;
@@ -632,6 +633,19 @@ export function startPose(
   // Keep a strictly safer pose if `alongRoad` itself is blocked by a barrier
   const wallBlocked = walls !== null && straightRunOnAsphaltM(track, null, walls, hit, s, alongRoad, footprint, runM) < runM;
   return wallBlocked ? bestPose : alongRoad;
+}
+
+/**
+ * A race times its own laps: at its start (`resetToStartGrid`'s `raceStart`) the car's last and best laps and sectors
+ * from the session before it (practice, a test day, qualifying) go, so the HUD's best lap, sector marks, optimal and
+ * predicted laps start the race empty. The laps themselves stay where they were kept (the lap recorder, the lap times)
+ */
+export function clearLapTimes(t: Pick<CarTelemetry, 'lastLapTimeMs' | 'lastLapValid' | 'bestLapTimeMs' | 'sectorTimesMs' | 'bestSectorTimesMs'>): void {
+  t.lastLapTimeMs = null;
+  t.lastLapValid = true;
+  t.bestLapTimeMs = null;
+  t.sectorTimesMs = [0, 0, 0];
+  t.bestSectorTimesMs = [null, null, null];
 }
 
 /** Gap between grid slots in a flying start's queue (m); the slots alternate sides */

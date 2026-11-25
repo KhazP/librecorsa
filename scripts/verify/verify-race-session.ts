@@ -11,6 +11,7 @@ import { QualifyingSession, aiQualifyingMs, qualifyingOrder, type QualifyingFram
 import { AiOpponentField, AI_DRIVERS } from "../../src/lib/sim/ai-opponents";
 import { ROLLING_START_PACE_MS } from "../../src/lib/sim/simulator-car";
 import { F1Physics2026 } from "../../src/lib/f1-physics-2026";
+import { F12026CarSim } from "../../src/lib/sim/f12026-car/F12026CarSim";
 import { getActiveTrackData } from "../../src/lib/track-data";
 
 let passed = 0;
@@ -510,6 +511,15 @@ console.log("Qualifying");
   restart.update(1, frame({ currentLapTimeMs: 1000 }));
   restart.update(29.5, frame({ currentLapTimeMs: 30500 }));
   check("a restart after the flag is no lap under way", restart.state === "last_lap" && restart.update(0.1, frame({ currentLapTimeMs: 100 })) === "done");
+  // Ended early by the player (the pause menu), 10 s into a clean lap after a 25.1 s one
+  const early = new QualifyingSession(300);
+  early.update(1, frame({ lapCount: 1, currentLapTimeMs: 1000 }));
+  early.update(24, frame({ lapCount: 1, currentLapTimeMs: 25000 }));
+  early.update(0.1, frame({ lapCount: 2, lastLapTimeMs: 25100, currentLapTimeMs: 100 }));
+  early.update(10, frame({ lapCount: 2, currentLapTimeMs: 10100 }));
+  check("ended early: over at once, the best lap so far kept", early.end() === "done" && early.bestMs === 25100 && early.remainingS > 0);
+  check("ended early: the lap under way never counts", early.update(15, frame({ lapCount: 3, lastLapTimeMs: 24000, currentLapTimeMs: 100 })) === "done" && early.bestMs === 25100 && early.laps.length === 1);
+  check("ended early without a lap: no time (the back of the grid)", new QualifyingSession(300).end() === "done");
 
   const order = qualifyingOrder([
     { id: "a", lapMs: 25300 },
@@ -528,7 +538,23 @@ console.log("Qualifying · the AI field's grid");
   const drivers = AI_DRIVERS.slice(0, 4);
   const field = new AiOpponentField(track, player, drivers, undefined, { seed: 3, learning: false });
   field.qualifying = { playerMs: 1, refLapMs: 90000, refBase: 1 };
+  // The qualifying lap the car comes with (and its sectors) is not the race's
+  Object.assign(player.telemetry, { lastLapTimeMs: 91000, bestLapTimeMs: 90500, sectorTimesMs: [30000, 30000, 31000], bestSectorTimesMs: [29900, 30000, 30600] });
   field.startRace(true);
+  const pt = player.telemetry;
+  check(
+    "the race's lap times start empty: no best, last or sector times from qualifying",
+    pt.bestLapTimeMs === null && pt.lastLapTimeMs === null && pt.bestSectorTimesMs.every((s) => s === null) && pt.sectorTimesMs.every((s) => s === 0),
+    JSON.stringify({ best: pt.bestLapTimeMs, last: pt.lastLapTimeMs, sectors: pt.bestSectorTimesMs })
+  );
+  // The other car physics (every car but the LC26): a race's grid clears them, a practice restart keeps them
+  const road = new F12026CarSim(track);
+  const timed = { lastLapTimeMs: 91000, bestLapTimeMs: 90500, sectorTimesMs: [30000, 30000, 31000], bestSectorTimesMs: [29900, 30000, 30600] };
+  Object.assign(road.telemetry, timed);
+  road.resetToStartGrid(true);
+  check("a practice restart keeps the session's best lap", road.telemetry.bestLapTimeMs === 90500 && road.telemetry.bestSectorTimesMs[2] === 30600);
+  road.resetToStartGrid(false, 2, undefined, true);
+  check("a race's grid clears it (every car physics)", road.telemetry.bestLapTimeMs === null && road.telemetry.lastLapTimeMs === null && road.telemetry.bestSectorTimesMs.every((s) => s === null));
   const st = field.status();
   const rows = st.qualifying ?? [];
   check("pole for a lap no one could beat", rows[0]?.isPlayer === true && st.standings.find((s) => s.isPlayer) !== undefined, JSON.stringify(rows));

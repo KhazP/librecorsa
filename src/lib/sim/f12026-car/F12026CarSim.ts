@@ -79,6 +79,7 @@ import {
   type SimulatorWheel,
   type StartFootprint,
   startPose,
+  clearLapTimes,
   type TyreVisualState,
 } from '../simulator-car';
 import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide, createLc26ProfileCarModel, sampleProfile, type SpeedProfileCarModel, withPlanningGrip } from '../speed-profile';
@@ -2317,6 +2318,7 @@ export class F12026CarSim implements SimulatorCar {
     this.telemetry.outLap = this.lineCrossingStartsLap;
     this.telemetry.currentLapTimeMs = 0;
     this.telemetry.topSpeedThisLapKmh = 0;
+    if (raceStart) clearLapTimes(this.telemetry);
   }
 
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {

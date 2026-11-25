@@ -71,6 +71,17 @@ for (const d of ["road", "historic"] as const) {
 }
 check("season lengths: 3 rounds at least, never more than the calendar", [3, 5, 7, 10].every((n) => (["short", "medium", "long", "full"] as const).every((l) => roundsFor(l, n) >= Math.min(3, n) && roundsFor(l, n) <= n)));
 
+// ---- The road ladder's start: a one-make series per car, per region
+{
+  const starts = startingSeries("road");
+  const club = starts.filter((s) => s.family === "clubCup");
+  const coupe = starts.filter((s) => s.family === "coupeCup");
+  check("road starts: Club Cup in the Liana alone, Coupé Cup in the Scirocco alone", starts.length === 6 && club.every((s) => s.cars.join() === "liana") && coupe.every((s) => s.cars.join() === "vw-scirocco-gtx"));
+  check("each region has both, and both lead to its Touring Cup", (["americas", "europe", "asiaPacific"] as const).every((r) => [club, coupe].every((f) => f.some((s) => s.region === r && s.next.join() === `touringCup_${r}`))));
+  const r = newCareer("road", "coupeCup_americas", allContent, 77)!;
+  check("a career can start in the Coupé Cup, in the Scirocco", r.season?.seriesId === "coupeCup_americas" && r.season.settings.car === "vw-scirocco-gtx" && r.choices.length === 6);
+}
+
 // ---- Rivals
 const REAL = ["VER", "HAM", "LEC", "NOR", "PIA", "RUS", "SAI", "ALO", "GAS", "OCO", "ALB", "STR", "HUL", "TSU", "BOT", "ANT", "HAD", "BOR"];
 const rivals = makeRivals(1234);
@@ -214,7 +225,7 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
   // The series of a level can be swapped until the season starts
   let run = newCareer("road", "clubCup_europe", allContent, 21)!;
   run = chooseSeries(run, "clubCup_americas", allContent);
-  check("before the first season starts, the other regions can be chosen", run.season?.seriesId === "clubCup_americas" && run.choices.length === 3);
+  check("before the first season starts, the other starting series can be chosen", run.season?.seriesId === "clubCup_americas" && run.choices.length === 6);
   run = startSeason(run);
   check("once it starts, the choice is made", run.choices.length === 0 && chooseSeries(run, "clubCup_europe", allContent) === run);
 }
@@ -241,6 +252,40 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
   const deleted = withoutRun(a, a.runs[0].id);
   const merged = JSON.parse(combineCareers(JSON.stringify(a), JSON.stringify(deleted))) as typeof a;
   check("a career deleted on one device stays deleted when the saves combine", merged.runs.length === 0);
+}
+
+{
+  // Saves from when Club Cup was the Liana or the Scirocco: a career in the Scirocco moves to the Coupé Cup, as it was
+  const asOld = (run: CareerRun): CareerRun => JSON.parse(JSON.stringify(run).replaceAll("coupeCup_", "clubCup_")) as CareerRun;
+  const parsed = (run: CareerRun) => parseCareerSave(JSON.parse(JSON.stringify(withRun(EMPTY_SAVE, run)))).runs[0];
+  // Under way: one season done (promoted), the next one, its first round raced
+  let sci = newCareer("road", "coupeCup_europe", allContent, 404)!;
+  sci = startSeason(updateSeasonSettings(sci, { length: "short" }, allContent));
+  while (sci.season!.rounds.some((r) => r === null)) sci = raceRound(sci, 1);
+  sci = endSeason(sci, allContent)!.run;
+  sci = chooseSeries(sci, sci.choices[0], allContent);
+  sci = startSeason(sci);
+  sci = raceRound(sci, 2);
+  const old = asOld(sci);
+  check("(an old save: the Scirocco's season recorded in the Club Cup)", old.history[0].seriesId === "clubCup_europe" && old.history[0].car === "vw-scirocco-gtx");
+  const moved = parsed(old);
+  check("an old Scirocco season's record moves to the Coupé Cup, its result kept", moved?.history[0].seriesId === "coupeCup_europe" && JSON.stringify(moved.history) === JSON.stringify(sci.history));
+  check("...and the career carries on where it was", JSON.stringify(moved?.season) === JSON.stringify(sci.season) && moved?.score === sci.score);
+  // A season under way in the Scirocco
+  let mid = startSeason(updateSeasonSettings(newCareer("road", "coupeCup_americas", allContent, 405)!, { length: "medium" }, allContent));
+  mid = raceRound(mid, 4);
+  const midMoved = parsed(asOld(mid));
+  check("an old Scirocco season under way moves with its rounds, circuits and objectives", JSON.stringify(midMoved?.season) === JSON.stringify(mid.season));
+  // A first season still in pre-season, the Scirocco picked: the new series, and every starting series to choose from
+  const pre = newCareer("road", "coupeCup_asiaPacific", allContent, 406)!;
+  const preOld = { ...asOld(pre), choices: ["clubCup_americas", "clubCup_europe", "clubCup_asiaPacific"] };
+  const preMoved = parsed(preOld);
+  check("an old pre-season in the Scirocco is the Coupé Cup's, on its calendar", preMoved?.season?.seriesId === "coupeCup_asiaPacific" && preMoved.season.settings.circuits.every((c) => seriesById("coupeCup_asiaPacific")!.calendar.includes(c)));
+  check("...with every starting series open", preMoved?.choices.join() === startingSeries("road").map((s) => s.id).join(), preMoved?.choices.join());
+  // The Liana's careers are untouched, and moving is done once
+  const liana = raceRound(startSeason(newCareer("road", "clubCup_europe", allContent, 407)!), 1);
+  check("a Liana career reads back as it was", JSON.stringify(parsed(liana)) === JSON.stringify(liana));
+  check("a moved career reads back the same again", JSON.stringify(parsed(moved!)) === JSON.stringify(moved));
 }
 
 {

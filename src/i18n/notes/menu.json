@@ -482,6 +482,7 @@
   "upNext.personalBest": "Row on the title screen's Up next sheet: the player's best lap for this circuit and car.",
   "upNext.oldPhysics": "Tag beside a best lap set before the current physics. Short.",
   "upNext.noTimeYet": "Shown when the player has no lap for this circuit and car.",
+  "career.series.coupeCup": "Name of a career series: club racing in one car for the whole grid, a 1980s sports coupé (the VW Scirocco), beside the Club Cup, raced in a small modern hatchback. A series name: treat it as your language's glossary treats Club Cup and Touring Cup.",
   "career.seriesWithRegion": "Combines a racing series name and its region, e.g. 'Club Cup Americas'. Reorder if your language puts the region first.",
   "career.raceRound": "Primary button on the career Season tab: launches the next round of the season. {round}: 1-based round number.",
   "career.roundTag": "Short tag on a selected circuit showing its round number, e.g. 'R1'.",

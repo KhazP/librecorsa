@@ -8,6 +8,7 @@ import {
   seriesContent,
   seriesOf,
   type CareerContent,
+  type CareerRegion,
   type CareerSeries,
 } from "@/lib/career/ladder";
 import {
@@ -21,6 +22,8 @@ import { Icon } from "@/components/ui/icons";
 import { uiZoomOf } from "@/components/ui/styles";
 import { SeriesCarThumb, carTitle, seriesName } from "./career-ui";
 import { SeasonArchiveModal, SeriesDetailContent, SeriesDetailModal } from "./CareerModals";
+
+const REGION_ORDER: readonly CareerRegion[] = ["americas", "europe", "asiaPacific"];
 
 interface ConnectorEdge {
   key: string;
@@ -110,6 +113,10 @@ export const CareerLadderView: React.FC<{
     for (const s of allSeries) {
       byTier.set(s.tier, [...(byTier.get(s.tier) ?? []), s]);
     }
+    // A region's series side by side (the Club Cup and the Coupé Cup of a region, beside the Touring Cup they lead to),
+    // in the ladder's order within it
+    const regionAt = (s: CareerSeries) => (s.region ? REGION_ORDER.indexOf(s.region) : REGION_ORDER.length);
+    for (const list of byTier.values()) list.sort((a, b) => regionAt(a) - regionAt(b));
     return [...byTier.entries()].sort(([a], [b]) => a - b);
   }, [allSeries]);
 

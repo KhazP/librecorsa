@@ -204,6 +204,8 @@
   "pauseMenu.actions.gridStart": "Pause menu (practice, no AI cars): restart from a standing start on the grid.",
   "pauseMenu.actions.rollingStart": "Pause menu (race against AI): restart the race with a rolling start (the field already moving).",
   "pauseMenu.actions.flyingLap": "Pause menu (practice): restart already at speed, so the first lap is a timed one.",
+  "pauseMenu.actions.endQualifying": "Pause menu, during qualifying before a race against AI cars: end the qualifying session now, as if its time had run out. Your best lap so far sets your grid place and the race starts.",
+  "pauseMenu.actions.endingQualifying": "Line under End qualifying for the moment after it is chosen, while the AI cars' qualifying times and the starting grid are worked out.",
   "pauseMenu.actions.skipTrack": "Pause menu: skip to the next music track.",
   "pauseMenu.actions.nowPlaying": "Line under Skip track: the music playing. {title}: track title; {composer}: its composer. Neither is translated.",
   "pauseMenu.actions.mainMenu": "Pause menu: leave the session for the title screen.",

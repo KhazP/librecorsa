@@ -294,6 +294,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     nowPlaying,
     cameraOverride,
     replayAvailable,
+    qualifying,
   } = useSyncExternalStore(session?.subscribe ?? noSubscribe, session?.getSnapshot ?? (() => idleSnapshot), () => idleSnapshot);
 
   const [aeroPreset, setAeroPreset] =
@@ -2361,6 +2362,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleAiAutopilot: handleToggleAiAutopilot,
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
+    // An AI race's qualifying (a career round's or the player's own race's): the pause menu ends it as the clock would
+    onEndQualifying: qualifying && session ? session.finishQualifyingNow : undefined,
     challengeTarget: targetShown ? challengeTargetNow : null,
     // A round is raced from the lights; a test day is practice, round the circuit as the player likes
     onSelectTurn: career.racing ? noTurnJump : handleSelectTurn,

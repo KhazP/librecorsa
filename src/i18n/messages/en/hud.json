@@ -310,6 +310,8 @@
       "gridStart": "Grid start",
       "rollingStart": "Rolling start",
       "flyingLap": "Flying lap",
+      "endQualifying": "End qualifying",
+      "endingQualifying": "Setting the grid…",
       "watchReplay": "Watch replay",
       "skipTrack": "Skip track",
       "nowPlaying": "{title}, {composer}",
