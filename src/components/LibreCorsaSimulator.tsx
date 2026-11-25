@@ -27,6 +27,7 @@ import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, loadLatestLap, saveBestLapIfFaster, saveLatestLap } from "@/lib/sim/ghost-store";
+import { recordDrivingTime, recordLapDistance } from "@/lib/sim/driver-stats";
 import { sectorSplitsFromSamples, selectCarBestLap, type SessionLapEntry } from "@/lib/sim/lap-analysis";
 import { LapTelemetryModal } from "@/components/hud/LapTelemetryModal";
 import {
@@ -1047,6 +1048,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
       if (recording.data.length > 0) {
+        // The driver's totals (driver-stats.ts): the lap's distance
+        recordLapDistance(recording.trackLengthM ?? 0);
         const valid = summary.valid && !summary.autopilot;
         setSessionLaps((prev) => [{ recording, valid, lapNumber: summary.lapNumber }, ...prev].slice(0, 20));
         setLatestLap(recording);
@@ -2020,7 +2023,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const pair = `${trackId}|${carId}`;
     const d = driveTime.current;
     const now = performance.now();
-    if (d.since !== null) d.ms += now - d.since;
+    if (d.since !== null) {
+      const sliceMs = now - d.since;
+      d.ms += sliceMs;
+      // And to the driver's totals (driver-stats.ts), in the car and circuit it was driven in
+      const [drivenTrack, drivenCar] = d.pair.split("|");
+      recordDrivingTime(sliceMs / 1000, drivenCar || carId, drivenTrack || trackId);
+    }
     d.since = phase === "driving" && !paused ? now : null;
     if (d.pair !== pair) {
       d.pair = pair;

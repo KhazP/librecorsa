@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useTranslations } from "use-intl/react";
-import { Button, ConfirmDialog, SettingRow, TextField } from "@/components/ui";
+import { useLocale, useTranslations } from "use-intl/react";
+import { Button, ConfirmDialog, SettingRow, TextField, Well } from "@/components/ui";
 import { CHOSEN_TILE, cx, MOTION } from "@/components/ui/styles";
 import { Icon } from "@/components/ui/icons";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { CLAIMED_TELEMETRY_PORTS, DEFAULT_TELEMETRY_PORT } from "@/lib/input/device-input";
 import { sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
+import { CARS } from "@/lib/cars/car-registry";
+import { averageFinish, loadDriverStats, mostDriven, type DriverStats } from "@/lib/sim/driver-stats";
+import { TRACKS } from "@/lib/track-registry";
 import { autoUpload, telemetryOut } from "../defs";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
@@ -64,7 +67,55 @@ function ColourRow() {
   );
 }
 
-/** Settings > Profile and data > Driver: who other players see */
+/** One total: the figure over what it counts */
+function StatTile({ value, label, text = false, className }: { value: string; label: string; text?: boolean; className?: string }) {
+  return (
+    <Well className={cx("flex min-w-0 flex-col gap-1 px-3.5 py-2.5 phone:px-3", className)}>
+      <span className={cx("truncate leading-none text-lc-chalk", text ? "text-[14px] font-semibold" : "lc-data text-[20px]")}>{value}</span>
+      <span className="lc-hint truncate">{label}</span>
+    </Well>
+  );
+}
+
+const carTitle = (id: string) => CARS.find((c) => c.id === id)?.title ?? id;
+const circuitName = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
+
+/** The driver's totals across every session (driver-stats.ts): only this player sees them */
+function DriverStatsCard() {
+  const tx = useTranslations("settings.profile.stats");
+  const locale = useLocale();
+  // Read after mount: the page is prerendered without storage
+  const [stats, setStats] = useState<DriverStats | null>(null);
+  useEffect(() => setStats(loadDriverStats()), []);
+  if (!stats) return null;
+  const num = (n: number, digits = 0) =>
+    new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+  const minutes = Math.floor(stats.drivingS / 60);
+  const avg = averageFinish(stats);
+  const car = mostDriven(stats.carS);
+  const circuit = mostDriven(stats.trackS);
+  return (
+    <SettingsCard title={tx("title")} description={tx("note")}>
+      <div className="grid grid-cols-4 gap-2.5 phone:grid-cols-2 phone:gap-2">
+        <StatTile
+          value={minutes >= 60 ? tx("hoursMinutes", { hours: num(Math.floor(minutes / 60)), minutes: minutes % 60 }) : tx("minutes", { minutes })}
+          label={tx("timeDriven")}
+        />
+        <StatTile value={tx("km", { km: num(stats.distanceM / 1000, 1) })} label={tx("distance")} />
+        <StatTile value={num(stats.races)} label={tx("races")} />
+        <StatTile value={num(stats.wins)} label={tx("wins")} />
+        <StatTile value={num(stats.podiums)} label={tx("podiums")} />
+        <StatTile value={num(stats.fastestLaps)} label={tx("fastestLaps")} />
+        <StatTile value={avg === null ? "—" : `P${num(avg, 1)}`} label={tx("averageFinish")} />
+        <StatTile value={num(stats.races - stats.finishes)} label={tx("retirements")} />
+        <StatTile value={car ? carTitle(car) : "—"} label={tx("mostDrivenCar")} text className="col-span-2" />
+        <StatTile value={circuit ? circuitName(circuit) : "—"} label={tx("mostDrivenCircuit")} text className="col-span-2" />
+      </div>
+    </SettingsCard>
+  );
+}
+
+/** Settings > Profile and data > Driver: who other players see, and the driver's own totals */
 export function DriverTab() {
   const env = useSettingsEnv();
   const tx = useTranslations("settings.profile.driver");
@@ -145,6 +196,7 @@ export function DriverTab() {
   };
 
   return (
+    <>
     <SettingsCard title={tx("title")} rows={[autoUpload]} before={
       <>
       <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3 pb-2">
@@ -181,6 +233,8 @@ export function DriverTab() {
       </>
     }>
     </SettingsCard>
+    <DriverStatsCard />
+    </>
   );
 }
 

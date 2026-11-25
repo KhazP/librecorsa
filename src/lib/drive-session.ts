@@ -3681,6 +3681,8 @@ export class DriveSession {
         gpuLost ? null : {
           driverCode: settingsNow.profile.code,
           teamColorHex: settingsNow.profile.color,
+          liveryId: settingsNow.liveryId,
+          ...(settingsNow.liveryId === "custom" ? { customLivery: settingsNow.customLivery } : {}),
           name: settingsNow.profile.name,
           race: mpRace
             ? mpRace.progress()

@@ -35,6 +35,7 @@ export interface HudPart {
   x: number;
   y: number;
   scale: number;
+  hidden?: boolean;
 }
 
 export type HudLayoutParts = Partial<Record<HudPartId, HudPart>>;
@@ -58,7 +59,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /** Hundredths of a percent and of the scale: fine enough for a pixel on a 4K screen, no float noise in the save */
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-export const isDefaultHudPart = (p: HudPart): boolean => p.x === 0 && p.y === 0 && p.scale === 1;
+export const isDefaultHudPart = (p: HudPart): boolean => p.x === 0 && p.y === 0 && p.scale === 1 && !p.hidden;
 
 /** A part clamped to its limits, or null where it is where its layout puts it */
 export function cleanHudPart(p: Partial<HudPart> | null | undefined): HudPart | null {
@@ -68,6 +69,7 @@ export function cleanHudPart(p: Partial<HudPart> | null | undefined): HudPart | 
     x: num(p.x, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0),
     y: num(p.y, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0),
     scale: num(p.scale, HUD_PART_SCALE_MIN, HUD_PART_SCALE_MAX, 1),
+    ...(p.hidden === true ? { hidden: true } : null),
   };
   return isDefaultHudPart(out) ? null : out;
 }
