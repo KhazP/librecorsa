@@ -866,17 +866,6 @@ export const spotterVolume = slider({
   ...audio("spotterVolume"),
 });
 export const spotterOn = toggle({ id: "spotter", get label() { return rt("spotter.label"); }, ...audio("spotter") });
-export const spotterVoice = choice("segmented", {
-  id: "spotterVoice",
-  get label() { return rt("spotterVoice.label"); },
-  off: (env) => (env.settings.audio.spotter ? null : rt("spotterVoice.off")),
-  options: () => [
-    { id: "jim", label: rt("spotterVoice.options.jim") },
-    { id: "clare", label: rt("spotterVoice.options.clare") },
-    { id: "geoffrey", label: rt("spotterVoice.options.geoffrey") },
-  ],
-  ...audio("spotterVoice"),
-});
 export const spotterRadio = toggle({
   id: "spotterRadio",
   get label() { return rt("spotterRadio.label"); },

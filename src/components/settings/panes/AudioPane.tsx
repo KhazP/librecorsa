@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "use-intl/react";
 import type { MusicPool } from "@/lib/audio/music-catalog";
-import { drsBeeps, kerbVolume, masterVolume, menuMusic, musicOn, musicTrackRows, mute, raceMusic, raceMusicOn, replayMusic, shiftBeep, spotterOn, spotterRadio, spotterVoice, spotterVolume } from "../defs";
+import { drsBeeps, kerbVolume, masterVolume, menuMusic, musicOn, musicTrackRows, mute, raceMusic, raceMusicOn, replayMusic, shiftBeep, spotterOn, spotterRadio, spotterVolume } from "../defs";
 import { SettingsCard } from "../fields";
 
 const POOLS: readonly MusicPool[] = ["menu", "race", "results"];
@@ -23,7 +23,7 @@ export function AudioPane() {
       {POOLS.map((pool) => (
         <SettingsCard key={pool} title={tx(POOL_TITLE[pool])} rows={TRACK_ROWS[pool]} />
       ))}
-      <SettingsCard title={tx("cockpitCues")} rows={[drsBeeps, shiftBeep, spotterOn, spotterVoice, spotterRadio]} />
+      <SettingsCard title={tx("cockpitCues")} rows={[drsBeeps, shiftBeep, spotterOn, spotterRadio]} />
     </>
   );
 }

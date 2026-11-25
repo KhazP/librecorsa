@@ -483,15 +483,6 @@
       "label": "Spotter volume",
       "off": "Spotter is off"
     },
-    "spotterVoice": {
-      "label": "Spotter voice",
-      "off": "Spotter is off",
-      "options": {
-        "jim": "George (UK)",
-        "clare": "Emma (UK)",
-        "geoffrey": "Adam (US)"
-      }
-    },
     "spotterRadio": {
       "label": "Spotter pit-radio filter",
       "off": "Spotter is off"
