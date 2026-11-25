@@ -141,6 +141,11 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
   onOpenReplay?: () => void;
+  /**
+   * Qualifying for an AI race is under way: ends it now, as its clock running out would (the best lap so far stands,
+   * the race lines up). Settles once the race has lined up. Absent outside such a session
+   */
+  onEndQualifying?: () => Promise<unknown>;
   onSelectTurn: (turnNumber: number) => void;
   /**
    * A career round (career/useCareerDrive.ts): no rolling restart and no jumping round the circuit; the restart is a
@@ -251,6 +256,19 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
     },
     [onResetCar, onTogglePause]
   );
+  // Ending qualifying lines the race up (a moment's work when the AI cars' reference lap is still on track), then the
+  // menu closes on the grid
+  const { onEndQualifying } = props;
+  const [endingQualifying, setEndingQualifying] = useState(false);
+  const endQualifyingAndResume = useCallback(() => {
+    if (!onEndQualifying || endingQualifying) return;
+    setEndingQualifying(true);
+    void onEndQualifying().finally(() => {
+      if (!mounted.current) return;
+      setEndingQualifying(false);
+      onTogglePause();
+    });
+  }, [onEndQualifying, endingQualifying, onTogglePause]);
   const panelRef = useRef<HTMLElement | null>(null);
   const panelId = useId();
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
@@ -299,6 +317,17 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             },
           ]
         : []),
+      ...(onEndQualifying
+        ? [
+            {
+              id: "endQualifying",
+              label: tx("actions.endQualifying"),
+              detail: endingQualifying ? tx("actions.endingQualifying") : undefined,
+              icon: "chequered" as const,
+              run: endQualifyingAndResume,
+            },
+          ]
+        : []),
       ...(!mpRace && onOpenReplay
         ? [
             {
@@ -328,7 +357,24 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         : []),
       ...(onExitToTitle ? [{ id: "title", label: tx("actions.mainMenu"), icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, career, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle, tx]
+    [
+      aiOpponents,
+      mpRace,
+      canRestart,
+      canFly,
+      career,
+      restartAndResume,
+      onEndQualifying,
+      endingQualifying,
+      endQualifyingAndResume,
+      onOpenReplay,
+      onTogglePause,
+      nowPlaying,
+      onSkipTrack,
+      onOpenControls,
+      onExitToTitle,
+      tx,
+    ]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead
