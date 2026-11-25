@@ -22,6 +22,7 @@ import {
   aerialCut,
   buildShowTimeline,
   DEFAULT_SHOW_MARKERS,
+  DOUBLE_PRESS_MS,
   gridPairs,
   ShowClock,
   type ShowKind,
@@ -145,11 +146,15 @@ export class PreRaceShowDirector {
   private readonly fwd = new THREE.Vector3();
   private readonly focusAt = new THREE.Vector3();
   private hasFocus = false;
+  /** When the last skip press came (ms, the page's clock): a second one soon after is a double press */
+  private lastPressMs: number | null = null;
 
   constructor(
     private readonly track: BuiltTrackData,
     /** The show has ended (started from the card, or the round left): the drive's cameras start over */
-    private readonly onEnd: () => void
+    private readonly onEnd: () => void,
+    /** A press moved the show on to `showTimeS` (s on its clock): the music goes there too, or the clock would wait for it */
+    private readonly onJump?: (showTimeS: number) => void
   ) {}
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -273,12 +278,47 @@ export class PreRaceShowDirector {
     if (this.clock) this.end();
   }
 
-  /** Straight to the start card (or, on it, the start) */
+  /** On to the next graphic (or, on the start card, the start): the Next button */
+  next(): void {
+    const clock = this.clock;
+    if (!clock) return;
+    if (clock.onReadyCard) this.end();
+    else if (clock.next(this.playerPair())) this.jumped(clock);
+  }
+
+  /** Straight to the start card (or, on it, the start): the Skip button */
   skip(): void {
     const clock = this.clock;
     if (!clock) return;
     if (clock.onReadyCard) this.end();
-    else if (clock.skip()) this.publish();
+    else if (clock.skip()) this.jumped(clock);
+  }
+
+  /**
+   * A skip press, a key or a pad button: one moves on a graphic, a second within `DOUBLE_PRESS_MS` skips the rest of the
+   * show to the start card. On the card a press starts, but not the quick one after a press that has just reached it:
+   * a double press near the end shows the card rather than starting the session under the player's thumb.
+   */
+  press(nowMs: number = performance.now()): void {
+    const clock = this.clock;
+    if (!clock) return;
+    const double = this.lastPressMs !== null && nowMs - this.lastPressMs <= DOUBLE_PRESS_MS;
+    this.lastPressMs = nowMs;
+    if (clock.onReadyCard) {
+      if (!double) this.end();
+    } else if (double) this.skip();
+    else this.next();
+  }
+
+  /** The grid's pair the player is in (0 = the back), a stop on the way to pole; null without them on the grid */
+  private playerPair(): number | null {
+    const at = gridPairs(this.grid).findIndex((pair) => pair.some((row) => row.isPlayer));
+    return at >= 0 ? at : null;
+  }
+
+  private jumped(clock: ShowClock): void {
+    this.publish();
+    this.onJump?.(clock.timeS);
   }
 
   /** Where the reflections should look from during the show; null when it is not playing */
@@ -343,6 +383,7 @@ export class PreRaceShowDirector {
     const size = kind === "qualifying" ? Object.keys(ctx.drivers).length : kind === "test" ? 1 : f.grid.length;
     this.clock = new ShowClock(buildShowTimeline(kind, size, this.markers));
     this.musicWaitS = 0;
+    this.lastPressMs = null;
     this.aerial ??= new MenuAerial(this.track);
     this.aerial.restart(f.playerS);
     this.epoch++;
