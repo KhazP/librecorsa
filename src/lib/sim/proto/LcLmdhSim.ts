@@ -11,8 +11,10 @@ import type { CarSoundSource } from '../CarAudio';
 import type { SpeedProfileCarModel } from '../speed-profile';
 
 /**
- * Its own engine, gearbox and hybrid sounds (`scripts/audio/build_custom_soundbank.py`). The bank's top anchor sits at
- * the limiter, the end of the regulated power curve
+ * Its sound bank (on librecorsa.org only): the engine, in the cockpit and outside, and its shift and lift-off sounds are
+ * Engine Lab by bimbalanch, given to LibreCorsa (CREDITS.md); the gearbox whine, hybrid motor, limiter and shift cut are
+ * from its earlier bank (`scripts/audio/build_custom_soundbank.py`). The engine's 16 anchors run from 1800 to 9846 rpm
+ * at the engine's own revs, past the 8300 rpm limiter, so the bank plays at the physics' rpm unscaled
  */
 export const LC_LMDH_SOUND: CarSoundSource = {
   id: 'lc-lmdh',
