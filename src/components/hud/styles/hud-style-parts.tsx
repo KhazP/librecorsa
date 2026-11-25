@@ -142,6 +142,8 @@ export interface HudDesignProps {
   showDeltaBar?: boolean;
   /** Whether the user's Proximity radar HUD setting is on */
   showRadar?: boolean;
+  /** Whether the user's Input trace HUD setting is on: a style that draws its own trace (`ownTrace`) shows it then */
+  showTrace?: boolean;
   /** Active camera mode (e.g. "tv_pod", "cockpit", "chase") */
   cameraMode?: CameraMode;
   /** The car being driven, for the layouts that name it */

@@ -707,6 +707,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           weather={!lightsPhase ? (props.weather ?? null) : null}
           showDeltaBar={showDelta}
           showRadar={showRadar}
+          showTrace={hud?.inputTrace === true}
           cameraMode={cameraMode}
           carId={props.carId}
         />
