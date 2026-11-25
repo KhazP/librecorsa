@@ -255,6 +255,129 @@ export class ReplayBuffer {
     return this.count;
   }
 
+  get sampleHz(): number {
+    return Math.round(1 / this.minIntervalS);
+  }
+
+  /** Exports all buffered frames into compact flat typed arrays (zero per-frame JS object allocations) */
+  exportSerialized(): { hz: number; carIds: string[]; times: Float64Array; data: Float32Array } {
+    const count = this.count;
+    const carIds = [...this.carIds()];
+    const cols = carIds.length;
+    const times = new Float64Array(count);
+    const data = new Float32Array(count * cols * CAR_STRIDE);
+    data.fill(Number.NaN);
+    if (count === 0 || cols === 0) {
+      return { hz: this.sampleHz, carIds, times, data };
+    }
+    const srcCols = carIds.map((id) => this.carIdToCol.get(id)!);
+    for (let i = 0; i < count; i++) {
+      const seq = this.headSeq + i;
+      const chunk = this.chunks.get(seq >>> CHUNK_SHIFT)!;
+      const off = seq & CHUNK_MASK;
+      times[i] = chunk.times[off];
+      const srcBase = off * chunk.carCols * CAR_STRIDE;
+      const dstBase = i * cols * CAR_STRIDE;
+      for (let c = 0; c < cols; c++) {
+        const srcCol = srcCols[c];
+        if (srcCol < chunk.carCols) {
+          const sOff = srcBase + srcCol * CAR_STRIDE;
+          if (!Number.isNaN(chunk.data[sOff])) {
+            data.set(chunk.data.subarray(sOff, sOff + CAR_STRIDE), dstBase + c * CAR_STRIDE);
+          }
+        }
+      }
+    }
+    return { hz: this.sampleHz, carIds, times, data };
+  }
+
+  /** Hydrates a ReplayBuffer from flat serialized typed arrays */
+  static fromSerialized(serialized: {
+    hz: number;
+    carIds: readonly string[];
+    times: Float64Array;
+    data: Float32Array;
+  }): ReplayBuffer {
+    const count = serialized.times.length;
+    const hz = serialized.hz > 0 ? serialized.hz : DEFAULT_HZ;
+    const maxSeconds = count > 0 ? Math.max(DEFAULT_MAX_SECONDS, (serialized.times[count - 1] - serialized.times[0]) + 10) : DEFAULT_MAX_SECONDS;
+    const buf = new ReplayBuffer({ maxSeconds, hz });
+    const cols = serialized.carIds.length;
+    if (count === 0 || cols === 0) return buf;
+
+    for (let c = 0; c < cols; c++) {
+      const id = serialized.carIds[c];
+      buf.carIdToCol.set(id, c);
+      buf.carIdsList.push(id);
+      buf.carFirstSeq.push(Number.POSITIVE_INFINITY);
+      buf.carLastSeq.push(-1);
+    }
+
+    for (let i = 0; i < count; i++) {
+      const seq = i;
+      const key = seq >>> CHUNK_SHIFT;
+      const off = seq & CHUNK_MASK;
+      let chunk = buf.chunks.get(key);
+      if (!chunk) {
+        const cData = new Float32Array(CHUNK_SIZE * cols * CAR_STRIDE);
+        cData.fill(Number.NaN);
+        chunk = { times: new Float64Array(CHUNK_SIZE), carCols: cols, data: cData };
+        buf.chunks.set(key, chunk);
+      }
+      chunk.times[off] = serialized.times[i];
+      const srcBase = i * cols * CAR_STRIDE;
+      const dstBase = off * cols * CAR_STRIDE;
+      chunk.data.set(serialized.data.subarray(srcBase, srcBase + cols * CAR_STRIDE), dstBase);
+      for (let c = 0; c < cols; c++) {
+        if (!Number.isNaN(serialized.data[srcBase + c * CAR_STRIDE])) {
+          if (seq < buf.carFirstSeq[c]) buf.carFirstSeq[c] = seq;
+          buf.carLastSeq[c] = seq;
+        }
+      }
+    }
+    buf.headSeq = 0;
+    buf.tailSeq = count;
+    return buf;
+  }
+
+  /** Reads a single car's state at `tS` without allocating an array of all cars */
+  carAt(tS: number, carId: string): ReplayCarState | null {
+    const col = this.carIdToCol.get(carId);
+    if (col === undefined || this.count === 0 || Number.isNaN(tS)) return null;
+    const tc = Math.min(Math.max(tS, this.startS), this.endS);
+    const { lo, hi } = this.bracket(tc);
+    const tA = this.timeAtIndex(lo);
+    const tB = this.timeAtIndex(hi);
+    const span = tB - tA;
+    const f = span > 0 ? Math.min(Math.max((tc - tA) / span, 0), 1) : 0;
+    const seqA = this.headSeq + lo;
+    const seqB = this.headSeq + hi;
+    const chunkA = this.chunks.get(seqA >>> CHUNK_SHIFT)!;
+    const chunkB = this.chunks.get(seqB >>> CHUNK_SHIFT)!;
+    const carA = col < chunkA.carCols ? this.readCar(chunkA, seqA & CHUNK_MASK, col) : null;
+    const carB = col < chunkB.carCols ? this.readCar(chunkB, seqB & CHUNK_MASK, col) : null;
+    if (f <= 0) return carA;
+    if (f >= 1) return carB;
+    if (carA && carB) return blendCar(carA, carB, f);
+    return carA ?? carB;
+  }
+
+  /** Samples a car's telemetry across `[fromS, toS]` into at most `maxPoints` samples for trace charts */
+  sampleCarSeries(carId: string, fromS: number, toS: number, maxPoints = 180): ReplayCarState[] {
+    const col = this.carIdToCol.get(carId);
+    if (col === undefined || this.count === 0 || toS <= fromS || maxPoints < 2) return [];
+    const start = Math.max(this.startS, fromS);
+    const end = Math.min(this.endS, toS);
+    if (end <= start) return [];
+    const out: ReplayCarState[] = [];
+    const step = (end - start) / (maxPoints - 1);
+    for (let i = 0; i < maxPoints; i++) {
+      const s = this.carAt(start + i * step, carId);
+      if (s) out.push(s);
+    }
+    return out;
+  }
+
   /** Ordered list of car IDs recorded anywhere in the retained window ("player" first when present) */
   carIds(): readonly string[] {
     if (this.count === 0) return [];

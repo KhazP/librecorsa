@@ -1,16 +1,20 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import type { CameraMode } from "@/types/f1";
-import type { ReplayCarOption } from "@/lib/drive-session";
+import type { ReplayCarOption, ReplayCarTelemetrySnapshot } from "@/lib/drive-session";
 import type { ReplayLapMarker } from "@/lib/sim/replay-buffer";
+import type { ReplayCarState } from "@/lib/sim/lap-types";
+import type { ReplayBookmark, ReplayCompatibility, ReplayEvent, ReplaySegment } from "@/lib/sim/replay-types";
+import type { ReplaySaveResult } from "@/lib/sim/replay-store";
 import { ALL_CAMERA_MODES, CAMERA_MODES } from "@/lib/render/camera-modes";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icons/Icon";
 import { ArrowKeys, KeyCap } from "@/components/ui/prompts";
 import { useFocusNav } from "@/components/menu/useFocusNav";
+import { ReplayTelemetryPanel } from "./ReplayTelemetryPanel";
 import { HUD_GLASS, HUD_LBL } from "./hud-format";
 import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE } from "./styles/hud-style-parts";
 
@@ -52,6 +56,23 @@ export interface ReplayBarProps {
   exitKeyLabel?: string;
   /** Label of the key that toggles Free camera (e.g. "F7") */
   freeCameraKeyLabel?: string;
+  events?: readonly ReplayEvent[];
+  bookmarks?: readonly ReplayBookmark[];
+  segment?: ReplaySegment;
+  segmentLoop?: boolean;
+  compareCarId?: string | null;
+  focusTelemetry?: ReplayCarTelemetrySnapshot | null;
+  compareTelemetry?: ReplayCarTelemetrySnapshot | null;
+  compatibility?: ReplayCompatibility | null;
+  onAddBookmark?: () => void;
+  onRemoveBookmark?: (id: string) => void;
+  onSetSegment?: (edge: "in" | "out", timeS?: number | null) => void;
+  onToggleSegmentLoop?: () => void;
+  onClearSegment?: () => void;
+  onSelectCompareCar?: (carId: string | null) => void;
+  sampleSeries?: (carId: string, fromS: number, toS: number, maxPoints?: number) => ReplayCarState[];
+  onSaveReplay?: () => Promise<ReplaySaveResult>;
+  onExportLcr?: () => Promise<void>;
 }
 
 /**
@@ -81,7 +102,27 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   onFlashback,
   exitKeyLabel = "T",
   freeCameraKeyLabel = "F7",
+  events = [],
+  bookmarks = [],
+  segment = { inS: null, outS: null },
+  segmentLoop = false,
+  compareCarId = null,
+  focusTelemetry = null,
+  compareTelemetry = null,
+  compatibility = null,
+  onAddBookmark,
+  onRemoveBookmark,
+  onSetSegment,
+  onToggleSegmentLoop,
+  onClearSegment,
+  onSelectCompareCar,
+  sampleSeries,
+  onSaveReplay,
+  onExportLcr,
 }) => {
+  const [showEvents, setShowEvents] = useState(false);
+  const [showTelemetry, setShowTelemetry] = useState(false);
+  const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
   const shown = Math.min(endS, Math.max(startS, timeS));
   const durationS = Math.max(0, endS - startS);
   const elapsedS = Math.max(0, shown - startS);
@@ -144,15 +185,15 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
 
   // The key listeners read the latest clock and callbacks from here, so they are added once
   const canCycleCar = Boolean(onCycleCar && cars.length > 1);
-  const latest = useRef({ timeS, startS, endS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback });
-  latest.current = { timeS, startS, endS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback };
+  const latest = useRef({ timeS, startS, endS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback, onAddBookmark, onSetSegment });
+  latest.current = { timeS, startS, endS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback, onAddBookmark, onSetSegment };
 
   useEffect(() => {
     const clamp = (t: number) => Math.min(latest.current.endS, Math.max(latest.current.startS, t));
     let spaceHandled = false;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      const { timeS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback } = latest.current;
+      const { timeS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback, onAddBookmark, onSetSegment } = latest.current;
       const target = e.target as HTMLElement | null;
       const isRangeInput = target instanceof HTMLInputElement && target.type === "range";
       const inMenuPopup = Boolean(target?.closest('[role="listbox"], [role="menu"]'));
@@ -191,6 +232,15 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
       } else if (onFlashback && (e.code === "KeyF" || e.key === "f" || e.key === "F")) {
         e.preventDefault();
         onFlashback();
+      } else if (onAddBookmark && (e.code === "KeyB" || e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        onAddBookmark();
+      } else if (onSetSegment && e.code === "BracketLeft") {
+        e.preventDefault();
+        onSetSegment("in");
+      } else if (onSetSegment && e.code === "BracketRight") {
+        e.preventDefault();
+        onSetSegment("out");
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -278,6 +328,56 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               <span>{formatReplayClock(durationS)}</span>
             </div>
             <div className="relative flex items-center">
+              {durationS > 0 && segment.inS !== null && segment.outS !== null && segment.outS > segment.inS ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-lc-cyan/35"
+                  style={{
+                    left: `${Math.max(0, ((segment.inS - startS) / durationS) * 100).toFixed(2)}%`,
+                    width: `${Math.min(100, ((segment.outS - segment.inS) / durationS) * 100).toFixed(2)}%`,
+                  }}
+                />
+              ) : null}
+              {durationS > 0
+                ? events.slice(0, 60).map((ev) => {
+                    const pct = Math.min(100, Math.max(0, ((ev.timeS - startS) / durationS) * 100));
+                    const tone =
+                      ev.kind === "collision" || ev.kind === "dnf" || ev.kind === "penalty"
+                        ? "bg-lc-loss"
+                        : ev.kind === "fastest_lap" || ev.kind === "personal_best"
+                          ? "bg-lc-best"
+                          : ev.kind === "overtake"
+                            ? "bg-lc-volt"
+                            : ev.kind === "yellow" || ev.kind === "vsc"
+                              ? "bg-lc-caution"
+                              : "bg-lc-fog/60";
+                    return (
+                      <button
+                        key={ev.id}
+                        type="button"
+                        onClick={() => onSeek(ev.timeS)}
+                        title={`${tx(`studio.eventKinds.${ev.kind}`)} · ${formatReplayClock(ev.timeS - startS)}${ev.detail ? ` (${ev.detail})` : ""}`}
+                        style={{ left: `${pct.toFixed(2)}%` }}
+                        className={`absolute -top-0.5 z-10 h-2 w-1 -translate-x-1/2 cursor-pointer rounded-full ${tone}`}
+                      />
+                    );
+                  })
+                : null}
+              {durationS > 0
+                ? bookmarks.map((bm) => {
+                    const pct = Math.min(100, Math.max(0, ((bm.timeS - startS) / durationS) * 100));
+                    return (
+                      <button
+                        key={bm.id}
+                        type="button"
+                        onClick={() => onSeek(bm.timeS)}
+                        title={`${bm.label} · ${formatReplayClock(bm.timeS - startS)}`}
+                        style={{ left: `${pct.toFixed(2)}%` }}
+                        className="absolute -bottom-0.5 z-10 h-2.5 w-1.5 -translate-x-1/2 cursor-pointer rounded-full bg-lc-cyan"
+                      />
+                    );
+                  })
+                : null}
               <input
                 type="range"
                 aria-label={L.timeline}
@@ -389,7 +489,153 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             </Button>
           </div>
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              variant={showEvents ? "primary" : "secondary"}
+              size="sm"
+              aria-pressed={showEvents}
+              onClick={() => setShowEvents((v) => !v)}
+            >
+              {tx("studio.events")} ({events.length + bookmarks.length})
+            </Button>
+            <Button
+              variant={showTelemetry ? "primary" : "secondary"}
+              size="sm"
+              aria-pressed={showTelemetry}
+              onClick={() => setShowTelemetry((v) => !v)}
+            >
+              {tx("studio.telemetry")}
+            </Button>
+            {onAddBookmark ? (
+              <Button variant="secondary" size="sm" icon={<Icon name="favourite" size="xs" />} title={tx("studio.addBookmark")} onClick={onAddBookmark}>
+                {tx("studio.bookmark")}
+              </Button>
+            ) : null}
+            {onSetSegment ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => onSetSegment("in")}>
+                  {tx("studio.setIn")}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => onSetSegment("out")}>
+                  {tx("studio.setOut")}
+                </Button>
+              </>
+            ) : null}
+            {onToggleSegmentLoop && segment.inS !== null && segment.outS !== null && segment.outS > segment.inS ? (
+              <Button variant={segmentLoop ? "primary" : "secondary"} size="sm" aria-pressed={segmentLoop} onClick={onToggleSegmentLoop}>
+                {tx("studio.loopSegment")}
+              </Button>
+            ) : null}
+            {onClearSegment && (segment.inS !== null || segment.outS !== null) ? (
+              <Button variant="secondary" size="sm" onClick={onClearSegment}>
+                {tx("studio.clearSegment")}
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {compatibility && compatibility.warnings.length > 0 ? (
+              <span
+                title={compatibility.warnings.join(" ")}
+                className="lc-mono rounded-lc-nub border border-lc-caution/40 bg-lc-caution/10 px-2 py-1 text-[11px] text-lc-caution"
+              >
+                {tx("studio.compatibilityWarning")}
+              </span>
+            ) : null}
+            {onSaveReplay ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Icon name="add" size="xs" />}
+                onClick={async () => {
+                  const res = await onSaveReplay();
+                  setSaveBadge(res.ok ? "saved" : "error");
+                  window.setTimeout(() => setSaveBadge("idle"), 2500);
+                }}
+              >
+                {saveBadge === "saved" ? tx("studio.savedReplay") : saveBadge === "error" ? tx("studio.saveError") : tx("studio.saveReplay")}
+              </Button>
+            ) : null}
+            {onExportLcr ? (
+              <Button variant="secondary" size="sm" icon={<Icon name="download" size="xs" />} onClick={() => void onExportLcr()}>
+                {tx("studio.exportLcr")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </section>
+
+      {showEvents ? (
+        <aside
+          aria-label={tx("studio.events")}
+          className="lc-ui-zoom fixed bottom-[calc(env(safe-area-inset-bottom,0px)+188px)] left-4 z-40 max-h-[300px] w-[300px] overflow-y-auto rounded-lc-tile border border-white/10 bg-lc-void/88 p-3 shadow-lc-pop backdrop-blur-md"
+        >
+          <div className={`${HUD_LBL} mb-2`}>{tx("studio.events")}</div>
+          {events.length === 0 && bookmarks.length === 0 ? (
+            <p className="lc-hint">{tx("studio.noEvents")}</p>
+          ) : (
+            <div className="space-y-1">
+              {bookmarks.map((bm) => (
+                <div key={bm.id} className="flex items-center justify-between gap-2 rounded-lc-nub bg-lc-well px-2 py-1">
+                  <button
+                    type="button"
+                    onClick={() => onSeek(bm.timeS)}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 text-left text-[12px] text-lc-cyan hover:text-lc-chalk"
+                  >
+                    <span className="truncate">{bm.label}</span>
+                    <span className="lc-mono shrink-0 text-[11px]">{formatReplayClock(bm.timeS - startS)}</span>
+                  </button>
+                  {onRemoveBookmark ? (
+                    <button
+                      type="button"
+                      aria-label={tx("studio.removeBookmark")}
+                      onClick={() => onRemoveBookmark(bm.id)}
+                      className="cursor-pointer text-lc-slate hover:text-lc-loss"
+                    >
+                      <Icon name="delete" size="xs" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {events.map((ev) => (
+                <button
+                  key={ev.id}
+                  type="button"
+                  onClick={() => onSeek(ev.timeS)}
+                  className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lc-nub bg-lc-well px-2 py-1 text-left text-[12px] text-lc-fog hover:bg-lc-titanium hover:text-lc-chalk"
+                >
+                  <span className="truncate">
+                    {tx(`studio.eventKinds.${ev.kind}`)}
+                    {ev.lap !== undefined ? ` · L${ev.lap}` : ""}
+                    {ev.carId ? ` · ${ev.carId === "player" ? (cars.find((c) => c.id === "player")?.label ?? "YOU") : (cars.find((c) => c.id === ev.carId)?.label ?? ev.carId)}` : ""}
+                  </span>
+                  <span className="lc-mono shrink-0 text-[11px] text-lc-slate">{formatReplayClock(ev.timeS - startS)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+      ) : null}
+
+      {showTelemetry ? (
+        <aside
+          aria-label={tx("studio.telemetry")}
+          className="lc-ui-zoom fixed bottom-[calc(env(safe-area-inset-bottom,0px)+188px)] right-4 z-40"
+        >
+          <ReplayTelemetryPanel
+            timeS={shown}
+            cars={cars}
+            focusedCarId={focusedCarId}
+            compareCarId={compareCarId}
+            focusTelemetry={focusTelemetry}
+            compareTelemetry={compareTelemetry}
+            onSelectCompareCar={(id) => onSelectCompareCar?.(id)}
+            sampleSeries={sampleSeries}
+          />
+        </aside>
+      ) : null}
 
       <div
         aria-hidden

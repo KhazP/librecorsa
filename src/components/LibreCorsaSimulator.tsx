@@ -2435,6 +2435,37 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onExit: () => session?.exitReplay(),
                   onFlashback: replayUi.canFlashback ? () => { session?.flashbackReplay(); } : undefined,
                   exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",
+                  events: replayUi.events,
+                  bookmarks: replayUi.bookmarks,
+                  segment: replayUi.segment,
+                  segmentLoop: replayUi.segmentLoop,
+                  compareCarId: replayUi.compareCarId,
+                  focusTelemetry: replayUi.focusTelemetry,
+                  compareTelemetry: replayUi.compareTelemetry,
+                  compatibility: replayUi.compatibility,
+                  onAddBookmark: () => session?.replayAddBookmark(),
+                  onRemoveBookmark: (id: string) => session?.replayRemoveBookmark(id),
+                  onSetSegment: (edge: "in" | "out", t?: number | null) => session?.replaySetSegment(edge, t),
+                  onToggleSegmentLoop: () => session?.replayToggleSegmentLoop(),
+                  onClearSegment: () => session?.replayClearSegment(),
+                  onSelectCompareCar: (carId: string | null) => session?.replaySetCompareCar(carId),
+                  sampleSeries: (carId: string, fromS: number, toS: number, maxPoints?: number) =>
+                    session?.replaySampleSeries(carId, fromS, toS, maxPoints) ?? [],
+                  onSaveReplay: () =>
+                    session ? session.saveCurrentReplay() : Promise.resolve({ ok: false, error: "unavailable" as const }),
+                  onExportLcr: async () => {
+                    const bytes = await session?.exportCurrentReplayBytes();
+                    if (!bytes) return;
+                    const copy = new ArrayBuffer(bytes.byteLength);
+                    new Uint8Array(copy).set(bytes);
+                    const blob = new Blob([copy], { type: "application/octet-stream" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${(replayUi.loadedReplayName || trackId).replace(/[^a-z0-9-_]+/gi, "_")}.lcr`;
+                    a.click();
+                    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  },
                 }
               : null
           }
@@ -2478,6 +2509,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onOpenSettings={(category?: SettingsCategory) => openSettings("title", category)}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
+          replayLibrary={{
+            hasLiveReplay: replayAvailable,
+            onSaveCurrentReplay: () =>
+              session ? session.saveCurrentReplay() : Promise.resolve({ ok: false, error: "unavailable" as const }),
+            onLoadReplay: (payload) => {
+              if (session?.loadReplayRecording(payload)) {
+                setPhase("driving");
+              }
+            },
+          }}
           challengePanel={
             boardOn
               ? {

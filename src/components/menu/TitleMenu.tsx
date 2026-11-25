@@ -61,8 +61,9 @@ import { InstallAppButton } from "./InstallAppButton";
 import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
 import { TitleMusic } from "./TitleMusic";
+import { ReplayLibraryPanel, type ReplayLibraryPanelProps } from "./ReplayLibraryPanel";
 
-type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "replays" | "display" | "credits" | "request";
 
 /**
  * How far a panel reaches beside the rail, in CSS px (the big-screen zoom scales them): each as wide as its content
@@ -76,6 +77,7 @@ const PANEL_COLUMNS: Partial<Record<TitlePanel, string>> = {
   circuit: "lg:grid-cols-[240px_minmax(0,1480px)]",
   car: "lg:grid-cols-[240px_minmax(0,1480px)]",
   leaderboard: "lg:grid-cols-[240px_minmax(0,1200px)]",
+  replays: "lg:grid-cols-[240px_minmax(0,1160px)]",
   request: "lg:grid-cols-[240px_minmax(0,1080px)]",
   garage: "lg:grid-cols-[240px_minmax(0,1000px)]",
 };
@@ -113,6 +115,7 @@ export interface TitleMenuProps extends PauseMenuProps {
   onCloseSupportNote?: () => void;
   /** A maker's donate button was pressed in the note */
   onSupportThanked?: (maker: string) => void;
+  replayLibrary?: ReplayLibraryPanelProps;
 }
 
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
@@ -739,6 +742,17 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           },
         ]
       : []),
+    ...(props.replayLibrary
+      ? [
+          {
+            id: "replays",
+            label: t("replays"),
+            icon: "replay" as const,
+            panel: "replays" as const,
+            run: () => openPanel("replays"),
+          },
+        ]
+      : []),
     {
       id: "settings",
       label: t("settings"),
@@ -1044,6 +1058,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   ) : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? (
                     <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
+                  ) : null}
+                  {panel === "replays" && props.replayLibrary ? (
+                    <ReplayLibraryPanel {...props.replayLibrary} />
                   ) : null}
                   {panel === "credits" ? <Credits /> : null}
                   {panel === "request" ? (

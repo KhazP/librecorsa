@@ -85,6 +85,19 @@ import type { BadgeContext } from "@/lib/net/awards";
 import { isVehicleModelId } from "@/types/f1";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer, type ReplayLapMarker } from "@/lib/sim/replay-buffer";
+import { extractReplayEvents } from "@/lib/sim/replay-events";
+import { checkReplayCompatibility, encodeLcrReplay } from "@/lib/sim/replay-format";
+import { saveReplayRecording, updateSavedReplayBookmarks, type ReplaySaveResult } from "@/lib/sim/replay-store";
+import { PHYSICS_VERSION, lapPhysicsVersion } from "@/lib/sim/lap-types";
+import type {
+  ReplayBookmark,
+  ReplayCompatibility,
+  ReplayEvent,
+  ReplayMetadata,
+  ReplayParticipant,
+  ReplayRecordingPayload,
+  ReplaySegment,
+} from "@/lib/sim/replay-types";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
@@ -345,7 +358,29 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
   const car = new F1Physics2026(track);
   return {
     telemetry: { ...car.telemetry },
-    replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false, focusedCarId: "player", cars: [], lapMarkers: [] },
+    replay: {
+      active: false,
+      timeS: 0,
+      startS: 0,
+      endS: 0,
+      playing: true,
+      speed: 1,
+      canFlashback: false,
+      focusedCarId: "player",
+      cars: [],
+      lapMarkers: [],
+      events: [],
+      bookmarks: [],
+      segment: { inS: null, outS: null },
+      segmentLoop: false,
+      compareCarId: null,
+      loadedReplayId: null,
+      loadedReplayName: null,
+      external: false,
+      compatibility: null,
+      focusTelemetry: null,
+      compareTelemetry: null,
+    },
     steerLockDeg: undefined,
     carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
     virtualMirror: false,
@@ -422,6 +457,21 @@ export interface ReplayCarOption {
   isPlayer: boolean;
 }
 
+export interface ReplayCarTelemetrySnapshot {
+  id: string;
+  speedKmh: number;
+  throttle: number;
+  brake: number;
+  steer: number;
+  gear: number;
+  rpm: number;
+  lap?: number;
+  s?: number;
+  distM?: number;
+  position?: number;
+  distanceToCompareM?: number | null;
+}
+
 /** The instant replay: the recording, and where it is shown from while open */
 export interface ReplayState {
   buffer: ReplayBuffer;
@@ -434,6 +484,17 @@ export interface ReplayState {
   wheelRotRad: number;
   cars: ReplayCarOption[];
   lapMarkers: ReplayLapMarker[];
+  events: ReplayEvent[];
+  bookmarks: ReplayBookmark[];
+  segment: ReplaySegment;
+  segmentLoop: boolean;
+  compareCarId: string | null;
+  loadedReplayId: string | null;
+  loadedReplayName: string | null;
+  external: boolean;
+  compatibility: ReplayCompatibility | null;
+  focusTelemetry: ReplayCarTelemetrySnapshot | null;
+  compareTelemetry: ReplayCarTelemetrySnapshot | null;
 }
 
 /** The replay bar's view of the replay */
@@ -452,6 +513,17 @@ export interface ReplayUi {
   cars: readonly ReplayCarOption[];
   /** Lap transition timestamps for timeline markers */
   lapMarkers: readonly ReplayLapMarker[];
+  events: readonly ReplayEvent[];
+  bookmarks: readonly ReplayBookmark[];
+  segment: ReplaySegment;
+  segmentLoop: boolean;
+  compareCarId: string | null;
+  loadedReplayId: string | null;
+  loadedReplayName: string | null;
+  external: boolean;
+  compatibility: ReplayCompatibility | null;
+  focusTelemetry: ReplayCarTelemetrySnapshot | null;
+  compareTelemetry: ReplayCarTelemetrySnapshot | null;
 }
 
 /**
@@ -586,6 +658,16 @@ export class DriveSession {
   readonly replayStepFrame: (dir: 1 | -1) => void;
   readonly replayFocusCar: (carId: string) => void;
   readonly replayCycleCar: (dir: 1 | -1) => void;
+  readonly replayAddBookmark: (label?: string) => void;
+  readonly replayRemoveBookmark: (id: string) => void;
+  readonly replaySetSegment: (edge: "in" | "out", timeS?: number | null) => void;
+  readonly replayToggleSegmentLoop: () => void;
+  readonly replayClearSegment: () => void;
+  readonly replaySetCompareCar: (carId: string | null) => void;
+  readonly replaySampleSeries: (carId: string, fromS: number, toS: number, maxPoints?: number) => ReplayCarState[];
+  readonly saveCurrentReplay: (name?: string) => Promise<ReplaySaveResult>;
+  readonly exportCurrentReplayBytes: (name?: string) => Promise<Uint8Array | null>;
+  readonly loadReplayRecording: (payload: ReplayRecordingPayload) => boolean;
   /** Opens the replay (optionally from the start of the race, playing immediately) */
   readonly openReplay: (opts?: { fromStart?: boolean; play?: boolean }) => boolean;
   /** Swaps the player's car in the running scene (the run starts over with it) */
@@ -862,7 +944,23 @@ export class DriveSession {
       wheelRotRad: 0,
       cars: [],
       lapMarkers: [],
+      events: [],
+      bookmarks: [],
+      segment: { inS: null, outS: null },
+      segmentLoop: false,
+      compareCarId: null,
+      loadedReplayId: null,
+      loadedReplayName: null,
+      external: false,
+      compatibility: null,
+      focusTelemetry: null,
+      compareTelemetry: null,
     };
+    const recordedControlEvents: ReplayEvent[] = [];
+    let replayCtrlYellow = false;
+    let replayCtrlVsc = false;
+    let replayCtrlDnf = false;
+    let replayCtrlPenaltyS = 0;
     /** The time trial being driven, and the tyre the player had on before it */
     let timeTrial: TimeTrialRules | null = null;
     let ownCompound: TireCompound | null = null;
@@ -1131,7 +1229,29 @@ export class DriveSession {
     this.telemetryStructKey = telemetryStructKeyOf(initialTelemetry);
     this.snapshot = {
       telemetry: initialTelemetry,
-      replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false, focusedCarId: "player", cars: [], lapMarkers: [] },
+      replay: {
+      active: false,
+      timeS: 0,
+      startS: 0,
+      endS: 0,
+      playing: true,
+      speed: 1,
+      canFlashback: false,
+      focusedCarId: "player",
+      cars: [],
+      lapMarkers: [],
+      events: [],
+      bookmarks: [],
+      segment: { inS: null, outS: null },
+      segmentLoop: false,
+      compareCarId: null,
+      loadedReplayId: null,
+      loadedReplayName: null,
+      external: false,
+      compatibility: null,
+      focusTelemetry: null,
+      compareTelemetry: null,
+    },
       steerLockDeg: undefined,
       carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
       virtualMirror: false,
@@ -2433,10 +2553,21 @@ export class DriveSession {
         endS: rp.buffer.endS,
         playing: rp.playing,
         speed: rp.speed,
-        canFlashback: rp.active && canFlashbackNow(),
+        canFlashback: rp.active && !rp.external && canFlashbackNow(),
         focusedCarId: rp.focusedCarId,
         cars: rp.cars,
         lapMarkers: rp.lapMarkers,
+        events: rp.events,
+        bookmarks: rp.bookmarks,
+        segment: rp.segment,
+        segmentLoop: rp.segmentLoop,
+        compareCarId: rp.compareCarId,
+        loadedReplayId: rp.loadedReplayId,
+        loadedReplayName: rp.loadedReplayName,
+        external: rp.external,
+        compatibility: rp.compatibility,
+        focusTelemetry: rp.focusTelemetry,
+        compareTelemetry: rp.compareTelemetry,
       });
     };
     const canFlashbackNow = (): boolean => {
@@ -2453,12 +2584,32 @@ export class DriveSession {
     const replayLastFocusPos = new THREE.Vector3();
     const replayLastFocusQuat = new THREE.Quaternion();
     let replayLastFocusId: string | null = null;
+    let loadedLiveBufferBackup: {
+      buffer: ReplayBuffer;
+      names: Map<string, { code: string; color: string; vehicle?: VehicleModelId }>;
+      events: ReplayEvent[];
+    } | null = null;
     const exitReplay = () => {
       const rp = replay;
       if (!rp.active) return;
       rp.active = false;
       rp.focusedCarId = "player";
+      rp.compareCarId = null;
+      rp.focusTelemetry = null;
+      rp.compareTelemetry = null;
       replayLastFocusId = null;
+      if (loadedLiveBufferBackup) {
+        rp.buffer = loadedLiveBufferBackup.buffer;
+        replayNames.clear();
+        for (const [k, v] of loadedLiveBufferBackup.names) replayNames.set(k, v);
+        recordedControlEvents.length = 0;
+        recordedControlEvents.push(...loadedLiveBufferBackup.events);
+        loadedLiveBufferBackup = null;
+      }
+      rp.external = false;
+      rp.loadedReplayId = null;
+      rp.loadedReplayName = null;
+      rp.compatibility = null;
       clearCameraOverride();
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
@@ -2466,15 +2617,112 @@ export class DriveSession {
       cameraRig.reset();
       publishReplayUi();
     };
+    const buildTrackPreview = (): Array<[number, number]> | undefined => {
+      const pts = track.samples;
+      if (pts.length < 2) return undefined;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      const step = Math.max(1, Math.floor(pts.length / 64));
+      for (let i = 0; i < pts.length; i += step) {
+        const p = pts[i].position;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+      const span = Math.max(1, maxX - minX, maxZ - minZ);
+      const out: Array<[number, number]> = [];
+      for (let i = 0; i < pts.length; i += step) {
+        const p = pts[i].position;
+        out.push([
+          Number(((p.x - minX) / span).toFixed(3)),
+          Number(((p.z - minZ) / span).toFixed(3)),
+        ]);
+      }
+      return out;
+    };
+    const buildCurrentParticipants = (): ReplayParticipant[] => {
+      const results = physics.telemetry.race?.results;
+      const playerCode = (settings.profile.code || "YOU").slice(0, 3).toUpperCase();
+      const playerColor = settings.profile.color || "#CCFF00";
+      return replay.buffer.carIds().map((id) => {
+        if (id === "player") {
+          const res = results?.find((r) => r.isPlayer);
+          return {
+            id,
+            label: playerCode,
+            name: settings.profile.name || playerCode,
+            color: playerColor,
+            isPlayer: true,
+            vehicle: vehicleNow,
+            ...(res ? { position: res.position, dnf: res.dnf, bestLapMs: res.bestLapMs, penaltyS: res.penaltyS } : {}),
+          };
+        }
+        const info = replayNames.get(id);
+        const res = results?.find((r) => !r.isPlayer && r.driverCode === info?.code);
+        return {
+          id,
+          label: info?.code || id.slice(0, 3).toUpperCase(),
+          color: info?.color ?? GHOST_CAR_COLOR,
+          isPlayer: false,
+          ...(info?.vehicle ? { vehicle: info.vehicle } : {}),
+          ...(res ? { position: res.position, dnf: res.dnf, bestLapMs: res.bestLapMs, penaltyS: res.penaltyS } : {}),
+        };
+      });
+    };
+    const buildCurrentReplayPayload = (customName?: string): ReplayRecordingPayload | null => {
+      if (replay.buffer.frameCount < 2) return null;
+      const frames = replay.buffer.exportSerialized();
+      const participants = buildCurrentParticipants();
+      const events = replay.external
+        ? replay.events
+        : extractReplayEvents(replay.buffer, participants, recordedControlEvents);
+      const trackMeta = getActiveTrackMetadata();
+      const carDef = carForVehicle(vehicleNow);
+      const weatherState = getTrackEnv().weather;
+      const now = Date.now();
+      const defaultName = `${trackMeta.name} · ${carDef.title}`;
+      const metadata: ReplayMetadata = {
+        id: replay.loadedReplayId ?? `rec-${now.toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        name: (customName ?? replay.loadedReplayName ?? defaultName).trim().slice(0, 120) || defaultName,
+        recordedAt: now,
+        trackId: host.trackId,
+        trackName: trackMeta.name,
+        vehicle: vehicleNow,
+        vehicleClass: carDef.id,
+        raceKind: raceNow().kind,
+        durationS: replay.buffer.durationS,
+        frameCount: frames.times.length,
+        hz: frames.hz,
+        participantCount: frames.carIds.length,
+        participants,
+        weather: {
+          condition: weatherState.conditions.weather,
+          trackWetness: weatherState.wetness,
+          rainIntensity: weatherState.rainIntensity,
+          ambientTempC: weatherState.ambientC,
+          trackTempC: weatherState.trackTempC,
+        },
+        physicsVersion: PHYSICS_VERSION,
+        lapPhysicsVersion: lapPhysicsVersion(vehicleNow, host.trackId),
+        trackPreview: buildTrackPreview(),
+      };
+      return {
+        metadata,
+        frames,
+        events,
+        bookmarks: [...replay.bookmarks],
+      };
+    };
     const openReplay = (opts: { fromStart?: boolean; play?: boolean } = {}): boolean => {
       if (disposed) return false;
       const rp = replay;
       // Not in a multiplayer race or active online room (where replayed poses would broadcast to peers)
       if (
-        raceNow().kind === "mp" ||
-        isInOnlineRoom(multiplayerSync.status, peersOnTrack) ||
-        rp.buffer.durationS < 1 ||
-        appPhaseNow !== "driving"
+        !rp.external &&
+        (raceNow().kind === "mp" ||
+          isInOnlineRoom(multiplayerSync.status, peersOnTrack) ||
+          rp.buffer.durationS < 1 ||
+          appPhaseNow !== "driving")
       ) {
         return false;
       }
@@ -2490,10 +2738,17 @@ export class DriveSession {
         : Math.max(rp.buffer.startS, rp.buffer.endS - REPLAY_OPEN_BACK_S);
       rp.prevTimeS = rp.timeS;
       rp.wheelRotRad = physics.wheelRotationRad;
-      rp.focusedCarId = "player";
+      rp.focusedCarId = rp.buffer.carIds()[0] ?? "player";
       replayLastFocusId = null;
       rp.cars = buildReplayCarOptions();
       rp.lapMarkers = rp.buffer.lapMarkers();
+      if (!rp.external) {
+        const participants = buildCurrentParticipants();
+        rp.events = extractReplayEvents(rp.buffer, participants, recordedControlEvents);
+        rp.compatibility = null;
+      }
+      rp.segment = { inS: null, outS: null };
+      rp.segmentLoop = false;
       // Neutralise live G-forces & boost flag so chase cameras don't stay locked sideways from the frame replay opened
       replayPlayerTelemetry = {
         ...physics.telemetry,
@@ -2591,6 +2846,21 @@ export class DriveSession {
       clearCameraOverride();
       replay.buffer.clear();
       replayNames.clear();
+      recordedControlEvents.length = 0;
+      replay.bookmarks = [];
+      replay.events = [];
+      replay.segment = { inS: null, outS: null };
+      replay.segmentLoop = false;
+      replay.compareCarId = null;
+      replay.external = false;
+      replay.loadedReplayId = null;
+      replay.loadedReplayName = null;
+      replay.compatibility = null;
+      loadedLiveBufferBackup = null;
+      replayCtrlYellow = false;
+      replayCtrlVsc = false;
+      replayCtrlDnf = false;
+      replayCtrlPenaltyS = 0;
       if (this.snapshot.replayAvailable) this.publish({ replayAvailable: false });
       onRunReset(reason);
       jumpWatch.reset();
@@ -2664,6 +2934,114 @@ export class DriveSession {
       const idx = Math.max(0, replay.cars.findIndex((c) => c.id === replay.focusedCarId));
       const next = replay.cars[(idx + dir + replay.cars.length) % replay.cars.length];
       if (next) this.replayFocusCar(next.id);
+    };
+    this.replayAddBookmark = (label?: string) => {
+      if (!replay.active) return;
+      const t = replay.timeS;
+      const bm: ReplayBookmark = {
+        id: `bm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+        timeS: t,
+        label: (label?.trim() || `Bookmark ${replay.bookmarks.length + 1}`).slice(0, 80),
+        createdAt: Date.now(),
+      };
+      replay.bookmarks = [...replay.bookmarks, bm].sort((a, b) => a.timeS - b.timeS);
+      if (replay.loadedReplayId) {
+        void updateSavedReplayBookmarks(replay.loadedReplayId, replay.bookmarks);
+      }
+      publishReplayUi();
+    };
+    this.replayRemoveBookmark = (id: string) => {
+      if (!replay.active) return;
+      replay.bookmarks = replay.bookmarks.filter((b) => b.id !== id);
+      if (replay.loadedReplayId) {
+        void updateSavedReplayBookmarks(replay.loadedReplayId, replay.bookmarks);
+      }
+      publishReplayUi();
+    };
+    this.replaySetSegment = (edge, timeS) => {
+      if (!replay.active) return;
+      const val = timeS === null ? null : THREE.MathUtils.clamp(timeS ?? replay.timeS, replay.buffer.startS, replay.buffer.endS);
+      const next: ReplaySegment = {
+        inS: edge === "in" ? val : replay.segment.inS,
+        outS: edge === "out" ? val : replay.segment.outS,
+      };
+      if (next.inS !== null && next.outS !== null && next.inS > next.outS) {
+        if (edge === "in") next.outS = next.inS;
+        else next.inS = next.outS;
+      }
+      replay.segment = next;
+      if (next.inS !== null && next.outS !== null && next.outS > next.inS) {
+        replay.segmentLoop = true;
+      }
+      publishReplayUi();
+    };
+    this.replayToggleSegmentLoop = () => {
+      if (!replay.active) return;
+      replay.segmentLoop = !replay.segmentLoop;
+      publishReplayUi();
+    };
+    this.replayClearSegment = () => {
+      if (!replay.active) return;
+      replay.segment = { inS: null, outS: null };
+      replay.segmentLoop = false;
+      publishReplayUi();
+    };
+    this.replaySetCompareCar = (carId) => {
+      if (!replay.active) return;
+      replay.compareCarId = carId && replay.cars.some((c) => c.id === carId) && carId !== replay.focusedCarId ? carId : null;
+      publishReplayUi();
+    };
+    this.replaySampleSeries = (carId, fromS, toS, maxPoints = 180) => {
+      return replay.buffer.sampleCarSeries(carId, fromS, toS, maxPoints);
+    };
+    this.saveCurrentReplay = async (name) => {
+      const payload = buildCurrentReplayPayload(name);
+      if (!payload) return { ok: false, error: "corrupt" };
+      const res = await saveReplayRecording(payload);
+      if (res.ok && res.summary) {
+        replay.loadedReplayId = res.summary.id;
+        replay.loadedReplayName = res.summary.name;
+        publishReplayUi();
+      }
+      return res;
+    };
+    this.exportCurrentReplayBytes = async (name) => {
+      const payload = buildCurrentReplayPayload(name);
+      if (!payload) return null;
+      return encodeLcrReplay(payload);
+    };
+    this.loadReplayRecording = (payload) => {
+      if (disposed || payload.frames.times.length < 2) return false;
+      if (!loadedLiveBufferBackup && !replay.external) {
+        loadedLiveBufferBackup = {
+          buffer: replay.buffer,
+          names: new Map(replayNames),
+          events: [...recordedControlEvents],
+        };
+      }
+      replay.buffer = ReplayBuffer.fromSerialized(payload.frames);
+      replayNames.clear();
+      for (const p of payload.metadata.participants) {
+        if (p.id !== "player") {
+          replayNames.set(p.id, {
+            code: p.label,
+            color: p.color,
+            vehicle: p.vehicle as VehicleModelId | undefined,
+          });
+        }
+      }
+      replay.external = true;
+      replay.loadedReplayId = payload.metadata.id;
+      replay.loadedReplayName = payload.metadata.name;
+      replay.events = payload.events.length > 0
+        ? payload.events
+        : extractReplayEvents(replay.buffer, payload.metadata.participants);
+      replay.bookmarks = [...payload.bookmarks];
+      replay.compatibility = checkReplayCompatibility(payload.metadata);
+      replay.compareCarId = null;
+      appPhaseNow = "driving";
+      this.publish({ paused: false });
+      return openReplay({ fromStart: true, play: false });
     };
 
     // Horizon-Stabilized Sim Camera State
@@ -3908,15 +4286,51 @@ export class DriveSession {
             });
           }
           rp.buffer.push(replayClockS, cars);
+          const raceNowSnap = physics.telemetry.race;
+          const playerResSnap = raceNowSnap?.results?.find((r) => r.isPlayer);
+          const yellowEvNow = Boolean(raceNowSnap?.yellow || raceNowSnap?.doubleYellow);
+          const vscEvNow = Boolean(raceNowSnap?.vsc);
+          const dnfEvNow = Boolean(raceNowSnap?.damage?.terminal || playerResSnap?.dnf);
+          const penEvNow = trackLimits.penaltyTotalS + (playerResSnap?.penaltyS ?? 0);
+          if (yellowEvNow && !replayCtrlYellow) {
+            recordedControlEvents.push({ id: `yellow-${recordedControlEvents.length}`, kind: "yellow", timeS: replayClockS });
+          }
+          if (vscEvNow && !replayCtrlVsc) {
+            recordedControlEvents.push({ id: `vsc-${recordedControlEvents.length}`, kind: "vsc", timeS: replayClockS });
+          }
+          if (dnfEvNow && !replayCtrlDnf) {
+            recordedControlEvents.push({ id: `dnf-player-${recordedControlEvents.length}`, kind: "dnf", timeS: replayClockS, carId: "player" });
+          }
+          if (penEvNow > replayCtrlPenaltyS + 0.01) {
+            recordedControlEvents.push({
+              id: `pen-player-${recordedControlEvents.length}`,
+              kind: "penalty",
+              timeS: replayClockS,
+              carId: "player",
+              detail: `+${Math.round(penEvNow - replayCtrlPenaltyS)}s`,
+            });
+          }
+          replayCtrlYellow = yellowEvNow;
+          replayCtrlVsc = vscEvNow;
+          replayCtrlDnf = dnfEvNow;
+          replayCtrlPenaltyS = penEvNow;
           if (!this.snapshot.replayAvailable && rp.buffer.durationS >= 1) {
             this.publish({ replayAvailable: true });
           }
         }
       } else if (replaying) {
         if (rp.playing && !frozen) {
-          rp.timeS = THREE.MathUtils.clamp(rp.timeS + dtSeconds * rp.speed, rp.buffer.startS, rp.buffer.endS);
-          if ((rp.speed > 0 && rp.timeS >= rp.buffer.endS) || (rp.speed < 0 && rp.timeS <= rp.buffer.startS)) {
-            rp.playing = false;
+          const segIn = rp.segmentLoop && rp.segment.inS !== null && rp.segment.outS !== null && rp.segment.outS > rp.segment.inS ? rp.segment.inS : rp.buffer.startS;
+          const segOut = rp.segmentLoop && rp.segment.inS !== null && rp.segment.outS !== null && rp.segment.outS > rp.segment.inS ? rp.segment.outS : rp.buffer.endS;
+          rp.timeS = rp.timeS + dtSeconds * rp.speed;
+          if (rp.segmentLoop && segOut > segIn) {
+            if (rp.speed > 0 && rp.timeS >= segOut) rp.timeS = segIn;
+            else if (rp.speed < 0 && rp.timeS <= segIn) rp.timeS = segOut;
+          } else {
+            rp.timeS = THREE.MathUtils.clamp(rp.timeS, rp.buffer.startS, rp.buffer.endS);
+            if ((rp.speed > 0 && rp.timeS >= rp.buffer.endS) || (rp.speed < 0 && rp.timeS <= rp.buffer.startS)) {
+              rp.playing = false;
+            }
           }
         }
         const replayDeltaT = rp.timeS - rp.prevTimeS;
@@ -3924,10 +4338,12 @@ export class DriveSession {
         const wheelDir = rp.playing && !frozen ? Math.sign(rp.speed) * Math.min(Math.abs(rp.speed), 4) : 0;
         const frame = rp.buffer.frameAt(rp.timeS);
         replayFocusCarFrame = null;
+        let replayCompareCarFrame: ReplayCarState | null = null;
         if (frame) {
           const peers: InterpolatedPeerState[] = [];
           for (const car of frame.cars) {
             if (car.id === rp.focusedCarId) replayFocusCarFrame = car;
+            if (rp.compareCarId && car.id === rp.compareCarId) replayCompareCarFrame = car;
             if (car.id === "player") {
               // Only the drawn pose: the car's physics stays where it is
               physics.worldPosition.set(car.x, car.y, car.z);
@@ -3949,6 +4365,35 @@ export class DriveSession {
             }
           }
           renderPeers = peers;
+
+          const toSnapshot = (c: ReplayCarState | null, other: ReplayCarState | null): ReplayCarTelemetrySnapshot | null => {
+            if (!c) return null;
+            let pos = 1;
+            if (c.distM !== undefined && Number.isFinite(c.distM)) {
+              for (const o of frame.cars) {
+                if (o.id !== c.id && o.distM !== undefined && o.distM > c.distM) pos++;
+              }
+            } else {
+              pos = frame.cars.findIndex((o) => o.id === c.id) + 1;
+            }
+            const distM = other ? Math.hypot(c.x - other.x, c.y - other.y, c.z - other.z) : null;
+            return {
+              id: c.id,
+              speedKmh: c.speedKmh,
+              throttle: c.throttle,
+              brake: c.brake,
+              steer: c.steer,
+              gear: c.gear,
+              rpm: c.rpm,
+              lap: c.lap,
+              s: c.s,
+              distM: c.distM,
+              position: pos,
+              distanceToCompareM: distM,
+            };
+          };
+          rp.focusTelemetry = toSnapshot(replayFocusCarFrame, replayCompareCarFrame);
+          rp.compareTelemetry = toSnapshot(replayCompareCarFrame, replayFocusCarFrame);
         }
       }
 

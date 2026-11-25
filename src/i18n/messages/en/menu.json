@@ -19,6 +19,8 @@
     "garageTyres": "{compound} tyres",
     "lapTimes": "Lap times",
     "lapTimesBest": "Best {time}",
+    "replays": "Replay studio",
+    "replaysDetail": "{count, plural, one {# saved} other {# saved}}",
     "settings": "Settings",
     "credits": "Credits",
     "feedback": "Feedback",
@@ -648,5 +650,32 @@
   },
   "pad": {
     "unbound": "None"
+  },
+  "replays": {
+    "title": "Replay studio",
+    "subtitle": "Saved recordings on this device and portable .lcr files",
+    "searchPlaceholder": "Search replays by name, circuit or car",
+    "filterAll": "All sessions",
+    "filterPractice": "Practice",
+    "filterAi": "AI race",
+    "filterMp": "Multiplayer",
+    "sortDate": "Newest",
+    "sortTrack": "Circuit",
+    "sortDuration": "Duration",
+    "importLcr": "Import .lcr",
+    "saveCurrent": "Save current replay",
+    "openStudio": "Open in studio",
+    "rename": "Rename",
+    "saveName": "Save",
+    "cancel": "Cancel",
+    "exportLcr": "Export .lcr",
+    "delete": "Delete",
+    "empty": "No saved replays yet. Finish a session or import a .lcr file.",
+    "importError": "Could not import replay file. Check format and version.",
+    "quotaError": "Browser storage is full. Delete old replays or export to .lcr.",
+    "participants": "{count} cars",
+    "physicsMismatch": "Physics v{version}",
+    "trackMismatch": "Circuit not installed",
+    "sizeKb": "{kb} KB"
   }
 }
