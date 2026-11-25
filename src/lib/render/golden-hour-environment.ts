@@ -551,16 +551,21 @@ class SkyBaker {
     const { autoClear, autoClearColor, autoClearDepth, autoClearStencil } = r;
     r.autoClear = r.autoClearColor = r.autoClearDepth = r.autoClearStencil = true;
     this.scene.background = r.getClearColor(this.clearColor);
+    // In a headset every render() draws with the headset's eyes unless XR is off: the cube camera turns it off for its
+    // faces, the prefilter's own draws need it off too
+    const xrEnabled = r.xr.enabled;
     try {
       this.cubeCamera.update(r, this.scene);
+      r.xr.enabled = false;
+      this.target = this.pmrem!.fromCubemap(this.cubeTarget.texture, this.target);
     } finally {
+      r.xr.enabled = xrEnabled;
       r.autoClear = autoClear;
       r.autoClearColor = autoClearColor;
       r.autoClearDepth = autoClearDepth;
       r.autoClearStencil = autoClearStencil;
       this.scene.background = null;
     }
-    this.target = this.pmrem!.fromCubemap(this.cubeTarget.texture, this.target);
     return this.target.texture;
   }
 
