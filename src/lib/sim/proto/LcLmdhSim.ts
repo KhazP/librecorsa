@@ -84,9 +84,11 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   speedProfile: LC_LMDH_PROFILE_CAR,
   // The closed-wheel line
   racingLine: 'gt3',
-  // ≈ 0.033 kg/s at 8000 rpm flat out [est]: 540 kW at the crank at 38 % efficiency. The flow follows the pedal and the
-  // revs, not the torque: the fuel the hybrid's deployment saves on the real car is not counted
-  fuelLPerS1000Rpm: 0.0055,
+  // The fuel the engine's work takes [963]: 37 % brake thermal efficiency on a 43.5 MJ/kg renewable fuel, ≈ 0.032 kg/s
+  // for the 510 kW at the crank flat out, and 0.7 g/s idling: ≈ 2.5 L a lap of Watkins Glen on the autopilot, where the
+  // class runs 30 to 33 laps on ≈ 90 L. The motor's deployment saves what the engine gives way to it under the shaft
+  // limit, ≈ 7 % a lap there at 40 kW, as the class's power rules have it
+  fuelFromEngineWork: { brakeThermalEfficiency: 0.37, lowerHeatingValueMJPerKg: 43.5, idleKgS: 0.0007 },
   // Levels index the electronics tables from the most intrusive (12). The class's dry baseline is 10 / 7 / 10 (slip,
   // cut, slip angle); ABS on TC + ABS and Full
   assistDials: {

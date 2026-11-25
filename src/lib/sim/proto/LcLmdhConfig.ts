@@ -147,12 +147,13 @@ const ENGINE = {
   ] as LutPoints,
   // Drive-by-wire actuator and intake filling [est]; the turbos' lag is its own (below)
   torqueResponseS: { rise: 0.03, fall: 0.02 },
-  // Two turbos on a 4.6 L V8 [est]: 1 bar of boost made from 3500 rpm, spooling in ≈ 0.25 s at 5000 rpm and running
-  // down in 0.5 s off the pedal. The hybrid motor fills what the lag costs while it may deploy
-  turbo: { maxBoost: 1, referenceRpm: 3500, gamma: 1.5, spoolUpS: 0.25, spoolRefRpm: 5000, spoolDownS: 0.5, displayMaxBoostBar: 1 },
+  // Two turbos on a 4.6 L V8 [963]: 1.25 bar of boost made from 2800 rpm on a fixed wastegate, spooling in ≈ 0.3 s at
+  // 5000 rpm, and the rotors holding their speed through a lift (1.4 s to run down), so a short lift costs little boost
+  // and a long one most of it. The hybrid motor fills what the lag costs while it may deploy
+  turbo: { maxBoost: 1.25, referenceRpm: 2800, gamma: 1.2, spoolUpS: 0.3, spoolRefRpm: 5000, spoolDownS: 1.4, displayMaxBoostBar: 1.25 },
   idleRpm: 2000,
-  // Crank, flywheel, clutch and the motor's rotor through its gear [est]
-  inertia: 0.165,
+  // Crank, flywheel and clutch [963], and the motor's rotor through its gear [est]
+  inertia: 0.13,
   // 25 Hz limiter: the cut lasts one cycle [est]
   limiterCutS: 0.04,
 };

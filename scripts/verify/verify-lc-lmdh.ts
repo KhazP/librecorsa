@@ -29,6 +29,7 @@ import { portedCarRoot } from '../../src/lib/ported-car-model';
 import { buildDoubleWishboneHardpoints, solveCornerKinematics3D } from '../../src/lib/sim/suspension-kinematics';
 import { Lut } from '../../src/lib/sim/lut';
 import { wetnessFromWater } from '../../src/lib/sim/wet-tyres';
+import { SIM_REALISM_FLAGS } from '../../src/lib/sim/sim-realism';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { downshiftTakenAt, measureDownshift, measureUpshift } from '../lib/upshift-test';
@@ -728,6 +729,28 @@ console.log('\n== Fuel and steering');
   const burnt = f0 - sim.telemetry.fuelKg;
   // A sprint's fixed 28 kg of ballast: none of it burnt
   check('30 s flat out from rest: the 28 kg of sprint fuel stays aboard', f0 === 28 && burnt === 0, `${fmt(burnt, 3)} kg of ${f0} kg`);
+  // Where the fuel is used, it pays for the engine's work [963]: flat out from 200 km/h the engine gives way to the
+  // motor's deployment at the shaft limit, so deploying burns less for the same run
+  const burn = (deployKw: number) => {
+    const car = createLcLmdhSim(pad);
+    car.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true, coldGarageStart: false });
+    car.setLiveTuner({ motorDeployKw: deployKw });
+    car.assistPreset = 'semi_pro';
+    car.teleportToDistance(1000, 200 / 3.6);
+    const start = car.telemetry.fuelKg;
+    let work = 0;
+    for (let t = 0; t < 12; t += DT) {
+      car.step(DT, { throttle: 1 });
+      work += car.vehicle.iceMechanicalPowerW * DT;
+    }
+    return { kg: start - car.telemetry.fuelKg, work, kmh: car.telemetry.speedKmh };
+  };
+  const on = burn(40);
+  const off = burn(0);
+  const w = LC_LMDH_SIM_PROFILE.fuelFromEngineWork!;
+  const expected = off.work / (w.brakeThermalEfficiency * w.lowerHeatingValueMJPerKg * 1e6);
+  check('With fuel use on, the burn pays for the engine\'s work, and deploying 40 kW saves 3–12 %', Math.abs(off.kg / expected - 1) < 0.05 && on.kg < off.kg * 0.97 && on.kg > off.kg * 0.88 && Math.abs(on.kmh - off.kmh) < 3,
+    `${fmt(off.kg, 3)} kg without (${fmt(expected, 3)} for its work), ${fmt(on.kg, 3)} kg deploying, ${fmt(on.kmh, 0)} / ${fmt(off.kmh, 0)} km/h`);
   // 263.5° of rim lock at the hands' 900°/s
   const steer = createLcLmdhSim(pad);
   steer.teleportToDistance(1000, 50 / 3.6);
