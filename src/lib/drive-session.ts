@@ -4412,12 +4412,21 @@ export class DriveSession {
         );
       }
       if (driving) {
-        spotter.update(nowMs, physics.worldPosition, physics.worldQuaternion, physics.vxMs, drawnPeers, {
-          enabled: !settingsNow.audio.muted && settingsNow.audio.spotter,
-          volume: settingsNow.audio.volume * settingsNow.audio.spotterVolume,
-          voice: settingsNow.audio.spotterVoice,
-          radioFilter: settingsNow.audio.spotterRadio,
-        });
+        // The spotter speaks through the car audio's output: the master volume, mute and pause apply to it
+        spotter.update(
+          nowMs,
+          physics.worldPosition,
+          physics.worldQuaternion,
+          physics.vxMs,
+          drawnPeers,
+          {
+            enabled: settingsNow.audio.spotter,
+            volume: settingsNow.audio.spotterVolume,
+            voice: settingsNow.audio.spotterVoice,
+            radioFilter: settingsNow.audio.spotterRadio,
+          },
+          { context: audio?.context ?? null, output: audio?.output ?? null },
+        );
         audio?.update(physics.telemetry, dtSeconds);
         // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
         const tc = physics.telemetry;
