@@ -1,12 +1,37 @@
 [
   {
-    "date": "2026-11-24",
-    "title": "Sign in from Lap times and from your first lap on a board",
+    "date": "2026-11-25",
+    "title": "LC25 Prototype, Porsche 963 LMDh rework, new HUD lineup, voice spotter and lap analysis",
     "items": [
-      "Lap times now has a Sign in button next to Export key, and the first lap you post to an online board while signed out says once that signing in keeps your best laps and driver names on every device, with a button that takes you to Settings > Profile and data > Account."
+      "Added the LC25 Prototype, a 2025-spec F1 car (body by shunqi, CC BY 4.0) with MGU-H energy flow rules, rear DRS, a ride-height ground-effect map, and physics calibrated against OpenF1, FIA and Pirelli data. On librecorsa.org it runs kyojinvan's 2025 F1 V6 sound (with a built-in synthesised V6 and MGU-H bank in local clones), alongside new wind, tyre rolling and bodywork audio layers. The 2026 Prototype is now named LC26 Prototype.",
+      "Added Nuzzi-designed F1 rain-tyre physics and full-wet tread artwork for F1 wet compounds, and printed tyre sidewall art on the inner sidewalls too.",
+      "Rebuilt the LC-LMDH around the Porsche 963 reference: weight split, pitch-sensitive aero, decoupled front platform, corner masses and damping, slick tyre character, turbos and rotating inertia, work-based fuel burn, differential and brake migration, steering-reading traction control, pedal map, late shift lights and electric pit-box launch. Reset LC-LMDH leaderboards to revision 18.",
+      "Fitted the LC-LMDH with a live Bosch-style steering-wheel LCD and in-car damage banners, tightened its steering rack to 390°, opened up the cockpit sightline with a parked wiper and cleaner seat adjustment, and replaced its engine layer with Engine Lab by bimbalanch's 963 V8 sound over its rising gear whine and electric motor launch.",
+      "Replaced the default HUD with a five-layout sim-style lineup: Blade (the new default), Trackside, Endurance, Pit wall and Racing line, translated into all 11 languages, with per-device layout page choices and wheel damage read in the right order.",
+      "Added an iRacing-style voice spotter under Settings > Audio (by adamikoo, #198) calling cars alongside with three CrewChief voices (Jim, Clare and Geoffrey) and an optional pit-radio filter, routed through the car audio output and synced with your account.",
+      "Added post-lap telemetry analysis (by adamikoo, #200) comparing your latest lap against the car's saved personal best with real sector splits, speed and input traces, and corner notes, stored locally and cleared with your saved data.",
+      "Auto-configured wheel bases that report their own pedals such as the MOZA R3 bundle and included wheel setups in wheel reports (#206), added progressive brake curve defaults for controllers and wheels, rendered live car mirrors in dash and shoulder views and on Low quality (#204), toned down and randomised AMG GT3 downshift pops, and fixed waking audio loops starting at the wrong pitch."
     ],
-    "commits": 3,
-    "lastSha": "a660090d71c23c4a9846d7f0e60fe2214ca2110d"
+    "commits": 74,
+    "lastSha": "47fd7482734c16c2560fb78cd1737ee8499d7b18"
+  },
+  {
+    "date": "2026-11-24",
+    "title": "Native desktop app, modding and importers, rolling starts, AI racecraft and multiplayer collisions",
+    "items": [
+      "Replaced the Electron desktop app with a native Go launcher that mirrors librecorsa.org locally for offline play, opens in a Chromium app window, quits cleanly with its window, stores mods and imports in Documents folders, signs in with a link code, and updates itself from signed releases. Android now releases on its own.",
+      "Added modding support in the desktop app (and local dev builds) for custom circuits, cars with physics patches and audio, and liveries. Drop an Assetto Corsa or Speed Dreams car or circuit into the import folder to convert it directly from the Mods panel, browse and install packages from a catalogue, or pack your own with npm run mod. Mod cars and circuits keep local bests off the online boards, and multiplayer rooms check package hashes.",
+      "Added Nuzzi-style rolling starts with a formation speed limiter and a 3-2-1 countdown HUD with audio cues.",
+      "Refined the LC26 Prototype's FIA 2026 ERS physics (#194): separated PLP and PL derating, continuous low-SOC ramp, Boost slew, transparent ICE-to-MGU-K torque arbitration, 1 s hold and smoother superclipping, split Boost and Overtake indicators across HUDs, wheel OLED and DualSense, and stopped Space and Arrow driving keys from activating focused HUD controls. Reset LC26 Prototype leaderboards to revision 538.",
+      "Added Neutral between first and reverse as in real sims (while touch Reverse and Drive still select directly), decoupled wheel shift paddles from MFD and TC controls, made MFD dials rebindable, let you unbind individual wheel and controller buttons, and kept Thrustmaster TMX, T150 and T500RS wheels on the bridge with automatic USB ID binding (#189).",
+      "Rebuilt AI racecraft with side-by-side and follow-distance rules, FIA-style single-move defensive lines, stronger Alien 100 pace using checked-grip exits and FIA-legal Boost, steadier heavy-rain race starts and wet braking, and an autopilot that gives AI cars room in races (#187).",
+      "Enabled car-to-car collisions in multiplayer by default with safety guards and a ghost toggle, enforced car class and spec locks across server and UI, and synced opponents' chosen liveries live mid-session, including returning to default (by adamikoo, #193).",
+      "Stabilised LC-LMDH low-downforce rear handling, softened AMG GT3 dry front-end turn-in, lowered heavy-rain wet tyre grip, added aero package tooltips in the garage, clipped rain streaks out of closed-cockpit cabins, boosted headlight reach and night visibility, optimised heavy-rain performance, and kept mirrors rendering smoothly under 45 fps instead of every fourth frame on Low (#186).",
+      "Made the proximity radar movable in the HUD editor with per-panel show and hide eye toggles (by adamikoo, #202), hid the suspension and aero widget by default, showed the exact DNF cause on the finish banner and race results, prompted for a driver name before entering the Weekly Challenge, enforced staying inside the 10 m start box on hill-climb starts (#191), and fixed flying-lap spawn placement and barrier clearance.",
+      "Lap times now has a Sign in button next to Export key, and the first lap you post to an online board while signed out says once that signing in keeps your best laps and driver names on every device, with a button to Settings > Profile and data > Account. Also reused frame-loop scratches and added Windows ARM Adreno GPU detection (by adamikoo, #192), added screenshots to the Controls guide (by hskl18, #205), expanded the docs, and added GitHub, code signing, privacy and press links to the home page's bottom bar."
+    ],
+    "commits": 244,
+    "lastSha": "cb3bab4ccb5cd9c0ceb124fda1fe1c4d035ca25f"
   },
   {
     "date": "2026-11-23",
