@@ -424,7 +424,11 @@ console.log('\n== Autopilot round Rwanda against the GT3');
         sim.step(1 / 60, {});
         t += 1 / 60;
         const i = Math.min(2, sim.telemetry.lapCount - lap0);
-        beyond[i] = Math.max(beyond[i], Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
+        // Past the edge beyond the own driver's room on the flat kerbs (`ownRangeAt`): it follows the line onto them
+        const lat = sim.lateralOffsetM;
+        const half = track.getSampleAtDistance(sim.sMeters).width / 2;
+        const [lo, hi] = sim.ownRangeAt(sim.sMeters);
+        beyond[i] = Math.max(beyond[i], Math.abs(lat) - half - Math.max(0, (lat >= 0 ? hi : -lo) - half));
         maxSlip = Math.max(maxSlip, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, sim.vxMs))) * 180) / Math.PI);
         if (sim.telemetry.lapCount - lap0 === laps - 1) sim.telemetry.brakeTempsC.forEach((c, k) => (discs[k] = Math.max(discs[k], c)));
         if (sim.telemetry.lapCount !== before) {
@@ -437,8 +441,8 @@ console.log('\n== Autopilot round Rwanda against the GT3');
     const m = lap(createPorsche934RsrSim(track, root), 3);
     // It slides on the way into the corners: off the throttle in second at 140–170 km/h, 60 % of the weight at the back
     // and the engine's overrun on the rears step the tail out (up to ≈ 14°), and it catches it on the road
-    check('flying laps complete in 135–150 s, CG within 0.5 m of the edge', m.done && m.lapS > 135 && m.lapS < 150 && Math.max(m.beyond[1], m.beyond[2]) <= 0.5 && m.beyond[0] <= 1 && m.maxSlip < 16,
-      `best ${fmt(m.lapS, 2)} s, top ${fmt(m.top, 0)} km/h, CG ${fmt(Math.max(0, m.beyond[1], m.beyond[2]), 2)} m past the edge (opening lap on cold tyres ${fmt(Math.max(0, m.beyond[0]), 2)}), max body slip ${fmt(m.maxSlip, 1)}°`);
+    check('flying laps complete in 135–150 s, CG within 0.5 m of the edge and its kerb room', m.done && m.lapS > 135 && m.lapS < 150 && Math.max(m.beyond[1], m.beyond[2]) <= 0.5 && m.beyond[0] <= 1 && m.maxSlip < 16,
+      `best ${fmt(m.lapS, 2)} s, top ${fmt(m.top, 0)} km/h, CG ${fmt(Math.max(0, m.beyond[1], m.beyond[2]), 2)} m past the edge and its kerb room (opening lap on cold tyres ${fmt(Math.max(0, m.beyond[0]), 2)}), max body slip ${fmt(m.maxSlip, 1)}°`);
     // Out of the pit lane's 20 °C the slicks and the discs reach the windows the data's grip curves are made for: the
     // slicks full from 80 °C (83 % below 58), the pads from 450 °C (79 % at 250)
     const t3 = m.tyres[2] ?? [0, 0, 0, 0];

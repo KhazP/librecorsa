@@ -81,6 +81,9 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   braking: { lowG: 1.55, aeroG: 1.9, refMs: 85 },
   understeerRadPerMs2: 0.003,
   speedProfile: LC_LMDH_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) it failed the race gate on its endurance
+  // layouts without a plan (the AI to blame for 5 → 7 contacts with the player's stand-in), laps 1.7 % quicker
+  aiOwnKerbShare: 0,
   // The closed-wheel line
   racingLine: 'gt3',
   // ≈ 0.033 kg/s at 8000 rpm flat out [est]: 540 kW at the crank at 38 % efficiency. The flow follows the pedal and the

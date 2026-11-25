@@ -68,6 +68,10 @@ export const SUZUKI_LIANA_SIM_PROFILE: CarSimProfile = {
   // so the autopilot steers that much in ahead of its yaw loop; with less it ran 1.7 m wide in Dunsfold's 7 m section
   understeerRadPerMs2: 0.015,
   speedProfile: SUZUKI_LIANA_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`, the whole or half the room) it failed the
+  // race gate on its 18 Club Cup layouts by one lap-1 off or one more contact with the player's stand-in, laps 1.2-1.4 %
+  // quicker
+  aiOwnKerbShare: 0,
   // The road cars' line where a circuit has one for it, else the GT3's: lower grip and power than an F1 car's or a
   // GT3's move the apexes and braking points
   racingLine: 'road',
