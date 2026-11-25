@@ -91,6 +91,8 @@ export const BMW_M1_PROCAR_SIM_PROFILE: CarSimProfile = {
   speedProfile: BMW_M1_PROCAR_PROFILE_CAR,
   // The road cars' line where a circuit has one for it, else the GT3's: grip well short of a GT3's
   racingLine: 'road',
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // Fuel flow with the engine's speed: 0.005 l/s per 1000 rpm flat out, ≈ 0.045 l/s (0.033 kg/s) at 9000 rpm
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.005,
