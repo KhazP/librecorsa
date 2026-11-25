@@ -287,7 +287,8 @@ const UPSHIFT_S = 0.06;
 export class LoopGrid {
   public readonly voices: LoopVoice[];
   /** Where the voices' pitch glide has got to on the grid axis: a voice waking mid-sweep joins the others there, instead
-   * of starting at the target up to a few semitones away from them */
+   * of starting at the target up to a few semitones away from them. `glideT` < 0: no glide under way (the grid has
+   * not played yet or was silent last update), so waking voices start at the target */
   private glideX = 0;
   private glideTarget = 0;
   private glideTau = 0.02;
@@ -319,9 +320,12 @@ export class LoopGrid {
   ): void {
     const vs = this.voices;
     if (vs.length === 0) return;
-    if (this.glideT < 0 || level <= 1e-4) this.glideX = x;
+    const silent = level <= 1e-4;
+    if (this.glideT < 0 || silent) this.glideX = x;
     else this.glideX = this.glideTarget + (this.glideX - this.glideTarget) * Math.exp(-Math.max(0, now - this.glideT) / this.glideTau);
-    this.glideT = now;
+    // A silent grid's last position is no glide to join: an opponent's voice handed to another car would otherwise
+    // wake its loops at the old car's revs (or two octaves down on a fresh voice) and swoop up to the new one's
+    this.glideT = silent ? -1 : now;
     this.glideTarget = x;
     this.glideTau = pitchTau;
     let i = 0;
