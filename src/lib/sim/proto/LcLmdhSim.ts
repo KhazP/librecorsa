@@ -78,8 +78,8 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // Its grip on the flat per g of weight and downforce, 1.56–1.64 from 90 to 162 km/h: the steering assist's yaw guard
   // reads this, and a figure under it trims a stick's lock short of the grip in slow corners
   padLateralMu: 1.6,
-  // 263.5° of rim lock each way on a 13.175 : 1 rack [bop]
-  steerRatio: 13.175,
+  // 194.25° of rim lock each way (388.5° lock to lock) on a 10.5 : 1 prototype rack
+  steerRatio: 10.5,
   // The autopilot brakes on 85 % of this and corners on 1.1 × that: 1.45 g at low speed and 3.2 g at 306 km/h, inside
   // the measured 1.52 and 3.32 g
   braking: { lowG: 1.55, aeroG: 1.9, refMs: 85 },

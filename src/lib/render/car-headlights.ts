@@ -736,6 +736,10 @@ export class CarHeadlights {
       if (child === this.group) continue;
       child.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
+        // Never treat interior steering-wheel meshes (e.g. LC-LMDH `light_004` LCD) as exterior headlights
+        for (let p: THREE.Object3D | null = obj; p && p !== root; p = p.parent) {
+          if (p.name === "STEER" || p.name === "STEER_BASE") return;
+        }
         const geo = obj.geometry;
         let hasBox = false;
         if (geo) {

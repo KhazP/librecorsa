@@ -8,13 +8,36 @@ import type * as THREE from 'three';
 import { type CarSimProfile, F12026CarSim } from '../f12026-car/F12026CarSim';
 import { AMG_GT3_CONFIG, AMG_GT3_ELECTRONICS as E } from './AmgGt3Config';
 import type { CarSoundSource } from '../CarAudio';
+import type { SoundBankPopTuning } from '../lc26-audio';
 import type { SpeedProfileCarModel } from '../speed-profile';
+
+/**
+ * Toned-down, organic downshift/overrun exhaust pop tuning for the AMG GT3:
+ * its bank's backfire recordings already carry multi-pop bursts, so lower gain, wider randomized cooldowns,
+ * and subtle pitch/timing variation replace loud rapid-fire crackles with natural V8 overrun texture.
+ */
+export const AMG_GT3_POP_TUNING: Partial<SoundBankPopTuning> = {
+  downshiftGain: 0.19,
+  liftGain: 0.2,
+  crackleGain: 0.14,
+  gainJitter: [0.76, 1.12],
+  pitchRange: [0.91, 1.09],
+  downshiftChance: 0.35,
+  downshiftDelayRangeS: [0.035, 0.105],
+  cooldownRangeS: [0.24, 0.44],
+  liftCooldownS: 0.38,
+  maxLiftBurstCount: 2,
+  liftBurstGapRangeS: [0.11, 0.24],
+  crackleRatePerS: 1.4,
+  liftTimerOnDownshiftS: 0.4,
+};
 
 /** Sound bank configuration for the GT3 */
 export const AMG_GT3_SOUND: CarSoundSource = {
   id: 'amg-gt3',
   assetDir: '/gt3/audio/',
   limiterRpm: AMG_GT3_CONFIG.gearbox.gears.redline_rpm,
+  popTuning: AMG_GT3_POP_TUNING,
 };
 
 const C = AMG_GT3_CONFIG;

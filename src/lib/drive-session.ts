@@ -16,7 +16,7 @@ import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
 import { setKtx2Renderer } from "@/lib/render/ktx2";
 import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display";
-import { createPortedCarRig } from "@/lib/ported-car-model";
+import { createPortedCarRig, lcLmdhCameraAnchors } from "@/lib/ported-car-model";
 import { defaultGtTyreBrand, resolveGtTyreBrand } from "@/lib/render/gt-tyre-sidewall";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
@@ -1561,8 +1561,9 @@ export class DriveSession {
             // the rim on screen turns with the player's own (its lock is the player's when they set one)
             steerLockDeg: carWheelLockDeg(def.physics, settings.wheel.steerLockPerCar) / 2,
             floor: staticFloorOf(model.rigConfig),
-            // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
-            cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
+            // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle;
+            // LC-LMDH uses an opened-up cockpit anchor clear of its low carbon roof visor
+            cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : car === "lc-lmdh" ? lcLmdhCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
             pirelliSidewall: def.classId === "f1" && def.year >= 2018,
             // Non-F1 racing cars wear sagatron918's GT sidewall packs (optional `?tyres=<brand>` override for testing)
@@ -2703,10 +2704,9 @@ export class DriveSession {
     let lc26ExtrasFor: THREE.Object3D | null = null;
     // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
-    // A ported body's wheel screen and shift lights (the 496R's), once its GLB has loaded under the rig
+    // A ported body's wheel screen and shift lights (the 496R's, LC-LMDH's), once its GLB has loaded under the rig
     let portedDash: PortedWheelDash | null = null;
     let portedProbeFrame = 0;
-    let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
     // Race control measures what a course cut saved against this: the best lap, else the car's own speed profile
     const stretchRefS = (fromM: number, toM: number): number | null => {
@@ -4176,14 +4176,14 @@ export class DriveSession {
           if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
           wingMirrors = new WingMirrors(renderer, scene, lc26Body);
         }
-        if (!lc26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
-          portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics), carRigCar);
-        }
-        // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
-        // gets an empty display and no mirrors, so it is probed once
-        if (!lc26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
+        // Probe ported wheel and GT3 cockpit dashes as soon as the GLB attaches (anchors become non-null on load),
+        // rather than waiting up to 30 frames with an uninitialized grey screen
+        if (!lc26Body && carById(carRigCar).modelUrl) {
           const anchors = carRig.getCameraAnchors();
-          if (anchors) {
+          if (!portedDash && (anchors || portedProbeFrame++ % 30 === 0)) {
+            portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics), carRigCar);
+          }
+          if (!gt3Dash && anchors) {
             gt3Dash = new Gt3DashDisplay(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
             const glassPatches = gt3MirrorPatches(carRig.chassisGroup);
             if (glassPatches.length) {

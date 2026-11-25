@@ -752,7 +752,7 @@ console.log('\n== Fuel and steering');
   const expected = off.work / (w.brakeThermalEfficiency * w.lowerHeatingValueMJPerKg * 1e6);
   check('With fuel use on, the burn pays for the engine\'s work, and deploying 40 kW saves 3–12 %', Math.abs(off.kg / expected - 1) < 0.05 && on.kg < off.kg * 0.97 && on.kg > off.kg * 0.88 && Math.abs(on.kmh - off.kmh) < 3,
     `${fmt(off.kg, 3)} kg without (${fmt(expected, 3)} for its work), ${fmt(on.kg, 3)} kg deploying, ${fmt(on.kmh, 0)} / ${fmt(off.kmh, 0)} km/h`);
-  // 263.5° of rim lock at the hands' 900°/s
+  // 194.25° of rim lock at the hands' 900°/s (388.5° lock-to-lock prototype rack)
   const steer = createLcLmdhSim(pad);
   steer.teleportToDistance(1000, 50 / 3.6);
   let tLock = NaN;
@@ -760,7 +760,7 @@ console.log('\n== Fuel and steering');
     steer.step(DT / 4, { analogSteer: 1 });
     if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
   }
-  check('Full lock from centre in 0.28–0.31 s (263.5° at 900°/s)', tLock > 0.28 && tLock < 0.31, `${fmt(tLock, 3)} s`);
+  check('Full lock from centre in 0.20–0.24 s (194.25° at 900°/s)', tLock > 0.20 && tLock < 0.24, `${fmt(tLock, 3)} s`);
 }
 
 console.log('\n== The 963\'s systems: its pedal map, a TC that reads the steering, electric out of the pit box');

@@ -27,7 +27,8 @@ const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
   "bmw-m4-gt3": { fromEye: [0, 0.02, 0.62], pitchDeg: -7, fovDeg: 58 },
   // Just past its wheel (whose screen and paddles reach 0.70 m ahead of the eye), 5 cm under the windscreen
   "mtr-496r": { fromEye: [0, -0.05, 0.7], pitchDeg: -4, fovDeg: 58 },
-  "lc-lmdh": { fromEye: [0, -0.04, 0.14], pitchDeg: -10, fovDeg: 58 },
+  // Framed over the wheel rim with clear sightline under the low prototype windscreen
+  "lc-lmdh": { fromEye: [0, -0.02, 0.15], pitchDeg: -5, fovDeg: 58 },
   liana: { fromEye: [0, 0, 0.61], pitchDeg: -6, fovDeg: 58 },
   "nissan-r33-jgtc": { fromEye: [0, 0.03, 0.53], pitchDeg: -3, fovDeg: 58 },
   "nissan-r32-jtcc": { fromEye: [0, 0.02, 0.56], pitchDeg: -3, fovDeg: 58 },

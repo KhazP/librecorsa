@@ -288,8 +288,8 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "amg-gt3": 14.2,
   liana: 15,
   "mtr-496r": 14,
-  // 527° of rim lock for 20° at the road wheels [est]
-  "lc-lmdh": 13.175,
+  // 388.5° (~390°) of rim lock for 18.5° at the road wheels (prototype butterfly wheel)
+  "lc-lmdh": 10.5,
   // [spec car.ini STEER_RATIO]
   "nissan-r33-jgtc": 15,
   "nissan-r32-jtcc": 12.4,

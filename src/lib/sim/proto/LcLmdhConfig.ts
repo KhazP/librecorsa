@@ -828,11 +828,12 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       // 0.21 m, the disc and its bell, the hub (and at the rear the driveshaft's half that turns with the wheel)
       wheelInertiaFront: 1.65,
       wheelInertiaRear: 1.82,
-      // 20° at the road wheels, 527° of rim lock to lock on a 13.175 : 1 rack [bop]
-      maxRoadWheelDeg: 20,
+      // 18.5° at the road wheels, 388.5° (~390°) of rim lock to lock on a 10.5 : 1 prototype rack (194.25° each way,
+      // keeping the butterfly steering wheel upright through hairpins)
+      maxRoadWheelDeg: 18.5,
       ffbMechanicalTrailM: 0.02,
       // Power steering, engine-driven: the same assist at any speed [est]
-      powerSteering: { steeringRatio: 13.175, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
+      powerSteering: { steeringRatio: 10.5, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
       // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/cars/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.69], [0.55, 2.61], [0.92, 2.45], [1.00, 2.00], [1.00, 0.72], [0.96, -2.40], [0.00, -2.41]],
       // Torsional stiffness between the axle structures: a carbon tub with the V8 as a stressed member [est]
