@@ -55,7 +55,7 @@ interface Frame {
 
 interface Event {
   seed: number;
-  kind: 'spin' | 'off';
+  kind: 'spin' | 'off' | 'contact';
   code: string;
   t: number;
   lap: number;
@@ -76,24 +76,29 @@ for (const k of seeds) {
   const o: StandInRaceOptions = { trackId, car, seed: 101 + k * 31, laps, aiCars, standIn, racecraft, plans };
   const hist = new Map<string, Frame[]>();
   const offWas = new Map<string, number>();
+  const lastHit = new Map<string, number>();
   let nextS = 0;
   const r = runStandInRace(o, (field: AiOpponentField, t: number) => {
     const F = field as unknown as {
       cars: { code: string; ai: SimulatorCar | null; isPlayer: boolean; sim: SimulatorCar; biasM: number; biasTargetM: number; clock: { lapsDone: number }; control?: { mode: string } | null; stats: { offTracks: number; spins: number }; removed: boolean }[];
       headingErr(s: SimulatorCar): number;
-      incidents: { kind: string; code?: string }[];
+      incidents: { kind: string; code?: string; a?: string; b?: string; aIsPlayer?: boolean; bIsPlayer?: boolean; impactMs?: number }[];
     };
     const track = getActiveTrackData(1200);
     const L = track.totalLengthM;
     const sample = t >= nextS;
     if (sample) nextS = t + 0.1;
     const spun = new Set(F.incidents.filter((i) => i.kind === 'spin').map((i) => i.code as string));
+    // Contacts with the stand-in: the AI car's side of it
+    const hitPlayer = new Set(
+      F.incidents.filter((i) => i.kind === 'contact' && (i.aIsPlayer || i.bIsPlayer)).map((i) => (i.aIsPlayer ? i.b : i.a) as string)
+    );
     for (const c of F.cars) {
       if (!c.ai || c.removed) continue;
       const me = c.sim;
       const offNow = c.stats.offTracks > (offWas.get(c.code) ?? 0);
       offWas.set(c.code, c.stats.offTracks);
-      if (sample || spun.has(c.code) || offNow) {
+      if (sample || spun.has(c.code) || offNow || hitPlayer.has(c.code)) {
         let near = '', nearDs = Infinity, nearDl = Infinity;
         for (const o2 of F.cars) {
           if (o2 === c || o2.removed) continue;
@@ -118,7 +123,9 @@ for (const k of seeds) {
         h.push(fr);
         while (h.length && t - h[0].t > 4) h.shift();
         hist.set(c.code, h);
-        for (const kind of [spun.has(c.code) ? 'spin' : null, offNow ? 'off' : null] as const) {
+        const touched = hitPlayer.has(c.code) && t - (lastHit.get(c.code) ?? -9) > 1;
+        if (hitPlayer.has(c.code)) lastHit.set(c.code, t);
+        for (const kind of [spun.has(c.code) ? 'spin' : null, offNow ? 'off' : null, touched ? 'contact' : null] as const) {
           if (!kind) continue;
           const pre = h.filter((x) => t - x.t <= 2);
           const traffic = pre.some((x) => Math.abs(x.nearDs) < 15 && Math.abs(x.nearDl) < 4);
