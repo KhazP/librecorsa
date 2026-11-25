@@ -17,6 +17,7 @@ import {
   applyAsphaltSheen,
   type RacingLineMask,
 } from "../../src/lib/render/asphalt-sheen";
+import { makeWetLamp, pickWetRoadLamps, WET_LAMP_SLOTS, WET_LAMPS_BY_QUALITY, wetLampUniforms } from "../../src/lib/render/wet-road-lamps";
 import { equilibriumWaterMm, topographicalPuddleFactor } from "../../src/lib/sim/weather";
 import { wetnessFromWater } from "../../src/lib/sim/wet-tyres";
 import type { TrackSamplePoint } from "../../src/types/f1";
@@ -118,7 +119,7 @@ const frag = shader.fragmentShader;
 check("Every asphalt shader edit finds its anchor in three's standard material once", warnings.length === 0, warnings.join("; ") || "none missed");
 check(
   "The wet code sits behind the dry guard; the probe's reflection behind its own switch",
-  frag.includes("if ( lc26WetRaw > 0.0 ) {") && frag.includes("float lc26Mirror = smoothstep( 0.05, 0.6, lc26Wet );") && frag.includes("uWetProbeOn > 0.5") && frag.includes("radiance = mix( radiance, lc26Probe"),
+  frag.includes("if ( lc26WetRaw > 0.0 ) {") && frag.includes("float lc26Mirror = 0.0;") && frag.includes("lc26Mirror = smoothstep( 0.05, 0.6, lc26Wet );") && frag.includes("uWetProbeOn > 0.5") && frag.includes("radiance = mix( radiance, lc26Probe"),
   `${frag.length} chars`
 );
 check(
@@ -140,6 +141,35 @@ const probeOn = u.uWetProbeOn.value === 1 && u.uWetProbe.value === probeTex && u
 setWetRoadProbe(null, new THREE.Vector3(), 1);
 const probeOff = u.uWetProbeOn.value === 0 && u.uWetProbe.value === null;
 check("Water level, probe and probe-off reach the shader's uniforms", levelSet && probeOn && probeOff);
+check(
+  "Lamps streak only on wet pixels, behind their count, in the material's uniforms",
+  frag.includes("if ( lc26Mirror > 0.0 && uWetLampCount > 0.5 ) {") && ["uWetLampPos", "uWetLampColor", "uWetLampDir", "uWetLampCount"].every((k) => k in u)
+);
+
+// --- Which lamps the wet road mirrors ---------------------------------------------------------------------------------
+const cam = new THREE.Vector3();
+const lamp = (x: number, z: number, strength: number) => {
+  const l = makeWetLamp();
+  l.pos.set(x, 1, z);
+  l.color.setRGB(strength, 0, 0);
+  return l;
+};
+const lamps = [lamp(0, 60, 1), lamp(0, 8, 1), lamp(0, 400, 50), lamp(0, 20, 10), lamp(3, 5, 0), lamp(0, 30, 1)];
+const picked = pickWetRoadLamps(lamps, lamps.length, cam, WET_LAMPS_BY_QUALITY.medium, true);
+const firstTwo = [wetLampUniforms.uWetLampPos.value[0].z, wetLampUniforms.uWetLampPos.value[1].z];
+check(
+  "The brightest-looking lamps near the camera first; out of reach and dark ones left out",
+  picked === 4 && wetLampUniforms.uWetLampCount.value === 4 && firstTwo[0] === 20 && firstTwo[1] === 8,
+  `picked ${picked}, first at z ${firstTwo.join(", ")}`
+);
+check(
+  "A slot per lamp at most, by quality; none on a dry road",
+  WET_LAMPS_BY_QUALITY.high <= WET_LAMP_SLOTS &&
+    pickWetRoadLamps(lamps, lamps.length, cam, 99, true) <= WET_LAMP_SLOTS &&
+    pickWetRoadLamps(lamps, lamps.length, cam, WET_LAMPS_BY_QUALITY.high, false) === 0 &&
+    wetLampUniforms.uWetLampCount.value === 0
+);
+
 setAsphaltWetness(0, 0, 0);
 setAsphaltStandingWater(0, 0);
 check("Dry: every wet uniform is back at 0", u.uWetness.value === 0 && u.uLineWetness.value === 0 && u.uWaterLevel.value === 0 && u.uRainIntensity.value === 0);
