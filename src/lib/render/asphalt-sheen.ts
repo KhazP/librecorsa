@@ -4,6 +4,7 @@ import type { TrackSamplePoint } from "@/types/f1";
 import { aiLineOffsetM } from "@/lib/sim/speed-profile";
 import { topographicalPuddleFactor } from "@/lib/sim/weather";
 import { patchShader, type ShaderPatch } from "./shader-patch";
+import { WET_LAMP_SLOTS, wetLampUniforms } from "./wet-road-lamps";
 
 /**
  * Rubbered-in racing line on the asphalt: a top-down world-XZ mask (white = rubber) drives roughness, a slight
@@ -13,7 +14,8 @@ import { patchShader, type ShaderPatch } from "./shader-patch";
  * Rain (setAsphaltWetness, setAsphaltStandingWater, setWetRoadProbe): water in the asphalt's pores darkens it; a film
  * of water then smooths it towards a gloss; standing water collects where the circuit's own water model pools it
  * (the mask's green channel) and turns to a near mirror with raindrop rings; and the wet road reflects the world round
- * the player's car (the cars' reflection probe) instead of the sky alone. Dry, none of it runs.
+ * the player's car (the cars' reflection probe) instead of the sky alone, with the lamps near the camera drawn out
+ * into streaks on it (wet-road-lamps.ts). Dry, none of it runs.
  */
 
 export interface RacingLineMask {
@@ -363,6 +365,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     ...wetUniforms,
     ...waterUniforms,
     ...probeUniforms,
+    ...wetLampUniforms,
   };
 
   material.onBeforeCompile = (shader) => {
@@ -485,6 +488,10 @@ uniform vec3 uWetProbePos;
 uniform float uWetProbeLod;
 uniform float uWetProbeIntensity;
 uniform float uWetSkyDim;
+uniform vec4 uWetLampPos[ ${WET_LAMP_SLOTS} ];
+uniform vec3 uWetLampColor[ ${WET_LAMP_SLOTS} ];
+uniform vec4 uWetLampDir[ ${WET_LAMP_SLOTS} ];
+uniform float uWetLampCount;
 varying vec3 vLc26WorldPos;
 ${WORLD_NOISE_GLSL}
 ${RIPPLE_GLSL}`;
@@ -497,6 +504,8 @@ const FILM_ROUGHNESS = 0.08;
 const PUDDLE_ROUGHNESS = 0.03;
 /** Sphere round the probe its view is projected onto for the wet road (m): about where the stands and walls are */
 const WET_PROBE_RADIUS_M = 45;
+/** A lamp's highlight on the wet road, this many times longer toward the viewer than across */
+const STREAK_STRETCH = 5;
 
 const FRAGMENT_PATCHES: readonly Patch[] = [
 	["#include <common>", "#include <common>\n" + FRAGMENT_HELPERS_GLSL],
@@ -515,6 +524,7 @@ diffuseColor.rgb *= mix( 1.0, 0.85, lc26Rubber );
 // water where the level tops the road's hollows (a near mirror). The line, swept by the cars, has its own water.
 float lc26WetRaw = mix( uWetness, uLineWetness, lc26Rubber );
 float lc26Wet = 0.0;
+float lc26Mirror = 0.0;
 float lc26Film = 0.0;
 float lc26PuddleMask = 0.0;
 if ( lc26WetRaw > 0.0 ) {
@@ -538,6 +548,8 @@ if ( lc26WetRaw > 0.0 ) {
 	float lc26WetRough = mix( roughnessFactor, ${DAMP_ROUGHNESS.toFixed(2)}, lc26Soak );
 	lc26WetRough = mix( lc26WetRough, ${FILM_ROUGHNESS.toFixed(2)} + 0.05 * lc26Rain, lc26Film * lc26Soak );
 	roughnessFactor = mix( lc26WetRough, ${PUDDLE_ROUGHNESS.toFixed(3)} + 0.035 * lc26Rain, lc26PuddleMask );
+	// How much of the road's shine is the water's mirror (the probe's view, the lamps' streaks)
+	lc26Mirror = smoothstep( 0.05, 0.6, lc26Wet );
 }
 `,
 	],
@@ -584,7 +596,6 @@ if ( uAsphaltDetail > 0.5 ) {
 	// probe stands in for the stands and walls, so what this point reflects is looked up where its ray would meet them;
 	// past it, the probe's view of the distance and the sky is everyone's. With no probe, the sky's map, dimmed to the
 	// sky on screen
-	float lc26Mirror = smoothstep( 0.05, 0.6, lc26Wet );
 	if ( lc26Mirror > 0.0 && uWetProbeOn < 0.5 ) radiance *= mix( 1.0, uWetSkyDim, lc26Mirror );
 	if ( lc26Mirror > 0.0 && uWetProbeOn > 0.5 ) {
 		vec3 lc26V = normalize( cameraPosition - vLc26WorldPos );
@@ -601,6 +612,50 @@ if ( uAsphaltDetail > 0.5 ) {
 		radiance = mix( radiance, lc26Probe, lc26Mirror );
 	}
 #endif
+`,
+	],
+	[
+		"#include <lights_fragment_end>",
+		/* glsl */ `
+#if defined( RE_IndirectSpecular )
+	// Lamps in the wet road: a glossy highlight per lamp, stretched along the view (a grazing wet road draws a lamp out
+	// into a streak toward the viewer), widened and dimmed by the lamp's size as a sphere light's is, with water's
+	// Fresnel. Dry pixels, or no lamps, skip it all
+	if ( lc26Mirror > 0.0 && uWetLampCount > 0.5 ) {
+		vec3 lc26LV = normalize( cameraPosition - vLc26WorldPos );
+		vec3 lc26LN = normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz );
+		float lc26NV = max( dot( lc26LN, lc26LV ), 0.08 );
+		vec3 lc26T = lc26LV - lc26LN * dot( lc26LV, lc26LN );
+		lc26T = dot( lc26T, lc26T ) > 1e-8 ? normalize( lc26T ) : vec3( 1.0, 0.0, 0.0 );
+		vec3 lc26Bt = cross( lc26LN, lc26T );
+		float lc26A = max( material.roughness * material.roughness, 0.002 );
+		vec3 lc26Glint = vec3( 0.0 );
+		for ( int i = 0; i < ${WET_LAMP_SLOTS}; i ++ ) {
+			if ( float( i ) >= uWetLampCount ) break;
+			vec3 lc26L = uWetLampPos[ i ].xyz - vLc26WorldPos;
+			float lc26D2 = max( dot( lc26L, lc26L ), 0.04 );
+			float lc26D = sqrt( lc26D2 );
+			lc26L /= lc26D;
+			if ( dot( lc26LN, lc26L ) <= 0.0 ) continue;
+			// a headlight lights only inside its cone
+			vec4 lc26Beam = uWetLampDir[ i ];
+			float lc26Cone = lc26Beam.w < -1.5 ? 1.0 : smoothstep( lc26Beam.w, mix( lc26Beam.w, 1.0, 0.5 ), dot( -lc26L, lc26Beam.xyz ) );
+			if ( lc26Cone <= 0.0 ) continue;
+			float lc26Ax = min( 1.0, lc26A + 0.5 * uWetLampPos[ i ].w / lc26D );
+			float lc26Ay = min( 1.0, lc26Ax * ${STREAK_STRETCH.toFixed(1)} );
+			vec3 lc26H = normalize( lc26L + lc26LV );
+			float lc26Ht = dot( lc26H, lc26T ) / lc26Ay;
+			float lc26Hb = dot( lc26H, lc26Bt ) / lc26Ax;
+			float lc26Hn = dot( lc26H, lc26LN );
+			float lc26Den = lc26Ht * lc26Ht + lc26Hb * lc26Hb + lc26Hn * lc26Hn;
+			float lc26Dg = 1.0 / ( PI * lc26Ax * lc26Ay * lc26Den * lc26Den );
+			float lc26Fr = 0.02 + 0.98 * pow( 1.0 - clamp( dot( lc26LV, lc26H ), 0.0, 1.0 ), 5.0 );
+			lc26Glint += uWetLampColor[ i ] * ( lc26Cone * lc26Dg * lc26Fr / ( 4.0 * lc26NV * lc26D2 ) );
+		}
+		reflectedLight.directSpecular += lc26Glint * lc26Mirror;
+	}
+#endif
+#include <lights_fragment_end>
 `,
 	],
 ];
