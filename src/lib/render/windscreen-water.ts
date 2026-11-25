@@ -45,6 +45,8 @@ const LOW_STEP_EVERY = 2;
 const SCENE_COPY_SCALE: Readonly<Record<GraphicsQuality, number>> = { low: 0.25, medium: 0.5, high: 0.5 };
 const WET_CELL_LOW_M = 0.02;
 const VISOR_DROP_BUDGET = 140;
+/** Looks at a car model for its windscreen this many times, a second apart, while it may still be loading */
+const GLASS_SCAN_TRIES = 8;
 const VISOR_MAP_SIZE: readonly [number, number] = [384, 216];
 /** The visor's drops are simulated on a 10 cm tall patch of the view (so a 3 mm drop is a few % of the screen) */
 const VISOR_HEIGHT = 0.1;
@@ -1091,6 +1093,7 @@ export class WindscreenWaterPass extends Pass {
   private glassFor: THREE.Object3D | null = null;
   private glassCar: CarId | null = null;
   private glassScanMs = -Infinity;
+  private glassScans = 0;
   private proxies: GlassProxy[] = [];
   private modeNow: WaterMode = "off";
   private wiper: WiperSpec | null = null;
@@ -1337,8 +1340,11 @@ export class WindscreenWaterPass extends Pass {
 
   /** Finds (or re-finds after a car change or a late model load) the windscreen of the car being driven */
   private ensureGlass(f: WindscreenWaterFrame, nowMs: number): boolean {
-    if (this.glassFor === f.chassis && this.glassCar === f.carId && this.glass) return true;
-    if (this.glassFor === f.chassis && this.glassCar === f.carId && nowMs - this.glassScanMs < 1000) return false;
+    const same = this.glassFor === f.chassis && this.glassCar === f.carId;
+    if (same && this.glass) return true;
+    // A model still loading is looked at again each second, for a few seconds; one with no windscreen is left alone
+    if (same && (nowMs - this.glassScanMs < 1000 || this.glassScans >= GLASS_SCAN_TRIES)) return false;
+    this.glassScans = same ? this.glassScans + 1 : 1;
     this.glassFor = f.chassis;
     this.glassCar = f.carId;
     this.glassScanMs = nowMs;
@@ -1372,6 +1378,13 @@ export class WindscreenWaterPass extends Pass {
     if (mode !== this.modeNow) {
       this.modeNow = mode;
       this.activeSince = -1;
+    }
+    // Another car now (a swap, a replay's focus): let go of the last one's glass
+    if (this.glassFor && this.glassFor !== f.chassis && mode !== "windscreen") {
+      this.dropProxies();
+      this.glass = null;
+      this.glassFor = null;
+      this.glassCar = null;
     }
     const water = field.count > 0 || (mode === "windscreen" && this.wetGrid.maxWet > 0.01);
     if (mode === "off" || (!wet && !water)) {
