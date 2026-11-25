@@ -98,7 +98,7 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume } from "@/lib/render/rain-fx";
+import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume, type RainLight } from "@/lib/render/rain-fx";
 import { WindscreenWaterPass, type WaterMode } from "@/lib/render/windscreen-water";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
@@ -4862,6 +4862,7 @@ export class DriveSession {
         // (in a race the worker runs, its road under the car)
         const workerRace = aiFieldOf(raceNow())?.worker;
         visualFx.setWetness((workerRace ? workerRace.playerWetness : trackEnv.weatherSampleFor(physics)?.wetness) ?? wetnessFromWater(wx.lineWaterMm));
+        visualFx.spray.setConditions(wx.waterMm, wx.windVxMs, wx.windVzMs);
       }
       if (nowMs - lastWeatherHudMs > 500) {
         lastWeatherHudMs = nowMs;
@@ -4905,6 +4906,8 @@ export class DriveSession {
         }
         carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
+        // Its rear lamps light its spray red: dim tail lamps by day, brighter with the lights on and braking
+        visualFx.setPlayerLamps((headlights.player ? 1 : 0.3) + (playerBrakingNow ? 0.7 : 0));
         visualFx.setHeadlights(headlights.opponents, camera);
         // Lamps in the wet road (wet-road-lamps.ts): the cars' rear lamps and headlights, the circuit's lamps at night
         const wetRoadNow = wetnessFromWater(wx.waterMm) > 0.05;
@@ -4973,13 +4976,16 @@ export class DriveSession {
             to.range = from.range;
           }
         }
-        rainFx.setLight({
+        const rainLight: RainLight = {
           beams: rainBeams,
           beamCount: rainBeamCount,
           lamp: venueNight?.mode === "lamps" ? venueNight.lightAt(rainCamPos.x, rainCamPos.z, rainLamp) : null,
           sunDir: env.sunDirection,
           sunShare: THREE.MathUtils.clamp(skyConditions.elevationDeg / 10, 0, 1) * (1 - wx.cloudCover) * (1 - 0.7 * wx.rainIntensity),
-        });
+        };
+        rainFx.setLight(rainLight);
+        // The cars' spray takes the same lights (render/tyre-spray.ts)
+        visualFx.spray.setLight(rainLight, skyLight);
         rainFx.setViewportHeight(renderer.domElement.height);
         rainFx.update(
           drawDtS,
@@ -5236,6 +5242,7 @@ export class DriveSession {
       portedDash?.dispose();
       carHeadlights.dispose();
       visualFx.disposeHeadlights();
+      visualFx.spray.dispose();
       unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();

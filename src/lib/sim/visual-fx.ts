@@ -4,8 +4,9 @@
  *
  * - Dynamic persistent quad-strip ribbon mesh for 4-wheel tire skidmarks, darkened by how hard each tyre slides past
  *   its grip (`tyre-slide-fx.ts`), and furrows in grass.
- * - `THREE.InstancedMesh` tire smoke (from the same sliding, `tyre-slide-fx.ts`), spray and off-track gravel/grass
- *   debris particles emitted at each wheel's 3D contact patch.
+ * - `THREE.InstancedMesh` tire smoke (from the same sliding, `tyre-slide-fx.ts`) and off-track gravel/grass debris
+ *   particles emitted at each wheel's 3D contact patch; the cars' spray on a wet road in its own pool
+ *   (`render/tyre-spray.ts`).
  * - Opponent vehicle 3D rig manager driven by `MultiplayerSyncManager` Cubic Hermite + Slerp states.
  */
 
@@ -35,6 +36,7 @@ import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow
 import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
 import { CarHeadlights, type HeadlightBeam } from '@/lib/render/car-headlights';
 import { makeWetLamp, type WetLamp } from '@/lib/render/wet-road-lamps';
+import { TyreSpray } from '@/lib/render/tyre-spray';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES, liveryForDriverCode, resolveLivery } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
@@ -51,9 +53,12 @@ const WET_HEADLIGHT_SHARE = 0.06;
 const WET_HEADLIGHT_CONE_COS = Math.cos(0.58);
 
 export const PARTICLE_BUDGET = { low: 120, medium: 220, high: MAX_PARTICLES } as const;
-/** Maximum distance (m) from the player at which opponents emit rooster-tail spray puffs */
-export const OPPONENT_SPRAY_DIST_M = { low: 90, medium: 125, high: 165 } as const;
-const OPPONENT_SPRAY_RATE = { low: 0.45, medium: 0.72, high: 1.0 } as const;
+/** An opponent's tyres in its own frame (m): half the track, the axles ahead of and behind its origin */
+const OPPONENT_HALF_TRACK_M = 0.8;
+const OPPONENT_FRONT_AXLE_M = 1.6;
+const OPPONENT_REAR_AXLE_M = 1.45;
+/** Opponents throw their full spray within this distance (m) of the player, less and less out to the reach */
+const OPPONENT_SPRAY_FULL_M = 45;
 /** Tyre smoke puffs per second from one wheel at full smoke (`tyre-slide-fx.ts`) */
 const SMOKE_PUFFS_PER_S = 40;
 /** Smoke builds within a few hundredths of a second of a lock-up and clears a little slower once the tyre grips again */
@@ -161,10 +166,18 @@ export class SimVisualFxManager {
   private particleCursor = 0;
   private particleColorDirty = false;
   private emitTimer = 0;
-  private readonly peerFwd = new THREE.Vector3();
-  private readonly peerUp = new THREE.Vector3();
   /** Road wetness under the player's car (0..1): rear-wheel spray at speed */
   private wetness = 0;
+  /** The cars' spray on a wet road (its own pool of puffs, on the view-only layer) */
+  public readonly spray = new TyreSpray();
+  /** The player's rear lamps for the spray's red (0 off, 1 on, more braking) */
+  private playerLamp = 0;
+  private readonly sprayWheels = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private readonly sprayVel = new THREE.Vector3();
+  private readonly sprayFwd = new THREE.Vector3();
+  private readonly sprayRight = new THREE.Vector3();
+  /** Opponents' headlights (and with them their rear lamps) are on */
+  private opponentLampsOn = false;
   /** Per wheel (FR, FL, RR, RL): smoothed smoke level 0..1, puffs owed, and the contact's world velocity (smoothed) */
   private readonly smokeLevel = [0, 0, 0, 0];
   /** Per wheel: smoothed skid-mark darkness 0..1 on a paved surface */
@@ -212,6 +225,7 @@ export class SimVisualFxManager {
 
   public setGraphicsQuality(quality: 'low' | 'medium' | 'high'): void {
     this.graphicsQuality = quality;
+    this.spray.setQuality(quality);
     const budget = PARTICLE_BUDGET[quality];
     if (this.activeParticles > budget) {
       for (let i = budget; i < this.activeParticles; i++) this.particles[i].active = false;
@@ -383,6 +397,7 @@ export class SimVisualFxManager {
       this.particleMesh.setColorAt(i, defaultColor);
     }
     this.group.add(this.particleMesh);
+    this.group.add(this.spray.mesh);
   }
 
   /** Daylight on the puffs (0..1, the sky brightness): smoke and spray do not glow at dusk or under rain clouds */
@@ -395,11 +410,17 @@ export class SimVisualFxManager {
     this.wetness = THREE.MathUtils.clamp(wetness, 0, 1);
   }
 
+  /** The player's rear lamps this frame (0 off, 1 lit, more braking): they light its spray red */
+  public setPlayerLamps(level: number): void {
+    this.playerLamp = Number.isFinite(level) ? Math.max(0, level) : 0;
+  }
+
   /**
    * Drives every active non-ghost opponent's lights-only headlights (front/rear flares + cloned emissive lenses)
    * from the session's headlight state and active camera, so AI and online cars are visible ahead and in mirrors at night.
    */
   public setHeadlights(on: boolean, camera?: THREE.Camera): void {
+    this.opponentLampsOn = on;
     for (const entry of this.opponentCars.values()) {
       const hl = this.rigHeadlights.get(entry.rig);
       if (hl) {
@@ -452,6 +473,7 @@ export class SimVisualFxManager {
       this.playerPos.multiplyScalar(0.25);
     }
     this.updateOpponentCars(dt, peers);
+    this.spray.step(dt);
   }
 
   private readonly carRight = new THREE.Vector3();
@@ -513,37 +535,21 @@ export class SimVisualFxManager {
     // 2. Tyre smoke, from how hard each tyre slides (`tyre-slide-fx.ts`), at a rate set by its level
     this.emitTyreSmoke(dt, carForward, carSpeedMs, wheels);
 
-    // 3. Spray and off-track dust
+    // 3. Spray on a wet road, off the tyres on the road (render/tyre-spray.ts)
+    for (let wIdx = 0; wIdx < 4; wIdx++) this.sprayWheels[wIdx].set(wheels[wIdx].worldPos.x, wheels[wIdx].zRoad, wheels[wIdx].worldPos.z);
+    const onRoad = wheels.filter((w) => w.fzN > 100 && w.surfaceType !== 'grass').length;
+    if (onRoad > 0) {
+      this.spray.emitCar('player', dt, this.sprayWheels, carForward, this.sprayVel.copy(carForward).multiplyScalar(carSpeedMs), this.wetness, this.playerLamp, onRoad / 4);
+    }
+
+    // 4. Off-track dust (none off a wet run-off)
     this.emitTimer += dt;
     if (this.emitTimer >= 0.018 && carSpeedMs > 3.5) {
       this.emitTimer = 0;
       for (let wIdx = 0; wIdx < 4; wIdx++) {
         const w = wheels[wIdx];
         if (w.fzN <= 100) continue;
-
-        // Spray: a fine mist off the tyres, most of it from the rears and the diffuser, rising behind the car. The
-        // fronts' is kept low and short-lived so it does not wash across the driver's view from beside the cockpit
-        if (this.wetness > 0.14 && carSpeedMs > 12 && w.surfaceType !== 'grass') {
-          const isRear = wIdx >= 2;
-          const prob = this.wetness * Math.min(1, carSpeedMs / 42) * (isRear ? 1 : 0.35);
-          if (Math.random() < prob) {
-            this.spawnParticle(
-              w.worldPos.x - carForward.x * (isRear ? 0.5 : 0.35),
-              w.zRoad + (isRear ? 0.25 : 0.1),
-              w.worldPos.z - carForward.z * (isRear ? 0.5 : 0.35),
-              carForward,
-              carUp,
-              carSpeedMs * (isRear ? 1.65 : 1.15),
-              isRear ? 0.6 : 0.35,
-              isRear ? 3.2 : 1.1,
-              isRear ? 0.75 : 0.32,
-              0xc9d1d8,
-              (isRear ? 0.16 : 0.08) * (0.6 + 0.4 * this.wetness),
-              isRear ? 1 : 0.35
-            );
-          }
-          continue;
-        }
+        if (this.wetness > 0.14 && w.surfaceType !== 'grass') continue;
         if (w.surfaceType === 'grass' || w.surfaceType === 'runoff') {
           this.spawnParticle(
             w.worldPos.x,
@@ -697,13 +703,12 @@ export class SimVisualFxManager {
     scale1: number,
     maxAge: number,
     colorHex: number,
-    alpha: number,
-    lift = 1
+    alpha: number
   ): void {
     const vel = this.puffVel
       .copy(carForward)
       .multiplyScalar(carSpeedMs * 0.22)
-      .addScaledVector(carUp, (1.4 + Math.random() * 1.6) * lift);
+      .addScaledVector(carUp, 1.4 + Math.random() * 1.6);
     vel.x += (Math.random() - 0.5) * 1.8;
     vel.z += (Math.random() - 0.5) * 1.8;
     this.spawnPuff(wx, wy, wz, vel, scale0, scale1, maxAge, colorHex, alpha);
@@ -1026,29 +1031,24 @@ export class SimVisualFxManager {
       // On Low, wheels.ground is already null so seatContactShadow uses physics contact height with zero raycasts
       seatContactShadow(carRig.root, wheels);
 
-      // Opponent car rooster-tail water spray plume in wet conditions (distance-culled and quality-scaled)
-      if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {
-        const maxDist = OPPONENT_SPRAY_DIST_M[this.graphicsQuality];
-        const nearEnough = !this.playerPosValid || peer.position.distanceToSquared(this.playerPos) <= maxDist * maxDist;
-        const peerSpeedMs = peer.speedKmh / 3.6;
-        if (nearEnough && Math.random() < this.wetness * Math.min(1, peerSpeedMs / 48) * 0.65 * OPPONENT_SPRAY_RATE[this.graphicsQuality]) {
-          const peerFwd = this.peerFwd.set(0, 0, 1).applyQuaternion(peer.quaternion);
-          const peerUp = this.peerUp.set(0, 1, 0).applyQuaternion(peer.quaternion);
-          const sideJitter = (Math.random() - 0.5) * 1.3;
-          this.spawnParticle(
-            peer.position.x - peerFwd.x * 2.1 + peerFwd.z * sideJitter,
-            peer.position.y + 0.32,
-            peer.position.z - peerFwd.z * 2.1 - peerFwd.x * sideJitter,
-            peerFwd,
-            peerUp,
-            peerSpeedMs * 1.55,
-            0.6,
-            3.6,
-            0.85,
-            0xc9d1d8,
-            // A mist that greys out what is behind it, not a wall: following closely still costs visibility
-            0.14 * (0.6 + 0.4 * this.wetness)
-          );
+      // Spray off an opponent on a wet road (the road under the player's car stands in for its own), less of it
+      // the farther it is from the player, none past the tier's reach
+      if (this.wetness > 0.12 && !peer.ghost && peer.speedKmh > 30) {
+        const reach = this.spray.reachM;
+        const distM = this.playerPosValid ? peer.position.distanceTo(this.playerPos) : 0;
+        if (distM < reach) {
+          const share = 1 - 0.7 * THREE.MathUtils.smoothstep(distM, OPPONENT_SPRAY_FULL_M, reach);
+          const fwd = this.sprayFwd.set(0, 0, 1).applyQuaternion(peer.quaternion);
+          const right = this.sprayRight.crossVectors(fwd, THREE.Object3D.DEFAULT_UP).normalize();
+          const p = peer.position;
+          const sw = this.sprayWheels;
+          for (let k = 0; k < 4; k++) {
+            const along = k < 2 ? OPPONENT_FRONT_AXLE_M : -OPPONENT_REAR_AXLE_M;
+            const across = k % 2 === 0 ? OPPONENT_HALF_TRACK_M : -OPPONENT_HALF_TRACK_M;
+            sw[k].set(p.x + fwd.x * along + right.x * across, p.y, p.z + fwd.z * along + right.z * across);
+          }
+          const lamp = (this.opponentLampsOn ? 1 : 0.3) + (braking ? 0.7 : 0);
+          this.spray.emitCar(peer.peerId, dt, sw, fwd, this.sprayVel.copy(fwd).multiplyScalar(peer.speedKmh / 3.6), this.wetness, lamp, share);
         }
       }
     }
