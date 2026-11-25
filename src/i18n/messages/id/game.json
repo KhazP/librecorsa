@@ -826,6 +826,18 @@
     "clutchGearUp": "Naik gigi",
     "clutchPaddle": "paddle naik gigi"
   },
+  "vr": {
+    "paused": "Dijeda",
+    "resumeHint": "A atau pelatuk kanan: lanjut",
+    "recenterHint": "Y: tengahkan pandangan",
+    "leaveHint": "B: keluar dari VR",
+    "pauseHint": "Tahan B untuk jeda",
+    "menusOutside": "Menu tampil di luar headset",
+    "lap": "Lap {lap}",
+    "lapOf": "Lap {lap}/{total}",
+    "last": "Sebelumnya",
+    "best": "Terbaik"
+  },
   "driverKey": {
     "notAKeyFile": "Itu bukan file kunci pembalap",
     "blocked": "Browser ini memblokir penyimpanannya"

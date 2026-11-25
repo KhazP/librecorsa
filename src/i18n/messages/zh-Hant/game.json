@@ -826,6 +826,18 @@
     "clutchGearUp": "升檔",
     "clutchPaddle": "升檔撥片"
   },
+  "vr": {
+    "paused": "已暫停",
+    "resumeHint": "A 或右扳機：繼續駕駛",
+    "recenterHint": "Y：重新置中視角",
+    "leaveHint": "B：離開 VR",
+    "pauseHint": "按住 B 暫停",
+    "menusOutside": "選單顯示在頭戴裝置外",
+    "lap": "第 {lap} 圈",
+    "lapOf": "第 {lap}/{total} 圈",
+    "last": "上一圈",
+    "best": "最佳"
+  },
   "driverKey": {
     "notAKeyFile": "這不是有效的車手金鑰檔案",
     "blocked": "此瀏覽器封鎖了儲存權限"

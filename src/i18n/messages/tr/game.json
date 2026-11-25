@@ -826,6 +826,18 @@
     "clutchGearUp": "Vites yükselt",
     "clutchPaddle": "vites yükseltme kulakçığı"
   },
+  "vr": {
+    "paused": "Duraklatıldı",
+    "resumeHint": "A veya sağ tetik: devam et",
+    "recenterHint": "Y: görüşü ortala",
+    "leaveHint": "B: VR’dan çık",
+    "pauseHint": "Duraklatmak için B’yi basılı tut",
+    "menusOutside": "Menüler gözlüğün dışında görünür",
+    "lap": "Tur {lap}",
+    "lapOf": "Tur {lap}/{total}",
+    "last": "Son",
+    "best": "En iyi"
+  },
   "driverKey": {
     "notAKeyFile": "Bu bir pilot anahtarı dosyası değil",
     "blocked": "Bu tarayıcı kaydetmeyi engelliyor"

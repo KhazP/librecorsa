@@ -826,6 +826,18 @@
     "clutchGearUp": "Subir marcha",
     "clutchPaddle": "aleta de subir marcha"
   },
+  "vr": {
+    "paused": "Pausado",
+    "resumeHint": "A ou gatilho direito: continuar",
+    "recenterHint": "Y: recentralizar a visão",
+    "leaveHint": "B: sair do VR",
+    "pauseHint": "Segure B para pausar",
+    "menusOutside": "Os menus aparecem fora do headset",
+    "lap": "Volta {lap}",
+    "lapOf": "Volta {lap}/{total}",
+    "last": "Última",
+    "best": "Melhor"
+  },
   "driverKey": {
     "notAKeyFile": "Este não é um arquivo de chave de piloto",
     "blocked": "Este navegador bloqueia o salvamento"

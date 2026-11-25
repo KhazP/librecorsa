@@ -25,6 +25,9 @@ export const OVERLAY_LAYER = 10;
  */
 export const DETAIL_LAYER = 11;
 
+/** Render layer of the headset's HUD panel (vr/vr-hud.ts): the headset's camera alone draws it, no probe or mirror */
+export const VR_HUD_LAYER = 12;
+
 /** Puts `root` and everything under it on the driver-head layer only (three's layers are not inherited) */
 export function moveToDriverHeadLayer(root: THREE.Object3D): void {
   root.traverse((obj) => obj.layers.set(DRIVER_HEAD_LAYER));

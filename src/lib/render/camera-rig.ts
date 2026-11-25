@@ -779,8 +779,11 @@ export class CameraRig {
       f.chassis.updateWorldMatrix(true, false);
       camera.position.copy(anchor.pos).applyMatrix4(f.chassis.matrixWorld);
       f.chassis.getWorldQuaternion(camera.quaternion);
-      camera.quaternion.multiply(CAM_FORWARD_FLIP).multiply(this.anchorPitch.setFromAxisAngle(CAM_X_AXIS, anchor.pitchRad));
-      const headLocked = view.driverHead && f.headMovement === "static";
+      camera.quaternion.multiply(CAM_FORWARD_FLIP);
+      // In a headset the seat is level with the car and still: the player's own head looks down and moves, and a view
+      // that tilts or shakes without the head moving makes them sick (sims lock the VR view to the car)
+      if (!f.inVr) camera.quaternion.multiply(this.anchorPitch.setFromAxisAngle(CAM_X_AXIS, anchor.pitchRad));
+      const headLocked = (view.driverHead && f.headMovement === "static") || f.inVr;
       if (!headLocked) {
         // Micro-shake: pitch about the lens' X axis, roll about its view axis, heave along the car's up
         this.shakeEuler.set(shake.pitchRad, 0, shake.rollRad);

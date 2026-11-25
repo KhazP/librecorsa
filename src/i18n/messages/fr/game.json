@@ -826,6 +826,18 @@
     "clutchGearUp": "Rapport supérieur",
     "clutchPaddle": "palette de montée"
   },
+  "vr": {
+    "paused": "En pause",
+    "resumeHint": "A ou gâchette droite : repartir",
+    "recenterHint": "Y : recentrer la vue",
+    "leaveHint": "B : quitter la VR",
+    "pauseHint": "Maintiens B pour mettre en pause",
+    "menusOutside": "Les menus s’affichent hors du casque",
+    "lap": "Tour {lap}",
+    "lapOf": "Tour {lap}/{total}",
+    "last": "Dernier",
+    "best": "Meilleur"
+  },
   "driverKey": {
     "notAKeyFile": "Ce n’est pas un fichier de clé de pilote",
     "blocked": "Ce navigateur bloque l’enregistrement"
