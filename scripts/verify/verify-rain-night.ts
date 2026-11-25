@@ -346,6 +346,18 @@ console.log("\n== Night lighting & headlights");
     `night key=${clearNight.keyIntensity.toFixed(2)}/fill=${clearNight.fillIntensity.toFixed(2)}, storm key=${stormyNight.keyIntensity.toFixed(2)}/fill=${stormyNight.fillIntensity.toFixed(2)}, contrast=${clearNight.gradeContrast.toFixed(2)}`
   );
 
+  // Rain takes most of the sun's direct light by day (the sky deck carries it), none of the moon's by night
+  const overcastNoon = evaluateSkyLighting(70, 1, 0);
+  const stormNoon = evaluateSkyLighting(70, 1, 0.85);
+  const stormyNightDry = evaluateSkyLighting(nightElev, 1, 0);
+  check(
+    "Rain dims the day's key light under the deck, never the night's",
+    stormNoon.keyIntensity < 0.45 * overcastNoon.keyIntensity &&
+      stormNoon.keyIntensity > 0.2 * overcastNoon.keyIntensity &&
+      Math.abs(stormyNight.keyIntensity - stormyNightDry.keyIntensity) < 1e-9,
+    `noon key overcast=${overcastNoon.keyIntensity.toFixed(3)} storm=${stormNoon.keyIntensity.toFixed(3)}, night storm=${stormyNight.keyIntensity.toFixed(3)}`
+  );
+
   // Opponent lights remain independent of player manual toggle
   const offAtNight = resolveHeadlightStates("off", nightElev, 0);
   check(

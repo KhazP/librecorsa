@@ -409,6 +409,20 @@ const NIGHT_FILL_SKY = 0x263a62;
 /** Fill added on a fully overcast night */
 const NIGHT_OVERCAST_FILL = 0.18;
 const NIGHT_FILL_GROUND = 0x121824;
+/**
+ * Share of the sun's direct light that rain takes away by day, on top of the cloud's: under a rain deck the sky carries
+ * the light, and level concrete lit by a sun a full overcast still let through shone twice as bright as the sky
+ */
+const RAIN_SUN_DIM = 0.75;
+
+/** The sun's (or by night the moon's) intensity before floodlights, for the sun elevation, cloud and rain */
+function keyIntensityFor(elevationDeg: number, cloud: number, rain: number, nightShare: number): number {
+  return (
+    curve(SUN_INTENSITY_KEYS, elevationDeg) *
+    (1 - (0.88 - 0.38 * nightShare) * Math.pow(cloud, 1.5)) *
+    (1 - RAIN_SUN_DIM * rain * (1 - nightShare))
+  );
+}
 
 /** Evaluates the core night/day lighting scalars at `(elevationDeg, cloud, rain)` for headless lighting checks */
 export function evaluateSkyLighting(
@@ -428,7 +442,7 @@ export function evaluateSkyLighting(
   const nightShare = nightShareOf(elevationDeg);
   return {
     nightShare,
-    keyIntensity: curve(SUN_INTENSITY_KEYS, elevationDeg) * (1 - (0.88 - 0.38 * nightShare) * Math.pow(cl, 1.5)),
+    keyIntensity: keyIntensityFor(elevationDeg, cl, rn, nightShare),
     fillIntensity: curve(FILL_INTENSITY_KEYS, elevationDeg) * (1 + 1.1 * cl) + NIGHT_OVERCAST_FILL * nightShare * cl,
     environmentIntensity: curve(ENV_INTENSITY_KEYS, elevationDeg) * (1 - 0.25 * rn),
     exposure: curve(EXPOSURE_KEYS, elevationDeg) * (1 + 0.3 * cl),
@@ -753,8 +767,9 @@ export function createGoldenHourEnvironment(
     skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
     sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
     colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud * (1 - nightShare));
-    // Cloud blocks most direct sun by day; at night clouds still scatter moonlight/skyglow rather than extinguishing it
-    sunLight.intensity = curve(SUN_INTENSITY_KEYS, e) * (1 - (0.88 - 0.38 * nightShare) * Math.pow(cloud, 1.5));
+    // Cloud blocks most direct sun by day, rain the most of what is left; at night clouds still scatter moonlight/skyglow
+    // rather than extinguishing it
+    sunLight.intensity = keyIntensityFor(e, cloud, rain, nightShare);
 
     // Fill: an overcast sky lights everything from above; at night it deepens to cool indigo
     fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud).lerp(tint.setHex(NIGHT_FILL_SKY), nightShare);
