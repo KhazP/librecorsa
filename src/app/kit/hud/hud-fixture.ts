@@ -1,6 +1,6 @@
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import type { BuiltTrackData } from "@/lib/track-data";
-import type { CarTelemetry, F12026Channels, RaceStandingEntry, TireCompound } from "@/types/f1";
+import type { CarTelemetry, F12026Channels, PitTelemetry, RaceStandingEntry, TireCompound } from "@/types/f1";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 
 /**
@@ -11,9 +11,13 @@ import type { WeatherHudState } from "@/components/hud/WeatherBadge";
  * - practice: the same car and lap alone, no race
  * - gt3: the race in a GT3 (no ERS, no aero flaps)
  * - lights: the race on the grid, the lights coming on
+ * - final: the race on its last lap, lap 5 of 5, the leader and the player on it
+ *
+ * Every race has pit stops (one required, none made, the medium tyres chosen for the stop, the car 6 % damaged), as an
+ * offline race with a pit lane does: the MFD shows its Pit page.
  */
-export type HudScenario = "race" | "practice" | "gt3" | "lights";
-export const HUD_SCENARIOS: readonly HudScenario[] = ["race", "practice", "gt3", "lights"];
+export type HudScenario = "race" | "practice" | "gt3" | "lights" | "final";
+export const HUD_SCENARIOS: readonly HudScenario[] = ["race", "practice", "gt3", "lights", "final"];
 
 export interface HudFixture {
   t: CarTelemetry;
@@ -50,6 +54,27 @@ const FIELD: { code: string; name: string; color: string; gap: number; interval:
   { code: "HUY", name: "J. Huynh", color: "#C5CBD8", gap: 13.214, interval: 3.384, best: 102_790, last: 103_020, compound: "soft" },
 ];
 
+/** The pit lane's state in a race: on the track, nothing called yet */
+const PIT: PitTelemetry = {
+  phase: "track",
+  limiterOn: false,
+  limiterAuto: false,
+  limitKmh: 80,
+  overLimit: false,
+  speedingCount: 0,
+  toBoxM: null,
+  boxSideM: null,
+  boxIndex: 3,
+  serviceLeftS: 0,
+  serviceTotalS: 0,
+  tyreS: 0,
+  repairS: 2.3,
+  damage: 0.06,
+  strategy: { nextCompound: "medium", repairDamage: true, boxRequested: false },
+  stopsMade: 0,
+  stopsRequired: 1,
+};
+
 const GT3_CHANNELS: F12026Channels = {
   WHEEL_SR_LF: 0, WHEEL_SR_RF: 0, WHEEL_SR_LR: 0, WHEEL_SR_RR: 0,
   BUMPSTOPUP_TRAVEL_LF: 0, BUMPSTOPUP_TRAVEL_RF: 0, BUMPSTOPUP_TRAVEL_LR: 0, BUMPSTOPUP_TRAVEL_RR: 0,
@@ -65,6 +90,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
   const base = new F1Physics2026(track).telemetry;
   const gt3 = scenario === "gt3";
   const lights = scenario === "lights";
+  const lap = lights ? 0 : scenario === "final" ? 5 : 4;
   // 72.4 s into a 101.4 s lap: about 0.7 round, in the last sector
   const progress = lights ? 0.995 : 0.7;
   const t: CarTelemetry = {
@@ -86,7 +112,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     trackDistanceM: progress * track.totalLengthM,
     currentSector: 3,
     currentTurnNumber: 7,
-    lapCount: lights ? 0 : 4,
+    lapCount: lap,
     currentLapTimeMs: lights ? 0 : 72_408,
     lastLapTimeMs: lights ? null : 101_902,
     bestLapTimeMs: lights ? null : 101_377,
@@ -116,7 +142,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
       name: f.name,
       teamColorHex: f.color,
       isPlayer: f.code === "YOU",
-      lap: lights ? 0 : 4,
+      lap,
       gapToLeaderS: lights ? 0 : f.gap,
       intervalS: lights ? 0 : f.interval,
       bestLapMs: lights ? null : f.best,
@@ -132,7 +158,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
       totalLaps: 5,
       position: 3,
       fieldSize: 8,
-      lap: lights ? 0 : 4,
+      lap,
       standings,
       splits: lights
         ? undefined
@@ -141,6 +167,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
             behind: { driverCode: "RUB", teamColorHex: "#4DA6FF", gapS: 0.471, changeS: 0.03 },
           },
     };
+    t.pit = PIT;
   }
   return { t, deltaS: lights ? null : -0.214, compound: "soft", weather: WEATHER };
 }
