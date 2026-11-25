@@ -125,6 +125,10 @@ export const CHAPARRAL_2D_SIM_PROFILE: CarSimProfile = {
   // As the M1's [est]
   understeerRadPerMs2: 0.007,
   speedProfile: CHAPARRAL_2D_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) the Can-Am fields failed the race gate
+  // (the '66: 3 → 5 contacts the AI was to blame for; the '67: lap-1 offs 412 → 545 in 90 races), and solo they ran past
+  // the kerbs at Chang, Oschersleben and Bridgehampton
+  aiOwnKerbShare: 0,
   // Fuel flow with the engine's speed: 0.00555 l/s per 1000 rpm flat out [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.005553,
 };
@@ -141,6 +145,10 @@ export const CHAPARRAL_2D_67_SIM_PROFILE: CarSimProfile = {
   braking: { lowG: 0.98, aeroG: -0.05, refMs: 80 },
   understeerRadPerMs2: 0.007,
   speedProfile: CHAPARRAL_2D_67_PROFILE_CAR,
+  // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) the Can-Am fields failed the race gate
+  // (the '66: 3 → 5 contacts the AI was to blame for; the '67: lap-1 offs 412 → 545 in 90 races), and solo they ran past
+  // the kerbs at Chang, Oschersleben and Bridgehampton
+  aiOwnKerbShare: 0,
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.00619,
 };
