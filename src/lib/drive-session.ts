@@ -15,7 +15,7 @@ import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
 import { setKtx2Renderer } from "@/lib/render/ktx2";
 import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display";
-import { createPortedCarRig } from "@/lib/ported-car-model";
+import { createPortedCarRig, lcLmdhCameraAnchors } from "@/lib/ported-car-model";
 import { defaultGtTyreBrand, resolveGtTyreBrand } from "@/lib/render/gt-tyre-sidewall";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
@@ -1560,8 +1560,9 @@ export class DriveSession {
             // the rim on screen turns with the player's own (its lock is the player's when they set one)
             steerLockDeg: carWheelLockDeg(def.physics, settings.wheel.steerLockPerCar) / 2,
             floor: staticFloorOf(model.rigConfig),
-            // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
-            cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
+            // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle;
+            // LC-LMDH uses an opened-up cockpit anchor clear of its low carbon roof visor
+            cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : car === "lc-lmdh" ? lcLmdhCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
             pirelliSidewall: def.classId === "f1" && def.year >= 2018,
             // Non-F1 racing cars wear sagatron918's GT sidewall packs (optional `?tyres=<brand>` override for testing)

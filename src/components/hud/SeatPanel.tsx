@@ -66,11 +66,11 @@ const seatRow = (key: RowKey, name: "view" | "fwd" | "up" | "right" | "tilt" | "
 
 const ROWS: readonly Row[] = [
   seatRow("view", "view", 1),
-  seatRow("fwd", "fwd", NUDGE_STEP_M),
   seatRow("up", "up", NUDGE_STEP_M),
-  seatRow("right", "right", NUDGE_STEP_M),
+  seatRow("fwd", "fwd", NUDGE_STEP_M),
   seatRow("tiltDeg", "tilt", NUDGE_TILT_STEP_DEG),
   seatRow("fovDeg", "fov", NUDGE_FOV_STEP_DEG),
+  seatRow("right", "right", NUDGE_STEP_M),
 ];
 
 const REPEAT_DELAY_MS = 300;
@@ -292,9 +292,21 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
                 ) : (
                   <>
                     <HoldButton label={r.less} icon="remove" onStep={() => change(i, -1)} />
-                    <span className={`lc-mono flex-1 text-center text-[15px] font-bold ${zero ? "text-lc-slate" : "text-lc-chalk"}`}>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      disabled={zero}
+                      onClick={() => resetRow(i)}
+                      title={zero ? undefined : tx("prompts.resetRow")}
+                      aria-label={zero ? undefined : `${r.label}: ${tx("prompts.resetRow")}`}
+                      className={cx(
+                        "lc-mono flex-1 rounded-lc-nub py-1 text-center text-[15px] font-bold",
+                        MOTION,
+                        zero ? "cursor-default text-lc-slate" : "cursor-pointer text-lc-chalk hover:bg-lc-chalk/10"
+                      )}
+                    >
                       {formatValue(r, p.nudge, p.fovDeg, units)}
-                    </span>
+                    </button>
                     <HoldButton label={r.more} icon="add" onStep={() => change(i, 1)} />
                   </>
                 )}
@@ -322,7 +334,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
             { action: "back", label: tx("prompts.done"), key: `Esc / ${cameraKey}`, keyPrinted: true },
           ]}
         />
-        <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">{tx("savedPerCar")}</p>
+        <p className="lc-hint m-0 px-1 text-lc-fog">{tx("savedPerCar")}</p>
       </div>
     </div>
   );

@@ -1322,7 +1322,7 @@ def main():
     sz = steer_info["pivot"][2] if steer_info else 0.35
     rear_z = -float(hi[1])
     cameras = {
-        "cockpit": {"pos": [round(sx, 3), round(sy + 0.20, 3), round(sz - 0.43, 3)], "pitchDeg": -4, "fov": 60},
+        "cockpit": {"pos": [round(sx - 0.008, 3), round(sy + 0.161, 3), round(sz - 0.262, 3)], "pitchDeg": -4, "fov": 58},
         "tcam": {"pos": [0.0, round(float(height) + 0.10, 3), round(sz - 0.55, 3)], "pitchDeg": -7, "fov": 58},
         "dash": {"pos": [round(sx, 3), round(sy + 0.125, 3), round(sz + 0.045, 3)], "pitchDeg": -3, "fov": 58},
         "bumper": {"pos": [0.0, 0.55, round(-float(front_axle) + 0.35, 3)], "pitchDeg": -3, "fov": 60},

@@ -51,10 +51,10 @@ export interface PortedCarOptions {
    */
   floor: StaticFloor;
   /**
-   * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model), built from
-   * where this model's steering wheel and front axle landed in rig space
+   * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model, or the
+   * LC-LMDH's tuned cockpit sightline), built from where this model's steering wheel and front axle landed in rig space
    */
-  cameraAnchors?: (fit: PortedCameraFit) => Lc26ModelInstance["cameraAnchors"];
+  cameraAnchors?: (fit: PortedCameraFit, glbAnchors: Lc26ModelInstance["cameraAnchors"]) => Lc26ModelInstance["cameraAnchors"];
   /** A 2018+ car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
   pirelliSidewall?: boolean;
   /** Non-F1 racing car GT tyre sidewall brand (sagatron918 packs, `gt-tyre-sidewall.ts`) */
@@ -150,6 +150,104 @@ export function portedCarRoot(model: THREE.Object3D): THREE.Object3D {
 /** Named body nodes/materials kept unmerged so headlight, taillight, mirror and dash hooks can find them cleanly */
 const PRESERVED_BODY_NODE_RE = /head|light|lamp|tail|brake|stop|rear_?led|mirror|dash|display|screen|glass|lens|beam|bulb|drl|fog/i;
 
+/**
+ * LC-LMDH cockpit sightline anchor relative to the steering-wheel centre: moves the eye forward and slightly lower
+ * under the low prototype canopy (`[-0.008, +0.161, -0.262]` m, `-4°` pitch, `58°` FOV) so corners ahead open up past
+ * the carbon roof visor and A-pillar while keeping the full steering-wheel LCD in view.
+ */
+export const LC_LMDH_COCKPIT_FROM_STEER = [-0.008, 0.161, -0.262] as const;
+
+export function lcLmdhCameraAnchors(
+  fit: PortedCameraFit,
+  glbAnchors: Lc26ModelInstance["cameraAnchors"]
+): Lc26ModelInstance["cameraAnchors"] {
+  if (!fit.steerCentre) return glbAnchors;
+  const [dx, dy, dz] = LC_LMDH_COCKPIT_FROM_STEER;
+  const cockpitPos = new THREE.Vector3(fit.steerCentre.x + dx, fit.steerCentre.y + dy, fit.steerCentre.z + dz);
+  const cockpit = {
+    pos: cockpitPos,
+    pitchRad: -4 * THREE.MathUtils.DEG2RAD,
+    fovDeg: 58,
+  };
+  return {
+    ...glbAnchors,
+    cockpit,
+    shoulder: {
+      pos: cockpitPos.clone().add(new THREE.Vector3(0, 0.18, -0.3)),
+      pitchRad: -8 * THREE.MathUtils.DEG2RAD,
+      fovDeg: cockpit.fovDeg + 3,
+    },
+  };
+}
+
+/**
+ * Parks the LC-LMDH's static vertical centre windscreen wiper down onto the lower passenger-side windscreen cowl so it
+ * no longer bisects the cockpit sightline. Operates once on the cached GLB template (`BODY`'s `carbon_weave` mesh),
+ * rotating only wiper arm/blade vertices above the pivot seam around `(0, 0.738, 1.496)`. Returns rotated vertex count.
+ */
+export function parkLcLmdhWiper(body: THREE.Object3D): number {
+  const pivot = new THREE.Vector3(0, 0.738, 1.496);
+  const fromDir = new THREE.Vector3(0, 0.244, -0.434).normalize();
+  const toDir = new THREE.Vector3(-0.852, -0.05, -0.521).normalize();
+  const rot = new THREE.Quaternion().setFromUnitVectors(fromDir, toDir);
+  const v = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  let moved = 0;
+
+  body.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material) || mesh.material.name !== "carbon_weave") return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const inWiperBox = (vi: number) => {
+      const x = pos.getX(vi);
+      const y = pos.getY(vi);
+      const z = pos.getZ(vi);
+      return Math.abs(x) <= 0.022 && y >= 0.745 && y <= 0.975 && z >= 1.06 && z <= 1.52;
+    };
+    const index = mesh.geometry.index;
+    const triVerts = index ? index.count : pos.count;
+    const wiperVerts = new Set<number>();
+    const otherVerts = new Set<number>();
+    for (let i = 0; i + 2 < triVerts; i += 3) {
+      const a = index ? index.getX(i) : i;
+      const b = index ? index.getX(i + 1) : i + 1;
+      const c = index ? index.getX(i + 2) : i + 2;
+      if (inWiperBox(a) && inWiperBox(b) && inWiperBox(c)) {
+        wiperVerts.add(a);
+        wiperVerts.add(b);
+        wiperVerts.add(c);
+      } else {
+        otherVerts.add(a);
+        otherVerts.add(b);
+        otherVerts.add(c);
+      }
+    }
+    if (wiperVerts.size === 0) return;
+
+    const normal = mesh.geometry.getAttribute("normal") as THREE.BufferAttribute | undefined;
+    let meshMoved = 0;
+    for (const vi of wiperVerts) {
+      if (otherVerts.has(vi)) continue;
+      v.fromBufferAttribute(pos, vi).sub(pivot).applyQuaternion(rot).add(pivot);
+      pos.setXYZ(vi, v.x, v.y, v.z);
+      if (normal) {
+        n.fromBufferAttribute(normal, vi).applyQuaternion(rot).normalize();
+        normal.setXYZ(vi, n.x, n.y, n.z);
+      }
+      meshMoved++;
+    }
+    if (meshMoved > 0) {
+      pos.needsUpdate = true;
+      if (normal) normal.needsUpdate = true;
+      mesh.geometry.computeBoundingBox();
+      mesh.geometry.computeBoundingSphere();
+      moved += meshMoved;
+    }
+  });
+  return moved;
+}
+
 /** Loads (once) and caches a ported car GLB; the rigs clone it. Exported to pre-warm opponents before a race */
 export function loadTemplate(url: string): Promise<THREE.Group | null> {
   let template = templates.get(url);
@@ -182,6 +280,7 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
         const extras = (car.userData ?? {}) as PortedExtras;
         const body = scene.getObjectByName("BODY");
         if (body) {
+          if (url.includes("lc-lmdh")) parkLcLmdhWiper(body);
           const variantNodes = new Set(Object.keys(extras.partVariants ?? {}));
           mergeStaticMeshesByMaterial(body, {
             namePrefix: "PORTED_BODY_Merged",
@@ -601,7 +700,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       pitchRad: -8 * THREE.MathUtils.DEG2RAD,
       fovDeg: anchors.cockpit.fovDeg + 3,
     };
-    cameraAnchors = options.cameraAnchors?.(cameraFit) ?? anchors;
+    cameraAnchors = options.cameraAnchors?.(cameraFit, anchors) ?? anchors;
   });
 
   const updateFromTelemetry = (
