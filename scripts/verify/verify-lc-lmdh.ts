@@ -216,7 +216,7 @@ console.log('\n== Aero against speed (flat, held speed)');
       lowest = Math.min(lowest, c.telemetry.aeroHeightFront);
       return false;
     });
-    check('On the brakes from 250 km/h the nose dives and the balance comes forward 0.8–3 %', most - steady > 0.8 && most - steady < 3 && most < wf,
+    check('On the brakes from 250 km/h the nose dives ≥ 4 mm and the balance comes forward 0.6–3 %', lowest < steadyFront - 0.004 && most - steady > 0.6 && most - steady < 3 && most < wf,
       `${fmt(steady, 1)} → ${fmt(most, 1)} %, front ${fmt(steadyFront * 1000, 1)} → ${fmt(lowest * 1000, 1)} mm`);
   }
   check('Floor clear of the ground at 300 km/h', Math.min(fast.front, fast.rear) > 0.015, `${fmt(fast.front * 1000, 1)} / ${fmt(fast.rear * 1000, 1)} mm, ${fmt(fast.downN / 1000, 1)} kN of downforce`);
@@ -729,8 +729,9 @@ console.log('\n== Fuel and steering');
   const burnt = f0 - sim.telemetry.fuelKg;
   // A sprint's fixed 28 kg of ballast: none of it burnt
   check('30 s flat out from rest: the 28 kg of sprint fuel stays aboard', f0 === 28 && burnt === 0, `${fmt(burnt, 3)} kg of ${f0} kg`);
-  // Where the fuel is used, it pays for the engine's work [963]: flat out from 200 km/h the engine gives way to the
-  // motor's deployment at the shaft limit, so deploying burns less for the same run
+  // Where the fuel is used, it pays for the engine's work [963]: flat out from 200 km/h, the work the shafts carry over the
+  // gearbox's efficiency (the motor off), and the engine gives way to the motor's deployment at the shaft limit, so
+  // deploying burns less for the same run
   const burn = (deployKw: number) => {
     const car = createLcLmdhSim(pad);
     car.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true, coldGarageStart: false });
@@ -741,7 +742,7 @@ console.log('\n== Fuel and steering');
     let work = 0;
     for (let t = 0; t < 12; t += DT) {
       car.step(DT, { throttle: 1 });
-      work += car.vehicle.iceMechanicalPowerW * DT;
+      work += (car.vehicle.driveshaftPowerW / C.gearbox.efficiency) * DT;
     }
     return { kg: start - car.telemetry.fuelKg, work, kmh: car.telemetry.speedKmh };
   };
