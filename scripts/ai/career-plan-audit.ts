@@ -51,6 +51,8 @@ interface Row {
   arm: Arm;
   i: number;
   laps: number;
+  /** Wall time the race took (s) */
+  wallS?: number;
   result: StandInRaceResult | null;
 }
 
@@ -125,8 +127,9 @@ async function audit(): Promise<void> {
     Array.from({ length: jobsN }, async () => {
       while (next < todo.length) {
         const job = todo[next++];
+        const t0 = Date.now();
         const result = await runOne(job.o);
-        appendFileSync(out, JSON.stringify({ ...job.row, result }) + '\n');
+        appendFileSync(out, JSON.stringify({ ...job.row, wallS: Math.round((Date.now() - t0) / 1000), result }) + '\n');
         finished++;
         if (finished % 10 === 0 || finished === todo.length)
           console.error(`  ${finished}/${todo.length} races, ${((Date.now() - started) / 60000).toFixed(1)} min`);
