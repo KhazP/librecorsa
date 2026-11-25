@@ -2419,7 +2419,7 @@ export class F12026CarSim implements SimulatorCar {
       const byWork = p.fuelLPerS1000Rpm === undefined && p.fuelFlowCurveKgS === undefined && p.fuelFlowKgS === undefined ? p.fuelFromEngineWork : undefined;
       if (byWork && this.fuelKg > 0 && this.realism.fuelUse) {
         // The engine's work at the crank over its efficiency and the fuel's heating value, and its idle while it runs
-        const running = !v.telemetry.engineStalled && v.rpm > 0.5 * this.config.engine.idleRpm;
+        const running = !v.telemetry.engineStalled && !v.electricOnly && v.rpm > 0.5 * this.config.engine.idleRpm;
         const fuelJPerKg = byWork.brakeThermalEfficiency * byWork.lowerHeatingValueMJPerKg * 1e6;
         const burnKgS = running && fuelJPerKg > 0 ? Math.max(byWork.idleKgS, v.iceMechanicalPowerW / fuelJPerKg) : 0;
         if (burnKgS > 0) {
@@ -3448,13 +3448,15 @@ export class F12026CarSim implements SimulatorCar {
 
     t.speedMs = vx;
     t.speedKmh = speedKmh;
-    t.rpm = Math.round(vt.rpm);
+    // The engine's speed: none while it is off and the motor drives alone (the motor's own is `mguRpm`)
+    t.rpm = vt.electricOnly ? 0 : Math.round(vt.rpm);
     t.gear = vt.gear;
     t.throttle = vt.throttle;
     t.brake = vt.brake;
     t.clutch = vt.clutchEngagement;
     t.clutchSlip = vt.clutchSlip;
     t.engineStalled = vt.engineStalled;
+    t.iceOff = vt.electricOnly;
     t.steering = this.steerCmd;
     t.longitudinalG = this.lastAxMs2 / G;
     t.lateralG = -this.lastAyMs2 / G;

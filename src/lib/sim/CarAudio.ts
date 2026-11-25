@@ -875,7 +875,8 @@ export class CarAudioEngine {
           skidRate: 0.85 + 0.25 * squeal.pitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
           bodywork: this.bodyworkLevel(telemetry, legacyDt),
-          stalled: telemetry.engineStalled === true,
+          // Engine off on its own or running electric: the banks mute the engine and keep the motor and driveline
+          stalled: telemetry.engineStalled === true || telemetry.iceOff === true,
           // Heard only by banks that carry a driveline section or an electric machine loop
           driveshaftRadS: telemetry.driveshaftRadS,
           driveshaftTorqueNm: telemetry.driveshaftTorqueNm,
@@ -924,7 +925,7 @@ export class CarAudioEngine {
       this.engineExhaustFilter.frequency.setTargetAtTime(cutoffHz, now, tau);
     }
 
-    const engineAlive = telemetry.engineStalled ? 0 : 1;
+    const engineAlive = telemetry.engineStalled || telemetry.iceOff ? 0 : 1;
 
     // Crossfade across the 5 real F1 WAV sample loops
     if (this.engineVoice === 'samples') {

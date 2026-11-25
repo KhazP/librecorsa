@@ -588,6 +588,8 @@ export interface VehicleTelemetry {
   clutchSlip: number;
   /** True when the engine has stalled under manual clutch */
   engineStalled: boolean;
+  /** True while the car runs on its hybrid motor alone, the engine off (`ERSData.pitLaneElectric`) */
+  electricOnly: boolean;
   /** Body-frame accelerations (g): + forward, + left */
   lonG: number;
   latG: number;
@@ -1398,6 +1400,13 @@ export class VehiclePhysics {
   public diffActivePhase: 'ENTRY' | 'MID' | 'EXIT' = 'MID';
   /** Live-tunable engine torque/throttle map (1 = Quali 100%, 2 = Race 98.5%, 3 = Smooth 96%, 4 = Lean 92.5%, 5 = Save 87%) */
   public engineMap = 1;
+  /** Running on the hybrid motor alone, the engine off (`ERSData.pitLaneElectric`) */
+  public electricOnly = false;
+  /** The engine has fired on this visit to the pit lane: it runs until the car is off it */
+  private pitEvFired = false;
+  /** How long the car has held a steady speed running electric (s), and its speed a step ago (km/h) */
+  private pitEvSteadyS = 0;
+  private pitEvPrevKmh = 0;
 
   // ---- aero & track environment
   public airDensity: number;
@@ -2171,6 +2180,10 @@ export class VehiclePhysics {
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
     this.turboBoost = 0;
+    this.electricOnly = false;
+    this.pitEvFired = false;
+    this.pitEvSteadyS = 0;
+    this.pitEvPrevKmh = speedMs * 3.6;
     this.drsOpen = false;
     this.drsBlend = 0;
     this.drsRequested = false;
@@ -3049,7 +3062,8 @@ export class VehiclePhysics {
     if (turbo && this.turbocharged) {
       const mguH = this.config.ers.mguH;
       const mode = this.config.performanceModes[this.performanceMode];
-      const baseTarget = turboBoostAsked(turbo, this.rpm, Math.max(this.icePlate, this.iceArbPlate));
+      // No exhaust while the engine is off: the rotor runs down
+      const baseTarget = this.electricOnly ? 0 : turboBoostAsked(turbo, this.rpm, Math.max(this.icePlate, this.iceArbPlate));
       if (mguH && this.ersEnergyJ > 0 && mode.deployFraction > 0) {
         const rpmReady = smoothstep(this.rpm, this.config.engine.idleRpm + 500, 7500);
         const liftFloor = turboSteadyBoost(turbo, this.rpm) * mguH.liftFloorBoostFraction * rpmReady;
@@ -3996,6 +4010,42 @@ export class VehiclePhysics {
       this.engineOmega = this.stall.recoverIfAuto(this.engineOmega, idleOmega);
     }
 
+    // ---- Electric running (`ERSData.pitLaneElectric`), as the class's cars leave their pit box: on the pit lane, in
+    // gear or neutral, from a crawl, the engine is off and the motor drives alone, from standstill. The engine fires once the car has
+    // held a steady speed (the pit limiter's) for a moment, or past the top speed, or on a low store, and then runs
+    // until the car is off the pit lane
+    const pitEv = this.config.ers.pitLaneElectric;
+    if (pitEv) {
+      let onPit = 0;
+      for (const w of this.wheels) if (w.ground.surface === 'pitlane') onPit++;
+      const kmhNow = this.velocity.length() * 3.6;
+      if (onPit < 2) this.pitEvFired = false;
+      if (this.electricOnly) {
+        const accel = Math.abs(kmhNow - this.pitEvPrevKmh) / 3.6 / Math.max(1e-6, h);
+        this.pitEvSteadyS = kmhNow >= pitEv.cruiseKmh && accel < 0.6 ? this.pitEvSteadyS + h : 0;
+        const soc = this.ersEnergyJ / Math.max(1, this.config.ers.ERS_MAX_CHARGE);
+        if (this.pitEvSteadyS >= pitEv.cruiseS || kmhNow > pitEv.maxKmh || soc <= pitEv.minSoc) this.pitEvFired = true;
+      }
+      this.pitEvPrevKmh = kmhNow;
+      const soc = this.ersEnergyJ / Math.max(1, this.config.ers.ERS_MAX_CHARGE);
+      const wasElectric = this.electricOnly;
+      // It begins only from a crawl (out of the box), never on a car arriving down the pit lane at speed
+      this.electricOnly =
+        (wasElectric || kmhNow < pitEv.cruiseKmh) &&
+        onPit >= 2 &&
+        this.gear >= 0 &&
+        !manualClutch &&
+        !this.stall.stalled &&
+        !this.pitEvFired &&
+        soc > pitEv.minSoc &&
+        kmhNow <= pitEv.maxKmh;
+      if (!this.electricOnly) this.pitEvSteadyS = 0;
+      // The engine fires: turned over by the wheels at speed, by its starter where they turn it slower than its idle
+      if (wasElectric && !this.electricOnly && this.engineOmega < idleOmega) this.engineOmega = idleOmega;
+    } else {
+      this.electricOnly = false;
+    }
+
     // ---- clutch engagement
     const cl = cfg.clutch;
     let engage = 0;
@@ -4031,6 +4081,8 @@ export class VehiclePhysics {
       }
       // A dog box between gears: the engine is free of the wheels
       if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
+      // Running electric the motor turns with the gearbox, no clutch between them to slip
+      else if (this.electricOnly && this.gear > 0) engage = 1;
     }
 
     // ---- manual-clutch stall & starter / bump-start recovery
@@ -4169,6 +4221,12 @@ export class VehiclePhysics {
     if (this.shiftTimer > 0 && tIceUncut > 0 && !downshifting) tIceUncut *= gb.shiftTorqueFraction;
     if (tIce > 0) tIce *= this.damagePowerMult;
     if (tIceUncut > 0) tIceUncut *= this.damagePowerMult;
+    // The engine off: no combustion, and declutched from the driveline it drags nothing either
+    if (this.electricOnly) {
+      tIce = 0;
+      tIceUncut = 0;
+      turboDeficit = 0;
+    }
 
     // A down-shift: free between gears, then the clutch comes home over its ramp, or at once when the engine has met
     // the wheels' speed (nothing is left to slip away, and the throttle finds the whole clutch)
@@ -4227,6 +4285,12 @@ export class VehiclePhysics {
         const harvestCapW = this.regenKw !== null ? Math.min(ers.maxHarvestW, this.regenKw * 1000) : ers.maxHarvestW * mode.brakeHarvestScale;
         pK = -harvestCapW * Math.min(1, inp.brake * 3);
         brakeWantW = -pK;
+      } else if (this.electricOnly) {
+        // Electric running: the motor's whole output on the throttle, whatever the deploy dial, while the store lasts
+        if (inp.throttle > 0.02 && this.ersEnergyJ > 0) {
+          deployAllowed = true;
+          pK = ers.ERS_MAX_DEPLOY * inp.throttle;
+        }
       } else if (dials && this.motorDeployKw !== null) {
         // The deploy dial: up to its cap on the throttle, above the class's minimum speed, while the store has charge
         if (inp.throttle > 0.05 && speedKmh >= dials.minDeploySpeedKmh && this.ersEnergyJ > 0 && this.motorDeployKw > 0) {
@@ -5263,6 +5327,7 @@ export class VehiclePhysics {
     t.clutchEngagement = this.clutchEngagement;
     t.clutchSlip = this.clutchSlipNorm;
     t.engineStalled = this.stall.stalled;
+    t.electricOnly = this.electricOnly;
     if (dt > 0) {
       _v.subVectors(this.velocity, this.prevVelocity).divideScalar(dt);
       t.lonG = _v.dot(_ez) / G;
@@ -5333,6 +5398,7 @@ export class VehiclePhysics {
       clutchEngagement: 0,
       clutchSlip: 0,
       engineStalled: false,
+      electricOnly: false,
       lonG: 0,
       latG: 0,
       WHEEL_SPEED_LF: 0,
