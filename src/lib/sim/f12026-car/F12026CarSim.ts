@@ -306,6 +306,14 @@ export interface CarSimProfile {
    */
   aiOwnKerbShare?: number;
   /**
+   * Fastest the autopilot turns the rim (deg/s) while it tracks a drive plan (default `DRIVER_RIM_SPEED_DEG_S`, the
+   * player's 900). At 900 the road, classic and prototype cars' plan tracking ran out of steering speed on a quick
+   * correction, lagged and swung wider each time until the car spun: career-length races on their plans spun and left
+   * the road many times more than on their own driver. 3600 still eases a hand-back after a knock across in a few
+   * tenths instead of one step
+   */
+  aiPlanRimSpeedDegS?: number;
+  /**
    * The car's understeer gradient (front road-wheel angle beyond the kinematic one, rad per m/s² of lateral
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
    */
@@ -3028,12 +3036,12 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /**
-   * The autopilot's steering, turned no faster than a driver's hands can turn the wheel when it tracks a plan (the
-   * player's 900°/s at the rim): a hand-back after a knock otherwise slammed the rack across in one step
+   * The autopilot's steering, turned no faster than `aiPlanRimSpeedDegS` at the rim when it tracks a plan (the player's
+   * 900°/s unless the car sets it): a hand-back after a knock otherwise slammed the rack across in one step
    */
   private autopilotSteer(want: number, h: number): number {
     if (!this.aiPlan) return want;
-    const maxStep = (DRIVER_RIM_SPEED_DEG_S / this.rimLockDeg) * h;
+    const maxStep = ((this.profile.aiPlanRimSpeedDegS ?? DRIVER_RIM_SPEED_DEG_S) / this.rimLockDeg) * h;
     return this.steerCmd + clamp(want - this.steerCmd, -maxStep, maxStep);
   }
 
