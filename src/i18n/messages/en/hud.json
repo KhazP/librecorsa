@@ -315,6 +315,7 @@
       "watchReplay": "Watch replay",
       "skipTrack": "Skip track",
       "nowPlaying": "{title}, {composer}",
+      "enterVr": "Enter VR",
       "settings": "Settings",
       "mainMenu": "Main menu"
     },

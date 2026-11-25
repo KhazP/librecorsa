@@ -209,6 +209,7 @@
   "pauseMenu.actions.skipTrack": "Pause menu: skip to the next music track.",
   "pauseMenu.actions.nowPlaying": "Line under Skip track: the music playing. {title}: track title; {composer}: its composer. Neither is translated.",
   "pauseMenu.actions.mainMenu": "Pause menu: leave the session for the title screen.",
+  "pauseMenu.actions.enterVr": "Pause menu action shown on a device with a VR headset: starts VR. Same words as Settings > Display > Graphics > Enter VR.",
   "pauseMenu.prompts.move": "Button prompt at the bottom of the screen: the stick or arrow keys move the cursor.",
   "pauseMenu.prompts.select": "Button prompt: confirm the highlighted item.",
   "pauseMenu.prompts.jumpThere": "Button prompt on the Corners tab: put the car at the highlighted corner.",

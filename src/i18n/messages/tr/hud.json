@@ -313,6 +313,7 @@
       "watchReplay": "Tekrarı izle",
       "skipTrack": "Parçayı atla",
       "nowPlaying": "{title}, {composer}",
+      "enterVr": "VR’a gir",
       "settings": "Ayarlar",
       "mainMenu": "Ana menü"
     },

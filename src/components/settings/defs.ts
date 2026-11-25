@@ -1,6 +1,7 @@
 import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
 import { RENDER_SCALE_FLOOR, sharpLowStepAllowed } from "@/lib/render/adaptive-quality";
 import {
@@ -596,7 +597,7 @@ export const quality = choice("tiles", {
   get label() { return rt("quality.label"); },
   // Phones and tablets draw without MSAA at every level (drive-session.ts): only they are told so
   options: () => {
-    const touch = isTouchDevice();
+    const touch = mobileClassGpu();
     return [
       { id: "low", label: rt("quality.options.low"), detail: rt("quality.details.low") },
       { id: "medium", label: rt("quality.options.medium"), detail: rt(touch ? "quality.details.mediumTouch" : "quality.details.medium") },

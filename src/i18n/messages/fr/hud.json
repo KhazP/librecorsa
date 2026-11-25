@@ -313,6 +313,7 @@
       "watchReplay": "Voir le replay",
       "skipTrack": "Piste suivante",
       "nowPlaying": "{title}, {composer}",
+      "enterVr": "Entrer en VR",
       "settings": "Paramètres",
       "mainMenu": "Menu principal"
     },

@@ -826,6 +826,18 @@
     "clutchGearUp": "رفع الترس",
     "clutchPaddle": "عتلة رفع الترس"
   },
+  "vr": {
+    "paused": "متوقف مؤقتًا",
+    "resumeHint": "A أو الزناد الأيمن: تابع القيادة",
+    "recenterHint": "Y: أعد توسيط الرؤية",
+    "leaveHint": "B: الخروج من VR",
+    "pauseHint": "اضغط مطولًا على B للإيقاف المؤقت",
+    "menusOutside": "تظهر القوائم خارج النظارة",
+    "lap": "اللفة {lap}",
+    "lapOf": "اللفة {lap}/{total}",
+    "last": "السابقة",
+    "best": "الأفضل"
+  },
   "driverKey": {
     "notAKeyFile": "هذا الملف ليس ملف مفتاح سائق",
     "blocked": "يمنع هذا المتصفح حفظ الملف"

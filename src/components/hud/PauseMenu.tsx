@@ -352,6 +352,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             },
           ]
         : []),
+      // A headset's browser: one press into VR from the pause menu (the headset's own HUD panel takes over there)
+      ...(displayPanel?.vrSupported && !displayPanel.vrActive
+        ? [{ id: "vr", label: tx("actions.enterVr"), icon: "vr" as const, run: displayPanel.onEnterVr }]
+        : []),
       ...(onOpenControls
         ? [{ id: "settings", label: tx("actions.settings"), icon: "settings" as const, run: onOpenControls }]
         : []),
@@ -373,6 +377,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
       onSkipTrack,
       onOpenControls,
       onExitToTitle,
+      displayPanel,
       tx,
     ]
   );

@@ -826,6 +826,18 @@
     "clutchGearUp": "Hochschalten",
     "clutchPaddle": "Hochschaltwippe"
   },
+  "vr": {
+    "paused": "Pausiert",
+    "resumeHint": "A oder rechter Trigger: weiterfahren",
+    "recenterHint": "Y: Ansicht zentrieren",
+    "leaveHint": "B: VR verlassen",
+    "pauseHint": "B halten zum Pausieren",
+    "menusOutside": "Die Menüs erscheinen außerhalb des Headsets",
+    "lap": "Runde {lap}",
+    "lapOf": "Runde {lap}/{total}",
+    "last": "Letzte",
+    "best": "Beste"
+  },
   "driverKey": {
     "notAKeyFile": "Das ist keine Fahrerschlüssel-Datei",
     "blocked": "Dieser Browser blockiert das Speichern"

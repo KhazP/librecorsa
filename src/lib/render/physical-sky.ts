@@ -4,7 +4,7 @@ import { CloudShape, CloudShapeDetail, CloudsEffect, LocalWeather, Turbulence } 
 import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { AZIMUTH_OFFSET_DEG, LATITUDE_DEG } from "@/lib/sim/weather";
 import { withBasePath } from "@/lib/base-path";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 import { cloudSkyFor, describeClouds, pickCloudRecipe, type CloudRecipe, type CloudSkySetup } from "./cloud-recipes";
 import { NIGHT_CLOUD_GLOW, nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
@@ -558,7 +558,7 @@ export class PhysicalSky {
   setQuality(quality: SkyQuality, aerialAllowed = quality === "high"): void {
     this.quality = quality;
     this.aerialAllowed = aerialAllowed;
-    const touch = isTouchDevice();
+    const touch = mobileClassGpu();
     this.clouds.qualityPreset = quality === "high" && !touch ? "medium" : "low";
     // Desktop Medium keeps crisp 0.75x volumetric clouds; touch devices stay 0.5x for mobile fill-rate budget.
     this.clouds.resolutionScale = touch ? 0.5 : quality === "high" ? 1 : 0.75;
@@ -578,7 +578,7 @@ export class PhysicalSky {
 
   /** Whether physical aerial perspective + cloud ground shadows should run (High desktop with post-chain aerial enabled) */
   get aerialActive(): boolean {
-    return this.showing && this.quality === "high" && this.aerialAllowed && !isTouchDevice();
+    return this.showing && this.quality === "high" && this.aerialAllowed && !mobileClassGpu();
   }
 
   private syncAerialShadow(): void {

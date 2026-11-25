@@ -826,6 +826,18 @@
     "clutchGearUp": "Lên số",
     "clutchPaddle": "lẫy lên số"
   },
+  "vr": {
+    "paused": "Tạm dừng",
+    "resumeHint": "A hoặc cò phải: lái tiếp",
+    "recenterHint": "Y: căn giữa góc nhìn",
+    "leaveHint": "B: thoát chế độ VR",
+    "pauseHint": "Giữ B để tạm dừng",
+    "menusOutside": "Menu hiển thị bên ngoài kính",
+    "lap": "Vòng {lap}",
+    "lapOf": "Vòng {lap}/{total}",
+    "last": "Vòng trước",
+    "best": "Tốt nhất"
+  },
   "driverKey": {
     "notAKeyFile": "Đây không phải là tệp khóa tay đua",
     "blocked": "Trình duyệt này chặn lưu tệp khóa"

@@ -2,7 +2,7 @@ import type * as THREE from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import type { GLTFLoaderPlugin, GLTFParser } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { withBasePath } from "@/lib/base-path";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 
 /**
  * GPU-compressed circuit textures for phones: KTX2 files with Basis Universal data (scripts/tracks/ktx2-track-textures.mjs),
@@ -74,7 +74,7 @@ function ktx2Mode(): Ktx2Mode {
 export function acquireKtx2Loader(): KTX2Loader | null {
   const mode = ktx2Mode();
   if (!renderer || mode === "off" || transcoderFailed) return null;
-  if (mode === "auto" && !isTouchDevice()) return null;
+  if (mode === "auto" && !mobileClassGpu()) return null;
   if (!loader) {
     const next = new KTX2Loader().setTranscoderPath(withBasePath("/basis/")).detectSupport(renderer);
     const config = next.workerConfig;

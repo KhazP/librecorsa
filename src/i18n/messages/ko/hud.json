@@ -313,6 +313,7 @@
       "watchReplay": "리플레이 보기",
       "skipTrack": "트랙 건너뛰기",
       "nowPlaying": "{title}, {composer}",
+      "enterVr": "VR 입장",
       "settings": "설정",
       "mainMenu": "메인 메뉴"
     },

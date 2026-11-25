@@ -39,7 +39,7 @@ import {
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
 import { GYRO_LOCK_MAX_DEG, GYRO_LOCK_MIN_DEG, GYRO_SENSITIVITY_MAX, GYRO_SENSITIVITY_MIN } from "@/lib/input/gyro-steer";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { isDrivingCameraMode } from "@/lib/render/camera-modes";
 import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
@@ -501,7 +501,7 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
  * heat; 30 fps is the player's choice for long sessions.
  */
 export function defaultGraphicsSettings(): GraphicsSettings {
-  const touch = isTouchDevice();
+  const touch = mobileClassGpu();
   return {
     ...DEFAULT_GRAPHICS_SETTINGS,
     quality: touch ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality,

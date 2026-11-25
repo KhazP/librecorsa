@@ -96,11 +96,11 @@ import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
-import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
+import { touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { carHasClosedCockpit, cockpitRainVolumeFor, createRainFx, RAIN_BEAMS, type CockpitRainVolume } from "@/lib/render/rain-fx";
 import { WindscreenWaterPass, type WaterMode } from "@/lib/render/windscreen-water";
-import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
+import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER, VR_HUD_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
 import { shapeStick } from "@/lib/input/stick-shape";
@@ -174,6 +174,9 @@ import { PitStopManager } from "@/lib/sim/pit/pit-stop";
 import { withPlayerPit } from "@/lib/broadcast/player-pit";
 import { pitBoxIndex } from "@/lib/sim/pit/ai-pit";
 import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
+import { VrPresenter } from "@/lib/vr/vr-presenter";
+import { isStandaloneHeadset, mobileClassGpu } from "@/lib/vr/headset";
+import { driveModel as driveVrHud, menuModel as menuVrHud, pausedModel as pausedVrHud } from "@/lib/vr/vr-hud";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -689,6 +692,10 @@ export class DriveSession {
   readonly captureFrame: (maxWidth?: number) => Promise<Blob | null>;
   /** Asks the headset for a VR session (one request at a time) */
   readonly enterVr: () => void;
+  /** Ends the headset session (the page's pause menu takes over) */
+  readonly exitVr: () => void;
+  /** Puts the head back on the driver's eye point, facing the nose */
+  readonly recenterVr: () => void;
   /** Opens the instant replay a moment back, paused, or closes it */
   readonly toggleReplay: () => void;
   /** Leaves the replay: the drawn car goes back to the live pose */
@@ -1460,9 +1467,27 @@ export class DriveSession {
 
     let renderer: THREE.WebGLRenderer;
     try {
+      const headset = isStandaloneHeadset();
+      // A standalone headset's context is made XR compatible from the start: three makes it so only when the session
+      // starts, which may lose the context, and a lost context is a black screen. three does not pass the flag on, so
+      // the context is made here with three's own attributes. (On a desktop the flag can wake the PC's VR runtime.)
+      const canvas = headset ? document.createElement("canvas") : undefined;
+      const context =
+        canvas?.getContext("webgl2", {
+          alpha: true,
+          depth: true,
+          stencil: false,
+          antialias: true,
+          premultipliedAlpha: true,
+          preserveDrawingBuffer: false,
+          powerPreference: "high-performance",
+          xrCompatible: true,
+        } as WebGLContextAttributes) ?? undefined;
       renderer = new THREE.WebGLRenderer({
-        // MSAA happens in the post-processing composer's half-float target instead
-        antialias: false,
+        ...(canvas && context ? { canvas, context } : {}),
+        // MSAA happens in the post-processing composer's half-float target instead. A standalone headset asks for it
+        // here: three gives the headset's eye buffers 4x MSAA only with it, and its tiled GPU resolves it on chip
+        antialias: headset,
         stencil: false,
         powerPreference: "high-performance",
         // Float precision across the 0.12 m .. 5.5 km depth range (kerbs, lines and decals stop z-fighting at
@@ -1498,6 +1523,8 @@ export class DriveSession {
       event.preventDefault();
       if (disposed || gpuLost) return;
       gpuLost = true;
+      // In a headset the notice (HTML) cannot be seen: back to the page, where it is
+      void renderer.xr.getSession()?.end().catch(() => {});
       // Lost in the background (or heard of just after coming back): the browser reclaimed it, nothing to remember
       const hidden = document.visibilityState === "hidden" || performance.now() - shownAtMs < BACKGROUND_LOSS_GRACE_MS;
       recordContextLoss(browserStore(), Date.now(), hidden);
@@ -1534,7 +1561,7 @@ export class DriveSession {
     // applyGraphicsQuality puts the physical sky's clouds in front of it.
     // Read the phone profile once per session so MSAA, the reflection probe, the step-down order and the
     // HUD rate always agree (and phones never allocate a 4x MSAA renderbuffer at startup).
-    const touchGraphics = isTouchDevice();
+    const touchGraphics = mobileClassGpu();
     const postFx = createPostFx(renderer, scene, camera, {
       multisampling: touchGraphics ? 0 : undefined,
     });
@@ -1897,7 +1924,7 @@ export class DriveSession {
       // Phones keep Low's drop count and water map whatever the preset
       windscreenWater.setQuality(touchGraphics ? "low" : g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
-      postFx.setSize(container.clientWidth, container.clientHeight);
+      if (!renderer.xr.isPresenting) postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
       if (lowered !== this.snapshot.autoQualityLowered) this.publish({ autoQualityLowered: lowered });
       sessionPerf?.setRenderState({ settings: graphicsLine(g, lowered), level });
@@ -2059,40 +2086,39 @@ export class DriveSession {
       if (updated) this.publish({ telemetry: { ...this.snapshot.telemetry, liveTuner: { ...updated } } });
     };
 
-    // WebXR: the headset's pose is added to a rig placed at the driver's eye every frame
+    // The headset (vr/vr-presenter.ts): its session, the seat on the driver's eye point, the HUD panel, the hand
+    // controllers as a pad, and its frame. Off the headset nothing of it runs
     renderer.xr.enabled = true;
-    const xrRig = new THREE.Group();
-    const xrCamera = new THREE.PerspectiveCamera(70, 1, 0.05, 5500);
-    xrCamera.layers.enable(OVERLAY_LAYER);
-    xrCamera.layers.enable(DETAIL_LAYER);
-    xrRig.add(xrCamera);
-    scene.add(xrRig);
-    this.enterVr = () => {
-      if (disposed) return;
-      const xr = (navigator as Navigator & { xr?: { requestSession: (mode: string, init?: object) => Promise<XRSession> } }).xr;
-      // One request at a time: a second click while the headset is being asked does nothing
-      if (!xr || this.snapshot.vr !== "off" || renderer.xr.isPresenting) return;
-      setVrState("requesting");
-      void (async () => {
-        let session: XRSession | null = null;
-        try {
-          session = await xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor"] });
-          if (disposed) {
-            void session.end().catch(() => {});
-            return;
-          }
-          session.addEventListener("end", () => setVrState("off"));
-          renderer.xr.setReferenceSpaceType("local");
-          await renderer.xr.setSession(session);
-          // The session may have ended while it was being set up
-          if (renderer.xr.isPresenting) clearCameraOverride();
-          setVrState(renderer.xr.isPresenting ? "on" : "off");
-        } catch {
-          void session?.end().catch(() => {});
-          setVrState("off");
+    const vr = new VrPresenter(renderer, {
+      standalone: isStandaloneHeadset(),
+      viewLayers: [OVERLAY_LAYER, DETAIL_LAYER],
+      hudLayer: VR_HUD_LAYER,
+      onPresenting: (on) => {
+        if (on) clearCameraOverride();
+        env.setHeadsetSky(on);
+        setVrState(on ? "on" : "off");
+        // Back on the page: its size and the graphics' pixel ratio, which the headset held while it presented
+        if (!on && !disposed) {
+          onResize();
+          this.applyGraphics();
         }
-      })();
+      },
+      // Taken off, the system menu, or the session over: the drive waits in the pause menu (the page's, after VR)
+      onInterrupted: () => {
+        if (!disposed && appPhaseNow === "driving" && !this.snapshot.paused) this.togglePause();
+      },
+    });
+    scene.add(vr.rig);
+    this.enterVr = () => {
+      // One request at a time: a second click while the headset is being asked does nothing
+      if (disposed || this.snapshot.vr !== "off" || vr.busy) return;
+      setVrState("requesting");
+      void vr.enter(settings.graphics.renderScale).then((failed) => {
+        if (failed && !vr.presenting && !disposed) setVrState("off");
+      });
     };
+    this.exitVr = () => vr.exit();
+    this.recenterVr = () => vr.recenter();
 
     // Sparks from under the floor of the cars that throw them
     const floorSparks = new FloorSparks();
@@ -2530,7 +2556,8 @@ export class DriveSession {
     window.addEventListener("keyup", onKeyUp);
 
     const onResize = () => {
-      if (!container) return;
+      // A headset fixes the canvas while it presents; the page is sized again when it ends
+      if (!container || renderer.xr.isPresenting) return;
       camera.aspect =
         container.clientWidth / Math.max(1, container.clientHeight);
       camera.updateProjectionMatrix();
@@ -3277,7 +3304,9 @@ export class DriveSession {
             return deg === null ? undefined : gyroSteerValue(deg, gyroSettings.gyroLockDeg, gyroSettings.gyroSensitivity);
           }
         : undefined;
-      const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow, gyroSteer);
+      // The headset's hand controllers drive as a pad of their own, after any pad plugged in (vr/xr-pad.ts)
+      const vrPad = vr.readPad();
+      const device = deviceInput.read(vrPad ? [...pads, vrPad] : pads, settings, dtSeconds, vehicleNow, gyroSteer);
       const appPhase = appPhaseNow;
       const inMenu = appPhase !== "driving";
       // Only the title screen counts its idle time: back on it from anywhere else, the clock starts over
@@ -3308,6 +3337,15 @@ export class DriveSession {
         wheelLostPending = false;
         if (!this.snapshot.paused) this.togglePause();
         setPauseNotice(tx("game.session.wheelDisconnected"));
+      }
+      // The headset's own buttons (its pause menu is the HUD panel): a long B pauses; paused, or in the menus the page
+      // alone shows, A or the throttle drives on, Y recentres and B leaves the headset for the page's menus
+      if (vr.presenting && !gpuLost) {
+        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel);
+        if (v.pause && !inMenu) this.togglePause();
+        if (v.resume && !inMenu) this.endPause();
+        if (v.recenter) vr.recenter();
+        if (v.leave) vr.exit();
       }
       // The pause menu, the seat panel or a lost GPU context: the car waits
       // The career's pre-race show holds the car too: the physics, the lights and the qualifying clock wait under it
@@ -4442,8 +4480,9 @@ export class DriveSession {
 
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;
+      // In a headset always the driver's seat: a camera that moves the head for the player makes them sick
       const mode: CameraMode =
-        inMenu || podium.playing || preRaceShow.playing ? "chase" : inVr ? "cockpit" : (cameraOverride ?? settings.camera ?? "chase");
+        inVr ? "cockpit" : inMenu || podium.playing || preRaceShow.playing ? "chase" : (cameraOverride ?? settings.camera ?? "chase");
       const view = CAMERA_MODES[mode];
       const lc26Cams = carRig.getCameraAnchors();
       const carFovDeg = lc26Cams ? lc26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
@@ -5052,13 +5091,17 @@ export class DriveSession {
           virtualMirrorShown = vmOn;
           setVirtualMirrorOn(vmOn);
         }
-        // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204)
-        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !inVr && !podium.playing, carRig.chassisGroup);
+        // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204), in a headset
+        // too, where they are the only rear view
+        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !podium.playing, carRig.chassisGroup);
         if (inVr) {
-          // The head pose is added on top of the driver's eye point (a "local" space starts at the head)
-          xrRig.position.copy(camera.position);
-          xrRig.quaternion.copy(camera.quaternion);
-          renderer.render(scene, xrCamera);
+          // The head's pose on top of the driver's eye point; the HUD panel shows what the page's HUD would
+          const hudModel = inMenu
+            ? menuVrHud()
+            : this.snapshot.paused
+              ? pausedVrHud()
+              : driveVrHud(physics.telemetry, settingsNow.ui.units.speed, vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null);
+          vr.render(scene, camera.position, camera.quaternion, hudModel, nowMs);
         } else {
           const t0 = loggedFirstFrame ? 0 : performance.now();
           startupMonitor?.begin();
@@ -5207,7 +5250,7 @@ export class DriveSession {
       unsubscribeAssets();
       window.clearInterval(assetWatchdog);
       renderer.setAnimationLoop(null);
-      void renderer.xr.getSession()?.end();
+      vr.dispose();
       wakeLock.dispose();
       haptics.stop();
       dualSense.stop();

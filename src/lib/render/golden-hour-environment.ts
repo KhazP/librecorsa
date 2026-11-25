@@ -18,7 +18,7 @@ import {
 import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
 import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { pixelRatioCap, type RenderPlan } from "./adaptive-quality";
 import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
 import type { CloudsEffect } from "@takram/three-clouds";
@@ -206,6 +206,12 @@ export interface GoldenHourEnvironment {
    * with the conditions of the next setConditions. Call it before that setConditions. Cheap: no shader change
    */
   setCloudSeed(seed: number): void;
+  /**
+   * In a headset the classic sky dome stands in for the physical sky. The physical sky's material leaves tone mapping
+   * and the output colour space to the composer, which a headset frame skips, so it came out as dark linear values
+   * there; the classic dome does both itself and follows the same conditions
+   */
+  setHeadsetSky(on: boolean): void;
   /** The cloud types the physical sky shows now, lowest first (empty with the classic sky) */
   readonly cloudTypes: string[];
   dispose(): void;
@@ -265,7 +271,9 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   const dprCap = pixelRatioCap(plan);
   const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
   const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
-  renderer.setPixelRatio(pixelRatio);
+  // A headset fixes the size while it presents (three puts the page's back when it ends, and the drive applies the
+  // graphics again then)
+  if (!renderer.xr.isPresenting) renderer.setPixelRatio(pixelRatio);
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
   env.sunLight.castShadow = quality !== "low";
   // Half the texels per side: three resizes the shadow map in place, with no shader change
@@ -551,16 +559,21 @@ class SkyBaker {
     const { autoClear, autoClearColor, autoClearDepth, autoClearStencil } = r;
     r.autoClear = r.autoClearColor = r.autoClearDepth = r.autoClearStencil = true;
     this.scene.background = r.getClearColor(this.clearColor);
+    // In a headset every render() draws with the headset's eyes unless XR is off: the cube camera turns it off for its
+    // faces, the prefilter's own draws need it off too
+    const xrEnabled = r.xr.enabled;
     try {
       this.cubeCamera.update(r, this.scene);
+      r.xr.enabled = false;
+      this.target = this.pmrem!.fromCubemap(this.cubeTarget.texture, this.target);
     } finally {
+      r.xr.enabled = xrEnabled;
       r.autoClear = autoClear;
       r.autoClearColor = autoClearColor;
       r.autoClearDepth = autoClearDepth;
       r.autoClearStencil = autoClearStencil;
       this.scene.background = null;
     }
-    this.target = this.pmrem!.fromCubemap(this.cubeTarget.texture, this.target);
     return this.target.texture;
   }
 
@@ -689,6 +702,7 @@ export function createGoldenHourEnvironment(
   };
 
   let physicalSkyHeld = options.deferPhysicalSky === true;
+  let headsetSky = false;
   let qualityNow: "low" | "medium" | "high" = "high";
   let aerialAllowedNow = true;
   const setQuality = (quality: "low" | "medium" | "high", aerialAllowed = quality === "high") => {
@@ -809,6 +823,11 @@ export function createGoldenHourEnvironment(
 
       camera.getWorldPosition(scratch);
       sky.position.copy(scratch);
+      if (physicalSky) {
+        const physical = physicalSky.showing && !headsetSky;
+        physicalSky.mesh.visible = physical;
+        sky.visible = !physical;
+      }
       // Drifting clouds (the Sky shader skips them at zero coverage), from where this session's seed starts them
       if (sky.material.uniforms.cloudCoverage.value > 0) sky.material.uniforms.time.value = classicCloudClockS + performance.now() / 1000;
       if (pendingBake && performance.now() - lastBakeMs > REBAKE_MIN_S * 1000) rebake();
@@ -821,6 +840,9 @@ export function createGoldenHourEnvironment(
       setConditions(current);
       // the environment's ground is lit by the key light: bake it again if it is night now
       if (nightShareOf(current.elevationDeg) > 0) pendingBake = true;
+    },
+    setHeadsetSky(on: boolean): void {
+      headsetSky = on;
     },
     setCloudSeed(seed: number): void {
       if (disposed) return;
@@ -1133,7 +1155,7 @@ export function createPostFx(
     },
 
     setQuality(quality: "low" | "medium" | "high", msaa = true, bloom = quality === "high" && msaa): void {
-      const touch = isTouchDevice();
+      const touch = mobileClassGpu();
       // Tile-based mobile GPUs suffer heavy DRAM bandwidth penalties resolving HalfFloat MSAA buffers, so touch stays 0×
       composer.multisampling = !msaa || touch ? 0 : quality === "high" ? 4 : quality === "medium" ? 2 : 0;
       keepOutputNonMsaa();
@@ -1144,7 +1166,7 @@ export function createPostFx(
     setClouds(next): void {
       if (cloudsPass) return;
       sky = next;
-      const includeAerial = Boolean(next.aerialPerspective && !isTouchDevice());
+      const includeAerial = Boolean(next.aerialPerspective && !mobileClassGpu());
       // On High desktop, merge AerialPerspectiveEffect (transmittance + inscatter + drifting cloud ground shadows)
       // directly into the pre-bloom clouds pass with zero extra FBO or fullscreen draw; keep a cloudless fallback pass.
       cloudsPass = includeAerial

@@ -826,6 +826,18 @@
     "clutchGearUp": "Marcia su",
     "clutchPaddle": "paddle marcia su"
   },
+  "vr": {
+    "paused": "In pausa",
+    "resumeHint": "A o grilletto destro: riparti",
+    "recenterHint": "Y: ricentra la vista",
+    "leaveHint": "B: esci dalla VR",
+    "pauseHint": "Tieni premuto B per la pausa",
+    "menusOutside": "I menu si vedono fuori dal visore",
+    "lap": "Giro {lap}",
+    "lapOf": "Giro {lap}/{total}",
+    "last": "Ultimo",
+    "best": "Migliore"
+  },
   "driverKey": {
     "notAKeyFile": "Non è un file di chiave del pilota",
     "blocked": "Questo browser ne blocca il salvataggio"

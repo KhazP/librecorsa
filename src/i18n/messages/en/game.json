@@ -826,6 +826,18 @@
     "clutchGearUp": "Gear up",
     "clutchPaddle": "upshift paddle"
   },
+  "vr": {
+    "paused": "Paused",
+    "resumeHint": "A or right trigger: drive on",
+    "recenterHint": "Y: recentre the view",
+    "leaveHint": "B: leave VR",
+    "pauseHint": "Hold B to pause",
+    "menusOutside": "The menus show outside the headset",
+    "lap": "Lap {lap}",
+    "lapOf": "Lap {lap}/{total}",
+    "last": "Last",
+    "best": "Best"
+  },
   "driverKey": {
     "notAKeyFile": "That is not a driver key file",
     "blocked": "This browser blocks saving it"
