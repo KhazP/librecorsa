@@ -1120,7 +1120,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       />
     ) : null}
 
-    {paused && !editMode ? (
+    {/* In a headset the pause menu is the headset's HUD panel: this one would take the pad's presses unseen */}
+    {paused && !editMode && !props.displayPanel?.vrActive ? (
       <PauseMenu
         {...props}
         mouseSteerEnabled={mouseSteerEnabled}

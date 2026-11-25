@@ -313,6 +313,7 @@
       "watchReplay": "觀看重播",
       "skipTrack": "跳至下一首",
       "nowPlaying": "{title}，{composer}",
+      "enterVr": "進入 VR",
       "settings": "設定",
       "mainMenu": "主選單"
     },
