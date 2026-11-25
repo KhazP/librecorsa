@@ -175,8 +175,9 @@ function buildSampleData() {
     },
   };
 
-  // 2. Pre-season career: Classic GT (promoted to a 2-car series in pre-season so car & calendar pickers show)
-  let preSeason = newCareer("road", "clubCup_americas", content, 209441)!;
+  // 2. Pre-season career: Classic GT (promoted to a 2-car series in pre-season so car & calendar pickers show), up from
+  // the Scirocco's Coupé Cup Americas (the other career came up through the Liana's Club Cup)
+  let preSeason = newCareer("road", "coupeCup_americas", content, 209441)!;
   preSeason = updateSeasonSettings(preSeason, { length: "short", mulligans: 3 }, content);
   preSeason = startSeason(preSeason);
   preSeason = finishSeason(preSeason, content, [2, 1, 2]).run;
