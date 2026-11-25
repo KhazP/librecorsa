@@ -106,6 +106,11 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     longitudinalG: 0.4,
     lateralG: 1.6,
     ersBatteryPercent: 44,
+    // The lap's energy left under the 2026 rules: 5.1 of the lap's 8.5 MJ recharged by here (none on the grid), and the
+    // store's 44 % of 4 MJ to deploy
+    ersRechargeLeftJ: gt3 ? undefined : lights ? 8_500_000 : 3_400_000,
+    ersRechargeLimitJ: gt3 ? undefined : 8_500_000,
+    ersDeployLeftJ: gt3 ? undefined : 1_760_000,
     mgukPowerKw: 180,
     fuelKg: 18.4,
     trackProgress: progress,

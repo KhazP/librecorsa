@@ -78,6 +78,8 @@ function useMfdText() {
       you: tx("relative.you"),
       battery: tx("fuel.battery"),
       ersPerLap: tx("fuel.ersPerLap"),
+      rechargeLeft: tx("fuel.rechargeLeft"),
+      deployLeft: tx("fuel.deployLeft"),
       treadPerLap: tx("fuel.treadPerLap"),
       fuel: tx("fuel.fuel"),
       perLap: tx("fuel.perLap"),
@@ -257,6 +259,77 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string
   );
 };
 
+/** Under this the lap has nothing left worth showing (J) */
+const ENERGY_NONE_J = 50_000;
+
+/** One of the lap's energy figures: a slim cell, so it fits under the energy row with the fuel advice showing */
+const EnergyLeft: React.FC<{ label: string; mj: string; of?: string; tone: string; toneClass: string }> = ({
+  label,
+  mj,
+  of,
+  tone,
+  toneClass,
+}) => {
+  const skin = useHudSkin();
+  if (skin !== null) {
+    return (
+      <div className={`flex min-w-0 flex-col justify-center gap-1 px-2.5 py-1 ${skinCss.deepBox}`}>
+        <span className={`${skinCss.label} whitespace-nowrap`}>{label}</span>
+        <span className="lc-data flex items-baseline gap-1 leading-none">
+          <span className={`${skinCss.readout} text-[14px] ${toneClass}`}>{mj}</span>
+          {of ? <span className={`text-[10px] ${skinCss.inkDim}`}>{of}</span> : null}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex min-w-0 flex-col justify-center gap-0.5 rounded-lc-nub bg-white/3 px-2.5 py-1">
+      <span className={`${LBL} leading-3 tracking-[0.08em] whitespace-nowrap`}>{label}</span>
+      <span className="lc-data flex items-baseline gap-1 leading-none">
+        <span className="text-[14px]" style={{ color: tone }}>
+          {mj}
+        </span>
+        {of ? <span className="text-[10px] text-lc-slate">{of}</span> : null}
+      </span>
+    </div>
+  );
+};
+
+/**
+ * What the lap has left (#196): under the 2026 rules the recharge it may still have, of the lap's limit, and the store
+ * to deploy; on a car with a per-lap deploy limit what is left of it. Nothing on other cars
+ */
+const LapEnergy: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+  const text = useMfdText();
+  const recharge = t.ersRechargeLeftJ;
+  const deploy = t.ersDeployLeftJ;
+  if (recharge === undefined && deploy === undefined) return null;
+  const mj = (j: number) => `${(j / 1e6).toFixed(1)} MJ`;
+  const spent = (j: number) => j < ENERGY_NONE_J;
+  const limit = t.ersRechargeLimitJ;
+  return (
+    <div className={`grid gap-1.5 ${recharge !== undefined && deploy !== undefined ? "grid-cols-2" : "grid-cols-1"}`}>
+      {recharge !== undefined ? (
+        <EnergyLeft
+          label={text.rechargeLeft}
+          mj={mj(recharge)}
+          of={limit !== undefined ? text.tx("fuel.ofLimit", { mj: (limit / 1e6).toFixed(1) }) : undefined}
+          tone={spent(recharge) ? HUD_SLATE : "var(--color-lc-chalk)"}
+          toneClass={spent(recharge) ? skinCss.inkDim : skinCss.ink}
+        />
+      ) : null}
+      {deploy !== undefined ? (
+        <EnergyLeft
+          label={text.deployLeft}
+          mj={mj(deploy)}
+          tone={spent(deploy) ? HUD_CAUTION : HUD_INFO}
+          toneClass={spent(deploy) ? skinCss.inkCaution : skinCss.inkInfo}
+        />
+      ) : null}
+    </div>
+  );
+};
+
 const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({ t, laps, L }) => {
   const skin = useHudSkin();
   const text = useMfdText();
@@ -275,7 +348,12 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
     <Stat key="w" label={text.treadPerLap} value={f.avgWearPct === null ? NONE : `${f.avgWearPct.toFixed(1)}%`} big={!f.hasFuel} />,
   ];
   if (!f.hasFuel) {
-    return <div className="grid h-full grid-cols-3 gap-1.5">{energy}</div>;
+    return (
+      <div className="flex h-full flex-col gap-1.5">
+        <div className="grid flex-1 grid-cols-3 gap-1.5">{energy}</div>
+        <LapEnergy t={t} />
+      </div>
+    );
   }
   return (
     <div className="flex h-full flex-col gap-1.5">
@@ -329,6 +407,7 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
         )
       ) : null}
       <div className="grid grid-cols-3 gap-1.5">{energy}</div>
+      <LapEnergy t={t} />
     </div>
   );
 };

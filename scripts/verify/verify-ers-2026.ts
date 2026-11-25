@@ -12,7 +12,8 @@
  * - the race's Boost (its power when pressed, or 150 kW), Overtake's lines and the Automatic Overtake's share;
  * - Low Grip Conditions (the wet): race control's call, Overtake off, the Boost holding only, reset sectors;
  * - each circuit's rules: the FIA's 2026 Power Unit Information for Monaco and the Red Bull Ring, derived elsewhere;
- * - issue #180: on Qiddiya the car deploys again out of the last corner (skipped without the circuit's files).
+ * - issue #180: on Qiddiya the car deploys again out of the last corner (skipped without the circuit's files);
+ * - issue #196: the lap's recharge and deploy left as the HUD gets them, the 2025 car's 4 MJ a lap, through the worker.
  *
  *   npx tsx scripts/verify/verify-ers-2026.ts
  */
@@ -419,6 +420,102 @@ function flatOut(opts: { mode: string; racing: boolean; fromKmh: number; toKmh: 
     sim.vehicle.ersEnergyJ = 4e6;
   }
   check('No deploy limit a lap (only the store and the recharge limit)', deployed > 9.5e6, `${f(deployed / 1e6, 2)} MJ deployed in 40 s without a lap line`);
+}
+{
+  // Issue #196: the lap's energy left, as the HUD gets it. From 300 km/h on the pad: the whole limit at the lap's start,
+  // less what the braking recovers; Overtake's extra on top; the whole limit again from the line
+  const sim = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+  sim.assistPreset = 'pro';
+  sim.autoGearbox = true;
+  sim.teleportToDistance(2000, 300 / 3.6);
+  const v = sim.vehicle;
+  const t = sim.telemetry;
+  const rulesLimit = () => (v.ersCircuit ? v.ersCircuit.recharge[v.ersSession] : ers.harvestPerLapJ) + v.extraRechargeJ;
+  const MJ = (j: number | undefined) => (j === undefined ? 'undefined' : `${f(j / 1e6, 3)} MJ`);
+  v.ersEnergyJ = 2e6;
+  v.resetLapEnergy();
+  sim.step(1 / 240, { throttle: 1 });
+  const limit = rulesLimit();
+  check('The lap\'s limit is the circuit\'s for the session (C5.2.10)', t.ersRechargeLimitJ === limit, `${MJ(t.ersRechargeLimitJ)} (${v.ersSession})`);
+  check('... and the lap starts with all of it left to recharge', t.ersRechargeLeftJ !== undefined && limit - t.ersRechargeLeftJ < 10_000, MJ(t.ersRechargeLeftJ));
+  for (let k = 0; k < 2 * 240; k++) {
+    sim.step(1 / 240, { throttle: 0, brake: 1 });
+    v.ersEnergyJ = 2e6; // room in the store: the lap's limit, not the charge, is under test
+  }
+  const harvested = v.lapHarvestJ;
+  check('Braking: the recharge left falls by what the lap recovered', harvested > 0.5e6 && Math.abs((t.ersRechargeLeftJ ?? 0) - (limit - harvested)) < 1,
+    `${MJ(harvested)} recovered, ${MJ(t.ersRechargeLeftJ)} left`);
+  check('Under the 2026 rules the deploy left is the store\'s charge (no limit a lap)', t.ersDeployLeftJ === v.ersEnergyJ, MJ(t.ersDeployLeftJ));
+  // A race lap begun with Overtake active: the grant, as the straight's check above sets it
+  const grant = (sim as unknown as { overtake: OvertakeGrant }).overtake;
+  sim.raceControl = { racing: true, earnedAtDetection: () => true };
+  grant.earned = grant.active = true;
+  sim.step(1 / 240, { throttle: 1 });
+  check('A race lap begun with Overtake: 0.5 MJ more in the limit and left',
+    v.extraRechargeJ === 500_000 && t.ersRechargeLimitJ === rulesLimit() && Math.abs((t.ersRechargeLeftJ ?? 0) - (rulesLimit() - v.lapHarvestJ)) < 1,
+    `${MJ((t.ersRechargeLimitJ ?? 0) - v.extraRechargeJ)} + ${MJ(v.extraRechargeJ)} (${v.ersSession}), ${MJ(t.ersRechargeLeftJ)} left`);
+  sim.raceControl = null;
+  grant.earned = grant.active = false;
+  v.resetLapEnergy(true);
+  sim.step(1 / 240, { throttle: 1 });
+  const next = rulesLimit();
+  check('... and over the line the next lap has the whole limit again', t.ersRechargeLimitJ === next && t.ersRechargeLeftJ !== undefined && next - t.ersRechargeLeftJ < 10_000,
+    `${MJ(t.ersRechargeLeftJ)} of ${MJ(next)}`);
+  let neverOver = true;
+  for (let k = 0; k < 6 * 240; k++) {
+    sim.step(1 / 240, { throttle: 0, brake: 1 });
+    v.ersEnergyJ = 2e6;
+    if (sim.vxMs < 30) sim.teleportToDistance(2000, 300 / 3.6);
+    neverOver &&= (t.ersRechargeLeftJ ?? -1) >= 0 && (t.ersRechargeLeftJ ?? Infinity) <= next;
+  }
+  check('... never under nothing or over the limit, braking past it', neverOver && t.ersRechargeLeftJ === Math.max(0, next - v.lapHarvestJ), `${MJ(v.lapHarvestJ)} recovered, ${MJ(t.ersRechargeLeftJ)} left`);
+
+  // The 2025 car: 4 MJ a lap from the store to the motor (Art. 5.3.4), and no recharge to show
+  const lc25 = vehicleModelSpec('lc25').createSim(pad, null) as F12026CarSim;
+  lc25.teleportToDistance(2000, 250 / 3.6);
+  const v25 = lc25.vehicle;
+  v25.resetLapEnergy();
+  v25.ersEnergyJ = 3e6;
+  v25.lapDeployJ = 3.4e6;
+  lc25.step(1 / 240, { throttle: 1 });
+  const capLeft = lc25.telemetry.ersDeployLeftJ;
+  const capWant = 4e6 - v25.lapDeployJ;
+  v25.ersEnergyJ = 0.3e6;
+  v25.lapDeployJ = 1e6;
+  lc25.step(1 / 240, { throttle: 1 });
+  const storeLeft = lc25.telemetry.ersDeployLeftJ;
+  check('2025 car: deploy left is the lap\'s 4 MJ less its deployment, as far as the store holds it',
+    v25.config.ers.deployPerLapJ === 4e6 && capLeft === capWant && capWant > 0.5e6 && capWant <= 0.6e6 && storeLeft === v25.ersEnergyJ && storeLeft <= 0.3e6,
+    `${MJ(capLeft)} with 3.4 MJ spent, ${MJ(storeLeft)} with 0.3 MJ stored`);
+  check('... and no recharge figure', lc25.telemetry.ersRechargeLeftJ === undefined && lc25.telemetry.ersRechargeLimitJ === undefined);
+
+  // No per-lap figures: the GT3 (no ERS), the LMDh (no limit a lap)
+  const none = (id: 'amg-gt3' | 'lc-lmdh') => {
+    const sim = vehicleModelSpec(id).createSim(pad, null) as F12026CarSim;
+    sim.teleportToDistance(2000, 200 / 3.6);
+    sim.step(1 / 240, { throttle: 1 });
+    const x = sim.telemetry;
+    return x.ersRechargeLeftJ === undefined && x.ersRechargeLimitJ === undefined && x.ersDeployLeftJ === undefined;
+  };
+  check('No lap energy on a car without ERS (GT3) or without a lap\'s limit (LMDh)', none('amg-gt3') && none('lc-lmdh'));
+
+  // Through the worker to the page's copy of the telemetry
+  const loop = loopbackTransport();
+  const host = createSimHost(loop.transport, loop.wallNowMs);
+  const car = host.adopt(vehicleModelSpec('lc26').createSim(pad, null), 'lc26');
+  car.resetToStartGrid(false);
+  host.endFrame(true);
+  for (let k = 0; k < 3; k++) {
+    car.step(1 / 60, {});
+    loop.advance(1 / 60);
+    host.endFrame(true);
+  }
+  const worker = loop.runtime.simulatedCar as unknown as { telemetry: CarTelemetry } | null;
+  const page = car.telemetry;
+  check('The lap\'s energy left reaches the page through the worker',
+    page.ersRechargeLimitJ !== undefined && page.ersRechargeLimitJ === worker?.telemetry.ersRechargeLimitJ &&
+      page.ersRechargeLeftJ === worker.telemetry.ersRechargeLeftJ && page.ersDeployLeftJ === worker.telemetry.ersDeployLeftJ,
+    `${MJ(page.ersRechargeLeftJ)} of ${MJ(page.ersRechargeLimitJ)}, ${MJ(page.ersDeployLeftJ)} to deploy`);
 }
 
 // ---------------------------------------------------------------------------

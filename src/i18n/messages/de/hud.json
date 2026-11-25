@@ -558,6 +558,9 @@
     "fuel": {
       "battery": "Batterie",
       "ersPerLap": "ERS / Runde",
+      "rechargeLeft": "Laden übrig",
+      "deployLeft": "Einsatz übrig",
+      "ofLimit": "von {mj}",
       "treadPerLap": "Profil / Runde",
       "fuel": "Kraftstoff",
       "lapsOfFuel": "{laps} Runden",

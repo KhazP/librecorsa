@@ -558,6 +558,9 @@
     "fuel": {
       "battery": "Baterai",
       "ersPerLap": "ERS / lap",
+      "rechargeLeft": "Sisa pengisian",
+      "deployLeft": "Sisa penyaluran",
+      "ofLimit": "dari {mj}",
       "treadPerLap": "Tapak / lap",
       "fuel": "Bahan bakar",
       "lapsOfFuel": "{laps} lap",

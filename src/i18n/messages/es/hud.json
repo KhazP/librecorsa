@@ -558,6 +558,9 @@
     "fuel": {
       "battery": "Batería",
       "ersPerLap": "ERS / vuelta",
+      "rechargeLeft": "Por recargar",
+      "deployLeft": "Por desplegar",
+      "ofLimit": "de {mj}",
       "treadPerLap": "Banda / vuelta",
       "fuel": "Combustible",
       "lapsOfFuel": "{laps} vueltas",

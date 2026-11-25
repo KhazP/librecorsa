@@ -558,6 +558,9 @@
     "fuel": {
       "battery": "배터리",
       "ersPerLap": "ERS / 랩",
+      "rechargeLeft": "충전 가능",
+      "deployLeft": "방출 가능",
+      "ofLimit": "/ {mj}",
       "treadPerLap": "마모 / 랩",
       "fuel": "연료",
       "lapsOfFuel": "{laps}랩",

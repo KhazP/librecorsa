@@ -2035,6 +2035,11 @@ export class VehiclePhysics {
     return base + this.extraRechargeJ;
   }
 
+  /** The recharge this lap may have (J, `ersRechargeLimitJ`), for the HUD: it moves with the session and Overtake */
+  public get lapRechargeLimitJ(): number {
+    return this.ersRechargeLimitJ();
+  }
+
   /** The bigger cut a power-limited period may start with here (W, C5.12.4), in a sector the circuit names; else 0 */
   private ersBigCutW(c: F1EnergyCircuit, lapS: number): number {
     let step = 0;
