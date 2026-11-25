@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 
 /**
  * Live reflections for the cars: a cube camera that rides above the player's car and films the world around it (track,
@@ -16,7 +16,7 @@ import { isTouchDevice } from "@/lib/input/touch-input";
 export type ReflectionQuality = "off" | "medium" | "high";
 
 export interface CarReflectionProbeOptions {
-  /** Override mobile/touch detection (`isTouchDevice()`) for deterministic tests. */
+  /** Override the phone-class GPU detection (`mobileClassGpu()`) for deterministic tests. */
   mobile?: boolean;
 }
 
@@ -60,7 +60,7 @@ export class CarReflectionProbe {
     private readonly scene: THREE.Scene,
     options?: CarReflectionProbeOptions
   ) {
-    this.isMobile = options?.mobile ?? isTouchDevice();
+    this.isMobile = options?.mobile ?? mobileClassGpu();
     this.faceSize = this.isMobile ? CUBE_SIZE_MOBILE : CUBE_SIZE;
     this.farDistanceM = this.isMobile ? PROBE_FAR_MOBILE_M : PROBE_FAR_M;
     this.cubeTarget = new THREE.WebGLCubeRenderTarget(this.faceSize, { type: THREE.HalfFloatType, generateMipmaps: false });

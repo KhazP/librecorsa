@@ -18,7 +18,7 @@ import {
 import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
 import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { pixelRatioCap, type RenderPlan } from "./adaptive-quality";
 import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
 import type { CloudsEffect } from "@takram/three-clouds";
@@ -1133,7 +1133,7 @@ export function createPostFx(
     },
 
     setQuality(quality: "low" | "medium" | "high", msaa = true, bloom = quality === "high" && msaa): void {
-      const touch = isTouchDevice();
+      const touch = mobileClassGpu();
       // Tile-based mobile GPUs suffer heavy DRAM bandwidth penalties resolving HalfFloat MSAA buffers, so touch stays 0×
       composer.multisampling = !msaa || touch ? 0 : quality === "high" ? 4 : quality === "medium" ? 2 : 0;
       keepOutputNonMsaa();
@@ -1144,7 +1144,7 @@ export function createPostFx(
     setClouds(next): void {
       if (cloudsPass) return;
       sky = next;
-      const includeAerial = Boolean(next.aerialPerspective && !isTouchDevice());
+      const includeAerial = Boolean(next.aerialPerspective && !mobileClassGpu());
       // On High desktop, merge AerialPerspectiveEffect (transmittance + inscatter + drifting cloud ground shadows)
       // directly into the pre-bloom clouds pass with zero extra FBO or fullscreen draw; keep a cloudless fallback pass.
       cloudsPass = includeAerial
