@@ -448,6 +448,18 @@ function cornerLimitedShare(plan: AiDrivePlan, s: number, vMs: number, lookM: nu
 }
 
 /**
+ * The share of its grip a damaged car still has to drive on (1 when pristine): the weaker axle's, as a car through a
+ * corner is held by its worse end, with the weak tyre on the outside carrying 70 % of its axle, and never over
+ * 1 − 0.35 × the damage overall. A drive plan's grip and the own driver's pace (√ of it) both take it
+ */
+export function damagedGrip(damage: CarDamage): number {
+  if (damage.pristine) return 1;
+  const g = damage.effects().wheelGripMult;
+  const axle = (a: number, b: number) => 0.7 * Math.min(a, b) + 0.3 * Math.max(a, b);
+  return Math.min(1 - 0.35 * damage.overall, axle(g[0], g[1]), axle(g[2], g[3]));
+}
+
+/**
  * Planned grip of an AI car at pace 1: the share of its measured limits the plan uses. A driver's pace (skill, the
  * lap's form, the weather) scales it as pace² (corner speed goes with √grip), so slower drivers are slower through
  * the corners and on the brakes, not down the straights
@@ -1261,12 +1273,7 @@ export class AiOpponentField implements AiRace {
     // A damaged car (a broken wing, bent suspension) has less grip to plan with, and a puncture leaves its tyre under
     // half: the plan takes the weaker axle's grip too, as a car through a corner is held by its worse end, with the
     // weak tyre on the outside carrying 70 % of its axle (a puncture: 0.6)
-    let damaged = 1;
-    if (!car.damage.pristine) {
-      const g = car.damage.effects().wheelGripMult;
-      const axle = (a: number, b: number) => 0.7 * Math.min(a, b) + 0.3 * Math.max(a, b);
-      damaged = Math.min(1 - 0.35 * car.damage.overall, axle(g[0], g[1]), axle(g[2], g[3]));
-    }
+    const damaged = damagedGrip(car.damage);
     // The fastest levels plan toward the most grip this car drove cleanly here (the circuit's line check), one step
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
     // the full step the LC26 hit Okayama's barriers four times as often)
@@ -2606,7 +2613,9 @@ export class AiOpponentField implements AiRace {
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
-      const planned = me.aiPlan ? 1 : car.pace * weatherPace;
+      // The own driver slows for damage as a plan does (its grip, in the plan): corner speed goes with √ grip. At full
+      // pace a car with a front tyre at 45 % of its grip left the road at every corner of Sachsenring for two laps
+      const planned = me.aiPlan ? 1 : car.pace * weatherPace * Math.sqrt(damagedGrip(car.damage));
       // (a planned car's speed off the line is the planner's, from its path: no blanket slow-down per metre, but for a car
       // that tracks plans its own way, `planOffLinePace`)
       // Past the corner's reach for a car alongside: that line is tighter than the plan's, so a little slower
