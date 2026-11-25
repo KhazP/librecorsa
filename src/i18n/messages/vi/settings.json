@@ -395,6 +395,10 @@
         "closed": "Đóng"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Dữ liệu đo từ xa hệ thống treo & khí động",
+      "hint": "Độ bám từng bánh, hành trình đệm chặn, độ cao gầm, cân bằng khí động và khóa vi sai theo thời gian thực"
+    },
     "inputTrace": {
       "label": "Biểu đồ thao tác"
     },

@@ -187,7 +187,10 @@
     "sharedDetail": "Menggunakan fisika dari mobil lain di kelas dan era yang sama, sehingga pengendaliannya mengikuti mobil tersebut, bukan mobil ini sendiri.",
     "eraBadge": "Fisika 2026",
     "era": "Mobil lama",
-    "eraDetail": "Menggunakan fisika 2026, sehingga pengendaliannya seperti mobil 2026, bukan seperti pada musim aslinya."
+    "eraDetail": "Menggunakan fisika 2026, sehingga pengendaliannya seperti mobil 2026, bukan seperti pada musim aslinya.",
+    "modBadge": "MOD",
+    "mod": "Mod terpasang",
+    "modDetail": "Dari paket mod yang kamu pasang, berbasis salah satu model kendaraan game. LibreCorsa belum memeriksanya, dan lap-nya tidak masuk ke papan waktu lap daring."
   },
   "carClass": {
     "f1": "Formula Open-Wheel",
@@ -209,7 +212,10 @@
     "simDetail": "Sirkuit sim buatan tangan, dengan mesh jalan, kerb, pembatas, dan fisika permukaan tersendiri.",
     "scanBadge": "Pindaian",
     "scan": "Hasil pindaian",
-    "scanDetail": "Dikonversi otomatis dari model 3D komunitas: jalan, kerb, area run-off, dan pembatas ditelusuri dari mesh, sehingga detailnya bisa berbeda dari sirkuit aslinya."
+    "scanDetail": "Dikonversi otomatis dari model 3D komunitas: jalan, kerb, area run-off, dan pembatas ditelusuri dari mesh, sehingga detailnya bisa berbeda dari sirkuit aslinya.",
+    "modBadge": "MOD",
+    "mod": "Mod terpasang",
+    "modDetail": "Dari paket mod yang kamu pasang. LibreCorsa belum memeriksanya, dan lap-nya tidak masuk ke papan waktu lap daring."
   },
   "circuitType": {
     "permanent": "Permanen",
@@ -282,6 +288,10 @@
     "pause": "Menu jeda",
     "mfd": "Buka / tutup MFD",
     "mfdPage": "Halaman MFD berikutnya",
+    "mfdUp": "Nilai MFD +",
+    "mfdDown": "Nilai MFD −",
+    "mfdPrev": "Dial MFD sebelumnya",
+    "mfdNext": "Dial MFD berikutnya",
     "hud": "Tampilkan / sembunyikan HUD",
     "board": "Buka / tutup papan waktu lap",
     "headlights": "Lampu depan (ketuk: kedip, tahan: nyala / mati)",
@@ -324,14 +334,18 @@
     "no": "Tidak"
   },
   "hudLayouts": {
-    "broadcast": "Siaran TV",
-    "broadcastDetail": "Grafis TV: menara posisi, peta, strip telemetri",
-    "dash": "Dasbor setir",
-    "dashDetail": "Layar setir balap, rendah dan di tengah",
+    "blade": "Blade",
+    "bladeDetail": "Satu instrumen rendah, sisanya tidak menghalangi",
+    "trackside": "Sisi trek",
+    "tracksideDetail": "Indikator di sudut layar, satu dial RPM",
+    "pitWall": "Pit wall",
+    "pitWallDetail": "Tabel waktu dan detail per halaman, tanpa dial",
+    "endurance": "Endurance",
+    "enduranceDetail": "Klasemen penuh, keausan ban, dial, dan status mobil",
+    "racingLine": "Racing line",
+    "racingLineDetail": "Relatif, bilah delta, dan kluster ringkas",
     "telemetry": "Telemetri",
     "telemetryDetail": "Dasbor ditambah ban, G, tenaga, dan input",
-    "classic": "Klasik",
-    "classicDetail": "Panel sudut orisinal",
     "minimal": "Minimalis",
     "minimalDetail": "Hanya kecepatan, gigi, dan lap",
     "touring": "GT-Like",
@@ -775,12 +789,19 @@
     "ready": "Siap. Tab di browser ini saling menemukan otomatis; perangkat lain bergabung dengan kode ruang."
   },
   "downloads": {
+    "desktopSummary": "Game di jendelanya sendiri, daring maupun offline. Mendukung mod, mengonversi sirkuit dan mobil dari game lain, serta memperbarui diri sendiri.",
+    "windowsZipNote": "Ekstrak di mana saja yang bisa ditulis (bukan Program Files), lalu jalankan LibreCorsa.exe di dalam folder LibreCorsa. Sebelum penandatanganan kode lewat SignPath Foundation disetujui, SmartScreen mungkin menghentikannya: klik Info selengkapnya, lalu Tetap jalankan.",
     "windowsStatusLabel": "Belum ditandatangani",
+    "windowsZipLabel": "Unduh .zip",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": "Buka .dmg dan seret LibreCorsa ke Aplikasi. Apple belum menotarisasinya, jadi saat pertama kali macOS menghentikannya: buka Pengaturan Sistem > Privasi & Keamanan lalu klik Tetap Buka.",
     "macosStatusLabel": "Belum ditandatangani",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Mac M1–M4",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Mac Intel x64",
+    "linuxTarNote": "Ekstrak di mana saja lalu jalankan librecorsa di dalam folder LibreCorsa. Saat pertama kali dijalankan, LibreCorsa akan ditambahkan ke menu aplikasimu:",
+    "linuxTarLabel": "Unduh .tar.gz",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "Trusted Web Activity layar penuh dengan kontrol imersif, Android Game Mode, dan pintasan peluncur. Memerlukan Android 7+ dan Chrome.",
     "androidInstallNote": "APK rilis bertanda tangan. Izinkan pemasangan dari browser saat diminta; aplikasi diverifikasi terhadap librecorsa.org dan terbuka tanpa bilah URL.",
@@ -823,7 +844,9 @@
     "launchTouch": "Tahan gas untuk meluncur",
     "launchKey": "Tahan {key} untuk meluncur · Esc Menu",
     "noRacesOnHillClimb": "Tidak ada balapan di lintasan hill climb",
-    "backToRaces": "Kembali ke daftar balapan"
+    "backToRaces": "Kembali ke daftar balapan",
+    "carAutoSwitched": "Beralih ke {car}: lobi dikunci ke {rule}",
+    "carBlockedByLobby": "Mobil dikunci ke {rule} selama berada di lobi ini"
   },
   "telemetryHud": {
     "menu": "Menu",
@@ -843,17 +866,6 @@
     "graphicsLow": "Grafis diatur ke Rendah setelah reset GPU.",
     "loadFailedStaying": "Gagal memuat sirkuit. Tetap di {circuit}.",
     "loadFailedDefault": "Gagal memuat sirkuit. Memuat {circuit}."
-  },
-  "minimap": {
-    "map": "Peta sirkuit",
-    "mapAtTurn": "Peta sirkuit; kamu berada di tikungan {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {# tikungan}}",
-    "sector": "Sektor {sector}",
-    "elevation": "Elevasi",
-    "altitude": "Ktg {height}",
-    "grade": "Kemiringan {grade}%",
-    "profileStart": "Start {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "Sumber dari {title}",

@@ -33,6 +33,7 @@
 | pole position | 폴 포지션 | |
 | pit lane | 피트 레인 | |
 | pit limiter | 피트 리미터 | 피트 속도 제한기 |
+| limiter | 리미터 | 속도 제한기(`리미터 켜짐`) |
 | track limits | 트랙 리밋 | 트랙 이탈로 인한 랩 무효 규정 |
 | lap deleted | 랩 무효 | 트랙 리밋 위반 등으로 삭제된 랩 |
 | racing line | 레이싱 라인 | 화면에 표시되는 이상 주행선 |
@@ -46,9 +47,12 @@
 | point-to-point | 구간 주행 | 출발지와 도착지가 다른 코스(명사형 수식: `구간`) |
 | car | 차량 | |
 | class | 클래스 | 차량 등급 |
+| livery | 리버리 | |
 | ghost | 고스트 | 반투명으로 표시되는 기록 주행 차량 |
+| ghost mode | 고스트 모드 | 멀티플레이어 비접촉 모드 |
 | share code | 공유 코드 | 랩 또는 셋업 공유용 텍스트 코드 |
 | room / room code / host / join | 방 / 방 코드 / 호스트 / 참가 | 온라인 멀티플레이어 방 관련 용어 |
+| lobby | 로비 | |
 | driver | 드라이버 | |
 | force feedback | 포스 피드백 | 약어 `FFB` 유지 |
 | steering wheel / wheel | 레이싱 휠 / 휠 | 설정·장비 명칭은 `레이싱 휠`, 짧은 표기는 `휠` |
@@ -70,6 +74,7 @@
 | keyboard | 키보드 | |
 | touch controls | 터치 조작 | |
 | bind | 할당 | 버튼·축 매핑(동사: 할당하기) |
+| unbind | 할당 해제 | 버튼·키 매핑 해제 |
 | axis | 축 | |
 | calibrate | 보정 | |
 | driving assists | 주행 보조 | |
@@ -89,6 +94,8 @@
 | springs | 스프링 | |
 | dampers | 댐퍼 | |
 | bump / rebound | 범프 / 리바운드 | 고속 범프, 저속 리바운드 |
+| bumpstop | 범프스톱 | 툴팁 bump rubber: `범프 러버` |
+| bumpstop travel | 범프스톱 스트로크 | |
 | anti-roll bar | 안티롤 바 | |
 | camber | 캠버 | |
 | toe | 토 | |
@@ -96,20 +103,31 @@
 | rear wing / front wing | 리어 윙 / 프런트 윙 | |
 | active aero | 액티브 에어로 | |
 | drag | 항력 | 공기 저항 |
+| aero balance | 에어로 밸런스 | |
 | grip / front grip / rear grip | 그립 / 프런트 그립 / 리어 그립 | |
+| slip | 슬립 | 텔레메트리 범례 |
 | understeer / oversteer | 언더스티어 / 오버스티어 | |
 | differential | 디퍼렌셜 | |
+| diff lock | 디퍼렌셜 잠금 | 텔레메트리 짧은 라벨: `LSD 잠금` |
 | gear ratios | 기어비 | |
 | fuel | 연료 | |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | 황기 / 이중 황기 / 청기 / 흑기 / 체커기 / 녹기 | 국제 모터스포츠 한국어 표준 |
 | safety car | 세이프티 카 | |
 | penalty / time penalty / drive-through | 페널티 / 시간 페널티 / 드라이브 스루 | |
+| retired | 리타이어 | `DNF`는 영문 유지 |
+| disqualified | 실격 | `DSQ`는 영문 유지 |
 | lights out | 라이트 아웃 | 레이스 스타트 신호 |
 | jump start | 부정 출발 | |
+| formation | 포메이션 | 롤링 스타트 |
 | overtake / overtake mode | 추월 / 오버테이크 모드 | 동사: 추월, F1 2026 에너지 부스트: 오버테이크 모드 |
 | ERS / DRS / deploy / harvest | ERS / DRS / 방출 / 회생 | `ERS`·`DRS` 유지, 에너지 방출·회생 |
 | battery | 배터리 | |
 | HUD | HUD | 영문 유지 |
+| Blade | 블레이드 | HUD 레이아웃 이름 |
+| Trackside | 트랙사이드 | HUD 레이아웃 이름 |
+| Pit wall | 피트 월 | HUD 레이아웃 이름 |
+| Endurance | 인듀어런스 | HUD 레이아웃 이름 |
+| Racing line | 레이싱 라인 | HUD 레이아웃 이름 |
 | proximity radar | 근접 레이더 | |
 | shift lights / rev lights | 시프트 라이트 / RPM 라이트 | |
 | delta | 델타 | 기준 랩과의 시간 차 |
@@ -131,6 +149,22 @@
 | physics / physics version | 물리 / 물리 버전 | 문맥에 따라 `물리 엔진` |
 | post / upload | 등록 / 업로드 | 온라인 보드에 랩 등록 / 업로드 |
 | Lap times | 랩 타임 | 랩 타임 목록 화면 |
+| mod | 모드 | 배지: `MOD` |
+| mod package | 모드 패키지 | |
+| mods folder | 모드 폴더 | |
+| import folder | 가져오기 폴더 | 명사; 동작 버튼 Import folder: `폴더 가져오기` |
+| converter | 변환기 | 모드 변환기 |
+| converter log | 변환기 로그 | |
+| fingerprint | 지문 | SHA-256 체크섬 |
+| launcher | 런처 | |
+| offline launcher | 오프라인 런처 | |
+| desktop app | 데스크톱 앱 | |
+| licence | 라이선스 | |
+| "More info" (Windows SmartScreen) | 추가 정보 | Windows 한국어 공식 표기 인용 |
+| "Run anyway" (Windows SmartScreen) | 실행 | Windows 한국어 공식 표기 인용 |
+| "Applications" (macOS) | 응용 프로그램 | macOS 한국어 공식 표기 인용 |
+| "System Settings > Privacy & Security" (macOS) | 시스템 설정 > 개인정보 보호 및 보안 | macOS 한국어 공식 표기 인용 |
+| "Open Anyway" (macOS) | 확인 없이 열기 | macOS 한국어 공식 표기 인용 |
 
 ## Accounts
 

@@ -32,6 +32,7 @@
 | pole position | pole position | |
 | pit lane | pit lane | |
 | pit limiter | limitador de velocidade do pit | |
+| limiter | limitador | Speed limiter; Limiter on: Limitador ativo |
 | track limits | limites de pista | |
 | lap deleted | volta anulada | |
 | racing line | linha ideal | |
@@ -45,12 +46,15 @@
 | point-to-point | ponto a ponto | |
 | car | carro | |
 | class | classe | |
+| livery | pintura | |
 | ghost | ghost | English is the norm; "fantasma" in prose |
+| ghost mode | modo ghost | Multiplayer no-contact mode |
 | share code | código de compartilhamento | |
 | room | sala | |
 | room code | código da sala | |
 | host | anfitrião | |
 | join | entrar | |
+| lobby | lobby | |
 | driver | piloto | |
 | force feedback | force feedback | |
 | steering wheel | volante | |
@@ -76,6 +80,7 @@
 | keyboard | teclado | |
 | touch controls | controles por toque | |
 | bind | atribuir | |
+| unbind | remover | |
 | axis | eixo | |
 | calibrate | calibrar | |
 | driving assists | assistências de pilotagem | |
@@ -102,6 +107,8 @@
 | rebound | retorno | |
 | fast bump | compressão rápida | |
 | slow rebound | retorno lento | |
+| bumpstop | batente | Telemetry legend: Batente |
+| bumpstop travel | curso dos batentes | |
 | anti-roll bar | barra estabilizadora | |
 | camber | cambagem | |
 | toe | convergência | |
@@ -110,12 +117,16 @@
 | front wing | asa dianteira | |
 | active aero | aerodinâmica ativa | |
 | drag | arrasto | |
+| aero balance | balanço aerodinâmico | Short telemetry label: Bal aero |
 | grip | aderência | |
 | front grip | aderência dianteira | |
 | rear grip | aderência traseira | |
+| grip (short per-wheel label) | Ader. | Short telemetry label; full word: aderência |
+| slip | deslizamento | Short telemetry legend: Desliz. |
 | understeer | subesterço | |
 | oversteer | sobresterço | |
 | differential | diferencial | |
+| diff lock | bloqueio do diferencial | Short telemetry label: Trava LSD |
 | gear ratios | relações de marcha | |
 | fuel | combustível | |
 | yellow flag | bandeira amarela | |
@@ -128,8 +139,11 @@
 | penalty | punição | |
 | time penalty | punição de tempo | |
 | drive-through | drive-through | |
+| retired | abandonou | DNF stays in English |
+| disqualified | desqualificado | DSQ stays in English |
 | lights out | luzes apagadas | |
 | jump start | queima de largada | |
+| formation | formação | Rolling start |
 | overtake (verb) | ultrapassar | |
 | overtake mode | Modo de ultrapassagem | |
 | ERS | ERS | |
@@ -138,6 +152,11 @@
 | harvest | recuperação | Energy |
 | battery | bateria | |
 | HUD | HUD | |
+| Blade | Lâmina | HUD layout name |
+| Trackside | Beira da pista | HUD layout name |
+| Pit wall | Mureta dos boxes | HUD layout name |
+| Endurance | Endurance | HUD layout name |
+| Racing line | Linha ideal | HUD layout name |
 | proximity radar | radar de proximidade | |
 | shift lights | luzes de troca de marcha | |
 | rev lights | luzes de rotação | |
@@ -187,6 +206,22 @@
 | post | publicar | Lap to the online board |
 | upload | enviar | |
 | Lap times | Tempos de volta | |
+| mod | mod | pl. mods; badge: MOD |
+| mod package | pacote de mods | |
+| mods folder | pasta de mods | |
+| import folder | pasta de importação | Noun; action button Import folder: Importar pasta |
+| converter | conversor | Mod converter |
+| converter log | log do conversor | |
+| fingerprint | impressão digital | SHA-256 checksum |
+| launcher | launcher | |
+| offline launcher | launcher offline | |
+| desktop app | app de desktop | |
+| licence | licença | |
+| “More info” (Windows SmartScreen) | Mais informações | Quote Windows pt-BR wording |
+| “Run anyway” (Windows SmartScreen) | Executar assim mesmo | Quote Windows pt-BR wording |
+| “Applications” (macOS) | Aplicativos | Quote macOS pt-BR wording |
+| “System Settings > Privacy & Security” (macOS) | Ajustes do Sistema > Privacidade e Segurança | Quote macOS pt-BR wording |
+| “Open Anyway” (macOS) | Abrir Mesmo Assim | Quote macOS pt-BR wording |
 
 ## Accounts
 | English | Portuguese (BR) | Note |

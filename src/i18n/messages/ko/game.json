@@ -187,7 +187,10 @@
     "sharedDetail": "같은 클래스와 시대의 다른 차량 물리를 공유하므로 고유 특성 대신 해당 차량처럼 거동합니다.",
     "eraBadge": "2026 물리",
     "era": "구형 차량",
-    "eraDetail": "2026 물리로 주행하므로 원래 시즌의 특성이 아닌 2026 차량처럼 거동합니다."
+    "eraDetail": "2026 물리로 주행하므로 원래 시즌의 특성이 아닌 2026 차량처럼 거동합니다.",
+    "modBadge": "MOD",
+    "mod": "설치된 모드",
+    "modDetail": "설치한 모드 패키지에서 게임 차량 모델에 적용된 항목입니다. LibreCorsa의 검증을 거치지 않았으며, 랩 기록은 온라인 보드에 등록되지 않습니다."
   },
   "carClass": {
     "f1": "포뮬러 오픈 휠",
@@ -209,7 +212,10 @@
     "simDetail": "고유의 도로, 연석, 방호벽 메시와 노면 물리를 갖춘 수작업 시뮬레이터 서킷입니다.",
     "scanBadge": "스캔",
     "scan": "변환된 스캔",
-    "scanDetail": "커뮤니티 3D 모델에서 자동 변환되어 도로, 연석, 런오프, 방호벽이 메시를 따라 구성되었으므로 실제 경기장과 세부 사항이 다를 수 있습니다."
+    "scanDetail": "커뮤니티 3D 모델에서 자동 변환되어 도로, 연석, 런오프, 방호벽이 메시를 따라 구성되었으므로 실제 경기장과 세부 사항이 다를 수 있습니다.",
+    "modBadge": "MOD",
+    "mod": "설치된 모드",
+    "modDetail": "설치한 모드 패키지의 서킷입니다. LibreCorsa의 검증을 거치지 않았으며, 랩 기록은 온라인 보드에 등록되지 않습니다."
   },
   "circuitType": {
     "permanent": "상설",
@@ -282,6 +288,10 @@
     "pause": "일시 정지 메뉴",
     "mfd": "MFD 열기 / 닫기",
     "mfdPage": "다음 MFD 페이지",
+    "mfdUp": "MFD 값 +",
+    "mfdDown": "MFD 값 −",
+    "mfdPrev": "이전 MFD 다이얼",
+    "mfdNext": "다음 MFD 다이얼",
     "hud": "HUD 표시 / 숨기기",
     "board": "랩 보드 열기 / 닫기",
     "headlights": "헤드라이트(짧게: 점멸, 길게: 켜기 / 끄기)",
@@ -324,14 +334,18 @@
     "no": "미지원"
   },
   "hudLayouts": {
-    "broadcast": "중계",
-    "broadcastDetail": "TV 중계 그래픽: 순위표, 트랙 맵, 텔레메트리 바",
-    "dash": "휠 대시",
-    "dashDetail": "화면 하단 중앙의 레이싱 휠 디스플레이",
+    "blade": "블레이드",
+    "bladeDetail": "하단 단일 계기판, 나머지 시야 확보",
+    "trackside": "트랙사이드",
+    "tracksideDetail": "화면 모서리 정보 표시, RPM 다이얼",
+    "pitWall": "피트 월",
+    "pitWallDetail": "타이밍 표 및 페이지형 상세 정보, 게이지 없음",
+    "endurance": "인듀어런스",
+    "enduranceDetail": "전체 순위, 타이어 마모, 다이얼 및 차량 상태",
+    "racingLine": "레이싱 라인",
+    "racingLineDetail": "상대 거리, 델타 바 및 콤팩트 클러스터",
     "telemetry": "텔레메트리",
     "telemetryDetail": "대시보드 + 타이어, 중력 가속도(G), 출력 및 입력",
-    "classic": "클래식",
-    "classicDetail": "오리지널 모서리 패널 구성",
     "minimal": "미니멀",
     "minimalDetail": "속도, 기어, 랩 정보만 표시",
     "touring": "GT 스타일",
@@ -775,12 +789,19 @@
     "ready": "준비되었습니다. 이 브라우저의 탭들은 자동으로 서로를 찾으며, 다른 기기는 방 코드로 참가합니다."
   },
   "downloads": {
+    "desktopSummary": "온라인과 오프라인 모두에서 독립 창으로 실행되는 게임입니다. 모드를 지원하고 다른 게임의 서킷과 차량을 변환할 수 있으며, 자동으로 업데이트됩니다.",
+    "windowsZipNote": "쓰기 권한이 있는 폴더(Program Files 제외)에 압축을 풀고 LibreCorsa 폴더 안의 LibreCorsa.exe를 실행하십시오. SignPath Foundation을 통한 코드 서명이 승인되기 전까지는 SmartScreen이 실행을 차단할 수 있습니다. 이 경우 추가 정보를 클릭한 뒤 실행을 선택하십시오.",
     "windowsStatusLabel": "미서명",
+    "windowsZipLabel": ".zip 다운로드",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": ".dmg 파일을 열고 LibreCorsa를 응용 프로그램 폴더로 끌어다 놓으십시오. 아직 Apple의 공증을 받지 않아 처음 실행 시 macOS가 차단할 수 있습니다. 시스템 설정 > 개인정보 보호 및 보안을 열고 확인 없이 열기를 클릭하십시오.",
     "macosStatusLabel": "미서명",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "M1–M4 Mac",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel x64 Mac",
+    "linuxTarNote": "원하는 위치에 압축을 풀고 LibreCorsa 폴더 안의 librecorsa를 실행하십시오. 처음 실행하면 앱 메뉴에 LibreCorsa가 자동으로 추가됩니다:",
+    "linuxTarLabel": ".tar.gz 다운로드",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "몰입형 조작, Android Game Mode 및 런처 바로가기를 지원하는 전체 화면 Trusted Web Activity입니다. Android 7 이상과 Chrome이 필요합니다.",
     "androidInstallNote": "서명된 정식 APK입니다. 안내가 표시되면 브라우저에서의 설치를 허용하십시오. librecorsa.org에 대해 검증되며 주소창 없이 열립니다.",
@@ -823,7 +844,9 @@
     "launchTouch": "스로틀을 길게 눌러 출발",
     "launchKey": "{key} 길게 눌러 출발 · Esc 메뉴",
     "noRacesOnHillClimb": "힐 클라임에서는 레이스를 진행할 수 없습니다",
-    "backToRaces": "레이스 목록으로 돌아가기"
+    "backToRaces": "레이스 목록으로 돌아가기",
+    "carAutoSwitched": "{car} 차량으로 전환되었습니다(로비 제한: {rule})",
+    "carBlockedByLobby": "이 로비에서는 차량이 {rule} 규칙으로 제한됩니다"
   },
   "telemetryHud": {
     "menu": "메뉴",
@@ -843,17 +866,6 @@
     "graphicsLow": "GPU 재설정 후 그래픽 품질이 낮음으로 설정되었습니다.",
     "loadFailedStaying": "서킷을 불러오지 못했습니다. 현재 서킷({circuit})을 유지합니다.",
     "loadFailedDefault": "서킷을 불러오지 못했습니다. 대신 {circuit}을 불러왔습니다."
-  },
-  "minimap": {
-    "map": "서킷 맵",
-    "mapAtTurn": "서킷 맵; 현재 {turn}번 코너에 있습니다",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {코너 #개}}",
-    "sector": "섹터 {sector}",
-    "elevation": "고도",
-    "altitude": "고도 {height}",
-    "grade": "경사 {grade}%",
-    "profileStart": "출발 {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "{title}의 출처",

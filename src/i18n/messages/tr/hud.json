@@ -179,6 +179,11 @@
       "penaltiesOff": "Kapalı",
       "penaltiesHint": "Pist sınırları ve erken çıkış için zaman eklenir",
       "damage": "Hasar",
+      "ghostMode": "Hayalet modu",
+      "ghostModeOn": "Açık (temas yok)",
+      "ghostModeOff": "Kapalı (çarpışma açık)",
+      "ghostModeOnHint": "Araçlar birbirinin içinden geçer",
+      "ghostModeOffHint": "Tam temas (doğuşta, pit yolunda, AFK’da veya ağır gecikmede hayalet)",
       "collisions": "Çarpışmalar",
       "lockedQualifying": "Sıralama turları sürerken kilitli",
       "lockedRace": "Yarış sürerken kilitli"
@@ -200,9 +205,13 @@
       "ready": "Hazır",
       "notReady": "Hazır değil",
       "hostOn": "Oda kurucusu {circuit} pistinde",
+      "modMissing": "Kurucu, {mod} modundaki bir pistte yarışıyor. Bu yarışa katılmak için onu Modlar’dan yükle.",
+      "modDifferent": "Kurucuda {mod} modu var ve senin kopyan farklı. Bu yarışa katılmak için aynı sürümü yükle.",
       "switchCircuit": "Pisti değiştir",
       "wrongCar": "Aracın bu odanın sınıfında değil ({class}).",
       "wrongCarSwitch": "Aracın bu odanın sınıfında değil ({class}). Araç değiştir:",
+      "wrongCarReadyBlocked": "Hazır olmadan önce izin verilen bir araca ({class}) geç",
+      "wrongCarStartBlocked": "Başlatmadan önce izin verilen bir araca ({class}) geç",
       "raceInProgress": "Yarış devam ediyor",
       "startRaceNow": "Yarışı şimdi başlat",
       "startQualifying": "{minutes} dk sıralama turlarını başlat",
@@ -435,7 +444,20 @@
     "yourRace": "Yarışın",
     "position": "P{position}",
     "disqualified": "Diskalifiye",
+    "disqualifiedReason": "Diskalifiye · {reason}",
     "retired": "Yarış dışı",
+    "retiredReason": "Yarış dışı · {reason}",
+    "dnfBadge": "DNF · {reason}",
+    "dsqBadge": "DSQ · {reason}",
+    "dnfReasons": {
+      "track_limits": "Pist sınırları",
+      "collision": "Çarpışma hasarı",
+      "wall_impact": "Bariyere çarpma",
+      "suspension": "Süspansiyon arızası",
+      "damage": "Ağır hasar",
+      "disconnected": "Bağlantı koptu",
+      "time_limit": "Süre doldu"
+    },
     "ofField": "/ {count}",
     "gridUnknown": "Grid bilinmiyor",
     "started": "Başlangıç P{position}",
@@ -653,13 +675,20 @@
   },
   "f12026ChannelsPanel": {
     "region": "Mühendislik kanalları",
+    "title": "Süspansiyon ve aero",
+    "suspensionGrip": "Süspansiyon ve tutuş",
+    "wheelLegend": "Kayma · Takoz",
+    "grip": "Tutuş",
+    "aeroDiff": "Aero ve diferansiyel",
+    "activeAero": "Aktif aero",
+    "driverAids": "Sürüş destekleri",
     "wheels": {
       "lf": "LF",
       "rf": "RF",
       "lr": "LR",
       "rr": "RR"
     },
-    "wheelTitle": "{wheel}: kayma oranı, stopere kalan mesafe, kullanılan tutuş",
+    "wheelTitle": "{wheel}: kayma oranı, takoza kalan mesafe, kullanılan tutuş",
     "slipRatio": "%SR",
     "aeroHeightTitle": "Aero sürüş yüksekliği",
     "aeroHeight": "Yükseklik",
@@ -844,11 +873,17 @@
     "startsIn": "Yarış <n>{seconds}</n> sn içinde başlıyor",
     "lightsLabel": "Kalkış ışıkları: {total} ışıktan {lit} tanesi yanıyor",
     "rollingStart": "Hareketli kalkış",
+    "formation": "Formasyon",
+    "limiterActive": "Sınırlayıcı açık",
+    "getReady": "Hazırlan",
+    "rollingCountdownLabel": "Hareketli kalkış geri sayımı: {count}",
     "holdPaceSkin": "Tempoyu koru · çizgiye kadar <n>{pace}</n> {unit}",
     "holdPace": "Çizgiye kadar <n>{pace}</n> {unit}",
     "greenFlag": "Yeşil bayrak",
     "lightsOut": "Işıklar söndü",
     "chequeredFlag": "Damalı bayrak",
+    "retired": "Yarış dışı · DNF",
+    "disqualified": "Diskalifiye",
     "reaction": "Tepki <n>{ms}</n> ms"
   },
   "launchCue": {
@@ -862,12 +897,9 @@
     "revsUp": "Devri yükselt"
   },
   "speedCluster": {
-    "region": "Hız göstergesi",
     "minimalRegion": "Hız ve vites",
     "shiftLights": "Vites ışıkları: {lit} / {total}",
     "gearLabel": "Vites {gear}",
-    "gear": "Vites",
-    "shift": "Vites at",
     "aeroToggle": "{label}: aç / kapat",
     "drsTitle": "DRS ({key}): arka kanat, DRS bölgesinde; yarışta 3. turdan itibaren algılama noktasında öndeki araçla 1 s içindeyken açılır",
     "straightModeTitle": "Straight Mode ({key}): düzlüklerde her iki kanat açılır; düzlükten hemen önce basarsan başlar başlamaz açılır",
@@ -895,10 +927,7 @@
     "throttleTitle": "Gaz girdisi",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Direksiyon torku / Force Feedback (Kırmızı = Kırpılma)",
-    "latG": "{g} g yanal",
-    "ersBattery": "ERS batarya şarjı",
-    "rpmBand": "Motor RPM bandı"
+    "forceTitle": "Direksiyon torku / Force Feedback (Kırmızı = Kırpılma)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +1010,6 @@
     "windowTitle": "Lastik sırtı çalışma aralığı",
     "window": "Aralık",
     "miniTitle": "{corner}: sırt {temps} · {pressure} · fren {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Lastikler"
   },
   "weatherBadge": {
     "region": "Hava durumu",

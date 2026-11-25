@@ -187,7 +187,10 @@
     "sharedDetail": "Roule sur la physique d’une autre voiture de la même catégorie et de la même époque, donc se conduit comme celle-ci plutôt que comme elle-même.",
     "eraBadge": "PHYSIQUE 2026",
     "era": "Voitures anciennes",
-    "eraDetail": "Roule sur la physique 2026, donc se conduit comme une voiture de 2026 plutôt que comme à son époque."
+    "eraDetail": "Roule sur la physique 2026, donc se conduit comme une voiture de 2026 plutôt que comme à son époque.",
+    "modBadge": "MOD",
+    "mod": "Mods installés",
+    "modDetail": "Issu d’un pack de mods que vous avez installé, basé sur l’un des modèles de véhicules du jeu. LibreCorsa ne l’a pas vérifié, et ses tours ne figurent pas dans les classements en ligne."
   },
   "carClass": {
     "f1": "Formule monoplace",
@@ -209,7 +212,10 @@
     "simDetail": "Un circuit sim fait main, avec ses propres maillages de route, de vibreurs et de barrières et sa physique de surface.",
     "scanBadge": "SCAN",
     "scan": "Scans convertis",
-    "scanDetail": "Converti automatiquement depuis un modèle 3D de la communauté : la route, les vibreurs, les zones de dégagement et les barrières sont tracés d’après le maillage, donc certains détails peuvent différer du vrai site."
+    "scanDetail": "Converti automatiquement depuis un modèle 3D de la communauté : la route, les vibreurs, les zones de dégagement et les barrières sont tracés d’après le maillage, donc certains détails peuvent différer du vrai site.",
+    "modBadge": "MOD",
+    "mod": "Mods installés",
+    "modDetail": "Issu d’un pack de mods que vous avez installé. LibreCorsa ne l’a pas vérifié, et ses tours ne figurent pas dans les classements en ligne."
   },
   "circuitType": {
     "permanent": "Permanent",
@@ -282,6 +288,10 @@
     "pause": "Menu pause",
     "mfd": "Ouvrir / fermer le MFD",
     "mfdPage": "Page MFD suivante",
+    "mfdUp": "Valeur MFD +",
+    "mfdDown": "Valeur MFD −",
+    "mfdPrev": "Réglage MFD précédent",
+    "mfdNext": "Réglage MFD suivant",
     "hud": "Afficher / masquer le HUD",
     "board": "Ouvrir / fermer le classement",
     "headlights": "Phares (appui bref : appels de phares, maintenir : allumés / éteints)",
@@ -324,14 +334,18 @@
     "no": "Non"
   },
   "hudLayouts": {
-    "broadcast": "Diffusion TV",
-    "broadcastDetail": "Graphismes TV : tableau des temps, carte, bandeau de télémétrie",
-    "dash": "Écran de volant",
-    "dashDetail": "Un écran de volant, bas et centré",
+    "blade": "Lame",
+    "bladeDetail": "Un seul bandeau bas, le reste dégagé",
+    "trackside": "Bord de piste",
+    "tracksideDetail": "Affichages dans les coins, compte-tours",
+    "pitWall": "Mur des stands",
+    "pitWallDetail": "Tableaux de chronos et détails par page, sans cadrans",
+    "endurance": "Endurance",
+    "enduranceDetail": "Classement complet, usure des pneus, cadran et état de la voiture",
+    "racingLine": "Trajectoire idéale",
+    "racingLineDetail": "Voitures proches, barre de delta et bloc compact",
     "telemetry": "Télémétrie",
     "telemetryDetail": "L’écran de volant plus pneus, G, puissance et commandes",
-    "classic": "Classique",
-    "classicDetail": "Les panneaux d’angle d’origine",
     "minimal": "Minimal",
     "minimalDetail": "Vitesse, rapport et tour uniquement",
     "touring": "GT-Like",
@@ -775,12 +789,19 @@
     "ready": "Prêt. Les onglets de ce navigateur se trouvent entre eux ; les autres appareils rejoignent avec un code de salon."
   },
   "downloads": {
+    "desktopSummary": "Le jeu dans sa propre fenêtre, en ligne ou hors ligne. Il accepte les mods, convertit les circuits et voitures d’autres jeux et se met à jour automatiquement.",
+    "windowsZipNote": "Décompressez-le dans un dossier où vous avez les droits d’écriture (pas dans Program Files) et lancez LibreCorsa.exe dans le dossier LibreCorsa. Tant que sa signature de code via SignPath Foundation n’est pas approuvée, SmartScreen peut le bloquer : cliquez sur Informations complémentaires, puis sur Exécuter quand même.",
     "windowsStatusLabel": "Non signée",
+    "windowsZipLabel": "Télécharger le .zip",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": "Ouvrez le .dmg et glissez LibreCorsa dans Applications. Apple ne l’a pas encore notarié, donc au premier blocage de macOS : ouvrez Réglages Système > Confidentialité et sécurité, puis cliquez sur Ouvrir quand même.",
     "macosStatusLabel": "Non signée",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Mac M1–M4",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Mac Intel x64",
+    "linuxTarNote": "Décompressez-le où vous voulez et lancez librecorsa dans le dossier LibreCorsa. Au premier lancement, LibreCorsa s’ajoute à votre menu d’applications :",
+    "linuxTarLabel": "Télécharger le .tar.gz",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "Trusted Web Activity en plein écran avec commandes immersives persistantes, Android Game Mode et raccourcis du lanceur. Nécessite Android 7+ et Chrome.",
     "androidInstallNote": "APK officiel signé. Autorisez l’installation depuis votre navigateur quand on vous le demande ; il se vérifie auprès de librecorsa.org et s’ouvre sans barre d’adresse.",
@@ -823,7 +844,9 @@
     "launchTouch": "Maintenez l’accélérateur pour partir",
     "launchKey": "Maintenez {key} pour partir · Esc Menu",
     "noRacesOnHillClimb": "Pas de courses en course de côte",
-    "backToRaces": "Retour aux courses"
+    "backToRaces": "Retour aux courses",
+    "carAutoSwitched": "Passé à {car} : salon verrouillé sur {rule}",
+    "carBlockedByLobby": "Voiture verrouillée sur {rule} dans ce salon"
   },
   "telemetryHud": {
     "menu": "Menu",
@@ -843,17 +866,6 @@
     "graphicsLow": "Qualité graphique réglée sur Basse après une réinitialisation du GPU.",
     "loadFailedStaying": "Échec du chargement du circuit. Reste sur {circuit}.",
     "loadFailedDefault": "Échec du chargement du circuit. {circuit} chargé."
-  },
-  "minimap": {
-    "map": "Carte du circuit",
-    "mapAtTurn": "Carte du circuit ; vous êtes au virage {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, one {# virage} other {# virages}}",
-    "sector": "Secteur {sector}",
-    "elevation": "Dénivelé",
-    "altitude": "Alt. {height}",
-    "grade": "PENTE {grade} %",
-    "profileStart": "Départ {height}",
-    "profileStartFinish": "D/A {height}"
   },
   "source": {
     "sourceOf": "Source de {title}",

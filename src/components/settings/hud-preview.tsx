@@ -101,33 +101,140 @@ export const RevRow: React.FC<{ x: number; y: number; w: number; n: number; lit:
 
 const SECTORS = ["var(--color-lc-cyan)", VOLT, "var(--color-lc-pink)"] as const;
 
-/** The game's own five layouts */
-const BUILT_IN: Record<string, HudPreviewDraw> = {
-  broadcast: () => (
+/** The new layouts' surface: a hard dark plate, no radius, with one 45° cut at the bottom right when `cut` */
+const PLATE_FILL = "var(--color-lc-void)";
+const Plate: React.FC<{ x: number; y: number; w: number; h: number; cut?: boolean }> = ({ x, y, w, h, cut = false }) => {
+  const c = cut ? Math.min(2.2, h / 3) : 0;
+  return <path d={`M${x} ${y}H${x + w}V${y + h - c}L${x + w - c} ${y + h}H${x}Z`} fill={PLATE_FILL} fillOpacity={0.88} />;
+};
+
+/** A three-sector strip: best (purple), personal best (green), the running one (chalk, part done) */
+const SectorStrip: React.FC<{ x: number; y: number; w: number }> = ({ x, y, w }) => {
+  const step = w / 3;
+  return (
     <g>
-      <Glass x={4} y={4} w={30} h={34} />
-      <rect x={4} y={4} width={30} height={6} rx={2.5} fill={CHALK} />
-      <Lines x={7} y={14} w={22} n={7} gap={3.2} />
-      <Glass x={128} y={4} w={28} h={22} />
-      <MiniTrack x={130} y={6} s={1.0} sectors={SECTORS} />
-      <Glass x={48} y={72} w={64} h={14} r={3} />
-      <RevRow x={52} y={74} w={56} n={14} lit={9} h={0.9} />
-      <Lines x={54} y={79} w={14} n={2} gap={3} h={1.4} ragged={false} opacity={0.8} />
-      <rect x={72} y={77} width={8} height={7.5} rx={1.5} fill={VOLT} />
-      <rect x={96} y={77} width={13} height={7.5} rx={1.5} fill="var(--color-lc-gain)" />
+      <rect x={x} y={y} width={step - 0.6} height={1} fill="var(--color-lc-purple)" />
+      <rect x={x + step} y={y} width={step - 0.6} height={1} fill="var(--color-lc-green)" />
+      <rect x={x + 2 * step} y={y} width={(step - 0.6) * 0.45} height={1} fill={CHALK} />
+    </g>
+  );
+};
+
+/** The game's own layouts: the five hard-plate ones, Telemetry and Minimal (GT-like and F1-like are in GAME_STYLE) */
+const BUILT_IN: Record<string, HudPreviewDraw> = {
+  blade: () => (
+    <g>
+      <Plate x={3} y={3} w={34} h={19} cut />
+      <rect x={3} y={3} width={34} height={2.6} fill={CHALK} fillOpacity={0.14} />
+      <rect x={3} y={10} width={34} height={2.4} fill={VOLT} />
+      <Lines x={6} y={7} w={26} n={5} gap={2.4} />
+      <Plate x={125} y={3} w={32} h={14} cut />
+      <Lines x={128} y={5.5} w={18} n={1} h={2.2} ragged={false} opacity={0.85} />
+      <Lines x={128} y={10} w={26} n={2} gap={2.4} />
+      <SectorStrip x={125} y={15.6} w={32} />
+      <MiniTrack x={6} y={27} s={0.95} />
+      <path d="M33 81 L130 81 L127 88 L30 88 Z" fill={PLATE_FILL} fillOpacity={0.9} />
+      <RevRow x={50} y={78.6} w={24} n={8} lit={8} h={1} />
+      <RevRow x={86} y={78.6} w={24} n={8} lit={3} h={1} />
+      <Lines x={36} y={83} w={30} n={2} gap={2.4} h={1.1} />
+      <path d="M75 76 L87 76 L85 88 L73 88 Z" fill={VOLT} />
+      <rect x={90} y={83} width={10} height={2.2} fill="var(--color-lc-gain)" />
+      <Lines x={104} y={83} w={20} n={2} gap={2.4} h={1.1} />
     </g>
   ),
-  dash: () => (
+  trackside: () => (
     <g>
-      <rect x={4} y={4} width={18} height={6} rx={3} {...GLASS} />
-      <rect x={5} y={5} width={6} height={4} rx={2} fill={VOLT} />
-      <MiniTrack x={130} y={4} s={1.05} stroke={CHALK} />
-      <path d="M48 88 L48 70 Q80 60 112 70 L112 88 Z" fill="var(--color-lc-carbon)" stroke="var(--color-lc-keyline)" strokeWidth={0.5} />
-      <RevRow x={64} y={66.5} w={32} n={10} lit={7} h={1.2} dots />
-      <rect x={52} y={71} width={56} height={14} rx={1.5} fill="var(--color-lc-void)" />
-      <rect x={76} y={72.5} width={8} height={11} rx={1} fill="var(--color-lc-well)" />
-      <Lines x={55} y={74} w={16} n={3} gap={3.2} h={1.2} />
-      <Lines x={89} y={74} w={16} n={3} gap={3.2} h={1.2} />
+      <path d="M3.6 2.6 L12 2.6 L10.8 7.8 L2.4 7.8 Z" fill={VOLT} />
+      <Lines x={15} y={3.6} w={20} n={1} h={2.6} ragged={false} opacity={0.9} />
+      <path d="M39.4 3.4 L48 3.4 L47 6.8 L38.4 6.8 Z" fill="var(--color-lc-gain)" />
+      <Lines x={4} y={10} w={36} n={2} gap={3} h={1} />
+      <Plate x={66} y={2.4} w={28} h={2.8} />
+      <MiniTrack x={5} y={21} s={0.9} />
+      <Plate x={3} y={68} w={40} h={19} />
+      <rect x={3} y={71.8} width={40} height={2.6} fill={VOLT} />
+      <Lines x={6} y={69} w={30} n={6} gap={3} />
+      <rect x={97.5} y={72} width={4} height={5} fill="var(--color-lc-gain)" />
+      <rect x={108} y={72} width={4} height={5} fill="var(--color-lc-gain)" />
+      <rect x={97.5} y={80} width={4} height={5} fill="var(--color-lc-gain)" />
+      <rect x={108} y={80} width={4} height={5} fill="var(--color-lc-crimson)" />
+      <Ring cx={144} cy={72} r={12} f={0.8} color={CHALK} w={1.6} />
+      <Ring cx={144} cy={72} r={9.6} f={0.45} color="var(--color-lc-cyan)" w={0.8} />
+      <path d="M139.5 67 L146 67 L144.2 76 L137.7 76 Z" fill={VOLT} />
+      <circle cx={80} cy={80.7} r={5.4} fill={PLATE_FILL} fillOpacity={0.6} />
+      <rect x={79} y={78.5} width={1.6} height={3.4} fill="var(--color-lc-azure)" />
+    </g>
+  ),
+  "pit-wall": () => (
+    <g>
+      <Plate x={3} y={3} w={29} h={29} />
+      <rect x={3} y={3} width={6} height={5} fill={VOLT} />
+      <rect x={26} y={3} width={6} height={5} fill="var(--color-lc-gain)" />
+      <Lines x={5} y={10.5} w={24} n={8} gap={2.6} />
+      <Plate x={59} y={2.8} w={42} h={3.6} />
+      <rect x={76} y={3.8} width={4} height={1.6} fill="var(--color-lc-gain)" />
+      <rect x={74} y={7.8} width={12} height={2.4} fill="var(--color-lc-amber)" />
+      <Plate x={3} y={60} w={35} h={27} />
+      <Lines x={5} y={62} w={30} n={6} gap={2.6} />
+      <rect x={3} y={70} width={35} height={2.2} fill={VOLT} />
+      <rect x={4} y={80} width={5} height={6} fill={VOLT} />
+      <Plate x={120} y={62} w={37} h={25} />
+      <Lines x={122} y={63.5} w={33} n={1} h={1.2} ragged={false} opacity={0.4} />
+      {[0, 1].map((r) =>
+        [0, 1].map((c) => (
+          <g key={`${r}${c}`}>
+            <rect x={122 + c * 17.5} y={67 + r * 8.5} width={4.6} height={3.4} fill={r === 1 && c === 1 ? "var(--color-lc-crimson)" : "var(--color-lc-gain)"} />
+            <rect x={127 + c * 17.5} y={67 + r * 8.5} width={4.6} height={3.4} fill={r === 1 && c === 1 ? "var(--color-lc-crimson)" : "var(--color-lc-gain)"} />
+            <rect x={132 + c * 17.5} y={67 + r * 8.5} width={4.6} height={3.4} fill={r === 1 && c === 1 ? "var(--color-lc-amber)" : "var(--color-lc-gain)"} />
+          </g>
+        )),
+      )}
+      <Lines x={122} y={83.5} w={33} n={1} h={1} ragged={false} opacity={0.5} />
+    </g>
+  ),
+  endurance: () => (
+    <g>
+      <Plate x={3} y={3} w={37} h={24} />
+      <Lines x={6} y={5} w={30} n={8} gap={2.7} />
+      <rect x={3} y={9.6} width={37} height={2.4} fill={VOLT} />
+      <MiniTrack x={7} y={30} s={0.95} />
+      <Plate x={130} y={3} w={27} h={22} />
+      <Lines x={132.5} y={5} w={22} n={3} gap={2.8} />
+      <rect x={130} y={17.6} width={27} height={4.6} fill="var(--color-lc-gain)" />
+      <Plate x={3} y={68} w={37} h={19} />
+      {[0, 1].map((r) =>
+        [0, 1].map((c) => <Ring key={`${r}${c}`} cx={9 + c * 18} cy={74 + r * 8} r={2.8} f={0.85 - (r + c) * 0.04} color={CHALK} w={0.9} />),
+      )}
+      <Plate x={122} y={58} w={35} h={29} />
+      <path d="M128.5 62 L131 62 L132 74 L127.5 74 Z" fill="none" stroke={CHALK} strokeWidth={0.6} />
+      <Ring cx={147} cy={66} r={9} f={0.82} color={CHALK} w={1.4} />
+      <rect x={144} y={61.5} width={6} height={6} fill={VOLT} />
+      <rect x={124} y={78.4} width={20} height={2} fill="var(--color-lc-amber)" />
+      <rect x={124} y={82.4} width={14} height={2} fill="var(--color-lc-cyan)" />
+    </g>
+  ),
+  "racing-line": () => (
+    <g>
+      <path d="M3.6 3 L10 3 L9 8 L2.6 8 Z" fill={VOLT} />
+      <Plate x={11} y={3} w={26} h={5} />
+      <Plate x={3} y={8.6} w={34} h={14} cut />
+      <rect x={3} y={13.8} width={34} height={2.4} fill={VOLT} />
+      <Lines x={6} y={10.4} w={26} n={4} gap={2.8} />
+      <Plate x={59} y={2.6} w={42} h={1.6} />
+      <rect x={76} y={2.6} width={4} height={1.6} fill="var(--color-lc-gain)" />
+      <Lines x={74} y={5.8} w={10} n={1} h={2} ragged={false} fill="var(--color-lc-gain)" opacity={0.9} />
+      <Plate x={129} y={3} w={28} h={14} cut />
+      <Lines x={131} y={5.4} w={18} n={1} h={2.2} ragged={false} opacity={0.85} />
+      <SectorStrip x={131} y={10} w={24} />
+      <MiniTrack x={134} y={21} s={0.9} sectors={SECTORS} />
+      <RevRow x={59} y={72.6} w={42} n={15} lit={11} h={0.9} />
+      <path d="M55 75 L106 75 L104 84 L53 84 Z" fill={PLATE_FILL} fillOpacity={0.9} />
+      <path d="M74 75 L87 75 L85 84 L72 84 Z" fill={VOLT} />
+      <Lines x={58} y={78} w={12} n={1} h={2.4} ragged={false} opacity={0.9} />
+      <rect x={90} y={79} width={13} height={1.2} fill="var(--color-lc-cyan)" />
+      <Plate x={53} y={84.8} w={53} h={3} />
+      <circle cx={44.6} cy={80.8} r={4.6} fill={PLATE_FILL} fillOpacity={0.6} />
+      <Plate x={124} y={68} w={33} h={19} cut />
+      <Lines x={126} y={70} w={28} n={5} gap={3.2} />
     </g>
   ),
   telemetry: () => (
@@ -150,22 +257,6 @@ const BUILT_IN: Record<string, HudPreviewDraw> = {
       <path d="M56 88 L56 72 Q80 64 104 72 L104 88 Z" fill="var(--color-lc-carbon)" />
       <rect x={59} y={74} width={42} height={12} rx={1.5} fill="var(--color-lc-void)" />
       <rect x={77} y={75} width={6} height={10} rx={1} fill="var(--color-lc-well)" />
-    </g>
-  ),
-  classic: () => (
-    <g>
-      <Glass x={4} y={4} w={26} h={22} />
-      <Lines x={7} y={8} w={18} n={5} gap={3.4} />
-      <Glass x={130} y={4} w={26} h={20} />
-      <MiniTrack x={132} y={6} s={0.9} stroke={CHALK} />
-      <Glass x={4} y={62} w={24} h={24} />
-      {[0, 1, 2, 3].map((i) => (
-        <rect key={i} x={8 + (i % 2) * 10} y={66 + Math.floor(i / 2) * 10} width={6} height={8} rx={1.2} fill="var(--color-lc-ideal)" fillOpacity={0.8} />
-      ))}
-      <Glass x={58} y={70} w={44} h={16} r={4} />
-      <rect x={74} y={73} width={12} height={10} rx={2} fill={VOLT} />
-      <Glass x={128} y={62} w={28} h={24} />
-      <Lines x={131} y={66} w={22} n={5} gap={3.6} />
     </g>
   ),
   minimal: () => (
@@ -322,7 +413,7 @@ const THIRD_PARTY: Record<string, HudPreviewDraw> = {
 
 /** A layout's picture: the driving view with the layout's panels on it */
 export const HudPreview: React.FC<{ preset: HudPreset; className?: string }> = ({ preset, className = "" }) => {
-  const draw = BUILT_IN[preset] ?? GAME_STYLE[preset] ?? COMMUNITY[preset] ?? THIRD_PARTY[preset] ?? BUILT_IN.broadcast;
+  const draw = BUILT_IN[preset] ?? GAME_STYLE[preset] ?? COMMUNITY[preset] ?? THIRD_PARTY[preset] ?? BUILT_IN.blade;
   return (
     <svg viewBox="0 0 160 90" aria-hidden className={`block aspect-video h-auto w-full ${className}`} preserveAspectRatio="xMidYMid slice">
       {/* Sky, ground and the road to the horizon: dim, so the panels read */}

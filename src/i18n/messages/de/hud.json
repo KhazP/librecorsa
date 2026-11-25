@@ -179,6 +179,11 @@
       "penaltiesOff": "Aus",
       "penaltiesHint": "Zeit wird für Streckenlimits und Frühstarts addiert",
       "damage": "Schaden",
+      "ghostMode": "Ghost-Modus",
+      "ghostModeOn": "An (kein Kontakt)",
+      "ghostModeOff": "Aus (Kollisionen an)",
+      "ghostModeOnHint": "Autos fahren durcheinander hindurch",
+      "ghostModeOffHint": "Voller Kontakt (Ghost beim Spawn, in der Boxengasse, bei AFK oder starkem Lag)",
       "collisions": "Kollisionen",
       "lockedQualifying": "Gesperrt, solange das Qualifying läuft",
       "lockedRace": "Gesperrt, solange das Rennen läuft"
@@ -200,9 +205,13 @@
       "ready": "Bereit",
       "notReady": "Nicht bereit",
       "hostOn": "Der Host fährt auf {circuit}",
+      "modMissing": "Der Host fährt auf einer Strecke aus der Mod {mod}. Installiere sie unter Mods, um diesem Rennen beizutreten.",
+      "modDifferent": "Der Host hat die Mod {mod}, und deine Kopie weicht ab. Installiere dieselbe Version, um diesem Rennen beizutreten.",
       "switchCircuit": "Strecke wechseln",
       "wrongCar": "Dein Auto gehört nicht zur Klasse dieses Raums ({class}).",
       "wrongCarSwitch": "Dein Auto gehört nicht zur Klasse dieses Raums ({class}). Auto wechseln:",
+      "wrongCarReadyBlocked": "Wechsle zu einem erlaubten Auto ({class}), bevor du dich bereit machst",
+      "wrongCarStartBlocked": "Wechsle vor dem Start zu einem erlaubten Auto ({class})",
       "raceInProgress": "Rennen läuft",
       "startRaceNow": "Rennen jetzt starten",
       "startQualifying": "{minutes} min Qualifying starten",
@@ -435,7 +444,20 @@
     "yourRace": "Dein Rennen",
     "position": "P{position}",
     "disqualified": "Disqualifiziert",
+    "disqualifiedReason": "Disqualifiziert · {reason}",
     "retired": "Ausgeschieden",
+    "retiredReason": "Ausgeschieden · {reason}",
+    "dnfBadge": "DNF · {reason}",
+    "dsqBadge": "DSQ · {reason}",
+    "dnfReasons": {
+      "track_limits": "Streckenlimits",
+      "collision": "Kollisionsschaden",
+      "wall_impact": "Einschlag in die Bande",
+      "suspension": "Fahrwerksschaden",
+      "damage": "Totalschaden",
+      "disconnected": "Verbindung getrennt",
+      "time_limit": "Zeit abgelaufen"
+    },
     "ofField": "von {count}",
     "gridUnknown": "Start unbekannt",
     "started": "Start P{position}",
@@ -653,6 +675,13 @@
   },
   "f12026ChannelsPanel": {
     "region": "Engineering-Kanäle",
+    "title": "Fahrwerk & Aero",
+    "suspensionGrip": "Fahrwerk & Grip",
+    "wheelLegend": "Schlupf · Anschlag",
+    "grip": "Grip",
+    "aeroDiff": "Aero & Differenzial",
+    "activeAero": "Aktive Aerodynamik",
+    "driverAids": "Fahrhilfen",
     "wheels": {
       "lf": "VL",
       "rf": "VR",
@@ -844,11 +873,17 @@
     "startsIn": "Rennstart in <n>{seconds}</n>",
     "lightsLabel": "Startlichter: {lit} von {total} an",
     "rollingStart": "Fliegender Start",
+    "formation": "Formation",
+    "limiterActive": "Limiter an",
+    "getReady": "Bereit machen",
+    "rollingCountdownLabel": "Countdown zum fliegenden Start: {count}",
     "holdPaceSkin": "Tempo halten · <n>{pace}</n> {unit} bis Start/Ziel",
     "holdPace": "<n>{pace}</n> {unit} bis zur Linie halten",
     "greenFlag": "Grüne Flagge",
     "lightsOut": "Lichter aus",
     "chequeredFlag": "Zielflagge",
+    "retired": "Ausgeschieden · DNF",
+    "disqualified": "Disqualifiziert",
     "reaction": "Reaktion <n>{ms}</n> ms"
   },
   "launchCue": {
@@ -862,12 +897,9 @@
     "revsUp": "Drehzahl hoch"
   },
   "speedCluster": {
-    "region": "Tacho-Einheit",
     "minimalRegion": "Tempo und Gang",
     "shiftLights": "Schaltlichter: {lit} von {total}",
     "gearLabel": "Gang {gear}",
-    "gear": "Gang",
-    "shift": "Schalten",
     "aeroToggle": "{label}: umschalten",
     "drsTitle": "DRS ({key}): Heckflügel-Klappe in der DRS-Zone; im Rennen nur innerhalb von 1 s zum Vordermann am Messpunkt, ab Runde 3",
     "straightModeTitle": "Straight Mode ({key}): beide Klappen auf den Geraden offen; kurz davor gedrückt, öffnen sie sich mit Beginn der Geraden",
@@ -895,10 +927,7 @@
     "throttleTitle": "Gaseingabe",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Lenkmoment / Force Feedback (Rot = Clipping)",
-    "latG": "{g} g quer",
-    "ersBattery": "ERS-Batterieladung",
-    "rpmBand": "Motordrehzahlbereich"
+    "forceTitle": "Lenkmoment / Force Feedback (Rot = Clipping)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +1010,6 @@
     "windowTitle": "Arbeitsfenster der Lauffläche",
     "window": "Fenster",
     "miniTitle": "{corner}: Lauffläche {temps} · {pressure} · Bremse {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Reifen"
   },
   "weatherBadge": {
     "region": "Wetter",

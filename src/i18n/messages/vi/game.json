@@ -187,7 +187,10 @@
     "sharedDetail": "Dùng mô hình vật lý của một xe khác cùng hạng và thời kỳ, nên cảm giác lái giống xe đó hơn là giống chính nó.",
     "eraBadge": "Vật lý 2026",
     "era": "Xe đời cũ",
-    "eraDetail": "Chạy trên mô hình vật lý 2026, nên cảm giác lái giống xe năm 2026 hơn là như ở mùa giải gốc của nó."
+    "eraDetail": "Chạy trên mô hình vật lý 2026, nên cảm giác lái giống xe năm 2026 hơn là như ở mùa giải gốc của nó.",
+    "modBadge": "MOD",
+    "mod": "Mod đã cài",
+    "modDetail": "Từ gói mod bạn đã cài, dùng một trong các mô hình xe của trò chơi. LibreCorsa chưa kiểm tra gói này và thành tích vòng sẽ không xuất hiện trên bảng xếp hạng trực tuyến."
   },
   "carClass": {
     "f1": "Xe công thức bánh hở",
@@ -209,7 +212,10 @@
     "simDetail": "Đường đua mô phỏng được dựng thủ công với lưới mặt đường, gờ lề, rào chắn và vật lý bề mặt riêng.",
     "scanBadge": "Bản quét",
     "scan": "Bản quét chuyển đổi",
-    "scanDetail": "Chuyển đổi tự động từ mô hình 3D cộng đồng: mặt đường, gờ lề, vùng thoát hiểm và rào chắn được dựng lại từ lưới nên chi tiết có thể khác ngoài đời thực."
+    "scanDetail": "Chuyển đổi tự động từ mô hình 3D cộng đồng: mặt đường, gờ lề, vùng thoát hiểm và rào chắn được dựng lại từ lưới nên chi tiết có thể khác ngoài đời thực.",
+    "modBadge": "MOD",
+    "mod": "Mod đã cài",
+    "modDetail": "Từ gói mod bạn đã cài. LibreCorsa chưa kiểm tra gói này và thành tích vòng sẽ không xuất hiện trên bảng xếp hạng trực tuyến."
   },
   "circuitType": {
     "permanent": "Cố định",
@@ -282,6 +288,10 @@
     "pause": "Menu tạm dừng",
     "mfd": "Mở / đóng MFD",
     "mfdPage": "Trang MFD tiếp theo",
+    "mfdUp": "Giá trị MFD +",
+    "mfdDown": "Giá trị MFD −",
+    "mfdPrev": "Mục MFD trước",
+    "mfdNext": "Mục MFD tiếp theo",
     "hud": "Hiện / ẩn HUD",
     "board": "Mở / đóng bảng xếp hạng vòng",
     "headlights": "Đèn pha (nhấn: nháy, giữ: bật / tắt)",
@@ -324,14 +334,18 @@
     "no": "Không"
   },
   "hudLayouts": {
-    "broadcast": "Truyền hình",
-    "broadcastDetail": "Đồ họa TV: bảng thứ hạng, bản đồ, dải thông số",
-    "dash": "Màn hình vô lăng",
-    "dashDetail": "Màn hình kiểu vô lăng xe đua, đặt thấp ở giữa",
+    "blade": "Thanh nghiêng",
+    "bladeDetail": "Một thanh đồng hồ thấp, phần còn lại gọn gàng",
+    "trackside": "Ven đường đua",
+    "tracksideDetail": "Thông số ở các góc, kèm đồng hồ vòng tua",
+    "pitWall": "Tường pit",
+    "pitWallDetail": "Bảng bấm giờ và chi tiết theo trang, không đồng hồ tròn",
+    "endurance": "Đua bền bỉ",
+    "enduranceDetail": "Thứ hạng đầy đủ, độ mòn lốp, đồng hồ tròn và tình trạng xe",
+    "racingLine": "Đường chạy lý tưởng",
+    "racingLineDetail": "Xe lân cận, thanh delta và cụm đồng hồ gọn",
     "telemetry": "Dữ liệu đo từ xa",
     "telemetryDetail": "Màn hình vô lăng kèm lốp, lực G, công suất và thao tác lái",
-    "classic": "Cổ điển",
-    "classicDetail": "Các bảng góc màn hình nguyên bản",
     "minimal": "Tối giản",
     "minimalDetail": "Chỉ hiển thị tốc độ, cấp số và vòng đua",
     "touring": "GT-Like",
@@ -720,7 +734,7 @@
     "warningCount": "Giới hạn đường đua · cảnh cáo {count}/{max}",
     "points": "{points} điểm",
     "strikes": "{count, plural, other {# lần vi phạm}}",
-    "disqualified": "Bị loại · giới hạn đường đua",
+    "disqualified": "Bị truất quyền thi đấu · giới hạn đường đua",
     "limitsPoints": "Giới hạn đường đua · {points}",
     "blackWhiteFlag": "Cờ đen trắng",
     "nextPenalty": "{why} · lần tới phạt +{seconds} s",
@@ -775,12 +789,19 @@
     "ready": "Sẵn sàng. Các thẻ trong trình duyệt này sẽ tự tìm thấy nhau; thiết bị khác tham gia bằng mã phòng."
   },
   "downloads": {
+    "desktopSummary": "Trò chơi chạy trong cửa sổ riêng, trực tuyến hoặc ngoại tuyến. Hỗ trợ mod, chuyển đổi đường đua và xe từ các trò chơi khác, và tự động cập nhật.",
+    "windowsZipNote": "Giải nén vào bất kỳ thư mục nào có quyền ghi (không phải Program Files) rồi chạy LibreCorsa.exe trong thư mục LibreCorsa. Cho đến khi việc ký mã qua SignPath Foundation được duyệt, SmartScreen có thể chặn tệp: nhấp Thông tin thêm, rồi chọn Vẫn chạy.",
     "windowsStatusLabel": "Chưa ký số",
+    "windowsZipLabel": "Tải xuống .zip",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": "Mở tệp .dmg và kéo LibreCorsa vào Ứng dụng. Apple chưa công chứng ứng dụng này, nên lần đầu macOS chặn mở: vào Cài đặt hệ thống > Quyền riêng tư & Bảo mật rồi nhấp Vẫn mở.",
     "macosStatusLabel": "Chưa ký số",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Máy Mac chip M1–M4",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Máy Mac Intel x64",
+    "linuxTarNote": "Giải nén vào bất kỳ đâu rồi chạy librecorsa trong thư mục LibreCorsa. Lần khởi chạy đầu tiên sẽ thêm LibreCorsa vào menu ứng dụng của bạn:",
+    "linuxTarLabel": "Tải xuống .tar.gz",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "Ứng dụng toàn màn hình Trusted Web Activity với điều khiển ẩn thanh hệ thống, Android Game Mode và lối tắt màn hình chính. Yêu cầu Android 7+ và Chrome.",
     "androidInstallNote": "Tệp APK phát hành đã ký số. Cho phép cài đặt từ trình duyệt khi được hỏi; ứng dụng xác thực với librecorsa.org và mở không có thanh địa chỉ.",
@@ -823,7 +844,9 @@
     "launchTouch": "Giữ chân ga để xuất phát",
     "launchKey": "Giữ {key} để xuất phát · Esc Menu",
     "noRacesOnHillClimb": "Không hỗ trợ đua chính trên đường đua leo đồi",
-    "backToRaces": "Quay lại danh sách cuộc đua"
+    "backToRaces": "Quay lại danh sách cuộc đua",
+    "carAutoSwitched": "Đã chuyển sang {car}: sảnh chờ khóa theo {rule}",
+    "carBlockedByLobby": "Xe bị khóa theo {rule} khi ở trong sảnh chờ này"
   },
   "telemetryHud": {
     "menu": "Menu",
@@ -843,17 +866,6 @@
     "graphicsLow": "Đồ họa đã chuyển về Thấp sau sự cố GPU.",
     "loadFailedStaying": "Tải đường đua thất bại. Tiếp tục ở {circuit}.",
     "loadFailedDefault": "Tải đường đua thất bại. Đã tải {circuit}."
-  },
-  "minimap": {
-    "map": "Bản đồ đường đua",
-    "mapAtTurn": "Bản đồ đường đua; bạn đang ở khúc cua {turn}",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {# khúc cua}}",
-    "sector": "Sector {sector}",
-    "elevation": "Độ cao",
-    "altitude": "Cao {height}",
-    "grade": "Độ dốc {grade}%",
-    "profileStart": "Xuất phát {height}",
-    "profileStartFinish": "S/F {height}"
   },
   "source": {
     "sourceOf": "Nguồn của {title}",

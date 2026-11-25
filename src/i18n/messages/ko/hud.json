@@ -179,6 +179,11 @@
       "penaltiesOff": "꺼짐",
       "penaltiesHint": "트랙 리밋 위반 및 부정 출발 시 시간 추가",
       "damage": "손상",
+      "ghostMode": "고스트 모드",
+      "ghostModeOn": "켜짐 (접촉 없음)",
+      "ghostModeOff": "꺼짐 (충돌 적용)",
+      "ghostModeOnHint": "차량끼리 통과합니다",
+      "ghostModeOffHint": "완전 접촉 (스폰, 피트 레인, 자리 비움 또는 심한 지연 시 고스트 처리)",
       "collisions": "충돌",
       "lockedQualifying": "예선 진행 중에는 잠겨 있습니다",
       "lockedRace": "레이스 진행 중에는 잠겨 있습니다"
@@ -200,9 +205,13 @@
       "ready": "준비 완료",
       "notReady": "준비 안 됨",
       "hostOn": "호스트가 {circuit}에 있습니다",
+      "modMissing": "호스트가 모드 {mod}의 서킷에서 레이스 중입니다. 이 레이스에 참가하려면 모드 메뉴에서 해당 모드를 설치하십시오.",
+      "modDifferent": "호스트가 사용 중인 모드 {mod}와 보유한 버전이 다릅니다. 이 레이스에 참가하려면 동일한 버전을 설치하십시오.",
       "switchCircuit": "서킷 전환",
       "wrongCar": "선택한 차량이 이 방의 허용 클래스({class})가 아닙니다.",
       "wrongCarSwitch": "선택한 차량이 이 방의 허용 클래스({class})가 아닙니다. 차량 변경:",
+      "wrongCarReadyBlocked": "준비하기 전에 허용된 차량({class})으로 변경하십시오",
+      "wrongCarStartBlocked": "시작하기 전에 허용된 차량({class})으로 변경하십시오",
       "raceInProgress": "레이스 진행 중",
       "startRaceNow": "지금 레이스 시작",
       "startQualifying": "{minutes}분 예선 시작",
@@ -435,7 +444,20 @@
     "yourRace": "내 레이스",
     "position": "P{position}",
     "disqualified": "실격",
+    "disqualifiedReason": "실격 · {reason}",
     "retired": "리타이어",
+    "retiredReason": "리타이어 · {reason}",
+    "dnfBadge": "DNF · {reason}",
+    "dsqBadge": "DSQ · {reason}",
+    "dnfReasons": {
+      "track_limits": "트랙 리밋",
+      "collision": "충돌 손상",
+      "wall_impact": "방호벽 충돌",
+      "suspension": "서스펜션 파손",
+      "damage": "치명적 손상",
+      "disconnected": "연결 끊김",
+      "time_limit": "시간 초과"
+    },
     "ofField": "/ {count}",
     "gridUnknown": "그리드 정보 없음",
     "started": "P{position} 출발",
@@ -653,6 +675,13 @@
   },
   "f12026ChannelsPanel": {
     "region": "엔지니어링 채널",
+    "title": "서스펜션 및 에어로",
+    "suspensionGrip": "서스펜션 및 그립",
+    "wheelLegend": "슬립 · 범프스톱",
+    "grip": "그립",
+    "aeroDiff": "에어로 및 디퍼렌셜",
+    "activeAero": "액티브 에어로",
+    "driverAids": "주행 보조",
     "wheels": {
       "lf": "LF",
       "rf": "RF",
@@ -844,11 +873,17 @@
     "startsIn": "레이스 시작까지 <n>{seconds}</n>",
     "lightsLabel": "스타트 라이트: {total}개 중 {lit}개 점등",
     "rollingStart": "롤링 스타트",
+    "formation": "포메이션",
+    "limiterActive": "리미터 켜짐",
+    "getReady": "준비",
+    "rollingCountdownLabel": "롤링 스타트 카운트다운: {count}",
     "holdPaceSkin": "속도 유지 · 출발/결승선까지 <n>{pace}</n> {unit}",
     "holdPace": "출발선까지 <n>{pace}</n> {unit} 유지",
     "greenFlag": "녹기",
     "lightsOut": "라이트 아웃",
     "chequeredFlag": "체커기",
+    "retired": "리타이어 · DNF",
+    "disqualified": "실격",
     "reaction": "반응 <n>{ms}</n>ms"
   },
   "launchCue": {
@@ -862,12 +897,9 @@
     "revsUp": "RPM 올리기"
   },
   "speedCluster": {
-    "region": "속도 클러스터",
     "minimalRegion": "속도 및 기어",
     "shiftLights": "시프트 라이트: {total}개 중 {lit}개",
     "gearLabel": "기어 {gear}",
-    "gear": "기어",
-    "shift": "변속",
     "aeroToggle": "{label}: 전환",
     "drsTitle": "DRS({key}): DRS 구역에서 리어 플랩 개방, 레이스에서는 3랩부터 감지 지점에서 앞차와 1초 이내일 때만 허용",
     "straightModeTitle": "스트레이트 모드({key}): 직선에서 양쪽 플랩 개방, 진입 직전 누르면 시작과 동시에 개방",
@@ -895,10 +927,7 @@
     "throttleTitle": "스로틀 입력",
     "forceLetter": "F",
     "clip": "클립",
-    "forceTitle": "조향 토크 / 포스 피드백(빨간색 = 클리핑)",
-    "latG": "횡 {g} g",
-    "ersBattery": "ERS 배터리 잔량",
-    "rpmBand": "엔진 RPM 대역"
+    "forceTitle": "조향 토크 / 포스 피드백(빨간색 = 클리핑)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +1010,6 @@
     "windowTitle": "트레드 적정 온도 범위",
     "window": "적정 범위",
     "miniTitle": "{corner}: 트레드 {temps} · {pressure} · 브레이크 {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "타이어"
   },
   "weatherBadge": {
     "region": "날씨",

@@ -908,10 +908,10 @@ const CATEGORIES: readonly CategoryDef[] = [
                 kind: "select",
                 id: "hudStyle",
                 label: "HUD style",
-                def: "broadcast",
+                def: "blade",
                 options: [
-                  { id: "broadcast", label: "Broadcast", detail: "Tower left, map right, inputs low" },
-                  { id: "dash", label: "Dash", detail: "Everything around the wheel" },
+                  { id: "blade", label: "Blade", detail: "One low instrument, the rest out of the way" },
+                  { id: "telemetry", label: "Telemetry", detail: "The dash, tyres, channels and inputs" },
                   { id: "minimal", label: "Minimal", detail: "Lap time and position" },
                   { id: "phone", label: "Phone", detail: "Clear of the touch pads" },
                 ],

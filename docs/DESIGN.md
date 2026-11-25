@@ -115,7 +115,13 @@ Layers, lowest first (`--z-lc-*`): HUD, touch pads, toasts, overlays, menus, res
 - **Card** (`Card`): carbon at 82 %, `white/9` border, no blur, no shadow. Content inside a sheet. Named by a plain
   heading (`title=`), never a dot plus tracked caps. Never a card inside a card: a group inside a card is a well.
 - **Well** (`Well`): `lc-well` with an `lc-line` hairline. Inputs, stat tiles, read-outs.
-- **HUD plate**: void at 84 %, `white/10` border, `blur(8px)`, `shadow-lc-pop`. One plate for every HUD panel.
+- **HUD plate**, two families:
+  - The game's own layouts after the sim titles (Blade, the default; Trackside, Pit wall, Endurance, Racing line) draw
+    **hard plates**: void at about 90 %, no radius, no border, no blur, at most one 45° cut on an outer corner, and the
+    logo's 12° slant on tags, tabs and the gear tile. Readouts may sit straight on the scene with a text shadow or a
+    soft scrim where a plate would be too heavy (Trackside).
+  - Telemetry, Minimal, GT-like and F1-like keep the **glass plate**: void at 84 %, `white/10` border, `blur(8px)`,
+    `shadow-lc-pop`.
 - Over the scene use the `white/9`–`white/10` hairline; inside a sheet use `lc-line`.
 
 ## 6. Components (`src/components/ui/`)
@@ -175,6 +181,15 @@ One part per job; a screen does not draw its own button, chip, toggle, tab, slid
 - Past 2.4:1 (a 32:9 screen) the HUD keeps to a centred 2.4:1 frame instead of the far edges. Anything the renderer places in window pixels (the virtual mirror's frame) is `fixed` to the window, not placed in the HUD layer.
 - Labels are `lc-hud-lbl` (9 px mono); values are `lc-data`; the gear sits in a volt tile in display italic. Every layout draws flags, compounds, positions, penalties, deltas and class tags with the same badges (§6).
 - The player's own row in any table is volt with void ink.
+- Tyre compounds are always `CompoundGlyph` / `CompoundBadge`, never a letter drawn in a ring by hand.
+- The layouts (`src/lib/settings/hud-layouts.ts`): Blade (the default), Trackside, Pit wall, Endurance, Racing line,
+  Telemetry, Minimal, GT-like, F1-like, then the credited third-party ones. Each of the game's own full-screen layouts
+  exports its `HudStyleOptions` (clearances, which shared pieces it draws itself) beside its component.
+- Every corner group goes through `anchor(scale, origin)`, which is what the HUD size and the layout editor move and
+  resize; `anchor` owns the element's inline `transform`, so centring and slants go on `translate` or an inner element.
+- `/kit/hud` (development only) draws any layout over a still frame with a fixed moment of a race:
+  `?style=<id>&scenario=race|practice|gt3|lights`, plus `edit=1` (the layout editor), `parts=shrunk|grown|moved`,
+  `size=0.75..1.5`, `extras=1`, `map=local`; `?previews=1` shows the pickers' pictures.
 - Semantics come from the semantic tokens (§2) and follow the colour-blind palette, in CSS and on canvas. Speeds, temperatures, pressures, distances and heights go through `src/lib/settings/units.ts`.
 - Text over the scene gets `.hud-text-shadow` only when it is not on glass.
 
@@ -201,7 +216,8 @@ One part per job; a screen does not draw its own button, chip, toggle, tab, slid
 
 ## 11. Don't
 
-- Square or small-radius cards for sheets, or flat opaque pages over the scene.
+- Square or small-radius cards for sheets, or flat opaque pages over the scene (the hard HUD plates of §5 are the
+  HUD's own surface, not a sheet).
 - Upright or non-italic display headings; sans-serif labels; proportional numbers.
 - A second focus colour, or volt used for decoration or for "selected".
 - A kicker or eyebrow: a small label line above a heading, a card or a block. The heading speaks for itself; a panel about one circuit names it in a line under the heading. (A field's label and a table's header are not kickers.)

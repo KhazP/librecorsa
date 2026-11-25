@@ -17,7 +17,7 @@ const roots = targets.length ? targets : ["src/components", "src/app"];
 const SKIP = [/^src\/app\/kit\//, /^src\/components\/ui\/logo\/geometry\.ts$/, /^src\/app\/fonts\//];
 // The in-race HUD may go down to 9 px; everything else stops at 11 px (the key cap's 10 px glyph is the one exception)
 const isHud = (f) =>
-  /^src\/components\/(hud\/(?!PauseMenu|MultiplayerPanel|LeaderboardPanel|SeatPanel|RaceResults|LapSummary|PodiumOverlay|RacesCard)|F1TelemetryHud|TrackMinimap)/.test(
+  /^src\/components\/(hud\/(?!PauseMenu|MultiplayerPanel|LeaderboardPanel|SeatPanel|RaceResults|LapSummary|PodiumOverlay|RacesCard)|F1TelemetryHud)/.test(
     f,
   );
 

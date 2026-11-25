@@ -395,6 +395,10 @@
         "closed": "Fechado"
       }
     },
+    "engineeringTelemetry": {
+      "label": "Telemetria de suspensão e aero",
+      "hint": "Aderência de cada roda, curso dos batentes, altura do carro, balanço aerodinâmico e bloqueio do diferencial ao vivo"
+    },
     "inputTrace": {
       "label": "Gráfico de entradas"
     },
@@ -784,7 +788,7 @@
     },
     "showCode": {
       "label": "Mostrar um código para outro dispositivo",
-      "hint": "Faz outro dispositivo entrar nesta conta, como o app para computador",
+      "hint": "Faz outro dispositivo entrar nesta conta, como o app de desktop",
       "hide": "Ocultar",
       "new": "Novo código",
       "show": "Mostrar um código",

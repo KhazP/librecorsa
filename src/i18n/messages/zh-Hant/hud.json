@@ -179,6 +179,11 @@
       "penaltiesOff": "關閉",
       "penaltiesHint": "超出賽道邊界與搶跑將判處加時",
       "damage": "車損",
+      "ghostMode": "幽靈模式",
+      "ghostModeOn": "開啟（無碰撞）",
+      "ghostModeOff": "關閉（開啟碰撞）",
+      "ghostModeOnHint": "車輛之間會互相穿透",
+      "ghostModeOffHint": "完整碰撞（重生、維修區、掛機或嚴重延遲時會自動幽靈化）",
       "collisions": "碰撞",
       "lockedQualifying": "排位賽進行中已鎖定",
       "lockedRace": "正賽進行中已鎖定"
@@ -200,9 +205,13 @@
       "ready": "已就緒",
       "notReady": "未就緒",
       "hostOn": "房主目前位於 {circuit}",
+      "modMissing": "房主使用的賽道來自模組 {mod}。請先在「模組」中安裝該模組才能加入賽事。",
+      "modDifferent": "房主安裝了模組 {mod}，但你的版本不同。請安裝相同版本才能加入賽事。",
       "switchCircuit": "切換賽道",
       "wrongCar": "你的車輛不符合此房間組別（{class}）。",
       "wrongCarSwitch": "你的車輛不符合此房間組別（{class}）。請更換車輛：",
+      "wrongCarReadyBlocked": "請先切換至允許的車輛（{class}）再準備就緒",
+      "wrongCarStartBlocked": "請先切換至允許的車輛（{class}）再開始賽事",
       "raceInProgress": "賽事進行中",
       "startRaceNow": "立即開始正賽",
       "startQualifying": "開始 {minutes} 分鐘排位賽",
@@ -435,7 +444,20 @@
     "yourRace": "你的賽事表現",
     "position": "P{position}",
     "disqualified": "已取消資格",
+    "disqualifiedReason": "已取消資格 · {reason}",
     "retired": "退賽",
+    "retiredReason": "退賽 · {reason}",
+    "dnfBadge": "DNF · {reason}",
+    "dsqBadge": "DSQ · {reason}",
+    "dnfReasons": {
+      "track_limits": "超出賽道邊界",
+      "collision": "碰撞損壞",
+      "wall_impact": "撞擊護欄",
+      "suspension": "懸吊故障",
+      "damage": "嚴重車損",
+      "disconnected": "連線中斷",
+      "time_limit": "超過時限"
+    },
     "ofField": "共 {count} 位",
     "gridUnknown": "起跑排位未知",
     "started": "自 P{position} 起跑",
@@ -653,6 +675,13 @@
   },
   "f12026ChannelsPanel": {
     "region": "工程遙測頻道",
+    "title": "懸吊與空力",
+    "suspensionGrip": "懸吊與抓地力",
+    "wheelLegend": "滑移 · 緩衝塊",
+    "grip": "抓地力",
+    "aeroDiff": "空力與差速器",
+    "activeAero": "主動空力",
+    "driverAids": "駕駛輔助",
     "wheels": {
       "lf": "左前",
       "rf": "右前",
@@ -844,11 +873,17 @@
     "startsIn": "距離起跑 <n>{seconds}</n> 秒",
     "lightsLabel": "起跑燈：已亮起 {lit}／{total} 盞",
     "rollingStart": "動態起跑",
+    "formation": "編隊",
+    "limiterActive": "限速啟用",
+    "getReady": "準備起跑",
+    "rollingCountdownLabel": "動態起跑倒數：{count}",
     "holdPaceSkin": "維持配速 · <n>{pace}</n> {unit} 至起終點線",
     "holdPace": "維持 <n>{pace}</n> {unit} 至起跑線",
     "greenFlag": "綠旗",
     "lightsOut": "燈滅起跑",
     "chequeredFlag": "方格旗",
+    "retired": "退賽 · DNF",
+    "disqualified": "已取消資格",
     "reaction": "反應 <n>{ms}</n> ms"
   },
   "launchCue": {
@@ -862,12 +897,9 @@
     "revsUp": "拉高轉速"
   },
   "speedCluster": {
-    "region": "車速錶組",
     "minimalRegion": "車速與檔位",
     "shiftLights": "換檔指示燈：{lit}／{total}",
     "gearLabel": "{gear} 檔",
-    "gear": "檔位",
-    "shift": "升檔",
     "aeroToggle": "{label}：切換",
     "drsTitle": "DRS（{key}）：於 DRS 區開啟尾翼；正賽自第 3 圈起須於偵測點落後前車 1 秒內方可使用",
     "straightModeTitle": "直線模式（{key}）：於直線同時開啟前後翼片；進直線前預按會在進入時自動開啟",
@@ -895,10 +927,7 @@
     "throttleTitle": "油門輸入",
     "forceLetter": "F",
     "clip": "過載",
-    "forceTitle": "轉向扭力／力回饋（紅色表示過載截頂）",
-    "latG": "{g} g 橫向",
-    "ersBattery": "ERS 電池電量",
-    "rpmBand": "引擎 RPM 轉速區間"
+    "forceTitle": "轉向扭力／力回饋（紅色表示過載截頂）"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +1010,6 @@
     "windowTitle": "胎面最佳工作溫域",
     "window": "溫域",
     "miniTitle": "{corner}：胎面 {temps} · {pressure} · 煞車 {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "輪胎"
   },
   "weatherBadge": {
     "region": "天氣",

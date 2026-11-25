@@ -32,6 +32,7 @@
 | pole position | 桿位 | |
 | pit lane | 維修區通道 | 簡稱「維修區」 |
 | pit limiter | 維修區限速器 | HUD 短標籤可用「維修區限速」 |
+| limiter | 限速 | 限速器；Limiter on 用「限速啟用」 |
 | track limits | 賽道邊界 | |
 | lap deleted | 單圈已取消 | 亦可用「單圈無效」（依語境精簡） |
 | racing line | 行車線 | 理想行車路線指示 |
@@ -45,9 +46,12 @@
 | point-to-point | 點對點賽道 | 簡稱「點對點」 |
 | car | 車輛／賽車 | 介面分類多用「車輛」，賽事語境可用「賽車」 |
 | class | 組別 | 車輛組別 |
+| livery | 塗裝 | |
 | ghost | 幽靈車 | 紀錄單圈的半透明車影 |
+| ghost mode | 幽靈模式 | 多人無碰撞模式 |
 | share code | 分享代碼 | |
 | room / room code / host / join | 房間／房間代碼／房主／加入 | host 作動詞時用「建立房間」或「主持」 |
+| lobby | 大廳 | |
 | driver | 車手 | |
 | force feedback | 力回饋 | FFB 保留 |
 | steering wheel / wheel | 方向盤 | |
@@ -69,6 +73,7 @@
 | keyboard | 鍵盤 | |
 | touch controls | 觸控操作 | 簡稱「觸控」 |
 | bind | 綁定 | 按鍵或軸的指派 |
+| unbind | 解除綁定 | |
 | axis | 軸 | 控制器／踏板類比軸 |
 | calibrate | 校準 | |
 | driving assists | 駕駛輔助 | |
@@ -88,6 +93,8 @@
 | springs | 彈簧 | |
 | dampers | 避震器 | 阻尼細項可用「阻尼」 |
 | bump / rebound (fast bump, slow rebound) | 壓縮／回彈（高速壓縮、低速回彈） | |
+| bumpstop | 緩衝塊 | 遙測圖例「緩衝塊」 |
+| bumpstop travel | 緩衝塊行程 | |
 | anti-roll bar | 防傾桿 | |
 | camber | 外傾角 | |
 | toe | 束角 | |
@@ -95,20 +102,31 @@
 | rear wing / front wing | 尾翼／前翼 | |
 | active aero | 主動空力 | 全稱「主動空氣力學」 |
 | drag | 風阻 | |
+| aero balance | 空力平衡 | |
 | grip / front grip / rear grip | 抓地力／前輪抓地力／後輪抓地力 | |
+| slip | 滑移 | 遙測圖例「滑移」 |
 | understeer / oversteer | 轉向不足／轉向過度 | |
 | differential | 差速器 | |
+| diff lock | 差速器鎖定 | 遙測短標籤「LSD 鎖定」 |
 | gear ratios | 齒比 | |
 | fuel | 燃油 | 剩餘量語境可用「油量」 |
 | yellow flag / double yellow / blue flag / black flag / chequered flag / green flag | 黃旗／雙黃旗／藍旗／黑旗／方格旗／綠旗 | |
 | safety car | 安全車 | |
 | penalty / time penalty / drive-through | 處罰／加時處罰／通過維修區處罰 | |
+| retired | 退賽 | `DNF` 保留英文 |
+| disqualified | 取消資格 | 賽事結果與起跑燈號中用「已取消資格」；`DSQ` 保留英文 |
 | lights out | 燈滅起跑 | |
 | jump start | 搶跑 | |
+| formation | 編隊 | 動態起跑編隊 |
 | overtake / overtake mode | 超車／超車模式 | |
 | ERS / DRS, deploy, harvest | ERS／DRS、釋放、回收 | ERS/DRS 保留 |
 | battery | 電池 | 剩餘電力語境可用「電量」 |
 | HUD | HUD | 保留英文縮寫 |
+| Blade | 刀鋒 | HUD 佈局名稱 |
+| Trackside | 場邊 | HUD 佈局名稱 |
+| Pit wall | 維修區牆 | HUD 佈局名稱 |
+| Endurance | 耐力賽 | HUD 佈局名稱 |
+| Racing line | 行車線 | HUD 佈局名稱 |
 | proximity radar | 車距雷達 | |
 | shift lights / rev lights | 換檔指示燈／轉速燈 | |
 | delta | 時間差 | HUD 窄版可保留「Delta」或用「時間差」 |
@@ -130,6 +148,22 @@
 | physics / physics version | 物理／物理版本 | |
 | post / upload | 發佈／上傳 | 將單圈發佈至圈速榜用「發佈」或「提交」 |
 | Lap times (screen) | 圈速紀錄 | 列表畫面名稱 |
+| mod | 模組 | 徽章：「模組」 |
+| mod package | 模組套件 | |
+| mods folder | 模組資料夾 | |
+| import folder | 匯入資料夾 | 名詞；動作按鈕 Import folder 亦為「匯入資料夾」 |
+| converter | 轉換工具 | 模組轉換工具 |
+| converter log | 轉換工具紀錄 | |
+| fingerprint | 校驗指紋 | SHA-256 校驗碼 |
+| launcher | 啟動器 | |
+| offline launcher | 離線啟動器 | |
+| desktop app | 桌面應用程式 | |
+| licence | 授權條款 | 簡稱「授權」 |
+| 「More info」（Windows SmartScreen） | 其他資訊 | 依 Windows 繁體中文介面原文 |
+| 「Run anyway」（Windows SmartScreen） | 仍要執行 | 依 Windows 繁體中文介面原文 |
+| 「Applications」（macOS） | 應用程式 | 依 macOS 繁體中文介面原文 |
+| 「System Settings > Privacy & Security」（macOS） | 系統設定 > 隱私權與安全性 | 依 macOS 繁體中文介面原文 |
+| 「Open Anyway」（macOS） | 強制打開 | 依 macOS 繁體中文介面原文 |
 
 ## Accounts
 

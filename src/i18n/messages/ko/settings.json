@@ -395,6 +395,10 @@
         "closed": "닫힘"
       }
     },
+    "engineeringTelemetry": {
+      "label": "서스펜션 및 에어로 텔레메트리",
+      "hint": "실시간 휠 그립, 범프스톱 스트로크, 차고, 에어로 밸런스 및 디퍼렌셜 잠금"
+    },
     "inputTrace": {
       "label": "입력 그래프"
     },

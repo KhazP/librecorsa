@@ -187,7 +187,10 @@
     "sharedDetail": "沿用同組別、同年代其他車輛的物理模型，因此操控表現與該車相近，而非獨立調校。",
     "eraBadge": "2026 物理",
     "era": "早期車款",
-    "eraDetail": "採用 2026 物理模型，因此操控感受近似 2026 賽車，而非該車款當年的實際手感。"
+    "eraDetail": "採用 2026 物理模型，因此操控感受近似 2026 賽車，而非該車款當年的實際手感。",
+    "modBadge": "模組",
+    "mod": "已安裝的模組",
+    "modDetail": "來自你安裝的模組套件，套用於遊戲內的車輛模型。LibreCorsa 尚未驗證此模組，其單圈紀錄不會上傳至線上圈速榜。"
   },
   "carClass": {
     "f1": "方程式開輪賽車",
@@ -209,7 +212,10 @@
     "simDetail": "手工打造的模擬賽道，擁有專屬道路、路緣石、護欄網格與路面物理。",
     "scanBadge": "掃描",
     "scan": "掃描轉換賽道",
-    "scanDetail": "由社群 3D 模型自動轉換：道路、路緣石、緩衝區與護欄皆自網格擷取，細節可能與真實場地略有差異。"
+    "scanDetail": "由社群 3D 模型自動轉換：道路、路緣石、緩衝區與護欄皆自網格擷取，細節可能與真實場地略有差異。",
+    "modBadge": "模組",
+    "mod": "已安裝的模組",
+    "modDetail": "來自你安裝的模組套件。LibreCorsa 尚未驗證此模組，其單圈紀錄不會上傳至線上圈速榜。"
   },
   "circuitType": {
     "permanent": "常設賽道",
@@ -282,6 +288,10 @@
     "pause": "暫停選單",
     "mfd": "開啟／關閉 MFD",
     "mfdPage": "下一個 MFD 頁面",
+    "mfdUp": "MFD 數值 +",
+    "mfdDown": "MFD 數值 −",
+    "mfdPrev": "上一個 MFD 旋鈕",
+    "mfdNext": "下一個 MFD 旋鈕",
     "hud": "顯示／隱藏 HUD",
     "board": "開啟／關閉圈速榜",
     "headlights": "頭燈（輕按：閃燈，長按：開／關）",
@@ -324,14 +334,18 @@
     "no": "不支援"
   },
   "hudLayouts": {
-    "broadcast": "轉播風格",
-    "broadcastDetail": "電視轉播畫面：名次欄、賽道圖、遙測條",
-    "dash": "方向盤儀錶",
-    "dashDetail": "置中於底部的方向盤液晶螢幕",
+    "blade": "刀鋒",
+    "bladeDetail": "單一低矮斜角儀錶，其餘畫面保持俐落",
+    "trackside": "場邊",
+    "tracksideDetail": "資訊分布於畫面角落，搭配轉速錶盤",
+    "pitWall": "維修區牆",
+    "pitWallDetail": "計時表格與分頁詳情，無圓形錶盤",
+    "endurance": "耐力賽",
+    "enduranceDetail": "完整排名、輪胎磨耗、錶盤與車況",
+    "racingLine": "行車線",
+    "racingLineDetail": "前後車距、時間差條與緊湊儀錶組",
     "telemetry": "遙測模式",
     "telemetryDetail": "儀錶板加上輪胎、G 值、動力與操作輸入",
-    "classic": "經典",
-    "classicDetail": "原始的四角面板配置",
     "minimal": "極簡",
     "minimalDetail": "僅顯示車速、檔位與圈數",
     "touring": "GT-Like",
@@ -775,12 +789,19 @@
     "ready": "已就緒。此瀏覽器中的其他分頁會自動配對；其他裝置請以房間代碼加入。"
   },
   "downloads": {
+    "desktopSummary": "獨立視窗執行的遊戲，線上或離線皆可遊玩。支援模組、轉換其他遊戲的賽道與車輛，並可自動更新。",
+    "windowsZipNote": "解壓縮至任何可寫入的位置（請勿放在 Program Files），並執行 LibreCorsa 資料夾內的 LibreCorsa.exe。在透過 SignPath Foundation 申請的程式碼簽章核准前，SmartScreen 可能會跳出警告：請點選「其他資訊」，再按「仍要執行」。",
     "windowsStatusLabel": "未簽章",
+    "windowsZipLabel": "下載 .zip",
+    "windowsZipDetail": "Windows x64",
+    "macosDmgNote": "開啟 .dmg 並將 LibreCorsa 拖曳至「應用程式」。由於尚未經過 Apple 公證，首次開啟時 macOS 會攔截：請開啟「系統設定 > 隱私權與安全性」，並點選「強制打開」。",
     "macosStatusLabel": "未簽章",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "M1–M4 Mac",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel x64 Mac",
+    "linuxTarNote": "解壓縮至任意位置，並執行 LibreCorsa 資料夾內的 librecorsa。首次啟動時會將 LibreCorsa 加入你的應用程式選單：",
+    "linuxTarLabel": "下載 .tar.gz",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "全螢幕 Trusted Web Activity，支援沉浸式邊緣手勢、Android Game Mode 與桌面捷徑。需要 Android 7 以上版本與 Chrome。",
     "androidInstallNote": "已簽章的正式版 APK。出現提示時請允許瀏覽器安裝；安裝檔會與 librecorsa.org 驗證並以無網址列模式開啟。",
@@ -823,7 +844,9 @@
     "launchTouch": "按住油門起跑",
     "launchKey": "按住 {key} 起跑 · Esc 選單",
     "noRacesOnHillClimb": "爬山賽不開放競速賽事",
-    "backToRaces": "返回賽事列表"
+    "backToRaces": "返回賽事列表",
+    "carAutoSwitched": "已切換至 {car}：大廳已鎖定為 {rule}",
+    "carBlockedByLobby": "在此大廳期間車輛已鎖定為 {rule}"
   },
   "telemetryHud": {
     "menu": "選單",
@@ -843,17 +866,6 @@
     "graphicsLow": "偵測到 GPU 重設，畫質已自動調整為「低」。",
     "loadFailedStaying": "賽道載入失敗，維持在 {circuit}。",
     "loadFailedDefault": "賽道載入失敗，已載入預設賽道 {circuit}。"
-  },
-  "minimap": {
-    "map": "賽道地圖",
-    "mapAtTurn": "賽道地圖；你目前位於第 {turn} 彎",
-    "facts": "{country} · {length} {unit} · {turns, plural, other {# 個彎道}}",
-    "sector": "第 {sector} 賽段",
-    "elevation": "海拔高度",
-    "altitude": "海拔 {height}",
-    "grade": "坡度 {grade}%",
-    "profileStart": "起點 {height}",
-    "profileStartFinish": "起終點 {height}"
   },
   "source": {
     "sourceOf": "{title} 的模型來源",

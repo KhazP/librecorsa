@@ -186,6 +186,7 @@
     "list": "{car} 리버리"
   },
   "downloads": {
+    "introApps": "오프라인 플레이와 모드를 지원하는 Windows, macOS 및 Linux용 데스크톱 앱과 Android용 앱을 제공합니다. 온라인 상태에서는 두 앱 모두 실시간 게임을 실행하므로 다시 설치하지 않아도 업데이트가 적용됩니다.",
     "directLink": "직접 링크",
     "platforms": "플랫폼",
     "thisDevice": "현재 기기",
@@ -198,14 +199,16 @@
     "whyInstall": "앱을 설치해야 하는 이유",
     "highlights": {
       "desktopApp": {
-        "label": "데스크톱"
+        "label": "데스크톱",
+        "text": "불러온 페이지, 차량 및 서킷을 보관하므로 오프라인에서도 플레이할 수 있습니다. 모드를 지원하고 다른 게임의 서킷과 차량을 변환하며, GitHub Releases를 통해 자동으로 업데이트됩니다."
       },
       "android": {
         "label": "Android",
         "text": "브라우저 주소창 없는 전체 화면 Trusted Web Activity, 몰입형 가장자리 스와이프, Android Game Mode 및 주행 / 랩 보드 런처 바로가기를 제공합니다."
       },
       "live": {
-        "label": "항상 최신 유지"
+        "label": "항상 최신 유지",
+        "text": "온라인 상태에서는 두 앱 모두 librecorsa.org의 실시간 게임을 실행하므로 물리, 서킷 및 멀티플레이어 업데이트를 다시 설치 없이 바로 받을 수 있습니다. 오프라인 상태에서는 데스크톱 앱에 보관된 콘텐츠로 플레이합니다."
       },
       "browser": {
         "label": "브라우저 및 iOS",
@@ -213,6 +216,7 @@
       }
     },
     "buildsTitle": "빌드 및 서명",
+    "buildsSigned": "모든 앱은 이 저장소의 소스 코드로부터 GitHub Actions에서 빌드되며 SHA-256 다이제스트와 함께 GitHub Releases에 게시됩니다. 데스크톱 앱은 서명이 검증된 경우에만 업데이트를 설치합니다. SignPath Foundation을 통한 무료 Windows 코드 서명은 현재 준비 중이며, macOS 앱은 아직 Apple 공증을 받지 않았습니다. Android APK는 <code>{file}</code>로 검증되는 업로드 키로 서명되어 있습니다.",
     "allReleases": "GitHub의 모든 릴리스",
     "signingPolicy": "코드 서명 정책"
   }

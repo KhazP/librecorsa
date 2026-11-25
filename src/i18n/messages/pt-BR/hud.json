@@ -179,6 +179,11 @@
       "penaltiesOff": "Desligadas",
       "penaltiesHint": "Tempo somado por limites de pista e queimas de largada",
       "damage": "Danos",
+      "ghostMode": "Modo ghost",
+      "ghostModeOn": "Ativado (sem contato)",
+      "ghostModeOff": "Desativado (com colisões)",
+      "ghostModeOnHint": "Os carros atravessam uns aos outros",
+      "ghostModeOffHint": "Contato total (ghost ao entrar na pista, no pit lane, AFK ou com muito lag)",
       "collisions": "Colisões",
       "lockedQualifying": "Bloqueado durante a classificação",
       "lockedRace": "Bloqueado durante a corrida"
@@ -200,9 +205,13 @@
       "ready": "Pronto",
       "notReady": "Não está pronto",
       "hostOn": "O anfitrião está em {circuit}",
+      "modMissing": "O anfitrião corre em um circuito do mod {mod}. Instale-o em Mods para entrar nesta corrida.",
+      "modDifferent": "O anfitrião tem o mod {mod}, e a sua cópia é diferente. Instale a mesma versão para entrar nesta corrida.",
       "switchCircuit": "Trocar circuito",
       "wrongCar": "Seu carro não é da classe desta sala ({class}).",
       "wrongCarSwitch": "Seu carro não é da classe desta sala ({class}). Troque de carro:",
+      "wrongCarReadyBlocked": "Troque para um carro permitido ({class}) antes de ficar pronto",
+      "wrongCarStartBlocked": "Troque para um carro permitido ({class}) antes de começar",
       "raceInProgress": "Corrida em andamento",
       "startRaceNow": "Iniciar corrida agora",
       "startQualifying": "Iniciar classificação de {minutes} min",
@@ -435,7 +444,20 @@
     "yourRace": "Sua corrida",
     "position": "P{position}",
     "disqualified": "Desqualificado",
+    "disqualifiedReason": "Desqualificado · {reason}",
     "retired": "Abandonou",
+    "retiredReason": "Abandonou · {reason}",
+    "dnfBadge": "DNF · {reason}",
+    "dsqBadge": "DSQ · {reason}",
+    "dnfReasons": {
+      "track_limits": "Limites de pista",
+      "collision": "Danos por colisão",
+      "wall_impact": "Batida na barreira",
+      "suspension": "Quebra de suspensão",
+      "damage": "Danos terminais",
+      "disconnected": "Desconectado",
+      "time_limit": "Tempo esgotado"
+    },
     "ofField": "de {count}",
     "gridUnknown": "Grid desconhecido",
     "started": "Largou em P{position}",
@@ -653,6 +675,13 @@
   },
   "f12026ChannelsPanel": {
     "region": "Canais de engenharia",
+    "title": "Suspensão e aero",
+    "suspensionGrip": "Suspensão e aderência",
+    "wheelLegend": "Desliz. · Batente",
+    "grip": "Ader.",
+    "aeroDiff": "Aero e diferencial",
+    "activeAero": "Aerodinâmica ativa",
+    "driverAids": "Assistências",
     "wheels": {
       "lf": "DE",
       "rf": "DD",
@@ -844,11 +873,17 @@
     "startsIn": "Largada em <n>{seconds}</n>",
     "lightsLabel": "Luzes de largada: {lit} de {total} acesas",
     "rollingStart": "Largada lançada",
+    "formation": "Formação",
+    "limiterActive": "Limitador ativo",
+    "getReady": "Prepare-se",
+    "rollingCountdownLabel": "Contagem regressiva da largada lançada: {count}",
     "holdPaceSkin": "Mantenha <n>{pace}</n> {unit} até a linha de largada",
     "holdPace": "Mantenha <n>{pace}</n> {unit} até a linha",
     "greenFlag": "Bandeira verde",
     "lightsOut": "Luzes apagadas",
     "chequeredFlag": "Bandeira quadriculada",
+    "retired": "Abandonou · DNF",
+    "disqualified": "Desqualificado",
     "reaction": "Reação <n>{ms}</n> ms"
   },
   "launchCue": {
@@ -862,12 +897,9 @@
     "revsUp": "Suba a rotação"
   },
   "speedCluster": {
-    "region": "Painel de velocidade",
     "minimalRegion": "Velocidade e marcha",
     "shiftLights": "Luzes de troca: {lit} de {total}",
     "gearLabel": "Marcha {gear}",
-    "gear": "Marcha",
-    "shift": "Troque",
     "aeroToggle": "{label}: alternar",
     "drsTitle": "DRS ({key}): flap traseiro, em zona de DRS; em corrida só a menos de 1 s do carro à frente no ponto de detecção, a partir da volta 3",
     "straightModeTitle": "Straight Mode ({key}): os dois flaps abrem nas retas; um toque pouco antes abre assim que ela começa",
@@ -895,10 +927,7 @@
     "throttleTitle": "Entrada do acelerador",
     "forceLetter": "F",
     "clip": "Clip",
-    "forceTitle": "Torque do volante / Force Feedback (vermelho = saturando)",
-    "latG": "{g} g lat.",
-    "ersBattery": "Carga da bateria ERS",
-    "rpmBand": "Faixa de rpm do motor"
+    "forceTitle": "Torque do volante / Force Feedback (vermelho = saturando)"
   },
   "hudFormat": {
     "session": {
@@ -981,9 +1010,6 @@
     "windowTitle": "Janela de trabalho da banda",
     "window": "Janela",
     "miniTitle": "{corner}: banda {temps} · {pressure} · freio {brake}{hasCondition, select, yes { · {condition}} other {}}"
-  },
-  "tyrePanel": {
-    "region": "Pneus"
   },
   "weatherBadge": {
     "region": "Clima",

@@ -22,17 +22,14 @@ import {
 import { TyreMini } from "../TyreBrakeWidget";
 import {
   AeroBadge,
-  anchor,
   arcPoints,
   DeltaReadout,
   deltaColor,
   formatOnce,
   gearLabel,
-  HUD_GLASS,
   HUD_LBL,
   InvalidTag,
   LapMarkGlyph,
-  MiniMap,
   raceNeighbours,
   useSectorFlash,
   type HudDesignProps,
@@ -68,7 +65,6 @@ function useWheelDashWords() {
       last: tx("last"),
       lead: tx("lead"),
       fuel: tx("fuel"),
-      tagLap: tx("tagLap"),
     }),
     [tx],
   );
@@ -234,58 +230,3 @@ export const WheelDash: React.FC<Pick<HudDesignProps, "t" | "deltaS" | "revRange
     </section>
   );
 };
-
-/** Position / lap tag */
-export const PositionTag: React.FC<{ t: HudDesignProps["t"] }> = ({ t }) => {
-  const race = t.race;
-  const w = useWheelDashWords();
-  return (
-    <div className={`flex items-center gap-2.5 rounded-full py-1.5 pr-4 pl-1.5 lc-mono ${HUD_GLASS}`}>
-      {race ? (
-        <span className="lc-data flex h-9 items-center rounded-full bg-lc-volt px-3 text-[18px] text-lc-void">P{race.position}</span>
-      ) : (
-        <SessionBadge session={t.timeTrial ? "timeAttack" : "practice"} size="lg" />
-      )}
-      <span className="flex flex-col leading-[1.05]">
-        <span className={HUD_LBL}>{w.tagLap}</span>
-        <span className="lc-data text-[18px] text-lc-chalk">
-          {race ? `${race.lap}${race.totalLaps ? `/${race.totalLaps}` : ""}` : Math.max(1, t.lapCount)}
-        </span>
-      </span>
-    </div>
-  );
-};
-
-/**
- * Wheel Dash: the car's own steering-wheel display, centred low where a wheel's screen sits.
- * Shift lights across the top, the gear dead centre, delta and pace to the right, energy and
- * tyres below. Everything the engineer would show you in one place, nothing in the corners.
- */
-export const WheelDashHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, mfd, channels, lapInvalid, mapMode, leftExtra, rightExtra }) => (
-  <div className="pointer-events-none absolute inset-0 select-none">
-    <div className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)] flex flex-col items-start gap-2" style={anchor(scale, "top left")}>
-      <PositionTag t={t} />
-      {leftExtra ? <div className="w-[264px]">{leftExtra}</div> : null}
-    </div>
-
-    <div className="absolute top-[clamp(14px,2.2vw,24px)] right-[clamp(14px,2.2vw,24px)] hidden w-[180px] md:block" style={anchor(scale, "top right")}>
-      <MiniMap map={map} t={t} local={mapMode === "local"} className="block h-[130px] w-full drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" stroke={18} />
-      {rightExtra ? <div className="mt-2">{rightExtra}</div> : null}
-    </div>
-
-    {mfd || channels ? (
-      <div className="absolute right-[clamp(14px,2.2vw,24px)] bottom-[clamp(14px,2.2vw,24px)] hidden flex-col items-end gap-2 lg:flex" style={anchor(scale, "bottom right")}>
-        {mfd}
-        {channels}
-      </div>
-    ) : null}
-
-    <div
-      data-hud-avoid
-      className="absolute bottom-[clamp(14px,2.2vw,24px)] left-1/2 w-[min(660px,calc(100vw-24px))] -translate-x-1/2"
-      style={anchor(scale, "bottom center")}
-    >
-      <WheelDash t={t} deltaS={deltaS} revRange={revRange} lapInvalid={lapInvalid} />
-    </div>
-  </div>
-);

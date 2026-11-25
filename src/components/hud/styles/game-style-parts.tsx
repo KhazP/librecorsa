@@ -287,8 +287,9 @@ export const TopDownCar: React.FC<{
   const susp = damage?.suspension ?? [0, 0, 0, 0];
   const baseEdge = { stroke: "var(--color-lc-chalk)", strokeOpacity: 0.32, strokeWidth: 0.9 };
 
+  // `i` is the telemetry's wheel order (FL, FR, RL, RR); the damage lists its corners FR, FL, RR, RL (`i ^ 1`)
   const wheel = (x: number, y: number, w: number, h: number, i: number) => {
-    const punctured = Boolean(damage?.punctured[i]);
+    const punctured = Boolean(damage?.punctured[i ^ 1]);
     const fill = punctured ? HUD_LOSS : t ? tyreHeatColor(t.tireTempsC[i], t.tireOptimalTempC) : "var(--color-lc-titanium)";
     return (
       <g key={i}>
@@ -318,8 +319,8 @@ export const TopDownCar: React.FC<{
 
   if (openWheel) {
     const suspStroke = (i: number) => ({
-      stroke: susp[i] >= 0.4 ? HUD_LOSS : susp[i] >= 0.1 ? HUD_CAUTION : "var(--color-lc-chalk)",
-      strokeOpacity: susp[i] >= 0.1 ? 0.95 : 0.42,
+      stroke: susp[i ^ 1] >= 0.4 ? HUD_LOSS : susp[i ^ 1] >= 0.1 ? HUD_CAUTION : "var(--color-lc-chalk)",
+      strokeOpacity: susp[i ^ 1] >= 0.1 ? 0.95 : 0.42,
       strokeWidth: 1.5,
       strokeLinecap: "round" as const,
     });

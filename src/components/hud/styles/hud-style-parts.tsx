@@ -148,6 +148,35 @@ export interface HudDesignProps {
   carId?: CarId;
 }
 
+/**
+ * What the shared layer round a full-screen style (F1TelemetryHud) does for it. Each of the game's own layouts exports
+ * its options next to its component, so a layout's clearances live with its drawing.
+ */
+export interface HudStyleOptions {
+  /** Height kept clear at the bottom centre (px at 100 %): the optional input trace sits above it */
+  bottomClearance: number;
+  /** The style draws its own input trace: the optional one stays off */
+  ownTrace?: boolean;
+  /** The style fills the bottom-left corner: the key hints stay off */
+  ownsBottomLeft?: boolean;
+  /** The MFD starts folded to its status pill */
+  mfdFolded?: boolean;
+  /** Height the style takes at the top centre (px at 100 %): start lights, notices and the delta bar start below it */
+  topClearance?: number;
+  /** The top centre while the start lights are up, where the style hides its own group there then (else `topClearance`) */
+  topClearanceInLights?: number;
+  /** The top centre with the player's Delta bar setting off, where the style's group there is its delta bar */
+  topClearanceWithoutDelta?: number;
+  /** The style shows the live delta at the top centre itself: the shared delta bar stays off */
+  ownDeltaBar?: boolean;
+  /** The style draws its own proximity radar or spotter: the shared radar stays off */
+  ownRadar?: boolean;
+  /** The style draws car damage inside its own condition panel: the shared DamageWidget stays off */
+  ownDamage?: boolean;
+  /** The style shows the cars ahead and behind with their gaps itself: the shared split gaps stay off */
+  ownSplits?: boolean;
+}
+
 /** Rev light range of the car (the same as the classic speed cluster's) */
 export function revRangeOf(t: CarTelemetry): [number, number] {
   return revRangeFor(t.f12026?.carId);
