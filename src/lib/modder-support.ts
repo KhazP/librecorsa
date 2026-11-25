@@ -29,6 +29,8 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   // The Chaparral 2D team's donations go to Pasta, their finances (NPanic's word)
   NPanic: { url: "https://www.paypal.com/paypalme/williampasta", via: "PayPal" },
   sagatron918: { url: "https://www.paypal.me/SagarNaikB", via: "PayPal" },
+  // The link in the credit their LC-LMDH engine sound asks for
+  bimbalanch: { url: "https://ko-fi.com/bimbalanch", via: "Ko-fi" },
 };
 
 /** The support button's words: a donation on PayPal, support on a membership site */

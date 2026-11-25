@@ -8,6 +8,8 @@
  *    whether or not the physics reports driveshafts and a machine.
  * 3. A bank built with the sections (the LC-LMDH's, hosted only): its manifest parses, its files are there and its
  *    layers follow the inputs.
+ * 4. A pitched grid's loops waking: mid-sweep they start where the others' pitch glide has got to; after a silence
+ *    (an opponent's voice handed to another car) they start at the target.
  *
  * Run with: npx tsx scripts/verify/verify-bank-layers.ts
  */
@@ -196,7 +198,11 @@ async function bankWithoutSections(): Promise<void> {
   bank.dispose();
 }
 
-async function bankWithSections(label: string, dir: string, required = false): Promise<void> {
+/**
+ * `required`: the bank is in the repository, so a missing manifest fails. `viewTone`: the bank has a tone stage per
+ * view (absent: its cockpit and outside buses must feed the engine filter directly)
+ */
+async function bankWithSections(label: string, dir: string, { required, viewTone }: { required: boolean; viewTone: boolean }): Promise<void> {
   console.log(`\n3. A bank built with the sections (${label})`);
   const manifestPath = join("public", dir, "manifest.json");
   if (!existsSync(manifestPath)) {
@@ -211,8 +217,10 @@ async function bankWithSections(label: string, dir: string, required = false): P
   const d = m.driveline;
   check("driveline section: positive axis scale and torque references, floor within 0..1", !!d && d.kmhPerRadS > 0 && d.torqueRefNm > 0 && (d.coastTorqueRefNm ?? 1) > 0 && (d.floor ?? 0) >= 0 && (d.floor ?? 0) < 1);
   check("mgu section: a loop file, a base speed and a full power", !!m.mgu && m.mgu.file.endsWith(".ogg") && m.mgu.baseRpm > 0 && m.mgu.fullKw > 0 && m.mgu.rms > 0.005);
-  check("loadFilter section: opens upwards with load", !!m.loadFilter && m.loadFilter.coastHz > 200 && m.loadFilter.loadHz > m.loadFilter.coastHz && m.loadFilter.loadHz <= 20000);
-  check("viewTone section: sane peak and shelf per view", Object.values(m.viewTone ?? {}).length > 0 && Object.values(m.viewTone ?? {}).every((t) => !!t && t.peakHz > 20 && Math.abs(t.peakDb) <= 9 && t.shelfHz > t.peakHz && Math.abs(t.shelfDb) <= 9));
+  // Open at full load at least as far as on the overrun: the LC-LMDH's Engine Lab engine holds it wide open throughout
+  check("loadFilter section: opens upwards with load, or stays open", !!m.loadFilter && m.loadFilter.coastHz > 200 && m.loadFilter.loadHz >= m.loadFilter.coastHz && m.loadFilter.loadHz <= 20000);
+  if (viewTone) check("viewTone section: sane peak and shelf per view", Object.values(m.viewTone ?? {}).length > 0 && Object.values(m.viewTone ?? {}).every((t) => !!t && t.peakHz > 20 && Math.abs(t.peakDb) <= 9 && t.shelfHz > t.peakHz && Math.abs(t.shelfDb) <= 9));
+  else check("no viewTone section", !m.viewTone);
   check("shift cut length within 20-120 ms", m.shift?.style === "sequential" && (m.shift.cutS ?? 0.06) >= 0.02 && (m.shift.cutS ?? 0.06) <= 0.12, `${m.shift?.cutS} s`);
   const mguFile = join("public", dir, m.mgu?.file ?? "missing");
   check("the machine's loop is an Ogg stream", existsSync(mguFile) && readFileSync(mguFile).subarray(0, 4).toString("ascii") === "OggS");
@@ -220,7 +228,8 @@ async function bankWithSections(label: string, dir: string, required = false): P
 
   const { bank, loaded, inside } = await loadBank(dir, "int");
   check("bank loads from public/", loaded);
-  check("tone stage sits between the cockpit bus and the engine filter", inside.toneNodes.length >= 2 && inside.viewBus.int.outputs[0] !== inside.engineFilter && inside.toneNodes[1].outputs[0] === inside.engineFilter);
+  if (viewTone) check("tone stage sits between the cockpit bus and the engine filter", inside.toneNodes.length >= 2 && inside.viewBus.int.outputs[0] !== inside.engineFilter && inside.toneNodes[1].outputs[0] === inside.engineFilter);
+  else check("no tone stage: both view buses feed the engine filter directly", inside.toneNodes.length === 0 && inside.viewBus.int.outputs[0] === inside.engineFilter && inside.viewBus.ext.outputs[0] === inside.engineFilter);
 
   // No driveshafts and no machine reported: the loops play as in any bank, the machine is silent
   const legacy = settle(bank, inside, base);
@@ -257,11 +266,68 @@ async function bankWithSections(label: string, dir: string, required = false): P
   bank.dispose();
 }
 
+/** A source that remembers the rate it was started at: the waking rate, set before the glide to the target */
+class WakeSource extends Node {
+  startRate = NaN;
+  override start() {
+    this.startRate = this.playbackRate.value;
+  }
+}
+
+function wakingLoops(): void {
+  console.log("\n4. Loops waking on a pitched grid");
+  const wakeCtx = { currentTime: 0, createGain: () => new Node(), createBufferSource: () => new WakeSource() };
+  const dt = 1 / 120;
+  let now = 0;
+  const makeGrid = () => {
+    const grid = new LoopGrid(wakeCtx as unknown as AudioContext, new Node() as unknown as AudioNode, [4000, 6000, 8000]);
+    for (const v of grid.voices) v.buffer = { duration: 2 } as AudioBuffer;
+    return grid;
+  };
+  const startRate = (grid: LoopGrid, key: number) =>
+    (grid.voiceFor(key) as unknown as { source: WakeSource | null }).source?.startRate ?? NaN;
+  const hold = (grid: LoopGrid, x: number, level: number, seconds: number) => {
+    for (let t = 0; t < seconds; t += dt) grid.update(x, level, true, (now += dt), dt, 0.03);
+  };
+
+  // Mid-sweep: the revs rise from 5000 to 5900, then to 7000 a frame later, where the 8000 rpm loop wakes while the
+  // others are a frame into their 20 ms glide towards 5900
+  const sweep = makeGrid();
+  hold(sweep, 5000, 1, 0.5);
+  sweep.update(5900, 1, true, (now += dt), dt, 0.03);
+  check("at 5900 rpm the 8000 rpm loop is not playing yet", Number.isNaN(startRate(sweep, 8000)));
+  sweep.update(7000, 1, true, (now += dt), dt, 0.03);
+  const glide = 5900 + (5000 - 5900) * Math.exp(-dt / 0.02);
+  const woke = startRate(sweep, 8000);
+  check(
+    "a loop waking mid-sweep starts where the others' glide has got to, not at the target",
+    near(woke, glide / 8000, 1e-9) && woke < 7000 / 8000 - 0.1,
+    `${woke.toFixed(3)}, glide ${(glide / 8000).toFixed(3)}, target ${(7000 / 8000).toFixed(3)}`
+  );
+
+  // After a silence (an opponent's voice freed at 5000 rpm, or never used), the loops start at the new car's revs
+  for (const [label, silentAt] of [["an old car's revs", 5000], ["a fresh voice", 1]] as const) {
+    const handed = makeGrid();
+    hold(handed, 5000, 1, 0.5);
+    hold(handed, silentAt, 0, 0.5);
+    handed.update(7000, 1, true, (now += dt), dt, 0.03);
+    const hi = startRate(handed, 8000);
+    const lo = startRate(handed, 6000);
+    check(
+      `a grid silent at ${label} wakes its loops at the target, not swooping up from there`,
+      near(hi, 7000 / 8000, 1e-9) && near(lo, 7000 / 6000, 1e-9),
+      `${lo.toFixed(3)} / ${hi.toFixed(3)}`
+    );
+  }
+}
+
 async function main() {
   mixingMaths();
   await bankWithoutSections();
-  await bankWithSections("the LC25 Prototype's, in the repository", "/cars/lc25/audio/", true);
-  await bankWithSections("the LC-LMDH's", "/cars/lc-lmdh/audio/", false);
+  await bankWithSections("the LC25 Prototype's, in the repository", "/cars/lc25/audio/", { required: true, viewTone: true });
+  // Its Engine Lab engine renders the cockpit and the outside itself, with no tone stage on top
+  await bankWithSections("the LC-LMDH's", "/cars/lc-lmdh/audio/", { required: false, viewTone: false });
+  wakingLoops();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

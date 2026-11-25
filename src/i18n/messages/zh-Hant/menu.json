@@ -161,6 +161,8 @@
     "creditPhysicsTyres": "物理製作：<link>{author}</link>，輪胎製作：<tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>，輪胎製作：<tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "引擎音效：{work}，作者：{author}，<link>{url}</link>",
+    "creditEngineSoundNoLink": "引擎音效：{work}，作者：{author}",
     "current": "目前車輛",
     "choose": "選擇車輛",
     "sortPopular": "最多人駕駛",

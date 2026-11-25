@@ -161,6 +161,8 @@
     "creditPhysicsTyres": "Fisika oleh <link>{author}</link>, ban oleh <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, ban oleh <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "Suara mesin: {work} oleh {author}, <link>{url}</link>",
+    "creditEngineSoundNoLink": "Suara mesin: {work} oleh {author}",
     "current": "Mobil saat ini",
     "choose": "Pilih mobil",
     "sortPopular": "Paling sering dikemudikan",

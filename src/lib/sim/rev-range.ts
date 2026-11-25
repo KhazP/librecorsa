@@ -23,8 +23,9 @@ export function revRangeFor(carId: string | undefined): [number, number] {
   if (carId === "lc25") return [10_200, 12_050];
   if (carId === "liana") return [5200, 6500];
   if (carId === "mtr-496r") return [8000, 9400];
-  // The LC-LMDH up to the engine speed its regulated power curve is set on (the lights' last stage) [claim]
-  if (carId === "lc-lmdh") return [6850, 8100];
+  // The LC-LMDH's lights come on late, as the 963's do, the first at 89 % of the limiter [963], up to the engine speed
+  // its regulated power curve is set on (the lights' last stage) [claim]
+  if (carId === "lc-lmdh") return [7350, 8100];
   // The classic Nissans up to their shift lights or shift points [spec digital_instruments.ini, drivetrain.ini]
   if (carId === "nissan-r33-jgtc") return [5000, 6700];
   if (carId === "nissan-r32-jtcc") return [6300, 7500];

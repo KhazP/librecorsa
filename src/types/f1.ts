@@ -473,6 +473,8 @@ export interface CarTelemetry {
   clutchSlip?: number;
   /** True when the engine has stalled under manual clutch (autoClutch off); hold clutch or shift to N to restart */
   engineStalled?: boolean;
+  /** True while a hybrid runs on its motor alone with the engine off (an LMDh on the pit lane) */
+  iceOff?: boolean;
   /** The player's currently bound clutch control, if any (shown on the stall recovery cue) */
   clutchControl?: StartClutchControl;
   steering: number; // -1..1 (positive = right)

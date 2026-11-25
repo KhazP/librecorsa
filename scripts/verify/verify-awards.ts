@@ -156,6 +156,7 @@ function limiter(max: number): RateLimit {
 async function main(): Promise<void> {
   // 1. Pure ranking & physics version mapping ------------------------------------------------------------------------
   check("physicsIdOf: maps V1, V2, LC26 offsets (current and prior) and restarted circuits", physicsIdOf(7) === "v1" && physicsIdOf(527) === "v1" && physicsIdOf(1007) === "v1" && physicsIdOf(8) === "v2" && physicsIdOf(528) === "v2" && physicsIdOf(538) === "v2" && physicsIdOf(2538) === "v2");
+  check("physicsIdOf: the LC-LMDH's own offset is V2, its earlier V2 laps too", physicsIdOf(18) === "v2" && physicsIdOf(1018) === "v2" && physicsIdOf(8) === "v2" && physicsIdOf(17) === "r17");
 
   const ranked = rankPodiums(
     [

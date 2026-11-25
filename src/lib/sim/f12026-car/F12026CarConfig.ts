@@ -314,6 +314,14 @@ export interface ERSData {
    * traction control's cut reaches the motor through a filter there. Absent: the motor's share of a cut acts at once
    */
   mguDemandFilter?: { maxHz: number; belowKmh: number };
+  /**
+   * Electric running on the pit lane, as an LMDh leaves its pit box: with two wheels or more on the pit lane's surface,
+   * in gear or neutral (an auto clutch), from a crawl under `cruiseKmh`, the engine is off (no torque, no drag, no fuel,
+   * no boost) and the motor drives alone on the throttle from standstill, up to `ERS_MAX_DEPLOY`. The engine fires once
+   * the car has held a steady speed over `cruiseKmh` for `cruiseS` (the pit limiter's), passes `maxKmh` or empties the
+   * store to `minSoc`, and runs until the car is off the pit lane. Absent: never
+   */
+  pitLaneElectric?: { cruiseKmh: number; cruiseS: number; maxKmh: number; minSoc: number };
 }
 
 /** `PerformanceModeData`: one ERS / engine map selectable from the wheel */

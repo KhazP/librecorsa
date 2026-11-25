@@ -161,6 +161,8 @@
     "creditPhysicsTyres": "물리 제작: <link>{author}</link>, 타이어 제작: <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, 타이어 제작: <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "엔진 사운드: {author} 제작 {work}, <link>{url}</link>",
+    "creditEngineSoundNoLink": "엔진 사운드: {author} 제작 {work}",
     "current": "현재 차량",
     "choose": "차량 선택",
     "sortPopular": "최다 주행",

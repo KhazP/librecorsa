@@ -186,7 +186,7 @@ export function tallyRecordHolders(
 }
 
 /**
- * The named physics version of a lap revision: "v1", "v2" (the circuit's restarts and the LC26's rigid-body offset
+ * The named physics version of a lap revision: "v1", "v2" (the circuit's restarts and the LC26's and LC-LMDH's offsets
  * set aside), else "r<n>" for a revision older than every named one
  */
 export function physicsIdOf(revision: number): string {
@@ -195,7 +195,9 @@ export function physicsIdOf(revision: number): string {
     (v) =>
       p === v.physics ||
       p === v.physics + v.lc26Offset ||
-      ("priorLc26Offsets" in v && v.priorLc26Offsets.some((o) => p === v.physics + o)),
+      ("priorLc26Offsets" in v && v.priorLc26Offsets.some((o) => p === v.physics + o)) ||
+      p === v.physics + v.lmdhOffset ||
+      ("priorLmdhOffsets" in v && v.priorLmdhOffsets.some((o) => p === v.physics + o)),
   );
   return named ? named.name.toLowerCase() : `r${p}`;
 }

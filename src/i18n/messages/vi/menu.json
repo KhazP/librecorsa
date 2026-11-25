@@ -161,6 +161,8 @@
     "creditPhysicsTyres": "Vật lý của <link>{author}</link>, lốp của <tyres>{tyreAuthor}</tyres>",
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, lốp của <tyres>{tyreAuthor}</tyres>",
+    "creditEngineSound": "Âm thanh động cơ: {work} của {author}, <link>{url}</link>",
+    "creditEngineSoundNoLink": "Âm thanh động cơ: {work} của {author}",
     "current": "Xe hiện tại",
     "choose": "Chọn xe",
     "sortPopular": "Lái nhiều nhất",

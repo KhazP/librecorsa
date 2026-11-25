@@ -37,7 +37,7 @@ export function moddersList(): ModderWork[] {
   for (const c of CARS) {
     add(c.credit.author, c.credit.authorUrl ?? c.credit.url, c.credit.label === "Physics by" ? `${c.title} (physics)` : c.title);
     if (c.tyreCredit) add(c.tyreCredit.author, c.tyreCredit.url, `${c.title} (tyres)`);
-    if (c.soundCredit) add(c.soundCredit.author, c.soundCredit.url, `${c.title} (sound)`);
+    if (c.soundCredit) add(c.soundCredit.author, c.soundCredit.url, `${c.title} (${c.soundCredit.engineSound ? "engine sound" : "sound"})`);
   }
   return [...byName.values()].sort((a, b) => Number(Boolean(b.support)) - Number(Boolean(a.support)) || a.name.localeCompare(b.name));
 }

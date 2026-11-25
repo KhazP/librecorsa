@@ -12,14 +12,17 @@
  *  - [est]      an estimate: nothing public gives it (centre of gravity, inertia, gear ratios, spring and damper
  *               rates, the aero map, the tyres)
  *  - [derived]  computed from other values in this file
+ *  - [963]      the project's own Porsche 963 reference set (the car's mass properties, platform, aero sensitivities,
+ *               turbo, fuel use and driveline), read for what each figure means physically and re-derived for this
+ *               engine's model, not copied: its own tyre and aero models differ from the reference's
  *
  * The regulations cap the power at the driveshafts (engine and hybrid together) on a curve against engine speed, so
  * the engine here is trimmed while the motor deploys (`EngineData.outputPowerCap`): the hybrid fills the turbos' lag
  * and brakes the rear axle, and adds no power at the limit. No ABS (Art. 11.5.1); traction control is allowed
  * (Art. 9.3).
  *
- * Trimmed to the class's low-drag endurance balance of performance [bop]: 1055 kg dry (1135 kg with the driver), 48.5 %
- * on the front axle, an 8300 rpm limiter, the long 3.00 gear set, the motor's deployment and regeneration on their own
+ * Trimmed to the class's low-drag endurance balance of performance [bop]: 1055 kg dry (1135 kg with the driver), 46.5 %
+ * on the front axle [963], an 8300 rpm limiter, the long 3.00 gear set, the motor's deployment and regeneration on their own
  * dials, unblanketed slicks and cold carbon brakes out of the garage.
  */
 import type { LutPoints } from '../lut';
@@ -137,19 +140,21 @@ const ENGINE = {
     [N_MAX, 58.5],
     [LIMITER_RPM + 600, 63],
   ] as LutPoints,
-  // A linear pedal: the engine control is torque-based (Art. 5.2.3) [spec]
-  throttleResponseCurve: [
-    [0, 0],
-    [1, 1],
-  ] as LutPoints,
+  // The engine control is torque-based (Art. 5.2.3) [spec], its pedal map progressive as the 963's default is [963]:
+  // ≈ pedal^1.15, so half the pedal asks 45 % of the torque and the first of the travel is gentler out of a slow corner.
+  // The engine maps 3 to 5 soften it further
+  throttleResponseCurve: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1].map(
+    (x) => [x, Number((x ** 1.15).toFixed(4))] as [number, number]
+  ) as LutPoints,
   // Drive-by-wire actuator and intake filling [est]; the turbos' lag is its own (below)
   torqueResponseS: { rise: 0.03, fall: 0.02 },
-  // Two turbos on a 4.6 L V8 [est]: 1 bar of boost made from 3500 rpm, spooling in ≈ 0.25 s at 5000 rpm and running
-  // down in 0.5 s off the pedal. The hybrid motor fills what the lag costs while it may deploy
-  turbo: { maxBoost: 1, referenceRpm: 3500, gamma: 1.5, spoolUpS: 0.25, spoolRefRpm: 5000, spoolDownS: 0.5, displayMaxBoostBar: 1 },
+  // Two turbos on a 4.6 L V8 [963]: 1.2 bar of boost made from 2800 rpm on a fixed wastegate, spooling in ≈ 0.3 s at
+  // 5000 rpm, and the rotors holding their speed through a lift (1.4 s to run down), so a short lift costs little boost
+  // and a long one most of it. The hybrid motor fills what the lag costs while it may deploy
+  turbo: { maxBoost: 1.2, referenceRpm: 2800, gamma: 1.2, spoolUpS: 0.3, spoolRefRpm: 5000, spoolDownS: 1.4, displayMaxBoostBar: 1.2 },
   idleRpm: 2000,
-  // Crank, flywheel, clutch and the motor's rotor through its gear [est]
-  inertia: 0.165,
+  // Crank, flywheel and clutch [963], and the motor's rotor through its gear [est]
+  inertia: 0.13,
   // 25 Hz limiter: the cut lasts one cycle [est]
   limiterCutS: 0.04,
 };
@@ -185,6 +190,10 @@ const ERS = {
   liftThrottle: 0,
   topGearLiftHarvestW: 0,
   mguDemandFilter: { maxHz: 50, belowKmh: 160 },
+  // Out of the pit box on the motor alone [963; the class's cars run electric in the garage and the pit lane, and footage
+  // of the 963 leaving its box at Imola has the motor's whine rising for ≈ 4 s before the V8 fires at the pit limiter's
+  // speed]: the engine fires after a second steady over 30 km/h, past 65 km/h, or with a tenth of the store left
+  pitLaneElectric: { cruiseKmh: 30, cruiseS: 1, maxKmh: 65, minSoc: 0.1 },
 };
 
 const FLAT: LutPoints = [
@@ -275,21 +284,23 @@ const MASS = DRY_MASS + 80;
 /** [spec Art. 3.1.5] */
 const WHEELBASE = 3.148;
 /** Share of the weight on the front axle: homologated per car (Art. 4.2) [bop] */
-const FRONT_WEIGHT = 0.485;
+const FRONT_WEIGHT = 0.465;
 const CG_HEIGHT = 0.275;
 /** The floor's height at the axles at rest (m) [est] */
 const FRONT_TARGET_HEIGHT = 0.05;
 const REAR_TARGET_HEIGHT = 0.064;
 
 /**
- * Double wishbones on push rods at both ends, each axle with its corner springs, a third (heave) spring and an anti-roll
- * element; all rates at the wheel [est]. The front is mostly its heave spring (a corner spring of 60 N/mm beside a
- * 480 N/mm heave element, 300 N/mm a wheel in heave), with a roll spring and the anti-roll bar's middle blade as one
- * 85 N/mm roll rate; the rear carries more on its corners (165 N/mm, 200 N/mm third spring, 20 N/mm bar). Ride
- * frequencies ≈ 5.5 Hz front and 4.8 Hz rear on the sprung mass, so the floor holds its height under ≈ 17 kN of
- * downforce. Packers on the heave elements catch the last of the travel. Four-way dampers with their knee at 65 mm/s:
- * the heave dampers carry about half the damping in heave (ζ ≈ 0.6 in bump, ≈ 0.75 in rebound), the corner dampers
- * all of it in roll.
+ * Double wishbones on push rods at both ends; all rates at the wheel. The platform is the 963 reference's [963], re-derived
+ * for this model's springs: a decoupled front, where the third (heave) element carries the ride (30 N/mm corner springs
+ * beside a 470 N/mm heave element, 265 N/mm a wheel in heave) and a stiff blade bar alone carries the roll; a rear on its
+ * corner springs (140 N/mm) with a softer third spring (210 N/mm) and a light bar. ≈ 860 kNm/rad of roll stiffness on the
+ * springs and bars, 68 % of it at the front (≈ 60 % of the lateral load transfer once the tub's 46 kNm/° twist is in
+ * series with it), so the front takes the load transfer and the rear its traction: ≈ 0.5° of body roll at 3 g. Ride
+ * frequencies ≈ 5.4 Hz front and 4.9 Hz rear on the sprung mass. Packers on the heave
+ * elements catch the last of the travel. Four-way dampers with their knee at 80 mm/s, the corner dampers doing most of
+ * the work as the reference's do (ζ ≈ 0.55 front and 0.6 rear in bump, 0.65 and 0.72 in rebound, in heave), the heave
+ * dampers a light trim; the rear corners damped harder than the front, holding the body on the throttle.
  *
  * The car's own pickup points are not public: the hardpoints are the simulator's GT push-rod wishbone layout [est],
  * `[x inboard, y up, z forward]` from the wheel centre, and the camber gain and roll-centre heights are what the
@@ -301,16 +312,16 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
-    staticCamber: -2.2,
+    staticCamber: -3.0,
     camberGainKinematic: -46,
-    springs: { wheel_rate: 60_000, helper_rate: 0, helper_range: 0 },
+    springs: { wheel_rate: 30_000, helper_rate: 0, helper_range: 0 },
     // Third-spring packers 11 mm (front) and 12 mm (rear) from static [bop]
-    heave: { rate: 480_000, gap: 0, packerGap: 0.011, packerRate: 900_000 },
+    heave: { rate: 470_000, gap: 0, packerGap: 0.011, packerRate: 900_000 },
     bumpStop: { range: 0.032, rate: 150_000, progression: 4_000_000 },
     droopTravel: 0.035,
     // The prototype's own uprights put the front roll centre higher than the GT layout's 30 mm [derived]
     rollCentreHeight: 0.0628,
-    arb: 85_000,
+    arb: 190_000,
     allowNoArb: true,
     hardpoints: [
       [0.44, 0.0804, 0.197],
@@ -327,15 +338,15 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
-    staticCamber: -1.6,
+    staticCamber: -2.2,
     camberGainKinematic: -25,
     springs: { wheel_rate: 140_000, helper_rate: 0, helper_range: 0 },
-    heave: { rate: 250_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
+    heave: { rate: 210_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
     // 8 mm of packers on the rear dampers [bop]
     bumpStop: { range: 0.04, rate: 150_000, progression: 4_000_000, packerGap: 0.008 },
     droopTravel: 0.045,
     rollCentreHeight: 0.0594,
-    arb: 14_000,
+    arb: 34_000,
     allowNoArb: true,
     hardpoints: [
       [0.44, 0.0838, 0.251],
@@ -350,19 +361,18 @@ const SUSPENSIONS: SuspensionsData = {
   },
   dampers_controller: {
     front: {
-      // More bump than rebound at the front corners, so the nose takes a kerb without lifting off the next [bop]
-      base: damper(7000, 3000, 5200, 2300),
-      heave: damper(9600, 4200, 12_400, 5200),
+      base: damper(7800, 3600, 8800, 3800),
+      heave: damper(1800, 1200, 3000, 1800),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
-      fastThresholdMs: 0.065,
+      fastThresholdMs: 0.08,
     },
     rear: {
-      base: damper(6000, 2600, 8200, 3400),
-      heave: damper(8000, 3600, 10_400, 4400),
+      base: damper(8600, 4000, 10_000, 4600),
+      heave: damper(1800, 1200, 2600, 1600),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
-      fastThresholdMs: 0.065,
+      fastThresholdMs: 0.08,
     },
   },
 };
@@ -373,24 +383,29 @@ const REF_AREA = 1.92;
 const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v / REF_AREA).toFixed(4))]);
 
 /**
- * Splitter, underfloor and rear wing, with the body's drag as a constant [est]. Nothing public gives the car's map:
- * the regulations homologate each car inside a window of downforce and drag measured in one wind tunnel (Art. 3.9),
- * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
- * CD·A ≈ 0.99 m² (4.3 : 1) with 44.5 % of the downforce on the front axle from 100 to 300 km/h held steady, running
- * 30 mm front and 42 mm rear at speed on a 5.5° rear wing. The drag is held by the class's speed-trap figures
- * (scripts/verify/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
- * onboard footage of one of the class's cars came out about a tenth above what the car could hold between 110 and
- * 145 km/h (each ± 15 %: the radii are an ideal line's), all of the gain under the floor, where it costs the least drag.
- * The balance stays behind the 46 % of the weight on the front axle as the car settles, so the car keeps its understeer
- * at speed. With the splitter gaining more than the floor as the nose came down, it had moved from 44.4 % at 100 km/h
- * to 46.9 % at 300, ahead of the weight: in a fast corner the rears worked nearly as hard as the fronts, and a lift, a
- * quick change of direction or full throttle at 230 km/h used up what they had left:
- *  - the splitter (CL·A 1.185 m²) works in ground effect: a little more down to 22 mm, losing it quickly below 15 mm as
- *    it chokes
- *  - the underfloor and diffuser (2.115 m²) read the mean ride height and the rake; they take the downforce the splitter
- *    gives up as the car settles
+ * Splitter and front floor, rear floor and diffuser, rear wing, with the body's drag as a constant. Nothing public gives
+ * the car's map: the regulations homologate each car inside a window of downforce and drag measured in one wind tunnel
+ * (Art. 3.9), across ride heights, and the figures for it are in an appendix that was not retrieved. The level is held
+ * where it was [est]: CL·A ≈ 4.25 m² and CD·A ≈ 1.1 m² at 250 km/h on a 5.5° rear wing, near the window's ≈ 4 : 1
+ * efficiency. The drag is held by the class's speed-trap figures (scripts/verify/verify-lc-lmdh.ts); the downforce was
+ * raised from 3.96 m² after the corner speeds read off a race lap's onboard footage of one of the class's cars came out
+ * about a tenth above what the car could hold between 110 and 145 km/h.
+ *
+ * How it moves with the platform is the 963 reference's [963], at about two fifths of its strength and with the stalls
+ * a real floor has: the nose coming down loads the front (≈ 1.1 % of balance forward for 10 mm, where the reference
+ * moves ≈ 2.6 %, the splitter and the floor's front gaining as they near the road), and the rake feeds the diffuser. So the balance comes forward on the
+ * brakes and goes back as the car squats on the throttle, and it moves forward as the car settles with speed: 42.8 % at
+ * 100 km/h, 44.7 % at 250 and 45.5 % at 300, always behind the 46.5 % of the weight on the front axle. (An earlier map
+ * whose balance passed the weight near 300 km/h lost the rears in fast corners on a lift, a quick change of direction or
+ * full throttle at 230 km/h.) The downforce grows by ≈ 7 % from 100 to 300 km/h:
+ *  - the splitter and the floor's front (CL·A 1.69 m² at 30 mm) gain ≈ 0.5 % a mm as the nose comes down, to 17 mm,
+ *    choking below 13 mm
+ *  - the floor's rear and the diffuser (1.65 m²) read the mean ride height and the rake: a little more down nearer the
+ *    road, more with the rake to ≈ 0.6°, stalling past it
  *  - the rear wing (0.95 m² at 5.5°) gains 0.065 m² of CL·A and 0.022 m² of CD·A a degree over its 1–9° range; it sits
- *    0.8 m behind the rear axle, so a degree moves the balance ≈ 1.1 % rearward
+ *    0.72 m behind the rear axle
+ * The diffuser and the wing work in the body's wake once the car slides, so the balance creeps forward with yaw [963],
+ * held under a quarter of a per cent at 8° (verify-car-physics-wave2: the low-drag trim snapped round past that).
  */
 const AERO: AeroData = {
   front_lift: 0,
@@ -403,21 +418,22 @@ const AERO: AeroData = {
     {
       name: 'FRONT_WING',
       area: REF_AREA,
-      // 0.3 m ahead of the front axle
-      positionZ: 2.0,
+      // The splitter and the floor's front, 0.38 m ahead of the front axle
+      positionZ: 2.064,
       angleDeg: 0,
       heightRef: 'front',
-      // Against the body's pitch from its static rake (deg, + nose down). Below -3° it is the dive planes and flick coming
-      // off for the low-drag package, shedding front downforce at the rate the splitter does near -2°
+      // Against the body's pitch from its static rake (deg, + nose down): the dive planes and flick, their change an
+      // offset on the front floor's own 1.7 m². Below -3° it is the dive planes and flick coming off for the low-drag
+      // package
       lutAOA_CL: perArea([
-        [-9, 0.61],
-        [-6, 0.79],
-        [-3, 0.99],
-        [-1, 1.125],
-        [0, 1.185],
-        [1, 1.235],
-        [2, 1.275],
-        [4, 1.315],
+        [-9, 1.115],
+        [-6, 1.295],
+        [-3, 1.495],
+        [-1, 1.63],
+        [0, 1.69],
+        [1, 1.74],
+        [2, 1.78],
+        [4, 1.82],
       ]),
       lutAOA_CD: perArea([
         [-9, 0.04],
@@ -425,70 +441,80 @@ const AERO: AeroData = {
         [0, 0.05],
         [4, 0.06],
       ]),
+      // In ground effect [963]: it gains as the nose comes down, ≈ 0.5 % a mm at its running height, to a peak at 17 mm,
+      // and chokes below 13 mm
       lutGH_CL_mult: [
-        [0, 0.3],
-        [0.008, 0.58],
-        [0.015, 0.86],
-        [0.022, 0.93],
-        [0.03, 0.915],
-        [0.045, 0.9],
-        [0.06, 0.82],
-        [0.08, 0.72],
-        [0.12, 0.6],
+        [0, 0.62],
+        [0.008, 0.9],
+        [0.013, 1.06],
+        [0.017, 1.07],
+        [0.022, 1.045],
+        [0.03, 1.0],
+        [0.04, 0.95],
+        [0.052, 0.895],
+        [0.065, 0.84],
+        [0.08, 0.785],
+        [0.12, 0.68],
       ],
       lutGH_CD_mult: [
         [0, 1.05],
         [0.03, 1],
         [0.12, 0.97],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.945], [20, 0.83], [30, 0.72]],
+      lutYaw_CL_mult: [[0, 1], [5, 0.988], [10, 0.958], [20, 0.88], [30, 0.79]],
       dragY: -0.2,
     },
     {
       name: 'VENTURI_FLOOR',
       area: REF_AREA,
-      positionZ: -0.1,
+      // The floor's rear and the diffuser, 0.46 m ahead of the rear axle
+      positionZ: -1.0,
       angleDeg: 0,
       heightRef: 'mean',
-      // Against the rake (deg): 0.22° at speed, 0.36° at rest
+      // Against the rake (deg) [963]: the diffuser gains as the rear comes up, to ≈ 0.6°, and stalls past it; 0.13° at
+      // 250 km/h, 0.26° at rest
       lutAOA_CL: perArea([
-        [-1, 1.69],
-        [-0.3, 1.965],
-        [0.2, 2.115],
-        [0.6, 2.185],
-        [1, 2.16],
-        [1.6, 2.01],
-        [2.5, 1.69],
+        [-1, 1.39],
+        [-0.3, 1.57],
+        [0.175, 1.645],
+        [0.6, 1.685],
+        [1, 1.675],
+        [1.6, 1.59],
+        [2.5, 1.39],
       ]),
       lutAOA_CD: perArea([
         [-1, 0.11],
         [0.2, 0.12],
         [2.5, 0.14],
       ]),
+      // A little more down as the floor comes closer, until it chokes under ≈ 16 mm
       lutGH_CL_mult: [
-        [0, 0.2],
-        [0.01, 0.56],
-        [0.02, 1.04],
-        [0.028, 1.11],
-        [0.036, 1.06],
-        [0.05, 0.925],
-        [0.065, 0.78],
-        [0.085, 0.62],
-        [0.11, 0.48],
-        [0.15, 0.35],
+        [0, 0.45],
+        [0.01, 0.8],
+        [0.016, 1.02],
+        [0.022, 1.04],
+        [0.03, 1.02],
+        [0.0353, 1.0],
+        [0.045, 0.985],
+        [0.06, 0.96],
+        [0.08, 0.92],
+        [0.11, 0.86],
+        [0.15, 0.78],
       ],
       lutGH_CD_mult: [
         [0, 1.04],
         [0.036, 1],
         [0.15, 0.95],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.98], [10, 0.93], [20, 0.8], [30, 0.65]],
+      // The diffuser works in the body's wake once the car slides [963]
+      lutYaw_CL_mult: [[0, 1], [5, 0.988], [10, 0.957], [20, 0.87], [30, 0.76]],
       dragY: -0.22,
     },
     {
       name: 'REAR_WING',
       area: REF_AREA,
-      positionZ: -2.25,
+      // 0.72 m behind the rear axle
+      positionZ: -2.187,
       // The middle of its 1–9° range
       angleDeg: 5.5,
       heightRef: 'rear',
@@ -514,7 +540,8 @@ const AERO: AeroData = {
         [0, 1],
         [0.3, 1],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.945], [20, 0.82], [30, 0.68]],
+      // Deeper in the body's wake than the floor once the car slides, so the balance creeps forward as it yaws [963]
+      lutYaw_CL_mult: [[0, 1], [5, 0.987], [10, 0.952], [20, 0.84], [30, 0.7]],
       dragY: 0.5,
     },
   ],
@@ -548,8 +575,13 @@ const LMDH_REAR: TyreGeometry = { width: LC_LMDH_HARDPOINTS.tyreWidthRear, radiu
 
 /** The tyres' reference load (N) [est] */
 const FZ0 = 3500;
-/** Lateral grip over longitudinal [est] */
-const LATERAL_GRIP = 1.05;
+/**
+ * Lateral grip over longitudinal [derived]: what this engine's brush tyre needs to give a slick's real cornering grip,
+ * as the GT3's slick fitted to its logs needs 1.131. At 1.05 the class's slick held 9 % less μ across the car than the
+ * GT3's at the same load, and the car's planned laps of Watkins Glen came out 3 % behind the GT3's against the 2024
+ * qualifying times (1:32.3 and 1:44.2, a ratio of 0.886); at 1.12 they are 0.894
+ */
+const LATERAL_GRIP = 1.12;
 
 /**
  * Peak grip against load (N → μ) [est]: μ0 · (Fz / Fz0)^(n − 1), held below a fifth of the reference load, with the
@@ -600,10 +632,13 @@ const pressureSpring = (rate: number): LutPoints => [18, 22, 26, 30, 34].map((p)
 
 /**
  * The class's spec slick [est]: nothing of the supplier's data is public. A brush tyre of μ 1.68 front and 1.72 rear at
- * 3.5 kN along the car and 5 % more across it, losing a fifth of that per doubling of the load, peaking near 6.5° of
- * slip angle and 10 % of slip ratio; the thermal, pressure and camber terms are the simulator's closed-wheel slick
- * estimates. The lateral grip was raised with the downforce (see the aero map's note): braking read off the same
- * footage, about 3.2 g from 280 km/h, already matched, so the longitudinal grip stayed. `grip` scales a compound
+ * 3.5 kN along the car and 12 % more across it, peaking near 10 % of slip ratio; the thermal and pressure terms are the
+ * simulator's closed-wheel slick estimates. The lateral grip was raised with the downforce (see the aero map's note):
+ * braking read off the same footage, about 3.2 g from 280 km/h, already matched, so the longitudinal grip stayed.
+ * `grip` scales a compound. Its character is the 963 reference's [963]: a gentle loss of grip with load (≈ 11–12 % less
+ * μ per doubling across the car, 10 % along it, the wider rear a little less), slip peaks near 6° (6.1° front, the rear's a little wider at 6.3° with
+ * its gentler falloff, so it lets go progressively: verify-car-physics-wave2), and a camber optimum near 3.4° front and
+ * 2.7° rear of running camber, where the static camber and the squat at speed put it
  */
 function lmdhCompound(
   tyre_compound: PhysicsTyreCompound,
@@ -629,13 +664,13 @@ function lmdhCompound(
     modelData: {
       Dy0: frontLat,
       Dx0: front,
-      lsExpY: 0.8,
-      lsExpX: 0.82,
+      lsExpY: 0.82,
+      lsExpX: 0.84,
       Fz0: FZ0,
-      dyCurve: loadCurve(frontLat, 0.8),
-      dxCurve: loadCurve(front, 0.82),
+      dyCurve: loadCurve(frontLat, 0.82),
+      dxCurve: loadCurve(front, 0.84),
       curve: 'brush',
-      friction_limit_angle: 6.5,
+      friction_limit_angle: 6.1,
       peakSlipLoadGain: 0.05,
       peakSlipPressureGain: 0.05,
       combinedExponent: 2,
@@ -696,25 +731,30 @@ function lmdhCompound(
       camberGain: 0.14,
       contact_camber_c1: 1,
       contact_camber_c2: 40,
-      dcamber0: 0.8,
-      dcamber1: -4.6,
+      // Lateral grip peaks at 3.4° of camber leaning into the force, 3.6 % over upright [963]; along the car it costs
+      // 2 % there
+      dcamber0: 1.2,
+      dcamber1: -10,
       dcamber0_x: 0,
       dcamber1_x: -6,
     },
-    // The 34 cm rear: its own grip at the same reference load, wider slip peak and gentler post-peak falloff for
-    // progressive breakaway on low-downforce trims, and a stiffer carcass
+    // The 34 cm rear: its own grip at the same reference load, a little less load-sensitive, a wider slip peak and a
+    // gentler post-peak falloff for progressive breakaway on low-downforce trims, and its camber optimum at 2.7° [963]
     rearOverride: {
       modelData: {
         Dy0: rearLat,
         Dx0: rear,
         Fz0: FZ0,
-        dyCurve: loadCurve(rearLat, 0.8),
-        dxCurve: loadCurve(rear, 0.82),
-        friction_limit_angle: 6.8,
+        lsExpY: 0.835,
+        lsExpX: 0.855,
+        dyCurve: loadCurve(rearLat, 0.835),
+        dxCurve: loadCurve(rear, 0.855),
+        friction_limit_angle: 6.3,
         longStiffnessMult: 1.19,
         falloff_level: 0.9,
         falloff_slope: 3,
       },
+      camberData: { dcamber0: 1.5, dcamber1: -16 },
       pressureData: { pressureSpringCurve: pressureSpring(320_000), setPsi: 19.58 },
     },
   };
@@ -774,16 +814,20 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       trackWidthRear: LC_LMDH_HARDPOINTS.trackWidthRear,
       // [est]
       cgHeight: CG_HEIGHT,
-      // [est]: a radius of gyration of 1.25 m in yaw, the engine and the gearbox close behind the cockpit
-      inertia: { pitch: 1650, roll: 420, yaw: 1780 },
-      // Wheel, tyre, brake, upright and half the links [est]; a rim alone is at least 8.75 / 9.25 kg (Art. 12.5.3)
-      unsprungMassFront: 24.5,
-      unsprungMassRear: 27.5,
-      // The cell sits behind the driver, a little ahead of the CG [est]
-      fuelTank: { y: -0.03, z: 0.1 },
-      // [est]
-      wheelInertiaFront: 1.35,
-      wheelInertiaRear: 1.65,
+      // [963]: radii of gyration of 1.26 m in yaw and 1.22 m in pitch on the car's mass, the V8 and the transaxle
+      // stretched out behind the cockpit; 0.58 m in roll, the tub, the engine and the driver low on the floor
+      inertia: { pitch: 1690, roll: 380, yaw: 1800 },
+      // A corner's wheel, tyre, brake, upright and half its links [963, derived]: the rim at least 8.75 / 9.25 kg (Art.
+      // 12.5.3), a 29/71-18 slick ≈ 12.5 kg and a 34/71-18 ≈ 14 kg, a 381 mm carbon disc, its bell and a six-piston
+      // caliper ≈ 7 kg, the upright, hub and bearing ≈ 6 kg, and at the rear half a driveshaft
+      unsprungMassFront: 37.5,
+      unsprungMassRear: 41,
+      // The cell sits between the cockpit and the engine, its centre a little behind the CG [963]
+      fuelTank: { y: -0.05, z: -0.12 },
+      // The spinning parts [963, derived]: the tyre's 12.5 / 14 kg at a 0.3 m radius of gyration, the rim's barrel at
+      // 0.21 m, the disc and its bell, the hub (and at the rear the driveshaft's half that turns with the wheel)
+      wheelInertiaFront: 1.65,
+      wheelInertiaRear: 1.82,
       // 20° at the road wheels, 527° of rim lock to lock on a 13.175 : 1 rack [bop]
       maxRoadWheelDeg: 20,
       ffbMechanicalTrailM: 0.02,
@@ -812,33 +856,34 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
     },
     // [est]: the launch slips the clutch at 4500 rpm
     clutch: { maxTorqueNm: 1300, biteRpm: 1800, lockRpm: 1900, launchRpm: 4500 },
-    // The spec mechanical plate differential (Art. 9.9) [spec]: six friction faces of μ 0.075 on a 50° drive ramp and a
-    // 36° coast ramp (~38 % drive lock, ~62 % coast lock) with 140 Nm of preload so power-on and lift-off stay
-    // progressive on low-downforce setups [bop]
+    // The spec mechanical plate differential (Art. 9.9) [spec]: six friction faces of μ 0.075, set as the 963 reference
+    // sets it [963]: a 56° drive ramp (~30 % drive lock) so the inside rear can turn on the power, a 34.7° coast ramp
+    // (~65 % coast lock) holding the rear on the brakes and a lift, and 90 Nm of preload
     differential: {
       type: 'LSD_Ramp',
-      settings: { power: 0.075, coast: 0.075, preload: 140, friction_faces: 6, power_ramp_deg: 50, coast_ramp_deg: 36 },
+      settings: { power: 0.075, coast: 0.075, preload: 90, friction_faces: 6, power_ramp_deg: 56, coast_ramp_deg: 34.7 },
       // Steel halfshafts from the transaxle, with their joints [est]
       halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 34 },
     },
     // Carbon discs of up to 381 mm (Art. 11.3.2) [spec], with their weak cold bite: 35 °C out of the garage, 290 °C after
-    // a formation lap [est]. 6400 Nm an axle pair at full pedal, 60 % front in 0.2 % clicks, moving 0.5 % forward over
-    // the pedal's travel, most of it gone early in the release [bop, est]. The brief's 56.4 % of 6800 Nm put 2960 Nm on
-    // each rear, past what the rears hold at low speed under braking: they locked at 70 % pedal at 80 km/h, a few tenths
-    // after the fronts, and a stamp spun the car. 60 % of 6400 keeps the fronts' 3840 Nm (the high-speed stop) and
-    // moves the rears' lock to 82 % (`scripts/verify-lc-lmdh.ts`). The rear ducts get 55 % of the front's air.
+    // a formation lap [est]. 6400 Nm an axle pair at full pedal, 58 % front in 0.2 % clicks [963], the brake-by-wire
+    // moving it forward from 40 % of the pedal's travel, 1.8 % by full pedal [963], so a stamp has the ≈ 60 % that keeps
+    // the fronts' 3830 Nm (the high-speed stop) and the rears' lock ≈ 20 points of pedal after the fronts'
+    // (`scripts/verify/verify-lc-lmdh.ts`), while a trail of the brake into the corner keeps the rears working. (The bias of an
+    // earlier brief, 56.4 % of 6800 Nm on a car with 48.5 % of its weight on the front, locked the rears at 70 % pedal at
+    // 80 km/h and a stamp spun the car.) The rear ducts get 55 % of the front's air.
     // The rear circuit is brake-by-wire (Art. 5.3.9, 11.7) [spec]: the rear calipers give way to the motor's
     // regeneration and the engine's overrun, so the axle brakes what the pedal asks
     brakes: {
       maxTorqueNm: 6400,
-      front_bias: 0.6,
+      front_bias: 0.58,
       ebbStep: 0.002,
       brakeByWire: true,
       discMaterial: 'endurance-carbon',
       discStartTempC: 290,
       garageDiscTempC: 35,
       rearDuctShare: 0.55,
-      migration: { amount: 0.005, rampStart: 0, exponent: 1.35 },
+      migration: { amount: 0.018, rampStart: 0.4 },
     },
     suspensions: SUSPENSIONS,
     aero: {
@@ -861,10 +906,10 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
 export const LC_LMDH_CONFIG = config(LMDH_GEAR_SETS.short, 5.5);
 
 /**
- * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5.8° off,
+ * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 4.9° off,
  * as the garage's gear set and low-drag package make it: `scripts/verify/verify-lc-lmdh.ts` checks its top speed
  */
-export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5.8);
+export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -4.9);
 
 /** What the regulations and the bulletin fix, for the checks: Nmax, the 500 kW line and the car's scale on it */
 export const LC_LMDH_POWER = { nMax: N_MAX, curve500Kw: POWER_CURVE_500, scaleVsKmh: POWER_SCALE_VS_KMH };
@@ -887,4 +932,7 @@ export const LC_LMDH_ELECTRONICS = {
   tcMinSpeedKmh: 40,
   tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.25 },
   tcDryRearSlide: { gain: 2, from: 0.45 },
+  // It reads the steering too [963]: the wheelspin it allows falls to half by 200° of rim, so a hairpin's exit on full
+  // lock gets less than a straight
+  tcSteerTightening: { fullAtRimDeg: 200, floor: 0.5 },
 };

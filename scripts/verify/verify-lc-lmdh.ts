@@ -29,6 +29,7 @@ import { portedCarRoot } from '../../src/lib/ported-car-model';
 import { buildDoubleWishboneHardpoints, solveCornerKinematics3D } from '../../src/lib/sim/suspension-kinematics';
 import { Lut } from '../../src/lib/sim/lut';
 import { wetnessFromWater } from '../../src/lib/sim/wet-tyres';
+import { SIM_REALISM_FLAGS } from '../../src/lib/sim/sim-realism';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { downshiftTakenAt, measureDownshift, measureUpshift } from '../lib/upshift-test';
@@ -143,7 +144,7 @@ console.log('\n== At rest (500 Hz tick)');
   const t = car.telemetry;
   const fz = car.wheels.map((w) => w.fz);
   const front = (fz[0] + fz[1]) / fz.reduce((a, b) => a + b, 0);
-  check('Front axle carries 48.5 % of the weight', Math.abs(front - C.chassis.frontWeightFraction) < 0.01, `${fmt(front * 100, 1)} %`);
+  check(`Front axle carries ${fmt(C.chassis.frontWeightFraction * 100, 1)} % of the weight`, Math.abs(front - C.chassis.frontWeightFraction) < 0.01, `${fmt(front * 100, 1)} %`);
   check('Rides at 50 / 64 mm', Math.abs(t.aeroHeightFront - 0.05) < 0.003 && Math.abs(t.aeroHeightRear - 0.064) < 0.003,
     `${fmt(t.aeroHeightFront * 1000, 1)} / ${fmt(t.aeroHeightRear * 1000, 1)} mm`);
   // Two seconds of single ticks: nothing may move
@@ -191,8 +192,33 @@ console.log('\n== Aero against speed (flat, held speed)');
   check('CD·A 1.06–1.13 m²', [slow, mid, fast].every((s) => s.cdA > 1.06 && s.cdA < 1.13), `${fmt(slow.cdA, 3)} / ${fmt(mid.cdA, 3)} / ${fmt(fast.cdA, 3)} m²`);
   check('Downforce over drag 3.85 : 1 at 250 km/h, on 32 / 40 mm', Math.abs(mid.clA / mid.cdA - 3.85) < 0.12 && Math.abs(mid.front - 0.032) < 0.003 && Math.abs(mid.rear - 0.04) < 0.004,
     `${fmt(mid.clA / mid.cdA, 2)} : 1 at ${fmt(mid.front * 1000, 1)} / ${fmt(mid.rear * 1000, 1)} mm`);
-  // Under the 54 % of the weight on the rear axle, so the car gains understeer with speed
-  check('Aero balance 44–48 % front', [slow, mid, fast].every((s) => s.bal > 44 && s.bal < 48), `${fmt(slow.bal, 1)} / ${fmt(mid.bal, 1)} / ${fmt(fast.bal, 1)} %`);
+  // The nose comes down with speed and the front loads [963]: forward as it settles, but always behind the weight on the
+  // front axle, so the car keeps its understeer at speed (an earlier map past the weight at 300 km/h lost the rears)
+  const wf = C.chassis.frontWeightFraction * 100;
+  check(`Aero balance 42–46 % front, forward as it settles, behind the ${fmt(wf, 1)} % of the weight`,
+    slow.bal > 42 && fast.bal < 46 && slow.bal < mid.bal && mid.bal < fast.bal && fast.bal < wf - 0.5,
+    `${fmt(slow.bal, 1)} / ${fmt(mid.bal, 1)} / ${fmt(fast.bal, 1)} %`);
+  // On the brakes the nose dives and the balance comes forward with it, never past the weight's share [963]
+  {
+    const car = makeCar();
+    car.reset(0, 0, 0, 250 / 3.6);
+    let pedal = 0.5;
+    run(car, 8, (c) => {
+      pedal = THREE.MathUtils.clamp(pedal + (c.telemetry.speedKmh < 250 ? 0.01 : -0.01), 0, 1);
+      return { throttle: pedal, brake: 0, steer: 0 };
+    });
+    const steady = car.telemetry.AERO_BALANCE;
+    const steadyFront = car.telemetry.aeroHeightFront;
+    let most = steady;
+    let lowest = steadyFront;
+    run(car, 0.6, () => ({ throttle: 0, brake: 0.6, steer: 0 }), (c) => {
+      most = Math.max(most, c.telemetry.AERO_BALANCE);
+      lowest = Math.min(lowest, c.telemetry.aeroHeightFront);
+      return false;
+    });
+    check('On the brakes from 250 km/h the nose dives ≥ 4 mm and the balance comes forward 0.6–3 %', lowest < steadyFront - 0.004 && most - steady > 0.6 && most - steady < 3 && most < wf,
+      `${fmt(steady, 1)} → ${fmt(most, 1)} %, front ${fmt(steadyFront * 1000, 1)} → ${fmt(lowest * 1000, 1)} mm`);
+  }
   check('Floor clear of the ground at 300 km/h', Math.min(fast.front, fast.rear) > 0.015, `${fmt(fast.front * 1000, 1)} / ${fmt(fast.rear * 1000, 1)} mm, ${fmt(fast.downN / 1000, 1)} kN of downforce`);
   // The long-circuit trim: the 1° wing (4.5° less, 0.065 m² of CL·A and 0.022 m² of CD·A a degree) and the front's dive
   // planes off, which shed the front's share of it so the balance stays put
@@ -703,6 +729,29 @@ console.log('\n== Fuel and steering');
   const burnt = f0 - sim.telemetry.fuelKg;
   // A sprint's fixed 28 kg of ballast: none of it burnt
   check('30 s flat out from rest: the 28 kg of sprint fuel stays aboard', f0 === 28 && burnt === 0, `${fmt(burnt, 3)} kg of ${f0} kg`);
+  // Where the fuel is used, it pays for the engine's work [963]: flat out from 200 km/h, the work the shafts carry over the
+  // gearbox's efficiency (the motor off), and the engine gives way to the motor's deployment at the shaft limit, so
+  // deploying burns less for the same run
+  const burn = (deployKw: number) => {
+    const car = createLcLmdhSim(pad);
+    car.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true, coldGarageStart: false });
+    car.setLiveTuner({ motorDeployKw: deployKw });
+    car.assistPreset = 'semi_pro';
+    car.teleportToDistance(1000, 200 / 3.6);
+    const start = car.telemetry.fuelKg;
+    let work = 0;
+    for (let t = 0; t < 12; t += DT) {
+      car.step(DT, { throttle: 1 });
+      work += (car.vehicle.driveshaftPowerW / C.gearbox.efficiency) * DT;
+    }
+    return { kg: start - car.telemetry.fuelKg, work, kmh: car.telemetry.speedKmh };
+  };
+  const on = burn(40);
+  const off = burn(0);
+  const w = LC_LMDH_SIM_PROFILE.fuelFromEngineWork!;
+  const expected = off.work / (w.brakeThermalEfficiency * w.lowerHeatingValueMJPerKg * 1e6);
+  check('With fuel use on, the burn pays for the engine\'s work, and deploying 40 kW saves 3–12 %', Math.abs(off.kg / expected - 1) < 0.05 && on.kg < off.kg * 0.97 && on.kg > off.kg * 0.88 && Math.abs(on.kmh - off.kmh) < 3,
+    `${fmt(off.kg, 3)} kg without (${fmt(expected, 3)} for its work), ${fmt(on.kg, 3)} kg deploying, ${fmt(on.kmh, 0)} / ${fmt(off.kmh, 0)} km/h`);
   // 263.5° of rim lock at the hands' 900°/s
   const steer = createLcLmdhSim(pad);
   steer.teleportToDistance(1000, 50 / 3.6);
@@ -712,6 +761,70 @@ console.log('\n== Fuel and steering');
     if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
   }
   check('Full lock from centre in 0.28–0.31 s (263.5° at 900°/s)', tLock > 0.28 && tLock < 0.31, `${fmt(tLock, 3)} s`);
+}
+
+console.log('\n== The 963\'s systems: its pedal map, a TC that reads the steering, electric out of the pit box');
+{
+  // The pedal map: progressive, as the 963's default is
+  const pedal = new Lut(C.engine.throttleResponseCurve);
+  check('A progressive pedal: half the pedal asks 43–47 % of the torque, full pedal all of it', pedal.evaluate(0.5) > 0.43 && pedal.evaluate(0.5) < 0.47 && pedal.evaluate(1) === 1,
+    `${fmt(pedal.evaluate(0.25), 3)} at a quarter, ${fmt(pedal.evaluate(0.5), 3)} at half`);
+  // A slow corner's exit at full throttle on 184° of rim, TC on: less wheelspin with the steering term than without
+  const exit = (withSteer: boolean) => {
+    const electronics = { ...LC_LMDH_SIM_PROFILE.electronics!, tcSteerTightening: withSteer ? LC_LMDH_SIM_PROFILE.electronics!.tcSteerTightening : undefined };
+    const sim = createLcLmdhSim(pad, null, { ...LC_LMDH_SIM_PROFILE, electronics });
+    sim.assistPreset = 'semi_pro';
+    sim.teleportToDistance(1000, 60 / 3.6);
+    const h = 1 / 240;
+    for (let t = 0; t < 1.5; t += h) sim.step(h, { throttle: 0.25, analogSteer: 0.7 });
+    let slip = 0;
+    let n = 0;
+    for (let t = 0; t < 1.5; t += h) {
+      sim.step(h, { throttle: 1, analogSteer: 0.7 });
+      slip += Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
+      n++;
+    }
+    return slip / n;
+  };
+  const withSteer = exit(true);
+  const without = exit(false);
+  check('The TC lets less wheelspin through on full lock, reading the steering', withSteer < without, `rear slip ${fmt(withSteer, 3)} with the steering term, ${fmt(without, 3)} without`);
+  // Out of the pit box on the motor alone: the engine off, then firing at the pit limiter's steady speed or past 65 km/h
+  const pitCar = (surface: 'pitlane' | 'road', kmh = 0) => {
+    const car = new VehiclePhysics({ ground: new FlatGroundQuery(0, surface), config: C, airDensity: RHO });
+    car.reset(0, 0, 0, kmh / 3.6);
+    car.ersEnergyJ = 0.6 * C.ers.ERS_MAX_CHARGE;
+    return car;
+  };
+  const box = pitCar('pitlane');
+  let enginePower = 0;
+  let motorKw = 0;
+  run(box, 2, () => ({ throttle: 1, brake: 0, steer: 0 }), (c) => {
+    enginePower = Math.max(enginePower, c.iceMechanicalPowerW);
+    motorKw = Math.max(motorKw, c.telemetry.MGUK_POWER / 1000);
+    return false;
+  });
+  const launched = box.telemetry.speedKmh;
+  check('Out of the pit box the motor drives alone: no engine power, the motor\'s up to 50 kW', box.electricOnly && enginePower === 0 && motorKw > 10 && motorKw <= 50.5 && launched > 10,
+    `${fmt(launched, 0)} km/h in 2 s on ${fmt(motorKw, 0)} kW, engine ${fmt(enginePower / 1000, 1)} kW, ${fmt(box.rpm, 0)} rpm`);
+  let firedAt = NaN;
+  run(box, 8, (c) => {
+    const v = c.telemetry.speedKmh;
+    return { throttle: v < 55 ? 1 : Math.max(0, 0.25 - (v - 55) * 0.1), brake: 0, steer: 0 };
+  }, (c, t) => {
+    if (!c.electricOnly && Number.isNaN(firedAt)) firedAt = t;
+    return false;
+  });
+  check('The engine fires at a steady 55 km/h, and stays on down the pit lane', !box.electricOnly && firedAt > 0 && box.iceMechanicalPowerW > 0, `fired ${fmt(firedAt, 2)} s after the launch's first 2 s`);
+  const flatOut = pitCar('pitlane');
+  run(flatOut, 12, () => ({ throttle: 1, brake: 0, steer: 0 }), (c) => !c.electricOnly);
+  check('Flat out it fires past 65 km/h', !flatOut.electricOnly && flatOut.telemetry.speedKmh > 64 && flatOut.telemetry.speedKmh < 72, `${fmt(flatOut.telemetry.speedKmh, 1)} km/h`);
+  const arriving = pitCar('pitlane', 60);
+  const road = pitCar('road');
+  run(arriving, 0.5, () => ({ throttle: 0.3, brake: 0, steer: 0 }));
+  run(road, 1, () => ({ throttle: 1, brake: 0, steer: 0 }));
+  check('Arriving down the pit lane at speed, and on the road, the engine runs', !arriving.electricOnly && !road.electricOnly,
+    `${fmt(arriving.telemetry.speedKmh, 0)} km/h on the pit lane, ${fmt(road.telemetry.speedKmh, 0)} km/h on the road`);
 }
 
 console.log('\n== What the sound hears: driveshaft and motor telemetry');

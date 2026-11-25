@@ -11,8 +11,10 @@ import type { CarSoundSource } from '../CarAudio';
 import type { SpeedProfileCarModel } from '../speed-profile';
 
 /**
- * Its own engine, gearbox and hybrid sounds (`scripts/audio/build_custom_soundbank.py`). The bank's top anchor sits at
- * the limiter, the end of the regulated power curve
+ * Its sound bank (on librecorsa.org only): the engine, in the cockpit and outside, and its shift and lift-off sounds are
+ * Engine Lab by bimbalanch, given to LibreCorsa (CREDITS.md); the gearbox whine, hybrid motor and limiter are from its
+ * earlier bank (`scripts/audio/build_custom_soundbank.py`), whose shift-cut bark the new engine's own upshifts replace. The engine's 16 anchors run from 1800 to 9846 rpm
+ * at the engine's own revs, past the 8300 rpm limiter, so the bank plays at the physics' rpm unscaled
  */
 export const LC_LMDH_SOUND: CarSoundSource = {
   id: 'lc-lmdh',
@@ -25,20 +27,21 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 
 /**
  * The car's planning model for its lap-time line, braking zones, braking urgency and HUD target speed, at ρ 1.07
- * (Rwanda's air, as the other closed-wheel cars' plans are): downforce 2.2 v² (CL·A ≈ 4.1 m² over the speeds a lap
- * uses), drag 0.588 v² (CD·A 1.10 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.365 and brakes on
- * μ 1.3, under what `scripts/ai/measure-ggv.ts` measures (1.59 g at 54 km/h and 3.43 g at 306 in corners, 1.69 and
- * 3.42 g on the brakes), so it never brakes later than the car can stop.
+ * (Rwanda's air, as the other closed-wheel cars' plans are): downforce 2.25 v² (CL·A ≈ 4.2 m² over the speeds a lap
+ * uses), drag 0.588 v² (CD·A 1.10 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.42 and brakes on
+ * μ 1.21, under what `scripts/ai/measure-ggv.ts` measures (1.66 g at 54 km/h and 3.66 g at 306 in corners, 1.73 and
+ * 3.37 g on the brakes): with the drag the plan adds to its braking, 3.36 g at 306 km/h and 2.9 g at 270 against the
+ * measured 3.37 and 3.12, so it never brakes later than the car can stop.
  */
 export const LC_LMDH_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
-  downforceCoef: 2.2,
+  downforceCoef: 2.25,
   // ½ρ·CD·A at ρ 1.07: the endurance trim's ≈ 1.10 m² on the 5.5° wing
   dragCoef: 0.588,
   rearDownforceShare: 0.555,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-  muLat: 1.365,
-  muLong: 1.3,
+  muLat: 1.42,
+  muLong: 1.21,
   maxBrakeForceN:
     2 *
     C.brakes.maxTorqueNm *
@@ -57,8 +60,9 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   turbo: true,
   // Cold pressures at the garage's 25 °C (no blankets): 131–172 kPa [bop]
   coldPsiRange: [19, 25],
-  frontCamberRange: [-3.2, -0.8],
-  rearCamberRange: [-2.6, -0.6],
+  // The garage's camber ranges round the 963's statics [963]
+  frontCamberRange: [-4, -1],
+  rearCamberRange: [-3.4, -0.6],
   setupPressureRefC: 25,
   // Three traction dials
   tcSlipAngleDial: true,
@@ -67,13 +71,13 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   tcMinSpeedMs: E.tcMinSpeedKmh / 3.6,
   electronics: E,
   // The rear wing goes 1–9° (set 5.5). Each package trims the front with it so the balance stays stable: high downforce
-  // adds the dive planes (+3°) with 1.5° more wing; low drag trims the front further (−5.8°) with the wing at its 1°
-  // minimum so the CoP shifts slightly rearward (~0.7 % behind balanced) to keep low-downforce corners planted without
+  // adds the dive planes (+3°) with 1.5° more wing; low drag trims the front further (−4.9°) with the wing at its 1°
+  // minimum so the CoP shifts slightly rearward (~0.5 % behind balanced) to keep low-downforce corners planted without
   // snap oversteer
-  aeroPackagesDeg: { low_downforce: [-5.8, -4.5], balanced: [0, 0], high_downforce: [3, 1.5] },
-  // Its grip on the flat per g of weight and downforce, 1.46–1.51 from 80 to 180 km/h: the steering assist's yaw guard
-  // reads this, and the 1.4 it had trimmed a stick's lock short of the grip in slow corners
-  padLateralMu: 1.5,
+  aeroPackagesDeg: { low_downforce: [-4.9, -4.5], balanced: [0, 0], high_downforce: [3, 1.5] },
+  // Its grip on the flat per g of weight and downforce, 1.56–1.64 from 90 to 162 km/h: the steering assist's yaw guard
+  // reads this, and a figure under it trims a stick's lock short of the grip in slow corners
+  padLateralMu: 1.6,
   // 263.5° of rim lock each way on a 13.175 : 1 rack [bop]
   steerRatio: 13.175,
   // The autopilot brakes on 85 % of this and corners on 1.1 × that: 1.45 g at low speed and 3.2 g at 306 km/h, inside
@@ -83,9 +87,12 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   speedProfile: LC_LMDH_PROFILE_CAR,
   // The closed-wheel line
   racingLine: 'gt3',
-  // ≈ 0.033 kg/s at 8000 rpm flat out [est]: 540 kW at the crank at 38 % efficiency. The flow follows the pedal and the
-  // revs, not the torque: the fuel the hybrid's deployment saves on the real car is not counted
-  fuelLPerS1000Rpm: 0.0055,
+  // The fuel the engine's work takes [963]: 37 % brake thermal efficiency on a 43.5 MJ/kg renewable fuel, ≈ 0.033 kg/s
+  // for the ≈ 535 kW at the crank flat out (≈ 495 kW while the motor deploys 40 kW), and 0.7 g/s idling: ≈ 2.5 L a lap
+  // of Watkins Glen on the autopilot, where the class runs 30 to 33 laps on ≈ 90 L. The motor's deployment saves what
+  // the engine gives way to it under the shaft limit, ≈ 7 % a lap there at 40 kW, as the class's power rules have it.
+  // Engine maps 1 to 3 all make the shaft limit, so they burn alike; 4 and 5 trade power for fuel
+  fuelFromEngineWork: { brakeThermalEfficiency: 0.37, lowerHeatingValueMJPerKg: 43.5, idleKgS: 0.0007 },
   // Levels index the electronics tables from the most intrusive (12). The class's dry baseline is 10 / 7 / 10 (slip,
   // cut, slip angle); ABS on TC + ABS and Full
   assistDials: {

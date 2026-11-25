@@ -78,13 +78,13 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [1.01, 0.98, 0.81, 0.64, 0.46, 0.29, 0.14, 0],
     lockKappa: Math.tan((240 / 14) * (Math.PI / 180)) / 2.8,
   },
-  // Measured 2026-11-14
+  // Measured 2026-11-25 on the 963 reference's platform, aero and slicks; its lock is 263.5° of rim on a 13.175 : 1 rack
   'lc-lmdh': {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
-    latG: [1.59, 1.74, 1.91, 2.15, 2.43, 2.76, 3.13, 3.43],
-    brakeG: [1.69, 1.77, 1.94, 2.16, 2.44, 2.77, 3.14, 3.42],
-    accelG: [1.05, 0.99, 0.84, 0.68, 0.52, 0.37, 0.22, 0.08],
-    lockKappa: Math.tan((225 / 12.5) * (Math.PI / 180)) / 3.148,
+    latG: [1.66, 1.87, 2.03, 2.27, 2.56, 2.91, 3.29, 3.66],
+    brakeG: [1.73, 1.83, 2.02, 2.26, 2.55, 2.86, 3.12, 3.37],
+    accelG: [0.77, 0.97, 0.81, 0.66, 0.49, 0.35, 0.2, 0.05],
+    lockKappa: Math.tan((263.5 / 13.175) * (Math.PI / 180)) / 3.148,
   },
   // Measured 2026-11-13
   'nissan-r33-jgtc': {

@@ -223,7 +223,8 @@ export class LoopVoice {
 
   /** Drive the voice; sources are started on demand and stopped after staying silent */
   /** `pitchTau`: time constant of the pitch glide (s); longer than a frame, so the pitch moves smoothly, not in 60 Hz steps */
-  public set(target: number, rate: number, now: number, dt: number, tau: number, pitchTau = 0.02): void {
+  /** `wakeRate`: the pitch a waking voice starts from (default: `rate`); it then glides to `rate` with the others */
+  public set(target: number, rate: number, now: number, dt: number, tau: number, pitchTau = 0.02, wakeRate = rate): void {
     if (!this.buffer || this.disposed) return;
     const active = target > 1e-4;
     if (active) {
@@ -232,7 +233,7 @@ export class LoopVoice {
         const src = this.ctx.createBufferSource();
         src.buffer = this.buffer;
         src.loop = true;
-        src.playbackRate.value = rate;
+        src.playbackRate.value = wakeRate;
         src.connect(this.gain);
         // random start offset decorrelates neighbouring grid renders
         src.start(now, Math.random() * this.buffer.duration);
@@ -240,7 +241,7 @@ export class LoopVoice {
       } else if (!this.wasActive) {
         // Snap pitch immediately when waking a voice from silence so it never glides from a stale RPM
         this.source.playbackRate.cancelScheduledValues(now);
-        this.source.playbackRate.setValueAtTime(rate, now);
+        this.source.playbackRate.setValueAtTime(wakeRate, now);
       }
     } else if (this.source) {
       this.silentFor += dt;
@@ -285,6 +286,13 @@ const UPSHIFT_S = 0.06;
 /** A 1-D grid of loops (rpm, boost or speed) crossfaded between neighbours with equal-power weights */
 export class LoopGrid {
   public readonly voices: LoopVoice[];
+  /** Where the voices' pitch glide has got to on the grid axis: a voice waking mid-sweep joins the others there, instead
+   * of starting at the target up to a few semitones away from them. `glideT` < 0: no glide under way (the grid has
+   * not played yet or was silent last update), so waking voices start at the target */
+  private glideX = 0;
+  private glideTarget = 0;
+  private glideTau = 0.02;
+  private glideT = -1;
 
   constructor(ctx: AudioContext, destination: AudioNode, keys: number[]) {
     this.voices = [...keys].sort((a, b) => a - b).map((k) => new LoopVoice(ctx, destination, k));
@@ -312,6 +320,14 @@ export class LoopGrid {
   ): void {
     const vs = this.voices;
     if (vs.length === 0) return;
+    const silent = level <= 1e-4;
+    if (this.glideT < 0 || silent) this.glideX = x;
+    else this.glideX = this.glideTarget + (this.glideX - this.glideTarget) * Math.exp(-Math.max(0, now - this.glideT) / this.glideTau);
+    // A silent grid's last position is no glide to join: an opponent's voice handed to another car would otherwise
+    // wake its loops at the old car's revs (or two octaves down on a fresh voice) and swoop up to the new one's
+    this.glideT = silent ? -1 : now;
+    this.glideTarget = x;
+    this.glideTau = pitchTau;
     let i = 0;
     while (i < vs.length - 2 && x >= vs[i + 1].key) i++;
     const lo = vs[i];
@@ -329,7 +345,8 @@ export class LoopGrid {
       if (v === lo) w = Math.cos(f * Math.PI * 0.5);
       else if (v === hi) w = Math.sin(f * Math.PI * 0.5);
       const rate = (pitched ? Math.min(4, Math.max(0.25, x / v.key)) : 1) * rateScale;
-      v.set(w * level, rate, now, dt, tau, pitchTau);
+      const wake = (pitched ? Math.min(4, Math.max(0.25, this.glideX / v.key)) : 1) * rateScale;
+      v.set(w * level, rate, now, dt, tau, pitchTau, wake);
     }
   }
 

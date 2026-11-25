@@ -101,6 +101,8 @@
   "carBrowser.creditPhysicsTyres": "Who made the car's physics and its tyres. Keep both tag pairs.",
   "carBrowser.creditOther": "{label}: the credit's own English words (e.g. 'Sound by'). Keep the tags.",
   "carBrowser.creditOtherTyres": "{label}: the credit's own English words. Keep both tag pairs.",
+  "carBrowser.creditEngineSound": "Credit for a car's engine sound, in the words its author asked for. {work}: the sound's name (Engine Lab), {author}: the author's name, {url}: their page; none of them translated. Keep the <link></link> tags around the address.",
+  "carBrowser.creditEngineSoundNoLink": "The same engine sound credit without the address (the Android app). {work}: the sound's name, {author}: the author's name; neither translated.",
   "carBrowser.current": "Disabled main button: this is the car being driven.",
   "circuitBrowser.outline": "Screen-reader name of the circuit's map. {circuit}: circuit name.",
   "circuitBrowser.show": "Filter field: which list to show (all, favourites, recently driven).",

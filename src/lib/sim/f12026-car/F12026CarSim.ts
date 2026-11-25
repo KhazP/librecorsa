@@ -148,6 +148,12 @@ export interface CarElectronicsProfile {
    */
   tcDryRearSlide?: { gain: number; from: number };
   /**
+   * TC1 slip target tightening with the steering: × 1 − (1 − `floor`)·min(1, rim angle / `fullAtRimDeg`), so the more
+   * lock the driver holds the less wheelspin the control lets through (a 963's TC reads the steering), held over the
+   * lateral tightening's floor. Absent: no steering term
+   */
+  tcSteerTightening?: { fullAtRimDeg: number; floor: number };
+  /**
    * ABS rear channels: the lock target × max(`floor`, 1 − `gain`·(|slip angle| − `deadbandRad`)), so a trail-braked rear
    * that already slides is held off the brakes. Default (an F1 calibration): gain 1.4, dead band 0.03 rad, floor 0.72.
    * Gain 0 = the rears regulate slip ratio only.
@@ -295,6 +301,13 @@ export interface CarSimProfile {
    * rpm / 1000 × this × throttle (× `FUEL_KG_PER_L`). Absent: `fuelFlowCurveKgS` or the constant `fuelFlowKgS` × throttle
    */
   fuelLPerS1000Rpm?: number;
+  /**
+   * Fuel burnt for the work the engine does, where none of the flows above is given: its mechanical power at the crank
+   * over its brake thermal efficiency and the fuel's lower heating value (MJ/kg), and `idleKgS` while it runs below
+   * that. So a hybrid's deployment, which the engine gives way to under a power cap, saves the fuel of the work it takes
+   * over, and an engine map with less torque burns less
+   */
+  fuelFromEngineWork?: { brakeThermalEfficiency: number; lowerHeatingValueMJPerKg: number; idleKgS: number };
   /** The TC / ABS dial positions of each driver-assist preset */
   assistDials: Record<DriverAssistPreset, AidDials>;
   /** The plan of the body worn when it is not the vehicle model's own (`VehiclePhysicsOptions.bodyPlan`) */
@@ -2407,7 +2420,19 @@ export class F12026CarSim implements SimulatorCar {
         this.chassisG = filterChassisG(this.chassisG, (dvx.dot(_ey) / stepS + G * _ey.y) / G, stepS);
       }
       // Fuel burnt this tick: the car gets lighter tick by tick, not frame by frame
-      if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
+      const p = this.profile;
+      // A flow given outright wins (a car imported on this car's profile brings its own consumption)
+      const byWork = p.fuelLPerS1000Rpm === undefined && p.fuelFlowCurveKgS === undefined && p.fuelFlowKgS === undefined ? p.fuelFromEngineWork : undefined;
+      if (byWork && this.fuelKg > 0 && this.realism.fuelUse) {
+        // The engine's work at the crank over its efficiency and the fuel's heating value, and its idle while it runs
+        const running = !v.telemetry.engineStalled && !v.electricOnly && v.rpm > 0.5 * this.config.engine.idleRpm;
+        const fuelJPerKg = byWork.brakeThermalEfficiency * byWork.lowerHeatingValueMJPerKg * 1e6;
+        const burnKgS = running && fuelJPerKg > 0 ? Math.max(byWork.idleKgS, v.iceMechanicalPowerW / fuelJPerKg) : 0;
+        if (burnKgS > 0) {
+          this.fuelKg = Math.max(0, this.fuelKg - burnKgS * CONTROL_DT_S);
+          v.setFuelMass(this.fuelKg);
+        }
+      } else if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
         const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
         const perRpm = this.profile.fuelLPerS1000Rpm;
         const flowLut = this.fuelFlowCurveLut;
@@ -2584,7 +2609,11 @@ export class F12026CarSim implements SimulatorCar {
       }
       const slideTerm = slideGain > 0 ? slideGain * Math.max(0, saDriven - slideFrom) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
-      const tcEffTarget = tcBaseTarget * latFactor;
+      const steerTight = elec.tcSteerTightening;
+      const ratio = this.profile.steerRatio ?? this.config.chassis.powerSteering?.steeringRatio ?? 12;
+      const rimDeg = Math.abs(this.steerAngleNorm) * this.config.chassis.maxRoadWheelDeg * ratio;
+      const steerFactor = steerTight ? 1 - (1 - steerTight.floor) * Math.min(1, rimDeg / steerTight.fullAtRimDeg) : 1;
+      const tcEffTarget = tcBaseTarget * Math.max(tight.floor, latFactor * steerFactor);
       // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)); on a four-wheel-drive car the
       // axle that spins the more (the slide term above stays with the axle the engine drives directly)
       const axleSlip = (l: number, r: number) => {
@@ -3429,13 +3458,15 @@ export class F12026CarSim implements SimulatorCar {
 
     t.speedMs = vx;
     t.speedKmh = speedKmh;
-    t.rpm = Math.round(vt.rpm);
+    // The engine's speed: none while it is off and the motor drives alone (the motor's own is `mguRpm`)
+    t.rpm = vt.electricOnly ? 0 : Math.round(vt.rpm);
     t.gear = vt.gear;
     t.throttle = vt.throttle;
     t.brake = vt.brake;
     t.clutch = vt.clutchEngagement;
     t.clutchSlip = vt.clutchSlip;
     t.engineStalled = vt.engineStalled;
+    t.iceOff = vt.electricOnly;
     t.steering = this.steerCmd;
     t.longitudinalG = this.lastAxMs2 / G;
     t.lateralG = -this.lastAyMs2 / G;

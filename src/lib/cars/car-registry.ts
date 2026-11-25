@@ -280,8 +280,12 @@ export interface CarDefinition {
   credit: CarCredit;
   /** Who made its tyre textures, when they are someone else's work than the body's (the car card links them) */
   tyreCredit?: { author: string; url: string };
-  /** Who made its sound, when it is someone else's work than the body's (the Credits panel lists them) */
-  soundCredit?: { author: string; url: string };
+  /**
+   * Who made its sound, when it is someone else's work than the body's (the Credits panel lists them). `engineSound`:
+   * the name of an engine sound whose author asked for the credit on the car card, which then reads "Engine sound:
+   * <engineSound> by <author>, <url>"
+   */
+  soundCredit?: { author: string; url: string; engineSound?: string };
   /** Where its 3D body comes from, when the credit names someone else (its modder); absent: the credit */
   modelSource?: CarCredit;
   /** The vehicle model that drives it */
@@ -443,6 +447,10 @@ const BUILT_IN_CARS: readonly CarDefinition[] = [
       ...CC_BY,
     },
     tyreCredit: SAGATRON_GT_TYRES,
+    // Its engine sound (on librecorsa.org only) was given to LibreCorsa by its author, credited as they asked (CREDITS.md)
+    ...(HOSTED_CONTENT
+      ? { soundCredit: { author: "bimbalanch", url: "https://ko-fi.com/bimbalanch", engineSound: "Engine Lab" } }
+      : {}),
     physics: "lc-lmdh",
     year: 2026,
     modelUrl: "/cars/lc-lmdh/model/lc-lmdh.glb",

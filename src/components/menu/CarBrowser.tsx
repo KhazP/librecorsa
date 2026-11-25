@@ -313,29 +313,17 @@ export const CarBrowser: React.FC<{
             )}
             {/* The credit and its source sit at the pane's foot, against the main action, when the pane has room */}
             <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
-              <span className="lc-hint">
-                {(() => {
-                  const tyreCredit = c.tyreCredit;
-                  const values = {
-                    author: c.credit.author,
-                    tyreAuthor: tyreCredit?.author ?? "",
-                    label: c.credit.label ?? "",
-                    link: (chunks: React.ReactNode) => (
-                      <a
-                        href={c.credit.authorUrl ?? c.credit.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
-                      >
-                        {chunks}
-                      </a>
-                    ),
-                    tyres: (chunks: React.ReactNode) =>
-                      storeBuild || !tyreCredit ? (
-                        <span className="text-lc-fog">{chunks}</span>
-                      ) : (
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="lc-hint">
+                  {(() => {
+                    const tyreCredit = c.tyreCredit;
+                    const values = {
+                      author: c.credit.author,
+                      tyreAuthor: tyreCredit?.author ?? "",
+                      label: c.credit.label ?? "",
+                      link: (chunks: React.ReactNode) => (
                         <a
-                          href={tyreCredit.url}
+                          href={c.credit.authorUrl ?? c.credit.url}
                           target="_blank"
                           rel="noreferrer"
                           className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
@@ -343,10 +331,51 @@ export const CarBrowser: React.FC<{
                           {chunks}
                         </a>
                       ),
-                  };
-                  // The credit's own words: the model's maker, or (the Liana) whoever made the physics
-                  const role = c.credit.label === undefined ? "Model" : c.credit.label === "Physics by" ? "Physics" : "Other";
-                  return tx.rich(`credit${role}${tyreCredit ? "Tyres" : ""}` as const, values);
+                      tyres: (chunks: React.ReactNode) =>
+                        storeBuild || !tyreCredit ? (
+                          <span className="text-lc-fog">{chunks}</span>
+                        ) : (
+                          <a
+                            href={tyreCredit.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
+                          >
+                            {chunks}
+                          </a>
+                        ),
+                    };
+                    // The credit's own words: the model's maker, or (the Liana) whoever made the physics
+                    const role = c.credit.label === undefined ? "Model" : c.credit.label === "Physics by" ? "Physics" : "Other";
+                    return tx.rich(`credit${role}${tyreCredit ? "Tyres" : ""}` as const, values);
+                  })()}
+                </span>
+                {(() => {
+                  // An engine sound credited in its author's words, with their link; the Android app leaves the
+                  // link out with the other donation pages (store-mode.ts)
+                  const sound = c.soundCredit;
+                  if (!sound?.engineSound) return null;
+                  const names = { work: sound.engineSound, author: sound.author };
+                  return (
+                    <span className="lc-hint">
+                      {storeBuild
+                        ? tx("creditEngineSoundNoLink", names)
+                        : tx.rich("creditEngineSound", {
+                            ...names,
+                            url: sound.url,
+                            link: (chunks: React.ReactNode) => (
+                              <a
+                                href={sound.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
+                              >
+                                {chunks}
+                              </a>
+                            ),
+                          })}
+                    </span>
+                  );
                 })()}
               </span>
               <SourceChip source={carModelSource(c)} />
