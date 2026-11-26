@@ -553,5 +553,41 @@
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/willow-springs-big-willow.32338/"
     }
+  },
+  "las_vegas": {
+    "folder": "lasvegas23",
+    "name": "Las Vegas Strip Circuit",
+    "layout": "Grand Prix layout",
+    "country": "United States",
+    "city": "Las Vegas, Nevada",
+    "baseAltitudeM": 610,
+    "credit": {
+      "title": "Las Vegas 2023",
+      "author": "Nukedrop",
+      "url": "https://www.patreon.com/cw/nukedrop/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.patreon.com/cw/nukedrop/",
+      "note": "UI by Fanapryde; helicopters by Mascot."
+    },
+    "type": "street"
+  },
+  "jeddah": {
+    "folder": "jeddah21",
+    "name": "Jeddah Corniche Circuit",
+    "layout": "Grand Prix layout",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "baseAltitudeM": 5,
+    "credit": {
+      "title": "Jeddah Corniche Circuit",
+      "author": "Nukedrop",
+      "url": "https://www.patreon.com/cw/nukedrop/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.patreon.com/cw/nukedrop/",
+      "note": "Logo, UI and sections by Fanapryde."
+    },
+    "type": "street"
   }
 }

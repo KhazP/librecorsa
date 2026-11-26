@@ -737,5 +737,51 @@
     },
     "quality": "sim",
     "defaultTimeOfDay": "night"
+  },
+  {
+    "id": "las_vegas",
+    "name": "Las Vegas Strip Circuit",
+    "layout": "Grand Prix layout",
+    "country": "United States",
+    "city": "Las Vegas, Nevada",
+    "lengthM": 6173.95,
+    "turns": 13,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/las_vegas/track_data.json",
+    "credit": {
+      "title": "Las Vegas 2023",
+      "author": "Nukedrop",
+      "url": "https://www.patreon.com/cw/nukedrop/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.patreon.com/cw/nukedrop/",
+      "note": "UI by Fanapryde; helicopters by Mascot."
+    },
+    "type": "street",
+    "quality": "sim",
+    "defaultTimeOfDay": "night"
+  },
+  {
+    "id": "jeddah",
+    "name": "Jeddah Corniche Circuit",
+    "layout": "Grand Prix layout",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "lengthM": 6198.38,
+    "turns": 19,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/jeddah/track_data.json",
+    "credit": {
+      "title": "Jeddah Corniche Circuit",
+      "author": "Nukedrop",
+      "url": "https://www.patreon.com/cw/nukedrop/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.patreon.com/cw/nukedrop/",
+      "note": "Logo, UI and sections by Fanapryde."
+    },
+    "type": "street",
+    "quality": "sim",
+    "defaultTimeOfDay": "night"
   }
 ]
