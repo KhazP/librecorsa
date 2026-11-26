@@ -32,7 +32,7 @@
 | Hall of Fame | Hall da Fama | |
 | GOAT (badge) | GOAT | Kept in English, common in Brazilian sports talk; name and short tag |
 | weekly challenge | desafio semanal | |
-| time trial | contra o relógio | |
+| time trial | contra o relógio | "Contrarrelógio" where space is short (the title menu's side list) |
 | practice | treino livre | |
 | race | corrida | |
 | AI race | corrida com IA | |

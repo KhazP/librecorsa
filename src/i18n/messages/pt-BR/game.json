@@ -128,6 +128,9 @@
     "realismFull": "Total",
     "surfaceDry": "Seca",
     "surfaceWet": "Molhada",
+    "physics": "Física {version}",
+    "physicsNew": "Física {version} (nova)",
+    "physicsOlderLaps": "Física {version} · Voltas anteriores",
     "renameUnreachable": "Não foi possível acessar o ranking online. Tente de novo em instantes",
     "renameFailed": "Não foi possível alterar o nome (HTTP {status})",
     "errors": {

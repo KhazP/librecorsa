@@ -128,6 +128,9 @@
     "realismFull": "Full",
     "surfaceDry": "Dry",
     "surfaceWet": "Wet",
+    "physics": "Physics {version}",
+    "physicsNew": "Physics {version} (New)",
+    "physicsOlderLaps": "Physics {version} · Older laps",
     "renameUnreachable": "Couldn't reach the online board. Try again in a moment",
     "renameFailed": "The name could not be changed (HTTP {status})",
     "errors": {

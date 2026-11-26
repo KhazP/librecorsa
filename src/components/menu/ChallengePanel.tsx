@@ -229,11 +229,14 @@ const TrialColumn: React.FC<{
             <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-lc-fog" title={tx("stigBadgeTitle")}>
               <span>{tx("stigEarn")}</span>
               <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet">
-                {tx("stigBadge")}
+                {/* Latin letters with dots: left to right, or a right-to-left page shows ".S.T.I.G" */}
+                <bdi dir="ltr">{tx("stigBadge")}</bdi>
               </Badge>
             </span>
           ) : (
-            <span className="lc-mono text-[11px] tracking-wider text-lc-slate uppercase">{event.id}</span>
+            <span dir="ltr" className="lc-mono text-[11px] tracking-wider text-lc-slate uppercase">
+              {event.id}
+            </span>
           )}
         </div>
 

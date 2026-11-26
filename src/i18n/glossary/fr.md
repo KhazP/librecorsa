@@ -33,7 +33,7 @@
 | Hall of Fame | Hall of Fame | Kept in English |
 | GOAT (badge) | GOAT | Kept in English, common in French sports talk; name and short tag |
 | weekly challenge | défi hebdomadaire | |
-| time trial | contre-la-montre | |
+| time trial | contre-la-montre | "Chrono" where space is short (the title menu's side list) |
 | practice | essais libres | |
 | race | course | |
 | AI race | course contre l’IA | |

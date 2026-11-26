@@ -128,6 +128,9 @@
     "realismFull": "Voll",
     "surfaceDry": "Trocken",
     "surfaceWet": "Nass",
+    "physics": "Physik {version}",
+    "physicsNew": "Physik {version} (neu)",
+    "physicsOlderLaps": "Physik {version} · Ältere Runden",
     "renameUnreachable": "Die Online-Bestenliste ist nicht erreichbar. Versuche es gleich noch einmal",
     "renameFailed": "Der Name konnte nicht geändert werden (HTTP {status})",
     "errors": {

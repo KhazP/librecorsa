@@ -128,6 +128,9 @@
     "realismFull": "完全",
     "surfaceDry": "乾地",
     "surfaceWet": "濕地",
+    "physics": "物理 {version}",
+    "physicsNew": "物理 {version}（新）",
+    "physicsOlderLaps": "物理 {version} · 較舊的單圈",
     "renameUnreachable": "無法連線至線上圈速榜，請稍後再試",
     "renameFailed": "無法變更名稱（HTTP {status}）",
     "errors": {

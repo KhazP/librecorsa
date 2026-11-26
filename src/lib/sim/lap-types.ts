@@ -8,6 +8,7 @@ import { lc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import { USAGE_EXTRAS } from "@/lib/net/usage-modes";
 import { CIRCUIT_BOARD_RESETS, type CircuitBoardReset } from "@/lib/circuit-board-resets";
+import { text } from "@/lib/text";
 
 /** What a lap can be driven with: the same four kinds the usage report counts */
 export const LAP_INPUTS = USAGE_EXTRAS.input;
@@ -145,10 +146,10 @@ export function namedPhysicsVersion(physics: number): NamedPhysicsVersion | null
   return PHYSICS_VERSIONS.find((v) => v.physics === physics) ?? null;
 }
 
-/** "Physics V2 (New)" for the version driven now, "Physics V1" for an older one */
+/** "Physics V2 (New)" for the version driven now, "Physics V1" for an older one, in the player's language */
 export function physicsVersionLabel(physics: number, opts: { short?: boolean } = {}): string {
-  const name = namedPhysicsVersion(physics)?.name ?? `v${physics}`;
-  return `Physics ${name}${physics === PHYSICS_VERSION && !opts.short ? " (New)" : ""}`;
+  const version = namedPhysicsVersion(physics)?.name ?? `v${physics}`;
+  return text(physics === PHYSICS_VERSION && !opts.short ? "game.board.physicsNew" : "game.board.physics", { version });
 }
 
 /**
@@ -198,7 +199,11 @@ export function boardChoices(trackId: string): BoardChoice[] {
         physics: v.physics,
         circuit: k,
         base: v.physics + CIRCUIT_REVISION_STEP * k,
-        label: newest ? physicsVersionLabel(v.physics) : `Physics ${v.name} · ${resets[k]?.oldBoard ?? "Older laps"}`,
+        label: newest
+          ? physicsVersionLabel(v.physics)
+          : resets[k]?.oldBoard
+            ? `${text("game.board.physics", { version: v.name })} · ${resets[k].oldBoard}`
+            : text("game.board.physicsOlderLaps", { version: v.name }),
         current: newest && v.physics === PHYSICS_VERSION,
       });
     }

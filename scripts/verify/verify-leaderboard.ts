@@ -1214,6 +1214,14 @@ async function main(): Promise<void> {
         boardWords('Body is not valid JSON') === 'Body is not valid JSON' &&
         boardWords(null) === null,
     );
+    // The board picker's names go through the game's words too (they were built in English in code once)
+    check(
+      'board words: the physics picker names its boards through the translated words',
+      physicsVersionLabel(PHYSICS_VERSION) === '[game.board.physicsNew]' &&
+        physicsVersionLabel(7) === '[game.board.physics]' &&
+        boardChoices(TRACK).every((c) => c.label.startsWith('[game.board.')),
+      boardChoices(TRACK).map((c) => c.label).join(' | '),
+    );
   }
 
   if (failures.length > 0) {

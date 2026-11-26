@@ -197,7 +197,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
    * board from before it started again. Picked by id, and found again on each circuit
    */
   const [boardPick, setBoardPick] = useState<string | null>(null);
-  const choices = useMemo(() => boardChoices(circuit), [circuit]);
+  // The locale too: the picker names its boards in the game's language
+  const choices = useMemo(() => boardChoices(circuit), [circuit, locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const choice = boardChoiceOf(circuit, boardPick);
   const older = !choice.current;
   const allPool = allLocal ?? local;

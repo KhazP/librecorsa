@@ -12,7 +12,7 @@
     "challengeShort": "Défi",
     "challengeDetail": "Reste {timeLeft} · {circuit}",
     "timeTrials": "Contre-la-montre",
-    "timeTrialsShort": "Contre-la-montre",
+    "timeTrialsShort": "Chrono",
     "timeTrialsDetail": "Reste {timeLeft} · {circuit}",
     "circuit": "Circuit",
     "car": "Voiture",

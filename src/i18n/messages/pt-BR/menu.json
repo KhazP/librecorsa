@@ -12,7 +12,7 @@
     "challengeShort": "Desafio",
     "challengeDetail": "Termina em {timeLeft} · {circuit}",
     "timeTrials": "Contra o relógio",
-    "timeTrialsShort": "Contra o relógio",
+    "timeTrialsShort": "Contrarrelógio",
     "timeTrialsDetail": "Termina em {timeLeft} · {circuit}",
     "circuit": "Circuito",
     "car": "Carro",

@@ -128,6 +128,9 @@
     "realismFull": "풀",
     "surfaceDry": "건조",
     "surfaceWet": "젖음",
+    "physics": "물리 {version}",
+    "physicsNew": "물리 {version} (신규)",
+    "physicsOlderLaps": "물리 {version} · 이전 랩",
     "renameUnreachable": "온라인 보드에 연결할 수 없습니다. 잠시 후 다시 시도해 주십시오.",
     "renameFailed": "이름을 변경할 수 없습니다(HTTP {status}).",
     "errors": {
