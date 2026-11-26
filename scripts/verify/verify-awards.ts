@@ -413,7 +413,7 @@ async function main(): Promise<void> {
 
   // 6. Client helpers & cache (src/lib/net/awards.ts) ----------------------------------------------------------------
   {
-    check("client: badgeLabel and badgeDetail format counts and notes", badgeLabel({ type: "weekly_gold", count: 2 }) === "Weekly Gold ×2" && badgeLabel({ type: "bulb", count: 1, note: "Replay bar" }) === "Idea Contributor — Replay bar" && badgeDetail({ type: "og", count: 1 }).includes("Physics V1"));
+    check("client: badgeLabel and badgeDetail format counts and notes", badgeLabel({ type: "weekly_gold", count: 2 }) === "Weekly Gold ×2" && badgeLabel({ type: "bulb", count: 1, note: "Replay bar" }) === "Idea Contributor: Replay bar" && badgeDetail({ type: "og", count: 1 }).includes("Physics V1"));
     check("client: badgeQueryNames deduplicates and drops commas", badgeQueryNames([" Alice ", "alice", "Bad,Name", "Bob"]).join(",") === "alice,bob");
     check("client: parseHallOfFame and parseBadges drop malformed items", parseHallOfFame({ ok: true, current: "2026-W48", events: [{ event: "bad", physics: "v1", podium: [] }], mostDecorated: [] })?.events.length === 0 && parseBadges({ ok: true, badges: { alice: [{ type: "bulb", count: 1, note: "Hi" }, { type: "nope", count: 1 }] } })?.alice.length === 1);
 
