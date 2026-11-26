@@ -176,7 +176,9 @@
     "creator": "Creator",
     "creatorDetail": "Made LibreCorsa",
     "goat": "GOAT",
-    "goatDetail": "Most decorated driver in the Hall of Fame. Drivers tied at the top share it."
+    "goatDetail": "Most decorated driver in the Hall of Fame. Drivers tied at the top share it.",
+    "stig": "The Stig",
+    "stigDetail": "Fastest driver on the Middle Gear Lap Board (Suzuki Liana 1.6 at Dunsfold Aerodrome). Moves automatically when beaten."
   },
   "camera": {
     "chaseClose": "Chase close",
