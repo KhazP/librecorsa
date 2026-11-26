@@ -7,6 +7,9 @@ import * as THREE from "three";
  *
  * - The glass is split into islands (one mesh holds both of F1 2007's mirrors), each a flat mirror with the
  *   area-weighted normal of its faces, turned toward the eye. An island seen edge-on (or from behind) has no reflection.
+ * - Glass modelled upright is aimed as a driver sets a mirror: tilted so the ray from the eye through its centre leaves
+ *   it `MIRROR_AIM_DEG` below level, its yaw as modelled. F1 2007's glass is upright and above the eye, so as modelled
+ *   it showed the sky 3-5 degrees up and missed a car 12 m behind.
  * - A fragment at p reflects the ray from the eye: r = reflect(normalize(p - eye), n). What it shows is the scene
  *   point `MIRROR_FOCUS_M` along that ray, looked up in the rear view, which is rendered from one camera between the
  *   mirrors (`MirrorView.camera`) with the car's axes. Exact at that distance; nearer or farther things are off by the
@@ -22,6 +25,10 @@ export const MIRROR_FOCUS_M = 12;
 export const MIRROR_PIXEL_BUDGET = 256 * 128;
 /** An island whose glass is closer than this to edge-on (cos of the angle to the eye ray) shows no reflection */
 const MIN_FACING = 0.1;
+/** Where an upright glass's centre ray is aimed (deg, below level): the road behind in its lower part, the horizon high */
+export const MIRROR_AIM_DEG = 1;
+/** A glass whose normal is within this (sine) of level is taken as modelled upright, not aimed by its modeller */
+const UPRIGHT = 0.02;
 /** Room round the fitted window, as a fraction of its size on each side */
 const WINDOW_MARGIN = 0.03;
 
@@ -113,9 +120,24 @@ export function glassIslands(model: ArrayLike<number>, eye: THREE.Vector3): Mirr
     for (const t of tris) for (let k = 0; k < 3; k++) radius = Math.max(radius, a.fromArray(model as number[], t * 9 + k * 3).distanceTo(centre));
     const normal = sum.normalize();
     const facing = normal.dot(toEye.subVectors(eye, centre).normalize());
+    if (facing >= MIN_FACING && Math.abs(normal.y) < UPRIGHT) aimUpright(normal, centre, eye);
     islands.push({ tris, normal: facing >= MIN_FACING ? normal : null, centre, area, radius });
   }
   return islands;
+}
+
+/**
+ * Tilts an upright glass's `normal` (in place) so the ray from `eye` through `centre` leaves it `MIRROR_AIM_DEG` below
+ * level, in the direction it reflects to as modelled: the normal halfway between the incoming ray and that one
+ */
+function aimUpright(normal: THREE.Vector3, centre: THREE.Vector3, eye: THREE.Vector3): void {
+  const d = new THREE.Vector3().subVectors(centre, eye).normalize();
+  const r = d.clone().addScaledVector(normal, -2 * d.dot(normal));
+  const level = Math.hypot(r.x, r.z);
+  if (!(level > 1e-6)) return;
+  const aim = THREE.MathUtils.degToRad(-MIRROR_AIM_DEG);
+  const target = new THREE.Vector3((r.x / level) * Math.cos(aim), Math.sin(aim), (r.z / level) * Math.cos(aim));
+  normal.subVectors(target, d).normalize();
 }
 
 /**

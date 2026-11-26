@@ -12,9 +12,9 @@
  * among them, are checked by verify-mod-parity.ts.
  *
  * Each body's mirrors (mirrors.ini's mesh, MIRROR_0): two flat glasses, a mirrored pair ahead of the driver facing back
- * at him, each showing a mirror image (its outboard edge farther out than its inboard one), and the rear view's lookup
- * (`mirror-reflection.ts`) landing where its camera sees what the glass reflects, at least as sharp as the planar
- * mirrors' 256 px over 35 degrees.
+ * at him and aimed at the road behind, each showing a mirror image (its outboard edge farther out than its inboard
+ * one), and the rear view's lookup (`mirror-reflection.ts`) landing where its camera sees what the glass reflects, at
+ * least as sharp as the planar mirrors' 256 px over 35 degrees.
  */
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
@@ -32,7 +32,7 @@ import { carListed } from '../../src/lib/hosted-content';
 import { carTakesPhysicsSwitch } from '../../src/lib/cars/f1-mod-physics';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { hasFile, noteSkip } from '../lib/hosted-files';
-import { aimMirrorCamera, fitMirrorView, mirrorLookup, MIRROR_FOCUS_M, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
+import { aimMirrorCamera, fitMirrorView, mirrorLookup, MIRROR_AIM_DEG, MIRROR_FOCUS_M, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -146,6 +146,13 @@ function checkMirrors(team: string, glb: string): void {
     }
     return hi.t > lo.t;
   });
+  // The glass is modelled upright, above the eye: aimed as a driver would, its centre's reflection just below level
+  const pitch = islands.map((i) => {
+    const r = i.centre.clone().sub(eye).normalize();
+    r.addScaledVector(i.normal!, -2 * r.dot(i.normal!));
+    return THREE.MathUtils.radToDeg(Math.asin(r.y));
+  });
+  check(`${team}: each glass aimed at the road, ${MIRROR_AIM_DEG}° below level through its centre`, pitch.every((p) => Math.abs(p + MIRROR_AIM_DEG) < 0.01), pitch.map((p) => fmt(p)).join(' / '));
   check(
     `${team}: each glass faces back at the driver, the pair's views mirror images, neither flipped`,
     islands.every((i) => i.normal!.z < -0.5 && Math.sign(i.normal!.x) === -Math.sign(i.centre.x)) && Math.abs(looks[0] + looks[1]) < 0.5 && unflipped,
