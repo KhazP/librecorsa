@@ -4805,6 +4805,9 @@ export class DriveSession {
           }),
         );
       }
+      // Paused, in a replay, the menus or the pre-race show: the call in progress is cut and the spotter starts from
+      // clear, so the time away never counts as time alongside (a "still there" the moment the drive resumed)
+      if (!driving) spotter.reset();
       if (driving) {
         // The spotter speaks through the car audio's output: the master volume, mute and pause apply to it
         spotter.update(
