@@ -99,7 +99,7 @@
     "summaryFullLock": "{grip}% de aderência · batente",
     "summaryCap": "{grip}% de aderência · limite {cap}°",
     "curve": "Curva de resposta do autoesterço",
-    "slide": "Deslize de {deg}°"
+    "slide": "Deslize {deg}°"
   },
   "padMap": {
     "controller": "Controle",

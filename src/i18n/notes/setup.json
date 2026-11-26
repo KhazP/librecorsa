@@ -69,7 +69,7 @@
   "assistCurve.summaryFullLock": "Beside the graph. {grip}: a percentage. Full lock = the steering turned as far as it goes.",
   "assistCurve.summaryCap": "Beside the graph. {grip}: a percentage. {cap}: the most the assist steers, in degrees.",
   "assistCurve.curve": "Screen-reader name of the graph.",
-  "assistCurve.slide": "Axis label on the graph, drawn very small. {deg}: the rear's slide angle in degrees.",
+  "assistCurve.slide": "Axis label on the graph, drawn very small. {deg}: the rear's slide angle in degrees. Two sit side by side under a small graph: about 10 characters.",
   "padMap.controller": "Screen-reader name of the drawing of a controller.",
   "padMap.steer": "Beside the left stick in the controller drawing: it steers.",
   "padMap.mfdDial": "Beside the D-pad's left / right: switches the MFD dial (MFD = the car's multi-function display; keep the abbreviation).",

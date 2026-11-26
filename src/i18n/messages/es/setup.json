@@ -99,7 +99,7 @@
     "summaryFullLock": "{grip}% de agarre · tope total",
     "summaryCap": "{grip}% de agarre · límite de {cap}°",
     "curve": "Curva de respuesta de autodirección",
-    "slide": "Derrape de {deg}°"
+    "slide": "Derrape {deg}°"
   },
   "padMap": {
     "controller": "Gamepad",
