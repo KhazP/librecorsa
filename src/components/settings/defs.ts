@@ -897,11 +897,11 @@ export const spotterVoice = choice("segmented", {
   id: "spotterVoice",
   get label() { return rt("spotterVoice.label"); },
   off: spotterOff,
-  // The voice actors' first names, as their packs are called
+  // The Kokoro voices' names; the ids are kept from the first voice set so saved settings still match
   options: () => [
-    { id: "jim", label: "Jim" },
-    { id: "clare", label: "Clare" },
-    { id: "geoffrey", label: "Geoffrey" },
+    { id: "jim", label: "George" },
+    { id: "clare", label: "Emma" },
+    { id: "geoffrey", label: "Adam" },
   ],
   ...audio("spotterVoice"),
 });
