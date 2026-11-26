@@ -310,6 +310,12 @@ export function tripleRects(width: number, height: number, pixelRatio = 1): [Scr
 /** A canvas this wide for its height looks like three screens side by side (3 x 16:10 is 4.8; one 32:9 screen is 3.6) */
 export const TRIPLE_ASPECT_MIN = 4.2;
 export const looksLikeTriple = (width: number, height: number) => height > 0 && width / height >= TRIPLE_ASPECT_MIN;
+/**
+ * The narrowest canvas three screens are drawn on: three square screens (three 5:4 screens are 3.75, three 4:3 ones
+ * 4). Narrower, with Three chosen, it is one screen's window: one view, and Settings says why
+ */
+export const TRIPLE_FIT_ASPECT_MIN = 3;
+export const tripleFits = (width: number, height: number) => height > 0 && width / height >= TRIPLE_FIT_ASPECT_MIN;
 
 /** Each of three screens' pixel aspect (width / height) on a canvas of this size */
 export const tripleScreenAspect = (width: number, height: number) => width / 3 / Math.max(1, height);

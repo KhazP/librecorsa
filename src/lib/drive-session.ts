@@ -61,7 +61,7 @@ import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { TripleViewRig } from "@/lib/render/triple-views";
-import { physicalVerticalFovDeg, screenRig, tripleRects, type ScreenRect } from "@/lib/display/screen-layout";
+import { physicalVerticalFovDeg, screenRig, tripleFits, tripleRects, type ScreenRect } from "@/lib/display/screen-layout";
 import { MirrorClock } from "@/lib/render/mirror-clock";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
 import { clampChassisToCarSheet } from "@/lib/sim/setup-sheet";
@@ -1641,7 +1641,7 @@ export class DriveSession {
     const layoutScreens = (force = false) => {
       const w = Math.max(1, container.clientWidth);
       const h = Math.max(1, container.clientHeight);
-      if (settings.screens.mode !== "triple" || renderer.xr.isPresenting) {
+      if (settings.screens.mode !== "triple" || renderer.xr.isPresenting || !tripleFits(w, h)) {
         if (!screensNow) return;
         screensNow = null;
         postFx.setViews(null);

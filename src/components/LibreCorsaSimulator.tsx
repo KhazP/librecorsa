@@ -108,7 +108,7 @@ import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
 import { TripleScreenPrompt } from "@/components/hud/TripleScreenPrompt";
 import { centreFrame, setUiFrame, type UiFrame } from "@/lib/display/ui-frame";
-import { physicalVerticalFovDeg, screenRig } from "@/lib/display/screen-layout";
+import { physicalVerticalFovDeg, screenRig, tripleFits } from "@/lib/display/screen-layout";
 import { accountActions, useAccountState } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
@@ -2081,7 +2081,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     return () => window.removeEventListener("resize", read);
   }, []);
   const uiFrameRect: UiFrame | null = useMemo(
-    () => (settings.screens.mode === "triple" && vrState !== "on" && windowSize ? centreFrame(windowSize.w, windowSize.h) : null),
+    () =>
+      settings.screens.mode === "triple" && vrState !== "on" && windowSize && tripleFits(windowSize.w, windowSize.h)
+        ? centreFrame(windowSize.w, windowSize.h)
+        : null,
     [settings.screens.mode, vrState, windowSize]
   );
   useEffect(() => {

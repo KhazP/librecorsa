@@ -54,6 +54,7 @@ import {
   physicalVerticalFovDeg,
   screenRig,
   totalHorizontalFovDeg,
+  tripleFits,
   tripleViews,
 } from "@/lib/display/screen-layout";
 import { clampFov } from "@/lib/settings/player-settings";
@@ -225,8 +226,9 @@ export function ScreensTab() {
   const rig = screenRig(screens, aspect);
   const trueFovDeg = physicalVerticalFovDeg(rig);
   const total = triple ? totalHorizontalFovDeg(tripleViews(rig, { x: 0, y: rig.eyeHeight, distance: rig.distance })) : null;
-  const wide = looksLikeTriple(shape.w, shape.h);
-  const notice = triple && !wide ? tx("notWide") : !triple && wide ? tx("looksTriple") : null;
+  // Three chosen on a window one screen wide draws one view (the notice says why); one chosen on a window the shape of
+  // three suggests three
+  const notice = triple && !tripleFits(shape.w, shape.h) ? tx("notWide") : !triple && looksLikeTriple(shape.w, shape.h) ? tx("looksTriple") : null;
   const fovNow = Math.round(env.settings.cockpitFovDeg ?? env.carFovDeg ?? 60);
   const fovTarget = Math.round(clampFov(trueFovDeg));
   const cm = (m: number) => (m * 100).toFixed(1);

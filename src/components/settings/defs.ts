@@ -19,6 +19,7 @@ import {
   pictureSize,
   SCREEN_LIMITS,
   SIDE_SCREEN_SCALES,
+  tripleFits,
   tripleScreenAspect,
   type ScreenSettings,
 } from "@/lib/display/screen-layout";
@@ -834,12 +835,12 @@ export const headMovement = choice("segmented", {
 
 const screens = <K extends keyof ScreenSettings>(k: K) =>
   lens<ScreenSettings[K]>((s) => s.screens[k], (s, v) => ({ ...s, screens: { ...s.screens, [k]: v } }));
-/** One screen's pixel aspect now: a third of the window with three screens, else the window */
+/** One screen's pixel aspect now: a third of the window with three screens on it, else the window */
 export function screenAspectNow(mode: ScreenSettings["mode"]): number {
   if (typeof window === "undefined") return 16 / 9;
   const w = window.innerWidth;
   const h = Math.max(1, window.innerHeight);
-  return mode === "triple" ? tripleScreenAspect(w, h) : w / h;
+  return mode === "triple" && tripleFits(w, h) ? tripleScreenAspect(w, h) : w / h;
 }
 /** The side angle (degrees) that faces the eye for these screens */
 export function facingAngleDeg(s: ScreenSettings): number {

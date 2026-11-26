@@ -20,6 +20,7 @@ import {
   screenRig,
   symmetricWindow,
   totalHorizontalFovDeg,
+  tripleFits,
   tripleRects,
   tripleViews,
   type ScreenRig,
@@ -225,6 +226,8 @@ for (const [w, pr] of [
 check("5760x1080 looks like three screens", looksLikeTriple(5760, 1080));
 check("A 32:9 screen (3840x1080) does not", !looksLikeTriple(3840, 1080));
 check("3 x 16:10 (5760x1200) does", looksLikeTriple(5760, 1200));
+check("Three 5:4 screens (3840x1024) are still drawn as three when chosen", tripleFits(3840, 1024));
+check("A 16:9 window with Three chosen draws one view", !tripleFits(1920, 1080));
 
 // --- Saved settings ---
 {
