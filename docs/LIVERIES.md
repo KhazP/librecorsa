@@ -47,7 +47,7 @@ Painting a quick test pattern first (the view names, "L" and "R", and a grid) an
 
 A view paints every surface that faces it along its line of sight, so parts that sit in front of one another share the same spot in that view:
 
-- **Rear wing and the deck under it**: on the GT3s and the LC-LMDH, whatever you paint on the rear wing in the top view also lands on the boot lid or engine cover below it. Keep the wing in the deck's colours, or put the wing's artwork on its rear face in the rear view instead.
+- **Rear wing and the deck under it**: on the GT3s and the LC-LMDH, whatever you paint on the rear wing in the top view also lands on the boot lid or engine cover below it, and shows faintly on the wing's underside, mirrored. Keep the wing in the deck's colours, or put the wing's artwork on its rear face in the rear view instead.
 - **Inner faces**: surfaces that face the middle of the car, such as the inside of the front wing endplates and of the rear wing endplates, and the inside of the LC25's sidepod channels, take the other side's view. Keep plain colours near the edges of those parts.
 - **LC-LMDH fin**: in the side views the shark fin sits over the rear wheel arch, so both take the same part of the picture.
 
