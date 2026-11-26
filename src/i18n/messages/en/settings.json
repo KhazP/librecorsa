@@ -39,7 +39,8 @@
         "graphics": "Graphics",
         "hud": "HUD",
         "camera": "Camera",
-        "interface": "Interface"
+        "interface": "Interface",
+        "screens": "Screens"
       },
       "audio": {
         "main": "Audio"
@@ -442,7 +443,8 @@
       "label": "Field of view",
       "hintCarOwn": "Using each car's default",
       "hintCarDefault": "Car default: {degrees}°",
-      "valueCar": "{value}° (car)"
+      "valueCar": "{value}° (car)",
+      "offTrueFov": "Set by True field of view in Screens"
     },
     "headMovement": {
       "label": "Head movement",
@@ -548,6 +550,47 @@
         "reduced": "Half the damage; a wrecked car restarts a flying lap, repaired",
         "full": "Race damage; a wrecked car restarts a flying lap, repaired"
       }
+    },
+    "screensMode": {
+      "label": "Screens",
+      "hint": "Three screens side by side each show their own view, with the menus and HUD on the centre one. Span the game across them with NVIDIA Surround or AMD Eyefinity.",
+      "options": {
+        "single": "One",
+        "triple": "Three"
+      }
+    },
+    "screenSize": {
+      "label": "Screen size",
+      "hint": "The diagonal of one screen's picture, as it was sold",
+      "value": "{value} in"
+    },
+    "screenDistance": {
+      "label": "Distance to screen",
+      "hint": "From your eyes to the centre screen, measured straight on"
+    },
+    "screenBezel": {
+      "label": "Bezel",
+      "hint": "One screen's frame beside its picture. 0 when Surround or Eyefinity already corrects for the frames, below 0 for strips that hide them"
+    },
+    "sideAngle": {
+      "label": "Side screen angle",
+      "hint": "How far the side screens turn in from the centre one. At {degrees}° their middles face your eyes",
+      "valueFacing": "{value}° (facing you)"
+    },
+    "eyeHeight": {
+      "label": "Eye height",
+      "hint": "Your eyes above (+) or below (−) the middle of the screens"
+    },
+    "trueFov": {
+      "label": "True field of view",
+      "hint": "The driver's views show exactly what your screens frame from where you sit. Off: the Field of view in Camera"
+    },
+    "sideScale": {
+      "label": "Side screen resolution",
+      "hint": "Less detail on the side screens, where your eyes take in less of it, for more frames per second"
+    },
+    "screens": {
+      "tripleOnly": "Only with three screens"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Language",
       "units": "Units",
       "sizeColour": "Size and colour"
+    },
+    "screens": {
+      "title": "Screens",
+      "viewTitle": "View",
+      "diagramTitle": "Seen from above",
+      "diagramLabel": "Your screens seen from above, with what each one shows",
+      "picture": "One screen: {width} × {height} cm",
+      "trueFov": "True field of view: {degrees}°",
+      "total": "Across three screens: {degrees}°",
+      "useFov": "Use {degrees}°",
+      "useFovHint": "Sets Field of view to what your screen frames from where you sit",
+      "fovNow": "Field of view now: {degrees}°",
+      "notWide": "This window is not three screens wide. Span the game across all three (NVIDIA Surround or AMD Eyefinity, then full screen) to give each its own view.",
+      "looksTriple": "This window looks like three screens side by side. Choose Three to give each screen its own view."
     }
   },
   "audio": {

@@ -26,7 +26,7 @@ import { SettingsEnvProvider, type SettingsEnv } from "./env";
 import { AdvancedOnly } from "./fields";
 import { AssistsTab, SteeringHelpTab } from "./panes/DrivingPane";
 import { ControllerTab, DeviceTab, KeyboardTab, TouchTab, WheelTab } from "./panes/ControlsPane";
-import { CameraTab, GraphicsTab, HudTab, InterfaceTab } from "./panes/DisplayPane";
+import { CameraTab, GraphicsTab, HudTab, InterfaceTab, ScreensTab } from "./panes/DisplayPane";
 import { AudioPane } from "./panes/AudioPane";
 import { DataTab, DriverTab } from "./panes/ProfilePane";
 import { AccountPanel } from "@/components/account/AccountPanel";
@@ -97,6 +97,7 @@ const CATEGORIES: readonly CategoryDef[] = [
       { id: "graphics", get label() { return t("settings.screen.tabs.display.graphics"); }, render: () => <GraphicsTab /> },
       { id: "hud", get label() { return t("settings.screen.tabs.display.hud"); }, render: () => <HudTab /> },
       { id: "camera", get label() { return t("settings.screen.tabs.display.camera"); }, render: () => <CameraTab /> },
+      { id: "screens", get label() { return t("settings.screen.tabs.display.screens"); }, render: () => <ScreensTab /> },
       { id: "interface", get label() { return t("settings.screen.tabs.display.interface"); }, render: () => <InterfaceTab /> },
     ],
   },

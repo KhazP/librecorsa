@@ -107,6 +107,7 @@ import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type C
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
 import { centreFrame, setUiFrame, type UiFrame } from "@/lib/display/ui-frame";
+import { physicalVerticalFovDeg, screenRig } from "@/lib/display/screen-layout";
 import { accountActions, useAccountState } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
@@ -982,7 +983,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** null returns to the car's own FOV */
   const handleCockpitFovChange = useCallback((fovDeg: number | null) => {
-    setSettings((prev) => ({ ...prev, cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)) }));
+    setSettings((prev) => ({
+      ...prev,
+      cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)),
+      // Picking a field of view by hand on three screens leaves the true one the screens give
+      screens: prev.screens.mode === "triple" && prev.screens.physicalFov ? { ...prev.screens, physicalFov: false } : prev.screens,
+    }));
   }, []);
 
   /** The seat panel's view: the one on screen (the panel switches to the cockpit from any other) */
@@ -2081,6 +2087,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setUiFrame(uiFrameRect);
     return () => setUiFrame(null);
   }, [uiFrameRect]);
+  /** On three screens with the true field of view: the driver's-eye field of view the screens give (degrees) */
+  const trueFovDeg = useMemo(
+    () =>
+      uiFrameRect && windowSize && settings.screens.physicalFov
+        ? physicalVerticalFovDeg(screenRig(settings.screens, uiFrameRect.w / Math.max(1, windowSize.h)))
+        : null,
+    [uiFrameRect, windowSize, settings.screens]
+  );
+  /** The driver's-eye field of view in use: the screens' true one, the player's own, or null for the car's own */
+  const cockpitFovInUse = trueFovDeg !== null ? Math.round(clampFov(trueFovDeg)) : settings.cockpitFovDeg;
   const ffbHid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
   const ffbLive =
     (settings.wheel.hidFfb && ffbHid.state === "ready") ||
@@ -2549,7 +2565,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           nudge={nudgeOf(settings.cameraNudges, carId, seatView)}
           fovDeg={clampFov(
             (seatView === "dash" ? dashViewFovDeg(carId) : carCockpitFov) +
-              (settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carCockpitFov) +
+              (cockpitFovInUse === null ? 0 : cockpitFovInUse - carCockpitFov) +
               nudgeOf(settings.cameraNudges, carId, seatView).fovDeg
           )}
           onStep={handleSeatStep}
@@ -2579,7 +2595,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onCycleCamera={cycleCamera}
           onOffTrackGlow={handleOffTrackGlow}
           inviteRoom={inviteRoom}
-          cockpitFovDeg={settings.cockpitFovDeg}
+          cockpitFovDeg={cockpitFovInUse}
           cockpitFovDefaultDeg={carCockpitFov}
           onChangeCockpitFov={handleCockpitFovChange}
           onToggleXMode={handleToggleXMode}

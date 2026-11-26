@@ -14,6 +14,14 @@ import {
   UI_SCALE_MIN,
   type PlayerSettings,
 } from "@/lib/settings/player-settings";
+import {
+  facingAngleRad,
+  pictureSize,
+  SCREEN_LIMITS,
+  SIDE_SCREEN_SCALES,
+  tripleScreenAspect,
+  type ScreenSettings,
+} from "@/lib/display/screen-layout";
 import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { SIM_REALISM_LABELS, SIM_REALISM_LEVELS } from "@/lib/sim/sim-realism";
 import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
@@ -803,6 +811,8 @@ export const fieldOfView = slider({
   max: COCKPIT_FOV_MAX_DEG,
   step: 1,
   format: (v, env) => (env.settings.cockpitFovDeg === null ? rt("cockpitFovDeg.valueCar", { value: String(v) }) : `${v}°`),
+  // Three screens with the true field of view: the screens set it (Display > Screens)
+  off: (env) => (env.settings.screens.mode === "triple" && env.settings.screens.physicalFov ? rt("cockpitFovDeg.offTrueFov") : null),
   read: (env) => env.settings.cockpitFovDeg ?? Math.round(env.carFovDeg ?? 60),
   // The car's own value is "the car's own" (null): each car then keeps its own on a car change
   write: (env, v) =>
@@ -818,6 +828,125 @@ export const headMovement = choice("segmented", {
     { id: "static", label: rt("headMovement.options.static") },
   ],
   ...hud("headMovement"),
+});
+
+// ---- Display > Screens
+
+const screens = <K extends keyof ScreenSettings>(k: K) =>
+  lens<ScreenSettings[K]>((s) => s.screens[k], (s, v) => ({ ...s, screens: { ...s.screens, [k]: v } }));
+/** One screen's pixel aspect now: a third of the window with three screens, else the window */
+export function screenAspectNow(mode: ScreenSettings["mode"]): number {
+  if (typeof window === "undefined") return 16 / 9;
+  const w = window.innerWidth;
+  const h = Math.max(1, window.innerHeight);
+  return mode === "triple" ? tripleScreenAspect(w, h) : w / h;
+}
+/** The side angle (degrees) that faces the eye for these screens */
+export function facingAngleDeg(s: ScreenSettings): number {
+  const { w } = pictureSize(s.diagonalIn, screenAspectNow(s.mode));
+  return (facingAngleRad(w, s.bezelMm / 1000, s.distanceCm / 100) * 180) / Math.PI;
+}
+const roundHalf = (v: number) => Math.round(v * 2) / 2;
+const tripleOnly = (env: SettingsEnv) => (env.settings.screens.mode === "triple" ? null : rt("screens.tripleOnly"));
+
+export const screensMode = choice("segmented", {
+  id: "screensMode",
+  get label() { return rt("screensMode.label"); },
+  hint: () => rt("screensMode.hint"),
+  options: () => [
+    { id: "single", label: rt("screensMode.options.single") },
+    { id: "triple", label: rt("screensMode.options.triple") },
+  ],
+  ...screens("mode"),
+});
+
+export const screenSize = slider({
+  id: "screenSize",
+  get label() { return rt("screenSize.label"); },
+  hint: () => rt("screenSize.hint"),
+  min: SCREEN_LIMITS.diagonalIn.min,
+  max: SCREEN_LIMITS.diagonalIn.max,
+  step: 0.5,
+  bigStep: 2,
+  format: (v) => rt("screenSize.value", { value: String(v) }),
+  ...screens("diagonalIn"),
+});
+
+export const screenDistance = slider({
+  id: "screenDistance",
+  get label() { return rt("screenDistance.label"); },
+  hint: () => rt("screenDistance.hint"),
+  min: SCREEN_LIMITS.distanceCm.min,
+  max: SCREEN_LIMITS.distanceCm.max,
+  step: 1,
+  bigStep: 5,
+  format: (v) => `${v} cm`,
+  ...screens("distanceCm"),
+});
+
+export const screenBezel = slider({
+  id: "screenBezel",
+  get label() { return rt("screenBezel.label"); },
+  hint: () => rt("screenBezel.hint"),
+  min: SCREEN_LIMITS.bezelMm.min,
+  max: SCREEN_LIMITS.bezelMm.max,
+  step: 1,
+  format: (v) => `${v} mm`,
+  off: tripleOnly,
+  ...screens("bezelMm"),
+});
+
+export const sideAngle = slider({
+  id: "sideAngle",
+  get label() { return rt("sideAngle.label"); },
+  hint: (env) => rt("sideAngle.hint", { degrees: String(Math.round(facingAngleDeg(env.settings.screens))) }),
+  min: SCREEN_LIMITS.sideAngleDeg.min,
+  max: SCREEN_LIMITS.sideAngleDeg.max,
+  step: 0.5,
+  bigStep: 5,
+  format: (v, env) => (env.settings.screens.sideAngleDeg === null ? rt("sideAngle.valueFacing", { value: String(v) }) : `${v}°`),
+  off: tripleOnly,
+  // Facing the eye is null: it follows the size and distance as they change
+  read: (env) => env.settings.screens.sideAngleDeg ?? roundHalf(facingAngleDeg(env.settings.screens)),
+  write: (env, v) =>
+    env.update((s) => ({
+      ...s,
+      screens: { ...s.screens, sideAngleDeg: Math.abs(v - roundHalf(facingAngleDeg(s.screens))) < 0.25 ? null : roundHalf(v) },
+    })),
+  // Back to facing the eye
+  initial: (env) => roundHalf(facingAngleDeg(env.settings.screens)),
+});
+
+export const eyeHeight = slider({
+  id: "eyeHeight",
+  get label() { return rt("eyeHeight.label"); },
+  hint: () => rt("eyeHeight.hint"),
+  advanced: true,
+  min: SCREEN_LIMITS.eyeHeightCm.min,
+  max: SCREEN_LIMITS.eyeHeightCm.max,
+  step: 0.5,
+  format: (v) => `${v > 0 ? "+" : ""}${v} cm`,
+  off: tripleOnly,
+  ...screens("eyeHeightCm"),
+});
+
+export const trueFov = toggle({
+  id: "trueFov",
+  get label() { return rt("trueFov.label"); },
+  hint: () => rt("trueFov.hint"),
+  off: tripleOnly,
+  ...screens("physicalFov"),
+});
+
+export const sideScale = choice("segmented", {
+  id: "sideScale",
+  get label() { return rt("sideScale.label"); },
+  hint: () => rt("sideScale.hint"),
+  options: () => SIDE_SCREEN_SCALES.map((v) => ({ id: String(v), label: pct(v) })),
+  off: tripleOnly,
+  read: (env) => String(env.settings.screens.sideScale),
+  write: (env, id) => env.update((s) => ({ ...s, screens: { ...s.screens, sideScale: Number(id) as ScreenSettings["sideScale"] } })),
+  initial: () => String(DEFAULT_PLAYER_SETTINGS.screens.sideScale),
 });
 
 // ---- Display > Interface
