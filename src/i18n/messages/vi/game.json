@@ -146,10 +146,10 @@
       "challengeEnded": "Thử thách tuần đó đã kết thúc",
       "challengeRules": "Vòng này không được chạy theo luật thử thách của tuần này",
       "tooFewSamples": "Bản ghi có quá ít mẫu",
-      "lapNotClosed": "Vòng chạy không kết thúc tại điểm bắt đầu",
+      "lapNotClosed": "Vòng đua không kết thúc tại điểm bắt đầu",
       "standingStartRun": "Lượt tính giờ điểm-đến-điểm phải bắt đầu bằng xuất phát đứng",
       "speedsVsDistance": "Tốc độ đã ghi không khớp với quãng đường đã chạy",
-      "distanceVsLength": "Quãng đường đã chạy không khớp với chiều dài vòng",
+      "distanceVsLength": "Quãng đường đã chạy không khớp với chiều dài vòng đua",
       "impliedSpeed": "Các vị trí đã ghi cho thấy tốc độ trên 420 km/h"
     }
   },

@@ -148,7 +148,7 @@
       "tooFewSamples": "紀錄的取樣點太少",
       "lapNotClosed": "這一圈的終點與起點不在同一處",
       "standingStartRun": "點對點單趟計時必須以靜態起跑開始",
-      "speedsVsDistance": "紀錄的速度與行駛距離不符",
+      "speedsVsDistance": "記錄的速度與行駛距離不符",
       "distanceVsLength": "行駛距離與單圈長度不符",
       "impliedSpeed": "位置紀錄顯示速度超過 420 km/h"
     }

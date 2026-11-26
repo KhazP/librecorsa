@@ -148,7 +148,7 @@
       "tooFewSamples": "A gravação tem amostras de menos",
       "lapNotClosed": "A volta não termina onde começou",
       "standingStartRun": "Uma subida cronometrada ponto a ponto deve começar com largada parada",
-      "speedsVsDistance": "As velocidades gravadas não batem com a distância percorrida",
+      "speedsVsDistance": "As velocidades registradas não batem com a distância percorrida",
       "distanceVsLength": "A distância percorrida não bate com o comprimento da volta",
       "impliedSpeed": "As posições indicam uma velocidade acima de 420 km/h"
     }

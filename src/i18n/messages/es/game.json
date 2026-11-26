@@ -148,7 +148,7 @@
       "tooFewSamples": "La grabación tiene muy pocas muestras",
       "lapNotClosed": "La vuelta no termina donde empezó",
       "standingStartRun": "Un intento cronometrado de punto a punto debe empezar con salida parada",
-      "speedsVsDistance": "Las velocidades grabadas no coinciden con la distancia recorrida",
+      "speedsVsDistance": "Las velocidades registradas no coinciden con la distancia recorrida",
       "distanceVsLength": "La distancia recorrida no coincide con la longitud de la vuelta",
       "impliedSpeed": "Las posiciones indican una velocidad superior a 420 km/h"
     }
