@@ -111,6 +111,16 @@ export function pausedModel(): VrHudModel {
   };
 }
 
+/**
+ * Which panel the headset shows. The seat panel holds the car as the pause menu does and is drawn on the page only, so
+ * the headset shows the paused panel over it: A drives on (closing it), Y recentres, B leaves. The drive's plates there
+ * showed a car that did not move with nothing to say why.
+ */
+export function headsetPanel(s: { inMenu: boolean; paused: boolean; seatPanel: boolean }): VrHudModel["kind"] {
+  if (s.inMenu) return "menu";
+  return s.paused || s.seatPanel ? "paused" : "drive";
+}
+
 /** Outside a drive (title menu, setup screens), which only the page shows */
 export function menuModel(): VrHudModel {
   return { kind: "menu", title: tx("game.vr.menusOutside"), lines: [tx("game.vr.leaveHint")] };

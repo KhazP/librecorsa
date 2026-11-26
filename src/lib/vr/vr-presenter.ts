@@ -158,9 +158,12 @@ export class VrPresenter {
     return this.pad;
   }
 
-  /** The headset's own buttons this frame: the long B that pauses, and the paused panel's A / B / Y */
-  pauseInput(nowMs: number, paused: boolean): VrPauseInput {
-    return this.buttons.read(this.pad, nowMs, paused);
+  /**
+   * The headset's own buttons this frame: the long B that pauses, and the paused panel's A / B / Y, which a pad
+   * plugged in (`pads`, the controllers' own left out) can press too
+   */
+  pauseInput(nowMs: number, paused: boolean, pads: readonly PadLike[] = []): VrPauseInput {
+    return this.buttons.read(this.pad, nowMs, paused, pads);
   }
 
   /**

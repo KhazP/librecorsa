@@ -178,7 +178,7 @@ import { pitBoxIndex } from "@/lib/sim/pit/ai-pit";
 import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 import { VrPresenter } from "@/lib/vr/vr-presenter";
 import { isStandaloneHeadset, mobileClassGpu } from "@/lib/vr/headset";
-import { driveModel as driveVrHud, menuModel as menuVrHud, pausedModel as pausedVrHud } from "@/lib/vr/vr-hud";
+import { driveModel as driveVrHud, headsetPanel, menuModel as menuVrHud, pausedModel as pausedVrHud } from "@/lib/vr/vr-hud";
 import { headsetTookPress } from "@/lib/vr/xr-pad";
 import type {
   AeroSetupPreset,
@@ -3348,7 +3348,10 @@ export class DriveSession {
       // The headset's own buttons (its pause menu is the HUD panel): a long B pauses; paused, or in the menus the page
       // alone shows, A or the throttle drives on, Y recentres and B leaves the headset for the page's menus
       if (vr.presenting && !gpuLost) {
-        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel);
+        // A pad plugged in presses the paused panel too, in the drive's pause only: in the menus its B is the page's
+        // Back, and the seat panel reads the pad itself
+        const panelPads = !inMenu && !this.snapshot.seatPanel ? pads : [];
+        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel, panelPads);
         if (v.pause && !inMenu) this.togglePause();
         if (v.resume && !inMenu) this.endPause();
         if (v.recenter) vr.recenter();
@@ -5116,16 +5119,18 @@ export class DriveSession {
         wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !podium.playing, carRig.chassisGroup);
         if (inVr) {
           // The head's pose on top of the driver's eye point; the HUD panel shows what the page's HUD would
-          const hudModel = inMenu
-            ? menuVrHud()
-            : this.snapshot.paused
-              ? pausedVrHud()
-              : driveVrHud(
-                  physics.telemetry,
-                  settingsNow.ui.units.speed,
-                  vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null,
-                  Boolean(track.pointToPoint)
-                );
+          const panel = headsetPanel({ inMenu, paused: this.snapshot.paused, seatPanel: this.snapshot.seatPanel });
+          const hudModel =
+            panel === "menu"
+              ? menuVrHud()
+              : panel === "paused"
+                ? pausedVrHud()
+                : driveVrHud(
+                    physics.telemetry,
+                    settingsNow.ui.units.speed,
+                    vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null,
+                    Boolean(track.pointToPoint)
+                  );
           vr.render(scene, camera.position, camera.quaternion, hudModel, nowMs);
         } else {
           const t0 = loggedFirstFrame ? 0 : performance.now();

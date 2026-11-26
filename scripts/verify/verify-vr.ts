@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { toReversedDepth } from "../../src/lib/vr/reversed-depth";
 import { HeadsetButtons, PAUSE_HOLD_MS, XR_PAD_ID, XrPadMapper, headsetTookPress, type XrHandSource } from "../../src/lib/vr/xr-pad";
 import { isStandaloneHeadset } from "../../src/lib/vr/headset";
-import { driveModel, formatLapTime } from "../../src/lib/vr/vr-hud";
+import { driveModel, formatLapTime, headsetPanel } from "../../src/lib/vr/vr-hud";
 import type { CarTelemetry, RaceStatus } from "../../src/types/f1";
 
 let failed = 0;
@@ -110,6 +110,37 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   check("a trigger held over does not resume again", !b.read(pad([7]), (t += 16), paused).resume);
   check("no pad: nothing", Object.values(b.read(null, (t += 16), false)).every((v) => v === false));
   check("a frame the headset did nothing in leaves the drive its presses", !headsetTookPress(b.read(pad([0]), (t += 16), false)));
+
+  // The first frame in the headset only notes what is held: the A that clicked Enter VR does not drive on
+  const fresh = new HeadsetButtons();
+  check("A still held from Enter VR does not drive on", !fresh.read(pad([0]), 0, true).resume && !fresh.read(pad([0]), 16, true).resume);
+  fresh.read(pad([]), 32, true);
+  check("a new A after it does", fresh.read(pad([0]), 48, true).resume);
+
+  // An Xbox pad on PC VR, no hand controllers: the paused panel's A / RT / Y / B work from it too
+  const xbox = (pressed: number[]) => ({ ...pad(pressed), id: "Xbox Wireless Controller" });
+  const pc = new HeadsetButtons();
+  let u = 0;
+  pc.read(null, (u += 16), false, [xbox([])]);
+  let padPaused = false;
+  for (let i = 0; i < 80; i++) if (pc.read(null, (u += 16), false, [xbox([1])]).pause) padPaused = true;
+  check("a pad's B held while driving does not pause (Boost on some layouts)", !padPaused);
+  pc.read(null, (u += 16), false, [xbox([7])]);
+  check("a pad's throttle held as the pause comes does not drive on", !pc.read(null, (u += 16), true, [xbox([7])]).resume);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  check("a pad's A on the paused panel drives on", pc.read(null, (u += 16), true, [xbox([0])]).resume);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  check("a pad's Y recentres", pc.read(null, (u += 16), true, [xbox([3])]).recenter);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  check("a pad's B leaves VR", pc.read(null, (u += 16), true, [xbox([1])]).leave);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  // A finger resting on the trigger: the browser calls it pressed at a light touch, the press point is further
+  const resting = xbox([]);
+  resting.buttons[7] = { value: 0.08, pressed: true };
+  check("a pad's trigger under a resting finger does not drive on", !pc.read(null, (u += 16), true, [resting]).resume);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  const wheel = { ...xbox([0]), mapping: "" };
+  check("a pad without the standard mapping (a wheel) is not read", !pc.read(null, (u += 16), true, [wheel]).resume);
 }
 
 // --- Standalone headset detection ---------------------------------------------------------------------------------
@@ -149,6 +180,15 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   const reverse = driveModel(tel({ gear: -1 }), "kmh");
   check("reverse and neutral read R and N", reverse.kind === "drive" && reverse.gear === "R" && (driveModel(tel({ gear: 0 }), "kmh") as { gear: string }).gear === "N");
   check("lap times read m:ss.mmm, none as dashes", formatLapTime(92_104) === "1:32.104" && formatLapTime(null) === "-:--.---");
+}
+
+// --- Which panel the headset shows ---------------------------------------------------------------------------------
+{
+  const at = (inMenu: boolean, paused: boolean, seatPanel: boolean) => headsetPanel({ inMenu, paused, seatPanel });
+  check("driving: the drive's plates", at(false, false, false) === "drive");
+  check("paused: the paused panel", at(false, true, false) === "paused");
+  check("the seat panel (the car held, its rows on the page only): the paused panel", at(false, false, true) === "paused");
+  check("the menus: the menus panel", at(true, false, false) === "menu" && at(true, true, true) === "menu");
 }
 
 console.log(failed === 0 ? "\nAll VR checks pass" : `\n${failed} VR check(s) FAILED`);
