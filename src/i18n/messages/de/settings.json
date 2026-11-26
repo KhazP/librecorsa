@@ -883,7 +883,7 @@
     },
     "code": {
       "title": "Code von einem anderen Gerät verwenden",
-      "how": "Öffne auf einem angemeldeten Gerät Einstellungen, dann Profil und Daten, dann Konto und wähle „Code anzeigen“.",
+      "how": "Öffne auf einem angemeldeten Gerät Einstellungen, dann Profil, dann Konto und wähle „Code anzeigen“.",
       "label": "Code",
       "continue": "Weiter",
       "format": "Ein Code besteht aus 8 Buchstaben und Ziffern, zum Beispiel ABCD-EFGH"
@@ -897,7 +897,7 @@
       "aria": "Code {code}",
       "left": "{minutes, plural, =0 {Weniger als eine Minute übrig. Er funktioniert einmal.} one {# Minute übrig. Er funktioniert einmal.} other {# Minuten übrig. Er funktioniert einmal.}}",
       "expired": "Dieser Code ist abgelaufen. Wähle „Neuer Code“ für einen weiteren.",
-      "how": "Öffne auf dem anderen Gerät Einstellungen, dann Profil und Daten, dann Konto. Wähle „Code von einem anderen Gerät verwenden“ und gib diesen Code ein."
+      "how": "Öffne auf dem anderen Gerät Einstellungen, dann Profil, dann Konto. Wähle „Code von einem anderen Gerät verwenden“ und gib diesen Code ein."
     }
   }
 }
