@@ -141,6 +141,11 @@ export interface SimulatorCar {
   aiPaceScale?: number;
   /** A car that plans its autopilot speeds on its tyres' grip on this road (0.05 steps); the weather pace then leaves it be */
   aiPlanGrip?(): number;
+  /**
+   * The share of their grip the tyres' own state (temperature, and the wet rubber's temperature term) leaves them at
+   * the limit, the weaker axle's (1 at best): what the field's drive plans take on a wet road besides the water
+   */
+  aiTyreGrip?(): number;
   /** Traffic lateral offset bias from the racing line (m) */
   aiLineBiasM?: number;
   /** Traffic speed cap (m/s) */

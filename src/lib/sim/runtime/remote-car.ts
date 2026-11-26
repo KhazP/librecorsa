@@ -124,6 +124,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   getChassisSetup: "localCall",
   getLiveTunerState: "localCall",
   aiPlanGrip: "localCall",
+  aiTyreGrip: "localCall",
   aiBaseSpeedProfile: "localCall",
   createAiPeerCar: "localCall",
 

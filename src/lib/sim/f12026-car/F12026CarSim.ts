@@ -62,7 +62,7 @@ import type { AeroWakeState } from '../aero-wake';
 import { type CarDamageEffects, withDamage } from '../car-damage';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
-import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
+import { SLICK_TRAITS, evaluateWlfGripMultiplier, wetGripFactor, wetnessFromWater } from '../wet-tyres';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import {
@@ -122,6 +122,12 @@ const nearestStep = (steps: readonly number[], v: number): number =>
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density: what the braking envelopes below are planned at */
 const AIR_DENSITY = 1.06;
+/**
+ * The patch's sliding speed through a wet corner near the limit (m/s), where `aiTyreGrip` takes the wet rubber's
+ * temperature term: the AMG GT3's tyres over 1 g through RISE's esses on 0.2 mm of water slide at 1.2-1.4 m/s
+ * (median) and 2.0-2.2 m/s (p90)
+ */
+const AI_LIMIT_SLIP_MS = 2;
 /** Standard-atmosphere air density at an altitude (as the LC26's): 1.07 at Rwanda, 1.21 at Silverstone */
 const airDensityAt = (altitudeM: number) => 1.225 * Math.pow(1 - 2.25577e-5 * altitudeM, 4.25588);
 /** A braking envelope at a circuit's air: the aero part grows with the density it was planned at (1.06) */
@@ -1636,6 +1642,31 @@ export class F12026CarSim implements SimulatorCar {
   /** Where the road under this car's track colliders really ends (null on the sample ground) */
   private autopilotEdges(): AutopilotEdges | null {
     return this.collider ? autopilotEdges(this.track, this.collider) : null;
+  }
+
+  /**
+   * For the AI's drive plans: the share of their grip the tyres' own state leaves them at the limit of a corner, the
+   * weaker axle's (1 at best). Each tyre's temperature grip on its compound's curve, as the physics last found it, times
+   * the wet rubber's temperature term the physics applies on a wet road (`evaluateWlfGripMultiplier`), taken at the
+   * slip speed of a wet corner near the limit. The weather's pace counts only the water on the road: slicks cooled to
+   * 60 °C on a wet road lose up to a sixth of their grip to the second term, and rain tyres overheating on a drying road
+   * a tenth to the first. Reads the car, changes nothing
+   */
+  public aiTyreGrip(): number {
+    const v = this.vehicle;
+    const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
+    let front = 0;
+    let rear = 0;
+    for (let i = 0; i < 4; i++) {
+      const w = v.wheels[i];
+      const water = v.wheelWaterMm[i] > 0 ? v.wheelWaterMm[i] : v.waterMm;
+      const wetness = water > 0 ? wetnessFromWater(water) : v.wetness;
+      const grip = w.thermalGrip * evaluateWlfGripMultiplier(traits, w.surfaceTempC, AI_LIMIT_SLIP_MS, w.fz, wetness);
+      if (w.isFront) front += grip / 2;
+      else rear += grip / 2;
+    }
+    const g = Math.min(front, rear);
+    return Number.isFinite(g) ? Math.min(1, Math.max(0, g)) : 1;
   }
 
   /**
