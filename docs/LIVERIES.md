@@ -13,11 +13,11 @@ Every car has two files, both 2048 × 2048 pixels, the size the game uses:
 
 | Car | Guide | Overlay |
 | :--- | :--- | :--- |
-| 2026 Prototype | [2026 Prototype guide (PNG, 296 KB)](livery-templates/lc26/lc26-template.png) | [2026 Prototype overlay (PNG, 268 KB)](livery-templates/lc26/lc26-overlay.png) |
-| LC25 Prototype | [LC25 Prototype guide (PNG, 297 KB)](livery-templates/lc25/lc25-template.png) | [LC25 Prototype overlay (PNG, 265 KB)](livery-templates/lc25/lc25-overlay.png) |
-| Mercedes-AMG GT3 Evo | [AMG GT3 Evo guide (PNG, 358 KB)](livery-templates/amg-gt3/amg-gt3-template.png) | [AMG GT3 Evo overlay (PNG, 319 KB)](livery-templates/amg-gt3/amg-gt3-overlay.png) |
-| BMW M4 GT3 Evo | [M4 GT3 Evo guide (PNG, 315 KB)](livery-templates/bmw-m4-gt3/bmw-m4-gt3-template.png) | [M4 GT3 Evo overlay (PNG, 276 KB)](livery-templates/bmw-m4-gt3/bmw-m4-gt3-overlay.png) |
-| LC-LMDH | [LC-LMDH guide (PNG, 301 KB)](livery-templates/lc-lmdh/lc-lmdh-template.png) | [LC-LMDH overlay (PNG, 264 KB)](livery-templates/lc-lmdh/lc-lmdh-overlay.png) |
+| 2026 Prototype | [2026 Prototype guide (PNG, 301 KB)](livery-templates/lc26/lc26-template.png) | [2026 Prototype overlay (PNG, 270 KB)](livery-templates/lc26/lc26-overlay.png) |
+| LC25 Prototype | [LC25 Prototype guide (PNG, 294 KB)](livery-templates/lc25/lc25-template.png) | [LC25 Prototype overlay (PNG, 264 KB)](livery-templates/lc25/lc25-overlay.png) |
+| Mercedes-AMG GT3 Evo | [AMG GT3 Evo guide (PNG, 356 KB)](livery-templates/amg-gt3/amg-gt3-template.png) | [AMG GT3 Evo overlay (PNG, 320 KB)](livery-templates/amg-gt3/amg-gt3-overlay.png) |
+| BMW M4 GT3 Evo | [M4 GT3 Evo guide (PNG, 310 KB)](livery-templates/bmw-m4-gt3/bmw-m4-gt3-template.png) | [M4 GT3 Evo overlay (PNG, 277 KB)](livery-templates/bmw-m4-gt3/bmw-m4-gt3-overlay.png) |
+| LC-LMDH | [LC-LMDH guide (PNG, 294 KB)](livery-templates/lc-lmdh/lc-lmdh-template.png) | [LC-LMDH overlay (PNG, 266 KB)](livery-templates/lc-lmdh/lc-lmdh-overlay.png) |
 
 Open a link and save the image (right-click, Save image as).
 
@@ -25,10 +25,12 @@ Open a link and save the image (right-click, Save image as).
 
 How to read a guide:
 
-- **Labels and arrows**: every view is named (TOP VIEW, LEFT SIDE, RIGHT SIDE, REAR, FRONT, and FW ENDPLATE L and R on the F1 cars) and the views seen from the side or above have an arrow that points to the front of the car. TOP L and TOP R mark the car's left and right halves in the top view, and L and R arrows mark them in the front and rear views. Labels only ever sit where that view paints nothing, so they never hide part of the car.
+- **Labels and arrows**: every view is named (TOP VIEW, LEFT SIDE, RIGHT SIDE, REAR, FRONT, and FW ENDPLATE L and R on the F1 cars), and the top and side views have an arrow that points to the front of the car. L and R mark the car's left and right halves in the top, front and rear views, on the overlay too. The name tags only ever sit where that view paints nothing, so they never hide part of the car.
+- **Big lettering on the car**: words like "← FRONT · LEFT SIDE" or "REAR WING" written across the body show which part of the picture lands on which part of the car. They're there to paint over.
 - **Light fill**: where that view really paints the car. Surfaces facing up take the top view, surfaces facing sideways take a side view, and so on, so a sidepod's top takes the top view even though its outline shows in the side view too.
 - **Dashed lines**: the centre line and the axles, to line up a stripe or a number between views.
-- **Hatching**: an area where paint won't land the way you drew it. On the LC25 Prototype it marks where the car is wider or longer than the painting area (the front wing tips, the rear wing's trailing edge and the tops of the front wing endplates), so the colour at the edge of the view stretches across it. On the AMG GT3 Evo it marks the front splitter, which always stays bare carbon.
+- **Hatched edges**: a narrow hatched strip along the edge of a view marks where part of the car reaches beyond that view. The part takes the colour you paint right at that edge, stretched across it, so keep plain colours there. The LC25 Prototype has them at its front wing tips, rear wing and front wing endplates, and both F1 cars along their front and rear views.
+- **Hatched areas on the AMG GT3 Evo**: the front splitter, which always stays bare carbon whatever you paint.
 
 ## How to paint one
 
