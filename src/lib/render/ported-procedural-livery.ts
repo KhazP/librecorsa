@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { LIVERY_FINISH_PROFILES } from "@/lib/render/f1-livery-painter";
+import { PORTED_LIVERY_SHADERS } from "@/lib/render/livery-projection";
 import {
   clearGt3LiveryCache,
   getGt3LiveryAtlasTexture,
@@ -137,117 +138,13 @@ const BLANK_ATLAS = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 
 BLANK_ATLAS.colorSpace = THREE.SRGBColorSpace;
 BLANK_ATLAS.needsUpdate = true;
 
-const PORTED_VERTEX_PATCH = /* glsl */ `#include <common>
-uniform mat4 uProcFrame;
-varying vec3 vProcPos;
-varying vec3 vProcNrm;`;
-
-const PORTED_VERTEX_BODY = /* glsl */ `#include <begin_vertex>
-vProcPos = ( uProcFrame * vec4( position, 1.0 ) ).xyz;
-vProcNrm = normalize( mat3( uProcFrame ) * normal );`;
-
-const PORTED_FRAGMENT_PATCH = /* glsl */ `#include <common>
-uniform sampler2D uProcAtlas;
-uniform float uProcEnabled;
-uniform float uProcCarbonStrength;
-uniform vec3 uProcMin;
-uniform vec3 uProcMax;
-uniform float uProcWingRearZ;
-uniform float uProcWingMinY;
-uniform float uProcHoodStartZ;
-uniform float uProcHoodMinY;
-uniform float uProcSplitterMaxY;
-uniform float uProcSplitterMinZ;
-varying vec3 vProcPos;
-varying vec3 vProcNrm;
-
-vec2 procAtlasClamp( vec2 uv, vec2 rectOrigin, vec2 rectSize ) {
-	vec2 pad = vec2( 2.0 / 2048.0 );
-	vec2 clamped = clamp( uv, vec2( 0.0 ), vec2( 1.0 ) );
-	return rectOrigin + pad + clamped * max( rectSize - pad * 2.0, vec2( 0.0001 ) );
-}
-
-float procCarbonTwill( vec2 p ) {
-	vec2 c = floor( p );
-	float warp = step( mod( c.x + c.y, 4.0 ), 1.5 );
-	return 2.0 * warp - 1.0;
-}`;
-
-const PORTED_FRAGMENT_MAP = /* glsl */ `#include <map_fragment>
-float procCarbonMask = 0.0;
-if ( uProcEnabled > 0.5 ) {
-	vec3 lp = vProcPos;
-	vec3 ln = normalize( vProcNrm );
-	vec3 span = max( uProcMax - uProcMin, vec3( 0.001 ) );
-
-	// 1) TOP panel: rect (0, 0, 1.0, 832/2048 = 0.40625)
-	vec2 uvTop = vec2( ( lp.z - uProcMin.z ) / span.z, ( uProcMax.x - lp.x ) / span.x );
-	vec3 colTop = texture2D( uProcAtlas, procAtlasClamp( uvTop, vec2( 0.0, 0.0 ), vec2( 1.0, 0.40625 ) ) ).rgb;
-
-	// 2) LEFT (+X) and RIGHT (-X) SIDE panels
-	vec3 colSide;
-	float sideV = ( uProcMax.y - lp.y ) / span.y;
-	if ( ln.x >= 0.0 ) {
-		float leftU = ( uProcMax.z - lp.z ) / span.z;
-		colSide = texture2D( uProcAtlas, procAtlasClamp( vec2( leftU, sideV ), vec2( 0.0, 0.40625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
-	} else {
-		float rightU = ( lp.z - uProcMin.z ) / span.z;
-		colSide = texture2D( uProcAtlas, procAtlasClamp( vec2( rightU, sideV ), vec2( 0.0, 0.625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
-	}
-
-	// 3) REAR (-Z) and FRONT (+Z) panels
-	vec3 colEnd;
-	if ( ln.z < 0.0 ) {
-		vec2 uvRear = vec2( ( uProcMax.x - lp.x ) / span.x, sideV );
-		colEnd = texture2D( uProcAtlas, procAtlasClamp( uvRear, vec2( 0.0, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
-	} else {
-		vec2 uvFront = vec2( ( lp.x - uProcMin.x ) / span.x, sideV );
-		colEnd = texture2D( uProcAtlas, procAtlasClamp( uvFront, vec2( 0.5, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
-	}
-
-	float wx = pow( abs( ln.x ), 4.0 );
-	float wy = pow( max( ln.y, 0.0 ) + 0.30 * max( -ln.y, 0.0 ), 4.0 );
-	float wz = pow( abs( ln.z ), 5.0 );
-
-	// Keep sloped hoods / prototype noses sharp on the TOP projection
-	if ( lp.z > uProcHoodStartZ && lp.y > uProcHoodMinY && ln.y > 0.42 ) {
-		wy *= 2.6;
-	}
-	// Rear wing mainplane top/rear crispness & wing endplate side crispness
-	if ( lp.z < uProcWingRearZ && lp.y > uProcWingMinY ) {
-		if ( abs( lp.x ) < 0.86 ) {
-			if ( ln.z < -0.35 ) wz = max( wz, 3.5 );
-			else wy = max( wy, 3.5 );
-		} else {
-			wx = max( wx, 4.0 );
-		}
-	}
-
-	vec3 livCol = ( colTop * wy + colSide * wx + colEnd * wz ) / max( wx + wy + wz, 1e-4 );
-
-	// Keep the protruding AMG GT3 Evo front aero splitter tray exposed dark carbon fiber
-	if ( uProcSplitterMaxY > 0.0 && lp.y < uProcSplitterMaxY && lp.z > uProcSplitterMinZ ) {
-		livCol = vec3( 0.011, 0.012, 0.015 );
-	}
-
-	diffuseColor.rgb = livCol;
-
-	float maxC = max( livCol.r, max( livCol.g, livCol.b ) );
-	procCarbonMask = ( 1.0 - smoothstep( 0.014, 0.028, maxC ) ) * uProcCarbonStrength;
-}`;
-
-const PORTED_FRAGMENT_ROUGHNESS = /* glsl */ `#include <roughnessmap_fragment>
-if ( procCarbonMask > 0.01 ) {
-	vec3 cn = abs( normalize( vProcNrm ) );
-	vec2 cp = cn.y > 0.6 ? vProcPos.xz : ( cn.x > 0.6 ? vProcPos.zy : vProcPos.xy );
-	float invPitch = 190.0;
-	vec3 dP = fwidth( vProcPos );
-	float towsPerPx = max( dP.x, max( dP.y, dP.z ) ) * invPitch;
-	float fade = ( 1.0 - smoothstep( 0.15, 0.32, towsPerPx ) ) * ( 1.0 - smoothstep( 8.0, 24.0, length( vViewPosition ) ) );
-	float twill = procCarbonTwill( cp * invPitch ) * fade * procCarbonMask;
-	roughnessFactor = mix( roughnessFactor, 0.36, procCarbonMask * 0.72 ) + 0.055 * twill;
-	diffuseColor.rgb *= 1.0 + 0.14 * twill;
-}`;
+const {
+  vertexPatch: PORTED_VERTEX_PATCH,
+  vertexBody: PORTED_VERTEX_BODY,
+  fragmentPatch: PORTED_FRAGMENT_PATCH,
+  fragmentMap: PORTED_FRAGMENT_MAP,
+  fragmentRoughness: PORTED_FRAGMENT_ROUGHNESS,
+} = PORTED_LIVERY_SHADERS;
 
 export interface ProceduralLiverySurface {
   material: THREE.MeshStandardMaterial;

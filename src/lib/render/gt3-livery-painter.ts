@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { LIVERY_FINISH_PROFILES } from "@/lib/render/f1-livery-painter";
+import { GT3_LIVERY_SHADERS, PORTED_PROJECTION } from "@/lib/render/livery-projection";
 import type { LiveryFinish } from "@/types/f1";
 
 /**
@@ -16,16 +17,16 @@ import type { LiveryFinish } from "@/types/f1";
  * - Zero shader recompiles on livery swap: `set(null)` restores the GLB's original material & baked paint seamlessly.
  */
 
-export const GT3_ATLAS_SIZE = 2048;
+export const GT3_ATLAS_SIZE: number = PORTED_PROJECTION.atlasSize;
 
 // Atlas panel layout inside 2048x2048 (flipY = false, y increases downward)
-const TOP_H = 832; // 0..832       (0.40625)
-const SIDE_H = 448; // 832..1280, 1280..1728 (0.21875 each)
-const LEFT_Y = TOP_H; // 832
-const RIGHT_Y = LEFT_Y + SIDE_H; // 1280
-const BOTTOM_Y = RIGHT_Y + SIDE_H; // 1728
-const BOTTOM_H = GT3_ATLAS_SIZE - BOTTOM_Y; // 320 (0.15625)
-const HALF_W = GT3_ATLAS_SIZE / 2; // 1024
+const TOP_H = PORTED_PROJECTION.panels.top.h; // 0..832       (0.40625)
+const SIDE_H = PORTED_PROJECTION.panels.left.h; // 832..1280, 1280..1728 (0.21875 each)
+const LEFT_Y = PORTED_PROJECTION.panels.left.y; // 832
+const RIGHT_Y = PORTED_PROJECTION.panels.right.y; // 1280
+const BOTTOM_Y = PORTED_PROJECTION.panels.rear.y; // 1728
+const BOTTOM_H = PORTED_PROJECTION.panels.rear.h; // 320 (0.15625)
+const HALF_W = PORTED_PROJECTION.panels.rear.w; // 1024
 
 export type Gt3CarTarget = "amg-gt3" | "bmw-m4-gt3";
 
@@ -3269,117 +3270,13 @@ const BLANK_GT3_ATLAS = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255
 BLANK_GT3_ATLAS.colorSpace = THREE.SRGBColorSpace;
 BLANK_GT3_ATLAS.needsUpdate = true;
 
-const GT3_VERTEX_PATCH = /* glsl */ `#include <common>
-uniform mat4 uGt3Frame;
-varying vec3 vGt3Pos;
-varying vec3 vGt3Nrm;`;
-
-const GT3_VERTEX_BODY = /* glsl */ `#include <begin_vertex>
-vGt3Pos = ( uGt3Frame * vec4( position, 1.0 ) ).xyz;
-vGt3Nrm = normalize( mat3( uGt3Frame ) * normal );`;
-
-const GT3_FRAGMENT_PATCH = /* glsl */ `#include <common>
-uniform sampler2D uGt3Atlas;
-uniform float uGt3Enabled;
-uniform float uGt3CarbonStrength;
-uniform vec3 uGt3Min;
-uniform vec3 uGt3Max;
-uniform float uGt3WingRearZ;
-uniform float uGt3HoodStartZ;
-uniform float uGt3SplitterMaxY;
-uniform float uGt3SplitterMinZ;
-varying vec3 vGt3Pos;
-varying vec3 vGt3Nrm;
-
-vec2 gt3AtlasClamp( vec2 uv, vec2 rectOrigin, vec2 rectSize ) {
-	vec2 pad = vec2( 2.0 / 2048.0 );
-	vec2 clamped = clamp( uv, vec2( 0.0 ), vec2( 1.0 ) );
-	return rectOrigin + pad + clamped * max( rectSize - pad * 2.0, vec2( 0.0001 ) );
-}
-
-float gt3CarbonTwill( vec2 p ) {
-	vec2 c = floor( p );
-	float warp = step( mod( c.x + c.y, 4.0 ), 1.5 );
-	return 2.0 * warp - 1.0;
-}`;
-
-const GT3_FRAGMENT_MAP = /* glsl */ `#include <map_fragment>
-float gt3CarbonMask = 0.0;
-if ( uGt3Enabled > 0.5 ) {
-	vec3 lp = vGt3Pos;
-	vec3 ln = normalize( vGt3Nrm );
-	vec3 span = max( uGt3Max - uGt3Min, vec3( 0.001 ) );
-
-	// 1) TOP panel: rect (0, 0, 1.0, 832/2048 = 0.40625)
-	vec2 uvTop = vec2( ( lp.z - uGt3Min.z ) / span.z, ( uGt3Max.x - lp.x ) / span.x );
-	vec3 colTop = texture2D( uGt3Atlas, gt3AtlasClamp( uvTop, vec2( 0.0, 0.0 ), vec2( 1.0, 0.40625 ) ) ).rgb;
-
-	// 2) LEFT (+X) and RIGHT (-X) SIDE panels: rects (0, 0.40625, 1.0, 0.21875) and (0, 0.625, 1.0, 0.21875)
-	vec3 colSide;
-	float sideV = ( uGt3Max.y - lp.y ) / span.y;
-	if ( ln.x >= 0.0 ) {
-		float leftU = ( uGt3Max.z - lp.z ) / span.z;
-		colSide = texture2D( uGt3Atlas, gt3AtlasClamp( vec2( leftU, sideV ), vec2( 0.0, 0.40625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
-	} else {
-		float rightU = ( lp.z - uGt3Min.z ) / span.z;
-		colSide = texture2D( uGt3Atlas, gt3AtlasClamp( vec2( rightU, sideV ), vec2( 0.0, 0.625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
-	}
-
-	// 3) REAR (-Z) and FRONT (+Z) panels: rects (0, 0.84375, 0.5, 0.15625) and (0.5, 0.84375, 0.5, 0.15625)
-	vec3 colEnd;
-	if ( ln.z < 0.0 ) {
-		vec2 uvRear = vec2( ( uGt3Max.x - lp.x ) / span.x, sideV );
-		colEnd = texture2D( uGt3Atlas, gt3AtlasClamp( uvRear, vec2( 0.0, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
-	} else {
-		vec2 uvFront = vec2( ( lp.x - uGt3Min.x ) / span.x, sideV );
-		colEnd = texture2D( uGt3Atlas, gt3AtlasClamp( uvFront, vec2( 0.5, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
-	}
-
-	// Sharp tri-orthographic weights so hood/door/rear graphics stay crisp with zero ghosting
-	float wx = pow( abs( ln.x ), 4.0 );
-	float wy = pow( max( ln.y, 0.0 ) + 0.30 * max( -ln.y, 0.0 ), 4.0 );
-	float wz = pow( abs( ln.z ), 5.0 );
-
-	// Keep gently sloped GT3 hoods sharp on the TOP projection
-	if ( lp.z > uGt3HoodStartZ && lp.y > 0.50 && ln.y > 0.42 ) {
-		wy *= 2.4;
-	}
-	// Rear wing mainplane top/rear crispness & wing endplate side crispness
-	if ( lp.z < uGt3WingRearZ && lp.y > 1.00 ) {
-		if ( abs( lp.x ) < 0.86 ) {
-			if ( ln.z < -0.35 ) wz = max( wz, 3.5 );
-			else wy = max( wy, 3.5 );
-		} else {
-			wx = max( wx, 4.0 );
-		}
-	}
-
-	vec3 livCol = ( colTop * wy + colSide * wx + colEnd * wz ) / max( wx + wy + wz, 1e-4 );
-
-	// Keep the protruding AMG GT3 Evo front aero splitter tray exposed dark carbon fiber
-	if ( uGt3SplitterMaxY > 0.0 && lp.y < uGt3SplitterMaxY && lp.z > uGt3SplitterMinZ ) {
-		livCol = vec3( 0.011, 0.012, 0.015 );
-	}
-
-	diffuseColor.rgb = livCol;
-
-	// Detect exposed dark carbon regions (linear max channel < 0.025) for 2x2 twill weave roughness sheen
-	float maxC = max( livCol.r, max( livCol.g, livCol.b ) );
-	gt3CarbonMask = ( 1.0 - smoothstep( 0.014, 0.028, maxC ) ) * uGt3CarbonStrength;
-}`;
-
-const GT3_FRAGMENT_ROUGHNESS = /* glsl */ `#include <roughnessmap_fragment>
-if ( gt3CarbonMask > 0.01 ) {
-	vec3 cn = abs( normalize( vGt3Nrm ) );
-	vec2 cp = cn.y > 0.6 ? vGt3Pos.xz : ( cn.x > 0.6 ? vGt3Pos.zy : vGt3Pos.xy );
-	float invPitch = 190.0;
-	vec3 dP = fwidth( vGt3Pos );
-	float towsPerPx = max( dP.x, max( dP.y, dP.z ) ) * invPitch;
-	float fade = ( 1.0 - smoothstep( 0.15, 0.32, towsPerPx ) ) * ( 1.0 - smoothstep( 8.0, 24.0, length( vViewPosition ) ) );
-	float twill = gt3CarbonTwill( cp * invPitch ) * fade * gt3CarbonMask;
-	roughnessFactor = mix( roughnessFactor, 0.36, gt3CarbonMask * 0.72 ) + 0.055 * twill;
-	diffuseColor.rgb *= 1.0 + 0.14 * twill;
-}`;
+const {
+  vertexPatch: GT3_VERTEX_PATCH,
+  vertexBody: GT3_VERTEX_BODY,
+  fragmentPatch: GT3_FRAGMENT_PATCH,
+  fragmentMap: GT3_FRAGMENT_MAP,
+  fragmentRoughness: GT3_FRAGMENT_ROUGHNESS,
+} = GT3_LIVERY_SHADERS;
 
 export interface Gt3LiverySurface {
   material: THREE.MeshStandardMaterial;

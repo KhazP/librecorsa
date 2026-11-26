@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { PORTED_PROJECTION } from "@/lib/render/livery-projection";
 import type { LiveryFinish } from "@/types/f1";
 
 /**
@@ -15,15 +16,15 @@ import type { LiveryFinish } from "@/types/f1";
  * - Tall rear wing endplates & chase-cam rear wing banner
  */
 
-export const LMDH_ATLAS_SIZE = 2048;
+export const LMDH_ATLAS_SIZE: number = PORTED_PROJECTION.atlasSize;
 
-const TOP_H = 832;
-const SIDE_H = 448;
-const LEFT_Y = TOP_H;
-const RIGHT_Y = LEFT_Y + SIDE_H;
-const BOTTOM_Y = RIGHT_Y + SIDE_H;
-const BOTTOM_H = LMDH_ATLAS_SIZE - BOTTOM_Y;
-const HALF_W = LMDH_ATLAS_SIZE / 2;
+const TOP_H = PORTED_PROJECTION.panels.top.h;
+const SIDE_H = PORTED_PROJECTION.panels.left.h;
+const LEFT_Y = PORTED_PROJECTION.panels.left.y;
+const RIGHT_Y = PORTED_PROJECTION.panels.right.y;
+const BOTTOM_Y = PORTED_PROJECTION.panels.rear.y;
+const BOTTOM_H = PORTED_PROJECTION.panels.rear.h;
+const HALF_W = PORTED_PROJECTION.panels.rear.w;
 
 export type LmdhPattern =
   | "rossa"
