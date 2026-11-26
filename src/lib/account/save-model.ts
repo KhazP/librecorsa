@@ -275,13 +275,15 @@ const hashValue = (v: unknown) => hashText(stableStringify(v));
 const fieldHash = (field: string, value: unknown) => hashValue(accountShare(field, value));
 
 /**
- * Account members a split field gained after player accounts went live, with their defaults (the spotter's, Nov 2026).
- * A device whose last sync came before one of them agreed on the field without it, and the first save of the newer
- * build stores the default: that is no choice of the player's, so it must not outweigh what another device chose.
- * The verify suite holds these defaults to the settings' own.
+ * Members an account settings field gained after player accounts went live, with their defaults (Nov 2026: the
+ * spotter's, and the AI races' pit stops). A device whose last sync came before one of them agreed on the field
+ * without it, and the first save of the newer build stores the default: that is no choice of the player's, so it must
+ * not outweigh what another device chose for the field. A new member of an account field goes here too: the verify
+ * suite checks every member against the fields as they were then, and these defaults against the settings' own.
  */
 export const LATER_ACCOUNT_MEMBERS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
   audio: { spotter: true, spotterVoice: "jim", spotterRadio: true },
+  race: { pitStops: 0 },
 };
 
 /**

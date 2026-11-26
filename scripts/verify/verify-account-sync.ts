@@ -15,6 +15,7 @@ import {
   DEFAULT_INTERFACE_SETTINGS,
   DEFAULT_PLAYER_SETTINGS,
   SETTINGS_STORAGE_KEY,
+  parsePlayerSettings,
 } from "../../src/lib/settings/player-settings";
 import { GARAGE_PRESETS_MAX } from "../../src/lib/sim/car-setup";
 import { RACE_HISTORY_MAX } from "../../src/lib/sim/race-history";
@@ -934,12 +935,36 @@ async function main2(): Promise<void> {
   }
 
   {
-    // Account members added after accounts went live (the spotter's): a device updated later stores their defaults on
-    // its first save, which must not overwrite what another device already chose for them
-    const later = LATER_ACCOUNT_MEMBERS.audio;
+    // Account members added after accounts went live (the spotter's, the AI races' pit stops): a device updated later
+    // stores their defaults on its first save, which must not overwrite what another device already chose for them.
+    // The members each account field had in the release before them (Nov 2026); a member added since is listed in
+    // LATER_ACCOUNT_MEMBERS with the default the game gives it
+    const MEMBERS_THEN: Record<string, readonly string[]> = {
+      profile: ["autoUpload", "code", "color", "generated", "name"],
+      customLivery: ["accent", "primary", "secondary"],
+      race: ["aggression", "aiGrid", "damage", "grid", "laps", "launch", "opponents", "qualifying", "rulePreset", "startMode", "trackLimits"],
+      conditions: ["seed", "timeOfDay", "timeScale", "weather"],
+      library: ["favorites", "recent"],
+      audio: ["musicMuted", "musicOff", "raceMusicOn"],
+      ui: ["palette", "units"],
+    };
+    const splits: Record<string, Record<string, string>> = { audio: AUDIO_SPLIT, ui: UI_SPLIT };
+    const defaults = DEFAULT_PLAYER_SETTINGS as unknown as Record<string, unknown>;
+    const unlisted: string[] = [];
+    for (const field of ACCOUNT_SETTINGS_FIELDS) {
+      const value = defaults[field];
+      if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+      const members = Object.keys(value).filter((m) => !splits[field] || splits[field][m] === "account");
+      for (const m of members) {
+        const later = LATER_ACCOUNT_MEMBERS[field];
+        const listed = later !== undefined && Object.hasOwn(later, m) && same(later[m], (value as Record<string, unknown>)[m]);
+        if (!(MEMBERS_THEN[field] ?? []).includes(m) && !listed) unlisted.push(`${field}.${m}`);
+      }
+    }
+    check("every account member added since is in LATER_ACCOUNT_MEMBERS with the settings' own default", unlisted.length === 0, unlisted.join(", "));
     check(
-      "the later audio members are account members, listed with the settings' own defaults",
-      Object.keys(later).every((m) => (AUDIO_SPLIT as Record<string, string>)[m] === "account" && same((DEFAULT_AUDIO_SETTINGS as unknown as Record<string, unknown>)[m], later[m])),
+      "LATER_ACCOUNT_MEMBERS names only account members",
+      Object.entries(LATER_ACCOUNT_MEMBERS).every(([field, later]) => ACCOUNT_SETTINGS_FIELDS.includes(field) && Object.keys(later).every((m) => !splits[field] || splits[field][m] === "account")),
     );
     const oldShare = { raceMusicOn: DEFAULT_AUDIO_SETTINGS.raceMusicOn, musicOff: DEFAULT_AUDIO_SETTINGS.musicOff, musicMuted: DEFAULT_AUDIO_SETTINGS.musicMuted };
     const hOld = hashText(stableStringify(oldShare));
@@ -965,6 +990,51 @@ async function main2(): Promise<void> {
     check("this device's own spotter choice still wins over a save that never had one", audioOf(mine).spotter === false, JSON.stringify(audioOf(mine)));
     const fresh = combineSaves(updated(), cloudWith({}), "combine", { base: before().account?.base });
     check("against a save from before the spotter, this device's defaults go up", audioOf(fresh).spotter === true && audioOf(fresh).spotterVoice === "jim");
+
+    // The whole way through the engine: B last synced on the build before; A, updated, changes the spotter and the
+    // laps; B updates (its first save stores the new defaults) and syncs
+    const withoutLater = (): Record<string, unknown> => {
+      const s = structuredClone(DEFAULT_PLAYER_SETTINGS) as unknown as Record<string, Record<string, unknown>>;
+      for (const [field, later] of Object.entries(LATER_ACCOUNT_MEMBERS)) for (const m of Object.keys(later)) delete s[field][m];
+      return s;
+    };
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const bStore = memoryStorage({ [SETTINGS_KEY]: JSON.stringify(withoutLater()), "bugesera.track": "spa" });
+    const b = device(server, "Device B", bStore, memoryGhosts(), clock);
+    // (its settings as the build before stored them, so the base it agrees on hashes the fields without the members)
+    await b.sync({ accountId: "acc1", apply: true });
+
+    clock.t = 2_000;
+    const aStore = memoryStorage({ [SETTINGS_KEY]: settingsWith({}) });
+    const a = device(server, "Device A", aStore, memoryGhosts(), clock);
+    await a.sync({ accountId: "acc1", apply: true });
+    clock.t = 3_000;
+    const aSettings = JSON.parse(aStore.getItem(SETTINGS_KEY) as string);
+    aStore.setItem(SETTINGS_KEY, JSON.stringify({ ...aSettings, audio: { ...aSettings.audio, spotter: false, spotterVoice: "clare" }, race: { ...aSettings.race, laps: 12 } }));
+    await a.sync({ accountId: "acc1", apply: true });
+
+    clock.t = 4_000;
+    // B's update: the game reads its settings and saves them back whole, the new members at their default
+    bStore.setItem(SETTINGS_KEY, JSON.stringify(parsePlayerSettings(JSON.parse(bStore.getItem(SETTINGS_KEY) as string))));
+    await b.sync({ accountId: "acc1", apply: true });
+    const cloudAudio = cloudDoc(server).settings.audio?.value as Record<string, unknown>;
+    const cloudRace = cloudDoc(server).settings.race?.value as Record<string, unknown>;
+    const bNow = JSON.parse(bStore.getItem(SETTINGS_KEY) as string);
+    check(
+      "through the engine, A's spotter and laps survive B's update, and B takes them",
+      cloudAudio?.spotter === false && cloudAudio?.spotterVoice === "clare" && cloudRace?.laps === 12 && bNow.audio.spotter === false && bNow.race.laps === 12,
+      JSON.stringify({ cloudAudio, laps: cloudRace?.laps, b: [bNow.audio.spotter, bNow.race.laps] }),
+    );
+    clock.t = 5_000;
+    const bIdle = await b.sync({ accountId: "acc1", apply: true });
+    const aAgain = await a.sync({ accountId: "acc1", apply: true });
+    const aNow = JSON.parse(aStore.getItem(SETTINGS_KEY) as string);
+    check(
+      "then neither device pushes again, and A keeps its choice",
+      bIdle.kind === "synced" && !bIdle.pushed && aAgain.kind === "synced" && !aAgain.pushed && aNow.audio.spotter === false && aNow.race.laps === 12,
+      JSON.stringify({ bIdle, aAgain }),
+    );
   }
 
   {
