@@ -51,9 +51,12 @@ if (!track.meshUrl || !existsSync(`public${track.meshUrl}`) || !track.pitLane) {
 }
 const root = loadGlbGeometry(`public${track.meshUrl}`);
 
-// A shower over a quarter-hour forecast: dry, cloud, heavy rain at half way, cloud, sun; the line dries behind it
+// A shower over a quarter-hour forecast: dry, cloud, a storm's rain at half way, cloud, sun; the line dries behind it.
+// The storm puts about 0.44 mm on the racing line, twice the call for intermediates, as heavy rain's 0.30 mm was
+// twice the old 0.14 mm call: since the call moved to 0.2 mm, heavy rain kept the line over it for about two laps,
+// mostly before the field could stop, and no car had a clean lap on intermediates in the wet
 const node = (sky: WeatherNode["sky"], rainChance: number): WeatherNode => ({ sky, rainChance, temperatureC: 18, humidityPct: 70, windSpeedKmh: 10, windDirectionOctant: 2 });
-const SHOWER = [node("mostly_cloudy", 0), node("overcast", 0), node("overcast_heavy_rain", 100), node("overcast", 0), node("partially_cloudy", 0)];
+const SHOWER = [node("mostly_cloudy", 0), node("overcast", 0), node("overcast_storm", 100), node("overcast", 0), node("partially_cloudy", 0)];
 
 type Car = {
   code: string;
