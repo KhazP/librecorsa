@@ -34,8 +34,15 @@ export function Meter({ label, value, tone = "good", detail, labelClassName = "w
     "aria-valuenow": pct,
     "aria-valuetext": text,
   } as const;
+  // Right to left the track fills from the right (:dir() follows the nearest dir, so the left-to-right HUD keeps it)
   const track = (
-    <span aria-hidden className={cx("relative block h-2 min-w-0 overflow-hidden rounded-full bg-lc-titanium", stacked ? "w-full" : "flex-1")}>
+    <span
+      aria-hidden
+      className={cx(
+        "relative block h-2 min-w-0 overflow-hidden rounded-full bg-lc-titanium [&:dir(rtl)]:-scale-x-100",
+        stacked ? "w-full" : "flex-1",
+      )}
+    >
       <span
         // Slid in by transform (no layout while shaders compile on the main thread); the track clips it, the right end stays round
         className={cx("absolute inset-0 rounded-full transition-transform duration-200 ease-lc motion-reduce:transition-none", TONE_FILL[tone])}
