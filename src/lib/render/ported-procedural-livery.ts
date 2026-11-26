@@ -40,6 +40,7 @@ export interface ProceduralBodyProfile {
   hoodMinY: number;
   splitterMaxY: number;
   splitterMinZ: number;
+  flipBackfacing?: boolean;
 }
 
 export const PROCEDURAL_BODY_PROFILES: Readonly<Record<ProceduralPortedCar, ProceduralBodyProfile>> = {
@@ -75,6 +76,7 @@ export const PROCEDURAL_BODY_PROFILES: Readonly<Record<ProceduralPortedCar, Proc
     hoodMinY: 0.40,
     splitterMaxY: 0.0,
     splitterMinZ: 99.0,
+    flipBackfacing: true,
   },
   liana: {
     car: "liana",
@@ -294,6 +296,7 @@ export function installPortedProceduralLivery(
     uProcHoodMinY: { value: profile.hoodMinY },
     uProcSplitterMaxY: { value: profile.splitterMaxY },
     uProcSplitterMinZ: { value: profile.splitterMinZ },
+    uProcFlipBackfacing: { value: profile.flipBackfacing ? 1.0 : 0.0 },
   };
   const identity = new THREE.Matrix4();
 

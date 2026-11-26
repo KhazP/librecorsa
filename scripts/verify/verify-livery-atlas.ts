@@ -177,6 +177,7 @@ uniform float uProcHoodStartZ;
 uniform float uProcHoodMinY;
 uniform float uProcSplitterMaxY;
 uniform float uProcSplitterMinZ;
+uniform float uProcFlipBackfacing;
 varying vec3 vProcPos;
 varying vec3 vProcNrm;
 
@@ -196,6 +197,9 @@ float procCarbonMask = 0.0;
 if ( uProcEnabled > 0.5 ) {
 \tvec3 lp = vProcPos;
 \tvec3 ln = normalize( vProcNrm );
+\tif ( uProcFlipBackfacing > 0.5 && !gl_FrontFacing ) {
+\t\tln = -ln;
+\t}
 \tvec3 span = max( uProcMax - uProcMin, vec3( 0.001 ) );
 
 \t// 1) TOP panel: rect (0, 0, 1.0, 832/2048 = 0.40625)
@@ -383,7 +387,8 @@ function evalGlslPorted(
   lp: readonly [number, number, number],
   rawNrm: readonly [number, number, number],
   profile: PortedProjectionProfile,
-  sampleAtlas: (u: number, v: number) => [number, number, number]
+  sampleAtlas: (u: number, v: number) => [number, number, number],
+  frontFacing = true
 ): { rgb: [number, number, number]; forcedCarbon: boolean } {
   const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
   const procAtlasClamp = (u: number, v: number, ox: number, oy: number, sx: number, sy: number): [number, number] => {
@@ -393,7 +398,8 @@ function evalGlslPorted(
     return [ox + pad + cu * Math.max(sx - pad * 2, 0.0001), oy + pad + cv * Math.max(sy - pad * 2, 0.0001)];
   };
   const len = Math.hypot(rawNrm[0], rawNrm[1], rawNrm[2]);
-  const ln: [number, number, number] = [rawNrm[0] / len, rawNrm[1] / len, rawNrm[2] / len];
+  const sign = profile.flipBackfacing && !frontFacing ? -1 : 1;
+  const ln: [number, number, number] = [(rawNrm[0] / len) * sign, (rawNrm[1] / len) * sign, (rawNrm[2] / len) * sign];
   const spanX = Math.max(profile.max[0] - profile.min[0], 0.001);
   const spanY = Math.max(profile.max[1] - profile.min[1], 0.001);
   const spanZ = Math.max(profile.max[2] - profile.min[2], 0.001);
@@ -778,12 +784,14 @@ async function main(): Promise<void> {
       car: "amg-gt3" | "bmw-m4-gt3" | "lc-lmdh";
       pos: [number, number, number];
       nrm: [number, number, number];
+      frontFacing?: boolean;
       expectDominant: PortedPanelId;
       expectCarbon?: boolean;
     }[] = [
       { name: "amg hood boost", car: "amg-gt3", pos: [0.0, 0.72, 1.55], nrm: [0.0, 0.65, 0.76], expectDominant: "top" },
       { name: "amg left door", car: "amg-gt3", pos: [0.95, 0.58, 0.05], nrm: [0.97, 0.24, 0.0], expectDominant: "left" },
       { name: "amg right door", car: "amg-gt3", pos: [-0.95, 0.58, 0.05], nrm: [-0.97, 0.24, 0.0], expectDominant: "right" },
+      { name: "amg ignores backfacing flip", car: "amg-gt3", pos: [-0.95, 0.58, 0.05], nrm: [0.97, 0.0, 0.0], frontFacing: false, expectDominant: "left" },
       { name: "amg rear wing chase face", car: "amg-gt3", pos: [0.0, 1.15, -2.05], nrm: [0.0, 0.6, -0.8], expectDominant: "rear" },
       { name: "amg rear wing top face", car: "amg-gt3", pos: [0.0, 1.15, -2.05], nrm: [0.0, 0.96, -0.28], expectDominant: "top" },
       { name: "amg rear wing endplate", car: "amg-gt3", pos: [0.92, 1.12, -2.05], nrm: [0.85, 0.5, 0.15], expectDominant: "left" },
@@ -791,15 +799,18 @@ async function main(): Promise<void> {
       { name: "bmw front bumper", car: "bmw-m4-gt3", pos: [0.0, 0.48, 2.40], nrm: [0.0, 0.15, 0.98], expectDominant: "front" },
       { name: "lmdh nose top boost", car: "lc-lmdh", pos: [0.0, 0.55, 1.90], nrm: [0.0, 0.65, 0.76], expectDominant: "top" },
       { name: "lmdh rear wing chase face", car: "lc-lmdh", pos: [0.0, 1.00, -2.25], nrm: [0.0, 0.5, -0.86], expectDominant: "rear" },
+      { name: "lmdh inverted right sidepod flips to right panel", car: "lc-lmdh", pos: [-0.99, 0.50, -0.95], nrm: [0.99, 0.0, 0.0], frontFacing: false, expectDominant: "right" },
+      { name: "lmdh inverted right nose flips to front panel", car: "lc-lmdh", pos: [-0.45, 0.44, 2.50], nrm: [0.0, 0.0, -0.99], frontFacing: false, expectDominant: "front" },
     ];
 
     for (const s of samples) {
       const prof = PROCEDURAL_BODY_PROFILES[s.car];
-      const ts = projectPortedPoint(s.pos, s.nrm, prof);
+      const ff = s.frontFacing ?? true;
+      const ts = projectPortedPoint(s.pos, s.nrm, prof, ff);
       assert.equal(ts.dominantPanel, s.expectDominant, `${s.name}: expected ${s.expectDominant}, got ${ts.dominantPanel}`);
       assert.equal(ts.splitterCarbonOverride, Boolean(s.expectCarbon), `${s.name}: splitterCarbonOverride mismatch`);
 
-      const glsl = evalGlslPorted(s.pos, s.nrm, prof, syntheticAtlas);
+      const glsl = evalGlslPorted(s.pos, s.nrm, prof, syntheticAtlas, ff);
       assert.equal(glsl.forcedCarbon, ts.splitterCarbonOverride, `${s.name}: GLSL forcedCarbon mismatch`);
 
       if (!s.expectCarbon) {

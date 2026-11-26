@@ -486,6 +486,8 @@ export interface PortedProjectionProfile {
   readonly hoodMinY: number;
   readonly splitterMaxY: number;
   readonly splitterMinZ: number;
+  /** Flip interpolated normals on back-facing fragments (`!gl_FrontFacing`) for double-sided GLBs with inverted faces */
+  readonly flipBackfacing?: boolean;
 }
 
 /** Shared 2048x2048 5-panel atlas layout and blend parameters for ported GT3 and LMDh bodywork */
@@ -585,13 +587,15 @@ export interface PortedPointProjection {
 export function projectPortedPoint(
   pos: readonly [number, number, number],
   nrm: readonly [number, number, number],
-  profile: PortedProjectionProfile
+  profile: PortedProjectionProfile,
+  frontFacing = true
 ): PortedPointProjection {
   const [lx, ly, lz] = pos;
   const nLen = Math.hypot(nrm[0], nrm[1], nrm[2]);
-  const nx = nLen > 1e-12 ? nrm[0] / nLen : 0;
-  const ny = nLen > 1e-12 ? nrm[1] / nLen : 1;
-  const nz = nLen > 1e-12 ? nrm[2] / nLen : 0;
+  const nSign = profile.flipBackfacing && !frontFacing ? -1 : 1;
+  const nx = (nLen > 1e-12 ? nrm[0] / nLen : 0) * nSign;
+  const ny = (nLen > 1e-12 ? nrm[1] / nLen : 1) * nSign;
+  const nz = (nLen > 1e-12 ? nrm[2] / nLen : 0) * nSign;
 
   const topSample = portedProjectToPanel("top", lx, ly, lz, profile);
   const sidePanel: PortedPanelId = nx >= 0 ? "left" : "right";
@@ -682,6 +686,7 @@ uniform float uProcHoodStartZ;
 uniform float uProcHoodMinY;
 uniform float uProcSplitterMaxY;
 uniform float uProcSplitterMinZ;
+uniform float uProcFlipBackfacing;
 varying vec3 vProcPos;
 varying vec3 vProcNrm;
 
@@ -702,6 +707,9 @@ float procCarbonMask = 0.0;
 if ( uProcEnabled > 0.5 ) {
 \tvec3 lp = vProcPos;
 \tvec3 ln = normalize( vProcNrm );
+\tif ( uProcFlipBackfacing > 0.5 && !gl_FrontFacing ) {
+\t\tln = -ln;
+\t}
 \tvec3 span = max( uProcMax - uProcMin, vec3( 0.001 ) );
 
 \t// 1) TOP panel: rect (0, 0, 1.0, ${topRect.h}/${s} = ${glslNum(topRect.h / s)})
