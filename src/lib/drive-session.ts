@@ -60,6 +60,8 @@ import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
+import { TripleViewRig } from "@/lib/render/triple-views";
+import { physicalVerticalFovDeg, screenRig, tripleRects, type ScreenRect } from "@/lib/display/screen-layout";
 import { MirrorClock } from "@/lib/render/mirror-clock";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
 import { clampChassisToCarSheet } from "@/lib/sim/setup-sheet";
@@ -1626,6 +1628,49 @@ export class DriveSession {
     const virtualMirror = new VirtualMirror(renderer, scene);
     let virtualMirrorShown = false;
 
+    // Three screens (Settings > Display > Screens): each screen draws its own view (TripleViewRig), turned and framed
+    // for where it stands, through its own post-processing chain into its third of the canvas. The game camera stays
+    // the one everything else reasons with; the centre screen's camera is it plus the eye's height.
+    const tripleRig = new TripleViewRig();
+    /** The screens drawn now (left, centre, right), or null while one picture fills the canvas (or a headset shows it) */
+    let screensNow: { key: string; rects: [ScreenRect, ScreenRect, ScreenRect]; aspect: number } | null = null;
+    /**
+     * Lays the canvas out for one screen or three: on a resize, a change of the setting, the pixel ratio or the side
+     * screens' resolution, and entering or leaving a headset. Cheap when nothing changed (every frame asks).
+     */
+    const layoutScreens = (force = false) => {
+      const w = Math.max(1, container.clientWidth);
+      const h = Math.max(1, container.clientHeight);
+      if (settings.screens.mode !== "triple" || renderer.xr.isPresenting) {
+        if (!screensNow) return;
+        screensNow = null;
+        postFx.setViews(null);
+        if (renderer.xr.isPresenting) return;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        postFx.setSize(w, h);
+        return;
+      }
+      const pr = renderer.getPixelRatio();
+      const scale = settings.screens.sideScale;
+      const key = `${w}x${h}@${pr}/${scale}`;
+      if (!force && screensNow?.key === key) return;
+      const rects = tripleRects(w, h, pr);
+      screensNow = { key, rects, aspect: rects[1].w / h };
+      const [left, centre, right] = tripleRig.cameras;
+      postFx.setViews([
+        { camera: left, rect: rects[0], scale },
+        { camera: centre, rect: rects[1], scale: 1 },
+        { camera: right, rect: rects[2], scale },
+      ]);
+      postFx.setSize(w, h);
+      // The game camera frames the centre screen; the side screens add what lies beyond it
+      camera.aspect = screensNow.aspect;
+      camera.updateProjectionMatrix();
+    };
+    /** The physical rig for this frame's screens (the settings' sizes, distance and angles), while there are three */
+    const screenRigNow = () => (screensNow ? screenRig(settings.screens, screensNow.aspect) : null);
+
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
     /**
@@ -2358,10 +2403,16 @@ export class DriveSession {
           setSettings((prev) => ({ ...prev, cameraNudges: stepNudge(prev.cameraNudges, car, view, { fovDeg: step * NUDGE_FOV_STEP_DEG }) }));
           return;
         }
-        setSettings((prev) => ({
-          ...prev,
-          cockpitFovDeg: Math.round(clampFov((prev.cockpitFovDeg ?? this.snapshot.carCockpitFovDeg) + step)),
-        }));
+        setSettings((prev) => {
+          // On three screens with the true field of view, the step starts from it and leaves it for the player's own
+          const trueFov = prev.screens.physicalFov ? screenRigNow() : null;
+          const from = trueFov ? Math.round(physicalVerticalFovDeg(trueFov)) : (prev.cockpitFovDeg ?? this.snapshot.carCockpitFovDeg);
+          return {
+            ...prev,
+            cockpitFovDeg: Math.round(clampFov(from + step)),
+            screens: trueFov ? { ...prev.screens, physicalFov: false } : prev.screens,
+          };
+        });
         return;
       }
 
@@ -2564,10 +2615,14 @@ export class DriveSession {
     const onResize = () => {
       // A headset fixes the canvas while it presents; the page is sized again when it ends
       if (!container || renderer.xr.isPresenting) return;
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      if (screensNow) {
+        layoutScreens(true);
+        return;
+      }
       camera.aspect =
         container.clientWidth / Math.max(1, container.clientHeight);
       camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
       postFx.setSize(container.clientWidth, container.clientHeight);
     };
     window.addEventListener("resize", onResize);
@@ -4493,7 +4548,12 @@ export class DriveSession {
       const lc26Cams = carRig.getCameraAnchors();
       const carFovDeg = lc26Cams ? lc26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
       if (carFovDeg !== this.snapshot.carCockpitFovDeg) setCarCockpitFov(carFovDeg);
-      const onboardFovShift = settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carFovDeg;
+      layoutScreens();
+      // On three screens the driver's eye sees what the screens frame from where the player sits (the true field of
+      // view), unless they turned that off; the car's own and the player's own field of view otherwise
+      const rigForFov = settings.screens.physicalFov ? screenRigNow() : null;
+      const cockpitFovDeg = rigForFov ? physicalVerticalFovDeg(rigForFov) : settings.cockpitFovDeg;
+      const onboardFovShift = cockpitFovDeg === null ? 0 : cockpitFovDeg - carFovDeg;
       // The procedural helmet goes once the LC26 model (with its own driver) has replaced the procedural car
       carRig.helmetGroup.visible = !lc26Cams;
       // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the
@@ -4757,7 +4817,8 @@ export class DriveSession {
           menu: inMenu
             ? {
                 close: appPhase === "wizard" && wizardStep === "car",
-                width: container.clientWidth,
+                // On three screens the menu is on the centre one: the car is framed beside it there
+                width: screensNow ? screensNow.rects[1].w : container.clientWidth,
                 height: container.clientHeight,
                 aerial: menuAerial,
                 still: reducedMotion?.matches ?? false,
@@ -5052,6 +5113,9 @@ export class DriveSession {
             : view.driverEye
               ? "visor"
               : "off";
+        // The three screens' cameras from where the game camera ended up this frame
+        const rigNow = screenRigNow();
+        if (rigNow) tripleRig.update(camera, rigNow);
         windscreenWater.update({
           dt: drawDtS,
           rain: wx.rainIntensity,
@@ -5060,7 +5124,8 @@ export class DriveSession {
           carId: rainCockpitCarId,
           chassis: rainCockpitChassis,
           eye: rainCockpitEye,
-          camera,
+          // The water is on the centre screen's picture
+          camera: rigNow ? tripleRig.cameras[1] : camera,
           wiperPhase: rainFx.windscreenState.wiperPhase,
           light: skyLight,
         });
@@ -5114,7 +5179,7 @@ export class DriveSession {
           const t0 = loggedFirstFrame ? 0 : performance.now();
           startupMonitor?.begin();
           postFx.render(drawDtS);
-          virtualMirror.draw();
+          virtualMirror.draw(screensNow ? screensNow.rects[1] : undefined);
           startupMonitor?.end("render");
           if (captureWaiting) {
             const take = captureWaiting;
@@ -5139,7 +5204,10 @@ export class DriveSession {
                 race: physics.telemetry.race,
                 localBestLapMs,
                 badgesByNameKey: nameplateBadges.map,
-              })
+              },
+              screensNow
+                ? tripleRig.cameras.map((cam, i) => ({ camera: cam, x: screensNow!.rects[i].x, w: screensNow!.rects[i].w }))
+                : undefined)
             );
           } else {
             nameplates.hideAll();
