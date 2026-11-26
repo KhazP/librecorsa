@@ -10,14 +10,14 @@ import { OPEN_WHEEL_KEYBOARD_STEER } from '@/lib/input/keyboard-steer';
 import { type CarSimProfile, F12026CarSim } from '../f12026-car/F12026CarSim';
 import { F12007_CONFIG, F12007_ELECTRONICS as E } from './F12007Config';
 import type { CarSoundSource } from '../CarAudio';
+import { f12007Sound } from './f12007-sounds';
 import type { SpeedProfileCarModel } from '../speed-profile';
 
-/** Its own engine, gearbox and tyre sounds, ported from the Assetto Corsa car's sound bank */
-export const F12007_SOUND: CarSoundSource = {
-  id: 'f1-2007',
-  assetDir: '/cars/f1-2007/audio/',
-  limiterRpm: F12007_CONFIG.gearbox.gears.redline_rpm,
-};
+/**
+ * Its own engine, gearbox and tyre sounds, ported from the Assetto Corsa car's sound banks: the Ferrari's, the car's
+ * first livery; each livery plays its team's (`f12007Sound`, `CarSkin.sound`)
+ */
+export const F12007_SOUND: CarSoundSource = f12007Sound('ferrari');
 
 const C = F12007_CONFIG;
 const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.soft][axle].radius;

@@ -1,9 +1,10 @@
 import type { CarSkin } from "./car-registry";
+import { f12007Sound } from "@/lib/sim/f1-2007/f12007-sounds";
 
 /*
  * F1 2007's liveries, one per driver, from Cimmerian Iter's Assetto Corsa skins (scripts/cars/port_ac_car.py
  * --skins-out writes each team's skins.json, which this list copies). Each team's car is a body of its own: a livery
- * names the team's GLB (`modelUrl`), and picking it puts that car on the entry's one physics. The Ferrari's Räikkönen
+ * names the team's GLB (`modelUrl`) and engine sound (`sound`), and picking it puts that car on the entry's one physics. The Ferrari's Räikkönen
  * is the paint the car's own GLB is in; every other team's first driver is the paint of that team's GLB
  * (`useModelPaint`), and the others list the livery files they change.
  */
@@ -18,24 +19,28 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     id: "ferrari-raikkonen",
     name: "#6 Kimi Räikkönen · Ferrari",
     swatch: ["#c8102e", "#f2f2f2"],
+    sound: f12007Sound("ferrari"),
     files: [],
   },
   {
     id: "ferrari-massa",
     name: "#5 Felipe Massa · Ferrari",
     swatch: ["#c8102e", "#f2f2f2"],
+    sound: f12007Sound("ferrari"),
     files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
   },
   {
     id: "ferrari-massa-early",
     name: "#5 Felipe Massa · Ferrari, early season",
     swatch: ["#c8102e", "#f2f2f2"],
+    sound: f12007Sound("ferrari"),
     files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
   },
   {
     id: "ferrari-raikkonen-early",
     name: "#6 Kimi Räikkönen · Ferrari, early season",
     swatch: ["#c8102e", "#f2f2f2"],
+    sound: f12007Sound("ferrari"),
     files: ["wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
   },
   // McLaren MP4-22
@@ -44,6 +49,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#1 Fernando Alonso · McLaren",
     swatch: ["#b8bcc2", "#141414", "#d8232a"],
     modelUrl: f12007BodyUrl("mclaren"),
+    sound: f12007Sound("mclaren"),
     useModelPaint: true,
     files: [],
   },
@@ -52,6 +58,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#2 Lewis Hamilton · McLaren",
     swatch: ["#b8bcc2", "#141414", "#d8232a"],
     modelUrl: f12007BodyUrl("mclaren"),
+    sound: f12007Sound("mclaren"),
     files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
   },
   // Renault R27
@@ -60,6 +67,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#3 Giancarlo Fisichella · Renault",
     swatch: ["#f27f1b", "#1c3f94"],
     modelUrl: f12007BodyUrl("renault"),
+    sound: f12007Sound("renault"),
     useModelPaint: true,
     files: [],
   },
@@ -68,6 +76,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#4 Heikki Kovalainen · Renault",
     swatch: ["#f27f1b", "#1c3f94"],
     modelUrl: f12007BodyUrl("renault"),
+    sound: f12007Sound("renault"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
   // Honda RA107
@@ -76,6 +85,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#7 Jenson Button · Honda",
     swatch: ["#1f4e8c", "#4e8f3a"],
     modelUrl: f12007BodyUrl("honda"),
+    sound: f12007Sound("honda"),
     useModelPaint: true,
     files: [],
   },
@@ -84,6 +94,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#8 Rubens Barrichello · Honda",
     swatch: ["#1f4e8c", "#4e8f3a"],
     modelUrl: f12007BodyUrl("honda"),
+    sound: f12007Sound("honda"),
     files: ["honda_07extra4.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
   },
   // BMW Sauber F1.07
@@ -92,6 +103,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#9 Nick Heidfeld · BMW Sauber",
     swatch: ["#f2f2f2", "#1e4fa0"],
     modelUrl: f12007BodyUrl("bmw-sauber"),
+    sound: f12007Sound("bmw-sauber"),
     useModelPaint: true,
     files: [],
   },
@@ -100,6 +112,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#10 Robert Kubica · BMW Sauber",
     swatch: ["#f2f2f2", "#1e4fa0"],
     modelUrl: f12007BodyUrl("bmw-sauber"),
+    sound: f12007Sound("bmw-sauber"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
   {
@@ -107,6 +120,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#10 Sebastian Vettel · BMW Sauber, United States GP",
     swatch: ["#f2f2f2", "#1e4fa0"],
     modelUrl: f12007BodyUrl("bmw-sauber"),
+    sound: f12007Sound("bmw-sauber"),
     files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "wcwing.jpg"],
   },
   // Toyota TF107
@@ -115,6 +129,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#11 Ralf Schumacher · Toyota",
     swatch: ["#f2f2f2", "#d0021b"],
     modelUrl: f12007BodyUrl("toyota"),
+    sound: f12007Sound("toyota"),
     files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
   },
   {
@@ -122,6 +137,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#12 Jarno Trulli · Toyota",
     swatch: ["#f2f2f2", "#d0021b"],
     modelUrl: f12007BodyUrl("toyota"),
+    sound: f12007Sound("toyota"),
     useModelPaint: true,
     files: [],
   },
@@ -131,6 +147,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#14 David Coulthard · Red Bull",
     swatch: ["#1c2a55", "#d8232a", "#f5c400"],
     modelUrl: f12007BodyUrl("red-bull"),
+    sound: f12007Sound("red-bull"),
     useModelPaint: true,
     files: [],
   },
@@ -139,6 +156,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#15 Mark Webber · Red Bull",
     swatch: ["#1c2a55", "#d8232a", "#f5c400"],
     modelUrl: f12007BodyUrl("red-bull"),
+    sound: f12007Sound("red-bull"),
     files: ["red_bull_14extra4.jpg", "wccarbody.jpg"],
   },
   // Williams FW29
@@ -147,6 +165,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#16 Nico Rosberg · Williams",
     swatch: ["#1d2a5a", "#f2f2f2"],
     modelUrl: f12007BodyUrl("williams"),
+    sound: f12007Sound("williams"),
     useModelPaint: true,
     files: [],
   },
@@ -155,6 +174,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#17 Alexander Wurz · Williams",
     swatch: ["#1d2a5a", "#f2f2f2"],
     modelUrl: f12007BodyUrl("williams"),
+    sound: f12007Sound("williams"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
   // Toro Rosso STR2
@@ -163,6 +183,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#18 Vitantonio Liuzzi · Toro Rosso",
     swatch: ["#1c2552", "#c8102e"],
     modelUrl: f12007BodyUrl("toro-rosso"),
+    sound: f12007Sound("toro-rosso"),
     useModelPaint: true,
     files: [],
   },
@@ -171,6 +192,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#19 Scott Speed · Toro Rosso",
     swatch: ["#1c2552", "#c8102e"],
     modelUrl: f12007BodyUrl("toro-rosso"),
+    sound: f12007Sound("toro-rosso"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
   {
@@ -178,6 +200,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#19 Sebastian Vettel · Toro Rosso",
     swatch: ["#1c2552", "#c8102e"],
     modelUrl: f12007BodyUrl("toro-rosso"),
+    sound: f12007Sound("toro-rosso"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
   // Spyker F8-VII
@@ -186,6 +209,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#20 Adrian Sutil · Spyker",
     swatch: ["#f07a1a", "#b8bcc2"],
     modelUrl: f12007BodyUrl("spyker"),
+    sound: f12007Sound("spyker"),
     useModelPaint: true,
     files: [],
   },
@@ -194,6 +218,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#21 Christijan Albers · Spyker",
     swatch: ["#f07a1a", "#b8bcc2"],
     modelUrl: f12007BodyUrl("spyker"),
+    sound: f12007Sound("spyker"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
   // Super Aguri SA07
@@ -202,6 +227,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#22 Takuma Sato · Super Aguri",
     swatch: ["#f2f2f2", "#d0021b"],
     modelUrl: f12007BodyUrl("super-aguri"),
+    sound: f12007Sound("super-aguri"),
     useModelPaint: true,
     files: [],
   },
@@ -210,6 +236,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#23 Anthony Davidson · Super Aguri",
     swatch: ["#f2f2f2", "#d0021b"],
     modelUrl: f12007BodyUrl("super-aguri"),
+    sound: f12007Sound("super-aguri"),
     files: ["t_cam1.jpg", "wccarbody.jpg"],
   },
 ];

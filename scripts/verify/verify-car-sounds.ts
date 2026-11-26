@@ -94,18 +94,43 @@ for (const car of CARS) {
   );
 }
 
+// A livery may bring its own sound (an F1 2007 team's engine): checked like the car's own
+for (const car of CARS) {
+  const teams = new Set((car.skins ?? []).map((s) => s.sound).filter((s): s is CarSoundSource => !!s));
+  for (const sound of teams) {
+    const skins = (car.skins ?? []).filter((s) => s.sound === sound);
+    check(
+      `${car.id}: livery sound '${sound.id}' (${sound.assetDir}) for ${skins.length} liver${skins.length === 1 ? "y" : "ies"}, limiter ${sound.limiterRpm} RPM`,
+      sound.limiterRpm === carById(car.id).sound.limiterRpm && sound.assetDir.startsWith(`/cars/${car.id}/audio/`)
+    );
+  }
+}
+if (carById("f1-2007").skins?.length) {
+  // Each F1 2007 livery plays its team's bank: the team its body names (the Ferrari's, on the car's own body)
+  const wrong = (carById("f1-2007").skins ?? []).filter((s) => {
+    const team = s.modelUrl?.match(/f1-2007-([a-z-]+)\.glb$/)?.[1] ?? "ferrari";
+    return s.sound?.assetDir !== `/cars/f1-2007/audio/${team}/`;
+  });
+  check("f1-2007: every livery plays its own team's sound", wrong.length === 0, wrong.map((s) => s.id).join(", "));
+}
+
 console.log("\n2. Manifest schema, anchor coverage, RMS consistency & Ogg file checks");
 const seenBanks = new Map<string, ExpectedSound>();
-for (const exp of Object.values(EXPECTED_SOUNDS)) {
+for (const [carId, exp] of Object.entries(EXPECTED_SOUNDS)) {
   if (!seenBanks.has(exp.sound.id)) {
     seenBanks.set(exp.sound.id, exp);
+  }
+  for (const skin of carById(carId as CarId).skins ?? []) {
+    if (skin.sound && !seenBanks.has(skin.sound.id)) seenBanks.set(skin.sound.id, { ...exp, sound: skin.sound });
   }
 }
 
 // The repository carries only the banks of its own cars; the others are skipped where a clone lacks them. A repository
 // car can still play a hosted bank (the LC25's RB21 bank in /cars/lc25-v6/, its synthesised one in git being the
 // fallback), so a bank in a git-ignored folder is hosted however its car is listed
-const repoBanks = new Set([...REPO_CAR_IDS].map((id) => carById(id as CarId).sound.id));
+const repoBanks = new Set(
+  [...REPO_CAR_IDS].flatMap((id) => [carById(id as CarId).sound.id, ...(carById(id as CarId).skins ?? []).flatMap((s) => (s.sound ? [s.sound.id] : []))])
+);
 const gitIgnored = (path: string): boolean => spawnSync("git", ["check-ignore", "-q", path]).status === 0;
 for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
   const relDir = join("public", sound.assetDir.replace(/^\/+|\/+$/g, ""));
@@ -140,15 +165,32 @@ for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
       // recording at two anchors: two copies of one loop at the same pitch comb-filter into a doubled engine
       const sources = layerEntries.map((e) => (e as { fsbName?: string }).fsbName).filter((n): n is string => !!n);
       const pitchToLimiter = sound.limiterRpm / Math.max(1, maxRpm);
-      check(
-        `${bankId} engine.${view}.${layer}: idle (<= ${maxIdleRpm}) to limiter (${sound.limiterRpm}), one recording per anchor`,
-        layerEntries.length >= 2 &&
-          strictlyIncreasing &&
-          minRpm <= maxIdleRpm &&
-          (layerEntries.length >= 4 ? maxRpm >= sound.limiterRpm : pitchToLimiter <= 2.2) &&
-          new Set(sources).size === sources.length,
-        `anchors=[${rpms.join(", ")}]${sources.length ? `, ${new Set(sources).size} recordings` : ""}`
-      );
+      const gains = layerEntries.map((e) => e.gain);
+      if (gains.length > 0 && gains.every((g) => g && g.length > 0)) {
+        // Loops that all sound at once, each at its own gain over rpm (a bank in its source's own mix): keyed by the rpm
+        // they play at their own pitch, the layer covers idle to limiter with no rpm where nothing sounds
+        const tables = gains as [number, number][][];
+        const valid = tables.every((t) => t.every(([x, g], i) => Number.isFinite(x) && Number.isFinite(g) && g >= 0 && (i === 0 || x >= t[i - 1][0])));
+        const holes: number[] = [];
+        for (let r = maxIdleRpm; r <= sound.limiterRpm; r += 50) {
+          if (tables.reduce((sum, t) => sum + lerpTable(t, r), 0) < 0.05) holes.push(r);
+        }
+        check(
+          `${bankId} engine.${view}.${layer}: loops with their own gains sound from idle (${maxIdleRpm}) to the limiter (${sound.limiterRpm}), one recording each`,
+          layerEntries.length >= 2 && strictlyIncreasing && valid && holes.length === 0 && new Set(sources).size === sources.length,
+          `roots=[${rpms.join(", ")}]${holes.length ? `, silent at ${holes.slice(0, 5).join(", ")}` : ""}`
+        );
+      } else {
+        check(
+          `${bankId} engine.${view}.${layer}: idle (<= ${maxIdleRpm}) to limiter (${sound.limiterRpm}), one recording per anchor`,
+          layerEntries.length >= 2 &&
+            strictlyIncreasing &&
+            minRpm <= maxIdleRpm &&
+            (layerEntries.length >= 4 ? maxRpm >= sound.limiterRpm : pitchToLimiter <= 2.2) &&
+            new Set(sources).size === sources.length,
+          `anchors=[${rpms.join(", ")}]${sources.length ? `, ${new Set(sources).size} recordings` : ""}`
+        );
+      }
 
       for (const e of layerEntries) {
         referencedFiles.add(e.file);
@@ -170,6 +212,27 @@ for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
         curve[curve.length - 1][1] === 1 &&
         curve.every((pt, i) => i === 0 || (pt[0] > curve[i - 1][0] && pt[1] >= curve[i - 1][1]))
     );
+    const tg = m.throttleGain?.[view];
+    if (tg) {
+      const at = (t: [number, number][], x: number) => lerpTable(t, x);
+      check(
+        `${bankId} throttleGain.${view}: the throttle opens the on-load layer and closes the overrun`,
+        at(tg.on, 1) > 0.5 && at(tg.on, 0) < 0.05 && at(tg.off, 0) > 0.5 && at(tg.off, 1) < 0.05,
+        `on ${at(tg.on, 0).toFixed(3)} -> ${at(tg.on, 1).toFixed(3)}, off ${at(tg.off, 0).toFixed(3)} -> ${at(tg.off, 1).toFixed(3)}`
+      );
+    }
+  }
+  // A sound that plays another bank's outside loops (`outsideAssetDir`) has the same ones in its own manifest
+  if (sound.outsideAssetDir) {
+    const outside = join("public", sound.outsideAssetDir.replace(/^\/+|\/+$/g, ""), "manifest.json");
+    if (existsSync(outside)) {
+      const o = JSON.parse(readFileSync(outside, "utf8")) as Lc26AudioManifest;
+      const strip = (x: Lc26AudioManifest) =>
+        JSON.stringify({ ext: x.engine.ext.map((e) => ({ ...e, channels: undefined })), tg: x.throttleGain?.ext, tc: x.throttleCurve.ext });
+      check(`${bankId}: its outside loops are ${sound.outsideAssetDir}'s, which the other cars play`, strip(o) === strip(m));
+    } else {
+      noteSkip(`${bankId}'s shared outside bank`, outside);
+    }
   }
 
   // Turbo & transmission
