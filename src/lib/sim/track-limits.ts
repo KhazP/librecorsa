@@ -2,8 +2,9 @@
  * Race control for track limits.
  *
  * Outside a race (practice, the time trial) the rule is strict: the moment the car is off the track (the physics'
- * off-track flag, all four wheels off) the running lap is deleted, with no give-back. An excursion in the last sector
- * also deletes the next lap, as it gave the car a run onto the straight; a restart clears that.
+ * off-track flag, all four wheels off) the running lap is deleted, with no give-back. An excursion in the final corner
+ * zone (from the last corner's entry onto the start-finish straight, `finalCornerZoneStartS`) also deletes the next
+ * lap, as it gave the car a run onto the straight; a restart clears that.
  *
  * In a race an excursion is judged after the car is back on the asphalt instead of killing the lap the instant a wheel
  * crosses the line:
@@ -155,6 +156,42 @@ export function weightedCutPoints(c: CutInput): number {
   return raw < 0.15 ? 0 : Math.round(raw / 0.25) * 0.25;
 }
 
+/** Entry lead before the final turn's apex included in the next-lap forfeit zone (m) */
+export const FINAL_CORNER_ENTRY_LEAD_M = 120;
+/** Default final-corner zone length before S/F when a circuit lists no turns (m) */
+export const FINAL_CORNER_FALLBACK_M = 450;
+
+/**
+ * Lap distance (m) from which an off-track excursion or wall-ride in strict mode also deletes the next lap:
+ * covers the final corner (with its entry lead) and the run onto the start-finish straight — plus any flying-start
+ * run-up when supplied — without reaching back past Sector 3 (`2/3` of the lap). Returns `Infinity` for
+ * point-to-point tracks (no next lap).
+ */
+export function finalCornerZoneStartS(
+  totalLengthM: number,
+  turns: readonly { sApprox: number }[] = [],
+  opts: { pointToPoint?: boolean; flyingStartS?: number } = {}
+): number {
+  if (opts.pointToPoint || !(totalLengthM > 0)) return Infinity;
+  const s3Start = (totalLengthM * 2) / 3;
+  let lastTurnS = -Infinity;
+  for (const turn of turns) {
+    if (Number.isFinite(turn.sApprox) && turn.sApprox > 0 && turn.sApprox < totalLengthM && turn.sApprox > lastTurnS) {
+      lastTurnS = turn.sApprox;
+    }
+  }
+  let startS = lastTurnS > 0 ? lastTurnS - FINAL_CORNER_ENTRY_LEAD_M : totalLengthM - FINAL_CORNER_FALLBACK_M;
+  if (
+    opts.flyingStartS !== undefined &&
+    Number.isFinite(opts.flyingStartS) &&
+    opts.flyingStartS >= s3Start &&
+    opts.flyingStartS < totalLengthM
+  ) {
+    startS = Math.min(startS, opts.flyingStartS);
+  }
+  return Math.max(s3Start, Math.min(totalLengthM, startS));
+}
+
 /** "practice": strict limits, any driving outside a race; "race": judged, from the lights to the flag */
 export type TrackLimitsSession = "practice" | "race";
 
@@ -166,8 +203,13 @@ export interface TrackLimitsFrame {
   lapCount: number;
   /** The running lap's clock (ms): it going back is a lap starting, also the first crossing after a restart */
   lapTimeMs?: number;
-  /** The sector the car is in (strict limits: an excursion in the last one also deletes the next lap) */
+  /** The sector the car is in (strict limits: fallback for next-lap deletion when `finalCornerZone` is omitted) */
   sector?: 1 | 2 | 3;
+  /**
+   * True when the car is in the final corner / run onto the start-finish straight (`finalCornerZoneStartS`): in
+   * strict mode an excursion or wall-ride here also deletes the next lap. When omitted, falls back to `sector === 3`.
+   */
+  finalCornerZone?: boolean;
   /** Lap distance (m) */
   distM: number;
   /** Lap length (m): with it, a jump of the lap distance no car can drive is a course cut */
@@ -691,13 +733,14 @@ export class TrackLimitsMonitor {
       return null;
     }
 
-    // A circuit's wall-ride (a breach of its rule, until the window is clear) is an excursion of its own: in the last
-    // sector it deletes the next lap too, and on a frame with no sector, one still going as that lap starts does. A hill
-    // climb's run ends at its finish: nothing carries over to the next one
+    // A circuit's wall-ride (a breach of its rule, until the window is clear) is an excursion of its own: in the final
+    // corner zone it deletes the next lap too, and on a frame with neither zone nor sector, one still going as that lap
+    // starts does. A hill climb's run ends at its finish: nothing carries over to the next one
     const rideBreach = f.wallRule === "ride" && this.wallBreach;
+    const inFinalCorner = f.finalCornerZone ?? f.sector === 3;
     let deleted = false;
     let wallDeleted = false;
-    if (started && (this.nextLapDeleted || (rideBreach && f.sector === undefined))) {
+    if (started && (this.nextLapDeleted || (rideBreach && f.sector === undefined && f.finalCornerZone === undefined))) {
       wallDeleted = this.nextLapDeleted ? this.nextLapWall : true;
       this.nextLapDeleted = this.nextLapWall = false;
       this.nextLapDeletedAtClockS = null;
@@ -707,24 +750,23 @@ export class TrackLimitsMonitor {
         : { kind: "lap_invalid", text: t("game.trackLimits.limitsDeleted"), detail: t("game.trackLimits.offBeforeLine"), atMs: f.nowMs };
     }
     if (f.offTrack) {
-      const lastSector = f.sector === 3;
-      if (!wasOff || (lastSector && !this.nextLapDeleted)) {
+      if (!wasOff || (inFinalCorner && !this.nextLapDeleted)) {
         deleted = true;
         wallDeleted = false;
         this.message = {
           kind: "lap_invalid",
           text: t("game.trackLimits.limitsDeleted"),
-          detail: lastSector ? t("game.trackLimits.nextLapToo") : t("game.trackLimits.offTrack"),
+          detail: inFinalCorner ? t("game.trackLimits.nextLapToo") : t("game.trackLimits.offTrack"),
           atMs: f.nowMs,
         };
       }
-      if (lastSector) {
+      if (inFinalCorner) {
         this.nextLapDeleted = true;
         this.nextLapWall = false;
         this.nextLapDeletedAtClockS = this.clockS;
       }
     }
-    const wallNext = rideBreach && this.wallNow && f.sector === 3 && !this.nextLapDeleted;
+    const wallNext = rideBreach && this.wallNow && inFinalCorner && !this.nextLapDeleted;
     if (wallNext) {
       this.nextLapDeleted = this.nextLapWall = true;
       this.nextLapDeletedAtClockS = this.clockS;

@@ -7,7 +7,7 @@ import { TURN_METADATA, inDeadZone, planCheckFor, resolveLivery, type BuiltTrack
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
-import type { SimulatorCar } from "@/lib/sim/simulator-car";
+import { boardFlyingStartPoint, type SimulatorCar } from "@/lib/sim/simulator-car";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type F1CarRig2026, type PortedSkin, type SimCarRig } from "@/lib/car-builder-2026";
@@ -68,7 +68,7 @@ import { clampChassisToCarSheet } from "@/lib/sim/setup-sheet";
 import { buildSharedSetup, garageTunerFrom } from "@/lib/sim/setup-share";
 import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
-import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
+import { finalCornerZoneStartS, LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar, type AiDriverDef } from "@/lib/sim/ai-opponents";
@@ -1922,6 +1922,10 @@ export class DriveSession {
       modCar: carById(carIdNow).mod ? carIdNow : null,
     });
     this.lapRecorder = lapRecorder;
+    const finalCornerStartS = finalCornerZoneStartS(track.totalLengthM, TURN_METADATA, {
+      pointToPoint: Boolean(track.pointToPoint),
+      flyingStartS: track.pointToPoint ? undefined : boardFlyingStartPoint(track).s,
+    });
 
     // Automatic quality (adaptive-quality.ts): steps down on top of the player's graphics while the frames stay slow on
     // track, never touching the saved settings or the simulation. The frame-rate cap (frame-pacer.ts) picks the
@@ -2856,7 +2860,7 @@ export class DriveSession {
       const prevLapCount = physics.telemetry.lapCount;
       const crossedLine = (car.lap !== undefined && car.lap < prevLapCount) || (Boolean(car.outLap) && !physics.telemetry.outLap);
       const targetS = car.s ?? physics.sMeters;
-      const inLastSector = !track.pointToPoint && track.getSampleAtDistance(targetS).sector === 3;
+      const inLastSector = !track.pointToPoint && targetS >= finalCornerStartS;
       // Invalidate before and after restoring pose so both the worker's immediate placement report and local twin see it
       physics.invalidateLap?.();
       const playerPose = poseFromReplayCar(car);
@@ -4034,6 +4038,7 @@ export class DriveSession {
             lapCount: t.lapCount,
             lapTimeMs: t.currentLapTimeMs,
             sector: t.currentSector,
+            finalCornerZone: !track.pointToPoint && physics.sMeters >= finalCornerStartS,
             distM: t.trackDistanceM,
             lapLengthM: track.totalLengthM,
             stretchRefS,
