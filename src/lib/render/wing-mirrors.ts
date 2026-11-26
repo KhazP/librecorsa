@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { planarUvGeometry } from "./planar-uv";
+import { fitMirrorView, mirrorProjection, reflectingGeometry, reflectingMirrorMaterial, type MirrorIsland } from "./mirror-reflection";
 
 /**
  * Wing mirrors for the LC26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
@@ -20,6 +21,11 @@ import { planarUvGeometry } from "./planar-uv";
  * Cost: the car's own model is hidden during the mirror pass (self-occlusion and the cockpit's own geometry
  * would otherwise fill the 35 degree frame), the shadow map is not re-rendered, and nothing is allocated per frame.
  * Shader variants are compiled in the constructor so the first cockpit switch does not hitch.
+ *
+ * A ported AC car's mirrors (`reflecting`, its mirrors.ini meshes) work differently: each fragment of their glass shows
+ * what it reflects from the driver's eye (`mirror-reflection.ts`), out of one rear view whose frustum and target size
+ * are fitted to the mirrors (the same pixel count). Those can be on the car's outside (`outside`): the chase and T-cam
+ * views see them too, so `inView` says when any of their glass faces the camera on screen.
  */
 
 const MIRROR_MATERIALS = ["mirror_1", "mirror_2"] as const;
@@ -47,6 +53,15 @@ export interface WingMirrorOptions {
    * overlay, one per patch
    */
   glassPatches?: readonly GlassPatch[];
+  /**
+   * A ported AC car's mirror meshes (the porter's MIRROR_n): each fragment shows what its glass reflects from
+   * `eyeInModel`, through a rear view fitted to them. Used on its own, without `materials` or `glassPatches`
+   */
+  reflecting?: readonly THREE.Mesh[];
+  /** What the rear view leaves out: the car's model (default `carModelRoot`), or its whole rig with the wheels */
+  hide?: THREE.Object3D;
+  /** The mirrors are on the car's outside (sidepods, doors), in shot from the chase and T-cam views too */
+  outside?: boolean;
 }
 
 export interface GlassPatch {
@@ -141,7 +156,14 @@ export class WingMirrors {
   readonly found: boolean;
   /** Mirrors on the car's sides (wing mirrors), not just a rear-view mirror */
   readonly coversSides: boolean = false;
+  /** On the car's outside: in shot from outside views (`CameraModeSpec.outsideMirrorsInShot`), when `inView` */
+  readonly outside: boolean;
   private readonly eyeInModel: THREE.Vector3;
+  /** Where the rear view is rendered from (model frame): the eye, or between the reflecting mirrors */
+  private readonly camInModel: THREE.Vector3;
+  private readonly hideRoot: THREE.Object3D;
+  /** The reflecting glass's islands (model frame), for `inView` */
+  private readonly islands: MirrorIsland[] = [];
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene: THREE.Scene;
@@ -161,6 +183,12 @@ export class WingMirrors {
   private readonly chassisPos = new THREE.Vector3();
   private readonly chassisQuat = new THREE.Quaternion();
   private readonly chassisScale = new THREE.Vector3();
+  private readonly frustum = new THREE.Frustum();
+  private readonly viewProj = new THREE.Matrix4();
+  private readonly islandCentre = new THREE.Vector3();
+  private readonly islandNormal = new THREE.Vector3();
+  private readonly camWorld = new THREE.Vector3();
+  private readonly sphere = new THREE.Sphere();
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -172,9 +200,32 @@ export class WingMirrors {
     this.scene = scene;
     this.carModelRoot = carModelRoot;
     this.eyeInModel = (options.eyeInModel ?? EYE_IN_MODEL).clone();
+    this.camInModel = this.eyeInModel;
+    this.hideRoot = options.hide ?? carModelRoot;
+    this.outside = options.outside ?? false;
     this.coversSides = options.coversSides ?? true;
     const materials = options.materials ?? MIRROR_MATERIALS;
     this.cam = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, RT_ASPECT, CAMERA_NEAR, CAMERA_FAR);
+
+    // Reflecting glass: its surfaces and the rear view fitted to them
+    const reflecting: { mesh: THREE.Mesh; geometry: THREE.BufferGeometry; model: Float32Array; islands: MirrorIsland[] }[] = [];
+    carModelRoot.updateWorldMatrix(true, true);
+    const toModel = carModelRoot.matrixWorld.clone().invert();
+    for (const mesh of options.reflecting ?? []) {
+      if (Array.isArray(mesh.material)) continue;
+      const built = reflectingGeometry(mesh, toModel.clone().multiply(mesh.matrixWorld), this.eyeInModel);
+      if (built) reflecting.push({ mesh, ...built });
+    }
+    const view = reflecting.length ? fitMirrorView(reflecting, this.eyeInModel) : null;
+    if (!view) for (const r of reflecting) r.geometry.dispose();
+    if (view) {
+      this.camInModel = view.camera.clone();
+      mirrorProjection(view, CAMERA_NEAR, CAMERA_FAR, this.cam.projectionMatrix);
+      this.cam.projectionMatrixInverse.copy(this.cam.projectionMatrix).invert();
+      for (const r of reflecting) this.islands.push(...r.islands.filter((i) => i.normal));
+      // Wing mirrors when any glass is off the centre line, else a cockpit's interior mirror alone
+      this.coversSides = options.coversSides ?? this.islands.some((i) => Math.abs(i.centre.x) > 0.25);
+    }
 
     const meshes: THREE.Mesh[] = [];
     carModelRoot.traverse((obj) => {
@@ -182,13 +233,13 @@ export class WingMirrors {
       if (!m.isMesh || Array.isArray(m.material)) return;
       if (materials.includes(m.material.name)) meshes.push(m);
     });
-    if (meshes.length === 0 && !options.glassPatches?.length) {
+    if (meshes.length === 0 && !options.glassPatches?.length && !view) {
       this.found = false;
       this.coversSides = false;
       return;
     }
 
-    const rt = new THREE.WebGLRenderTarget(RT_WIDTH, RT_HEIGHT, {
+    const rt = new THREE.WebGLRenderTarget(view?.width ?? RT_WIDTH, view?.height ?? RT_HEIGHT, {
       type: THREE.HalfFloatType,
       samples: 0,
       depthBuffer: true,
@@ -209,6 +260,20 @@ export class WingMirrors {
       });
       // The glass material ignores UVs, so the surface geometry can stay on the mesh in both modes
       mesh.geometry = surfaceGeometry;
+    }
+    if (view) {
+      for (const r of reflecting) {
+        const glass = r.mesh.material as THREE.Material;
+        this.slots.push({
+          mesh: r.mesh,
+          glass,
+          glassGeometry: r.mesh.geometry,
+          surfaceGeometry: r.geometry,
+          surface: reflectingMirrorMaterial(rt.texture, view, this.eyeInModel, glass.side),
+        });
+        // Its own attributes kept: the glass material draws the same triangles when the mirrors are off
+        r.mesh.geometry = r.geometry;
+      }
     }
     for (const patch of options.glassPatches ?? []) {
       const geometry = buildPatchGeometry(patch);
@@ -244,6 +309,35 @@ export class WingMirrors {
     this.renderRearView(chassis);
   }
 
+  /**
+   * Whether any reflecting glass is on screen from `camera` (`heightPx` tall): facing it, inside its frustum and
+   * over a pixel or two across. True for mirrors that aren't reflecting ones (the caller's view flags decide those)
+   */
+  inView(camera: THREE.Camera, heightPx: number): boolean {
+    if (!this.found) return false;
+    if (this.islands.length === 0) return true;
+    camera.updateMatrixWorld();
+    this.viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.viewProj);
+    this.camWorld.setFromMatrixPosition(camera.matrixWorld);
+    this.carModelRoot.updateWorldMatrix(true, false);
+    const m = this.carModelRoot.matrixWorld;
+    // Pixels per metre at 1 m (a perspective projection's y scale is 1 / tan(fov / 2))
+    const pxPerM = (camera.projectionMatrix.elements[5] * heightPx) / 2;
+    for (const isl of this.islands) {
+      this.islandCentre.copy(isl.centre).applyMatrix4(m);
+      this.islandNormal.copy(isl.normal!).transformDirection(m);
+      const toCam = this.camWorld.sub(this.islandCentre);
+      const dist = toCam.length();
+      const facing = this.islandNormal.dot(toCam) > 0;
+      this.camWorld.setFromMatrixPosition(camera.matrixWorld);
+      if (!facing || !(dist > 0)) continue;
+      if (!this.frustum.intersectsSphere(this.sphere.set(this.islandCentre, isl.radius))) continue;
+      if ((isl.radius / dist) * pxPerM >= 1.5) return true;
+    }
+    return false;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -272,7 +366,7 @@ export class WingMirrors {
     // Pose from the live chassis (its pitch/roll/heave already applied this frame)
     chassis.updateWorldMatrix(true, false);
     this.carModelRoot.updateWorldMatrix(true, false);
-    this.eye.copy(this.eyeInModel).applyMatrix4(this.carModelRoot.matrixWorld);
+    this.eye.copy(this.camInModel).applyMatrix4(this.carModelRoot.matrixWorld);
     chassis.matrixWorld.decompose(this.chassisPos, this.chassisQuat, this.chassisScale);
     this.cam.position.copy(this.eye);
     this.cam.quaternion.copy(this.chassisQuat);
@@ -281,9 +375,9 @@ export class WingMirrors {
     const prevTarget = r.getRenderTarget();
     const prevAutoUpdate = r.shadowMap.autoUpdate;
     const prevXr = r.xr.enabled;
-    const carVisible = this.carModelRoot.visible;
+    const carVisible = this.hideRoot.visible;
 
-    this.carModelRoot.visible = false;
+    this.hideRoot.visible = false;
     r.shadowMap.autoUpdate = false;
     // In a headset every render() draws with the headset's eyes unless XR is off
     r.xr.enabled = false;
@@ -296,7 +390,7 @@ export class WingMirrors {
     } finally {
       r.setRenderTarget(prevTarget);
       r.xr.enabled = prevXr;
-      this.carModelRoot.visible = carVisible;
+      this.hideRoot.visible = carVisible;
       r.shadowMap.autoUpdate = prevAutoUpdate;
     }
   }
@@ -311,9 +405,9 @@ export class WingMirrors {
     const rt = this.rt;
     if (!rt) return;
     const prevTarget = r.getRenderTarget();
-    const carVisible = this.carModelRoot.visible;
+    const carVisible = this.hideRoot.visible;
     try {
-      this.carModelRoot.visible = false;
+      this.hideRoot.visible = false;
       r.setRenderTarget(rt);
       r.compile(this.scene, this.cam);
       r.setRenderTarget(prevTarget);
@@ -325,7 +419,7 @@ export class WingMirrors {
     } catch {
       // Compilation is an optimisation only; a failure here just moves the cost to the first cockpit frame
     } finally {
-      this.carModelRoot.visible = carVisible;
+      this.hideRoot.visible = carVisible;
       r.setRenderTarget(prevTarget);
     }
   }
