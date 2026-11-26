@@ -281,7 +281,7 @@
   "lapSummary.signIn": "Button beside that note: opens Settings > Profile and data > Account (the session pauses).",
   "lapSummary.driver": "The name the lap went up under. Keep the <b></b> tags around {name}; they style it. {name}: the driver's name, not translated.",
   "lapSummary.rename": "Button: change the driver's name on the board.",
-  "lapSummary.chart.title": "Chart title: the lowest speed through each corner.",
+  "lapSummary.chart.title": "Chart title: the lowest speed through each corner. Short (about 25 characters): the picked corner's name and speed share its line.",
   "lapSummary.chart.turn": "Short corner name, e.g. 'T4' for turn 4. Keep it short.",
   "lapSummary.chart.bar": "Screen-reader name of one corner's bar. {name}: corner name, not translated. {speed}, {unit}: lowest speed and km/h or mph. {delta}: the change against the best lap, e.g. '+1.2'. {state}: none (no earlier lap yet), same, faster or slower.",
   "lapSummary.chart.faster": "Chart key: faster through the corner than the best lap.",

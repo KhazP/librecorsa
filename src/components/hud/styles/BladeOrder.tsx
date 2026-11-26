@@ -182,7 +182,7 @@ const OrderRows: React.FC<{ t: CarTelemetry; w: Words; compound: TireCompound; g
               </span>
               <span
                 className={`lc-mono pr-3 text-right text-[14px] leading-none ${
-                  e.lastLapMs ? (e.isPlayer ? "" : "text-lc-fog") : e.isPlayer ? "text-lc-void/45" : "text-lc-dim"
+                  e.lastLapMs ? (e.isPlayer ? "" : "text-lc-fog") : e.isPlayer ? "text-lc-void/60" : "text-lc-slate"
                 }`}
               >
                 {formatLapTime(e.lastLapMs)}

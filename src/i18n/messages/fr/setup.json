@@ -99,7 +99,7 @@
     "summaryFullLock": "{grip} % d’adhérence · braquage maximal",
     "summaryCap": "{grip} % d’adhérence · limite {cap}°",
     "curve": "Courbe de réponse de l’auto-braquage",
-    "slide": "Glissement {deg}°"
+    "slide": "Dérive {deg}°"
   },
   "padMap": {
     "controller": "Manette",

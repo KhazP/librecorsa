@@ -18,7 +18,9 @@ export const PenaltyBadge: React.FC<{
   size?: BadgeSize;
   variant?: BadgeVariant;
   className?: string;
-}> = ({ penalty, size = "md", variant = "soft", className = "" }) => {
+  /** Without the time penalty's clock icon, where only the words fit (a timing tower row) */
+  bare?: boolean;
+}> = ({ penalty, size = "md", variant = "soft", className = "", bare = false }) => {
   const tx = useTranslations("common.penalty");
   const seconds = penalty.kind === "time" ? penalty.seconds : 0;
   const strikes = penalty.kind === "trackLimits" ? penalty.strikes : 0;
@@ -38,7 +40,7 @@ export const PenaltyBadge: React.FC<{
   switch (penalty.kind) {
     case "time":
       return (
-        <Badge tone="bad" icon="penalty" {...common}>
+        <Badge tone="bad" icon={bare ? undefined : "penalty"} {...common}>
           {words}
         </Badge>
       );

@@ -412,12 +412,14 @@ export const StandingsTable: React.FC<{
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className={cx("grid items-center gap-2 px-2.5 pb-1 text-lc-slate", gridCols)}>
+        {/* The number columns are narrow: a longer heading ("Victoires") sits against the column's end and runs back
+            over the driver column's free space, never into the next heading */}
         <span className="lc-lbl">{tx("colPos")}</span>
-        {hasMove ? <span className="lc-lbl text-center">{tx("colChange")}</span> : null}
+        {hasMove ? <span className="lc-lbl justify-self-center whitespace-nowrap">{tx("colChange")}</span> : null}
         <span className="lc-lbl">{tx("colDriver")}</span>
-        {hasWins ? <span className="lc-lbl text-end">{tx("colWins")}</span> : null}
-        {hasRoundPts ? <span className="lc-lbl text-end">{tx("colRoundPoints")}</span> : null}
-        <span className="lc-lbl text-end">{tx("colPoints")}</span>
+        {hasWins ? <span className="lc-lbl justify-self-end whitespace-nowrap">{tx("colWins")}</span> : null}
+        {hasRoundPts ? <span className="lc-lbl justify-self-end whitespace-nowrap">{tx("colRoundPoints")}</span> : null}
+        <span className="lc-lbl justify-self-end whitespace-nowrap">{tx("colPoints")}</span>
       </div>
 
       {rows.map((row, idx) => {

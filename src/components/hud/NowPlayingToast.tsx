@@ -31,6 +31,38 @@ const SPOT_CLASS: Record<Spot, string> = {
 const CONTROLS =
   'button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="slider"], [role="switch"], [role="link"], [data-toast-avoid]';
 
+/** The in-race HUD (F1TelemetryHud's root): its plates and readouts count as things the card must not cover */
+const HUD_ROOT = "[data-hud-root]";
+/** A HUD element at least this share of the screen is a frame or wrapper, not a plate */
+const HUD_WRAPPER_SHARE = 0.35;
+
+/** Whether a HUD element is something drawn: a filled, bordered or shadowed plate, its own text, or an image */
+function drawn(el: Element, cs: CSSStyleDeclaration): boolean {
+  if (el instanceof SVGSVGElement || el instanceof HTMLImageElement || el instanceof HTMLCanvasElement) return true;
+  if (cs.backgroundImage !== "none" || cs.boxShadow !== "none") return true;
+  if (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent") return true;
+  if (parseFloat(cs.borderTopWidth) > 0 && cs.borderTopColor !== "rgba(0, 0, 0, 0)") return true;
+  for (const node of el.childNodes) if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) return true;
+  return false;
+}
+
+/** The boxes of everything the in-race HUD draws on the screen now (none outside a drive) */
+function hudPlates(): DOMRect[] {
+  const plates: DOMRect[] = [];
+  const screen = window.innerWidth * window.innerHeight;
+  for (const root of document.querySelectorAll<HTMLElement>(HUD_ROOT)) {
+    for (const el of root.querySelectorAll<HTMLElement | SVGSVGElement>("*")) {
+      // Inside an SVG only the svg itself counts
+      if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0 || r.width * r.height > screen * HUD_WRAPPER_SHARE) continue;
+      if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+      if (drawn(el, getComputedStyle(el))) plates.push(r);
+    }
+  }
+  return plates;
+}
+
 /** The screen's safe-area insets (a notch, the home indicator), as the CSS above reads them */
 function safeInsets(): { top: number; right: number; bottom: number; left: number } {
   const probe = document.createElement("div");
@@ -73,6 +105,8 @@ function clearSpot(card: HTMLElement): Spot | null {
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) controls.push(r);
   }
+  // In a drive the HUD's plates too (the timing panel, the speed pod, the start lights)
+  controls.push(...hudPlates());
   const free = (spot: Spot) => {
     const b = box(spot);
     // A few pixels of breathing room around each control
@@ -84,8 +118,8 @@ function clearSpot(card: HTMLElement): Spot | null {
 /**
  * The music's new track for four seconds: the title, and the composer under it. Each track once (a track picked up
  * again after the grid or a circuit change keeps its announcement); on every screen, over the menus too. It sits top
- * right (top left right to left) unless a control is there, then at the first clear spot along the screen's top and
- * bottom edges; where every spot would cover a control (and in Career), the track goes unannounced.
+ * right (top left right to left) unless a control or, in a drive, a HUD plate is there, then at the first clear spot
+ * along the screen's top and bottom edges; where every spot would cover one (and in Career), the track goes unannounced.
  */
 export function NowPlayingToast({ nowPlaying }: { nowPlaying: NowPlaying | null }) {
   const [shown, setShown] = useState<NowPlaying | null>(null);

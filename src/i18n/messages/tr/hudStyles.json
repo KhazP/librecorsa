@@ -564,7 +564,7 @@
     },
     "positionShort": "P{position}",
     "positionOf": "{total} içinde {position}. sıra",
-    "ofField": "/ {total}",
+    "ofField": "toplam {total}",
     "lapOf": "Tur {lap} / {total}",
     "lap": "Tur {lap}",
     "run": "Tırmanış {lap}",

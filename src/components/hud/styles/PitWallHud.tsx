@@ -199,7 +199,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
         </div>
       ) : (
         <>
-          <div className={`grid h-[22px] grid-cols-[44px_1fr_78px_76px] items-center gap-x-2 px-3 ${COLS} ${HAIR}`}>
+          <div className={`grid h-[22px] grid-cols-[44px_1fr_78px_84px] items-center gap-x-2 px-3 ${COLS} ${HAIR}`}>
             <span className={LBL}>{w.sector}</span>
             <span />
             <span className={`${LBL} text-right`}>{w.time}</span>
@@ -208,7 +208,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
           {sectors.map((s, i) => {
             const tone = s.mark ? MARK_TEXT[s.mark] : "";
             return (
-              <div key={i} className={`grid h-[25px] grid-cols-[44px_1fr_78px_76px] items-center gap-x-2 px-3 ${HAIR}`}>
+              <div key={i} className={`grid h-[25px] grid-cols-[44px_1fr_78px_84px] items-center gap-x-2 px-3 ${HAIR}`}>
                 <span className={s.state === "todo" ? LBL : lbl("text-lc-chalk")}>{w.sectorShort[i]}</span>
                 <span className={`lc-mono text-right text-[10px] leading-none font-extrabold tracking-[0.12em] uppercase ${tone}`}>
                   {s.mark === "best" ? w.markBest : s.mark === "pb" ? w.markPb : ""}
@@ -233,7 +233,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
             return (
               <div key={side} className={`grid h-[27px] grid-cols-[62px_14px_1fr_70px_66px] items-center px-3 ${HAIR}`}>
                 <span className={LBL}>{side === "ahead" ? w.ahead : w.behind}</span>
-                {car ? <i aria-hidden className="block h-[15px] w-1" style={{ backgroundColor: car.color }} /> : <span />}
+                {car ? <i aria-hidden className="block h-[15px] w-1 justify-self-center" style={{ backgroundColor: car.color }} /> : <span />}
                 <span className={`lc-mono text-[14px] leading-none font-bold tracking-[0.04em] ${car ? "" : "text-lc-dim"}`}>{car ? car.code : NONE}</span>
                 <span className={`${NUMB} text-right text-[15px]`}>{car && racing ? formatGap(car.gap, true) : ""}</span>
                 <GapTrend changeS={car && split && split.driverCode === car.code ? split.changeS : undefined} side={side} w={w} />
