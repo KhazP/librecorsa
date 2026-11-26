@@ -54,12 +54,18 @@ export function Modal({
   const closeLatest = useRef(onClose);
   closeLatest.current = onClose;
   const dismiss = () => closeLatest.current();
+  // What had the focus as the modal opened, read while it renders: by its effect a field inside it may have taken the
+  // focus already (autoFocus), and the focus goes back to the opener on close, not to a field that is gone
+  const openerRef = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current && typeof document !== "undefined") openerRef.current = document.activeElement as HTMLElement | null;
+  wasOpen.current = open;
 
   useFocusNav(sheetRef, { enabled: open, onBack: dismiss, autoFocus: false });
 
   useEffect(() => {
     if (!open) return;
-    const before = document.activeElement as HTMLElement | null;
+    const before = openerRef.current ?? (document.activeElement as HTMLElement | null);
     const around: HTMLElement[] = [];
     for (let el = before?.parentElement ?? null; el && el !== document.body; el = el.parentElement) {
       around.push(el);
