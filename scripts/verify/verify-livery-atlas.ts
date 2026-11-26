@@ -43,6 +43,14 @@ import { manifestFiles, validateModManifest } from "../../src/lib/mods/mod-manif
 import { modDefinitions, registerModContent } from "../../src/lib/mods/mod-content";
 import { sanitizePacket } from "../../src/lib/net/wire";
 import { checkPackage, readImageDimensions } from "../mods/lib/package-check";
+import {
+  assertLabelsOffPaintedGeometry,
+  buildF1VectorLayers,
+  buildPortedVectorLayers,
+  LIVERY_TEMPLATE_TARGETS,
+  loadPaintGeometry,
+  rasterizeTriangle,
+} from "../cars/build-livery-templates";
 import type { LiveryConfig } from "../../src/types/f1";
 
 let passed = 0;
@@ -957,6 +965,171 @@ async function main(): Promise<void> {
       assert.equal(prevMeta.format, "webp");
       assert.equal(prevMeta.width, 640);
       assert.equal(prevMeta.height, 640);
+    }
+  });
+
+  await check("template label/pill pixels never overlap painted bodywork and use plain words without engine jargon", async () => {
+    const root = process.cwd();
+    const SIZE = F1_PROJECTION.atlasSize;
+    const JARGON_RE = /\([+-][XYZ]\)|\bX\s*=\s*0\b|\|X\|\s*>/;
+
+    // 1. Exact GLB-mask pixel check for every target whose GLB exists locally (always lc26 & lc25, plus hosted if present)
+    const localModelsDir = join(root, "public/cars");
+    let glbChecked = 0;
+    for (const target of LIVERY_TEMPLATE_TARGETS) {
+      const glbPath = join(localModelsDir, target.glbRelPath);
+      if (!existsSync(glbPath)) continue;
+      glbChecked++;
+      const { triangles, frontAxleZ, rearAxleZ, clamping, splitterVerts } = await loadPaintGeometry(target, glbPath);
+      const panelIds = target.kind === "f1" ? F1_PANEL_IDS : PORTED_PANEL_IDS;
+      const panelRectOf = (pid: string) =>
+        target.kind === "f1"
+          ? F1_PROJECTION.panels[pid as F1PanelId]
+          : PORTED_PROJECTION.panels[pid as PortedPanelId];
+      const fillMask = new Uint8Array(SIZE * SIZE);
+
+      for (const tri of triangles) {
+        const cx = (tri.v0[0] + tri.v1[0] + tri.v2[0]) / 3;
+        const cy = (tri.v0[1] + tri.v1[1] + tri.v2[1]) / 3;
+        const cz = (tri.v0[2] + tri.v1[2] + tri.v2[2]) / 3;
+        const cnx = tri.n0[0] + tri.n1[0] + tri.n2[0];
+        const cny = tri.n0[1] + tri.n1[1] + tri.n2[1];
+        const cnz = tri.n0[2] + tri.n1[2] + tri.n2[2];
+        const p0 = target.kind === "f1" ? projectF1Point(tri.v0, tri.n0) : projectPortedPoint(tri.v0, tri.n0, target.profile);
+        const p1 = target.kind === "f1" ? projectF1Point(tri.v1, tri.n1) : projectPortedPoint(tri.v1, tri.n1, target.profile);
+        const p2 = target.kind === "f1" ? projectF1Point(tri.v2, tri.n2) : projectPortedPoint(tri.v2, tri.n2, target.profile);
+        const pc = target.kind === "f1"
+          ? projectF1Point([cx, cy, cz], [cnx, cny, cnz])
+          : projectPortedPoint([cx, cy, cz], [cnx, cny, cnz], target.profile);
+        for (const pid of panelIds) {
+          const wMax = Math.max(
+            (p0.panelWeights as Partial<Record<string, number>>)[pid] ?? 0,
+            (p1.panelWeights as Partial<Record<string, number>>)[pid] ?? 0,
+            (p2.panelWeights as Partial<Record<string, number>>)[pid] ?? 0,
+            (pc.panelWeights as Partial<Record<string, number>>)[pid] ?? 0
+          );
+          if (wMax < 0.18 && pc.dominantPanel !== pid) continue;
+          const s0 = target.kind === "f1"
+            ? f1ProjectToPanel(pid as F1PanelId, tri.v0[0], tri.v0[1], tri.v0[2])
+            : portedProjectToPanel(pid as PortedPanelId, tri.v0[0], tri.v0[1], tri.v0[2], target.profile);
+          const s1 = target.kind === "f1"
+            ? f1ProjectToPanel(pid as F1PanelId, tri.v1[0], tri.v1[1], tri.v1[2])
+            : portedProjectToPanel(pid as PortedPanelId, tri.v1[0], tri.v1[1], tri.v1[2], target.profile);
+          const s2 = target.kind === "f1"
+            ? f1ProjectToPanel(pid as F1PanelId, tri.v2[0], tri.v2[1], tri.v2[2])
+            : portedProjectToPanel(pid as PortedPanelId, tri.v2[0], tri.v2[1], tri.v2[2], target.profile);
+          rasterizeTriangle(fillMask, panelRectOf(pid), s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+        }
+      }
+
+      const panelRects = panelIds.map((pid) => [pid, panelRectOf(pid)] as const);
+      for (const overlayOnly of [false, true]) {
+        const layers =
+          target.kind === "f1"
+            ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, fillMask, overlayOnly)
+            : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, splitterVerts > 0, fillMask, overlayOnly);
+        assert.ok(!JARGON_RE.test(layers.labelsSvg), `${target.id} (${overlayOnly ? "overlay" : "template"}) labels must not contain engine jargon`);
+        await assertLabelsOffPaintedGeometry(
+          target.id,
+          overlayOnly ? "overlay" : "template",
+          Buffer.from(layers.labelsSvg),
+          fillMask,
+          panelRects
+        );
+      }
+    }
+    assert.ok(glbChecked >= 2, `expected at least lc26 and lc25 GLBs locally, checked ${glbChecked}`);
+
+    // 2. Pixel check across all 5 committed template PNGs: find every filled dark pill (#0f172a box) and verify the
+    //    perimeter 4 px outside its white border sits in unpainted background (#cbd5e1), never on painted bodywork
+    //    fill (#f4f7fb / #e2e8f0, which has r in [222..250] and cool blue tint b - r >= 4).
+    for (const carId of ["lc26", "lc25", "amg-gt3", "bmw-m4-gt3", "lc-lmdh"] as const) {
+      const templatePath = join(root, "docs/livery-templates", carId, `${carId}-template.png`);
+      const { data, info } = await sharp(readFileSync(templatePath)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const w = info.width;
+      const h = info.height;
+      const isDarkPillPx = (x: number, y: number): boolean => {
+        const o = (y * w + x) * 3;
+        return data[o] < 30 && data[o + 1] < 40 && data[o + 2] < 65;
+      };
+      const isPaintFillPx = (x: number, y: number): boolean => {
+        const o = (y * w + x) * 3;
+        const rr = data[o], gg = data[o + 1], bb = data[o + 2];
+        return rr >= 220 && rr <= 250 && gg >= 226 && bb >= 236 && bb - rr >= 4;
+      };
+      const isPillInteriorPx = (x: number, y: number): boolean => {
+        // Inside a pill: either dark navy fill (#0f172a) or white text (#ffffff) or grey antialiased text
+        const o = (y * w + x) * 3;
+        const rr = data[o], gg = data[o + 1], bb = data[o + 2];
+        // Exclude background slate (#cbd5e1: r~203,g~213,b~225) and paint fill (#e2e8f0 / #f4f7fb)
+        if (rr >= 195 && rr <= 250 && bb - rr >= 4) return false;
+        return isDarkPillPx(x, y) || (rr > 248 && gg > 248 && bb > 248);
+      };
+      const panels = carId === "lc26" || carId === "lc25" ? Object.entries(F1_PROJECTION.panels) : Object.entries(PORTED_PROJECTION.panels);
+      for (const [pid, r] of panels) {
+        const visited = new Uint8Array(r.w * r.h);
+        for (let y = r.y + 6; y < r.y + r.h - 14; y += 4) {
+          for (let x = r.x + 6; x < r.x + r.w - 20; x += 4) {
+            if (visited[(y - r.y) * r.w + (x - r.x)] || !isDarkPillPx(x, y)) continue;
+            // Seed only on a solid 24x8 dark navy bar (the solid interior of a pill, never thin mesh edges)
+            let solid = true;
+            for (let dy = 0; dy < 8 && solid; dy += 2) {
+              for (let dx = 0; dx < 24; dx += 3) {
+                if (!isDarkPillPx(x + dx, y + dy)) {
+                  solid = false;
+                  break;
+                }
+              }
+            }
+            if (!solid) continue;
+            // Flood-fill the pill's dark interior + white lettering to get its exact bounding box
+            let x0 = x, x1 = x, y0 = y, y1 = y;
+            let darkCount = 0;
+            const q: number[] = [x, y];
+            visited[(y - r.y) * r.w + (x - r.x)] = 1;
+            let count = 0;
+            while (q.length > 0 && count < 60000) {
+              const cy = q.pop()!;
+              const cx = q.pop()!;
+              count++;
+              if (isDarkPillPx(cx, cy)) darkCount++;
+              if (cx < x0) x0 = cx;
+              if (cx > x1) x1 = cx;
+              if (cy < y0) y0 = cy;
+              if (cy > y1) y1 = cy;
+              for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (nx <= r.x + 3 || nx >= r.x + r.w - 3 || ny <= r.y + 3 || ny >= r.y + r.h - 3) continue;
+                const li = (ny - r.y) * r.w + (nx - r.x);
+                if (visited[li] || !isPillInteriorPx(nx, ny)) continue;
+                visited[li] = 1;
+                q.push(nx, ny);
+              }
+            }
+            const bw = x1 - x0 + 1;
+            const bh = y1 - y0 + 1;
+            if (bw < 28 || bh < 14 || bh > 96 || darkCount / (bw * bh) < 0.45) continue;
+            // Check 4px outside the pill's outer edge (past its 2px white border) for any painted bodywork fill
+            let paintHits = 0;
+            for (let px = Math.max(r.x + 4, x0 - 4); px <= Math.min(r.x + r.w - 5, x1 + 4); px += 2) {
+              for (const py of [y0 - 4, y1 + 4]) {
+                if (py > r.y + 4 && py < r.y + r.h - 4 && isPaintFillPx(px, py)) paintHits++;
+              }
+            }
+            for (let py = Math.max(r.y + 4, y0 - 4); py <= Math.min(r.y + r.h - 5, y1 + 4); py += 2) {
+              for (const px of [x0 - 4, x1 + 4]) {
+                if (px > r.x + 4 && px < r.x + r.w - 4 && isPaintFillPx(px, py)) paintHits++;
+              }
+            }
+            assert.equal(
+              paintHits,
+              0,
+              `${carId} ${pid}: dark pill [${x0}..${x1}, ${y0}..${y1}] touches painted bodywork (${paintHits} border hits)`
+            );
+          }
+        }
+      }
     }
   });
 

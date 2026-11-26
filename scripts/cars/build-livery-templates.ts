@@ -13,7 +13,7 @@ import { join, resolve } from "node:path";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { MeshoptDecoder } from "meshoptimizer";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import * as THREE from "three";
 import {
   F1_PANEL_IDS,
@@ -30,6 +30,7 @@ import {
   type PortedProjectionProfile,
 } from "../../src/lib/render/livery-projection";
 import {
+  isProceduralPaintMesh,
   PROCEDURAL_BODY_PROFILES,
   PROCEDURAL_PROFILE_BY_MATERIAL,
 } from "../../src/lib/render/ported-procedural-livery";
@@ -38,6 +39,7 @@ const ROOT = process.cwd();
 const OUT_ROOT = join(ROOT, "docs/livery-templates");
 const SIZE = F1_PROJECTION.atlasSize;
 const F1_PAINT_MATERIALS = new Set(["EXT_PAINT_PRIMARY", "EXT_PAINT_SECONDARY", "EXT_PAINT_ACCENT"]);
+const LABEL_PAINT_MARGIN_PX = 8;
 
 type TemplateCarId = "lc26" | "lc25" | "amg-gt3" | "bmw-m4-gt3" | "lc-lmdh";
 type AnyPanelId = F1PanelId | PortedPanelId;
@@ -109,10 +111,10 @@ interface PaintTri {
   readonly v0: Vec3;
   readonly v1: Vec3;
   readonly v2: Vec3;
-  readonly n0: Vec3;
-  readonly n1: Vec3;
-  readonly n2: Vec3;
-  readonly faceNrm: Vec3;
+  n0: Vec3;
+  n1: Vec3;
+  n2: Vec3;
+  faceNrm: Vec3;
   readonly material: string;
 }
 
@@ -162,6 +164,76 @@ function isSplitterPoint(p: Vec3, profile: PortedProjectionProfile): boolean {
   return profile.splitterMaxY > 0 && p[1] < profile.splitterMaxY && p[2] > profile.splitterMinZ;
 }
 
+/**
+ * For double-sided GLBs with mirrored right-half winding inversions (such as `lc-lmdh.glb`, where the
+ * runtime shader flips `!gl_FrontFacing` fragments to match exterior viewing direction), orient any
+ * right-half (`x < 0`) triangle whose normal is inverted relative to its mirrored left-half (`x > 0`) twin.
+ * This ensures the offline template matches the exterior shading and removes asymmetric inverted-nose/tail
+ * artefacts from the REAR and FRONT panels.
+ */
+function orientInvertedMirroredTriangles(triangles: PaintTri[]): number {
+  const CELL = 0.025; // 2.5 cm spatial voxel grid for left-half twin lookup
+  const cellKey = (ix: number, iy: number, iz: number) => `${ix},${iy},${iz}`;
+  const leftBuckets = new Map<string, { c: Vec3; n: Vec3 }[]>();
+
+  for (const tri of triangles) {
+    const cx = (tri.v0[0] + tri.v1[0] + tri.v2[0]) / 3;
+    if (cx <= 0.01) continue;
+    const cy = (tri.v0[1] + tri.v1[1] + tri.v2[1]) / 3;
+    const cz = (tri.v0[2] + tri.v1[2] + tri.v2[2]) / 3;
+    const key = cellKey(Math.round(cx / CELL), Math.round(cy / CELL), Math.round(cz / CELL));
+    let bucket = leftBuckets.get(key);
+    if (!bucket) {
+      bucket = [];
+      leftBuckets.set(key, bucket);
+    }
+    bucket.push({ c: [cx, cy, cz], n: tri.faceNrm });
+  }
+
+  let flipped = 0;
+  for (const tri of triangles) {
+    const cx = (tri.v0[0] + tri.v1[0] + tri.v2[0]) / 3;
+    if (cx >= -0.01) continue;
+    const cy = (tri.v0[1] + tri.v1[1] + tri.v2[1]) / 3;
+    const cz = (tri.v0[2] + tri.v1[2] + tri.v2[2]) / 3;
+    const mx = -cx;
+    const bx = Math.round(mx / CELL);
+    const by = Math.round(cy / CELL);
+    const bz = Math.round(cz / CELL);
+
+    let bestDistSq = 0.04 * 0.04;
+    let bestTwin: Vec3 | null = null;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = leftBuckets.get(cellKey(bx + dx, by + dy, bz + dz));
+          if (!bucket) continue;
+          for (const cand of bucket) {
+            const ddx = cand.c[0] - mx;
+            const ddy = cand.c[1] - cy;
+            const ddz = cand.c[2] - cz;
+            const d2 = ddx * ddx + ddy * ddy + ddz * ddz;
+            if (d2 < bestDistSq) {
+              bestDistSq = d2;
+              bestTwin = cand.n;
+            }
+          }
+        }
+      }
+    }
+    if (!bestTwin) continue;
+    const expected: Vec3 = [-bestTwin[0], bestTwin[1], bestTwin[2]];
+    if (dot3(tri.faceNrm, expected) < -0.45) {
+      tri.n0 = [-tri.n0[0], -tri.n0[1], -tri.n0[2]];
+      tri.n1 = [-tri.n1[0], -tri.n1[1], -tri.n1[2]];
+      tri.n2 = [-tri.n2[0], -tri.n2[1], -tri.n2[2]];
+      tri.faceNrm = [-tri.faceNrm[0], -tri.faceNrm[1], -tri.faceNrm[2]];
+      flipped++;
+    }
+  }
+  return flipped;
+}
+
 /** Loads all paint-zone triangles and axle positions from an F1 or ported car GLB */
 async function loadPaintGeometry(
   target: CarTemplateTarget,
@@ -173,6 +245,8 @@ async function loadPaintGeometry(
   clamping: ClampingStats<AnyPanelId>;
   bounds: { min: Vec3; max: Vec3 };
   splitterVerts: number;
+  excludedNodes: number;
+  flippedMirroredTris: number;
 }> {
   await MeshoptDecoder.ready;
   const io = new NodeIO()
@@ -188,6 +262,7 @@ async function loadPaintGeometry(
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];
   let splitterVerts = 0;
+  let excludedNodes = 0;
 
   // For ported cars, ported-car-model.ts transforms every mesh under BODY by relativeMatrix(mesh, body)
   const bodyNode = target.kind === "ported"
@@ -211,6 +286,11 @@ async function loadPaintGeometry(
 
     const mesh = node.getMesh();
     if (!mesh) continue;
+
+    if (target.kind === "ported" && !isProceduralPaintMesh(target.id, node.getName())) {
+      excludedNodes++;
+      continue;
+    }
 
     let frameMatrix: readonly number[];
     if (target.kind === "f1") {
@@ -326,9 +406,9 @@ async function loadPaintGeometry(
           v0,
           v1,
           v2,
-          n0: nrmAcc ? norms[i0] : faceNrm,
-          n1: nrmAcc ? norms[i1] : faceNrm,
-          n2: nrmAcc ? norms[i2] : faceNrm,
+          n0: nrmAcc ? [...norms[i0]] : [...faceNrm],
+          n1: nrmAcc ? [...norms[i1]] : [...faceNrm],
+          n2: nrmAcc ? [...norms[i2]] : [...faceNrm],
           faceNrm,
           material: matName,
         });
@@ -336,7 +416,21 @@ async function loadPaintGeometry(
     }
   }
 
-  return { triangles, frontAxleZ, rearAxleZ, clamping, bounds: { min, max }, splitterVerts };
+  let flippedMirroredTris = 0;
+  if (target.kind === "ported" && target.profile.flipBackfacing) {
+    flippedMirroredTris = orientInvertedMirroredTriangles(triangles);
+  }
+
+  return {
+    triangles,
+    frontAxleZ,
+    rearAxleZ,
+    clamping,
+    bounds: { min, max },
+    splitterVerts,
+    excludedNodes,
+    flippedMirroredTris,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -446,90 +540,400 @@ function escXml(s: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// SVG vector overlays (F1 7-panel & Ported 5-panel)
+// Collision-free label placement using the rasterised paint-coverage mask
 // ---------------------------------------------------------------------------
 
-function pushSvgHelpers(parts: string[]): {
-  pill: (x: number, y: number, text: string, fontSize?: number, align?: "start" | "end" | "middle") => void;
-  arrow: (x1: number, y: number, x2: number, label: string) => void;
-  bodyStamp: (x: number, y: number, text: string, fontSize?: number) => void;
-  tag: (x: number, y: number, text: string) => void;
-} {
-  const pill = (x: number, y: number, text: string, fontSize = 30, align: "start" | "end" | "middle" = "start") => {
-    const padX = 14;
-    const h = Math.round(fontSize * 1.42);
-    const estW = Math.round(text.length * fontSize * 0.62) + padX * 2;
-    const bx = align === "start" ? x : align === "end" ? x - estW : x - estW / 2;
-    const tx = bx + estW / 2;
-    const ty = y + Math.round(h * 0.72);
-    parts.push(
-      `<rect x="${bx}" y="${y}" width="${estW}" height="${h}" rx="6" fill="#0f172a" stroke="#ffffff" stroke-width="2" />`
-    );
-    parts.push(
-      `<text x="${tx}" y="${ty}" text-anchor="middle" font-size="${fontSize}" fill="#ffffff" class="hdr">${escXml(text)}</text>`
-    );
-  };
-
-  const arrow = (x1: number, y: number, x2: number, label: string) => {
-    const dir = x2 > x1 ? 1 : -1;
-    const head = 18;
-    const tipX = x2;
-    const lineEnd = x2 - dir * 12;
-    const midX = (x1 + x2) / 2;
-    parts.push(
-      `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#ffffff" stroke-width="9" stroke-linecap="round" />`
-    );
-    parts.push(
-      `<polygon points="${tipX},${y} ${tipX - dir * head},${y - 11} ${tipX - dir * head},${y + 11}" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />`
-    );
-    parts.push(
-      `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#0f172a" stroke-width="5" stroke-linecap="round" />`
-    );
-    parts.push(
-      `<polygon points="${tipX},${y} ${tipX - dir * head},${y - 10} ${tipX - dir * head},${y + 10}" fill="#0f172a" />`
-    );
-    parts.push(
-      `<text x="${midX}" y="${y - 14}" text-anchor="middle" font-size="28" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="hdr">${escXml(label)}</text>`
-    );
-  };
-
-  const bodyStamp = (x: number, y: number, text: string, fontSize = 36) => {
-    parts.push(
-      `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" fill="#0f172a" stroke="#ffffff" stroke-width="6" paint-order="stroke" class="stamp">${escXml(text)}</text>`
-    );
-  };
-
-  const tag = (x: number, y: number, text: string) => {
-    parts.push(
-      `<text x="${x}" y="${y}" font-size="28" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="hdr">${escXml(text)}</text>`
-    );
-  };
-
-  return { pill, arrow, bodyStamp, tag };
+/** Conservative pixel width estimate for bold sans-serif SVG text (with letter-spacing) */
+function estimateTextWidth(text: string, fontSize: number): number {
+  let units = 0;
+  for (const ch of text) {
+    if (ch === " " || ch === "·" || ch === "|" || ch === "I" || ch === "i" || ch === "l" || ch === "!" || ch === ".") {
+      units += 0.36;
+    } else if (ch === "W" || ch === "M" || ch === "←" || ch === "→") {
+      units += 0.96;
+    } else if (ch === "(" || ch === ")" || ch === ":" || ch === "-") {
+      units += 0.44;
+    } else {
+      units += 0.72;
+    }
+  }
+  return Math.ceil(units * fontSize + text.length * 0.8);
 }
 
-function buildF1VectorSvg(
+interface RectBox {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+interface PanelMaskIndex {
+  readonly rect: AtlasPanelRect;
+  /** 2D prefix sum of paint-blocked pixels (fillMask dilated by LABEL_PAINT_MARGIN_PX) inside `rect` */
+  readonly marginSum: Int32Array;
+  /** 2D prefix sum of raw fillMask pixels (zero margin) inside `rect` */
+  readonly paintSum: Int32Array;
+  /** Placed label boxes (in full atlas coordinates) to keep labels from overlapping each other */
+  readonly placed: RectBox[];
+}
+
+function buildPrefixSum(mask: Uint8Array, rect: AtlasPanelRect): Int32Array {
+  const stride = rect.w + 1;
+  const sum = new Int32Array((rect.h + 1) * stride);
+  for (let ly = 0; ly < rect.h; ly++) {
+    const srcRow = (rect.y + ly) * SIZE + rect.x;
+    const row = (ly + 1) * stride;
+    const prev = ly * stride;
+    let run = 0;
+    for (let lx = 0; lx < rect.w; lx++) {
+      if (mask[srcRow + lx]) run++;
+      sum[row + lx + 1] = sum[prev + lx + 1] + run;
+    }
+  }
+  return sum;
+}
+
+function queryPrefixSum(sum: Int32Array, rect: AtlasPanelRect, x: number, y: number, w: number, h: number): number {
+  const lx0 = Math.max(0, Math.floor(x - rect.x));
+  const ly0 = Math.max(0, Math.floor(y - rect.y));
+  const lx1 = Math.min(rect.w, Math.ceil(x + w - rect.x));
+  const ly1 = Math.min(rect.h, Math.ceil(y + h - rect.y));
+  if (lx1 <= lx0 || ly1 <= ly0) return 0;
+  const stride = rect.w + 1;
+  return sum[ly1 * stride + lx1] - sum[ly0 * stride + lx1] - sum[ly1 * stride + lx0] + sum[ly0 * stride + lx0];
+}
+
+function boxesOverlap(a: RectBox, b: RectBox, pad = 6): boolean {
+  return (
+    a.x < b.x + b.w + pad &&
+    a.x + a.w + pad > b.x &&
+    a.y < b.y + b.h + pad &&
+    a.y + a.h + pad > b.y
+  );
+}
+
+class PanelLabelPlacer {
+  private readonly panels = new Map<AnyPanelId, PanelMaskIndex>();
+
+  constructor(fillMask: Uint8Array, panelRects: ReadonlyArray<readonly [AnyPanelId, AtlasPanelRect]>) {
+    for (const [pid, rect] of panelRects) {
+      const dilated = dilateMaskInPanel(fillMask, rect, LABEL_PAINT_MARGIN_PX);
+      this.panels.set(pid, {
+        rect,
+        marginSum: buildPrefixSum(dilated, rect),
+        paintSum: buildPrefixSum(fillMask, rect),
+        placed: [],
+      });
+    }
+  }
+
+  /**
+   * Finds a non-overlapping box of size `(w, h)` inside `pid`, preferring positions closest to `targets`
+   * (tried in priority order). Enforces `LABEL_PAINT_MARGIN_PX` clearance from painted pixels when `strictMargin`
+   * is true, or zero overlap with `fillMask` when `strictMargin` is false.
+   */
+  findBox(
+    pid: AnyPanelId,
+    w: number,
+    h: number,
+    targets: readonly [number, number][],
+    opts?: { strictMargin?: boolean; xRange?: readonly [number, number]; yRange?: readonly [number, number]; borderPad?: number }
+  ): RectBox | null {
+    const idx = this.panels.get(pid);
+    if (!idx) return null;
+    const r = idx.rect;
+    const border = opts?.borderPad ?? 6;
+    const minX = Math.max(r.x + border, opts?.xRange ? Math.ceil(opts.xRange[0]) : r.x + border);
+    const maxX = Math.min(r.x + r.w - border - w, opts?.xRange ? Math.floor(opts.xRange[1] - w) : r.x + r.w - border - w);
+    const minY = Math.max(r.y + border, opts?.yRange ? Math.ceil(opts.yRange[0]) : r.y + border);
+    const maxY = Math.min(r.y + r.h - border - h, opts?.yRange ? Math.floor(opts.yRange[1] - h) : r.y + r.h - border - h);
+    if (minX > maxX || minY > maxY) return null;
+
+    const sum = opts?.strictMargin === false ? idx.paintSum : idx.marginSum;
+    const fits = (x: number, y: number): boolean => {
+      if (queryPrefixSum(sum, r, x, y, w, h) > 0) return false;
+      const cand: RectBox = { x, y, w, h };
+      for (const prev of idx.placed) {
+        if (boxesOverlap(cand, prev, 6)) return false;
+      }
+      return true;
+    };
+
+    // Fast path: try clamped target points directly in priority order
+    for (const [tx, ty] of targets) {
+      const cx = Math.max(minX, Math.min(maxX, Math.round(tx)));
+      const cy = Math.max(minY, Math.min(maxY, Math.round(ty)));
+      if (fits(cx, cy)) return { x: cx, y: cy, w, h };
+    }
+
+    // Full-panel grid search picking the free box closest to the first preferred target
+    const [prefX, prefY] = targets[0] ?? [minX, minY];
+    let best: RectBox | null = null;
+    let bestDistSq = Infinity;
+    const step = 4;
+    for (let y = minY; y <= maxY; y += step) {
+      for (let x = minX; x <= maxX; x += step) {
+        const dx = x - prefX;
+        const dy = y - prefY;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= bestDistSq) continue;
+        if (fits(x, y)) {
+          bestDistSq = d2;
+          best = { x, y, w, h };
+        }
+      }
+    }
+    return best;
+  }
+
+  reserve(pid: AnyPanelId, box: RectBox): void {
+    this.panels.get(pid)?.placed.push(box);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SVG vector builders (chrome, in-body stamps, collision-free panel labels)
+// ---------------------------------------------------------------------------
+
+function svgHeader(): string[] {
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`,
+    `<defs><style>`,
+    `  .hdr { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 0.4px; }`,
+    `  .stamp { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 1px; }`,
+    `  .ref { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }`,
+    `</style></defs>`,
+  ];
+}
+
+function createLabelEmitter(labelParts: string[], placer: PanelLabelPlacer, panelRectOf: (pid: AnyPanelId) => AtlasPanelRect) {
+  /**
+   * Places a dark rounded pill (or multi-line stacked pill) in unpainted space with >= 8 px margin from painted
+   * pixels. Shrinks font size and tries compact fallback lines if needed; falls back to outlined text without
+   * background only if no strict-margin pill fits anywhere in the panel.
+   */
+  const placePill = (
+    pid: AnyPanelId,
+    linesOrVariants: readonly (string | readonly string[])[],
+    preferredCorners: readonly ("tl" | "tr" | "bl" | "br" | "tc" | "bc")[],
+    startFontSize = 28,
+    minFontSize = 15
+  ): boolean => {
+    const r = panelRectOf(pid);
+    const toTargets = (w: number, h: number): [number, number][] =>
+      preferredCorners.map((c) => {
+        switch (c) {
+          case "tl": return [r.x + 12, r.y + 10];
+          case "tr": return [r.x + r.w - w - 12, r.y + 10];
+          case "bl": return [r.x + 12, r.y + r.h - h - 10];
+          case "br": return [r.x + r.w - w - 12, r.y + r.h - h - 10];
+          case "tc": return [r.x + Math.round((r.w - w) / 2), r.y + 10];
+          case "bc": return [r.x + Math.round((r.w - w) / 2), r.y + r.h - h - 10];
+        }
+      });
+
+    const variants: (readonly string[])[] = linesOrVariants.map((v) => (typeof v === "string" ? [v] : v));
+
+    // Try with strict 8px margin across variants & descending font sizes
+    for (const strictMargin of [true, false]) {
+      for (const lines of variants) {
+        for (let fs = startFontSize; fs >= minFontSize; fs -= 2) {
+          const padX = Math.max(10, Math.round(fs * 0.45));
+          const padY = Math.max(5, Math.round(fs * 0.24));
+          const lineH = Math.round(fs * 1.18);
+          const textW = Math.max(...lines.map((l) => estimateTextWidth(l, fs)));
+          const w = textW + padX * 2 + 4;
+          const h = lines.length * lineH + padY * 2 + 2;
+          const box = placer.findBox(pid, w, h, toTargets(w, h), { strictMargin });
+          if (!box) continue;
+          placer.reserve(pid, box);
+          const cx = box.x + box.w / 2;
+          if (strictMargin) {
+            labelParts.push(
+              `<rect x="${box.x + 1}" y="${box.y + 1}" width="${box.w - 2}" height="${box.h - 2}" rx="6" fill="#0f172a" stroke="#ffffff" stroke-width="2" />`
+            );
+            for (let i = 0; i < lines.length; i++) {
+              const ty = box.y + padY + i * lineH + Math.round(fs * 0.88);
+              labelParts.push(
+                `<text x="${cx.toFixed(1)}" y="${ty}" text-anchor="middle" font-size="${fs}" fill="#ffffff" class="hdr">${escXml(lines[i])}</text>`
+              );
+            }
+          } else {
+            // Tight-space fallback: outlined text with no filled background
+            for (let i = 0; i < lines.length; i++) {
+              const ty = box.y + padY + i * lineH + Math.round(fs * 0.88);
+              labelParts.push(
+                `<text x="${cx.toFixed(1)}" y="${ty}" text-anchor="middle" font-size="${fs}" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="hdr">${escXml(lines[i])}</text>`
+              );
+            }
+          }
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  /** Places a directional FRONT arrow + label in unpainted space with >= 8 px margin */
+  const placeArrow = (
+    pid: AnyPanelId,
+    dir: 1 | -1,
+    label: string,
+    preferred: readonly [number, number][]
+  ): boolean => {
+    const widths = [230, 180, 140];
+    for (const w of widths) {
+      const fs = w >= 180 ? 24 : 20;
+      const h = fs + 28;
+      const box = placer.findBox(pid, w, h, preferred, { strictMargin: true });
+      if (!box) continue;
+      placer.reserve(pid, box);
+      const y = box.y + h - 13;
+      const x1 = dir > 0 ? box.x + 10 : box.x + box.w - 10;
+      const x2 = dir > 0 ? box.x + box.w - 10 : box.x + 10;
+      const head = 15;
+      const lineEnd = x2 - dir * 10;
+      const midX = (x1 + x2) / 2;
+      labelParts.push(
+        `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />`
+      );
+      labelParts.push(
+        `<polygon points="${x2},${y} ${x2 - dir * head},${y - 9} ${x2 - dir * head},${y + 9}" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />`
+      );
+      labelParts.push(
+        `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round" />`
+      );
+      labelParts.push(
+        `<polygon points="${x2},${y} ${x2 - dir * head},${y - 8} ${x2 - dir * head},${y + 8}" fill="#0f172a" />`
+      );
+      labelParts.push(
+        `<text x="${midX.toFixed(1)}" y="${y - 12}" text-anchor="middle" font-size="${fs}" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="hdr">${escXml(label)}</text>`
+      );
+      return true;
+    }
+    return false;
+  };
+
+  /** Places an outlined reference label (axle, centre line, or overlay tag) strictly off painted pixels */
+  const placeRefText = (
+    pid: AnyPanelId,
+    text: string,
+    targets: readonly [number, number][],
+    opts?: { startFontSize?: number; minFontSize?: number; xRange?: readonly [number, number]; yRange?: readonly [number, number]; cls?: "ref" | "hdr" }
+  ): boolean => {
+    const startFs = opts?.startFontSize ?? 20;
+    const minFs = opts?.minFontSize ?? 14;
+    const cls = opts?.cls ?? "ref";
+    for (const strictMargin of [true, false]) {
+      for (let fs = startFs; fs >= minFs; fs -= 2) {
+        const w = estimateTextWidth(text, fs) + 12;
+        const h = Math.round(fs * 1.25) + 8;
+        const box = placer.findBox(pid, w, h, targets, {
+          strictMargin,
+          xRange: opts?.xRange,
+          yRange: opts?.yRange,
+        });
+        if (!box) continue;
+        placer.reserve(pid, box);
+        const cx = box.x + box.w / 2;
+        const ty = box.y + Math.round(fs * 0.96) + 3;
+        labelParts.push(
+          `<text x="${cx.toFixed(1)}" y="${ty}" text-anchor="middle" font-size="${fs}" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="${cls}">${escXml(text)}</text>`
+        );
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /** Places an axle label beside its vertical dashed line `axleX`, searching along the line first */
+  const placeAxleLabel = (pid: AnyPanelId, text: string, axleX: number, preferSide: "left" | "right"): void => {
+    const r = panelRectOf(pid);
+    const estW = estimateTextWidth(text, 20) + 12;
+    const xLeft = axleX - estW - 8;
+    const xRight = axleX + 8;
+    const primaryX = preferSide === "left" ? xLeft : xRight;
+    const altX = preferSide === "left" ? xRight : xLeft;
+    const yBottom = r.y + r.h - 36;
+    const yTop = r.y + 10;
+    const yMid = r.y + Math.round(r.h / 2) - 14;
+
+    // First try within a vertical band beside the axle line so the label stays visibly attached to its line
+    const bandMinX = Math.max(r.x + 6, axleX - estW - 24);
+    const bandMaxX = Math.min(r.x + r.w - 6, axleX + estW + 24);
+    const placedNearLine = placeRefText(
+      pid,
+      text,
+      [
+        [primaryX, yBottom],
+        [altX, yBottom],
+        [primaryX, yTop],
+        [altX, yTop],
+        [primaryX, yMid],
+        [altX, yMid],
+      ],
+      { startFontSize: 20, minFontSize: 14, xRange: [bandMinX, bandMaxX] }
+    );
+    if (!placedNearLine) {
+      // Fallback: search wider band (still staying near axleX)
+      placeRefText(pid, text, [[primaryX, yBottom], [primaryX, yTop]], { startFontSize: 18, minFontSize: 14 });
+    }
+  };
+
+  return { placePill, placeArrow, placeRefText, placeAxleLabel };
+}
+
+function pushBodyStamp(
+  parts: string[],
+  x: number,
+  y: number,
+  text: string,
+  fontSize = 36,
+  reserve?: { placer: PanelLabelPlacer; pid: AnyPanelId }
+): void {
+  parts.push(
+    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" fill="#0f172a" stroke="#ffffff" stroke-width="6" paint-order="stroke" class="stamp">${escXml(text)}</text>`
+  );
+  if (reserve) {
+    const w = estimateTextWidth(text, fontSize) + 16;
+    const h = Math.round(fontSize * 1.25) + 12;
+    reserve.placer.reserve(reserve.pid, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h });
+  }
+}
+
+interface VectorLayers {
+  readonly chromeSvg: string;
+  readonly stampsSvg: string | null;
+  readonly labelsSvg: string;
+}
+
+function buildF1VectorLayers(
   target: F1TemplateTarget,
   frontAxleZ: number,
   rearAxleZ: number,
   clamping: ClampingStats<AnyPanelId>,
+  fillMask: Uint8Array,
   overlayOnly: boolean
-): string {
+): VectorLayers {
   const p = F1_PROJECTION.panels;
   const pt = (panel: F1PanelId, x: number, y: number, z: number): [number, number] => {
     const s = f1ProjectToPanel(panel, x, y, z);
     return [s.px, s.py];
   };
 
-  const parts: string[] = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`,
-    `<defs><style>`,
-    `  .hdr { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 0.5px; }`,
-    `  .stamp { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 1px; }`,
-    `  .ref { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }`,
-    `</style></defs>`,
-  ];
-  const { pill, arrow, bodyStamp, tag } = pushSvgHelpers(parts);
+  const chromeParts = svgHeader();
+  const stampParts = overlayOnly ? null : svgHeader();
+  const labelParts = svgHeader();
+
+  const placer = new PanelLabelPlacer(
+    fillMask,
+    F1_PANEL_IDS.map((pid) => [pid, p[pid]] as const)
+  );
+  const { placePill, placeArrow, placeRefText, placeAxleLabel } = createLabelEmitter(
+    labelParts,
+    placer,
+    (pid) => p[pid as F1PanelId]
+  );
 
   const dashColor = overlayOnly ? "#0f172a" : "#334155";
   const dashOpacity = overlayOnly ? "0.75" : "0.7";
@@ -537,114 +941,142 @@ function buildF1VectorSvg(
   const topCentreY = pt("top", 0, 0, 0)[1];
   const rearCentreX = pt("rear", 0, 0.7, -2.3)[0];
   const frontCentreX = pt("front", 0, 0.3, 2.3)[0];
-  parts.push(
+  chromeParts.push(
     `<line x1="${p.top.x + 2}" y1="${topCentreY.toFixed(1)}" x2="${p.top.x + p.top.w - 2}" y2="${topCentreY.toFixed(1)}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="14 10" />`
   );
-  parts.push(
+  chromeParts.push(
     `<line x1="${rearCentreX.toFixed(1)}" y1="${p.rear.y + 2}" x2="${rearCentreX.toFixed(1)}" y2="${p.rear.y + p.rear.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
   );
-  parts.push(
+  chromeParts.push(
     `<line x1="${frontCentreX.toFixed(1)}" y1="${p.front.y + 2}" x2="${frontCentreX.toFixed(1)}" y2="${p.front.y + p.front.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
   );
 
+  const axleCoords = new Map<"top" | "left" | "right", { fx: number; rx: number }>();
   for (const pid of ["top", "left", "right"] as const) {
     const r = p[pid];
     const fx = pt(pid, 0, 0.5, frontAxleZ)[0];
     const rx = pt(pid, 0, 0.5, rearAxleZ)[0];
-    parts.push(
+    axleCoords.set(pid, { fx, rx });
+    chromeParts.push(
       `<line x1="${fx.toFixed(1)}" y1="${r.y + 2}" x2="${fx.toFixed(1)}" y2="${r.y + r.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="8 8" />`
     );
-    parts.push(
+    chromeParts.push(
       `<line x1="${rx.toFixed(1)}" y1="${r.y + 2}" x2="${rx.toFixed(1)}" y2="${r.y + r.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="8 8" />`
-    );
-    if (!overlayOnly) {
-      const labelY = r.y + r.h - 14;
-      const fxAnchor = pid === "left" ? "start" : "end";
-      const fxDx = fxAnchor === "end" ? -10 : 10;
-      const rxAnchor = pid === "left" ? "end" : "start";
-      const rxDx = rxAnchor === "start" ? 10 : -10;
-      parts.push(
-        `<text x="${(fx + fxDx).toFixed(1)}" y="${labelY}" text-anchor="${fxAnchor}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="ref">FRONT AXLE</text>`
-      );
-      parts.push(
-        `<text x="${(rx + rxDx).toFixed(1)}" y="${labelY}" text-anchor="${rxAnchor}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="ref">REAR AXLE</text>`
-      );
-    }
-  }
-
-  if (!overlayOnly) {
-    parts.push(
-      `<text x="${p.top.x + 18}" y="${(topCentreY - 12).toFixed(1)}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="ref">CENTRE LINE (X = 0)</text>`
     );
   }
 
   for (const pid of F1_PANEL_IDS) {
     const r = p[pid];
-    parts.push(`<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`);
+    chromeParts.push(`<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`);
   }
 
   if (overlayOnly) {
-    tag(p.top.x + 14, p.top.y + 34, `${target.id.toUpperCase()} — TOP (FRONT →)`);
-    tag(p.left.x + 14, p.left.y + 34, `LEFT SIDE (← FRONT)`);
-    tag(p.right.x + 14, p.right.y + 34, `RIGHT SIDE (FRONT →)`);
-    tag(p.rear.x + 14, p.rear.y + 34, `REAR`);
-    tag(p.front.x + 14, p.front.y + 34, `FRONT`);
-    tag(p.fwEndplateLeft.x + 12, p.fwEndplateLeft.y + 30, `FW ENDPLATE L (←)`);
-    tag(p.fwEndplateRight.x + 12, p.fwEndplateRight.y + 30, `FW ENDPLATE R (→)`);
+    placeRefText("top", `${target.id.toUpperCase()} — TOP (FRONT →)`, [[p.top.x + 12, p.top.y + 10]], { startFontSize: 24, cls: "hdr" });
+    placeRefText("left", "LEFT SIDE (← FRONT)", [[p.left.x + 12, p.left.y + 10]], { startFontSize: 24, cls: "hdr" });
+    placeRefText("right", "RIGHT SIDE (FRONT →)", [[p.right.x + p.right.w - 300, p.right.y + 10], [p.right.x + 12, p.right.y + 10]], { startFontSize: 24, cls: "hdr" });
+    placeRefText("rear", "REAR", [[p.rear.x + 12, p.rear.y + 10]], { startFontSize: 22, cls: "hdr" });
+    placeRefText("front", "FRONT", [[p.front.x + 12, p.front.y + 10]], { startFontSize: 22, cls: "hdr" });
+    placeRefText("fwEndplateLeft", "FW ENDPLATE L (←)", [[p.fwEndplateLeft.x + 10, p.fwEndplateLeft.y + 10]], { startFontSize: 18, minFontSize: 14, cls: "hdr" });
+    placeRefText("fwEndplateRight", "FW ENDPLATE R (→)", [[p.fwEndplateRight.x + p.fwEndplateRight.w - 210, p.fwEndplateRight.y + 10]], { startFontSize: 18, minFontSize: 14, cls: "hdr" });
   } else {
-    pill(p.top.x + 16, p.top.y + 14, `${target.id.toUpperCase()} · TOP VIEW`, 32, "start");
-    arrow(p.top.x + 1260, p.top.y + 52, p.top.x + 1520, "FRONT");
-
-    pill(p.left.x + 16, p.left.y + 14, "LEFT SIDE (+X)", 30, "start");
-    arrow(p.left.x + 560, p.left.y + 50, p.left.x + 310, "FRONT");
-
-    pill(p.right.x + 16, p.right.y + 14, "RIGHT SIDE (-X)", 30, "start");
-    arrow(p.right.x + p.right.w - 280, p.right.y + 50, p.right.x + p.right.w - 30, "FRONT");
-
-    pill(p.rear.x + 16, p.rear.y + 12, "REAR (-Z)", 28, "start");
-    pill(p.rear.x + p.rear.w - 16, p.rear.y + 12, "L ←  |  → R", 28, "end");
-
-    pill(p.front.x + 14, p.front.y + 12, "FRONT (+Z)", 28, "start");
-    pill(p.front.x + p.front.w - 14, p.front.y + 12, "R ← | → L", 28, "end");
-
-    pill(p.fwEndplateLeft.x + 12, p.fwEndplateLeft.y + 20, "FW ENDPLATE L  ← FRONT", 28, "start");
-    pill(p.fwEndplateRight.x + 12, p.fwEndplateRight.y + 20, "FW ENDPLATE R  FRONT →", 28, "start");
-
+    // 0. Emit & reserve in-body orientation stamps first so pills never touch stamp text either
     const [topSideLX, topSideLY] = pt("top", 0.48, 0.5, -0.3);
     const [topSideRX, topSideRY] = pt("top", -0.48, 0.5, -0.3);
     const [topNoseX, topNoseY] = pt("top", 0, 0.4, 1.45);
-    bodyStamp(topSideLX, topSideLY, "TOP L  →", 32);
-    bodyStamp(topSideRX, topSideRY, "TOP R  →", 32);
-    bodyStamp(topNoseX, topNoseY, "TOP →", 32);
+    pushBodyStamp(stampParts!, topSideLX, topSideLY, "TOP L  →", 32, { placer, pid: "top" });
+    pushBodyStamp(stampParts!, topSideRX, topSideRY, "TOP R  →", 32, { placer, pid: "top" });
+    pushBodyStamp(stampParts!, topNoseX, topNoseY, "TOP →", 32, { placer, pid: "top" });
 
     const [leftPodX, leftPodY] = pt("left", 0.5, 0.44, -0.3);
-    bodyStamp(leftPodX, leftPodY, "← FRONT · LEFT SIDE", 42);
+    pushBodyStamp(stampParts!, leftPodX, leftPodY, "← FRONT · LEFT SIDE", 42, { placer, pid: "left" });
 
     const [rightPodX, rightPodY] = pt("right", -0.5, 0.44, -0.3);
-    bodyStamp(rightPodX, rightPodY, "RIGHT SIDE · FRONT →", 42);
+    pushBodyStamp(stampParts!, rightPodX, rightPodY, "RIGHT SIDE · FRONT →", 42, { placer, pid: "right" });
 
     const [rearWingX, rearWingY] = pt("rear", 0, 0.81, -2.35);
-    bodyStamp(rearWingX, rearWingY, "REAR WING", 48);
+    pushBodyStamp(stampParts!, rearWingX, rearWingY, "REAR WING", 48, { placer, pid: "rear" });
 
     const [frontNoseX, frontNoseY] = pt("front", 0, 0.3, 2.5);
-    bodyStamp(frontNoseX, frontNoseY, "FRONT", 34);
+    pushBodyStamp(stampParts!, frontNoseX, frontNoseY, "FRONT", 34, { placer, pid: "front" });
 
-    if (target.allowMainBoundsClamping && clamping.byPanel.top.count > 0) {
-      pill(p.top.x + 16, p.top.y + p.top.h - 56, "HATCHED = CLAMPED EDGE (|X| > 0.95m)", 28, "start");
+    // 1. Place primary panel pills and legends in unpainted space so reference labels yield cleanly to them
+    placePill("top", [`${target.id.toUpperCase()} · TOP VIEW`], ["tl", "bl", "tr", "br"], 30, 18);
+    placeArrow("top", 1, "FRONT", [[p.top.x + 1260, p.top.y + 12], [p.top.x + 1260, p.top.y + p.top.h - 68]]);
+
+    if (target.allowMainBoundsClamping && clamping.dominantClampedTotal > 0) {
+      placePill(
+        "top",
+        [
+          "HATCHED = OUTSIDE THE PAINTING AREA: COLOUR AT THE EDGE STRETCHES HERE",
+          ["HATCHED = OUTSIDE THE PAINTING AREA:", "COLOUR AT THE EDGE STRETCHES HERE"],
+        ],
+        ["bl", "tl", "bc"],
+        22,
+        15
+      );
+    }
+
+    placePill("left", ["LEFT SIDE"], ["tl", "bl", "tr"], 28, 18);
+    placeArrow("left", -1, "FRONT", [[p.left.x + 280, p.left.y + 10], [p.left.x + 100, p.left.y + 10]]);
+
+    placePill("right", ["RIGHT SIDE"], ["tr", "tl", "br"], 28, 18);
+    placeArrow("right", 1, "FRONT", [[p.right.x + p.right.w - 490, p.right.y + 10], [p.right.x + p.right.w - 280, p.right.y + 10]]);
+
+    placePill("rear", ["REAR (SEEN FROM BEHIND)", "REAR"], ["bl", "tl", "br", "tr"], 24, 16);
+    placePill("rear", ["L ←  |  → R", "L ← | → R"], ["br", "tr", "bl", "tl"], 24, 16);
+
+    placePill("front", ["FRONT (SEEN FROM THE FRONT)", ["FRONT", "(SEEN FROM FRONT)"], "FRONT"], ["tl", "tr", "bl", "br"], 22, 14);
+    placePill("front", ["R ← | → L"], ["tr", "tl", "br", "bl"], 20, 14);
+
+    // Front wing endplates: left panel is empty on the left half; right panel is empty on the right half
+    placePill("fwEndplateLeft", [["FW ENDPLATE L", "← FRONT"], "FW ENDPLATE L ←"], ["tl", "bl"], 20, 14);
+    placePill("fwEndplateRight", [["FW ENDPLATE R", "FRONT →"], "FW ENDPLATE R →"], ["tr", "br"], 20, 14);
+
+    // 2. Place axle labels and centre-line label cleanly off painted pixels
+    for (const pid of ["top", "left", "right"] as const) {
+      const { fx, rx } = axleCoords.get(pid)!;
+      placeAxleLabel(pid, "FRONT AXLE", fx, pid === "left" ? "right" : "left");
+      placeAxleLabel(pid, "REAR AXLE", rx, pid === "left" ? "left" : "right");
+    }
+
+    // Centre line label placed beside topCentreY where nothing is painted (cockpit opening, wing gap, or nose tip gap)
+    const placedCentre = placeRefText(
+      "top",
+      "CENTRE LINE",
+      [
+        [p.top.x + 920, topCentreY - 14],
+        [p.top.x + 190, topCentreY - 34],
+        [p.top.x + 190, topCentreY + 12],
+        [p.top.x + 1900, topCentreY - 34],
+      ],
+      { startFontSize: 20, minFontSize: 14, yRange: [topCentreY - 80, topCentreY + 80] }
+    );
+    if (!placedCentre) {
+      placeRefText("top", "CENTRE LINE", [[p.top.x + 190, topCentreY - 100], [p.top.x + 190, topCentreY + 80]], {
+        startFontSize: 18,
+        minFontSize: 14,
+      });
     }
   }
 
-  parts.push(`</svg>`);
-  return parts.join("\n");
+  chromeParts.push(`</svg>`);
+  stampParts?.push(`</svg>`);
+  labelParts.push(`</svg>`);
+  return {
+    chromeSvg: chromeParts.join("\n"),
+    stampsSvg: stampParts ? stampParts.join("\n") : null,
+    labelsSvg: labelParts.join("\n"),
+  };
 }
 
-function buildPortedVectorSvg(
+function buildPortedVectorLayers(
   target: PortedTemplateTarget,
   frontAxleZ: number,
   rearAxleZ: number,
-  splitterVerts: number,
+  hasCarbonHatch: boolean,
+  fillMask: Uint8Array,
   overlayOnly: boolean
-): string {
+): VectorLayers {
   const p = PORTED_PROJECTION.panels;
   const prof = target.profile;
   const pt = (panel: PortedPanelId, x: number, y: number, z: number): [number, number] => {
@@ -652,15 +1084,19 @@ function buildPortedVectorSvg(
     return [s.px, s.py];
   };
 
-  const parts: string[] = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`,
-    `<defs><style>`,
-    `  .hdr { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 0.5px; }`,
-    `  .stamp { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 1px; }`,
-    `  .ref { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }`,
-    `</style></defs>`,
-  ];
-  const { pill, arrow, bodyStamp, tag } = pushSvgHelpers(parts);
+  const chromeParts = svgHeader();
+  const stampParts = overlayOnly ? null : svgHeader();
+  const labelParts = svgHeader();
+
+  const placer = new PanelLabelPlacer(
+    fillMask,
+    PORTED_PANEL_IDS.map((pid) => [pid, p[pid]] as const)
+  );
+  const { placePill, placeArrow, placeRefText, placeAxleLabel } = createLabelEmitter(
+    labelParts,
+    placer,
+    (pid) => p[pid as PortedPanelId]
+  );
 
   const dashColor = overlayOnly ? "#0f172a" : "#334155";
   const dashOpacity = overlayOnly ? "0.75" : "0.7";
@@ -668,131 +1104,200 @@ function buildPortedVectorSvg(
   const topCentreY = pt("top", 0, 0.6, 0)[1];
   const rearCentreX = pt("rear", 0, 0.7, prof.min[2])[0];
   const frontCentreX = pt("front", 0, 0.5, prof.max[2])[0];
-  parts.push(
+  chromeParts.push(
     `<line x1="${p.top.x + 2}" y1="${topCentreY.toFixed(1)}" x2="${p.top.x + p.top.w - 2}" y2="${topCentreY.toFixed(1)}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="14 10" />`
   );
-  parts.push(
+  chromeParts.push(
     `<line x1="${rearCentreX.toFixed(1)}" y1="${p.rear.y + 2}" x2="${rearCentreX.toFixed(1)}" y2="${p.rear.y + p.rear.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
   );
-  parts.push(
+  chromeParts.push(
     `<line x1="${frontCentreX.toFixed(1)}" y1="${p.front.y + 2}" x2="${frontCentreX.toFixed(1)}" y2="${p.front.y + p.front.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
   );
 
+  const axleCoords = new Map<"top" | "left" | "right", { fx: number; rx: number }>();
   for (const pid of ["top", "left", "right"] as const) {
     const r = p[pid];
     const fx = pt(pid, 0, 0.6, frontAxleZ)[0];
     const rx = pt(pid, 0, 0.6, rearAxleZ)[0];
-    parts.push(
+    axleCoords.set(pid, { fx, rx });
+    chromeParts.push(
       `<line x1="${fx.toFixed(1)}" y1="${r.y + 2}" x2="${fx.toFixed(1)}" y2="${r.y + r.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="8 8" />`
     );
-    parts.push(
+    chromeParts.push(
       `<line x1="${rx.toFixed(1)}" y1="${r.y + 2}" x2="${rx.toFixed(1)}" y2="${r.y + r.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="8 8" />`
-    );
-    if (!overlayOnly) {
-      const labelY = r.y + r.h - 14;
-      const fxAnchor = pid === "left" ? "start" : "end";
-      const fxDx = fxAnchor === "end" ? -10 : 10;
-      const rxAnchor = pid === "left" ? "end" : "start";
-      const rxDx = rxAnchor === "start" ? 10 : -10;
-      parts.push(
-        `<text x="${(fx + fxDx).toFixed(1)}" y="${labelY}" text-anchor="${fxAnchor}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="ref">FRONT AXLE</text>`
-      );
-      parts.push(
-        `<text x="${(rx + rxDx).toFixed(1)}" y="${labelY}" text-anchor="${rxAnchor}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="ref">REAR AXLE</text>`
-      );
-    }
-  }
-
-  if (!overlayOnly) {
-    const centreLabelX = target.id === "lc-lmdh" ? p.top.x + 18 : p.top.x + 265;
-    parts.push(
-      `<text x="${centreLabelX}" y="${(topCentreY - 12).toFixed(1)}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="ref">CENTRE LINE (X = 0)</text>`
     );
   }
 
   for (const pid of PORTED_PANEL_IDS) {
     const r = p[pid];
-    parts.push(`<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`);
+    chromeParts.push(`<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`);
   }
 
   if (overlayOnly) {
-    tag(p.top.x + 14, p.top.y + 34, `${target.id.toUpperCase()} — TOP (FRONT →)`);
-    tag(p.left.x + 14, p.left.y + 34, `LEFT SIDE (← FRONT)`);
-    tag(p.right.x + 14, p.right.y + 34, `RIGHT SIDE (FRONT →)`);
-    tag(p.rear.x + 14, p.rear.y + 34, `REAR`);
-    tag(p.front.x + 14, p.front.y + 34, `FRONT`);
+    placeRefText("top", `${target.id.toUpperCase()} — TOP (FRONT →)`, [[p.top.x + 400, p.top.y + 140], [p.top.x + 12, p.top.y + 10]], { startFontSize: 22, minFontSize: 14, cls: "hdr" });
+    placeRefText("left", "LEFT SIDE (← FRONT)", [[p.left.x + 12, p.left.y + 10]], { startFontSize: 24, cls: "hdr" });
+    placeRefText("right", "RIGHT SIDE (FRONT →)", [[p.right.x + p.right.w - 320, p.right.y + 10]], { startFontSize: 24, cls: "hdr" });
+    placeRefText("rear", "REAR", [[p.rear.x + 440, p.rear.y + 40], [p.rear.x + 12, p.rear.y + 10]], { startFontSize: 22, cls: "hdr" });
+    placeRefText("front", "FRONT", [[p.front.x + 440, p.front.y + 40], [p.front.x + 12, p.front.y + 10]], { startFontSize: 22, cls: "hdr" });
   } else {
-    pill(p.top.x + 16, p.top.y + 14, `${target.id.toUpperCase()} · TOP VIEW`, 32, "start");
-    arrow(p.top.x + 1500, p.top.y + 52, p.top.x + 1780, "FRONT");
-
-    pill(p.left.x + 16, p.left.y + 14, "LEFT SIDE (+X)", 30, "start");
-    arrow(p.left.x + 580, p.left.y + 50, p.left.x + 330, "FRONT");
-
-    pill(p.right.x + 16, p.right.y + 14, "RIGHT SIDE (-X)", 30, "start");
-    arrow(p.right.x + p.right.w - 280, p.right.y + 50, p.right.x + p.right.w - 30, "FRONT");
-
-    pill(p.rear.x + 16, p.rear.y + 12, "REAR (-Z)", 28, "start");
-    pill(p.rear.x + p.rear.w - 16, p.rear.y + 12, "L ←  |  → R", 28, "end");
-
-    pill(p.front.x + 16, p.front.y + 12, "FRONT (+Z)", 28, "start");
-    pill(p.front.x + p.front.w - 16, p.front.y + 12, "R ←  |  → L", 28, "end");
-
-    // In-body orientation stamps on clean bodywork zones (prove alignment & non-mirroring in 3D renders)
+    // 0. Emit & reserve in-body orientation stamps first so pills never touch stamp text
     if (target.id === "lc-lmdh") {
       const [noseX, noseY] = pt("top", 0, 0.55, 1.80);
       const [roofX, roofY] = pt("top", 0, 1.05, 0.10);
       const [sideLX, sideLY] = pt("top", 0.65, 0.72, -0.55);
       const [sideRX, sideRY] = pt("top", -0.65, 0.72, -0.55);
-      bodyStamp(noseX, noseY, "NOSE · TOP →", 36);
-      bodyStamp(roofX, roofY, "ROOF →", 34);
-      bodyStamp(sideLX, sideLY, "TOP L →", 32);
-      bodyStamp(sideRX, sideRY, "TOP R →", 32);
+      pushBodyStamp(stampParts!, noseX, noseY, "NOSE · TOP →", 36, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, roofX, roofY, "ROOF →", 34, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, sideLX, sideLY, "TOP L →", 32, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, sideRX, sideRY, "TOP R →", 32, { placer, pid: "top" });
 
       const [leftFlankX, leftFlankY] = pt("left", 0.9, 0.54, -0.10);
       const [rightFlankX, rightFlankY] = pt("right", -0.9, 0.54, -0.10);
-      bodyStamp(leftFlankX, leftFlankY, "← FRONT · LEFT SIDE", 44);
-      bodyStamp(rightFlankX, rightFlankY, "RIGHT SIDE · FRONT →", 44);
+      pushBodyStamp(stampParts!, leftFlankX, leftFlankY, "← FRONT · LEFT SIDE", 44, { placer, pid: "left" });
+      pushBodyStamp(stampParts!, rightFlankX, rightFlankY, "RIGHT SIDE · FRONT →", 44, { placer, pid: "right" });
 
       const [rearDeckX, rearDeckY] = pt("rear", 0, 0.72, -2.35);
       const [rearWingX, rearWingY] = pt("rear", 0, 1.02, -2.30);
-      bodyStamp(rearDeckX, rearDeckY, "REAR", 38);
-      bodyStamp(rearWingX, rearWingY, "REAR WING", 34);
+      pushBodyStamp(stampParts!, rearDeckX, rearDeckY, "REAR", 38, { placer, pid: "rear" });
+      pushBodyStamp(stampParts!, rearWingX, rearWingY, "REAR WING", 34, { placer, pid: "rear" });
 
       const [frontNoseX, frontNoseY] = pt("front", 0, 0.44, 2.65);
-      bodyStamp(frontNoseX, frontNoseY, "FRONT", 42);
+      pushBodyStamp(stampParts!, frontNoseX, frontNoseY, "FRONT", 42, { placer, pid: "front" });
     } else {
       // GT3 coupes (`amg-gt3`, `bmw-m4-gt3`)
-      const hoodZ = target.id === "amg-gt3" ? 1.45 : 1.50;
+      const hoodZ = target.id === "amg-gt3" ? 1.15 : 1.50;
       const roofZ = target.id === "amg-gt3" ? -0.30 : -0.25;
+      const wingZ = target.id === "amg-gt3" ? -2.14 : prof.wingRearZ - 0.15;
+      const sideX = target.id === "amg-gt3" ? 0.76 : 0.78;
+      const sideZ = target.id === "amg-gt3" ? -1.52 : -1.48;
       const [hoodX, hoodY] = pt("top", 0, 0.85, hoodZ);
       const [roofX, roofY] = pt("top", 0, 1.20, roofZ);
-      const [rearWingTopX, rearWingTopY] = pt("top", 0, 1.15, prof.wingRearZ - 0.15);
-      bodyStamp(hoodX, hoodY, "HOOD · TOP →", 40);
-      bodyStamp(roofX, roofY, "ROOF · TOP →", 38);
-      bodyStamp(rearWingTopX, rearWingTopY, "WING", 30);
+      const [rearWingTopX, rearWingTopY] = pt("top", 0, 1.15, wingZ);
+      const [topSideLX, topSideLY] = pt("top", sideX, 0.90, sideZ);
+      const [topSideRX, topSideRY] = pt("top", -sideX, 0.90, sideZ);
+      pushBodyStamp(stampParts!, hoodX, hoodY, "HOOD · TOP →", 38, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, roofX, roofY, "ROOF · TOP →", 38, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, topSideLX, topSideLY, "TOP L →", 30, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, topSideRX, topSideRY, "TOP R →", 30, { placer, pid: "top" });
+      pushBodyStamp(stampParts!, rearWingTopX, rearWingTopY, "WING", 30, { placer, pid: "top" });
 
       const doorY = target.id === "amg-gt3" ? 0.58 : 0.62;
       const [leftDoorX, leftDoorY] = pt("left", 0.95, doorY, 0.05);
       const [rightDoorX, rightDoorY] = pt("right", -0.95, doorY, 0.05);
-      bodyStamp(leftDoorX, leftDoorY, "← FRONT · LEFT SIDE", 44);
-      bodyStamp(rightDoorX, rightDoorY, "RIGHT SIDE · FRONT →", 44);
+      pushBodyStamp(stampParts!, leftDoorX, leftDoorY, "← FRONT · LEFT SIDE", 44, { placer, pid: "left" });
+      pushBodyStamp(stampParts!, rightDoorX, rightDoorY, "RIGHT SIDE · FRONT →", 44, { placer, pid: "right" });
 
       const [rearBumperX, rearBumperY] = pt("rear", 0, 0.66, prof.min[2]);
       const [rearWingX, rearWingY] = pt("rear", 0, 1.12, prof.min[2]);
-      bodyStamp(rearBumperX, rearBumperY, "REAR", 42);
-      bodyStamp(rearWingX, rearWingY, "REAR WING", 34);
+      pushBodyStamp(stampParts!, rearBumperX, rearBumperY, "REAR", 42, { placer, pid: "rear" });
+      pushBodyStamp(stampParts!, rearWingX, rearWingY, "REAR WING", 34, { placer, pid: "rear" });
 
       const [frontBumperX, frontBumperY] = pt("front", 0, 0.48, prof.max[2]);
-      bodyStamp(frontBumperX, frontBumperY, "FRONT", 44);
+      pushBodyStamp(stampParts!, frontBumperX, frontBumperY, "FRONT", 44, { placer, pid: "front" });
     }
 
-    if (splitterVerts > 0) {
-      pill(p.front.x + 16, p.front.y + p.front.h - 54, "HATCHED = CARBON SPLITTER (UNPAINTABLE)", 26, "start");
+    // 1. Primary panel header pills & FRONT arrows (strictly in unpainted space)
+    placePill(
+      "top",
+      [`${target.id.toUpperCase()} · TOP VIEW`, [`${target.id.toUpperCase()}`, "TOP VIEW"]],
+      ["tl", "tc", "bl", "tr"],
+      28,
+      16
+    );
+    placeArrow("top", 1, "FRONT", [
+      [p.top.x + 1460, p.top.y + 60],
+      [p.top.x + 1060, p.top.y + 200],
+      [p.top.x + 340, p.top.y + 380],
+    ]);
+
+    placePill("left", ["LEFT SIDE"], ["tl", "bl", "tr"], 28, 18);
+    placeArrow("left", -1, "FRONT", [[p.left.x + 320, p.left.y + 10], [p.left.x + 600, p.left.y + 10]]);
+
+    // Right side: front nose is on the right half so the top-right sky is wide open (avoiding rear wing/fin at top-left)
+    placePill("right", ["RIGHT SIDE"], ["tr", "br", "tl"], 28, 18);
+    placeArrow("right", 1, "FRONT", [[p.right.x + p.right.w - 520, p.right.y + 10], [p.right.x + p.right.w - 280, p.right.y + 10]]);
+
+    placePill("rear", ["REAR (SEEN FROM BEHIND)", "REAR"], ["tc", "bc", "tl", "bl"], 24, 15);
+    placePill("rear", ["L ←  |  → R", "L ← | → R"], ["bc", "tr", "br", "tc"], 22, 15);
+
+    placePill("front", ["FRONT (SEEN FROM THE FRONT)", "FRONT"], ["tc", "bc", "tl", "bl"], 24, 15);
+    placePill("front", ["R ←  |  → L", "R ← | → L"], ["bc", "tr", "br", "tc"], 22, 15);
+
+    if (hasCarbonHatch) {
+      // Place AMG bare-carbon legend on a panel with generous unpainted space (front windshield or side sky)
+      const placedOnFront = placePill("front", ["HATCHED = ALWAYS BARE CARBON"], ["tc", "bc", "bl", "tl"], 20, 15);
+      if (!placedOnFront) {
+        placePill("left", ["HATCHED = ALWAYS BARE CARBON"], ["tr", "tl", "bl"], 22, 16);
+      }
     }
+
+    // 2. Axle & centre-line reference labels (strictly in unpainted space)
+    for (const pid of ["top", "left", "right"] as const) {
+      const { fx, rx } = axleCoords.get(pid)!;
+      placeAxleLabel(pid, "FRONT AXLE", fx, pid === "left" ? "right" : "left");
+      placeAxleLabel(pid, "REAR AXLE", rx, pid === "left" ? "left" : "right");
+    }
+
+    placeRefText(
+      "top",
+      "CENTRE LINE",
+      [
+        [p.top.x + 300, topCentreY - 34],
+        [p.top.x + 1120, topCentreY - 34],
+        [p.top.x + 300, topCentreY + 12],
+      ],
+      { startFontSize: 20, minFontSize: 14, yRange: [topCentreY - 70, topCentreY + 70] }
+    );
   }
 
-  parts.push(`</svg>`);
-  return parts.join("\n");
+  chromeParts.push(`</svg>`);
+  stampParts?.push(`</svg>`);
+  labelParts.push(`</svg>`);
+  return {
+    chromeSvg: chromeParts.join("\n"),
+    stampsSvg: stampParts ? stampParts.join("\n") : null,
+    labelsSvg: labelParts.join("\n"),
+  };
+}
+
+/**
+ * Rasterises a label-only SVG layer to 2048x2048 RGBA and asserts that zero rendered label/pill pixels
+ * overlap any painted car geometry pixel in `fillMask`.
+ */
+async function assertLabelsOffPaintedGeometry(
+  carId: string,
+  layerName: string,
+  labelsSvg: Buffer,
+  fillMask: Uint8Array,
+  panelRects: ReadonlyArray<readonly [AnyPanelId, AtlasPanelRect]>
+): Promise<void> {
+  const { data } = await sharp(labelsSvg).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const problems: string[] = [];
+  for (const [pid, r] of panelRects) {
+    let overlapCount = 0;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let y = r.y; y < r.y + r.h; y++) {
+      const row = y * SIZE;
+      for (let x = r.x; x < r.x + r.w; x++) {
+        const idx = row + x;
+        if (!fillMask[idx]) continue;
+        const alpha = data[idx * 4 + 3];
+        if (alpha > 16) {
+          overlapCount++;
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (overlapCount > 0) {
+      problems.push(`${pid}: ${overlapCount} px overlapping painted geometry at [${minX}..${maxX}, ${minY}..${maxY}]`);
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(`${carId} (${layerName}): label/pill pixels overlap painted bodywork — ${problems.join("; ")}`);
+  }
 }
 
 async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: string): Promise<void> {
@@ -801,12 +1306,22 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     throw new Error(`${target.id}: GLB not found at ${glbPath} (pass --models <dir> if models live elsewhere)`);
   }
 
-  const { triangles, frontAxleZ, rearAxleZ, clamping, bounds, splitterVerts } = await loadPaintGeometry(target, glbPath);
+  const {
+    triangles,
+    frontAxleZ,
+    rearAxleZ,
+    clamping,
+    bounds,
+    splitterVerts,
+    excludedNodes,
+    flippedMirroredTris,
+  } = await loadPaintGeometry(target, glbPath);
   const panelIds: readonly AnyPanelId[] = target.kind === "f1" ? F1_PANEL_IDS : PORTED_PANEL_IDS;
   const panelRectOf = (pid: AnyPanelId): AtlasPanelRect =>
     target.kind === "f1"
       ? F1_PROJECTION.panels[pid as F1PanelId]
       : PORTED_PROJECTION.panels[pid as PortedPanelId];
+  const panelRects = panelIds.map((pid) => [pid, panelRectOf(pid)] as const);
 
   // Fail loudly if a car that shouldn't clamp main bounds has any clamped vertices on top/side/fwEndplate
   if (target.kind === "f1" && !target.allowMainBoundsClamping) {
@@ -820,6 +1335,7 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
   }
 
   const fillMask = new Uint8Array(SIZE * SIZE);
+  const paintableFillMask = new Uint8Array(SIZE * SIZE); // non-splitter painted triangles (for exact splitter-only hatching)
   const hatchRaw = new Uint8Array(SIZE * SIZE); // clamped edge (lc25) or unpaintable carbon splitter (amg-gt3)
   const meshEdges = new Uint8Array(SIZE * SIZE);
   const featureEdges = new Uint8Array(SIZE * SIZE);
@@ -865,6 +1381,13 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     const wOf = (proj: typeof p0, pid: AnyPanelId): number =>
       (proj.panelWeights as Partial<Record<AnyPanelId, number>>)[pid] ?? 0;
 
+    const isForcedCarbonTri =
+      target.kind === "ported" &&
+      target.profile.splitterMaxY > 0 &&
+      isSplitterPoint(tri.v0, target.profile) &&
+      isSplitterPoint(tri.v1, target.profile) &&
+      isSplitterPoint(tri.v2, target.profile);
+
     for (const pid of panelIds) {
       const wMax = Math.max(wOf(p0, pid), wOf(p1, pid), wOf(p2, pid), wOf(pc, pid));
       if (wMax < WEIGHT_MIN && pc.dominantPanel !== pid) continue;
@@ -883,6 +1406,12 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
       const fillVal = wMax >= WEIGHT_STRONG ? 2 : 1;
       rasterizeTriangle(fillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, fillVal);
 
+      if (isForcedCarbonTri) {
+        rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+      } else {
+        rasterizeTriangle(paintableFillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+      }
+
       // Hatch clamped edges on lc25
       if (target.kind === "f1" && target.allowMainBoundsClamping) {
         const isMain = F1_MAIN_BOUND_PANELS.has(pid as F1PanelId);
@@ -899,17 +1428,6 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
           (s0.clamped && (isMain || s0.clampedU)) ||
           (s1.clamped && (isMain || s1.clampedU)) ||
           (s2.clamped && (isMain || s2.clampedU))
-        ) {
-          rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
-        }
-      }
-
-      // Hatch forced-carbon front splitter tray on AMG GT3 Evo
-      if (target.kind === "ported" && target.profile.splitterMaxY > 0) {
-        if (
-          isSplitterPoint(tri.v0, target.profile) &&
-          isSplitterPoint(tri.v1, target.profile) &&
-          isSplitterPoint(tri.v2, target.profile)
         ) {
           rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
         }
@@ -951,8 +1469,10 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     }
   }
 
-  // Expand clamped edge markers inward on lc25; keep exact splitter footprint on amg-gt3
+  // Expand clamped edge markers inward on lc25; on amg-gt3 hatch only pixels exclusively covered by forced-carbon
+  // triangles (never pixels shared with paintable bumper corners that sit above or behind the splitter shelf)
   const hatchBand = new Uint8Array(SIZE * SIZE);
+  let carbonHatchPixels = 0;
   if (target.kind === "f1" && target.allowMainBoundsClamping) {
     for (const pid of panelIds) {
       const rect = panelRectOf(pid);
@@ -965,7 +1485,12 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
       }
     }
   } else if (splitterVerts > 0) {
-    hatchBand.set(hatchRaw);
+    for (let i = 0; i < hatchBand.length; i++) {
+      if (hatchRaw[i] && !paintableFillMask[i]) {
+        hatchBand[i] = 1;
+        carbonHatchPixels++;
+      }
+    }
   }
 
   const silhouette = new Uint8Array(SIZE * SIZE);
@@ -1056,16 +1581,21 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     }
   }
 
-  const templateSvg = Buffer.from(
+  const templateLayers =
     target.kind === "f1"
-      ? buildF1VectorSvg(target, frontAxleZ, rearAxleZ, clamping, false)
-      : buildPortedVectorSvg(target, frontAxleZ, rearAxleZ, splitterVerts, false)
-  );
-  const overlaySvg = Buffer.from(
+      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, fillMask, false)
+      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, fillMask, false);
+  const overlayLayers =
     target.kind === "f1"
-      ? buildF1VectorSvg(target, frontAxleZ, rearAxleZ, clamping, true)
-      : buildPortedVectorSvg(target, frontAxleZ, rearAxleZ, splitterVerts, true)
-  );
+      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, fillMask, true)
+      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, fillMask, true);
+
+  const templateLabelsBuf = Buffer.from(templateLayers.labelsSvg);
+  const overlayLabelsBuf = Buffer.from(overlayLayers.labelsSvg);
+
+  // Assert zero overlap between panel labels/pills/arrows/legends and painted geometry
+  await assertLabelsOffPaintedGeometry(target.id, "template", templateLabelsBuf, fillMask, panelRects);
+  await assertLabelsOffPaintedGeometry(target.id, "overlay", overlayLabelsBuf, fillMask, panelRects);
 
   const outDir = join(OUT_ROOT, target.id);
   mkdirSync(outDir, { recursive: true });
@@ -1073,11 +1603,16 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
   const overlayPath = join(outDir, `${target.id}-overlay.png`);
   const previewPath = join(outDir, `${target.id}-preview.webp`);
 
-  const templateComposite = sharp(templateRgba, { raw: { width: SIZE, height: SIZE, channels: 4 } })
-    .composite([{ input: templateSvg, top: 0, left: 0 }]);
+  const templateComposites: OverlayOptions[] = [
+    { input: Buffer.from(templateLayers.chromeSvg), top: 0, left: 0 },
+  ];
+  if (templateLayers.stampsSvg) {
+    templateComposites.push({ input: Buffer.from(templateLayers.stampsSvg), top: 0, left: 0 });
+  }
+  templateComposites.push({ input: templateLabelsBuf, top: 0, left: 0 });
 
-  const templatePng = await templateComposite
-    .clone()
+  const templatePng = await sharp(templateRgba, { raw: { width: SIZE, height: SIZE, channels: 4 } })
+    .composite(templateComposites)
     .flatten({ background: { r: 203, g: 213, b: 225 } })
     .png({ palette: true, compressionLevel: 9, effort: 10, colors: 64 })
     .toBuffer();
@@ -1090,7 +1625,10 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
   writeFileSync(previewPath, previewWebp);
 
   const overlayPng = await sharp(overlayRgba, { raw: { width: SIZE, height: SIZE, channels: 4 } })
-    .composite([{ input: overlaySvg, top: 0, left: 0 }])
+    .composite([
+      { input: Buffer.from(overlayLayers.chromeSvg), top: 0, left: 0 },
+      { input: overlayLabelsBuf, top: 0, left: 0 },
+    ])
     .png({ palette: true, compressionLevel: 9, effort: 10, colors: 32 })
     .toBuffer();
   writeFileSync(overlayPath, overlayPng);
@@ -1100,6 +1638,8 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
   console.log(
     `  paint tris: ${triangles.length}, verts: ${clamping.totalVerts}, bounds: x[${bounds.min[0].toFixed(3)}..${bounds.max[0].toFixed(3)}] y[${bounds.min[1].toFixed(3)}..${bounds.max[1].toFixed(3)}] z[${bounds.min[2].toFixed(3)}..${bounds.max[2].toFixed(3)}]`
   );
+  if (excludedNodes > 0) console.log(`  excluded interior/roll-cage nodes: ${excludedNodes}`);
+  if (flippedMirroredTris > 0) console.log(`  oriented inverted mirrored triangles: ${flippedMirroredTris}`);
   console.log(`  axles: front z=${frontAxleZ.toFixed(4)} m, rear z=${rearAxleZ.toFixed(4)} m`);
   console.log(`  dominant-panel clamped verts: ${clamping.dominantClampedTotal}`);
   for (const pid of panelIds) {
@@ -1108,7 +1648,8 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
       console.log(`    ${pid}: ${c.count} (u<0:${c.uLo}, u>1:${c.uHi}, v<0:${c.vLo}, v>1:${c.vHi})`);
     }
   }
-  if (splitterVerts > 0) console.log(`  forced-carbon front splitter verts: ${splitterVerts}`);
+  if (splitterVerts > 0) console.log(`  forced-carbon front splitter verts: ${splitterVerts}, exclusive carbon hatch px: ${carbonHatchPixels}`);
+  console.log(`  label overlap check: 0 px overlapping painted bodywork (template + overlay)`);
   console.log(`  wrote ${templatePath} — ${fmtKb(templatePath)}`);
   console.log(`  wrote ${overlayPath} — ${fmtKb(overlayPath)}`);
   console.log(`  wrote ${previewPath} — ${fmtKb(previewPath)}`);
@@ -1161,7 +1702,23 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((err) => {
-  console.error(err instanceof Error ? err.stack ?? err.message : err);
-  process.exit(1);
-});
+export {
+  assertLabelsOffPaintedGeometry,
+  buildF1VectorLayers,
+  buildPortedVectorLayers,
+  loadPaintGeometry,
+  rasterizeTriangle,
+  TARGETS as LIVERY_TEMPLATE_TARGETS,
+};
+
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry && entry.endsWith("build-livery-templates.ts"));
+}
+
+if (isDirectRun()) {
+  void main().catch((err) => {
+    console.error(err instanceof Error ? err.stack ?? err.message : err);
+    process.exit(1);
+  });
+}
