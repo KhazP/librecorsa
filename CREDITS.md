@@ -197,9 +197,13 @@ Each circuit below is created by **LilSki** ([https://www.overtake.gg/members/li
 
 * `"SpeedVegas"` v18.2 ([https://www.overtake.gg/downloads/speedvegas-2025.86996/](https://www.overtake.gg/downloads/speedvegas-2025.86996/)), track by **Gogol** ([https://www.overtake.gg/members/gogol-the-chaos.153450/](https://www.overtake.gg/members/gogol-the-chaos.153450/)) (`speedvegas`), used with permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`), plus its own surface names mapped: the paved areas beside the lap (`SURFACE`) drive as run-off and the sand patch (`SURFACE_SAND`) as gravel
 
-#### Willow Springs (`public/tracks/willow_springs/`)
+#### Assetto Corsa circuits by Nukedrop (`public/tracks/<id>/`)
 
-* `"Willow Springs - Big Willow"` ([https://www.overtake.gg/downloads/willow-springs-big-willow.32338/](https://www.overtake.gg/downloads/willow-springs-big-willow.32338/)) by **Nukedrop** ([https://www.patreon.com/cw/nukedrop/](https://www.patreon.com/cw/nukedrop/)) (`willow_springs`), used with permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`) from the mod's Big Willow Real layout, with its satellite-photo terrain and light towers drawn with their own textures rather than the game's asphalt shader
+Each circuit below is created by **Nukedrop** ([https://www.patreon.com/cw/nukedrop/](https://www.patreon.com/cw/nukedrop/)) and used with the author's permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`).
+
+* `"Willow Springs - Big Willow"` ([https://www.overtake.gg/downloads/willow-springs-big-willow.32338/](https://www.overtake.gg/downloads/willow-springs-big-willow.32338/)) by **Nukedrop** (`willow_springs`), used with permission. Converted from the mod's Big Willow Real layout, with its satellite-photo terrain and light towers drawn with their own textures rather than the game's asphalt shader
+* `"Las Vegas 2023"` ([https://www.patreon.com/cw/nukedrop/](https://www.patreon.com/cw/nukedrop/)) by **Nukedrop**, with UI by **Fanapryde** and helicopters by **Mascot** (`las_vegas`), used with permission. Built as a floodlit night street circuit with all Strip landmark models, `models.ini` placement offsets, night-emissive facades and signs, modelled kerbs, and walled-straight surface rules
+* `"Jeddah Corniche Circuit"` ([https://www.patreon.com/cw/nukedrop/](https://www.patreon.com/cw/nukedrop/)) by **Nukedrop**, with logo, UI and sections by **Fanapryde** (`jeddah`), used with permission. Built as a floodlit night street circuit with stadium floodlights, night-emissive paddock and skyline facades, modelled kerbs, and double-density banked road colliders
 
 #### Qiddiya Speed Park (`public/tracks/qiddiya/`)
 
