@@ -1,6 +1,6 @@
 # Verifying downloads
 
-LibreCorsa runs directly in your browser with nothing to install. There are two apps besides:
+LibreCorsa runs directly in your browser with nothing to install, and also offers optional desktop and Android apps.
 
 - **The desktop app** for Windows, macOS and Linux. It serves the game on your own computer and keeps every page, car and circuit it loads, so it plays the live game from librecorsa.org when you're online and what it kept when you're not. It opens the game in its own window in Chrome, Edge, Brave or Chromium (wheels, pedals and pads need one of those), takes mods from `Documents/LibreCorsa/mods`, converts circuits and cars from other games into mods, and updates itself.
 - **The Android app**, which opens the live site full-screen, with no browser bar.

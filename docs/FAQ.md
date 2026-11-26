@@ -29,9 +29,9 @@ No. LibreCorsa is an independent fan project, not affiliated with Formula 1, the
 ### What can I play it on?
 
 - **In a browser** on Windows, macOS or Linux: any browser with WebGL2 and hardware acceleration turned on.
-- **The desktop app** for Windows, macOS and Linux, which plays offline too and takes mods, and an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Checking a download](DOWNLOADS.md).
+- **The desktop app** for Windows, macOS and Linux, which plays offline too and takes mods, and an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Verifying downloads](DOWNLOADS.md).
 - **iPhone and iPad** in Safari. Share, then Add to Home Screen, gives you full screen.
-- **VR headsets** through WebXR (Quest Browser, or Chrome with SteamVR or OpenXR), from Settings > Display > Graphics. It's a work in progress, so expect rough edges.
+- **VR headsets** through WebXR (Quest Browser, or Chrome with SteamVR or OpenXR), from **Settings > Display > Graphics** or **Enter VR** in the pause menu, with in-cockpit HUD plates and an in-headset pause and seat panel. It's a work in progress, so expect rough edges.
 
 ### Can I play offline?
 
@@ -91,7 +91,7 @@ No plans right now.
 
 ### Can I use the code or host my own copy?
 
-Yes. The code is under the [GNU Affero General Public License v3.0](../LICENSE), so you can run it, change it and host it. If you run a changed version for other people, you share its source under the same licence. A clone carries RISE Motordrome and the 2026 Prototype. Every other car and circuit stays on librecorsa.org.
+Yes. The code is under the [GNU Affero General Public License v3.0](../LICENSE), so you can run it, change it and host it. If you run a changed version for other people, you share its source under the same licence. A clone carries RISE Motordrome with the LC26 and LC25 Prototypes. Every other car and circuit stays on librecorsa.org.
 
 ### Can I use the cars and circuits in my own game or mod?
 

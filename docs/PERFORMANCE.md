@@ -7,7 +7,7 @@ Because LibreCorsa runs directly in your browser, frame pacing and visual qualit
 - **WebGL2 with hardware acceleration:** Required by every browser. If disabled, the game displays `"3D graphics are off in your browser"`.
 - **No installation required:** Play directly at `librecorsa.org`, or use the optional desktop and Android apps (see [Verifying downloads](DOWNLOADS.md)). The desktop app runs the game in Chrome, Edge, Brave or Chromium, so the browser's GPU and background settings apply to it too.
 - **Chrome or Edge for WebHID:** Required for direct browser wheel force feedback, DualSense adaptive triggers/haptics/lightbar, and gyro steering. See [Controls, controllers, and wheels](CONTROLS.md).
-- **Mobile devices (phones and tablets):** Any touch-primary device defaults to **Medium** graphics with **Automatic quality** and **Sharpen** enabled, disables MSAA anti-aliasing, and loads GPU-compressed circuit textures to stay within mobile memory budgets.
+- **Mobile devices and standalone VR headsets:** Touch-primary phones and tablets (and standalone WebXR headsets) default to **Medium** graphics with **Automatic quality** and **Sharpen** enabled, disable MSAA anti-aliasing, and load GPU-compressed KTX2 circuit textures to stay within mobile memory budgets.
 - **Installing on mobile:** Adding the site to your home screen unlocks full-screen play. On iPhone and iPad, tap **Share > Add to Home Screen** (note that iOS isolates Home Screen app storage from Safari, so it maintains separate saves). The Android app requires Android 7 or later and Chrome.
 
 ## Graphics settings
@@ -25,6 +25,7 @@ On desktop browsers, **Medium** and **High** enable MSAA anti-aliasing; on phone
 - **Quality:** `Low`, `Medium`, or `High` (defaults to `High` on desktop, `Medium` on mobile).
 - **Sharp Low:** Available when **Quality** is set to `Low`. Renders Low effects at Medium internal resolution (`"Draws Low at Medium resolution"`).
 - **Render resolution:** Scales internal rendering from `50%` to `150%` in `5%` increments (`100%` default), multiplied on top of the active preset.
+- **Driver body:** Shows drivers' bodies and arms inside cars that have them (`Off` by default; helmets always render).
 - **Sharpen:** Post-scaling edge and tarmac sharpening (`"Crisps edges and tarmac after scaling"`). Enabled by default on phones and tablets.
 - **Frame rate:** `Full` or `30 fps` (`"30 fps lowers heat on mobile"`). Caps rendering only: input polling, 500 Hz vehicle physics, multiplayer networking, and lap timing continue running at full rate.
 - **Automatic quality:** Dynamically trims visual load on sustained slowdowns (`"Steps down on sustained frame drops"`). Enabled by default on mobile; off by default on desktop.
@@ -101,7 +102,7 @@ If you encounter `"The simulator stopped"`, update your browser or GPU driver, e
 
 - Browsers require a user gesture before unlocking Web Audio: clicking or pressing a key on `"Press any key to continue"` (or `"Tap to continue"`) at the end of loading satisfies this requirement.
 - Verify **Mute** (default `M` key) and **Master volume** under **Settings > Audio**. Your mute state persists across visits.
-- On-track music is turned off by default; enable it under **Settings > Audio**.
+- On-track music and the voice spotter are turned off by default; enable either under **Settings > Audio**.
 
 ### Controller or wheel not detected
 
@@ -135,6 +136,7 @@ You can append query parameters to `https://librecorsa.org/play` (or `http://loc
 | `lc26engine` | `?lc26engine=classic` / `rigid` | Switches the LC26 between its legacy engine and the shipping rigid-body engine (persisted in `localStorage`) |
 | `sky` | `?sky=classic` | Disables the volumetric physical sky and uses the classic skybox |
 | `depth` | `?depth=standard` | Disables reversed depth buffer rendering (useful for isolating WebGL depth bugs) |
+| `ktx2` | `?ktx2=off` / `on` / `etc` / `astc` | Overrides GPU-compressed KTX2 circuit textures (auto-enabled on phones/tablets; `off` forces WebP) |
 | `cloudseed` | `?cloudseed=42` | Seeds volumetric cloud generation deterministically and logs cloud recipes |
 | `tyres` | `?tyres=<brand>` | Overrides GT sidewall tyre branding for visual testing |
 
