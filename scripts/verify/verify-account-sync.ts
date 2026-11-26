@@ -24,6 +24,7 @@ import {
   ACCOUNT_SETTINGS_FIELDS,
   AUDIO_SPLIT,
   KEY_CLASSES,
+  LATER_ACCOUNT_MEMBERS,
   PRESETS_MAX,
   SETTINGS_KEY,
   SETTINGS_SPLIT,
@@ -39,10 +40,12 @@ import {
   emptySave,
   emptySyncState,
   firstSyncDecision,
+  hashText,
   isEmptySave,
   parseSyncState,
   pickSide,
   readSaveDoc,
+  stableStringify,
   summarizeSave,
   type StorageLike,
   type SyncState,
@@ -928,6 +931,40 @@ async function main2(): Promise<void> {
     );
     const idle = await older.sync({ accountId: "acc1", apply: false });
     check("nothing changed: an older build doesn't rewrite the newer save", idle.kind === "synced" && !idle.pushed);
+  }
+
+  {
+    // Account members added after accounts went live (the spotter's): a device updated later stores their defaults on
+    // its first save, which must not overwrite what another device already chose for them
+    const later = LATER_ACCOUNT_MEMBERS.audio;
+    check(
+      "the later audio members are account members, listed with the settings' own defaults",
+      Object.keys(later).every((m) => (AUDIO_SPLIT as Record<string, string>)[m] === "account" && same((DEFAULT_AUDIO_SETTINGS as unknown as Record<string, unknown>)[m], later[m])),
+    );
+    const oldShare = { raceMusicOn: DEFAULT_AUDIO_SETTINGS.raceMusicOn, musicOff: DEFAULT_AUDIO_SETTINGS.musicOff, musicMuted: DEFAULT_AUDIO_SETTINGS.musicMuted };
+    const hOld = hashText(stableStringify(oldShare));
+    // The last sync, by a build without the spotter: what this device saw and agreed on then
+    const before = (): SyncState => ({
+      ...emptySyncState(),
+      since: 1_000,
+      settings: { audio: { h: hOld, t: 1_000 } },
+      account: { id: "acc1", rev: 1, appliedRev: 1, base: { keys: {}, settings: { audio: hOld } }, lastSyncedAt: 1_000, localHash: "", fetched: [] },
+    });
+    const updated = (audio: Record<string, unknown> = {}) =>
+      collect(memoryStorage({ [SETTINGS_KEY]: settingsWith({ audio: { ...DEFAULT_AUDIO_SETTINGS, ...audio } }) }), before(), { now: 3_000, savedBy: "Updated later" }).doc;
+    const cloudWith = (audio: Record<string, unknown>) => doc({ settings: { audio: { value: { ...oldShare, ...audio }, t: 2_000 } } });
+    const audioOf = (out: SaveDoc) => out.settings.audio?.value as Record<string, unknown>;
+
+    const chose = combineSaves(updated(), cloudWith({ spotter: false, spotterVoice: "clare", spotterRadio: false }), "combine", { base: before().account?.base });
+    check(
+      "another device's spotter choice survives a device that only took the defaults on its update",
+      audioOf(chose).spotter === false && audioOf(chose).spotterVoice === "clare" && audioOf(chose).spotterRadio === false,
+      JSON.stringify(audioOf(chose)),
+    );
+    const mine = combineSaves(updated({ spotter: false }), cloudWith({}), "combine", { base: before().account?.base });
+    check("this device's own spotter choice still wins over a save that never had one", audioOf(mine).spotter === false, JSON.stringify(audioOf(mine)));
+    const fresh = combineSaves(updated(), cloudWith({}), "combine", { base: before().account?.base });
+    check("against a save from before the spotter, this device's defaults go up", audioOf(fresh).spotter === true && audioOf(fresh).spotterVoice === "jim");
   }
 
   {
