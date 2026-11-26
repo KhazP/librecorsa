@@ -372,7 +372,9 @@ export interface RacecraftParams {
    * follows them in and both brake at one point.
    * 24 career-grid races of 4 laps (Liana at Grobnik, Sachsenring and VIR North, R32 at Grobnik, R33 at Sachsenring,
    * LMDh at RISE), the same seeds: AI v AI contacts 194 -> 65 at 2 m (own driver 57), passes 203 -> 68 (68), spins,
-   * offs and wall hits 30 -> 3 (3), the leader's lap still the quickest (116.7 -> 115.1 s; own driver 119.8)
+   * offs and wall hits 30 -> 3 (3), the leader's lap still the quickest (116.7 -> 115.1 s; own driver 119.8). Over
+   * 10-12 laps (one seed each: Liana and R32 at Grobnik, R33 at Sachsenring, LMDh at RISE) contacts 28 -> 7, 27 -> 14,
+   * 21 -> 10 and 30 -> 10, the own driver's 1, 9, 2 and 0: better, not yet the own driver's
    */
   planDefendReachM: number;
   /**
