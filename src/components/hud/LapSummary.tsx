@@ -639,7 +639,7 @@ const LapCard: React.FC<
                 <span className={`lc-mono text-[18px] leading-tight font-bold ${skinCss.readout}`} style={{ color: mark.color }}>
                   {formatSectorTime(t)}
                 </span>
-                <span className={`truncate text-[11px] ${skinCss.inkDim}`}>{words.sectors[idx]}</span>
+                <span className={`text-[11px] leading-tight break-words ${skinCss.inkDim}`}>{words.sectors[idx]}</span>
               </div>
             );
           })}
@@ -752,7 +752,8 @@ const LapCard: React.FC<
               <span className="lc-mono text-[18px] leading-tight font-bold" style={{ color: mark.color }}>
                 {formatSectorTime(t)}
               </span>
-              <span className="lc-hint truncate">{words.sectors[idx]}</span>
+              {/* Wraps rather than cuts: "Sector 1: personal best" is long in most languages */}
+              <span className="lc-hint leading-tight break-words">{words.sectors[idx]}</span>
             </Well>
           );
         })}
@@ -1016,7 +1017,8 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
   const chartBody = (
     <>
       <div className="flex items-baseline justify-between gap-3">
-        <span id={titleId} className={`shrink-0 text-[13px] font-semibold ${skin !== null ? skinCss.inkSoft : "text-lc-fog"}`}>
+        {/* The heading may wrap to a second line so the picked corner's name keeps its room */}
+        <span id={titleId} className={`min-w-0 text-[13px] leading-tight font-semibold ${skin !== null ? skinCss.inkSoft : "text-lc-fog"}`}>
           {words.title}
         </span>
         {cur && curDelta ? (
