@@ -1,6 +1,6 @@
 """
 The rest of the Assetto Corsa project of the official Rwanda layout, around the FBX that bl_ac.py writes: the track
-folder with both layouts' surfaces, lighting, maps and interface files, the Custom Shaders Patch settings (grass and
+folder with both layouts' surfaces, lighting, maps and interface files, the track extension settings (grass and
 rain, from the material names in the .fbx.ini beside the FBX) and a README with the steps left to do on a PC.
 
     ~/.venvs/librecorsa-tracks/bin/python -I ac_data.py ~/Desktop/rwanda_official [preview.jpg]
@@ -38,8 +38,8 @@ def surfaces():
     return '\n'.join(L)
 
 
-# Custom Shaders Patch: each list is the materials whose name starts with one of these (keys as in CSP's track docs)
-CSP = (('GRASS_FX', (
+# Track extension config: each list is the materials whose name starts with one of these
+EXT_CONFIG = (('GRASS_FX', (
            ('GRASS_MATERIALS', ('ac_Terrain_Grass__GRASS_',)),
            ('OCCLUDING_MATERIALS', ('ac_Track_', 'ac_Kerb_', 'ac_Runoff_', 'ac_Paint_', 'ac_Pit_Apron', 'ac_Road_', 'ac_Service_',
                                     'ac_Parking_', 'ac_Path_', 'ac_Court_', 'ac_Helipad_', 'ac_Causeway_', 'ac_Bridge_', 'ac_Lake_',
@@ -55,12 +55,12 @@ CSP = (('GRASS_FX', (
            ('LINES_MATERIALS', ('ac_Paint_', 'ac_Runoff_')))))
 
 
-def csp(out):
+def ext_config(out):
     """extension/ext_config.ini from the materials the FBX was written with; every list has to find at least one"""
     names = re.findall(r'^NAME=(.+)$', open(os.path.join(out, 'rwanda_official.fbx.ini')).read(), re.M)
-    L = ['; Custom Shaders Patch settings of the official Rwanda layout: 3D grass and rain.',
+    L = ['; Track extension settings of the official Rwanda layout: 3D grass and rain.',
          '; Written from the material names of rwanda_official.fbx.ini. Not tried in the game yet.', '']
-    for section, lists in CSP:
+    for section, lists in EXT_CONFIG:
         L.append('[%s]' % section)
         for key, starts in lists:
             found = [n for n in names if n.startswith(starts)]
@@ -126,7 +126,7 @@ def main(out, preview=None):
 
     os.makedirs(os.path.join(track, 'extension'), exist_ok=True)
     with open(os.path.join(track, 'extension', 'ext_config.ini'), 'w') as f:
-        f.write(csp(out))
+        f.write(ext_config(out))
     with open(os.path.join(out, 'README.txt'), 'w') as f:
         f.write(README)
     print('wrote', out)
@@ -152,7 +152,7 @@ track/rwanda_official/     the track folder for content/tracks, complete except 
     models_gp.ini, models_short.ini      each layout loads rwanda_official.kn5 and its own timing model
     gp/, short/                          data/surfaces.ini, data/lighting.ini, data/map.ini, map.png, an empty ai/
     ui/gp/, ui/short/                    ui_track.json, outline.png, preview.png
-    extension/ext_config.ini             Custom Shaders Patch: 3D grass (GrassFX) and rain (RainFX) for both layouts
+    extension/ext_config.ini             Track extension: 3D grass (GrassFX) and rain (RainFX) for both layouts
 
 Steps on the PC
 ---------------

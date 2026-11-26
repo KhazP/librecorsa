@@ -361,7 +361,7 @@ AC_TRACKS = {
         'modelledKerbs': True,
         'layout_dir': '1',
         'models_ini': None,
-        # models_1.ini also places the helicopters and the blimp (animated by CSP): the circuit, plus the brake boards
+        # models_1.ini also places the helicopters and the blimp (animated extension objects): the circuit, plus the brake boards
         # that the mod's ext_config inserts in place of the old ones. 1.kn5 has no meshes, only an older texture set
         'kn5_files': ['istanbul_park.kn5', 'brakemarkers.kn5'],
         # The mod's active skin ("Formula 1 2020", skins/default) replaces these textures by name in AC
@@ -728,7 +728,7 @@ AC_TRACKS = {
         'modelledKerbs': True,
         'layout_dir': 'event',
         'models_ini': None,
-        # models_event.ini also places helicopters, marshals, flag men and camera crews (animated by CSP). AC.kn5 holds
+        # models_event.ini also places helicopters, marshals, flag men and camera crews (animated extension objects). AC.kn5 holds
         # only the grid, pit and timing markers; roadmesh.kn5 and walls.kn5 are the physical road and barriers
         'kn5_files': ['g333_sachsenring_2022.kn5', 'event.kn5', 'GarageDoors.kn5', 'walls.kn5', 'roadmesh.kn5',
                       'trees.kn5', 'groove.kn5'],
@@ -834,7 +834,7 @@ AC_TRACKS = {
         'modelledKerbs': True,
         'layout_dir': 'regular',
         'models_ini': None,
-        # models_regular.ini also places the airship, a helicopter and camera crews (animated by CSP). physical.kn5 is
+        # models_regular.ini also places the airship, a helicopter and camera crews (animated extension objects). physical.kn5 is
         # the physical road and barriers
         'kn5_files': ['le_mans_82.kn5', 'trees.kn5', 'lights.kn5', 'trib_lights.kn5', 'timing.kn5', 'ferriswheel.kn5',
                       'physical.kn5'],
@@ -876,7 +876,7 @@ AC_TRACKS = {
         'folder': 'g333_borgloh_2024',
         'layout_dir': '',
         'models_ini': None,
-        # models.ini also places marshals, a TV camera crew, a plane and birds (animated by CSP). track_hp.kn5 is the
+        # models.ini also places marshals, a TV camera crew, a plane and birds (animated extension objects). track_hp.kn5 is the
         # physical road and walls.kn5 the barriers
         'kn5_files': ['g333_borgloh_2024.kn5', 'track_hp.kn5', 'road_marks.kn5', 'road_edges.kn5', 'plants.kn5',
                       'borgloh_TSOs.kn5', 'tso_small_01.kn5', 'start_timing.kn5', 'timing_clock.kn5', '2d_crowd.kn5',
@@ -916,7 +916,7 @@ AC_TRACKS = {
     },
     'goodwood': {
         'folder': 'g333_goodwood_hillclimb',
-        # The LQ layout: the HQ one needs CSP's flow shader and animated objects. Its AI lane is the HQ one's
+        # The LQ layout: the HQ one uses extension shaders and animated objects. Its AI lane is the HQ one's
         'layout_dir': 'layout_b',
         'models_ini': None,
         # models_layout_b.ini also places a Ferris wheel and marshals at their own offsets and the 3D crowd.
@@ -998,7 +998,7 @@ AC_TRACKS = {
         'layout_dir': 'boot',
         'models_ini': None,
         # models_boot.ini also lists 3D grass, the parked tents and RVs (veh.kn5, 531k triangles) and the blimp and
-        # scout plane (animated by CSP). lt.kn5 is the layout's timing gates, groove_b.kn5 its rubber, cones and two
+        # scout plane (animated extension objects). lt.kn5 is the layout's timing gates, groove_b.kn5 its rubber, cones and two
         # blocking walls
         'kn5_files': ['lilski_watkins_glen.kn5', 'pb.kn5', 'phy.kn5', 'land.kn5', 'trees.kn5', 'lt.kn5', 'groove_b.kn5',
                       'cf.kn5', 'people.kn5', 'pitobjects.kn5', 'lights.kn5', 'endurance.kn5'],

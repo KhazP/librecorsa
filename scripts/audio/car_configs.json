@@ -66,8 +66,8 @@
   "bmw-m4-gt3": {
     "outDir": "public/cars/bmw-m4-gt3/audio",
     "limiterRpm": 7000,
-    "sourceDescription": "BMW M4 GT3 Sound Mod by corsamode - content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank",
-    "intBank": "m4gt3/content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank",
+    "sourceDescription": "BMW M4 GT3 Sound Mod by corsamode",
+    "intBank": "m4gt3/sfx/m4gt3.bank",
     "engine": {
       "int": {
         "on": [
@@ -659,7 +659,7 @@
     "outDir": "public/cars/lc25-v6/audio",
     "limiterRpm": 13000,
     "sourceDescription": "hahmad's Red Bull RB21 (Honda RBPT) v1.0 sound for Assetto Corsa (https://www.overtake.gg/members/hahmad.2388716/) — Copyright (c) 2026 hahmad, all rights reserved, used with permission",
-    "intBank": "RB21_Honda_AC_Sound_v1.0/content/cars/vrc_formula_alpha_2024_csp/sfx/vrc_formula_alpha_2024_csp.bank",
+    "intBank": "RB21_Honda_AC_Sound_v1.0/sfx/rb21.bank",
     "hideSampleNames": true,
     "resampleRange": [0.58, 1.65],
     "engine": {

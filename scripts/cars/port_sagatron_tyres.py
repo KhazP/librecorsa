@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Port sagatron918's six RSS GT-M Tyre Extension packs into planar sidewall disc WebPs read by
+Port sagatron918's six GT-M Tyre Extension packs into planar sidewall disc WebPs read by
 `src/lib/render/gt-tyre-sidewall.ts`. Used with the author's permission; see CREDITS.md.
 
-Each pack ships an inner zip (`extension/textures/cars/Sagatron918/RSS_*.zip`) containing 4096² BC7/DXT1
-tyre strips laid out for Assetto Corsa's RSS GT-M tyre UVs:
+Each pack ships an inner zip (`extension/textures/cars/Sagatron918/*.zip`) containing 4096² BC7/DXT1
+tyre strips laid out for Assetto Corsa's GT-M tyre UVs:
   - Lower band (rows ~3540–3920): 180° arc of the outer sidewall, upright (letter tops face the shoulder/tread).
   - Upper band (rows ~1430–1820): the opposite 180° arc of the outer sidewall, rotated 180° (letter tops face
     the tread at the larger row index, and u runs right-to-left).
@@ -34,6 +34,7 @@ Dependencies: Python stdlib + numpy + Pillow (decodes DX10 BC7 and DXT1 DDS).
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import io
 import sys
 import zipfile
@@ -60,8 +61,8 @@ SEAM_FEATHER = 0.008
 @dataclass(frozen=True)
 class TyreSpec:
     output_stem: str
-    outer_zip: str
-    inner_zip: str
+    outer_glob: str
+    inner_glob: str
     dds_name: str
     upper_mid: float
     lower_mid: float
@@ -74,8 +75,8 @@ class TyreSpec:
 SPECS: tuple[TyreSpec, ...] = (
     TyreSpec(
         output_stem="pirelli",
-        outer_zip="Sagatron_RSS_Pirelli_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_PIRELLI_PZERO.zip",
+        outer_glob="Sagatron_*Pirelli_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*PIRELLI_PZERO.zip",
         dds_name="Pirelli_DHG.dds",
         upper_mid=1614.0,
         lower_mid=3738.0,
@@ -86,8 +87,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="michelin",
-        outer_zip="Sagatron_RSS_Michelin_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_MICHELIN_TYRE.zip",
+        outer_glob="Sagatron_*Michelin_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*MICHELIN_TYRE.zip",
         dds_name="Michelin_N24.dds",
         upper_mid=1625.0,
         lower_mid=3747.0,
@@ -98,8 +99,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="goodyear",
-        outer_zip="Sagatron_RSS_Goodyear_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_GOODYEAR_LMGT3.zip",
+        outer_glob="Sagatron_*Goodyear_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*GOODYEAR_LMGT3.zip",
         dds_name="Goodyear_M.dds",
         upper_mid=1612.0,
         lower_mid=3718.0,
@@ -110,8 +111,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="goodyear-wet",
-        outer_zip="Sagatron_RSS_Goodyear_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_GOODYEAR_LMGT3.zip",
+        outer_glob="Sagatron_*Goodyear_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*GOODYEAR_LMGT3.zip",
         dds_name="Goodyear_W.dds",
         upper_mid=1608.0,
         lower_mid=3720.0,
@@ -122,8 +123,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="bridgestone",
-        outer_zip="Sagatron_RSS_Bridgestone_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_BRIDGESTONE.zip",
+        outer_glob="Sagatron_*Bridgestone_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*BRIDGESTONE.zip",
         dds_name="Bridgestone_Post_2022.dds",
         upper_mid=1605.0,
         lower_mid=3715.0,
@@ -134,8 +135,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="bridgestone-wet",
-        outer_zip="Sagatron_RSS_Bridgestone_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_BRIDGESTONE.zip",
+        outer_glob="Sagatron_*Bridgestone_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*BRIDGESTONE.zip",
         dds_name="Bridgestone_Post_2022_Wet.dds",
         upper_mid=1605.0,
         lower_mid=3715.0,
@@ -146,8 +147,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="yokohama",
-        outer_zip="Sagatron_RSS_Yokohama_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_YOKOHAMA_ADVAN.zip",
+        outer_glob="Sagatron_*Yokohama_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*YOKOHAMA_ADVAN.zip",
         dds_name="Yokohama_ADVAN_SGT_A005.dds",
         upper_mid=1608.0,
         lower_mid=3702.0,
@@ -158,8 +159,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="falken",
-        outer_zip="Sagatron_RSS_Falken_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_FALKEN.zip",
+        outer_glob="Sagatron_*Falken_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*FALKEN.zip",
         dds_name="Falken_Dry.dds",
         upper_mid=1580.0,
         lower_mid=3720.0,
@@ -170,8 +171,8 @@ SPECS: tuple[TyreSpec, ...] = (
     ),
     TyreSpec(
         output_stem="falken-wet",
-        outer_zip="Sagatron_RSS_Falken_Tyre_Extension.zip",
-        inner_zip="extension/textures/cars/Sagatron918/RSS_FALKEN.zip",
+        outer_glob="Sagatron_*Falken_Tyre_Extension.zip",
+        inner_glob="extension/textures/cars/Sagatron918/*FALKEN.zip",
         dds_name="Falken_Wet.dds",
         upper_mid=1592.0,
         lower_mid=3720.0,
@@ -185,11 +186,15 @@ SPECS: tuple[TyreSpec, ...] = (
 
 def load_dds_from_packs(source_dir: Path, spec: TyreSpec) -> np.ndarray:
     """Reads a single diffuse DDS straight from the nested pack zips into an sRGB float32 array."""
-    outer_path = source_dir / spec.outer_zip
-    if not outer_path.is_file():
-        sys.exit(f"Missing pack archive: {outer_path}")
+    matches = sorted(source_dir.glob(spec.outer_glob))
+    if not matches:
+        sys.exit(f"Missing pack archive matching {spec.outer_glob} in {source_dir}")
+    outer_path = matches[0]
     with zipfile.ZipFile(outer_path) as outer:
-        with outer.open(spec.inner_zip) as inner_bytes:
+        inner_names = [n for n in outer.namelist() if fnmatch.fnmatch(n, spec.inner_glob)]
+        if not inner_names:
+            sys.exit(f"Missing inner archive matching {spec.inner_glob} in {outer_path}")
+        with outer.open(inner_names[0]) as inner_bytes:
             with zipfile.ZipFile(io.BytesIO(inner_bytes.read())) as inner:
                 with inner.open(spec.dds_name) as dds_file:
                     im = Image.open(io.BytesIO(dds_file.read()))
@@ -307,7 +312,7 @@ def verify_disc(disc: np.ndarray, rubber_fill: np.ndarray, stem: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("source_dir", type=Path, help="folder containing the 6 Sagatron_RSS_*_Tyre_Extension.zip archives")
+    ap.add_argument("source_dir", type=Path, help="folder containing the 6 Sagatron_*_Tyre_Extension.zip archives")
     ap.add_argument("out_dir", type=Path, help="output directory (e.g. public/cars/shared/tyres/gt)")
     ap.add_argument("--size", type=int, default=1024, help="output disc resolution in px (default: 1024)")
     ap.add_argument("--brands", nargs="*", help="optional subset of output stems to port (default: all)")

@@ -19,9 +19,9 @@ The road, kerbs, run-off, pit lane, gravel and verges the cars drive on are the 
 release's physics meshes lie within 2 cm of the game's), and both laps' track data stay as they are.
 
 Left out, and why:
-  - the trees of the main model (Trees_*): CSP hides them and draws its own; the game has scenery/foliage.glb
+  - the trees of the main model (Trees_*): the track extension hides them and draws its own; the game has scenery/foliage.glb
   - rwanda_official_screens.kn5: the main model's screens already show the feed in the game; the release splits
-    their faces only for CSP's live timing board
+    their faces only for the track extension's live timing board
   - per-lap models (closures, groove, timing gates, the short lap's brake boards): both laps share one model here
   - horizon meshes beyond the game's far plane (5.5 km): the outer rings and the far apron
 """
@@ -290,7 +290,7 @@ def check_frame(nodes):
 
 
 def parse_ext_config(path):
-    """CSP's ini: repeated section names allowed, PROP_... keys repeat; returns [(section, [(key, value)])]"""
+    """Extension ini: repeated section names allowed, PROP_... keys repeat; returns [(section, [(key, value)])]"""
     out = []
     for line in open(path, encoding='utf-8', errors='replace'):
         line = line.split(' ;', 1)[0].strip()
@@ -304,7 +304,7 @@ def parse_ext_config(path):
     return out
 
 
-def csp_materials(ext_dir):
+def ext_materials(ext_dir):
     """Per AC material, in file order: the shader and resources of every active SHADER_REPLACEMENT naming it"""
     per = defaultdict(lambda: {'shader': None, 'res': {}, 'props': {}})
     for sec, kv in parse_ext_config(os.path.join(ext_dir, 'ext_config.ini')):
@@ -411,7 +411,7 @@ def main():
 
     # The look: ext_config.ini's replacements on materials the game has
     look = {'materials': {}, 'vertexColour': {}, 'dropVertexColour': []}
-    for mat, e in csp_materials(ext).items():
+    for mat, e in ext_materials(ext).items():
         shader = e['shader'] or ''
         if shader.startswith('ksMultilayer'):
             tint = multilayer_tint(e, ext)
@@ -440,7 +440,7 @@ def main():
             out['normalTexture'] = textures.save(nm, Image.open(os.path.join(ext, nm)).convert('RGBA'), keep_alpha=False)
         mult = e['props'].get('diffuseMult')
         if shader.endswith('_UVMult') and mult:
-            # CSP's UVMult: a negative multiplier scales u only
+            # Extension UVMult: a negative multiplier scales u only
             s = abs(mult[0])
             out['uvScale'] = [s, 1.0] if mult[0] < 0 else [s, s]
         if out:

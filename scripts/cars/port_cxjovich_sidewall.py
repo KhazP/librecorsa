@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Port Cxjovich's 2026 Pirelli Tire Pack (OverTake, for the Formula Hybrid X 2026 in Assetto Corsa) into the packed
+Port Cxjovich's 2026 Pirelli Tire Pack (OverTake) into the packed
 sidewall disc the 2018+ cars' tyre shader reads (`src/lib/render/pirelli-sidewall.ts`). Used with the author's
 permission under CC BY-NC-SA 4.0; see CREDITS.md.
 
@@ -17,11 +17,11 @@ Output (lossless WebP, so the packed masks don't bleed into each other):
   R = rubber albedo (sRGB), G = slick logo mask (from the white C2, the art with the chequers), B = wet logo mask
   (from the blue Wet, Cinturato). The shader tints the masks with the compound colour.
 
-The `data/` LUTs in the pack are left out: they carry Race Sim Studio's copyright.
+Only the sidewall texture strips are read; any `data/` LUTs in the pack are left out.
 
 Run with:
   python3 -I scripts/cars/port_cxjovich_sidewall.py \
-    "<pack>/rss_formula_hybrid_x_2026/extension/tyres" public/cars/shared/tyres/pirelli-2026-sidewall-cx.webp
+    "<pack>/extension/tyres" public/cars/shared/tyres/pirelli-2026-sidewall-cx.webp
 
 Dependencies: Python stdlib + numpy + Pillow (decodes DX10 BC7 DDS).
 """

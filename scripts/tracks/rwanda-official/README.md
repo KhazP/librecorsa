@@ -173,8 +173,8 @@ $PY -I scripts/tracks/rwanda-official/ac_data.py ~/Desktop/rwanda_official [prev
 Physics meshes carry AC's names (`ROAD`, `PIT`, `KERB`, `RUNOFF`, `SAND`, `GRASS`, `WALL`); grid, pit boxes and hotlap
 start are dummies taken from the Grand Prix lap's track data, 0.6 m above the road. The two laps part between the first and the second
 timing gate, so each lap's gates are a small model of their own, listed in that layout's `models_*.ini`.
-`extension/ext_config.ini` sets up Custom Shaders Patch's 3D grass and rain from the material names in the `.fbx.ini`
-(keys as in CSP's track docs); `ac_data.py` stops if a material it expects is gone. The `.kn5` files themselves still
+`extension/ext_config.ini` sets up 3D grass and rain from the material names in the `.fbx.ini`
+(track extension keys); `ac_data.py` stops if a material it expects is gone. The `.kn5` files themselves still
 come out of ksEditor.
 
 ## Back from the Assetto Corsa release
@@ -205,7 +205,7 @@ What comes over:
   toned-down whites, the lake's colour, and the savanna colour its multilayer shaders give the grass (taken as a
   multiplier on the grass nodes' vertex colours, gamma 2.2, as the release applies it to the colours as drawn).
 
-What stays in Assetto Corsa: the trees of CSP's tree system (the game keeps `scenery/foliage.glb`), the per-lap
+What stays in Assetto Corsa: the trees of the track extension tree system (the game keeps `scenery/foliage.glb`), the per-lap
 models (closures, groove, timing gates, the short lap's brake boards: both laps share one model here), the horizon
 rings beyond the game's 5.5 km far plane, the live screens, night lights, smoke, grass and rain effects, the baked
 vertex occlusion and the sounds.

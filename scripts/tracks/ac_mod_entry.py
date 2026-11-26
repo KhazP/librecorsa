@@ -192,7 +192,7 @@ def models(src, layout):
     """The KN5 models Assetto Corsa loads for the layout, and notes on those left out. From models_<layout>.ini (or
     models.ini): every MODEL_n placed where it was modelled (the porter draws each where its file puts it, so one the
     INI moves or turns, a helicopter in the sky, is left out), no DYNAMIC_OBJECT_n (balloons and planes AC moves
-    about), none from extension/ (Custom Shaders Patch's, which it animates) and none outside the track folder
+    about), none from extension/ (animated extension objects) and none outside the track folder
     (`model_path`). Without an INI, <folder>.kn5 as Assetto Corsa loads it, else every .kn5 in the folder"""
     notes = []
     ini = None
@@ -226,9 +226,9 @@ def models(src, layout):
             if not os.path.exists(os.path.join(src, f)):
                 notes.append(f'{f}: named in {ini} but not in the folder')
                 continue
-            # Custom Shaders Patch's own objects (helicopters, drones, flag marshals), which it animates
+            # Extension animated objects (helicopters, drones, flag marshals)
             if re.match(r'extension/', f, re.I):
-                notes.append(f'{f}: animated by Custom Shaders Patch, left out')
+                notes.append(f'{f}: animated extension object, left out')
                 continue
             if f not in out:
                 out.append(f)

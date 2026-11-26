@@ -1,5 +1,5 @@
 /**
- * Nuzzi-style Rolling Start verification suite:
+ * Rolling Start verification suite:
  *   npx tsx scripts/verify/verify-rolling-start.ts
  *
  * Verifies:
@@ -39,7 +39,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 console.log("== Rolling start pure helpers");
 {
   const targetKmh = ROLLING_START_PACE_MS * 3.6;
-  check("ROLLING_START_PACE_MS is in the 60-70 km/h Nuzzi window", targetKmh >= 60 && targetKmh <= 70, `${targetKmh.toFixed(1)} km/h`);
+  check("ROLLING_START_PACE_MS is in the 60-70 km/h window", targetKmh >= 60 && targetKmh <= 70, `${targetKmh.toFixed(1)} km/h`);
 
   const off = applySpeedLimiter(80, undefined, 1, 0);
   check("speed limiter inactive passes throttle & brake through untouched", !off.active && off.throttle === 1 && off.brake === 0 && off.ignitionCut === 1);

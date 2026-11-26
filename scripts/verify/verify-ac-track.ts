@@ -220,7 +220,7 @@ IS_PITLANE=1
   write(join(trav, "models.ini"), named.map((f, i) => `[MODEL_${i}]\nFILE=${f}\n`).join("\n"));
   const { entry: tr, error: trErr } = entryOf("autotest_trav", ["--src", trav]);
   check("a models INI's files outside the track folder are left out, and said", JSON.stringify(tr?.kn5_files) === '["testtrav.kn5","sub/ok.kn5"]' && named.slice(0, 4).every((f) => tr?._auto.models.includes(`${f}: outside the track folder, left out`)), JSON.stringify(tr?.kn5_files) + trErr.slice(-200));
-  check("... and ./extension/ is Custom Shaders Patch's, however it is written", !!tr?._auto.models.some((n) => /^extension\/heli\.kn5: animated/.test(n)));
+  check("... and ./extension/ is animated extension content, however it is written", !!tr?._auto.models.some((n) => /^extension\/heli\.kn5: animated/.test(n)));
   const porter = spawnSync(
     "uv",
     ["run", "--python", "3.14", "--no-project", "--with-requirements", "scripts/tracks/requirements.txt", "python", "-P", "-c",
