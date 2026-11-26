@@ -93,7 +93,7 @@ export interface PlayerSettings {
   profile: DriverProfile;
   /** Race the ghost of the personal-best lap for this circuit and car */
   ghost: boolean;
-  /** AI opponents' skill, 0 (Rookie) to 100 (Alien); 70 = Pro */
+  /** AI opponents' skill, 0 (Rookie) to 100 (Alien); default 95 */
   aiSkill: number;
   /** AI race: laps, field, grid, damage, start */
   race: RaceSetup;

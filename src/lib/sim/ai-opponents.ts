@@ -607,7 +607,7 @@ function driveHooksFor(sim: SimulatorCar, track: BuiltTrackData): AiDriveHooks |
 const classOf = (sim: SimulatorCar): AiClassId => (sim.vehicleId === 'amg-gt3' || (sim.racingLineId ?? 'f1') !== 'f1' ? 'gt3' : 'f1-2026');
 
 export interface AiFieldOptions {
-  /** AI skill 0-100 (`AI_SKILL_DEFAULT`, Pro: the field as it always drove) */
+  /** AI skill 0-100 (`AI_SKILL_DEFAULT`) */
   skill?: number;
   /** Circuit id for the per-track tuning files (default: the track data's id) */
   trackId?: string;
