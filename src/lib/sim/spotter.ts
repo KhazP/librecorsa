@@ -43,7 +43,7 @@ const MIN_SPEED_MS = 5;
 const MAX_UPDATE_GAP_MS = 500;
 
 function clipPath(voice: SpotterVoiceId, key: SpotterClipKey): string {
-  // Jim, the default voice, sits at the top of the folder
+  // George, the default voice (id "jim", kept from the first voice set), sits at the top of the folder
   return voice === "jim" ? `/audio/spotter/${key}.wav` : `/audio/spotter/${voice}/${key}.wav`;
 }
 
