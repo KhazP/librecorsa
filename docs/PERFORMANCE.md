@@ -26,7 +26,7 @@ On desktop browsers, **Medium** and **High** enable MSAA anti-aliasing; on phone
 - **Sharp Low:** Available when **Quality** is set to `Low`. Renders Low effects at Medium internal resolution (`"Draws Low at Medium resolution"`).
 - **Render resolution:** Scales internal rendering from `50%` to `150%` in `5%` increments (`100%` default), multiplied on top of the active preset.
 - **Sharpen:** Post-scaling edge and tarmac sharpening (`"Crisps edges and tarmac after scaling"`). Enabled by default on phones and tablets.
-- **Frame rate:** `Full` or `30 fps` (`"30 fps lowers heat on mobile"`). Caps rendering only—input polling, 500 Hz vehicle physics, multiplayer networking, and lap timing continue running at full rate.
+- **Frame rate:** `Full` or `30 fps` (`"30 fps lowers heat on mobile"`). Caps rendering only: input polling, 500 Hz vehicle physics, multiplayer networking, and lap timing continue running at full rate.
 - **Automatic quality:** Dynamically trims visual load on sustained slowdowns (`"Steps down on sustained frame drops"`). Enabled by default on mobile; off by default on desktop.
 - **Lowest resolution (Advanced):** Sets the floor for **Automatic quality** between `60%` and `100%` (`60%` default). Setting it to `100%` limits automatic scaling to visual effects only.
 
@@ -48,15 +48,15 @@ Phones and thin laptops often throttle after a few minutes as heat builds up. **
 
 - **On-demand downloads:** Circuits and cars download only when you select them. The loading screen reports each file name and size, followed by `"Compiling shaders"`.
 - **Offline cache:** A service worker caches downloaded assets in your browser so repeat visits load instantly without re-downloading.
-- **Background freshness checks:** The first time a session requests a cached file, LibreCorsa asks the server if a newer copy exists—reusing your cached copy if unchanged or updating it in place if modified. When offline, or if the server doesn't respond within 6 seconds, it falls back seamlessly to the cached copy.
+- **Background freshness checks:** The first time a session requests a cached file, LibreCorsa asks the server if a newer copy exists, reusing your cached copy if unchanged or updating it in place if modified. When offline, or if the server doesn't respond within 6 seconds, it falls back seamlessly to the cached copy.
 - **Incremental game updates:** New releases keep your cached circuits and cars intact and only download files that actually changed.
-- **Automatic cleanup:** Assets unused for 45 days—or removed from the server—are pruned automatically. Total cache usage is capped at `1 GB` or half of the storage quota your browser grants the site (whichever is smaller), evicting least-recently-used files first.
-- **Clearing downloaded assets:** Wipe site data for `librecorsa.org` in your browser's privacy settings. Note that the in-game **Clear saved data** button leaves cached circuits/cars intact, whereas browser site-data clearing deletes everything including your driver key—export your **Identity key** first.
+- **Automatic cleanup:** Assets unused for 45 days, or removed from the server, are pruned automatically. Total cache usage is capped at `1 GB` or half of the storage quota your browser grants the site (whichever is smaller), evicting least-recently-used files first.
+- **Clearing downloaded assets:** Wipe site data for `librecorsa.org` in your browser's privacy settings. Note that the in-game **Clear saved data** button leaves cached circuits/cars intact, whereas browser site-data clearing deletes everything including your driver key, so export your **Identity key** first.
 - **In-session updates:** When a new build becomes available while the game is open, the title and pause menus display `"Update ready"` with a **Reload** button (prompting for confirmation if reloading would end an active race or room).
 
 ## Saved data
 
-- **Stored per browser:** Settings, lap history, ghosts, and car setups live in your current browser's storage. Separate browsers—and an iOS Home Screen install—do not share saves.
+- **Stored per browser:** Settings, lap history, ghosts, and car setups live in your current browser's storage. Separate browsers (and an iOS Home Screen install) do not share saves.
 - **Ghosts:** Export individual laps with **Save ghost file** on the lap summary card, or use **Export my best** and **Import ghost file** in the pause menu's **Lap times** tab.
 - **Driver identity key:** Signs your online leaderboard laps. Back it up or transfer it via **Settings > Profile and data > Data > Identity key** (**Save** / **Load**).
 - **Reset all settings:** `"Restores default controls, assists, display and audio"` while preserving your driver profile, setups, and lap times.
@@ -88,7 +88,7 @@ If you encounter `"The simulator stopped"`, update your browser or GPU driver, e
 
 ### Phone overheating
 
-- Keep **Automatic quality** enabled—it is specifically designed to manage thermal throttling.
+- Keep **Automatic quality** enabled; it is specifically designed to manage thermal throttling.
 - Switch **Frame rate** to `30 fps` for longer sessions.
 
 ### Loading bar stalls
@@ -99,7 +99,7 @@ If you encounter `"The simulator stopped"`, update your browser or GPU driver, e
 
 ### No audio
 
-- Browsers require a user gesture before unlocking Web Audio—clicking or pressing a key on `"Press any key to continue"` (or `"Tap to continue"`) at the end of loading satisfies this requirement.
+- Browsers require a user gesture before unlocking Web Audio: clicking or pressing a key on `"Press any key to continue"` (or `"Tap to continue"`) at the end of loading satisfies this requirement.
 - Verify **Mute** (default `M` key) and **Master volume** under **Settings > Audio**. Your mute state persists across visits.
 - On-track music is turned off by default; enable it under **Settings > Audio**.
 
@@ -114,7 +114,7 @@ To record detailed frame-timing telemetry for a bug report:
 1. Open [librecorsa.org/play?perf=1](https://librecorsa.org/play?perf=1) and drive normally.
 2. Open the pause menu's **Session** tab and use **Copy** or **Save file** on the **Performance report** card (works on mobile as well as desktop).
 
-The report logs an entry every 10 seconds throughout your session—recording FPS, frame times, frames exceeding 50 ms, JavaScript/simulation work share, Chrome memory usage, canvas resolution, and the active automatic quality step—plus every quality step-down event and a second-by-second breakdown of the first 30 seconds on track.
+The report logs an entry every 10 seconds throughout your session, recording FPS, frame times, frames exceeding 50 ms, JavaScript/simulation work share, Chrome memory usage, canvas resolution, and the active automatic quality step, plus every quality step-down event and a second-by-second breakdown of the first 30 seconds on track.
 
 ## URL parameters
 
@@ -142,6 +142,6 @@ You can append query parameters to `https://librecorsa.org/play` (or `http://loc
 
 - **In-game feedback:** Open **Feedback** from the title menu or the pause menu's **Feedback** tab, choose **Bug**, and fill in **"What happened?"** and **"How to make it happen"**.
 - **Attached diagnostics:** The **Included details** list previews everything appended to the public issue (circuit, car, input device, graphics settings, browser, GPU, build version, recent FPS, and error log). Click any unlocked item to omit it; locked fields are always included.
-- **Submitting:** Clicking submit opens a pre-filled GitHub issue in a new tab (requires a free GitHub account—click **Create** on GitHub to post it). If the panel captured a screenshot, copy or save it and drag it into the issue description.
+- **Submitting:** Clicking submit opens a pre-filled GitHub issue in a new tab (requires a free GitHub account; click **Create** on GitHub to post it). If the panel captured a screenshot, copy or save it and drag it into the issue description.
 - **Directly on GitHub:** Open a **Bug report** at [github.com/librecorsa/librecorsa/issues/new/choose](https://github.com/librecorsa/librecorsa/issues/new/choose). Include your OS and browser, graphics preset and render resolution, and any red errors from the browser console (`F12`).
 - **What helps most:** Concrete reproduction steps (even rough ones), the circuit and car involved, and a performance report if you are reporting stutter or low FPS.

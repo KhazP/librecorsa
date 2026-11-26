@@ -132,7 +132,7 @@ export interface RainTyreDesign {
 }
 
 /**
- * Rain-tyre physics ratios from Nuzzi's "All F1 Tyres for VRC Formula Alpha 2023 (Wet Physics Included)" (OverTake,
+ * Rain-tyre physics ratios from Nuzzi's F1 tyre pack with wet physics (OverTake,
  * used with permission; see CREDITS.md). Only the rain-tyre deltas relative to the pack's own slicks and CSP wet
  * tread geometry (`TREAD_COVER` × `TREAD_DEPTH`) are used, applied on top of LC25's slick carcass and Cxjovich's
  * temperature / wear curves (`F1_RAIN_TYRE_PACK`):

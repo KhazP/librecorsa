@@ -23,12 +23,12 @@ Each tyre evaluates grip across three lateral tread strips (inner, middle, outer
 | Compound | Dry grip (vs. slick) | Wet film grip | Water cleared at 200 km/h | Initial groove depth | Working window shift | Dry wear / heat penalty |
 | :-- | --: | --: | --: | --: | --: | :-- |
 | **Slicks** (Soft / Medium / Hard) | `100%` | `54%` | `0.42 mm` | `0 mm` | Baseline | `1.0×` wear · `1.0×` heat |
-| **Intermediate** | `91%` | `89%` | `1.30 mm` | `2.5 mm` | `-30 °C` (F1 peak `75 °C`) | `3.0×` wear · `1.35×` heat |
-| **Full wet** | `84%` | `93%` | `3.10 mm` | `5.5 mm` | `-42 °C` (F1 peak `70 °C`) | `4.0×` wear · `1.50×` heat |
+| **Intermediate** | `90%` | `78%` | `1.25 mm` | `2.5 mm` | `-30 °C` (F1 peak `75 °C`) | `3.0×` wear · `1.35×` heat |
+| **Full wet** | `82%` | `79%` | `2.65 mm` | `5.5 mm` | `-42 °C` (F1 peak `70 °C`) | `4.0×` wear · `1.50×` heat |
 
 Key wet-tyre behaviours on track:
 
-- **Water thresholds:** The track transitions from **Damp** (`> 0.08 mm`) to **Wet** (`> 0.5 mm`) to **Standing water** (`> 1.5 mm`). As a rule of thumb, intermediates become faster than slicks above `0.14 mm`, and full wets take over above `1.1 mm`.
+- **Water thresholds:** The track transitions from **Damp** (`> 0.08 mm`) to **Wet** (`> 0.5 mm`) to **Standing water** (`> 1.5 mm`). As a rule of thumb, the game's tyre calls put intermediates on above `0.2 mm` of water on the racing line, and full wets above `1.15 mm`.
 - **Aquaplaning and tread wear:** Every tyre clears more water at lower speed (the contact patch has longer to drain) and less as speed rises. Once water depth exceeds a tyre's clearing capacity, it rides up onto the film and loses up to 80% of its grip. Worn rain grooves lose up to 55% of their water-clearing capacity.
 - **Steering feel in standing water:** Before full aquaplaning begins, a hydrodynamic water wedge builds at the leading edge of the contact patch, shortening pneumatic trail and lightening steering self-aligning torque in your wheel. Above `0.6 mm` of water, rolling drag through puddles also creates asymmetric pull if one side of the car hits deeper water.
 - **Dry track penalty on rain tyres:** Running intermediates or full wets on drying asphalt overheats the soft silica blocks and accelerates tread wear (`3×`–`4×`) until you find damp off-line patches or pit for slicks.
@@ -48,14 +48,14 @@ The road surface is tracked across 64 sectors around the lap:
 - **Starting rubber presets:** `Green` (`8%` rubber), `Light` (`30%`), `Medium` (`50%`), `Natural` (`65%`, default), `Heavy` (`80%`), and `Saturated` (`95%`), with progression rates of `0×` (static), `0.5×`, `1×`, `2×`, and `5×`. Time trials and the weekly challenge lock the track to fully rubbered-in dry grip with no marbles or wash-off.
 - **Rubber buildup and marbles:** Cars driving on-line lay rubber into the racing groove, increasing dry grip, while shedding rubber marbles off-line that reduce off-line grip and temporarily coat tyres if you run wide.
 - **Rain wash-off and drying line:** Heavy rain gradually rinses rubber back down toward `35%`. When rain eases, cars squeeze water out of the racing line first, creating a visibly darker, higher-grip dry ribbon before the rest of the asphalt drains.
-- **Wet groove inversion ("the wet line"):** Once track wetness exceeds `0.18`, polished rubber laid along the dry racing line seals the asphalt pores and becomes *slicker* than unrubbered tarmac beside it—rewarding wider wet-line entries and exits in the rain.
+- **Wet groove inversion ("the wet line"):** Once track wetness exceeds `0.18`, polished rubber laid along the dry racing line seals the asphalt pores and becomes *slicker* than unrubbered tarmac beside it, rewarding wider wet-line entries and exits in the rain.
 
 ## 2026 F1 active aero and hybrid rules
 
 Open-wheel cars follow era-appropriate overtaking rules based on their model year:
 
 - **2026 onward (`straight-mode-2026`):** Active aero **Straight Mode** plus **Overtake Mode** hybrid deployment.
-- **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only—free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
+- **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only: free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
 - **Pre-2011 (`none`):** Fixed wings; flaps stay closed.
 
 ### Active aero: Z-Mode and X-Mode (Straight Mode)
@@ -64,7 +64,7 @@ On 2026 cars, pressing the **Active aero** button (`X` on keyboard, `Y` / `△` 
 
 - **Where flaps open:** Both front and rear wing flaps open on every designated straight at least `250 m` long (radius `≥ 800 m`, bridging gentle kinks up to `100 m` long with radius `≥ 500 m`) with **no gap requirement** to the car ahead.
 - **Pre-queueing:** A HUD notice appears `150 m` before a straight-mode zone. Pressing the flap button up to `250 m` before the zone queues activation (held for up to `12 s`) and opens the flaps the instant you cross the activation line.
-- **Low Grip Conditions and wet lockout:** When racing-line water exceeds `0.14 mm`, race control declares **Low Grip Conditions** (cleared once water falls below `0.08 mm`). Under Low Grip Conditions, rear flaps stay locked out above `0.25` wetness, only the **front flaps** open, and activation zones shift `50 m` further down the straight. Under open-wheel race rules, local yellow-flag zones also lock out flaps and Overtake Mode.
+- **Low Grip Conditions and wet lockout:** When racing-line water exceeds `0.2 mm`, race control declares **Low Grip Conditions** (cleared once water falls below `0.08 mm`). Under Low Grip Conditions, rear flaps stay locked out above `0.25` wetness, only the **front flaps** open, and activation zones shift `50 m` further down the straight. Under open-wheel race rules, local yellow-flag zones also lock out flaps and Overtake Mode.
 
 ### 350 kW MGU-K, 4 MJ battery, and Overtake Mode
 
@@ -77,7 +77,7 @@ The 2026 power unit pairs a 1.6 L V6 turbo with a `350 kW` MGU-K and a `4 MJ` us
 
 ## Garage and car setups
 
-Open the **Garage** from the menu or pause screen to tune your car, save named setups, or exchange setups via `LC1-` share codes and `.json` files (see [Sharing car setups](ONLINE.md#sharing-car-setups)). Every car uses one of two class setup sheets anchored to that car's real physical baseline:
+Open the **Garage** from the menu or pause screen to tune your car, save named setups, or exchange setups via `LC1-` share codes and `.json` files (see [Sharing a car setup](ONLINE.md#sharing-a-car-setup)). Every car uses one of two class setup sheets anchored to that car's real physical baseline:
 
 ### F1 setup sheet (`lc26`, `f12026-car`, and F1 mods)
 
@@ -107,4 +107,4 @@ Closed-wheel cars share a unified sheet that automatically exposes only the hard
 | **Aero** | Aero package & rear wing clicks (`0`–`10`, winged cars only), front & rear ride height (mm), front & rear brake ducts (`0`–`6`), radiator opening (`1`–`7`, where fitted) |
 | **Fuel** | Starting fuel ballast (litres and kg) |
 
-You can also adjust live in-car dials—such as brake bias and differential settings (`entry`, `mid`, `exit`)—on track through the **MFD** (`O` to toggle, `I` or `Insert` to cycle pages).
+You can also adjust live in-car dials on track, such as brake bias and the differential's `entry`, `mid` and `exit` settings, through the **MFD** (`O` to toggle, `I` or `Insert` to cycle pages).

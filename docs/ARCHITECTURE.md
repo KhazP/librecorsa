@@ -54,7 +54,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 - **`src/lib/sim/simulator-car.ts`** is the interface every car implements.
 - **`src/lib/sim/f12026-car/VehiclePhysics.ts`** is the rigid-body car every model uses: a 6-DOF body on the circuit's collider meshes, with five ground samples per wheel, double-wishbone suspension, a thermal tyre model, aero maps and the drivetrain.
 - **`f12026-car/F12026CarSim.ts`** connects it to the game: track colliders, assists, DRS and the era's overtaking rules.
-- **Each car is a config** on that model: `f12026-car/` (the 2026 Prototype), `gt3/`, `proto/` (LMDh, MTR 496R), `classic/` and `road/`. Each `*Sim.ts` pairs a config with its sound.
+- **Each car is a config** on that model: `f12026-car/` (the LC26 Prototype), `f12025-car/` (the LC25 Prototype), `gt3/`, `proto/` (LMDh, MTR 496R), `classic/` and `road/`. Each `*Sim.ts` pairs a config with its sound.
 - **The car list** is `src/lib/cars/car-registry.ts`: a car is a body and a sound on one of the vehicle models in `vehicle-models.ts`. Setups, telemetry and boards are keyed by the model.
 - **Shared parts** sit beside them: suspension kinematics, aero wake, brakes, gearbox, the 2026 energy rules (`f12026-car/ers-2026.ts`), wet tyres and the realism levels (`sim-realism.ts`; the checks test "full").
 - **The ground**: `f12026-car/TrackColliderQuery.ts` answers ray queries against the circuit's collider meshes, and `sim/track-surfaces.ts` is the table of road, kerb, grass and gravel properties.

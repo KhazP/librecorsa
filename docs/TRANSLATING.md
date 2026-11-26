@@ -1,6 +1,6 @@
 # Translating
 
-All localizable text in LibreCorsa lives in JSON message catalogs organized by feature area under `src/i18n/messages/<language>/`. English (`en`) is the canonical source. Every other language mirrors the same folder structure, and any missing key falls back to English automatically—so partial translations can ship immediately and grow incrementally.
+All localizable text in LibreCorsa lives in JSON message catalogs organized by feature area under `src/i18n/messages/<language>/`. English (`en`) is the canonical source. Every other language mirrors the same folder structure, and any missing key falls back to English automatically, so partial translations can ship immediately and grow incrementally.
 
 Players choose their display language under **Settings > Display > Interface > Language**. The default **Automatic** option follows the browser's locale whenever a matching translation exists.
 
@@ -58,7 +58,7 @@ Pass the standard browser language tag (`tr`, `pt-BR`, `zh-Hant`) followed by th
 
 - **Placeholders:** Keep `{name}` tokens verbatim and untranslated, placed wherever natural grammar dictates.
 - **ICU plurals:** In blocks like `{count, plural, one {# lap} other {# laps}}`, `#` renders the number. Use your language's standard CLDR plural categories (`one`, `few`, `many`, `other`, etc.).
-- **Rich-text tags:** In strings like `<n>#</n> turns`, tags apply styling—keep them wrapped around the corresponding translated span.
+- **Rich-text tags:** In strings like `<n>#</n> turns`, tags apply styling; keep them wrapped around the corresponding translated span.
 - **Translator notes:** Check `src/i18n/notes/<area>.json` for UI context whenever an English label could be ambiguous in isolation.
 - **Normal capitalization:** Write labels in normal sentence case even when the UI displays them in all caps. Because LibreCorsa sets the document `lang` attribute, CSS handles locale-aware uppercasing accurately (such as Turkish `i` → `İ`).
 
@@ -67,7 +67,7 @@ Pass the standard browser language tag (`tr`, `pt-BR`, `zh-Hant`) followed by th
 - **Inside React components:** Call `const t = useTranslations("menu.title")` and render `t("drive")` or `t("lapTimesBest", { time })`. Add the source string to `src/i18n/messages/en/menu.json`. Message keys are strongly typed, so missing keys fail `npx tsc --noEmit`.
 - **Outside React (canvas HUD, toasts):** Import `t("hud.x.y")` from `@/i18n/runtime` and invoke it at render/display time so live language switches take effect immediately. Use `upper(text)` for locale-aware uppercasing.
 - **Inside `src/lib`:** Use `text("game.weather.clear")` from `@/lib/text`, which has zero React or client-runtime dependencies so it can be safely imported by the race server, simulation worker, and static pages (returning the active locale in the browser and English elsewhere). Shared lookup tables expose localized strings through getters while preserving their object shape; hot-loop code caches translated strings once per locale via `perLanguage` (`@/lib/per-language`).
-- **Keep sentences whole:** Store one complete message per sentence using placeholders for dynamic values—never concatenate fragments, as word order varies across languages.
+- **Keep sentences whole:** Store one complete message per sentence using placeholders for dynamic values. Never concatenate fragments, as word order varies across languages.
 - **One key per context:** Give distinct contexts distinct keys (for example, `"Off"` on a toggle switch vs. `"Off"` for a track-limits rule), since translators cannot see the screen.
 - **Translate labels, never data:** Only localize user-facing labels. IDs, persisted settings values, wire protocol tokens, code comparisons, ghost files, bug reports, and diagnostics must remain canonical.
 - **Add context notes:** Document any short or ambiguous string in `src/i18n/notes/<area>.json`.

@@ -1,6 +1,6 @@
 # Porting circuits
 
-A local clone of LibreCorsa includes one circuit, RISE Motordrome—all other hosted circuits live in R2 and are gitignored. This guide explains how to convert an Assetto Corsa track mod for a local build, as well as how to model and build an original circuit from scratch in Blender.
+A local clone of LibreCorsa includes one circuit, RISE Motordrome; all other hosted circuits live in R2 and are gitignored. This guide explains how to convert an Assetto Corsa track mod for a local build, as well as how to model and build an original circuit from scratch in Blender.
 
 To extract a track mod from an F1 25 `.erp` archive instead, see [Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md). Because the mod converter evolved circuit by circuit, expect to read through `port_ac_track.py` and add track-specific overrides for new conversions.
 
@@ -85,13 +85,13 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
 Files consumed from the mod directory:
 
 - `.kn5` models (visual geometry plus physics meshes identified by surface naming)
-- `ai/fast_lane.ai` (**required**—provides centreline and track widths)
+- `ai/fast_lane.ai` (**required**; provides centreline and track widths)
 - `ai/pit_lane.ai` (optional pit lane spline)
 - `data/surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras.ini`, and `groove.ini` (all optional)
 
 ## Building a circuit in Blender
 
-`scripts/tracks/build_blender_track.py` turns a Blender-authored circuit into LibreCorsa's runtime format using the exact same road, kerb, barrier, and racing-line pipeline—no Assetto Corsa files needed.
+`scripts/tracks/build_blender_track.py` turns a Blender-authored circuit into LibreCorsa's runtime format using the exact same road, kerb, barrier, and racing-line pipeline, with no Assetto Corsa files needed.
 
 ### Try the worked example
 
@@ -112,7 +112,7 @@ On macOS, invoke Blender via `/Applications/Blender.app/Contents/MacOS/Blender`.
 
 Model in metres using Blender's standard `Z`-up orientation (glTF export automatically converts to LibreCorsa's `Y`-up space):
 
-- **Drivable surfaces and walls:** Name every physical mesh starting with `Road`, `Kerb`, `Runoff`, `Gravel`, `Grass`, `Wall`, or `PitLane`—either alone or followed by `.`, `_`, `-`, a space, or a digit (e.g., `Road.001`, `Kerb_T1`, `Wall 3`). Cars drive directly on these triangles and collide with walls. Any other mesh name is treated as visual-only scenery.
+- **Drivable surfaces and walls:** Name every physical mesh starting with `Road`, `Kerb`, `Runoff`, `Gravel`, `Grass`, `Wall`, or `PitLane`, either alone or followed by `.`, `_`, `-`, a space, or a digit (e.g., `Road.001`, `Kerb_T1`, `Wall 3`). Cars drive directly on these triangles and collide with walls. Any other mesh name is treated as visual-only scenery.
 - **Road mesh and UVs:** Keep the road surface smooth with enough lateral subdivisions to represent camber cleanly, and unwrap its UVs so LibreCorsa's custom asphalt shader renders properly. Raise kerbs roughly `1 cm` above the road edge.
 - **Materials:** Use Principled BSDF materials. Unless driven by a texture map, LibreCorsa only retains metalness (clamped up to `0.6`) on material names containing metal keywords (`metal`, `steel`, `armco`, `rail`, `guard`, `post`, `pole`, etc.), and enforces minimum roughness of `0.65` (`0.8` for ground surfaces such as asphalt, grass, kerbs, and gravel).
 - **`Track_Centreline`:** A closed loop tracing the middle of the road, converted to a mesh (**Object > Convert > Mesh**). Vertical height is projected onto the `Road` mesh below, so the loop may float above the surface.
@@ -153,7 +153,7 @@ Place a `.json` file next to your `.glb` with the same stem (or pass `--settings
 }
 ```
 
-Any applicable mod-converter setting also works here—such as `minWidthM` for roads narrower than `8.5 m`, or `turns_override` to supply custom corner names.
+Any applicable mod-converter setting also works here, such as `minWidthM` for roads narrower than `8.5 m`, or `turns_override` to supply custom corner names.
 
 ### Running the Blender builder
 
@@ -166,7 +166,7 @@ This writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.gl
 
 ## Common issues and fixes
 
-These solutions came out of porting Qiddiya Speed Park—a circuit with sharp elevation crests, tight banked corners, and night lighting. Put these keys in your circuit settings JSON; all work with both converters except `gridBoxes`, `defaultTimeOfDay`, and `nightLighting` (`build_blender_track.py` only).
+These solutions came out of porting Qiddiya Speed Park, a circuit with sharp elevation crests, tight banked corners, and night lighting. Put these keys in your circuit settings JSON; all work with both converters except `gridBoxes`, `defaultTimeOfDay`, and `nightLighting` (`build_blender_track.py` only).
 
 - **Sharp crests come out flattened:** By default, road elevation is smoothed over `1.5` samples (~`7.5 m`, `profileSmoothSamples`) and crests are eased to a `400 m` minimum radius (`crestMinRadiusM`) to suppress laser-scan noise. On a clean modelled circuit with an intentional sharp crest, this drops the physics surface below the visual road. Lower both values (Qiddiya uses `"crestMinRadiusM": 20` and `"profileSmoothSamples": 0.6`).
 - **Car bounces every 5 m through tight banked corners:** The physics collider connects sample rows spaced `5 m` apart with straight chords. On steep, tight banking those chords sag a few centimetres beneath the curve sampled by the tyres, causing rhythmic bouncing. Set `"colliderRowsPerSample": 2` (or `4` for even smoother surfaces at the cost of a few extra megabytes) to place intermediate rows on the true curve. For rapidly twisting banking, also tighten `"roadTwistM"` (Qiddiya uses `0.005`).
@@ -183,7 +183,7 @@ These solutions came out of porting Qiddiya Speed Park—a circuit with sharp el
 - Add your circuit ID to `REPO_TRACK_IDS` in `src/lib/hosted-content.ts` (local clones only display listed IDs; setting `NEXT_PUBLIC_HOSTED_CONTENT=1` displays every hosted circuit even if its files are absent).
 - Run `npm run home-outlines` to regenerate the circuit outline map for the home page.
 - Per-circuit AI tuning files in `public/ai` are optional.
-- Both converters register new circuits in the tracked `public/tracks/index.json` file. Do **not** commit an `index.json` entry for a circuit whose assets only exist locally—a listed circuit without files will fail to load.
+- Both converters register new circuits in the tracked `public/tracks/index.json` file. Do **not** commit an `index.json` entry for a circuit whose assets only exist locally: a listed circuit without files will fail to load.
 
 ## Verification and compression
 
@@ -200,10 +200,10 @@ If you built with `--no-compress`, run `npm run compress-tracks` to meshopt-comp
 
 Every circuit lives under `public/tracks/<id>/` as two core files:
 
-- **`<id>.glb`:** Must contain `Track_Collider_Road` (a clean drivable physics surface extending `1.6 m` past each road edge) and `Track_Collider_Wall` (barriers). Drivable and off-track meshes carry `userData.surface` (`road`, `kerb`, `sausage`, `runoff`, `pitlane`, `gravel`, or `grass`) and optional `userData.grip`—named `Track_Surface_Road`, `Track_Surface_Kerb`, `Track_Surface_Runoff`, `Track_Surface_Gravel`, and `Track_Surface_Grass` by the converters. See the header comment in `src/lib/sim/f12026-car/TrackColliderQuery.ts` for the full collider contract.
+- **`<id>.glb`:** Must contain `Track_Collider_Road` (a clean drivable physics surface extending `1.6 m` past each road edge) and `Track_Collider_Wall` (barriers). Drivable and off-track meshes carry `userData.surface` (`road`, `kerb`, `sausage`, `runoff`, `pitlane`, `gravel`, or `grass`) and optional `userData.grip`, named `Track_Surface_Road`, `Track_Surface_Kerb`, `Track_Surface_Runoff`, `Track_Surface_Gravel`, and `Track_Surface_Grass` by the converters. See the header comment in `src/lib/sim/f12026-car/TrackColliderQuery.ts` for the full collider contract.
 - **`track_data.json`:** Stores metadata, DRS zones, TV cameras, turn markers, sectors, starting grid, pit lane, and dense spline samples (position, width, banking, racing lines, kerbs, run-off, and wall offsets). Inspect `public/tracks/rwanda_official/track_data.json` and `src/lib/track-data.ts` as the canonical reference.
 
-For an advanced, fully scripted Blender build—complete with custom terrain, kerbs, and scenery—see `scripts/tracks/rwanda-official/` and its README, which generates RISE Motordrome directly.
+For an advanced, fully scripted Blender build (complete with custom terrain, kerbs, and scenery), see `scripts/tracks/rwanda-official/` and its README, which generates RISE Motordrome directly.
 
 ## Licences
 

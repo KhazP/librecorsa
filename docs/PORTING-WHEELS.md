@@ -24,7 +24,7 @@ Wheel bases are commonly plugged into a Windows PC while your dev server runs on
 2. Disable the desktop centring spring in your wheel base's vendor software (MOZA Pit House, Fanatec Control Panel, etc.).
 3. In LibreCorsa, open **Settings > Force feedback**, enable **Force feedback**, click **Connect wheel**, select your wheel, hold the rim firmly, and click **Test** in the **Test direction** row. The wheel should pull right, then left.
 4. Switch Settings to **Advanced**, set **Damping** to `100%`, and turn the wheel by hand. If resistance increases noticeably while **Test direction** does nothing, the base is running condition effects properly and the bug is isolated to constant force.
-5. Click **Copy diagnostics** and save the output—it is your baseline for debugging.
+5. Click **Copy diagnostics** and save the output: it is your baseline for debugging.
 
 ## Reading diagnostics
 
@@ -35,25 +35,25 @@ Wheel bases are commonly plugged into a Windows PC while your dev server runs on
 - **Selector order:** Indicates whether array usages were read verbatim or re-sorted to the USB HID PID specification order (see the Windows Chromium bug below).
 - **Setup and teardown traffic:** Ordered hex dump of every output and feature report sent or read during initialization and shutdown.
 - **Stream writes:** Counts of force, condition, and LED reports sent after setup, failure counts and error messages, and the last 24 changed values.
-- **PID State input report:** Live device status flags (effect playing, actuators enabled, safety switch, actuator power) if the base sends them. Many wheels—including the MOZA R9—never transmit PID State reports, so silence here is normal.
+- **PID State input report:** Live device status flags (effect playing, actuators enabled, safety switch, actuator power) if the base sends them. Many wheels (including the MOZA R9) never transmit PID State reports, so silence here is normal.
 
 ## Debugging HID PID wheels
 
-Most modern direct-drive bases speak USB HID PID. `webhid-ffb.ts` already handles three subtle firmware and OS traps—check diagnostics carefully for similar quirks:
+Most modern direct-drive bases speak USB HID PID. `webhid-ffb.ts` already handles three subtle firmware and OS traps; check diagnostics carefully for similar quirks:
 
-- **Chrome on Windows shuffles HID array usages:** Chrome does not have access to raw HID descriptors on Windows. Instead, Chromium reconstructs reports from Windows preparsed data—one item per usage—and orders them by bit offset using an unstable sort (`CreateReportDescriptions` in Chromium's `services/device/hid/hid_service_win.cc`). Because usages inside a single array share the same bit position, their order comes out scrambled. On the MOZA R9, effect types arrived reversed: requesting Constant Force sent Friction and requesting Damper sent Square, both silently accepted with zero motor output. On Windows, LibreCorsa now restores `Effect Type`, `Effect Operation`, `Block Load`, and `Device Control` to the canonical USB PID spec order (`UsageOrder`, `SPEC_SELECTOR_ORDER`), matching the spec's reference descriptor used by most firmware. If a base defines a non-standard usage order in firmware, inspect its raw descriptor on Linux, macOS, or via `hidapi` on Windows.
+- **Chrome on Windows shuffles HID array usages:** Chrome does not have access to raw HID descriptors on Windows. Instead, Chromium reconstructs reports from Windows preparsed data (one item per usage) and orders them by bit offset using an unstable sort (`CreateReportDescriptions` in Chromium's `services/device/hid/hid_service_win.cc`). Because usages inside a single array share the same bit position, their order comes out scrambled. On the MOZA R9, effect types arrived reversed: requesting Constant Force sent Friction and requesting Damper sent Square, both silently accepted with zero motor output. On Windows, LibreCorsa now restores `Effect Type`, `Effect Operation`, `Block Load`, and `Device Control` to the canonical USB PID spec order (`UsageOrder`, `SPEC_SELECTOR_ORDER`), matching the spec's reference descriptor used by most firmware. If a base defines a non-standard usage order in firmware, inspect its raw descriptor on Linux, macOS, or via `hidapi` on Windows.
 - **1-bit flags declared as `0..0`:** The MOZA R9 declares its 1-bit `X`, `Y`, `Direction Enable`, and `Device Control` flags with a logical range of `0..0`. The parser treats `0..0` as full bit-width so `1` can still be encoded.
 - **Device Control exposed as bit flags:** Some wheel descriptors declare `Reset`, `Stop All`, `Enable Actuators`, etc. as individual 1-bit flags rather than a selector array. The parser supports both layouts.
 
-By default, the generic PID profile mirrors Linux `hid-pidff`: Trigger Button `0`, Direction Enable set without axis flags, `Reset` → `Stop All` → `Enable Actuators`, and a `PID Pool` feature read before creating effects. Bases requiring different fields get an entry in `PID_QUIRKS` (`PidProfile`: trigger button, direction enable, axis flags, loop count, and inter-command delays—see the PXN V99 entry for an example).
+By default, the generic PID profile mirrors Linux `hid-pidff`: Trigger Button `0`, Direction Enable set without axis flags, `Reset` → `Stop All` → `Enable Actuators`, and a `PID Pool` feature read before creating effects. Bases requiring different fields get an entry in `PID_QUIRKS` (`PidProfile`: trigger button, direction enable, axis flags, loop count, and inter-command delays; see the PXN V99 entry for an example).
 
 ### When diagnostics look clean but the wheel still doesn't move
 
 Work through these three steps in order, from fastest to most conclusive:
 
 1. **Cross-check Linux kernel drivers:** Inspect `drivers/hid/usbhid/hid-pidff.c` and `drivers/hid/hid-universal-pidff.c` in mainline Linux for vendor quirks and compare every `Set Effect` byte and init step against `pidff_set_effect_report`, `pidff_set_effect_direction`, and `pidff_reset`.
-2. **Replay the exact bytes outside the browser:** On the Windows PC, copy the initialization bytes from diagnostics into a minimal Python script using `pip install hidapi` and send them via `write()`. Because `hidapi`'s `write()` uses `WriteFile` on Windows—the exact same OS path Chrome's `sendReport` calls—this isolates firmware behavior from the browser while letting you tweak one byte at a time. (On the MOZA R9, changing the effect type byte to `0x01` immediately moved the rim.)
-3. **Capture a working game over USB:** Run Wireshark with USBPcap filtered strictly to the wheel's USB address (keeping keyboards out of the capture) while running a game with working FFB. Compare initialization sequence, created effect types, and whether reports travel over interrupt OUT or control `SET_REPORT`. If Wireshark lists only network interfaces, USBPcap isn't registered—reboot after installing, copy `USBPcapCMD.exe` from `C:\Program Files\USBPcap\` into `C:\Program Files\Wireshark\extcap\`, or run Wireshark as administrator.
+2. **Replay the exact bytes outside the browser:** On the Windows PC, copy the initialization bytes from diagnostics into a minimal Python script using `pip install hidapi` and send them via `write()`. Because `hidapi`'s `write()` uses `WriteFile` on Windows (the exact same OS path Chrome's `sendReport` calls), this isolates firmware behavior from the browser while letting you tweak one byte at a time. (On the MOZA R9, changing the effect type byte to `0x01` immediately moved the rim.)
+3. **Capture a working game over USB:** Run Wireshark with USBPcap filtered strictly to the wheel's USB address (keeping keyboards out of the capture) while running a game with working FFB. Compare initialization sequence, created effect types, and whether reports travel over interrupt OUT or control `SET_REPORT`. If Wireshark lists only network interfaces, USBPcap isn't registered: reboot after installing, copy `USBPcapCMD.exe` from `C:\Program Files\USBPcap\` into `C:\Program Files\Wireshark\extcap\`, or run Wireshark as administrator.
 
 Reference Python replay script using the MOZA R9's report IDs (swap in report IDs from your wheel's diagnostics):
 
@@ -84,7 +84,7 @@ out(0x0C, 0x04); out(0x0C, 0x02)                          # Stop All, Disable Ac
 
 ## Adding a custom wheel protocol
 
-Every protocol byte must be backed by a verifiable source: a mainline or out-of-tree Linux driver or USB captures from vendor software. Cite the reference function in comments (as the `lg4ff*` helpers cite `hid-lg4ff.c` and the Thrustmaster driver cites `hid-tmff2`). Do **not** copy GPL source code directly—implement the packet encoding cleanly from the documented protocol behavior.
+Every protocol byte must be backed by a verifiable source: a mainline or out-of-tree Linux driver or USB captures from vendor software. Cite the reference function in comments (as the `lg4ff*` helpers cite `hid-lg4ff.c` and the Thrustmaster driver cites `hid-tmff2`). Do **not** copy GPL source code directly; implement the packet encoding cleanly from the documented protocol behavior.
 
 Place the protocol implementation in a dedicated module beside `webhid-ffb.ts` (following `webhid-logitech-hidpp.ts` and `webhid-thrustmaster.ts`), then wire it into `webhid-ffb.ts`:
 
