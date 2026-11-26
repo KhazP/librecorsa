@@ -9,7 +9,7 @@ const SHOW_MS = 4000;
 const LEAVE_MS = 220;
 /** How often the card looks again for a clear spot while it shows (a screen opened under it) */
 const RECHECK_MS = 400;
-/** Its margin from the screen's edges (px) */
+/** Its least margin from the screen's edges (px); a notch or home indicator's safe area can make it more */
 const EDGE = 16;
 
 /** Where the card may sit, tried in this order; start and end follow the language's direction */
@@ -19,16 +19,33 @@ const SPOTS: readonly Spot[] = ["top-end", "top-center", "bottom-center", "botto
 const TOP = "top-[max(1rem,env(safe-area-inset-top))]";
 const BOTTOM = "bottom-[max(1rem,env(safe-area-inset-bottom))]";
 const SPOT_CLASS: Record<Spot, string> = {
-  "top-end": `${TOP} end-[max(1rem,env(safe-area-inset-right))] justify-end`,
+  "top-end": `${TOP} end-[max(1rem,env(safe-area-inset-right))] rtl:end-[max(1rem,env(safe-area-inset-left))] justify-end`,
   "top-center": `${TOP} inset-x-0 mx-auto justify-center`,
   "bottom-center": `${BOTTOM} inset-x-0 mx-auto justify-center`,
-  "bottom-start": `${BOTTOM} start-[max(1rem,env(safe-area-inset-left))] justify-start`,
-  "bottom-end": `${BOTTOM} end-[max(1rem,env(safe-area-inset-right))] justify-end`,
+  "bottom-start": `${BOTTOM} start-[max(1rem,env(safe-area-inset-left))] rtl:start-[max(1rem,env(safe-area-inset-right))] justify-start`,
+  "bottom-end": `${BOTTOM} end-[max(1rem,env(safe-area-inset-right))] rtl:end-[max(1rem,env(safe-area-inset-left))] justify-end`,
 };
 
 /** Everything the player can press or read as a control: the card never sits over one */
 const CONTROLS =
   'button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="slider"], [role="switch"], [role="link"], [data-toast-avoid]';
+
+/** The screen's safe-area insets (a notch, the home indicator), as the CSS above reads them */
+function safeInsets(): { top: number; right: number; bottom: number; left: number } {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const inset = {
+    top: parseFloat(cs.paddingTop) || 0,
+    right: parseFloat(cs.paddingRight) || 0,
+    bottom: parseFloat(cs.paddingBottom) || 0,
+    left: parseFloat(cs.paddingLeft) || 0,
+  };
+  probe.remove();
+  return inset;
+}
 
 /** The first spot whose box, for a card this size, covers no control on the screen; null when every one would */
 function clearSpot(card: HTMLElement): Spot | null {
@@ -36,10 +53,13 @@ function clearSpot(card: HTMLElement): Spot | null {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const rtl = getComputedStyle(card).direction === "rtl";
-  const x = { start: rtl ? vw - EDGE - w : EDGE, end: rtl ? EDGE : vw - EDGE - w, center: (vw - w) / 2 };
+  const inset = safeInsets();
+  const left = Math.max(EDGE, inset.left);
+  const right = Math.max(EDGE, inset.right);
+  const x = { start: rtl ? vw - right - w : left, end: rtl ? left : vw - right - w, center: (vw - w) / 2 };
   const box = (spot: Spot) => {
     const [v, hz] = spot.split("-") as ["top" | "bottom", "start" | "end" | "center"];
-    const top = v === "top" ? EDGE : vh - EDGE - h;
+    const top = v === "top" ? Math.max(EDGE, inset.top) : vh - Math.max(EDGE, inset.bottom) - h;
     return { left: x[hz], right: x[hz] + w, top, bottom: top + h };
   };
   const controls: DOMRect[] = [];
