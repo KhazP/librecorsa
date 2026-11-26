@@ -27,7 +27,7 @@ const SHARE_IMAGE = {
   url: "/opengraph-image.jpg",
   width: 1200,
   height: 630,
-  alt: "A LibreCorsa open-wheeler on the start-finish straight of the Rwanda International Circuit",
+  alt: "A LibreCorsa open-wheeler on the start-finish straight of RISE Motordrome",
 };
 
 export const metadata: Metadata = {
@@ -51,10 +51,10 @@ const TRAILER_URL = "/media/librecorsa-trailer.mp4";
 const FACTS: [string, React.ReactNode][] = [
   ["Developer", "Alp Yalay, solo"],
   ["Released", "October 2026, free to play in the browser"],
-  ["Plays on", "Any modern browser: computer, phone or tablet"],
+  ["Plays on", "Any modern browser (computer, phone or tablet), plus desktop and Android apps"],
   ["Controls", "Keyboard, gamepad, touch or a force-feedback wheel"],
-  ["Modes", "Hot laps, races against AI, multiplayer, online lap times"],
-  ["Content", "Open-wheelers built to the 2026 rules, GT3 cars, a road car, more than a dozen circuits"],
+  ["Modes", "Career mode, time trials, hot laps, races against AI, multiplayer, online lap times"],
+  ["Content", "14 cars across five classes (2026 and 2025 open-wheelers, GT3, prototypes, classics and road cars) on 20 circuits and two hill climbs"],
   ["Price", "Free. Tips are optional and unlock nothing"],
   [
     "Website",
@@ -268,11 +268,12 @@ export default function PressPage() {
         <div className="grid gap-3 lg:grid-cols-2">
           <div className={`${CARD} flex flex-col gap-4 p-4.5 sm:p-6`}>
             <p className="lc-body m-0 text-[16px] leading-[1.6]">
-              LibreCorsa is a free racing simulator that runs in a web browser, with nothing to install. You drive open-wheel race
-              cars built to the 2026 rules, GT3 cars and a small road car on more than a dozen circuits, in the dry or the rain,
-              by day or at night. Race AI drivers, set lap times against players around the world, or race friends online. It
-              plays with a keyboard, a gamepad, a touch screen or a steering wheel with force feedback. I build it alone, and
-              the code is open source.
+              LibreCorsa is a free racing simulator that runs in a web browser, with nothing to install. You drive 14 cars across
+              five classes (2026 and 2025 open-wheelers, GT3 cars, prototypes, classics and road cars) on 20 circuits and two hill
+              climbs, in the dry or the rain, by day or at night. Work through a career ladder, take on weekly and permanent time
+              trials, race AI drivers, set lap times against players around the world, or race friends online. It plays with a
+              keyboard, a gamepad, a touch screen or a steering wheel with force feedback. I build it alone, and the code is open
+              source.
             </p>
             <p className="lc-hint m-0 text-[13px]">
               LibreCorsa is an independent fan project. It is not affiliated with Formula 1, the FIA, any team or any circuit.
