@@ -101,7 +101,8 @@
       "silver": "B",
       "bronze": "Đ",
       "og": "OG",
-      "goat": "GOAT"
+      "goat": "GOAT",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "Vật lý V1",
       "bulb": "Ý tưởng cho game",
       "creator": "Đã tạo ra game",
-      "goat": "Tay đua giàu thành tích nhất"
+      "goat": "Tay đua giàu thành tích nhất",
+      "stig": "P1 Middle Gear Lap Board"
     }
   },
   "profile": {

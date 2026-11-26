@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} min",
     "placeNoTime": "Noch keine Zeit",
     "placeFirst": "P1 · diese Woche am schnellsten",
+    "placeFirstPermanent": "P1 · am schnellsten auf der Liste",
     "place": "P{place}",
     "placeGap": "P{place} · {gap} auf P{above}"
   },
@@ -145,6 +146,7 @@
       "pickName": "Wähle einen anderen Namen",
       "challengeEnded": "Diese Wochenchallenge ist vorbei",
       "challengeRules": "Diese Runde wurde nicht nach den Regeln der Wochenchallenge gefahren",
+      "permanentChallengeRules": "Diese Runde wurde nicht nach den Regeln dieser Challenge gefahren",
       "tooFewSamples": "Die Aufzeichnung hat zu wenige Messpunkte",
       "lapNotClosed": "Die Runde endet nicht dort, wo sie begonnen hat",
       "standingStartRun": "Ein Punkt-zu-Punkt-Zeitlauf muss mit einem stehenden Start beginnen",
@@ -174,7 +176,9 @@
     "creator": "Entwickler",
     "creatorDetail": "Hat LibreCorsa entwickelt",
     "goat": "GOAT",
-    "goatDetail": "Fahrer mit den meisten Medaillen in der Hall of Fame. Bei Gleichstand an der Spitze teilen sich alle das Abzeichen."
+    "goatDetail": "Fahrer mit den meisten Medaillen in der Hall of Fame. Bei Gleichstand an der Spitze teilen sich alle das Abzeichen.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: am schnellsten auf dem Middle Gear Lap Board."
   },
   "camera": {
     "chaseClose": "Verfolger nah",

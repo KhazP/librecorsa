@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes}분",
     "placeNoTime": "아직 기록 없음",
     "placeFirst": "P1 · 이번 주 최고 기록",
+    "placeFirstPermanent": "P1 · 보드 최고 기록",
     "place": "P{place}",
     "placeGap": "P{place} · P{above}까지 {gap}"
   },
@@ -145,6 +146,7 @@
       "pickName": "다른 이름을 선택해 주십시오",
       "challengeEnded": "해당 주간 챌린지가 종료되었습니다",
       "challengeRules": "이번 주 챌린지 규칙에 맞게 주행한 랩이 아닙니다",
+      "permanentChallengeRules": "이 챌린지 규칙에 맞게 주행한 랩이 아닙니다",
       "tooFewSamples": "기록된 샘플이 너무 적습니다",
       "lapNotClosed": "랩이 시작한 지점에서 끝나지 않습니다",
       "standingStartRun": "구간 주행 타임 런은 스탠딩 스타트로 시작해야 합니다",
@@ -174,7 +176,9 @@
     "creator": "제작자",
     "creatorDetail": "LibreCorsa 제작",
     "goat": "GOAT",
-    "goatDetail": "명예의 전당 최다 수상 드라이버입니다. 공동 1위는 모두 이 배지를 받습니다."
+    "goatDetail": "명예의 전당 최다 수상 드라이버입니다. 공동 1위는 모두 이 배지를 받습니다.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: Middle Gear Lap Board 최고 기록입니다."
   },
   "camera": {
     "chaseClose": "근접 체이스",

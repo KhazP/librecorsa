@@ -286,9 +286,13 @@
     "unbind": "解除按鈕 {button} 與「{action}」的綁定",
     "pressButton": "請按下按鈕",
     "bound": "按鍵 {button}",
+    "boundHat": "方向鍵 {dir}",
+    "boundHatAria": "{action}：方向鍵 {dir}。變更",
+    "unbindHat": "解除方向鍵 {dir} 與「{action}」的綁定",
     "add": "新增",
     "capturing": "請按下任一裝置上的按鈕。按 Esc 取消；{seconds} s 後自動停止",
-    "moved": "按鍵 {button} 已從「{action}」移至此處"
+    "moved": "按鍵 {button} 已從「{action}」移至此處",
+    "movedHat": "方向鍵 {dir} 已從「{action}」移至此處"
   },
   "bridge": {
     "takenOver": "已被接管",

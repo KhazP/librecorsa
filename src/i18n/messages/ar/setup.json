@@ -286,9 +286,13 @@
     "unbind": "إلغاء تعيين الزر {button} من {action}",
     "pressButton": "اضغط زرًا",
     "bound": "زر {button}",
+    "boundHat": "أزرار الاتجاهات {dir}",
+    "boundHatAria": "{action}: أزرار الاتجاهات {dir}. تغيير",
+    "unbindHat": "إلغاء تعيين أزرار الاتجاهات {dir} من {action}",
     "add": "إضافة",
     "capturing": "اضغط زرًا على أي جهاز. Esc للإلغاء؛ يتوقف بعد {seconds} s",
-    "moved": "نُقل زر {button} من {action}"
+    "moved": "نُقل زر {button} من {action}",
+    "movedHat": "نُقل زر الاتجاهات {dir} من {action}"
   },
   "bridge": {
     "takenOver": "مُستحوَذ عليه",

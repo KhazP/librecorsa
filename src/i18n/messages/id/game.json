@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} mnt",
     "placeNoTime": "Belum ada waktu",
     "placeFirst": "P1 · tercepat minggu ini",
+    "placeFirstPermanent": "P1 · tercepat di papan",
     "place": "P{place}",
     "placeGap": "P{place} · {gap} ke P{above}"
   },
@@ -145,6 +146,7 @@
       "pickName": "Pilih nama lain",
       "challengeEnded": "Tantangan mingguan itu sudah berakhir",
       "challengeRules": "Lap ini tidak ditempuh sesuai aturan tantangan minggu ini",
+      "permanentChallengeRules": "Lap ini tidak ditempuh sesuai aturan tantangan ini",
       "tooFewSamples": "Rekaman memiliki terlalu sedikit sampel",
       "lapNotClosed": "Lap tidak berakhir di tempat awalnya",
       "standingStartRun": "Run berwaktu titik-ke-titik harus dimulai dengan start diam",
@@ -174,7 +176,9 @@
     "creator": "Pembuat",
     "creatorDetail": "Membuat LibreCorsa",
     "goat": "GOAT",
-    "goatDetail": "Pembalap peraih medali terbanyak di Hall of Fame. Jika seri di puncak, semua berbagi lencana ini."
+    "goatDetail": "Pembalap peraih medali terbanyak di Hall of Fame. Jika seri di puncak, semua berbagi lencana ini.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: tercepat di Middle Gear Lap Board."
   },
   "camera": {
     "chaseClose": "Chase dekat",

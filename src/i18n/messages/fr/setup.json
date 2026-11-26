@@ -286,9 +286,13 @@
     "unbind": "Retirer le bouton {button} de {action}",
     "pressButton": "Appuyez sur un bouton",
     "bound": "Btn {button}",
+    "boundHat": "Croix dir. {dir}",
+    "boundHatAria": "{action} : croix directionnelle {dir}. Modifier",
+    "unbindHat": "Retirer la croix directionnelle {dir} de {action}",
     "add": "Ajouter",
     "capturing": "Appuyez sur un bouton de n’importe quel périphérique. Esc annule ; arrêt après {seconds} s",
-    "moved": "Btn {button} retiré de {action}"
+    "moved": "Btn {button} retiré de {action}",
+    "movedHat": "Croix dir. {dir} retirée de {action}"
   },
   "bridge": {
     "takenOver": "Repris",

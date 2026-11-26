@@ -286,9 +286,13 @@
     "unbind": "Gỡ gán nút {button} khỏi {action}",
     "pressButton": "Nhấn một nút",
     "bound": "Nút {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. Thay đổi",
+    "unbindHat": "Gỡ gán D-pad {dir} khỏi {action}",
     "add": "Thêm",
     "capturing": "Nhấn một nút trên thiết bị bất kỳ. Esc để hủy; tự dừng sau {seconds} s",
-    "moved": "Đã chuyển nút {button} từ {action}"
+    "moved": "Đã chuyển nút {button} từ {action}",
+    "movedHat": "Đã chuyển D-pad {dir} từ {action}"
   },
   "bridge": {
     "takenOver": "Đã bị chiếm quyền",

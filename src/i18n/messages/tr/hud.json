@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "Bu haftanın mücadelesi",
+      "regionTrial": "Zamana karşı hedefi",
       "yourBest": "En iyin",
-      "weekFastest": "Bu haftanın en hızlısı"
+      "weekFastest": "Bu haftanın en hızlısı",
+      "boardFastest": "Tablonun en hızlısı"
     }
   },
   "raceIncidentFeed": {

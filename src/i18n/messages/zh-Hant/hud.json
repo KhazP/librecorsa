@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "本週挑戰",
+      "regionTrial": "計時賽目標",
       "yourBest": "你的最佳",
-      "weekFastest": "本週最快"
+      "weekFastest": "本週最快",
+      "boardFastest": "圈速榜最快"
     }
   },
   "raceIncidentFeed": {

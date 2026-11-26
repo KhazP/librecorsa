@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "Challenge der Woche",
+      "regionTrial": "Zeitfahren-Ziel",
       "yourBest": "Deine Bestzeit",
-      "weekFastest": "Schnellste der Woche"
+      "weekFastest": "Schnellste der Woche",
+      "boardFastest": "Listenbestzeit"
     }
   },
   "raceIncidentFeed": {

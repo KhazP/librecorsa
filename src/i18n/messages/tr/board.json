@@ -101,7 +101,8 @@
       "silver": "G",
       "bronze": "B",
       "og": "OG",
-      "goat": "GOAT"
+      "goat": "GOAT",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "Fizik V1",
       "bulb": "Oyun fikri",
       "creator": "Oyunu yaptı",
-      "goat": "En çok madalyalı pilot"
+      "goat": "En çok madalyalı pilot",
+      "stig": "Middle Gear Lap Board P1"
     }
   },
   "profile": {

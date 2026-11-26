@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "تحدي هذا الأسبوع",
+      "regionTrial": "هدف تجربة الزمن",
       "yourBest": "أفضل زمن لك",
-      "weekFastest": "الأسرع هذا الأسبوع"
+      "weekFastest": "الأسرع هذا الأسبوع",
+      "boardFastest": "الأسرع على اللوحة"
     }
   },
   "raceIncidentFeed": {

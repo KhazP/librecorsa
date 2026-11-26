@@ -286,9 +286,13 @@
     "unbind": "{button} numaralı tuşun {action} atamasını kaldır",
     "pressButton": "Bir tuşa bas",
     "bound": "Tuş {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. Değiştir",
+    "unbindHat": "D-pad {dir} için {action} atamasını kaldır",
     "add": "Ekle",
     "capturing": "Herhangi bir aygıtta bir tuşa bas. Esc iptal eder; {seconds} s sonra durur",
-    "moved": "Tuş {button}, {action} işlevinden taşındı"
+    "moved": "Tuş {button}, {action} işlevinden taşındı",
+    "movedHat": "D-pad {dir}, {action} işlevinden taşındı"
   },
   "bridge": {
     "takenOver": "Devralındı",

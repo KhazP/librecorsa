@@ -101,7 +101,8 @@
       "silver": "S",
       "bronze": "B",
       "og": "OG",
-      "goat": "GOAT"
+      "goat": "GOAT",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "Fisika V1",
       "bulb": "Ide game",
       "creator": "Membuat game ini",
-      "goat": "Pembalap peraih medali terbanyak"
+      "goat": "Pembalap peraih medali terbanyak",
+      "stig": "P1 Middle Gear Lap Board"
     }
   },
   "profile": {

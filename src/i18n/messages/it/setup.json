@@ -286,9 +286,13 @@
     "unbind": "Rimuovi il pulsante {button} da {action}",
     "pressButton": "Premi un pulsante",
     "bound": "Tasto {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. Cambia",
+    "unbindHat": "Rimuovi D-pad {dir} da {action}",
     "add": "Aggiungi",
     "capturing": "Premi un pulsante su un dispositivo qualsiasi. Esc annulla; si interrompe dopo {seconds} s",
-    "moved": "Tasto {button} spostato da {action}"
+    "moved": "Tasto {button} spostato da {action}",
+    "movedHat": "D-pad {dir} spostato da {action}"
   },
   "bridge": {
     "takenOver": "In uso altrove",

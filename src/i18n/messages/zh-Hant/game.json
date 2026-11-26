@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} 分鐘",
     "placeNoTime": "尚無成績",
     "placeFirst": "P1 · 本週最快",
+    "placeFirstPermanent": "P1 · 圈速榜最快",
     "place": "P{place}",
     "placeGap": "P{place} · 距 P{above} 差 {gap}"
   },
@@ -145,6 +146,7 @@
       "pickName": "請選擇其他名稱",
       "challengeEnded": "該每週挑戰已結束",
       "challengeRules": "這一圈未依照本週挑戰的規則駕駛",
+      "permanentChallengeRules": "這一圈未依照此挑戰的規則駕駛",
       "tooFewSamples": "紀錄的取樣點太少",
       "lapNotClosed": "這一圈的終點與起點不在同一處",
       "standingStartRun": "點對點單趟計時必須以靜態起跑開始",
@@ -174,7 +176,9 @@
     "creator": "創作者",
     "creatorDetail": "打造了 LibreCorsa",
     "goat": "GOAT",
-    "goatDetail": "名人堂中獎牌最多的車手。並列榜首時，所有並列者共享此徽章。"
+    "goatDetail": "名人堂中獎牌最多的車手。並列榜首時，所有並列者共享此徽章。",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip：Middle Gear Lap Board 最快紀錄。"
   },
   "camera": {
     "chaseClose": "近距追尾",

@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "Thử thách tuần này",
+      "regionTrial": "Mục tiêu đua tính giờ",
       "yourBest": "Kỷ lục của bạn",
-      "weekFastest": "Nhanh nhất tuần này"
+      "weekFastest": "Nhanh nhất tuần này",
+      "boardFastest": "Nhanh nhất bảng"
     }
   },
   "raceIncidentFeed": {

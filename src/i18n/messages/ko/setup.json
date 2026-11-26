@@ -286,9 +286,13 @@
     "unbind": "{action}에서 버튼 {button} 할당 해제",
     "pressButton": "버튼 누르기",
     "bound": "버튼 {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. 변경",
+    "unbindHat": "{action}에서 D-pad {dir} 할당 해제",
     "add": "추가",
     "capturing": "아무 장치에서나 버튼을 누르십시오. Esc로 취소하며 {seconds}초 후 중단됩니다",
-    "moved": "버튼 {button}이(가) {action}에서 이동되었습니다"
+    "moved": "버튼 {button}이(가) {action}에서 이동되었습니다",
+    "movedHat": "D-pad {dir} 입력이 {action}에서 이동되었습니다"
   },
   "bridge": {
     "takenOver": "제어권 전환됨",

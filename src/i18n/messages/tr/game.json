@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} dk",
     "placeNoTime": "Henüz süre yok",
     "placeFirst": "P1 · bu haftanın en hızlısı",
+    "placeFirstPermanent": "P1 · tablonun en hızlısı",
     "place": "P{place}",
     "placeGap": "P{place} · P{above} ile fark {gap}"
   },
@@ -145,6 +146,7 @@
       "pickName": "Başka bir isim seç",
       "challengeEnded": "O haftalık mücadele sona erdi",
       "challengeRules": "Bu tur bu haftaki mücadelenin kurallarına göre atılmadı",
+      "permanentChallengeRules": "Bu tur bu mücadelenin kurallarına göre atılmadı",
       "tooFewSamples": "Kayıtta çok az örnek var",
       "lapNotClosed": "Tur başladığı yerde bitmiyor",
       "standingStartRun": "Noktadan noktaya zamanlı tırmanış durarak kalkışla başlamalı",
@@ -174,7 +176,9 @@
     "creator": "Yapımcı",
     "creatorDetail": "LibreCorsa’yı yaptı",
     "goat": "GOAT",
-    "goatDetail": "Onur Listesi’nin en çok madalyalı pilotu. Zirvede eşitlik varsa rozeti hepsi paylaşır."
+    "goatDetail": "Onur Listesi’nin en çok madalyalı pilotu. Zirvede eşitlik varsa rozeti hepsi paylaşır.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: Middle Gear Lap Board’un en hızlısı."
   },
   "camera": {
     "chaseClose": "Yakın takip",

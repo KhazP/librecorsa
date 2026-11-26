@@ -101,7 +101,8 @@
       "silver": "A",
       "bronze": "B",
       "og": "OG",
-      "goat": "GOAT"
+      "goat": "GOAT",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {MT} other {MT×#}}",
     "flClassCompact": "{count, plural, =1 {MT·{class}} other {MT·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "Physique V1",
       "bulb": "Idée de jeu",
       "creator": "A créé le jeu",
-      "goat": "Pilote le plus décoré"
+      "goat": "Pilote le plus décoré",
+      "stig": "P1 du Middle Gear Lap Board"
     }
   },
   "profile": {

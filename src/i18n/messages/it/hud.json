@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "Sfida della settimana",
+      "regionTrial": "Obiettivo prova a tempo",
       "yourBest": "Il tuo migliore",
-      "weekFastest": "Il più veloce della settimana"
+      "weekFastest": "Il più veloce della settimana",
+      "boardFastest": "Più veloce in classifica"
     }
   },
   "raceIncidentFeed": {

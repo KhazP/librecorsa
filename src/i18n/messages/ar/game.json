@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} د",
     "placeNoTime": "لا يوجد زمن بعد",
     "placeFirst": "P1 · الأسرع هذا الأسبوع",
+    "placeFirstPermanent": "P1 · الأسرع على اللوحة",
     "place": "P{place}",
     "placeGap": "P{place} · {gap} خلف P{above}"
   },
@@ -145,6 +146,7 @@
       "pickName": "اختر اسمًا آخر",
       "challengeEnded": "انتهى ذلك التحدي الأسبوعي",
       "challengeRules": "لم تُقطَع هذه اللفة وفق قواعد تحدي هذا الأسبوع",
+      "permanentChallengeRules": "لم تُقطَع هذه اللفة وفق قواعد هذا التحدي",
       "tooFewSamples": "يحتوي التسجيل على عينات قليلة جدًا",
       "lapNotClosed": "لا تنتهي اللفة حيث بدأت",
       "standingStartRun": "يجب أن تبدأ المحاولة الموقوتة من نقطة إلى نقطة بانطلاق من الثبات",
@@ -174,7 +176,9 @@
     "creator": "المُنشئ",
     "creatorDetail": "صنع LibreCorsa",
     "goat": "الأعظم",
-    "goatDetail": "السائق الأكثر تتويجًا في قاعة المشاهير. يتقاسمه المتعادلون في الصدارة."
+    "goatDetail": "السائق الأكثر تتويجًا في قاعة المشاهير. يتقاسمه المتعادلون في الصدارة.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: الأسرع على Middle Gear Lap Board."
   },
   "camera": {
     "chaseClose": "ملاحقة قريبة",

@@ -101,7 +101,8 @@
       "silver": "S",
       "bronze": "B",
       "og": "OG",
-      "goat": "الأعظم"
+      "goat": "الأعظم",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {FL} zero {FL×#} one {FL} two {FL×#} few {FL×#} many {FL×#} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} zero {FL·{class}×#} one {FL·{class}} two {FL·{class}×#} few {FL·{class}×#} many {FL·{class}×#} other {FL·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "فيزياء V1",
       "bulb": "فكرة للعبة",
       "creator": "صنع اللعبة",
-      "goat": "السائق الأكثر تتويجًا"
+      "goat": "السائق الأكثر تتويجًا",
+      "stig": "P1 في Middle Gear Lap Board"
     }
   },
   "profile": {

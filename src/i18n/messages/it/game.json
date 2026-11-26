@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} min",
     "placeNoTime": "Ancora nessun tempo",
     "placeFirst": "P1 · il più veloce della settimana",
+    "placeFirstPermanent": "P1 · il più veloce in classifica",
     "place": "P{place}",
     "placeGap": "P{place} · {gap} da P{above}"
   },
@@ -145,6 +146,7 @@
       "pickName": "Scegli un altro nome",
       "challengeEnded": "Quella sfida settimanale è finita",
       "challengeRules": "Questo giro non è stato percorso secondo le regole della sfida di questa settimana",
+      "permanentChallengeRules": "Questo giro non è stato percorso secondo le regole di questa sfida",
       "tooFewSamples": "La registrazione ha troppo pochi campioni",
       "lapNotClosed": "Il giro non finisce dove è iniziato",
       "standingStartRun": "Una salita a tempo punto a punto deve iniziare con una partenza da fermo",
@@ -174,7 +176,9 @@
     "creator": "Creatore",
     "creatorDetail": "Ha creato LibreCorsa",
     "goat": "GOAT",
-    "goatDetail": "Il pilota più decorato della Hall of Fame. In caso di parità in vetta, tutti condividono il badge."
+    "goatDetail": "Il pilota più decorato della Hall of Fame. In caso di parità in vetta, tutti condividono il badge.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: il più veloce sul Middle Gear Lap Board."
   },
   "camera": {
     "chaseClose": "Esterna ravvicinata",

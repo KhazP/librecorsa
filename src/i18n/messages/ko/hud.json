@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "이번 주 챌린지",
+      "regionTrial": "타임 트라이얼 목표",
       "yourBest": "내 최고 기록",
-      "weekFastest": "이번 주 최고 기록"
+      "weekFastest": "이번 주 최고 기록",
+      "boardFastest": "보드 최고 기록"
     }
   },
   "raceIncidentFeed": {

@@ -286,9 +286,13 @@
     "unbind": "Desasignar el botón {button} de {action}",
     "pressButton": "Pulsa un botón",
     "bound": "Bot. {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. Cambiar",
+    "unbindHat": "Desasignar D-pad {dir} de {action}",
     "add": "Añadir",
     "capturing": "Pulsa un botón de cualquier dispositivo. Esc cancela; se detiene tras {seconds} s",
-    "moved": "Bot. {button} movido desde {action}"
+    "moved": "Bot. {button} movido desde {action}",
+    "movedHat": "D-pad {dir} movido desde {action}"
   },
   "bridge": {
     "takenOver": "Tomado",

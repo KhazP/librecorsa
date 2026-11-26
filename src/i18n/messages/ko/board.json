@@ -101,7 +101,8 @@
       "silver": "은",
       "bronze": "동",
       "og": "OG",
-      "goat": "GOAT"
+      "goat": "GOAT",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "물리 V1",
       "bulb": "게임 아이디어",
       "creator": "게임 제작",
-      "goat": "최다 수상 드라이버"
+      "goat": "최다 수상 드라이버",
+      "stig": "Middle Gear Lap Board P1"
     }
   },
   "profile": {

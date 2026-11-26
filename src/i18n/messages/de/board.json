@@ -101,7 +101,8 @@
       "silver": "S",
       "bronze": "B",
       "og": "OG",
-      "goat": "GOAT"
+      "goat": "GOAT",
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {SR} other {SR×#}}",
     "flClassCompact": "{count, plural, =1 {SR·{class}} other {SR·{class}×#}}",
@@ -132,7 +133,8 @@
       "og": "Physik V1",
       "bulb": "Spielidee",
       "creator": "Hat das Spiel entwickelt",
-      "goat": "Fahrer mit den meisten Medaillen"
+      "goat": "Fahrer mit den meisten Medaillen",
+      "stig": "Middle Gear Lap Board P1"
     }
   },
   "profile": {

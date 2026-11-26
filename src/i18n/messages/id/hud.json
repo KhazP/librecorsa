@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "Tantangan minggu ini",
+      "regionTrial": "Target Time Trial",
       "yourBest": "Terbaikmu",
-      "weekFastest": "Tercepat minggu ini"
+      "weekFastest": "Tercepat minggu ini",
+      "boardFastest": "Tercepat di papan"
     }
   },
   "raceIncidentFeed": {

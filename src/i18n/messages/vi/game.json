@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} phút",
     "placeNoTime": "Chưa có thành tích",
     "placeFirst": "P1 · nhanh nhất tuần này",
+    "placeFirstPermanent": "P1 · nhanh nhất trên bảng",
     "place": "P{place}",
     "placeGap": "P{place} · kém P{above} {gap}"
   },
@@ -145,6 +146,7 @@
       "pickName": "Hãy chọn tên khác",
       "challengeEnded": "Thử thách tuần đó đã kết thúc",
       "challengeRules": "Vòng này không được chạy theo luật thử thách của tuần này",
+      "permanentChallengeRules": "Vòng này không được chạy theo luật của thử thách này",
       "tooFewSamples": "Bản ghi có quá ít mẫu",
       "lapNotClosed": "Vòng đua không kết thúc tại điểm bắt đầu",
       "standingStartRun": "Lượt tính giờ điểm-đến-điểm phải bắt đầu bằng xuất phát đứng",
@@ -174,7 +176,9 @@
     "creator": "Người tạo",
     "creatorDetail": "Đã tạo ra LibreCorsa",
     "goat": "GOAT",
-    "goatDetail": "Tay đua giàu thành tích nhất Đại sảnh Danh vọng. Nếu đồng hạng đầu, tất cả cùng nhận huy hiệu."
+    "goatDetail": "Tay đua giàu thành tích nhất Đại sảnh Danh vọng. Nếu đồng hạng đầu, tất cả cùng nhận huy hiệu.",
+    "stig": "S.T.I.G.",
+    "stigDetail": "Stock Trim, Infinite Grip: nhanh nhất trên Middle Gear Lap Board."
   },
   "camera": {
     "chaseClose": "Sau xe gần",

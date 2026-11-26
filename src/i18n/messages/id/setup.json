@@ -286,9 +286,13 @@
     "unbind": "Lepas penetapan tombol {button} dari {action}",
     "pressButton": "Tekan tombol",
     "bound": "Tombol {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. Ubah",
+    "unbindHat": "Lepas penetapan D-pad {dir} dari {action}",
     "add": "Tambah",
     "capturing": "Tekan tombol di perangkat mana saja. Esc untuk batal; berhenti setelah {seconds} s",
-    "moved": "Tombol {button} dipindahkan dari {action}"
+    "moved": "Tombol {button} dipindahkan dari {action}",
+    "movedHat": "D-pad {dir} dipindahkan dari {action}"
   },
   "bridge": {
     "takenOver": "Diambil alih",

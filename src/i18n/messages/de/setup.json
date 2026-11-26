@@ -286,9 +286,13 @@
     "unbind": "Taste {button} von {action} lösen",
     "pressButton": "Taste drücken",
     "bound": "Taste {button}",
+    "boundHat": "D-Pad {dir}",
+    "boundHatAria": "{action}: D-Pad {dir}. Ändern",
+    "unbindHat": "D-Pad {dir} von {action} lösen",
     "add": "Hinzufügen",
     "capturing": "Drücke eine Taste an einem beliebigen Gerät. Esc bricht ab; endet nach {seconds} s",
-    "moved": "Taste {button} von {action} verschoben"
+    "moved": "Taste {button} von {action} verschoben",
+    "movedHat": "D-Pad {dir} von {action} verschoben"
   },
   "bridge": {
     "takenOver": "Übernommen",
