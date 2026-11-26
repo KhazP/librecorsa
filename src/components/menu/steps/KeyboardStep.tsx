@@ -160,16 +160,18 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
                     />
                   </>
                 ) : (
+                  // The plus alone: the slot is a key cap wide, and "Add" in most languages ("Hinzufügen") is not
                   <Button
                     size="sm"
                     variant="secondary"
-                    className={CAP}
+                    className={`${CAP} [&_.lc-title]:hidden`}
                     icon={<Icon name="add" />}
+                    title={tx("add")}
                     aria-label={tx("addFor", { action: label })}
                     data-nav-default={navDefault}
                     onClick={press}
                   >
-                    {tx("add")}
+                    {null}
                   </Button>
                 )}
               </span>

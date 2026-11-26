@@ -86,7 +86,7 @@
   "keyBindings.boundAria": "Screen-reader label of a key slot. {action}: the action, already translated. {key}: key name.",
   "keyBindings.unbind": "Screen-reader label of the small × button next to a key. {key}: key name. {action}: already translated.",
   "keyBindings.addFor": "Screen-reader label of an empty slot. {action}: already translated.",
-  "keyBindings.add": "On an empty key slot: press it to add a key.",
+  "keyBindings.add": "Tooltip of an empty key slot (the slot itself shows only a plus): press it to add a key.",
   "keyBindings.capturing": "Esc is the key name; keep it. {seconds}: a number of seconds; s = seconds.",
   "keyBindings.escPauses": "Esc is the key name; keep it.",
   "fixedKeys.title": "Card title: keys that can't be rebound.",
