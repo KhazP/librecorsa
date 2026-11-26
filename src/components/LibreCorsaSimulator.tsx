@@ -2808,7 +2808,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                     {
                       event: MIDDLE_GEAR_CHALLENGE,
                       title: tr("menu.challenge.middleGearTitle"),
-                      tagline: tr("menu.challenge.middleGearTagline"),
                       trackName: challengeTrackName(MIDDLE_GEAR_CHALLENGE.trackId),
                       carTitle: weekCar(MIDDLE_GEAR_CHALLENGE).title,
                       available: middleGearAvailable,

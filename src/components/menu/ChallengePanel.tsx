@@ -35,10 +35,8 @@ import { sanitizeDriverName } from "@/lib/settings/player-settings";
 
 export interface ChallengeTrialItem {
   event: TimeTrialEvent;
-  /** Display title for this event ("Weekly Time Trial" or "Middle Gear Lap Board") */
+  /** Accessible title for this event ("Weekly" or "Middle Gear Lap Board") */
   title: string;
-  /** Optional subtitle/tagline shown on the event card */
-  tagline?: string;
   trackName: string;
   carTitle: string;
   /** This copy of the game has this trial's circuit and car */
@@ -208,7 +206,7 @@ const TrialColumn: React.FC<{
             {permanent ? (
               <>
                 <Badge size="sm" variant="solid" tone={{ color: "amber" }} icon="challenge">
-                  {tx("permanentBadge")}
+                  {tx("middleGearBadge")}
                 </Badge>
                 {event.fixedSetup ? (
                   <Badge size="sm" variant="outline" icon="locked">
@@ -228,8 +226,8 @@ const TrialColumn: React.FC<{
             )}
           </div>
           {permanent ? (
-            <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet" title={tx("stigHolderHint")}>
-              {tx("stigAward")}
+            <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet">
+              {tx("stigBadge")}
             </Badge>
           ) : (
             <span className="lc-mono text-[11px] tracking-wider text-lc-slate uppercase">{event.id}</span>
@@ -237,22 +235,14 @@ const TrialColumn: React.FC<{
         </div>
 
         {/* Circuit & Car visual showcase (consistent height across side-by-side columns so both CTAs and boards align) */}
-        <div className="relative z-10 flex min-h-[108px] items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span
-              className={cx(
-                "text-[11px] font-bold tracking-[0.12em] uppercase",
-                permanent ? "text-[#F5C542]" : "text-lc-volt"
-              )}
-            >
-              {trial.title}
-            </span>
+        <div className="relative z-10 flex min-h-[96px] items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
             <h3 className="lc-h3 m-0 line-clamp-2 text-[20px] leading-tight text-lc-chalk">{trial.trackName}</h3>
-            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {car ? <CarClassTag car={car} size="sm" /> : null}
               <span className="truncate text-[14px] font-semibold text-lc-fog">{trial.carTitle}</span>
             </div>
-            <p className="lc-hint m-0 mt-0.5 truncate">
+            <p className="lc-hint m-0 truncate">
               {[trackInfo.country, trackLength, tx("turns", { count: trackInfo.turns })].filter(Boolean).join(" · ")}
             </p>
           </div>
@@ -267,31 +257,17 @@ const TrialColumn: React.FC<{
           </div>
         </div>
 
-        {/* Compact rules & award metadata */}
-        <div className="relative z-10 flex flex-col gap-1.5 rounded-lc-row border border-lc-line/80 bg-lc-well/70 px-3 py-2">
-          <div className="flex flex-wrap items-center justify-between gap-2" aria-label={tx("rules")}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <LapConditionBadges assists={event.assists} realism={event.realism} />
-              <span className="lc-mono text-[11.5px] text-lc-fog">{challengeConditionsLabel(event.vehicle)}</span>
-            </div>
-            <span className="text-[11.5px] font-medium text-lc-slate">
-              {permanent && event.fixedSetup ? tx("regSetupFixed") : tx("regSetupOpen")}
-            </span>
-          </div>
-          <p className="m-0 text-[12px] text-lc-slate">
-            {permanent
-              ? tx("stigHolderHint")
-              : trial.hasRaces && trial.available
-                ? `${tx("podiumRewardsHint")} · ${tx("aboutWithRaces")}`
-                : tx("podiumRewardsHint")}
-          </p>
+        {/* Rules */}
+        <div className="relative z-10 flex flex-wrap items-center gap-1.5" aria-label={tx("rules")}>
+          <LapConditionBadges assists={event.assists} realism={event.realism} />
+          <span className="lc-mono text-[12px] text-lc-fog">{challengeConditionsLabel(event.vehicle)}</span>
         </div>
 
-        {/* Primary Enter CTA */}
+        {/* Primary CTA */}
         <div className="relative z-10">
           {trial.available ? (
             <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
-              {permanent ? tx("driveMiddleGear") : tx("enterTrial")}
+              {tx("driveShort")}
             </Button>
           ) : (
             <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
@@ -305,15 +281,12 @@ const TrialColumn: React.FC<{
       {/* Live Ranking Board directly beneath its own event card */}
       <div className="flex flex-1 flex-col gap-3 border-t border-lc-line bg-lc-well/35 px-4 pt-3.5 pb-4 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <h4 className="lc-row-label m-0 text-lc-chalk">{permanent ? trial.title : tx("times")}</h4>
-            {board ? <Badge size="sm" variant="outline">{tx("drivers", { total: board.total, count: formatCount(board.total) })}</Badge> : null}
-          </div>
           {choices.length <= 2 ? (
             <Segmented aria-label={tx("physicsVersion")} size="sm" value={choice.id} onChange={setBoardPick} options={choices} />
           ) : (
             <Select aria-label={tx("physicsVersion")} className="w-52 max-w-full" value={choice.id} onChange={setBoardPick} options={choices} />
           )}
+          {board ? <Badge size="sm" variant="outline">{tx("drivers", { total: board.total, count: formatCount(board.total) })}</Badge> : null}
         </div>
 
         {me ? (

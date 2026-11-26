@@ -170,11 +170,11 @@
     "middleGearOption": "Middle Gear Lap Board · {circuit}",
     "pastWeek": "{dates} · {circuit}",
     "timeLeft": "{timeLeft} left",
-    "permanent": "Permanent · Fixed setup",
+    "permanent": "Fixed setup",
     "ran": "Ran {dates}",
     "rules": "Rules",
     "emptyThisWeek": "No times set yet this week.",
-    "emptyPermanent": "No times recorded yet on the Middle Gear Lap Board.",
+    "emptyPermanent": "No times set yet.",
     "emptyPastWeek": "No times recorded for this week."
   },
   "layoutPicker": {
