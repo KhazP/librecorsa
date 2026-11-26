@@ -157,7 +157,7 @@ The patched profile runs in the exact same 500 Hz simulation worker as built-in 
 
 If a patch violates any rule, contains a typo, or uses the wrong type, that car is skipped (the rest of the package still loads) and the **Mods** panel pinpoints the failing field path. Updating `gearbox.gears.redline_rpm` automatically adjusts audio pitch scaling and the shift warning beep. Garage setup ranges, AI profiles, and HUD layouts remain inherited from the base model.
 
-All base vehicle models support physics patches except `lc26` and `lc25`, which each run on a simulation of their own. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
+All base vehicle models support physics patches except `lc26` and `lc25`. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
 
 ## Checking, packing, and importing with the CLI
 
