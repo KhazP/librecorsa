@@ -147,11 +147,21 @@ const creditKey = (t: TrackInfo): string => t.credit?.url || `${t.credit?.title}
 // A no-break space: the number and its unit stay on one line
 const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `\u2066${distanceIn(t.lengthM / 1000, unit).toFixed(2)}\u00a0${DISTANCE_LABEL[unit]}\u2069`;
 
-const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+/**
+ * A credits section: `lead` and `note`, in the player's language, run in the page's direction; the credit lines between
+ * them stay in English (docs/TRANSLATING.md) and read left to right, so a right-to-left page keeps their quotes and
+ * years in place
+ */
+const CreditRow: React.FC<{ title: string; lead?: React.ReactNode; note?: React.ReactNode; children?: React.ReactNode }> = ({ title, lead, note, children }) => (
   <div className="flex flex-col gap-1.5 border-t border-lc-line py-4">
     <h3 className="lc-row-label m-0">{title}</h3>
-    {/* Credit lines stay in English (docs/TRANSLATING.md): left to right, so a right-to-left page keeps their quotes and years in place */}
-    <p dir="ltr" className="lc-body m-0 text-start">{children}</p>
+    {lead ? <p className="lc-body m-0">{lead}</p> : null}
+    {children ? (
+      <p dir="ltr" className="lc-body m-0 text-start">
+        {children}
+      </p>
+    ) : null}
+    {note ? <p className="lc-body m-0">{note}</p> : null}
   </div>
 );
 
@@ -267,11 +277,19 @@ const Credits: React.FC = () => {
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] gap-x-8">
         <div>
-          <CreditRow title={tx("physicsTitle")}>{tx("physicsBody")}</CreditRow>
-          <CreditRow title={tx("graphicsTitle")}>{tx("graphicsBody")}</CreditRow>
-          <CreditRow title={tx("hudTitle")}>
-            {tx("hudBody")}
-            <br />
+          <CreditRow title={tx("physicsTitle")} lead={tx("physicsBody")} />
+          <CreditRow title={tx("graphicsTitle")} lead={tx("graphicsBody")} />
+          <CreditRow
+            title={tx("hudTitle")}
+            lead={tx("hudBody")}
+            note={tx.rich("hudLicences", {
+              link: (chunks) => (
+                <a href={`${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`} target="_blank" rel="noreferrer" className={linkClass}>
+                  {chunks}
+                </a>
+              ),
+            })}
+          >
             {THIRD_PARTY_HUD_LAYOUTS.map((l) => {
               const credit: HudLayoutCredit = l.credit;
               return (
@@ -295,13 +313,6 @@ const Credits: React.FC = () => {
                   <br />
                 </React.Fragment>
               );
-            })}
-            {tx.rich("hudLicences", {
-              link: (chunks) => (
-                <a href={`${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`} target="_blank" rel="noreferrer" className={linkClass}>
-                  {chunks}
-                </a>
-              ),
             })}
           </CreditRow>
         </div>
@@ -475,7 +486,7 @@ const Credits: React.FC = () => {
             · used with permission
           </CreditRow>
           {LISTED_TRACKS.some((t) => t.credit) ? (
-            <CreditRow title={tx("circuitsTitle")}>
+            <CreditRow title={tx("circuitsTitle")} note={tx("circuitsConverted")}>
               {/* One line per source: a venue's layouts share one, and a mod circuit with no link of its own is its own line */}
               {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => creditKey(o) === creditKey(t)) === i).map((t) => (
                 <React.Fragment key={t.id}>
@@ -508,10 +519,9 @@ const Credits: React.FC = () => {
                   <br />
                 </React.Fragment>
               ))}
-              {tx("circuitsConverted")}
             </CreditRow>
           ) : null}
-          <CreditRow title={tx("sceneryTitle")}>
+          <CreditRow title={tx("sceneryTitle")} note={tx("sceneryNote")}>
             {SCENERY_CREDITS.map((c) => (
               <React.Fragment key={c.id}>
                 &ldquo;{c.title}&rdquo; (
@@ -525,7 +535,6 @@ const Credits: React.FC = () => {
                 <br />
               </React.Fragment>
             ))}
-            {tx("sceneryNote")}
           </CreditRow>
         </div>
       </div>
