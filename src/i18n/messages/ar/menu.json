@@ -249,7 +249,7 @@
       "label": "اسم السائق",
       "hint": "حتى 16 حرفًا. يمكنك تغييره في أي وقت من الإعدادات.",
       "keepAndDrive": "إبقاء الاسم والقيادة",
-      "saveAndDrive": "حفظ والقيادة",
+      "saveAndDrive": "الحفظ والقيادة",
       "save": "حفظ الاسم",
       "saving": "جارٍ الحفظ…",
       "cancel": "إلغاء"
@@ -789,7 +789,7 @@
     "circuitPickerNeedExact": "اختر {needed, plural, zero {# حلبات} one {حلبة واحدة} two {حلبتين} few {# حلبات} many {# حلبة} other {# حلبة}} للمتابعة.",
     "roundTag": "R{round}",
     "mulligans": "فرص الإعادة",
-    "mulligansHint": "عدد مرات إعادة الجولة المسموح بها إذا غادرتها مبكرًا. كلما قلّ العدد زاد رصيد الموسم.",
+    "mulligansHint": "مرات إعادة السباق ومغادرة الجولات مبكرًا المسموح بها هذا الموسم. كلما قلّ العدد زاد رصيد الموسم.",
     "mulliganBonusBadge": "مكافأة +{bonus}",
     "mulliganBonusNone": "بلا مكافأة",
     "testDayCircuit": "يوم الاختبار · {circuit}",

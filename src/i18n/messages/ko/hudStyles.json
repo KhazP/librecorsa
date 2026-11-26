@@ -438,7 +438,7 @@
     "weather": "노면 상태, 기온 및 노면 온도",
     "rain": "비",
     "radar": "근접 차량",
-    "limits": "트랙 리밋",
+    "limits": "리밋",
     "time": "시간",
     "delta": "베스트 랩 대비 델타",
     "deltaBest": "Δ 베스트 랩",
@@ -585,7 +585,7 @@
     "live": "진행 중",
     "ahead": "전방",
     "behind": "후방",
-    "limits": "트랙 리밋",
+    "limits": "리밋",
     "penalty": "+{seconds}초",
     "trend": {
       "yourWay": "유리하게 변화",
@@ -663,7 +663,7 @@
       "outer": "O",
       "middle": "M",
       "inner": "I",
-      "brake": "브레이크"
+      "brake": "BRK"
     },
     "car": {
       "tc": "TC",
@@ -756,7 +756,7 @@
     "faster": "빠름",
     "slower": "느림",
     "level": "동일",
-    "limits": "트랙 리밋",
+    "limits": "리밋",
     "limitsOf": "{count} / {of}",
     "weather": {
       "label": "날씨",
@@ -778,7 +778,7 @@
       "rr": "우측 뒤"
     },
     "tyre": "{corner}: 트레드 {tread} %, {temp}, {pressure}, 브레이크 {brake}",
-    "brake": "브레이크",
+    "brake": "BRK",
     "hot": "과열",
     "cold": "저온",
     "flat": "펑크",
@@ -940,7 +940,7 @@
     "air": "기온",
     "track": "노면",
     "rain": "비",
-    "limits": "트랙 리밋",
+    "limits": "리밋",
     "limitsSpoken": "트랙 리밋: {of}회 중 {count}회",
     "penalty": "+{seconds}초",
     "map": "서킷 맵",

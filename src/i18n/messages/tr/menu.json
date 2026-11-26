@@ -789,7 +789,7 @@
     "circuitPickerNeedExact": "Devam etmek için {needed, plural, one {# pist} other {# pist}} seç.",
     "roundTag": "R{round}",
     "mulligans": "Tekrar hakkı",
-    "mulligansHint": "Bir ayaktan erken çıkarsan o ayağı yeniden başlatma hakkı. Ne kadar az hak seçersen sezon skoru o kadar artar.",
+    "mulligansHint": "Bu sezon izin verilen yeniden başlatma ve erken çıkılan ayak sayısı. Ne kadar az hak seçersen sezon skoru o kadar artar.",
     "mulliganBonusBadge": "+{bonus} skor bonusu",
     "mulliganBonusNone": "Bonus yok",
     "testDayCircuit": "Test günü · {circuit}",

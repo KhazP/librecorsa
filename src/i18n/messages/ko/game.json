@@ -151,7 +151,7 @@
     "creator": "제작자",
     "creatorDetail": "LibreCorsa 제작",
     "goat": "GOAT",
-    "goatDetail": "명예의 전당 최다 수상 드라이버. 공동 1위는 모두 이 배지를 받음."
+    "goatDetail": "명예의 전당 최다 수상 드라이버입니다. 공동 1위는 모두 이 배지를 받습니다."
   },
   "camera": {
     "chaseClose": "근접 체이스",
@@ -829,11 +829,11 @@
     "clutchPaddle": "업시프트 패들"
   },
   "vr": {
-    "paused": "일시정지",
+    "paused": "일시 정지",
     "resumeHint": "A 또는 오른쪽 트리거: 계속 주행",
     "recenterHint": "Y: 시점 재정렬",
     "leaveHint": "B: VR 나가기",
-    "pauseHint": "B를 길게 눌러 일시정지",
+    "pauseHint": "B를 길게 눌러 일시 정지",
     "menusOutside": "메뉴는 헤드셋 밖에서 표시됩니다",
     "lap": "랩 {lap}",
     "lapOf": "랩 {lap}/{total}",

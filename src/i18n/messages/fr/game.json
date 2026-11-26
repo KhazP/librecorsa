@@ -193,7 +193,7 @@
     "eraDetail": "Roule sur la physique 2026, donc se conduit comme une voiture de 2026 plutôt que comme à son époque.",
     "modBadge": "MOD",
     "mod": "Mods installés",
-    "modDetail": "Issu d’un pack de mods que vous avez installé, basé sur l’un des modèles de véhicules du jeu. LibreCorsa ne l’a pas vérifié, et ses tours ne figurent pas dans les classements en ligne."
+    "modDetail": "Issue d’un pack de mods que vous avez installé, basée sur l’un des modèles de véhicules du jeu. LibreCorsa ne l’a pas vérifiée, et ses tours ne figurent pas dans les classements en ligne."
   },
   "carClass": {
     "f1": "Formule monoplace",
@@ -331,8 +331,8 @@
     "logitechHidpp": "Non testé ; démarre sur WebHID avec le Force Feedback HID++ tel que l’envoie hid-logitech-hidpp sous Linux, une fois que Logitech G HUB a basculé le volant en mode PC",
     "logitechBridgeOnly": "Non testé ; pont uniquement : aucun pilote Linux principal ne gère le G923 pour PlayStation ni le G PRO, et le navigateur ne peut pas remettre à l’échelle l’axe de direction du DFP",
     "thrustmaster": "Non testé ; les commandes de hid-tmff2 sous Linux, une fois qu’un pilote a sorti le volant de son mode de démarrage. Sinon, ou si Windows refuse les commandes, le pont prend le relais",
-    "thrustmasterPid": "Non testé ; le pilote HID PID, quand le navigateur voit les rapports HID PID du volant (Chrome sous Windows les voit). Sans eux, le pont prend le relais",
-    "thrustmasterBridgeOnly": "Non testé ; pont uniquement : hid-tmff2 ne couvre pas le T500RS",
+    "thrustmasterPid": "Non testé ; le pilote HID PID, quand le navigateur voit les rapports HID PID du volant (Chrome sous Windows les voit). Sans eux, le pont prend le relais",
+    "thrustmasterBridgeOnly": "Non testé ; pont uniquement : hid-tmff2 ne couvre pas le T500RS",
     "fanatecCslElite": "Non testé ; sans Force Feedback HID PID, la page bascule sur le pont",
     "tested": "Testé",
     "expected": "Prévu",
@@ -830,10 +830,10 @@
   },
   "vr": {
     "paused": "En pause",
-    "resumeHint": "A ou gâchette droite : repartir",
-    "recenterHint": "Y : recentrer la vue",
-    "leaveHint": "B : quitter la VR",
-    "pauseHint": "Maintiens B pour mettre en pause",
+    "resumeHint": "A ou gâchette droite : repartir",
+    "recenterHint": "Y : recentrer la vue",
+    "leaveHint": "B : quitter la VR",
+    "pauseHint": "Maintenez B pour mettre en pause",
     "menusOutside": "Les menus s’affichent hors du casque",
     "lap": "Tour {lap}",
     "lapOf": "Tour {lap}/{total}",

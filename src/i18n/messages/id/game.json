@@ -830,7 +830,7 @@
   },
   "vr": {
     "paused": "Dijeda",
-    "resumeHint": "A atau pelatuk kanan: lanjut",
+    "resumeHint": "A atau trigger kanan: lanjut",
     "recenterHint": "Y: tengahkan pandangan",
     "leaveHint": "B: keluar dari VR",
     "pauseHint": "Tahan B untuk jeda",

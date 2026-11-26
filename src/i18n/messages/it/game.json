@@ -830,7 +830,7 @@
   },
   "vr": {
     "paused": "In pausa",
-    "resumeHint": "A o grilletto destro: riparti",
+    "resumeHint": "A o trigger destro: riparti",
     "recenterHint": "Y: ricentra la vista",
     "leaveHint": "B: esci dalla VR",
     "pauseHint": "Tieni premuto B per la pausa",

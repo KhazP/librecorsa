@@ -131,10 +131,10 @@
       "protected": "Protegido"
     },
     "collisionHint": {
-      "on": "Contacto total",
+      "on": "Contacto total (fantasma al aparecer, en el pit lane, AFK o con mucho lag)",
       "ghostLap1": "Sin contacto en la vuelta inicial",
       "off": "Los autos se atraviesan",
-      "protected": "Vuelta 1 fantasma; después un auto peligroso no puede tocar a los demás"
+      "protected": "Contacto activo tras la salida; autos peligrosos, pit lane y embestidas atraviesan"
     },
     "anyCar": "Cualquier auto",
     "startType": {
@@ -718,7 +718,7 @@
     "foldTuner": "Plegar el panel electrónico"
   },
   "f12026ChannelsPanel": {
-    "region": "Canales de ingeniería",
+    "region": "Telemetría de suspensión y aero",
     "title": "Suspensión y aero",
     "suspensionGrip": "Suspensión y agarre",
     "wheelLegend": "Desliz. · Tope",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}: relación de deslizamiento, recorrido restante hasta el tope, agarre usado",
     "slipRatio": "%RD",
     "aeroHeightTitle": "Altura de marcha aerodinámica",
-    "aeroHeight": "Alt aero",
+    "aeroHeight": "Altura",
     "aeroBalanceTitle": "Balance aerodinámico (parte delantera de la carga)",
     "aeroBalance": "Bal aero",
     "lsdTitle": "Par de bloqueo del diferencial",

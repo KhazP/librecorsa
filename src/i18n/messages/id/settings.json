@@ -409,7 +409,7 @@
     },
     "engineeringTelemetry": {
       "label": "Telemetri suspensi & aero",
-      "hint": "Cengkeraman roda langsung, jarak main bumpstop, tinggi suspensi, keseimbangan aero, dan penguncian diferensial"
+      "hint": "Data langsung: cengkeraman roda, jarak main bumpstop, tinggi suspensi, keseimbangan aero, dan penguncian diferensial"
     },
     "inputTrace": {
       "label": "Grafik input"
