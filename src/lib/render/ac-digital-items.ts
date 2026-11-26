@@ -7,8 +7,10 @@
  *
  * AC draws an item in its node's XY plane, from its POSITION along the node's -X (the driver's right), its baseline
  * there and SIZE metres high, facing the driver (-Z). Each item here is a quad of that size with a canvas of its text,
- * redrawn only when the text changes. The 'digital_big' font is AC's seven-segment one: digits are drawn as segments;
- * the other fonts are a bold sans.
+ * redrawn only when the text changes. The 'digital_big' font is AC's seven-segment one: digits are drawn as segments,
+ * SIZE high. AC's text fonts (f2004, audi_vln, arial_big) are a cell SIZE high whose digits stand 0.68 of it tall, on a
+ * line 0.22 of it above POSITION (the Ferrari's LCD windows fit them so, and no other way); f2004 and audi_vln are
+ * narrow. Those are drawn in a bold sans with the same metrics (`fontMetrics`).
  */
 import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
@@ -32,6 +34,8 @@ export interface AcDigitalItem {
   postfix?: string;
   units?: string;
   decimals?: number;
+  /** How far behind POSITION (along the node's +Z) its screen's surface lies, where it is drawn (m) */
+  depth?: number;
 }
 
 export interface AcDigitalExtra {
@@ -44,8 +48,29 @@ const PX = 64;
 /** Margins round the text, in text heights */
 const MARGIN_X = 0.12;
 const MARGIN_Y = 0.15;
-/** Width of one character, in text heights (seven-segment and sans alike) */
+/** Width of one seven-segment character, in text heights */
 const CHAR_W = 0.62;
+/** A bold sans's cap (digit) height and digit advance, in ems */
+const SANS_CAP_EM = 0.716;
+const SANS_DIGIT_EM = 0.556;
+
+/** How an AC font sets its text, in text heights: digit height, the gap under the digits, and a character's advance */
+interface FontMetrics {
+  segments: boolean;
+  digitH: number;
+  lift: number;
+  advance: number;
+  /** Horizontal scale of the sans glyphs (a narrow font) */
+  narrow: number;
+}
+
+/** AC's fonts by name: 'digital_*' its seven-segment, f2004 and audi_vln narrow, any other (arial_big) a plain sans */
+export function fontMetrics(font: string): FontMetrics {
+  const name = font.toLowerCase();
+  if (name.startsWith("digital")) return { segments: true, digitH: 1, lift: 0, advance: CHAR_W, narrow: 1 };
+  const narrow = /^(f2004|audi_vln)/.test(name) ? 0.78 : 1;
+  return { segments: false, digitH: 0.68, lift: 0.22, advance: SANS_DIGIT_EM * narrow * 1.05, narrow };
+}
 /** How far in front of its LCD window a text floats (m), clear of z-fighting */
 const LIFT_M = 0.0006;
 /** Brightest a lit text glows (an AC INTENSITY of 4.5 is a bright LED) */
@@ -211,7 +236,7 @@ export class AcDigitalItems {
 
   private build(item: AcDigitalItem): LiveItem | null {
     const chars = maxChars(item);
-    const w = Math.ceil((chars * CHAR_W + 2 * MARGIN_X) * PX);
+    const w = Math.ceil((chars * fontMetrics(item.font).advance + 2 * MARGIN_X) * PX);
     const h = Math.ceil((1 + 2 * MARGIN_Y) * PX);
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -230,8 +255,9 @@ export class AcDigitalItems {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
       opacity: item.color[3],
-      // Dark ink on a lit LCD stays dark; a lit segment glows with its intensity
-      color: new THREE.Color(item.color[0], item.color[1], item.color[2]).multiplyScalar(glow),
+      // Dark ink on a lit LCD stays dark; a lit segment glows with its intensity. The INI's COLOR is sRGB (30,30,30 is
+      // near-black ink, not a mid grey)
+      color: new THREE.Color().setRGB(item.color[0], item.color[1], item.color[2], THREE.SRGBColorSpace).multiplyScalar(glow),
     });
     const widthM = (w / PX) * item.size;
     const heightM = (h / PX) * item.size;
@@ -240,7 +266,8 @@ export class AcDigitalItems {
     mesh.rotation.y = Math.PI;
     const [px, py, pz] = item.position;
     const cx = item.align === "LEFT" ? px - widthM / 2 + MARGIN_X * item.size : item.align === "RIGHT" ? px + widthM / 2 - MARGIN_X * item.size : px;
-    mesh.position.set(cx, py - MARGIN_Y * item.size + heightM / 2, pz - LIFT_M);
+    // On its screen's surface (the porter's `depth`), not floating in front of it at the node's plane
+    mesh.position.set(cx, py - MARGIN_Y * item.size + heightM / 2, pz + (item.depth ?? 0) - LIFT_M);
     mesh.renderOrder = 2;
     mesh.castShadow = false;
     mesh.receiveShadow = false;
@@ -254,10 +281,10 @@ export class AcDigitalItems {
     if (!text) return;
     ctx.fillStyle = "#ffffff";
     const top = MARGIN_Y * PX;
-    const segments = item.font.toLowerCase().startsWith("digital");
-    const textW = text.length * CHAR_W * PX;
+    const metrics = fontMetrics(item.font);
+    const textW = text.length * metrics.advance * PX;
     const left = item.align === "LEFT" ? MARGIN_X * PX : item.align === "RIGHT" ? w - MARGIN_X * PX - textW : (w - textW) / 2;
-    if (segments) {
+    if (metrics.segments) {
       const cw = CHAR_W * PX;
       for (let i = 0; i < text.length; i++) {
         const ch = text[i];
@@ -277,11 +304,16 @@ export class AcDigitalItems {
       }
       return;
     }
-    ctx.font = `bold ${PX}px Arial, Helvetica, sans-serif`;
-    ctx.textBaseline = "bottom";
+    // The digits metrics.digitH tall, standing metrics.lift above the item's line (the canvas's top + PX)
+    ctx.font = `bold ${Math.round((metrics.digitH / SANS_CAP_EM) * PX)}px Arial, Helvetica, sans-serif`;
+    ctx.textBaseline = "alphabetic";
     ctx.textAlign = item.align === "LEFT" ? "left" : item.align === "RIGHT" ? "right" : "center";
     const x = item.align === "LEFT" ? MARGIN_X * PX : item.align === "RIGHT" ? w - MARGIN_X * PX : w / 2;
-    ctx.fillText(text, x, top + PX, w - 2 * MARGIN_X * PX);
+    ctx.save();
+    ctx.translate(x, 0);
+    ctx.scale(metrics.narrow, 1);
+    ctx.fillText(text, 0, top + PX * (1 - metrics.lift), (w - 2 * MARGIN_X * PX) / metrics.narrow);
+    ctx.restore();
   }
 
   /** Redraws the texts that changed, at most 15 times a second */
