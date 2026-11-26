@@ -22,7 +22,7 @@ Everything here is maintained alongside the source code and published at [docs.l
 ## Modding
 
 - **[Making mods](modding.md)**: Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, custom sound banks, physics patches, and sharing through catalogues.
-- **[Painting liveries](LIVERIES.md)**: Templates for 5 projected-atlas cars (F1, GT3, and LMDh) and 8 classic UV-mapped cars, how to paint and package them, and how to send a livery in.
+- **[Painting liveries](LIVERIES.md)**: Templates for the F1 cars, GT3s, and LMDh, how to paint and package them, and how to send a livery in.
 - **[Importing mods from other games](importing-mods.md)**: Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
 
 ## Porting

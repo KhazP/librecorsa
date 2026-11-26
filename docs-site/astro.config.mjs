@@ -13,7 +13,7 @@ export default defineConfig({
     starlight({
       title: "LibreCorsa docs",
       description:
-        "Documentation for LibreCorsa: controls and wheels, driving, setups, and career, triple screens and VR, online racing and time trials, telemetry, downloads, modding, atlas and UV liveries, porting, translating, physics validation, and race AI.",
+        "Documentation for LibreCorsa: controls and wheels, driving, setups, and career, triple screens and VR, online racing and time trials, telemetry, downloads, modding, painting liveries, porting, translating, physics validation, and race AI.",
       logo: {
         dark: "./src/assets/brand/librecorsa-logo.svg",
         light: "./src/assets/brand/librecorsa-logo-on-light.svg",

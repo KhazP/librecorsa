@@ -107,11 +107,10 @@ All other circuit data (surfaces, kerbs, DRS zones, racing lines, AI plans, and 
 
 ### Liveries for built-in cars (`skins`)
 
-A livery is either a painted picture projected onto the car (`atlas`) or a set of UV-mapped texture files swapped onto the model's materials. Across the 14 built-in cars, 13 have downloadable paint templates in [Painting liveries](LIVERIES.md):
+A livery is either a painted picture projected onto the car (`atlas`) or a set of texture files swapped onto the model's materials. Which one depends on the car:
 
-- **Painted picture (`atlas`, 5 cars):** `lc26` (LC26 Prototype), `lc25` (LC25 Prototype), `amg-gt3` (Mercedes-AMG GT3 Evo), `bmw-m4-gt3` (BMW M4 GT3 Evo), and `lc-lmdh` (LC-LMDH). See [The templates](LIVERIES.md#the-templates) for each car's 2048 × 2048 guide and overlay.
-- **UV texture files (8 cars):** `bmw-m1-procar`, `chaparral-2d`, `chaparral-2d-67`, `mtr-496r`, `nissan-r32-jtcc`, `nissan-r33-jgtc`, `porsche-934-rsr`, and `vw-scirocco-gtx`. See [UV texture liveries](LIVERIES.md#uv-texture-liveries-classic-cars-and-mtr-496r) and the [UV templates table](LIVERIES.md#uv-templates) for every downloadable UV overlay and exact output filename.
-- **Suzuki Liana 1.6 (`liana`):** accepted by the manifest validator for compatibility, but its GLB has no swappable material texture slots (`skinMaps`) and it is not an atlas car — it uses only its factory Ice Blue Silver paint and the built-in procedural `#106 Middle Gear Special` livery. (Similarly, older texture-file packages targeting `amg-gt3`, `bmw-m4-gt3`, or `lc-lmdh` leave those models in their factory paint because they have no texture slots to swap.)
+- **Painted picture (`atlas`, 5 cars):** `lc26` (LC26 Prototype), `lc25` (LC25 Prototype), `amg-gt3` (Mercedes-AMG GT3 Evo), `bmw-m4-gt3` (BMW M4 GT3 Evo), and `lc-lmdh` (LC-LMDH). [Painting liveries](LIVERIES.md) has each car's 2048 × 2048 guide and overlay templates and how to paint one.
+- **Texture files:** `mtr-496r`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, and `porsche-934-rsr` (plus `liana`, `amg-gt3`, `bmw-m4-gt3`, and `lc-lmdh` for older manifests, though those models have no texture slots to swap, so a texture-file livery leaves them in their factory paint).
 
 For both kinds:
 
@@ -124,9 +123,9 @@ For a painted picture:
 - `finish` (optional) is the paint's finish: `gloss` (the default), `satin`, `matte`, `metallic`, or `chrome`.
 - An F1 livery shows up in that car's livery picker under Installed mods; a livery made for `lc26` doesn't appear on `lc25`, or the other way round.
 
-For UV texture files:
+For texture files:
 
-- The files must use the model's exact texture filenames (listed in the [UV templates table](LIVERIES.md#uv-templates), or matching `public/cars/<car>/skins/<skin>/` for secondary slots like rims or trim).
+- The files must use the model's exact texture filenames from `public/cars/<car>/skins/<skin>/`.
 - Use `files` when overriding only a subset of textures (every listed file must exist in the folder; omitted slots keep the model's default textures), and `variant` to select a body variant on cars that support them (such as `"sebring"` on `chaparral-2d` and `chaparral-2d-67`).
 
 ### Cars (`cars`)
@@ -166,11 +165,11 @@ cars/gt-x/audio/
   oneshot_backfire_ext_1.ogg
 ```
 
-- **Supported audio formats:** `.ogg` (Ogg Vorbis — used by all built-in banks for small file size, 48 kHz recommended), `.wav`, and `.mp3`. All files are decoded through the browser's Web Audio `decodeAudioData`.
+- **Supported audio formats:** `.ogg` (Ogg Vorbis, used by all built-in banks for small file size; 48 kHz recommended), `.wav`, and `.mp3`. All files are decoded through the browser's Web Audio `decodeAudioData`.
 - **Filenames:** The loader reads every filename from `manifest.json` (any safe relative filename inside the audio folder works); the built-in convention (`scripts/audio/port_ac_bank.py`) is `engine_<int|ext>_<on|off>_<rpm>.ogg`, `trans_<on|off>_<kmh>.ogg`, `turbo_<on|off>_<boost>.ogg`, and `oneshot_<role>[_<n>].ogg`.
 - **Required `manifest.json` fields:**
   - `sampleRate` (e.g. `48000`) and `loopSeconds` (typically `2.0`–`2.4` s of seamless equal-power crossfaded audio).
-  - `engine.int` and `engine.ext`: **both arrays are required and must be non-empty** (if either is absent, or any loop in the active camera view fails to decode, the bank falls back to the built-in engine audio). Each entry has `{ "file", "layer": "on" | "off", "rpm", "channels": 1 | 2, "rms" }`. Neighbouring RPM anchors are crossfaded with equal-power weights and pitched continuously from `0.75 × minRpm` up to `max(1.35 × maxRpm, limiterRpm × 1.05)` — your lowest RPM anchor covers idle and low revs.
+  - `engine.int` and `engine.ext`: **both arrays are required and must be non-empty** (if either is absent, or any loop in the active camera view fails to decode, the bank falls back to the built-in engine audio). Each entry has `{ "file", "layer": "on" | "off", "rpm", "channels": 1 | 2, "rms" }`. Neighbouring RPM anchors are crossfaded with equal-power weights and pitched continuously from `0.75 × minRpm` up to `max(1.35 × maxRpm, limiterRpm × 1.05)`, so your lowest RPM anchor covers idle and low revs.
 - **Optional `manifest.json` sections:**
   - `throttleCurve`: `{ "ext": [[0, 0], …, [1, 1]], "int": [[0, 0], …, [1, 1]] }` mapping effective throttle `0..1` to the `on`/`off` blend weight (defaults to linear when omitted).
   - `turbo`: array of `{ "file", "layer": "on" | "off", "boost", "channels", "rms" }`, indexed by gauge boost in bar.

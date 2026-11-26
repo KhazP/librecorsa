@@ -87,7 +87,7 @@ No. What I add myself needs the rights to it. Some cars ported from mods carry r
 
 Yes, in the [desktop app](DOWNLOADS.md) (the hosted web version on `librecorsa.org` does not load local mods):
 
-- **Custom liveries:** LibreCorsa ships painting templates for **13 cars**: **5 projected-atlas templates** (LC26 Prototype, LC25 Prototype, Mercedes-AMG GT3 Evo, BMW M4 GT3 Evo, and LC-LMDH) and **8 classic UV templates** (BMW M1 Procar, Chaparral 2D, Chaparral 2D 427, MTRacing 496R, Nissan R32 JTCC, Nissan R33 JGTC, Porsche 934 Turbo RSR, and VW Scirocco GTX 16V). See [Painting liveries](LIVERIES.md) for downloads and packaging instructions.
+- **Custom liveries:** LibreCorsa ships painting templates for five cars (LC26 Prototype, LC25 Prototype, Mercedes-AMG GT3 Evo, BMW M4 GT3 Evo, and LC-LMDH). See [Painting liveries](LIVERIES.md) for templates and packaging instructions.
 - **Mods and conversions:** Drop mod packages into `Documents/LibreCorsa/mods/` (see [Making mods](modding.md)), or drop Assetto Corsa, Speed Dreams, or Blender circuits and cars into `Documents/LibreCorsa/import/` and convert them directly from the desktop app's **Mods** panel (see [Importing mods from other games](importing-mods.md)).
 
 ### Will LibreCorsa come to Steam or consoles?
