@@ -19,7 +19,7 @@
 import { createFlatTestTrack } from "../lib/flat-track";
 import { vehicleModelSpec } from "../../src/lib/cars/vehicle-models";
 import { AiOpponentField, aiDriversFor } from "../../src/lib/sim/ai-opponents";
-import { applySpeedLimiter, rollingFormationStep } from "../../src/lib/sim/race-start";
+import { applySpeedLimiter, ROLLING_GAUGE_HEADROOM, rollingFormationStep, rollingSpeedGauge } from "../../src/lib/sim/race-start";
 import { MultiplayerRace } from "../../src/lib/sim/race-session";
 import type { RaceStartInfo } from "../../src/lib/sim/multiplayer-sync";
 import { createSimHost, loopbackTransport } from "../../src/lib/sim/runtime/sim-host";
@@ -73,6 +73,36 @@ console.log("== Rolling start pure helpers");
   const at3 = rollingFormationStep(45, ROLLING_START_PACE_MS, ROLLING_START_PACE_MS, 0);
   const rippled = rollingFormationStep(46, ROLLING_START_PACE_MS * 0.85, ROLLING_START_PACE_MS, at3.stageOrder);
   check("stage latch prevents backward flicker on speed/distance ripple", at3.countdown === 3 && rippled.countdown === 3, `at3=${at3.countdown}, rippled=${rippled.countdown}`);
+
+  // Fixed rolling-start speed gauge (shared across all HUDs)
+  const gZero = rollingSpeedGauge(0, ROLLING_START_PACE_MS);
+  const gSlow = rollingSpeedGauge(50, ROLLING_START_PACE_MS);
+  const gHold = rollingSpeedGauge(64.5, ROLLING_START_PACE_MS);
+  const gExact = rollingSpeedGauge(targetKmh, ROLLING_START_PACE_MS);
+  const gFast = rollingSpeedGauge(71, ROLLING_START_PACE_MS);
+  const gCornerHold = rollingSpeedGauge(42, 45 / 3.6);
+  const gCornerSlow = rollingSpeedGauge(39, 45 / 3.6);
+  check(
+    "rollingSpeedGauge classifies slow / hold / fast zones around formation pace",
+    gZero.zone === "slow" &&
+      gSlow.zone === "slow" &&
+      gHold.zone === "hold" &&
+      gExact.zone === "hold" &&
+      gFast.zone === "fast" &&
+      gCornerHold.zone === "hold" &&
+      gCornerSlow.zone === "slow",
+    `zero=${gZero.zone}, slow=${gSlow.zone}, hold=${gHold.zone}, fast=${gFast.zone}`,
+  );
+  check(
+    "rollingSpeedGauge fills monotonically and hits targetFraction at exact pace",
+    gZero.fillFraction === 0 &&
+      gSlow.fillFraction < gHold.fillFraction &&
+      Math.abs(gExact.fillFraction - gExact.targetFraction) < 1e-6 &&
+      Math.abs(gExact.targetFraction - 1 / ROLLING_GAUGE_HEADROOM) < 1e-6 &&
+      gFast.fillFraction === 1 &&
+      rollingSpeedGauge(Number.NaN, ROLLING_START_PACE_MS).fillFraction === 0,
+    `exact=${gExact.fillFraction.toFixed(4)}, target=${gExact.targetFraction.toFixed(4)}`,
+  );
 }
 
 const track = createFlatTestTrack(4000, 400);
@@ -101,6 +131,7 @@ for (const carId of TEST_CARS) {
 
   let maxBeforeGreenKmh = 0;
   let minBeforeGreenKmh = Infinity;
+  let allGaugeInHold = true;
   let greenDistM = -Infinity;
   const stages: string[] = [];
   for (let i = 0; i < 120 * 16; i++) {
@@ -109,8 +140,10 @@ for (const carId of TEST_CARS) {
     field.update(DT);
     const rf = field.status().rollingFormation;
     if (rf) {
-      maxBeforeGreenKmh = Math.max(maxBeforeGreenKmh, player.vxMs * 3.6);
-      minBeforeGreenKmh = Math.min(minBeforeGreenKmh, player.vxMs * 3.6);
+      const kmh = player.vxMs * 3.6;
+      maxBeforeGreenKmh = Math.max(maxBeforeGreenKmh, kmh);
+      minBeforeGreenKmh = Math.min(minBeforeGreenKmh, kmh);
+      if (rollingSpeedGauge(kmh, rf.paceMs).zone !== "hold") allGaugeInHold = false;
       const tag = rf.stage === "countdown" ? String(rf.countdown) : rf.stage;
       if (stages[stages.length - 1] !== tag) stages.push(tag);
     } else {
@@ -119,9 +152,9 @@ for (const carId of TEST_CARS) {
     }
   }
   check(
-    `${carId}: full-throttle clamped to 60-70 km/h through formation`,
-    !field.isRollingFormation && maxBeforeGreenKmh <= 70 && minBeforeGreenKmh >= 58 && player.speedLimiterMs === undefined,
-    `range=${minBeforeGreenKmh.toFixed(1)}..${maxBeforeGreenKmh.toFixed(1)} km/h`,
+    `${carId}: full-throttle clamped to 60-70 km/h and stays in green hold zone`,
+    !field.isRollingFormation && maxBeforeGreenKmh <= 70 && minBeforeGreenKmh >= 58 && allGaugeInHold && player.speedLimiterMs === undefined,
+    `range=${minBeforeGreenKmh.toFixed(1)}..${maxBeforeGreenKmh.toFixed(1)} km/h, hold=${allGaugeInHold}`,
   );
   check(
     `${carId}: 3-2-1 countdown & green flag at S/F`,
