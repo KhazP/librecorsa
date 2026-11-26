@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
@@ -29,6 +30,7 @@ import {
   type ProceduralLiveryController,
   type ProceduralLiverySurface,
 } from "@/lib/render/ported-procedural-livery";
+import { installPortedDriver, type PortedDriver } from "@/lib/render/ported-driver";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -38,6 +40,7 @@ import {
  *     WHEEL_xx  hub pivot at the tread centre in the car's axes; children WHEEL_xx_RIM / WHEEL_xx_TYRE
  *     HUB_xx    a corner's parts that steer and ride with the wheel but don't spin (an upright, a fixed hub fairing),
  *               at the same centre (optional)
+ *     DRIVER    the mod's driver, skinned, with its steering and shift clips (optional; render/ported-driver.ts)
  * Model space: +X left, +Y up, +Z forward, floor at y = 0 (the rig's axes). `chassis` puts the model's axle midpoint
  * on the vehicle model's.
  */
@@ -261,7 +264,10 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
       const full = withBasePath(url);
       assetProgress.begin("car");
       try {
-        const scene = (await createGltfLoader().loadAsync(full, (event) => assetProgress.progress("car", event))).scene;
+        const gltf = await createGltfLoader().loadAsync(full, (event) => assetProgress.progress("car", event));
+        const scene = gltf.scene;
+        // A driver's steering and shift clips, carried by the template to every rig cloned from it
+        scene.animations = gltf.animations;
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
@@ -507,6 +513,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const steerRest = new THREE.Quaternion();
   let opponentLod: OpponentLodController | null = null;
   let lastLod: 0 | 1 = 0;
+  // The mod's driver, when the model has one, and an opponent's steering wheel it holds
+  let driver: PortedDriver | null = null;
+  let opponentWheel: THREE.Object3D | null = null;
   let disposed = false;
   // The compound the sidewalls show; the tyres are built when the model loads
   let compound: TireCompound = "medium";
@@ -560,7 +569,12 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
 
   /** Puts a body on the rig; settles once its livery's textures are on */
   const buildBody = (template: THREE.Group, url: string): Promise<void> => {
-    const model = template.clone(true);
+    // A driver's skinned meshes need their own skeleton, on the clone's bones
+    let hasSkin = false;
+    template.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) hasSkin = true;
+    });
+    const model = hasSkin ? (cloneSkinned(template) as THREE.Group) : template.clone(true);
     model.updateMatrixWorld(true);
     const car = portedCarRoot(model);
     const extras = (car.userData ?? {}) as PortedExtras;
@@ -654,6 +668,20 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         if (extras.digitalItems) steerNode.userData.digitalItems = extras.digitalItems;
       }
     }
+    // The driver sits on the body (its floor drop with it); the livery's helmet, suit and gloves are among the
+    // materials collected below
+    const driverNode = find("DRIVER");
+    if (driverNode) {
+      bodyGroup.add(driverNode);
+      driver = installPortedDriver(driverNode, model.animations, { opponent: !!options.opponent });
+      if (options.opponent && steerNode) {
+        // Its hands hold a wheel: shown and turned while the driver is posed (near), hidden past it
+        opponentWheel = steerNode;
+        steerPivot = steerNode;
+        steerRest.copy(steerNode.quaternion);
+        steerNode.visible = lastLod === 0;
+      }
+    }
     for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
       const node = bodyGroup.getObjectByName(name) ?? find(name);
       if (node) parts.push({ node, variants });
@@ -732,8 +760,11 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     if (options.opponent) {
       disableCarCastShadow(bodyGroup);
       for (const c of corners) disableCarCastShadow(c.steer);
-      opponentLod = createOpponentLodController([bodyGroup, ...corners.map((c) => c.steer)]);
+      opponentLod = createOpponentLodController([bodyGroup, ...corners.map((c) => c.steer)], {
+        microMeshes: driver?.fullDetail,
+      });
       opponentLod.setLod(lastLod);
+      driver?.setLevel(lastLod);
     }
     if (placeholder.parent) {
       placeholder.removeFromParent();
@@ -746,6 +777,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     clearBody = () => {
       opponentLod?.dispose();
       opponentLod = null;
+      driver?.dispose();
+      driver = null;
+      opponentWheel = null;
       proceduralLivery?.dispose();
       proceduralLivery = null;
       for (const c of corners) {
@@ -801,7 +835,12 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       const lod: 0 | 1 = wheels?.lod ?? 0;
       lastLod = lod;
       opponentLod?.setLod(lod);
+      // Posed near, the low-detail figure at rest past LOD1's reach, none where the tyres flatten (past ~150 m, and
+      // past LOD1's 12 m on Low graphics)
+      driver?.setLevel(lod === 0 ? 0 : (wheels?.detail ?? 1) === 0 ? 2 : 1);
+      if (opponentWheel) opponentWheel.visible = lod === 0;
     }
+    driver?.update(t.steering * options.steerLockDeg, t, _dtSeconds ?? 1 / 60);
   };
 
   return {
@@ -839,6 +878,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     dispose: () => {
       disposed = true;
       opponentLod?.dispose();
+      driver?.dispose();
       proceduralLivery?.dispose();
       for (const c of corners) c.tyre?.dispose();
       for (const slot of skinSlots) if (slot.ownedBySkin) slot.mat.dispose();

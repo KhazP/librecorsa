@@ -8,11 +8,12 @@
  * livery files (when this copy has them), a 2007 car's overtaking rules (no DRS), the straight line through the
  * adapter (0-100 and 0-200 km/h from a clutch start and the top speed on the default wings), the four dry compounds
  * (the Super Soft in the fourth slot only this car has, and its default), and the tyres' warm-up round RISE on the
- * autopilot from cold and from blankets (when this copy has the circuit). The data's own values, the warm-up's rates
- * among them, are checked by verify-mod-parity.ts.
+ * autopilot from cold and from blankets (when this copy has the circuit), and each team's driver (when this copy has
+ * the bodies): the model its data names, skinned to its skeleton, the arms on the rim as the wheel turns. The data's
+ * own values, the warm-up's rates among them, are checked by verify-mod-parity.ts.
  *
  * Each body's mirrors (mirrors.ini's mesh, MIRROR_0): two flat glasses, a mirrored pair ahead of the driver facing back
- * at him and aimed at the road behind, each showing a mirror image (its outboard edge farther out than its inboard
+ * at the driver and aimed at the road behind, each showing a mirror image (its outboard edge farther out than its inboard
  * one), and the rear view's lookup (`mirror-reflection.ts`) landing where its camera sees what the glass reflects, at
  * least as sharp as the planar mirrors' 256 px over 35 degrees.
  */
@@ -33,6 +34,9 @@ import { carTakesPhysicsSwitch } from '../../src/lib/cars/f1-mod-physics';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { hasFile, noteSkip } from '../lib/hosted-files';
 import { aimMirrorCamera, fitMirrorView, mirrorLookup, MIRROR_AIM_DEG, MIRROR_FOCUS_M, MIRROR_INNER_EDGE_DEG, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
+import { loadGltfTextureless } from '../lib/gltf-node';
+import { installPortedDriver, portedDriverExtras } from '../../src/lib/render/ported-driver';
+import type { CarTelemetry } from '../../src/types/f1';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -402,8 +406,164 @@ console.log('\n== Warm-up round RISE on the autopilot (the full layout)');
   }
 }
 
-if (failures.length) {
-  console.log(`\n${failures.length} F1 2007 check(s) failed:\n  ${failures.join('\n  ')}`);
-  process.exit(1);
+// Each team's driver, as driver3d.ini names it (scripts/cars/ac_driver.py), through the game's own driver code
+const DRIVER_MODELS: Record<string, string> = {
+  ferrari: 'driver2007_B', mclaren: 'driver2007_A', renault: 'driver2007_A', honda: 'driver2007_A', 'bmw-sauber': 'driver2007_A',
+  toyota: 'driver2007_B', 'red-bull': 'driver2007_C', williams: 'driver2007_B', 'toro-rosso': 'driver2007_C', spyker: 'driver2007_A',
+  'super-aguri': 'driver2007_A',
+};
+
+async function driverChecks(): Promise<void> {
+  console.log('\n== Drivers');
+  if (!hasFile(`public${f12007BodyUrl('ferrari')}`)) {
+    noteSkip('F1 2007 drivers', `public${f12007BodyUrl('ferrari')}`);
+    return;
+  }
+  for (const team of TEAMS) {
+    const path = `public${f12007BodyUrl(team)}`;
+    if (!hasFile(path)) continue;
+    const gltf = await loadGltfTextureless(path);
+    const scene = gltf.scene;
+    const node = scene.getObjectByName('DRIVER');
+    const extras = portedDriverExtras(node);
+    if (!node || !extras) {
+      check(`${team}: a driver in the car`, false, 'no DRIVER node');
+      continue;
+    }
+    const skinned: THREE.SkinnedMesh[] = [];
+    node.traverse((o) => {
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) skinned.push(o as THREE.SkinnedMesh);
+    });
+    const under = (o: THREE.Object3D) => {
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === node) return true;
+      return false;
+    };
+    const bones = skinned[0]?.skeleton.bones ?? [];
+    const hidden = extras.hide.filter((n) => node.getObjectByName(n));
+    check(
+      `${team}: ${DRIVER_MODELS[team]}, its suit and gloves skinned to its 55 bones, helmet and face out of its eyes' view`,
+      extras.model === DRIVER_MODELS[team] &&
+        ['DRV_SUIT', 'DRV_GLOVES'].every((n) => skinned.some((m) => m.name === n)) &&
+        skinned.every((m) => m.skeleton.bones.length === 55 && m.skeleton.bones.every(under)) &&
+        ['DRV_HELMET', 'DRV_GEO_Driver_FACE'].every((n) => hidden.includes(n)) &&
+        !!scene.getObjectByName('DRV_LOD'),
+      `${extras.model}, ${skinned.map((m) => m.name).join(' + ')} on ${bones.length} bones, hidden ${hidden.join(' ')}`,
+    );
+
+    // The arms through the game's own driver: each hand's grip (its fingers' bases) about the wheel's axis turns with
+    // the rim, + to the right (clockwise as the driver sees it), at ±45 and ±90 degrees
+    const car = scene.getObjectByName('CAR')!;
+    const steer = (car.userData as { steer?: { pivot: number[]; columnAxis: number[] } }).steer!;
+    const z = new THREE.Vector3(...steer.columnAxis).normalize();
+    const x = new THREE.Vector3(1, 0, 0).addScaledVector(z, -z.x).normalize();
+    const y = new THREE.Vector3().crossVectors(z, x);
+    const pivot = new THREE.Vector3(...steer.pivot);
+    const driver = installPortedDriver(node, gltf.animations, { opponent: false })!;
+    const grips = ['DRV_RIG_HAND_L', 'DRV_RIG_HAND_R'].map((n) => node.getObjectByName(n)!.children.filter((c) => !/thumb/i.test(c.name)));
+    const v = new THREE.Vector3();
+    const gripAt = (rimDeg: number) => {
+      driver.update(rimDeg, null, 0);
+      scene.updateMatrixWorld(true);
+      return grips.map((fingers) => {
+        const p = fingers.reduce((acc, f) => acc.add(f.getWorldPosition(v)), new THREE.Vector3()).divideScalar(fingers.length).sub(pivot);
+        return { deg: THREE.MathUtils.radToDeg(Math.atan2(p.dot(y), p.dot(x))), r: Math.hypot(p.dot(x), p.dot(y)) };
+      });
+    };
+    const centre = gripAt(0);
+    let worstHand = 0;
+    let worstBoth = 0;
+    let rMin = Infinity;
+    let rMax = 0;
+    for (const rim of [-90, -60, -30, 30, 60, 90]) {
+      const turned = gripAt(rim).map((g, i) => {
+        rMin = Math.min(rMin, g.r);
+        rMax = Math.max(rMax, g.r);
+        return ((g.deg - centre[i].deg + 540) % 360) - 180;
+      });
+      worstHand = Math.max(worstHand, ...turned.map((d) => Math.abs(d - rim)));
+      worstBoth = Math.max(worstBoth, Math.abs((turned[0] + turned[1]) / 2 - rim));
+    }
+    const span = extras.steer?.clipLockDeg ?? NaN;
+    // The clip's keys are timed by the hands' mean turn, so it follows the rim closely; each hand on its own strays by
+    // the clip's own spread between them (up to ~11 degrees in the A and C models' clips)
+    check(
+      `${team}: the hands turn with the rim to ±90° (both within 3°, each within 12°, on a 12–20 cm rim)`,
+      worstBoth < 3 && worstHand < 12 && rMin > 0.12 && rMax < 0.2 && span > 280 && span < 450,
+      `both off by ${fmt(worstBoth, 1)}°, one by ${fmt(worstHand, 1)}° at most, ${fmt(rMin * 100, 1)}–${fmt(rMax * 100, 1)} cm, clip ±${fmt(span, 0)}° (LOCK ${extras.steer?.lockDeg})`,
+    );
+    // Each end of the clip reaches the rim's full lock in the game (225 degrees each way): past its last key the arms
+    // would hold still while the wheel turns on
+    const steerClip = gltf.animations.find((c) => c.name === extras.steer?.clip);
+    const times = steerClip?.tracks.flatMap((tr) => [tr.times[0], tr.times[tr.times.length - 1]]) ?? [];
+    const leftEnd = (Math.min(...times) - 0.5) * 2 * span;
+    const rightEnd = (Math.max(...times) - 0.5) * 2 * span;
+    check(
+      `${team}: the steering clip reaches full lock both ways (±225° of rim)`,
+      leftEnd <= -225 && rightEnd >= 225,
+      `${fmt(leftEnd, 0)}° to +${fmt(rightEnd, 0)}°`,
+    );
+    // Seated where the car's eyes are: the head joint within 25 cm of the cockpit camera
+    const eye = new THREE.Vector3(...((car.userData as { cameras: { cockpit: { pos: number[] } } }).cameras.cockpit.pos));
+    const head = node.getObjectByName(extras.head?.node ?? 'DRV_RIG_Head')!.getWorldPosition(new THREE.Vector3());
+    check(`${team}: the head where the car's eyes are (within 25 cm)`, head.distanceTo(eye) < 0.25, `${fmt(head.distanceTo(eye) * 100, 1)} cm`);
+    if (team === 'ferrari') {
+      // An upshift flexes the shifting hand's fingers over driver3d.ini's times and lets them go again
+      const finger = node.getObjectByName(extras.shift?.shift_up?.[0] ?? '');
+      const tel = (gear: number) => ({ gear, lateralG: 0, longitudinalG: 0 }) as unknown as CarTelemetry;
+      driver.update(0, tel(3), 1 / 60);
+      const before = finger?.quaternion.clone();
+      driver.update(0, tel(4), 1 / 60);
+      driver.update(0, tel(4), 0.075);
+      const flexed = finger && before ? THREE.MathUtils.radToDeg(finger.quaternion.angleTo(before)) : NaN;
+      for (let i = 0; i < 30; i++) driver.update(0, tel(4), 1 / 60);
+      const after = finger && before ? THREE.MathUtils.radToDeg(finger.quaternion.angleTo(before)) : NaN;
+      check('an upshift flexes the fingers on the paddle and lets them go', flexed > 4 && after < 0.5, `${extras.shift?.shift_up?.join(' ')}: ${fmt(flexed, 1)}° mid-shift, ${fmt(after, 2)}° after`);
+      // HEAD_MOVEMENT: in a right-hand corner at its MAX_G the head turns right (into the corner) by YAW_MAX_DEG and
+      // leans left (out of it); under braking it nods forward
+      const headNode = node.getObjectByName(extras.head!.node)!;
+      const headTurn = (lateralG: number, longitudinalG: number) => {
+        const t = { gear: 4, lateralG, longitudinalG } as unknown as CarTelemetry;
+        for (let i = 0; i < 180; i++) driver.update(0, t, 1 / 60);
+        scene.updateMatrixWorld(true);
+        return headNode.getWorldQuaternion(new THREE.Quaternion());
+      };
+      const still = headTurn(0, 0);
+      const turnOf = (q: THREE.Quaternion) => {
+        const e = new THREE.Euler().setFromQuaternion(q.clone().multiply(still.clone().invert()), 'YXZ');
+        return { yaw: THREE.MathUtils.radToDeg(e.y), pitch: THREE.MathUtils.radToDeg(e.x), roll: THREE.MathUtils.radToDeg(e.z) };
+      };
+      const right = turnOf(headTurn(extras.head!.maxG, 0));
+      const braking = turnOf(headTurn(0, -extras.head!.maxG));
+      headTurn(0, 0);
+      check(
+        'the head turns into a right-hand corner, leans out of it, and nods under braking',
+        right.yaw < -0.9 * Math.abs(extras.head!.yawDeg) && right.roll < -0.5 * Math.abs(extras.head!.rollDeg) && braking.pitch > 0.5 * Math.abs(extras.head!.pitchDeg),
+        `yaw ${fmt(right.yaw, 1)}° (car +y is left), roll ${fmt(right.roll, 1)}°, braking pitch ${fmt(braking.pitch, 1)}°`,
+      );
+    }
+    driver.dispose();
+
+    if (team === 'ferrari') {
+      // An opponent's: posed near, the low-detail figure at rest past LOD1, none past the far reach
+      const opp = installPortedDriver(node, gltf.animations, { opponent: true })!;
+      const lod = scene.getObjectByName('DRV_LOD')!;
+      const full = () => opp.fullDetail.every((m) => m.visible);
+      const none = () => opp.fullDetail.every((m) => !m.visible);
+      opp.setLevel(1);
+      const far = none() && lod.visible;
+      opp.setLevel(2);
+      const gone = none() && !lod.visible;
+      opp.setLevel(0);
+      check("an opponent's driver: full near, low detail past LOD1, none past the far reach", far && gone && full() && !lod.visible);
+      opp.dispose();
+    }
+  }
 }
-console.log('\nAll F1 2007 checks passed.');
+
+void driverChecks().then(() => {
+  if (failures.length) {
+    console.log(`\n${failures.length} F1 2007 check(s) failed:\n  ${failures.join('\n  ')}`);
+    process.exit(1);
+  }
+  console.log('\nAll F1 2007 checks passed.');
+});
