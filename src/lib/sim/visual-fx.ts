@@ -57,6 +57,8 @@ export const PARTICLE_BUDGET = { low: 120, medium: 220, high: MAX_PARTICLES } as
 const OPPONENT_HALF_TRACK_M = 0.8;
 const OPPONENT_FRONT_AXLE_M = 1.6;
 const OPPONENT_REAR_AXLE_M = 1.45;
+/** Time constant (s) of an opponent body's pitch and roll easing toward the pedals' and the steering's */
+const OPPONENT_BODY_EASE_S = 0.12;
 /** Opponents throw their full spray within this distance (m) of the player, less and less out to the reach */
 const OPPONENT_SPRAY_FULL_M = 45;
 /** Tyre smoke puffs per second from one wheel at full smoke (`tyre-slide-fx.ts`) */
@@ -199,6 +201,9 @@ export class SimVisualFxManager {
       /** The rig of the other look (solid / ghost), hidden, once the car has changed look */
       spare?: SimCarRig;
       wheelRot: number;
+      /** The body's drawn pitch and roll (rad), eased toward what the pedals and steering ask for */
+      bodyPitch?: number;
+      bodyRoll?: number;
       telemetry?: CarTelemetry;
       /** The AI car's wheels on its ground at the drawn pose (refreshed in place each frame) */
       wheels?: WheelSeating;
@@ -970,8 +975,12 @@ export class SimVisualFxManager {
       const spinRadS = Number.isFinite(rpm) ? (rpm * 2 * Math.PI) / 60 : peer.speedKmh / 3.6 / 0.348;
       entry.wheelRot = (entry.wheelRot + spinRadS * dt) % (2 * Math.PI);
       const wheelRot = entry.wheelRot;
-      const pitchRad = peer.brake > 0.2 ? 0.012 : -peer.throttle * 0.008;
-      const rollRad = peer.steerAngle * 0.04;
+      // Eased: set straight from the pedals, the body snapped by up to 1.15° in a frame whenever the brake crossed 0.2
+      const ease = 1 - Math.exp(-dt / OPPONENT_BODY_EASE_S);
+      const wantPitch = peer.brake > 0.2 ? 0.012 : -peer.throttle * 0.008;
+      const wantRoll = peer.steerAngle * 0.04;
+      const pitchRad = (entry.bodyPitch = entry.bodyPitch === undefined ? wantPitch : entry.bodyPitch + (wantPitch - entry.bodyPitch) * ease);
+      const rollRad = (entry.bodyRoll = entry.bodyRoll === undefined ? wantRoll : entry.bodyRoll + (wantRoll - entry.bodyRoll) * ease);
 
       // One telemetry object per opponent, refreshed in place (it was a ~70-field literal per car per frame)
       const syntheticTelemetry = (entry.telemetry ??= createPeerTelemetry());
