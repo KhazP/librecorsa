@@ -128,7 +128,7 @@ const Tank: React.FC<{ label: string; labelCls: string; fill: number; fillCls: s
   value,
   textCls = "text-lc-chalk",
 }) => (
-  <div className={`grid h-[36px] grid-cols-[38px_1fr] items-center gap-2.5 border-b px-3.5 ${HAIR}`}>
+  <div className={`col-span-2 grid h-[36px] grid-cols-subgrid items-center border-b px-3.5 ${HAIR}`}>
     <span className={`${LBL} ${labelCls}`}>{label}</span>
     <div className="relative h-[22px] bg-lc-titanium">
       <span aria-hidden className={`absolute inset-y-0 left-0 ${fillCls}`} style={{ width: `${(Math.min(1, Math.max(0, fill)) * 100).toFixed(1)}%` }} />
@@ -235,8 +235,12 @@ export const EnduranceDial: React.FC<{ t: CarTelemetry; revRange: [number, numbe
         <Dial t={t} revRange={revRange} w={w} />
       </div>
       <div className={`border-t ${HAIR} ${PLATE}`}>
-        <FuelTank t={t} w={w} />
-        {hasErs ? <ErsTank t={t} w={w} /> : null}
+        {/* The two tanks share their label column, as wide as the longer label (German "Kraftstoff", Portuguese
+            "Combustível"), so their bars start together and no label runs under a bar */}
+        <div className="grid grid-cols-[minmax(38px,max-content)_1fr] gap-x-2.5">
+          <FuelTank t={t} w={w} />
+          {hasErs ? <ErsTank t={t} w={w} /> : null}
+        </div>
         <Electronics t={t} w={w} />
       </div>
     </div>

@@ -63,7 +63,10 @@ export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps =
       <span />
       <span>{L.driver}</span>
       <span className="text-end">{gaps === "leader" ? L.gap : L.interval}</span>
-      <span className="text-end whitespace-nowrap" title={L.lastVsYouTitle}>
+      {/* Set closer than the other labels, wrapping inside its 40 px (German's "vs. dich" goes to a third line) and held
+          to the column's end, so a word wider than the column (French "Dernier") reaches a little into the gap before
+          it, never past the card's edge, which cut the label off */}
+      <span className="justify-self-end text-end tracking-[0.06em]" title={L.lastVsYouTitle}>
         {L.lastVsYou}
       </span>
     </div>
