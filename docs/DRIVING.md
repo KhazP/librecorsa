@@ -54,8 +54,8 @@ The road surface is tracked across 64 sectors around the lap:
 
 Open-wheel cars follow era-appropriate overtaking rules based on their model year:
 
-- **2026 onward (`straight-mode-2026`):** Active aero **Straight Mode** plus **Overtake Mode** hybrid deployment.
-- **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only: free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
+- **2026 onward (`straight-mode-2026`):** Active aero **Straight Mode** plus **Overtake Mode** hybrid deployment (`lc26`, `f12026-car`).
+- **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only (`lc25`, which also models 2025 MGU-H and ground-effect ride-height maps): free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
 - **Pre-2011 (`none`):** Fixed wings; flaps stay closed.
 
 ### Active aero: Z-Mode and X-Mode (Straight Mode)
@@ -68,10 +68,11 @@ On 2026 cars, pressing the **Active aero** button (`X` on keyboard, `Y` / `△` 
 
 ### 350 kW MGU-K, 4 MJ battery, and Overtake Mode
 
-The 2026 power unit pairs a 1.6 L V6 turbo with a `350 kW` MGU-K and a `4 MJ` usable battery state-of-charge window. Power delivery follows the FIA 2026 speed taper rules:
+The 2026 power unit pairs a 1.6 L V6 turbo with a `350 kW` MGU-K, a `4 MJ` usable battery state-of-charge window, and an `8.5 MJ` per-lap recharge limit (with full-throttle superclipping up to `350 kW` at the end of long straights). From a standing start, MGU-K deployment unlocks once the car reaches `50 km/h`. Power delivery follows the FIA 2026 speed taper rules:
 
 - **Standard deployment:** Delivers up to `350 kW` up to `290 km/h`, tapers linearly down to `100 kW` at `340 km/h`, and ramps to `0 kW` at `345 km/h`. In races on circuits with designated `250 kW` power-limited sectors, electrical output caps at `250 kW` up to `310 km/h` before tapering to `0 kW` at `345 km/h`.
-- **Overtake Mode (`Space` / `Shift` hold, or `B` latch):** Holds full `350 kW` deployment all the way to `337.5 km/h` before tapering to `0 kW` at `355 km/h`, and increases the lap's energy harvest allowance by **`+0.5 MJ`**.
+- **Overtake Mode (`Z` on keyboard; Automatic Overtake on by default):** Holds full `350 kW` deployment all the way to `337.5 km/h` before tapering to `0 kW` at `355 km/h`, and increases the lap's energy harvest allowance by **`+0.5 MJ`** (to `9.0 MJ`).
+- **Boost (`Space` / `Shift` hold, or `B` latch):** Overrides automatic energy-management cuts and superclipping to deploy or hold MGU-K power on demand. In a race, Boost is capped at the car's current power at activation or `150 kW` (whichever is higher); under **Low Grip Conditions**, Boost only holds current deployment without raising it.
 - **Low-speed street circuits (Rev 1 curves, e.g., Monaco):** Standard deployment tapers from `350 kW` at `200 km/h` to `0 kW` at `300 km/h`; Overtake Mode tapers more gently from `200 km/h` to `150 kW` at `300 km/h` and `0 kW` at `310 km/h`.
 - **Earning Overtake Mode in a race:** Cross the circuit's Overtake Detection Line within `1.0 s` of the car directly ahead on track (lapped cars included) to unlock Overtake Mode from the Activation Line through the entire following lap. In practice and qualifying, Overtake Mode is available freely at any time.
 
@@ -79,7 +80,7 @@ The 2026 power unit pairs a 1.6 L V6 turbo with a `350 kW` MGU-K and a `4 MJ` us
 
 Open the **Garage** from the menu or pause screen to tune your car, save named setups, or exchange setups via `LC1-` share codes and `.json` files (see [Sharing a car setup](ONLINE.md#sharing-a-car-setup)). Every car uses one of two class setup sheets anchored to that car's real physical baseline:
 
-### F1 setup sheet (`lc26`, `f12026-car`, and F1 mods)
+### F1 setup sheet (`lc26`, `lc25`, `f12026-car`, and F1 mods)
 
 | Tab | Adjustable parameters |
 | :-- | :-- |
@@ -108,3 +109,25 @@ Closed-wheel cars share a unified sheet that automatically exposes only the hard
 | **Fuel** | Starting fuel ballast (litres and kg) |
 
 You can also adjust live in-car dials on track, such as brake bias and the differential's `entry`, `mid` and `exit` settings, through the **MFD** (`O` to toggle, `I` or `Insert` to cycle pages).
+
+## Race starts, pit stops, and Virtual Safety Car
+
+- **Standing starts:** Under **Assisted** launch, the car is held on the grid until lights out. Under **Manual** launch, hold the clutch and target launch revs through the lights and release at lights out; your reaction time is measured on launch, and moving early triggers a `+5 s` or `+10 s` jump-start penalty.
+- **Rolling starts:** An automatic formation speed limiter holds pace (~`65 km/h`) while preserving full braking, paired with a live rolling-start pace bar across every HUD (`slow` / `hold` / `fast`), a `"GET READY"` notice, and a `3-2-1` countdown as the leader approaches the start/finish line.
+- **Pit stops:** Circuits with a pit lane support full pit stops in practice, AI races, and Career mode. The pit speed limiter (`\`) engages automatically inside the speed-limit zone (speeding draws a `+5 s` penalty). Use the MFD **Pit** page (`O` / `I` on keyboard, or controller D-pad) to pick your next tyre compound and toggle damage repairs. Stopping on the same compound still fits a fresh set of tyres, and mandatory pit stops can be required in race setup and career series.
+- **Virtual Safety Car (VSC):** In AI races, retired cars on track or persistent double-yellow hazards automatically trigger a VSC. Every car paces to ~`65%` of its own racing speed (`65`–`216 km/h`) against a live delta with overtaking and aero/overtake aids locked out; sustained speeding draws a `+5 s` penalty, and green resumes `10`–`15 s` after `"VSC ending"`.
+
+## Career mode
+
+Career mode offers two progression ladders with regional calendars (Americas, Europe, and Asia-Pacific on regional tiers), persistent rivals, and season-by-season promotion:
+
+- **Road ladder:** Club Cup (Suzuki Liana 1.6) or Coupé Cup (VW Scirocco GTX 16V) -> Touring Cup (Nissan R32 JTCC) -> Classic GT (Nissan R33 JGTC) or Prototype Cup (MTRacing 496R) -> GT3 (BMW M4 / Mercedes-AMG) -> Endurance Prototypes (LC-LMDH) -> Grand Prix (LC26 Prototype).
+- **Historic ladder:** Procar Series (BMW M1 Procar) -> Group 4 Classic (Porsche 934 Turbo RSR) -> Can-Am Legends (Chaparral 2D / 2D 427).
+- **Test days and season structure:** Optional **Test days** let you practice the next round's circuit against a promotion-pace lap target before racing. Each season sets configurable length, **mulligans** (round restarts), three **bonus objectives**, optional qualifying (with free flying-lap restart and **End qualifying** in the pause menu), and a championship score. Finishing inside a series' promotion places unlocks the next tier; missing promotion three times in one series ends the career. New career seasons default to **Expert** AI difficulty.
+
+## Cameras, HUD, replay, and voice spotter
+
+- **Cameras:** The default driving camera is **T-Cam (`tv_pod`)**. Press `C` to cycle driving views (`F7` for free camera, `F8` for trackside TV camera), or hold `C` (or press `Alt` + arrow keys) to adjust cockpit seating.
+- **HUD layouts:** 15 layouts ship out of the box with **Blade** as the default (including a bottom-left live input trace when no force-feedback wheel is active) plus a layout editor to move, resize, or hide widgets. Career pre-race shows, offline AI full-screen podiums, and broadcast event cards can each be toggled under **Settings > Display > HUD**.
+- **Instant replay and Flashback:** Press `T` to open instant replay. In offline sessions, press `F` (or click **Flashback**) inside replay to rewind and resume driving from that moment (which invalidates the current lap in practice and time trials).
+- **Voice spotter:** Off by default under **Settings > Audio**. When enabled, it calls cars alongside (`"car left"`, `"car right"`, `"three wide"`, `"still there"`, `"clear"`) using three **Kokoro-82M** (Apache-2.0) voices (**George**, **Emma**, and **Adam**) with an optional pit-wall radio filter.

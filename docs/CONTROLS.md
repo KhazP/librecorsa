@@ -31,7 +31,7 @@ Default bindings are mapped by physical key position, so an AZERTY keyboard auto
 | Clutch (hold) | Unbound by default |
 | Camera (hold: seat & camera), free camera, trackside TV camera | `C`, `F7`, `F8` |
 | Racing line, autopilot, mouse steering | `R`, `P`, `V` |
-| Restart, restart lap (flying start), instant replay | `Backspace`, `L`, `T` |
+| Restart, restart lap (flying start), instant replay (`F` inside offline replay: Flashback) | `Backspace`, `L`, `T` |
 | Headlights on / off, flash headlights (hold) | `U`, `Y` |
 | Pit speed limiter | `\` |
 | Show / hide HUD, open / close lap board | `H`, `J` |
@@ -106,10 +106,10 @@ All wheel settings live under **Controls > Wheel**:
 - **Wheel type:** Choose **Direct drive** (raw, unfiltered signal; `1080°` default rotation) or **Belt or gear** (light smoothing filter; `900°` default rotation).
 - **Calibrate all:** Walks through steering, throttle, and brake in order. For each step, hold the rim straight (or take your foot off the pedal) and click **Continue**, then turn the wheel roughly `90°` left or press the pedal all the way down and release. Inverted pedal axes are handled automatically. Press `Esc` (or `B` / `○` on a controller) to cancel.
 - **Clutch pedal:** Optional and located in the **Pedals** card. Because **Calibrate all** skips it, use its dedicated **Calibrate** button (or **Remove** to unbind it).
-- **Rotation:** Set to `360°`, `540°`, `900°`, `1080°`, or **Custom** (`180°`–`2520°`) to match your wheel driver's configured lock. The in-game steering wheel then tracks your physical rim 1:1 up to the real car's steering lock (`360°` for Formula cars, `640°` for GT3, `1080°` for the Suzuki Liana). With force feedback enabled, a soft lock pushes back past the car's physical limit.
+- **Rotation:** Set to `360°`, `540°`, `900°`, `1080°`, or **Custom** (`180°`–`2520°`) to match your wheel driver's configured lock. The in-game steering wheel then tracks your physical rim 1:1 up to the real car's steering lock (`360°` for Formula cars, `390°` for the LC-LMDH, `640°` for GT3, `1080°` for the Suzuki Liana). With force feedback enabled, a soft lock pushes back past the car's physical limit.
 - **Brake curve (Advanced):** Use `1.0` for load-cell pedals, or `1.3`–`1.6` for potentiometer pedals to give finer modulation near the top of pedal travel.
 - **Steering filters (Advanced):** Override steering lock per car class if you prefer a quicker rack than the real car, and tune **Centre dead zone** and **Input filter**.
-- **Wheel buttons:** Unbound by default. Select a slot and press a button on your rim. At minimum, bind gear paddles and a pause button; pulling both paddles together selects neutral.
+- **Wheel buttons:** Unbound by default (uncalibrated wheels also keep MFD dials unbound so non-standard shift paddles, such as on a MOZA R3, never adjust TC or MFD pages). Select a slot and press a button or 8-way POV hat direction (such as a Logitech G920 D-pad) on your rim, or clear individual actions to unbind them. At minimum, bind gear paddles and a pause button; pulling both paddles together selects neutral.
 
 > If you load onto the track with an uncalibrated throttle or brake axis on a wheel, a **Calibrate pedals** shortcut appears on the HUD outside of races and jumps directly to this tab.
 
