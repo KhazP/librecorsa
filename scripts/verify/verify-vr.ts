@@ -10,7 +10,7 @@
  */
 import * as THREE from "three";
 import { toReversedDepth } from "../../src/lib/vr/reversed-depth";
-import { HeadsetButtons, PAUSE_HOLD_MS, XR_PAD_ID, XrPadMapper, type XrHandSource } from "../../src/lib/vr/xr-pad";
+import { HeadsetButtons, PAUSE_HOLD_MS, XR_PAD_ID, XrPadMapper, headsetTookPress, type XrHandSource } from "../../src/lib/vr/xr-pad";
 import { isStandaloneHeadset } from "../../src/lib/vr/headset";
 import { driveModel, formatLapTime } from "../../src/lib/vr/vr-hud";
 import type { CarTelemetry, RaceStatus } from "../../src/types/f1";
@@ -102,10 +102,14 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   b.read(pad([]), (t += 16), paused);
   check("Y while paused recentres", b.read(pad([3]), (t += 16), paused).recenter);
   b.read(pad([]), (t += 16), paused);
-  check("A while paused resumes", b.read(pad([0]), (t += 16), paused).resume);
+  const resumed = b.read(pad([0]), (t += 16), paused);
+  check("A while paused resumes", resumed.resume);
+  // The drive is handed back in the same frame: that A (Gear up on the default layout) is the headset's, not a shift
+  check("the press that resumes is the headset's, not the drive's", headsetTookPress(resumed));
   b.read(pad([7]), (t += 16), paused);
   check("a trigger held over does not resume again", !b.read(pad([7]), (t += 16), paused).resume);
   check("no pad: nothing", Object.values(b.read(null, (t += 16), false)).every((v) => v === false));
+  check("a frame the headset did nothing in leaves the drive its presses", !headsetTookPress(b.read(pad([0]), (t += 16), false)));
 }
 
 // --- Standalone headset detection ---------------------------------------------------------------------------------
