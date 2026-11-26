@@ -477,13 +477,83 @@ export class LapRecorder {
   }
 }
 
+/** A ghost's samples are re-timed against the median of this many seconds either side */
+const RETIME_HALF_WINDOW_S = 0.5;
+/** No sample is moved further in time than this (s): the drawn pose was carried forward by 50 ms at most */
+const RETIME_MAX_S = 0.06;
+/** Slower than this (m/s), a sample is left where it is */
+const RETIME_MIN_SPEED_MS = 5;
+
+/**
+ * A recording's samples with each pose moved to its own lap time, for playing it back as a ghost. Laps driven in the
+ * simulation worker before the recorder took the telemetry's own pose (`SimulatorCar.telemetryPose`) stamped each
+ * sample with the lap time of one state and the pose drawn that frame, carried forward by up to 50 ms: positions sat
+ * up to a metre off along the track (45 cm at the 95th percentile on the board's keyboard laps), and the ghost lurched
+ * back and forth 20 times a second. Each sample's error in time is read from how far its distance along the path
+ * strays from the distance its recorded speed covers (less the moving median of that difference, which takes out the
+ * slow drift between the two and any jump), and the poses are re-sampled at the samples' own times. A lap recorded
+ * cleanly moves by a millisecond or so. Returns new data; the recording is left as it is.
+ */
+export function steadyGhostData(recording: LapRecording): number[] {
+  const d = recording.data;
+  const S = LAP_SAMPLE_STRIDE;
+  const out = d.slice();
+  const n = Math.floor(d.length / S);
+  if (n < 3) return out;
+  // Distance along the recorded path, less the distance the recorded speeds cover (rows: t, s, x, y, z, q…, km/h)
+  const strayM = new Float64Array(n);
+  let pathM = 0;
+  let speedM = 0;
+  for (let i = 1; i < n; i++) {
+    const a = (i - 1) * S;
+    const b = i * S;
+    pathM += Math.hypot(d[b + 2] - d[a + 2], d[b + 3] - d[a + 3], d[b + 4] - d[a + 4]);
+    speedM += ((d[a + 9] + d[b + 9]) / 2 / 3.6) * (d[b] - d[a]);
+    strayM[i] = pathM - speedM;
+  }
+  const half = Math.max(1, Math.round(RETIME_HALF_WINDOW_S * recording.sampleHz));
+  const poseT = new Float64Array(n);
+  const window: number[] = [];
+  for (let i = 0; i < n; i++) {
+    poseT[i] = d[i * S];
+    const speedMs = d[i * S + 9] / 3.6;
+    if (!(speedMs >= RETIME_MIN_SPEED_MS)) continue;
+    window.length = 0;
+    for (let j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) window.push(strayM[j]);
+    window.sort((p, q) => p - q);
+    const aheadS = (strayM[i] - window[window.length >> 1]) / speedMs;
+    if (Math.abs(aheadS) <= RETIME_MAX_S) poseT[i] += aheadS;
+  }
+  for (let i = 1; i < n; i++) if (!(poseT[i] > poseT[i - 1])) poseT[i] = poseT[i - 1] + 1e-6;
+  // Each sample's pose at its own time, between the poses either side of it
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    const t = d[i * S];
+    while (j < n - 2 && poseT[j + 1] < t) j++;
+    const f = Math.min(1, Math.max(0, (t - poseT[j]) / (poseT[j + 1] - poseT[j])));
+    const a = j * S;
+    const b = a + S;
+    const o = i * S;
+    for (let k = 2; k <= 4; k++) out[o + k] = d[a + k] + (d[b + k] - d[a + k]) * f;
+    const q = nlerpQuat({ qx: d[a + 5], qy: d[a + 6], qz: d[a + 7], qw: d[a + 8] }, { qx: d[b + 5], qy: d[b + 6], qz: d[b + 7], qw: d[b + 8] }, f);
+    out[o + 5] = q.qx;
+    out[o + 6] = q.qy;
+    out[o + 7] = q.qz;
+    out[o + 8] = q.qw;
+  }
+  return out;
+}
+
 /** Plays a recorded lap back: interpolated samples at any time within the lap */
 export class GhostPlayer {
   readonly recording: LapRecording;
+  /** The recording with its poses at their own times (`steadyGhostData`): what is played */
+  private readonly played: LapRecording;
   private readonly count: number;
 
   constructor(recording: LapRecording) {
     this.recording = recording;
+    this.played = { ...recording, data: steadyGhostData(recording) };
     this.count = Math.floor(recording.data.length / LAP_SAMPLE_STRIDE);
   }
 
@@ -499,10 +569,11 @@ export class GhostPlayer {
     const n = this.count;
     if (n < 2 || Number.isNaN(tS)) return null;
     const tc = Math.min(Math.max(tS, 0), this.lapTimeS);
-    const timeAt = (i: number) => this.recording.data[i * LAP_SAMPLE_STRIDE];
+    const played = this.played;
+    const timeAt = (i: number) => played.data[i * LAP_SAMPLE_STRIDE];
     if (tc < timeAt(0) - 0.25) return null;
-    if (tc <= timeAt(0)) return lapSampleAt(this.recording, 0);
-    if (tc >= timeAt(n - 1)) return lapSampleAt(this.recording, n - 1);
+    if (tc <= timeAt(0)) return lapSampleAt(played, 0);
+    if (tc >= timeAt(n - 1)) return lapSampleAt(played, n - 1);
 
     let lo = 0;
     let hi = n - 1;
@@ -511,8 +582,8 @@ export class GhostPlayer {
       if (timeAt(mid) <= tc) lo = mid;
       else hi = mid;
     }
-    const a = lapSampleAt(this.recording, lo);
-    const b = lapSampleAt(this.recording, hi);
+    const a = lapSampleAt(played, lo);
+    const b = lapSampleAt(played, hi);
     const span = b.t - a.t;
     const f = span > 0 ? (tc - a.t) / span : 0;
     const q = nlerpQuat(a, b, f);
