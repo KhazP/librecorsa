@@ -144,6 +144,13 @@ async function main(): Promise<void> {
       JSON.stringify(parts.PART_early_model) === '["early"]' && JSON.stringify(parts.PART_body_main) === '["base"]',
       JSON.stringify(parts),
     );
+    // The early body's mirrors sit 6 cm further out: the late car's live mirror is shown for the late liveries alone,
+    // the early model keeps its own glass
+    check(
+      "the late car's live mirror shown only for the liveries that keep its body",
+      JSON.stringify(parts.MIRROR_0) === '["base"]' && ferrari.nodes!.some((n) => n.name === 'MIRROR_0'),
+      JSON.stringify(parts.MIRROR_0),
+    );
     const early = F1_2007_SKINS.filter((s) => s.id.startsWith('ferrari-') && s.id.endsWith('-early'));
     check('both early liveries wear it', early.length === 2 && early.every((s) => s.variant === 'early'), early.map((s) => `${s.id}:${s.variant}`).join(' '));
     const lateFiles = ['wccarbody.jpg', 'wcextra0.jpg', 'wcextra1.jpg'];
@@ -182,7 +189,13 @@ async function main(): Promise<void> {
       }
     check('every reading in a cell of its own', boxes.length >= 8 && clash.length === 0, `${boxes.length} readings${clash.length ? `; ${clash.join(', ')}` : ''}`);
     const f2004 = fontMetrics('f2004');
-    check("AC's f2004 narrow, its digits 0.68 tall 0.22 above the line", f2004.narrow < 1 && f2004.digitH === 0.68 && f2004.lift === 0.22 && fontMetrics('digital_big').segments);
+    check("AC's f2004 narrow, its digits 0.68 tall 0.22 above the line", f2004.narrow < 1 && f2004.digitH === 0.68 && f2004.lift === 0.22);
+    // The BMW's seven-segment gear: its window (BMW_GEARSBK) spans 5.5 mm under its node to 5.7 mm over it, the item
+    // 12 mm under it and 17 mm high
+    const seg = fontMetrics('digital_big');
+    const gearBottom = -0.012 + seg.lift * 0.017;
+    const gearTop = gearBottom + seg.digitH * 0.017;
+    check("the BMW's seven-segment gear inside its window", seg.segments && gearBottom >= -0.0055 && gearTop <= 0.0057, `${(gearBottom * 1000).toFixed(1)}..${(gearTop * 1000).toFixed(1)} mm`);
   }
 
   // The game keeps a porter-made finish as made, and still finishes other cars' paint by its name
