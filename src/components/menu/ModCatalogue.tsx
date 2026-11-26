@@ -228,8 +228,10 @@ export const ModCatalogue: React.FC<ModCatalogueProps> = ({ installed, claim, bl
                     <img src={e.preview} alt="" loading="lazy" decoding="async" className="h-10 w-16 shrink-0 rounded-lc-row bg-lc-well object-cover" />
                   ) : null}
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-semibold text-lc-chalk">
-                      {e.name} <span className="font-normal text-lc-slate">{e.version}</span>
+                    {/* A long name is cut short, never its version */}
+                    <span className="flex min-w-0 items-baseline gap-1.5 font-semibold text-lc-chalk">
+                      <span className="truncate">{e.name}</span>
+                      <span className="max-w-[45%] shrink-0 truncate font-normal text-lc-slate">{e.version}</span>
                     </span>
                     <span className="lc-hint truncate">
                       {meta.join(" · ")}
