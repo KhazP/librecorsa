@@ -340,7 +340,7 @@ const SculptedCluster: React.FC<{
           fill={activeAccent}
         />
 
-        {/* Right gauge: crisp KPH / Speed / RPM / Value */}
+        {/* Right gauge: the speed unit / Speed / RPM / Value */}
         <g transform="translate(262, 54)">
           <circle
             r={r}
@@ -361,7 +361,7 @@ const SculptedCluster: React.FC<{
             transform="rotate(140)"
           />
           <text y="-15" fill="#94a3b8" fontSize="7.5" fontWeight="700" textAnchor="middle" letterSpacing="1">
-            {speedLbl === "KM/H" ? "KPH" : speedLbl}
+            {speedLbl}
           </text>
           <text y="3" fill="#ffffff" fontSize="21" fontWeight="900" textAnchor="middle">
             {speed}
