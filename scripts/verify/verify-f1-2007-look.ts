@@ -11,6 +11,8 @@
  *   the paints' polished coat (a clearcoat masked by a per-pixel map) over their own ksDiffuse (the McLaren's silver at
  *   0.25 of AC's 0.4, the Ferrari's red at its skin's 0.3), and the carbon's reflection capped at its fresnelMaxLevel,
  *   with no coat and its weave tiled as many times as AC tiles it. Other cars' materials keep the game's name rules.
+ * - The Ferrari's early-season liveries wear the early body their skins swap in (ext_config.ini MODEL_REPLACEMENT), as
+ *   a part variant, and none of the late body's files.
  */
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
@@ -128,6 +130,29 @@ async function main(): Promise<void> {
   check("McLaren's silver under its own ksDiffuse 0.25 (of AC's usual 0.4)", Math.abs(factor('mclaren') - 0.625) < 1e-3, String(factor('mclaren')));
   check("Ferrari's red under its skin's ksDiffuse 0.3", Math.abs(factor('ferrari') - 0.75) < 1e-3, String(factor('ferrari')));
   check('a team at AC\'s usual 0.4 keeps its paint as baked', Math.abs(factor('williams') - 1) < 1e-3, String(factor('williams')));
+
+  console.log('\n== The Ferrari\'s early-season body');
+  {
+    const ferrari = glbs.get('ferrari')!.json as GltfJson & { nodes?: { name?: string; extras?: Record<string, unknown> }[] };
+    const root = ferrari.nodes?.find((n) => n.extras?.wheelCentres);
+    const parts = (root?.extras?.partVariants ?? {}) as Record<string, string[]>;
+    check(
+      'the early body a part of its own, the late body shown for every other livery',
+      JSON.stringify(parts.PART_early_model) === '["early"]' && JSON.stringify(parts.PART_body_main) === '["base"]',
+      JSON.stringify(parts),
+    );
+    const early = F1_2007_SKINS.filter((s) => s.id.startsWith('ferrari-') && s.id.endsWith('-early'));
+    check('both early liveries wear it', early.length === 2 && early.every((s) => s.variant === 'early'), early.map((s) => `${s.id}:${s.variant}`).join(' '));
+    const lateFiles = ['wccarbody.jpg', 'wcextra0.jpg', 'wcextra1.jpg'];
+    check(
+      'an early livery carries no file of the late body (Räikkönen early wore Massa\'s)',
+      early.every((s) => (s.files ?? []).every((f) => !lateFiles.includes(f))),
+      early.map((s) => `${s.id}: ${(s.files ?? []).join(',')}`).join(' | '),
+    );
+    // Räikkönen's early paint is the one the early body comes in (his #6); Massa's early files are his own
+    const massa = F1_2007_SKINS.find((s) => s.id === 'ferrari-massa-early');
+    check("Massa's early livery paints the early body in his files", ['wcextra5.jpg', 'wcextra6.jpg', 'wcextra7.jpg'].every((f) => massa?.files?.includes(f)));
+  }
 
   // The game keeps a porter-made finish as made, and still finishes other cars' paint by its name
   const made = new THREE.MeshPhysicalMaterial({ name: 'paint_002', clearcoat: 0.5, roughness: 0.27, specularIntensity: 0.1 });
