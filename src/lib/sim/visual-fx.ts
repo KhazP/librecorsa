@@ -13,7 +13,7 @@
 import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-builder-2026';
-import { anyCarForVehicle, carForVehicle, portedSkinFor } from '@/lib/cars/car-registry';
+import { anyCarForVehicle, carForVehicle, portedSkinFor, type CarSkin } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
 import { defaultGtTyreBrand, type GtTyreBrand } from '@/lib/render/gt-tyre-sidewall';
@@ -1304,13 +1304,23 @@ function liveryKeyOf(peer: InterpolatedPeerState): string {
  */
 function opponentSkin(vehicle: VehicleModelId | undefined, driverCode: string): PortedSkin | null {
   if (!vehicle) return null;
+  return portedSkinFor(carForVehicle(vehicle).id, opponentCarSkin(vehicle, driverCode));
+}
+
+function opponentCarSkin(vehicle: VehicleModelId | undefined, driverCode: string): CarSkin | null {
+  if (!vehicle) return null;
   const car = carForVehicle(vehicle);
   const skins = car.physics === vehicle ? car.skins : undefined;
   if (!skins || skins.length < 2) return null;
   let h = 0;
   for (const ch of driverCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const skin = skins[h % skins.length];
-  return portedSkinFor(car.id, skin);
+  return skins[h % skins.length];
+}
+
+/** The livery an opponent races in (`opponentSkin`), for what else it brings (its sound); null for a ghost or the first */
+export function opponentLiveryOf(peer: InterpolatedPeerState): CarSkin | null {
+  if (peer.ghost || peer.passThrough || peer.stale) return null;
+  return opponentCarSkin(peer.vehicle, liveryCodeOf(peer));
 }
 
 /** The translucent materials `ghostify` gave a car */

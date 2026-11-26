@@ -186,6 +186,11 @@ export interface CarSkin {
    * team's driver puts that team's car on the same physics. With `useModelPaint`, that body's own paint
    */
   modelUrl?: string;
+  /**
+   * The sound it brings, when not the car's `sound`: a season's cars under one entry (F1 2007), each team's car its own
+   * engine. The player hears the picked livery's; another car, the livery it races in
+   */
+  sound?: CarSoundSource;
   /** Procedural livery id (`gt3-livery-painter.ts`), projected directly onto the GLB's exterior paint material */
   procedural?: string;
   /** Explicitly keeps the GLB's built-in factory paint (even when this skin is not `skins[0]`) */

@@ -70,7 +70,7 @@ import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
-import { SimVisualFxManager } from "@/lib/sim/visual-fx";
+import { opponentLiveryOf, SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar, type AiDriverDef } from "@/lib/sim/ai-opponents";
 import { resolveRaceRules } from "@/lib/sim/race-rules";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
@@ -317,7 +317,8 @@ const approach = (value: number, target: number, maxStep: number) =>
   value + Math.max(-maxStep, Math.min(maxStep, target - value));
 
 /** The sound bank each car plays (the F1 cars share one bank) */
-const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
+/** The car's sound, or the picked livery's where it brings its own (an F1 2007 team's engine) */
+const soundFor = (car: CarId): CarSoundSource => carSkinFor(car)?.sound ?? carById(car).sound;
 /** A car's own physics (a mod car's physics file) while it drives on the model they were made for; else none */
 const ownProfile = (car: CarId, vehicle: VehicleModelId) => {
   const def = carById(car);
@@ -1846,9 +1847,17 @@ export class DriveSession {
       carHeadlights = new CarHeadlights(carRigCar, { spotCount: wanted });
       carHeadlights.attach(carRig.chassisGroup);
     };
+    // A livery with an engine of its own (an F1 2007 team's) is heard at once
+    let liverySound = soundFor(carIdNow);
     // A livery picked in the menus goes onto the car at once; one on another body builds the car again, as another
     // car would be (its cockpit extras belong to the old body)
     const unsubscribeCarSkins = subscribeCarSkins(() => {
+      const heard = soundFor(carIdNow);
+      if (heard !== liverySound) {
+        liverySound = heard;
+        prefetchSoundBank(heard.assetDir);
+        audio?.setCar(heard);
+      }
       const next = skinFor(carRigCar);
       if ((next?.modelUrl ?? null) !== carRigBody) swapCarRig(carRigCar, true);
       else void carRig.setSkin?.(next);
@@ -3104,7 +3113,8 @@ export class DriveSession {
     const kbAxleSlip = createAxleSlipSample();
     // The other cars, heard where they are from the active camera
     const opponentAudio = new OpponentAudio();
-    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "lc26").sound;
+    const opponentSound = (p: InterpolatedPeerState): CarSoundSource =>
+      opponentLiveryOf(p)?.sound ?? carForVehicle(p.vehicle ?? "lc26").sound;
     const trackEnv = getTrackEnv();
     // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
     let lastSkyMs = -Infinity;
