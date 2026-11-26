@@ -61,7 +61,7 @@ function venueHeroOf(venueId: string): HomeVenueHero | null {
 const F1_SWATCH = (liv: LiveryConfig): string =>
   liv.visual?.swatchCss ?? `linear-gradient(130deg, ${liv.primary} 0 52%, ${liv.accent} 52% 64%, ${liv.secondary} 64% 100%)`;
 
-const F1_LIVERY_ORDER = ["house", "grid2026", "retro"] as const;
+const F1_LIVERY_ORDER = ["house", "grid2026", "retro", "mod"] as const;
 
 function liveriesOf(c: CarDefinition): { liveryStore?: "settings" | "skin"; liveries: HomeLivery[] } {
   if (carTakesLivery(c.id)) {
