@@ -437,6 +437,14 @@ function allowReversedDepth(owner: unknown): void {
   if (camera && typeof camera.updateProjectionMatrix !== "function") camera.updateProjectionMatrix = () => {};
 }
 
+/** One camera's clouds and haze: the main view's, or another screen's (createView) */
+interface SkyView {
+  readonly clouds: CloudsEffect;
+  readonly aerialPerspective: AerialPerspectiveEffect;
+  readonly composite: CloudsCompositeUniforms;
+  readonly aerialUniforms: AerialUniforms;
+}
+
 export class PhysicalSky {
   /** The visible sky, sun disc on; added to the scene by the caller */
   readonly mesh: THREE.Mesh<THREE.PlaneGeometry, PatchedSkyMaterial>;
@@ -454,8 +462,9 @@ export class PhysicalSky {
   private readonly sunECEF = new THREE.Vector3(0, 0, 1);
   private readonly procedural: Array<{ dispose(): void }> = [];
   private stbn: THREE.Data3DTexture | null = null;
-  private readonly composite: CloudsCompositeUniforms;
-  private readonly aerialUniforms: AerialUniforms;
+  /** The main view first, then one per other screen (createView) */
+  private readonly views: SkyView[] = [];
+  private readonly reversedDepth: boolean;
   private quality: SkyQuality = "high";
   private aerialAllowed = true;
   private cloud = 0;
@@ -480,47 +489,24 @@ export class PhysicalSky {
     this.bakeMesh.visible = false;
     for (const m of [this.mesh.material, this.bakeMesh.material]) m.worldToECEFMatrix.copy(this.worldToECEF);
 
-    this.clouds = new CloudsEffect();
-    this.clouds.worldToECEFMatrix.copy(this.worldToECEF);
-    // Procedural noise volumes, rendered on the GPU the first time the clouds draw
+    this.reversedDepth = reversedDepth;
+    // Procedural noise volumes, rendered on the GPU the first time the clouds draw (shared by every view)
     const localWeather = new LocalWeather();
     const shape = new CloudShape();
     const shapeDetail = new CloudShapeDetail();
     const turbulence = new Turbulence();
     this.procedural.push(localWeather, shape, shapeDetail, turbulence);
     for (const p of this.procedural) allowReversedDepth(p);
-    this.clouds.localWeatherTexture = localWeather;
-    this.clouds.shapeTexture = shape;
-    this.clouds.shapeDetailTexture = shapeDetail;
-    this.clouds.turbulenceTexture = turbulence;
-    // Light shafts need the atmosphere's aerial-perspective pass, which this renderer does not run
-    this.clouds.lightShafts = false;
-    if (reversedDepth) patchCloudsForReversedDepth(this.clouds);
-    this.composite = patchCloudsComposite(this.clouds);
-    this.clouds.skipRendering = false;
-
-    this.aerialPerspective = new AerialPerspectiveEffect(undefined, {
-      sunLight: false,
-      skyLight: false,
-      sky: false,
-      transmittance: true,
-      inscatter: true,
-    });
-    this.aerialPerspective.worldToECEFMatrix.copy(this.worldToECEF);
-    this.aerialPerspective.shadowSampleCount = 4;
-    this.aerialPerspective.shadowRadius = 4;
-    this.aerialUniforms = patchAerialPerspective(this.aerialPerspective, reversedDepth);
-    this.clouds.events.addEventListener("change", (event) => {
-      if (event.property === "atmosphereShadow") this.syncAerialShadow();
-    });
+    this.noise = { localWeather, shape, shapeDetail, turbulence };
 
     this.generator = new PrecomputedTexturesGenerator(renderer);
     allowReversedDepth(this.generator);
     const textures = this.generator.textures;
     Object.assign(this.mesh.material, textures);
     Object.assign(this.bakeMesh.material, textures);
-    Object.assign(this.clouds, textures);
-    Object.assign(this.aerialPerspective, textures);
+    const main = this.makeView();
+    this.clouds = main.clouds;
+    this.aerialPerspective = main.aerialPerspective;
     this.generator
       .update()
       .then(() => {
@@ -540,11 +526,106 @@ export class PhysicalSky {
       .then((buffer) => {
         if (this.disposed) return;
         this.stbn = createSpatiotemporalNoise(new Uint8Array(buffer));
-        this.clouds.stbnTexture = this.stbn;
-        this.aerialPerspective.stbnTexture = this.stbn;
+        for (const v of this.views) {
+          v.clouds.stbnTexture = this.stbn;
+          v.aerialPerspective.stbnTexture = this.stbn;
+        }
         this.applyLook();
       })
       .catch((error: unknown) => console.warn("[physical-sky] blue noise missing; the clouds will look grainier", error));
+  }
+
+  private readonly noise: { localWeather: LocalWeather; shape: CloudShape; shapeDetail: CloudShapeDetail; turbulence: Turbulence };
+
+  /** A camera's clouds and haze, sharing the noise volumes, the atmosphere's tables and the weather with the others */
+  private makeView(): SkyView {
+    const clouds = new CloudsEffect();
+    clouds.worldToECEFMatrix.copy(this.worldToECEF);
+    clouds.localWeatherTexture = this.noise.localWeather;
+    clouds.shapeTexture = this.noise.shape;
+    clouds.shapeDetailTexture = this.noise.shapeDetail;
+    clouds.turbulenceTexture = this.noise.turbulence;
+    // Light shafts need the atmosphere's aerial-perspective pass, which this renderer does not run
+    clouds.lightShafts = false;
+    if (this.reversedDepth) patchCloudsForReversedDepth(clouds);
+    const composite = patchCloudsComposite(clouds);
+    clouds.skipRendering = false;
+
+    const aerialPerspective = new AerialPerspectiveEffect(undefined, {
+      sunLight: false,
+      skyLight: false,
+      sky: false,
+      transmittance: true,
+      inscatter: true,
+    });
+    aerialPerspective.worldToECEFMatrix.copy(this.worldToECEF);
+    aerialPerspective.shadowSampleCount = 4;
+    aerialPerspective.shadowRadius = 4;
+    const aerialUniforms = patchAerialPerspective(aerialPerspective, this.reversedDepth);
+    const view: SkyView = { clouds, aerialPerspective, composite, aerialUniforms };
+    clouds.events.addEventListener("change", (event) => {
+      if (event.property === "atmosphereShadow") this.syncAerialShadow(view);
+    });
+    const textures = this.generator.textures;
+    Object.assign(clouds, textures);
+    Object.assign(aerialPerspective, textures);
+    if (this.stbn) {
+      clouds.stbnTexture = this.stbn;
+      aerialPerspective.stbnTexture = this.stbn;
+    }
+    clouds.sunDirection.copy(this.sunECEF);
+    aerialPerspective.sunDirection.copy(this.sunECEF);
+    this.views.push(view);
+    return view;
+  }
+
+  /**
+   * The sky for another screen's camera (the side screens of three): its own clouds, whose temporal upscaling keeps
+   * each camera's history, and its own haze. It follows this sky's weather and quality; `beforeRender` puts its
+   * clouds where the main view's have drifted to, and it draws with no time step of its own.
+   */
+  createView(): {
+    readonly clouds: CloudsEffect;
+    readonly cloudsActive: boolean;
+    readonly aerialPerspective: AerialPerspectiveEffect;
+    readonly aerialActive: boolean;
+    beforeRender(): void;
+    dispose(): void;
+  } {
+    const view = this.makeView();
+    this.applyQualityTo(view);
+    this.copyDrift(view);
+    this.applyLook();
+    const sky = this;
+    return {
+      clouds: view.clouds,
+      aerialPerspective: view.aerialPerspective,
+      get cloudsActive() {
+        return sky.cloudsActive;
+      },
+      get aerialActive() {
+        return sky.aerialActive;
+      },
+      beforeRender: () => this.copyDrift(view),
+      dispose: () => {
+        const i = this.views.indexOf(view);
+        if (i > 0) this.views.splice(i, 1);
+        // Their passes only: the noise volumes and the atmosphere's tables are the main view's
+        view.clouds.dispose();
+        view.aerialPerspective.dispose();
+      },
+    };
+  }
+
+  /** A view's cloud pattern where the main view's has drifted to (the main view advances it with time) */
+  private copyDrift(view: SkyView): void {
+    const main = this.views[0];
+    if (!main || view === main) return;
+    view.clouds.localWeatherRepeat.copy(main.clouds.localWeatherRepeat);
+    view.clouds.localWeatherOffset.copy(main.clouds.localWeatherOffset);
+    view.clouds.shapeOffset.copy(main.clouds.shapeOffset);
+    view.clouds.shapeDetailOffset.copy(main.clouds.shapeDetailOffset);
+    view.clouds.localWeatherVelocity.copy(main.clouds.localWeatherVelocity);
   }
 
   /** Sun, cloud cover and rain (cheap: uniforms only) */
@@ -553,8 +634,10 @@ export class PhysicalSky {
     this.sunECEF.copy(c.sunDirection).transformDirection(this.worldToECEF);
     this.mesh.material.sunDirection.copy(this.sunECEF);
     this.bakeMesh.material.sunDirection.copy(this.sunECEF);
-    this.clouds.sunDirection.copy(this.sunECEF);
-    this.aerialPerspective.sunDirection.copy(this.sunECEF);
+    for (const v of this.views) {
+      v.clouds.sunDirection.copy(this.sunECEF);
+      v.aerialPerspective.sunDirection.copy(this.sunECEF);
+    }
     this.cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
     this.rain = THREE.MathUtils.clamp(c.rain, 0, 1);
     this.windX = Number.isFinite(c.windVxMs) ? c.windVxMs! : 0;
@@ -580,12 +663,16 @@ export class PhysicalSky {
   setQuality(quality: SkyQuality, aerialAllowed = quality === "high"): void {
     this.quality = quality;
     this.aerialAllowed = aerialAllowed;
-    const touch = mobileClassGpu();
-    this.clouds.qualityPreset = quality === "high" && !touch ? "medium" : "low";
-    // Desktop Medium keeps crisp 0.75x volumetric clouds; touch devices stay 0.5x for mobile fill-rate budget.
-    this.clouds.resolutionScale = touch ? 0.5 : quality === "high" ? 1 : 0.75;
-    this.clouds.lightShafts = false;
+    for (const v of this.views) this.applyQualityTo(v);
     this.applyLook();
+  }
+
+  private applyQualityTo(view: SkyView): void {
+    const touch = mobileClassGpu();
+    view.clouds.qualityPreset = this.quality === "high" && !touch ? "medium" : "low";
+    // Desktop Medium keeps crisp 0.75x volumetric clouds; touch devices stay 0.5x for mobile fill-rate budget.
+    view.clouds.resolutionScale = touch ? 0.5 : this.quality === "high" ? 1 : 0.75;
+    view.clouds.lightShafts = false;
   }
 
   /** This sky is up: its lookup tables are ready and the preset is not Low */
@@ -603,9 +690,9 @@ export class PhysicalSky {
     return this.showing && this.quality === "high" && this.aerialAllowed && !mobileClassGpu();
   }
 
-  private syncAerialShadow(): void {
+  private syncAerialShadow(view?: SkyView): void {
     const wantShadow = this.aerialActive && this.cloudsActive && this.stbn !== null;
-    this.aerialPerspective.shadow = wantShadow ? this.clouds.atmosphereShadow : null;
+    for (const v of view ? [view] : this.views) v.aerialPerspective.shadow = wantShadow ? v.clouds.atmosphereShadow : null;
   }
 
   /** Picks the session's recipe (once per seed) and puts its pattern where the seed says */
@@ -613,11 +700,12 @@ export class PhysicalSky {
     if (this.recipe) return this.recipe;
     const r = pickCloudRecipe(this.seed, this.cloud, this.rain);
     this.recipe = r;
-    const c = this.clouds;
-    c.localWeatherRepeat.setScalar(r.repeat);
-    c.localWeatherOffset.set(r.offset[0], r.offset[1]);
-    c.shapeOffset.set(r.shapeOffset[0], r.shapeOffset[1], r.shapeOffset[2]);
-    c.shapeDetailOffset.set(r.shapeOffset[1], r.shapeOffset[2], r.shapeOffset[0]);
+    for (const { clouds: c } of this.views) {
+      c.localWeatherRepeat.setScalar(r.repeat);
+      c.localWeatherOffset.set(r.offset[0], r.offset[1]);
+      c.shapeOffset.set(r.shapeOffset[0], r.shapeOffset[1], r.shapeOffset[2]);
+      c.shapeDetailOffset.set(r.shapeOffset[1], r.shapeOffset[2], r.shapeOffset[0]);
+    }
     if (this.logRecipes) console.info(`[physical-sky] cloud seed ${r.seed}: ${describeClouds(r, this.cloud, this.rain).join(", ") || "clear"}`);
     return r;
   }
@@ -630,24 +718,28 @@ export class PhysicalSky {
     cloudSkyFor(recipe, cloud, rain, this.setup);
     this.anyClouds = this.setup.layers.some((l) => l.height > 0);
     const volumetric = this.cloudsActive;
-    this.clouds.coverage = this.setup.coverage;
-    for (let i = 0; i < 4; i++) this.clouds.cloudLayers[i].set(this.setup.layers[i]);
     // Drift with the wind aloft, along the recipe's own heading in a calm
     const calm = Math.hypot(this.windX, this.windZ) < 0.1;
-    cloudDriftVelocity(
-      calm ? Math.sin(recipe.calmDriftRad) : this.windX,
-      calm ? Math.cos(recipe.calmDriftRad) : this.windZ,
-      Math.max(MIN_DRIFT_MS, WIND_ALOFT_FACTOR * Math.hypot(this.windX, this.windZ)),
-      this.worldToECEF,
-      recipe.repeat,
-      this.clouds.localWeatherVelocity
-    );
+    for (const { clouds } of this.views) {
+      clouds.coverage = this.setup.coverage;
+      for (let i = 0; i < 4; i++) clouds.cloudLayers[i].set(this.setup.layers[i]);
+      cloudDriftVelocity(
+        calm ? Math.sin(recipe.calmDriftRad) : this.windX,
+        calm ? Math.cos(recipe.calmDriftRad) : this.windZ,
+        Math.max(MIN_DRIFT_MS, WIND_ALOFT_FACTOR * Math.hypot(this.windX, this.windZ)),
+        this.worldToECEF,
+        recipe.repeat,
+        clouds.localWeatherVelocity
+      );
+    }
     // Rain clouds dark and grey (the visible sky with them, so the horizon below the deck matches); a dry overcast
     // keeps some of the low sun's colour
     const gloom = rain * (0.75 + 0.25 * cloud);
     const cloudsScale = SKY_RADIANCE_SCALE * (1 - 0.45 * gloom);
-    this.composite.cloudsRadianceScale.value = cloudsScale;
-    this.composite.cloudsGrey.value = Math.min(1, 0.7 * gloom + 0.3 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
+    for (const { composite } of this.views) {
+      composite.cloudsRadianceScale.value = cloudsScale;
+      composite.cloudsGrey.value = Math.min(1, 0.7 * gloom + 0.3 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
+    }
     this.mesh.material.uniforms.skyRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.35 * gloom);
     // The bake has no volumetric clouds, so its sky always takes the veil; the visible sky only a little under a full
     // deck and in rain (the deck itself greys it, and broken cloud shows blue sky between)
@@ -666,19 +758,21 @@ export class PhysicalSky {
     this.mesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
     this.bakeMesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
     this.mesh.material.uniforms.nightStars.value = starShare(night, cloud, rain);
-    this.composite.cloudsNightGlow.value.setRGB(...NIGHT_CLOUD_GLOW).multiplyScalar(night);
+    for (const { composite } of this.views) composite.cloudsNightGlow.value.setRGB(...NIGHT_CLOUD_GLOW).multiplyScalar(night);
     this.bakeMesh.material.uniforms.nightStars.value = 0;
     // A thick overcast hides the sun disc (the probe zeroes this while it films and puts the value back)
     this.mesh.material.uniforms.showSunDisc.value = 1 - THREE.MathUtils.smoothstep(cloud, 0.55, 0.9);
     // Physical aerial perspective + soft drifting cloud ground shadows on High desktop
     const sunUp = THREE.MathUtils.smoothstep(this.sunElevationSin, 0.02, 0.22);
-    this.aerialUniforms.aerialRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.4 * gloom);
-    this.aerialUniforms.aerialGrey.value = Math.min(1, 0.65 * gloom + 0.25 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
-    this.aerialUniforms.aerialStrength.value = this.aerialActive ? 0.85 * (1 - 0.55 * rain) : 0;
-    this.aerialUniforms.cloudShadowStrength.value =
-      this.aerialActive && volumetric && this.stbn !== null
-        ? 0.34 * sunUp * (1 - 0.85 * gloom) * (1 - 0.65 * THREE.MathUtils.smoothstep(cloud, 0.78, 1))
-        : 0;
+    for (const { aerialUniforms } of this.views) {
+      aerialUniforms.aerialRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.4 * gloom);
+      aerialUniforms.aerialGrey.value = Math.min(1, 0.65 * gloom + 0.25 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
+      aerialUniforms.aerialStrength.value = this.aerialActive ? 0.85 * (1 - 0.55 * rain) : 0;
+      aerialUniforms.cloudShadowStrength.value =
+        this.aerialActive && volumetric && this.stbn !== null
+          ? 0.34 * sunUp * (1 - 0.85 * gloom) * (1 - 0.65 * THREE.MathUtils.smoothstep(cloud, 0.78, 1))
+          : 0;
+    }
     this.syncAerialShadow();
   }
 
@@ -690,8 +784,11 @@ export class PhysicalSky {
       m.geometry.dispose();
       m.material.dispose();
     }
-    this.clouds.dispose();
-    this.aerialPerspective.dispose();
+    for (const v of this.views) {
+      v.clouds.dispose();
+      v.aerialPerspective.dispose();
+    }
+    this.views.length = 0;
     for (const p of this.procedural) p.dispose();
     this.stbn?.dispose();
     this.generator.dispose();

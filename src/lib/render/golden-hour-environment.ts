@@ -218,11 +218,17 @@ export interface GoldenHourEnvironment {
 }
 
 export interface PostFx {
-  composer: EffectComposer;
+  /** The main chain's composer (the whole canvas, or the centre screen of three) */
+  readonly composer: EffectComposer;
   render(dtSeconds: number): void;
   setSize(width: number, height: number): void;
   /** swap the camera used by the render pass (the sim uses a single camera, but keep it safe) */
   setCamera(camera: THREE.Camera): void;
+  /**
+   * Three screens (left, centre, right), each drawn by its own chain into its part of the canvas with its own camera;
+   * null draws the whole canvas with the main camera again. Call again when the canvas or the views change.
+   */
+  setViews(views: [PostFxView, PostFxView, PostFxView] | null): void;
   /** Graphics preset: MSAA samples and bloom on / off (`bloom` decouples touch High bloom from disabled touch MSAA) */
   setQuality(quality: "low" | "medium" | "high", msaa?: boolean, bloom?: boolean): void;
   /**
@@ -230,13 +236,11 @@ export interface PostFx {
    * the frame the water on the glass refracts)
    */
   addScenePass(pass: Pass): void;
-  /** Puts the physical sky's clouds (and High desktop aerial perspective) into the chain, once; later calls are no-ops */
-  setClouds(sky: {
-    readonly clouds: CloudsEffect;
-    readonly cloudsActive: boolean;
-    readonly aerialPerspective?: AerialPerspectiveEffect;
-    readonly aerialActive?: boolean;
-  }): void;
+  /**
+   * Puts the physical sky's clouds (and High desktop aerial perspective) into the chain, once; later calls are no-ops.
+   * `createView` gives each side screen its own clouds.
+   */
+  setClouds(sky: PostFxSky & { createView?: (camera: THREE.Camera) => PostFxSkyView }): void;
   /**
    * Zero-pass FidelityFX RCAS sharpening strength (0 = off / skipped, up to 1). Automatically enabled when rendering
    * below native devicePixelRatio (Low on HiDPI, Medium on 2x/3x phones, or adaptive step-down).
@@ -270,7 +274,11 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   // The automatic quality's Lowest resolution bounds `renderScale`, the multiplier on this cap (adaptive-quality.ts)
   const dprCap = pixelRatioCap(plan);
   const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
-  const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
+  // Three 4K screens at 150 % would ask for a canvas wider than the GPU draws (16384 px on most): held to what it can
+  const pixelRatio = Math.min(
+    Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale),
+    maxCanvasPixelRatio(renderer)
+  );
   // A headset fixes the size while it presents (three puts the page's back when it ends, and the drive applies the
   // graphics again then)
   if (!renderer.xr.isPresenting) renderer.setPixelRatio(pixelRatio);
@@ -289,6 +297,18 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   setAsphaltQuality(quality);
   setSceneryQuality(quality);
   setSceneryDensity(quality);
+}
+
+/** The largest pixel ratio at which the canvas still fits the GPU's largest drawing buffer and viewport */
+function maxCanvasPixelRatio(renderer: THREE.WebGLRenderer): number {
+  const gl = renderer.getContext();
+  const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array | null;
+  const maxDim = Math.min(Number(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)) || 16384, dims?.[0] ?? 16384, dims?.[1] ?? 16384);
+  const el = renderer.domElement;
+  const w = el.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 0);
+  const h = el.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 0);
+  const longest = Math.max(1, w, h);
+  return Math.max(0.35, maxDim / longest);
 }
 
 // ---------------------------------------------------------------------------
@@ -1026,55 +1046,83 @@ const hexColor = (css: string): THREE.Vector3 | null => {
   return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 };
 
+/** The physical sky's clouds and haze, as one chain draws them (setClouds) */
+export interface PostFxSky {
+  readonly clouds: CloudsEffect;
+  readonly cloudsActive: boolean;
+  readonly aerialPerspective?: AerialPerspectiveEffect;
+  readonly aerialActive?: boolean;
+}
+
+/** A second view of the physical sky for another camera: its own clouds (they keep each camera's history) */
+export interface PostFxSkyView extends PostFxSky {
+  /** Brings this view's clouds level with the main view's (their drift), right before it draws */
+  beforeRender(): void;
+  dispose(): void;
+}
+
+/** One screen of a multi-screen frame: its camera, where it draws on the canvas, and its render resolution */
+export interface PostFxView {
+  camera: THREE.Camera;
+  /** CSS px from the canvas' left and top (screen-layout.ts tripleRects) */
+  rect: { x: number; y: number; w: number; h: number };
+  /** Share of the canvas' resolution this view renders at (the side screens may render lower) */
+  scale: number;
+}
+
+/**
+ * One scene render and its post-processing to the screen: the composer and its passes. One draws the whole canvas;
+ * with three screens each screen has its own, drawn into its part of the canvas. The clouds keep a history of the
+ * camera they march for (temporal upscaling), so one composer can't serve three cameras in turn.
+ */
+interface Chain {
+  camera: THREE.Camera;
+  composer: EffectComposer;
+  renderPass: RenderPass;
+  bloomPass: EffectPass;
+  plainPass: EffectPass;
+  cloudsPass: EffectPass | null;
+  aerialPass: EffectPass | null;
+  cloudsPlainPass: EffectPass | null;
+  sky: PostFxSky | null;
+  /** A side screen's own view of the sky (disposed with the chain) */
+  ownSky: PostFxSkyView | null;
+  /** Passes reading the scene buffer right after the RenderPass (addScenePass; the main chain only) */
+  scenePasses: Pass[];
+  rcas: RcasEffect[];
+  grades: DisplayGradeEffect[];
+  /** Device-pixel size set by hand (a screen of several), or null: the composer follows the canvas */
+  sizePx: { w: number; h: number } | null;
+}
+
+/**
+ * The composer's buffers and passes at `w` x `h` device px without touching the renderer's size: EffectComposer.setSize
+ * resizes the renderer (and so the canvas) to whatever it is given, and a screen of three is a third of the canvas
+ */
+function sizeComposer(composer: EffectComposer, w: number, h: number): void {
+  composer.inputBuffer.setSize(w, h);
+  composer.outputBuffer.setSize(w, h);
+  const depth = (composer as unknown as { depthRenderTarget?: THREE.WebGLRenderTarget | null }).depthRenderTarget;
+  depth?.setSize(w, h);
+  for (const pass of composer.passes) pass.setSize(w, h);
+}
+
 export function createPostFx(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera,
   opts?: { multisampling?: number }
 ): PostFx {
-  const composer = new EffectComposer(renderer, {
-    frameBufferType: THREE.HalfFloatType,
-    multisampling: opts?.multisampling ?? 4,
-  });
-  // `outputBuffer` only ever receives fullscreen post passes (cloudsPass on High), never 3D geometry, so keeping its
-  // samples at 0 avoids a duplicate MSAA HalfFloat allocation and a redundant second MSAA resolve blit per frame.
-  const keepOutputNonMsaa = () => {
-    if (composer.outputBuffer.samples !== 0) {
-      composer.outputBuffer.samples = 0;
-      composer.outputBuffer.dispose();
-    }
-  };
-  keepOutputNonMsaa();
-
-  const renderPass = new RenderPass(scene, camera);
-  renderPass.needsDepthBlit = false;
-  // Volumetric clouds (physical sky only, added by setClouds):
-  // - On High (with bloom): `cloudsPass` composites clouds into the non-MSAA `outputBuffer` before `bloomPass`, so
-  //   bright cloud edges bloom too.
-  // - On Medium / non-bloom: `cloudsPlainPass` merges clouds + AgX + display grade into ONE fullscreen pass straight
-  //   to screen, eliminating the intermediate HalfFloat write+read round-trip (and when MSAA is off, reading
-  //   `inputBuffer.depthTexture` directly with zero depth-copy blits).
-  let sky: {
-    readonly clouds: CloudsEffect;
-    readonly cloudsActive: boolean;
-    readonly aerialPerspective?: AerialPerspectiveEffect;
-    readonly aerialActive?: boolean;
-  } | null = null;
-  let cloudsPass: EffectPass | null = null;
-  let aerialPass: EffectPass | null = null;
-  let cloudsPlainPass: EffectPass | null = null;
-  let mainCamera = camera;
-  /** Passes reading the scene buffer right after the RenderPass (addScenePass) */
-  const scenePasses: Pass[] = [];
-
-  const bloom = new BloomEffect({
-    mipmapBlur: true,
-    luminanceThreshold: 1.1,
-    luminanceSmoothing: 0.1,
-    intensity: 0.4,
-    radius: 0.7,
-    levels: 5,
-  });
+  // Shared by every chain: the sharpening and edge glow follow the settings, the contrast the night
+  let sharpnessNow = 0;
+  let contrastNow = GRADE_CONTRAST;
+  let edgeGlowColor: THREE.Vector3 | null = null;
+  // When the edge glow came on (null: off), and whether it holds still for reduced motion
+  let edgeGlowSinceMs: number | null = null;
+  let edgeGlowSteady = false;
+  let quality: { samples: number; bloom: boolean } = { samples: opts?.multisampling ?? 4, bloom: true };
+  /** The sky the main chain composites (setClouds), and how to give another camera its own */
+  let skySource: (PostFxSky & { createView?: (camera: THREE.Camera) => PostFxSkyView }) | null = null;
 
   // One merged pass to the screen: bloom runs on linear HDR, then AgX, then the grade.
   // AgX is applied here because EffectPass ignores renderer.toneMapping. It keeps highlights but reads flat and grey on
@@ -1084,39 +1132,115 @@ export function createPostFx(
   // white specks). The grade had a pass of its own; here it runs the same code without the round trip through a
   // half-float buffer (whose rounding was the only difference), a full-screen write and read saved per frame,
   // multisampled on High and Medium.
-  // The RCAS & grade effects of each terminal pass below: sharpness and edge glow are synced across all of them
-  const rcasEffects: RcasEffect[] = [];
-  const grades: DisplayGradeEffect[] = [];
-  let sharpnessNow = 0;
-  let contrastNow = GRADE_CONTRAST;
-  let edgeGlowColor: THREE.Vector3 | null = null;
-  const toneMapAndGrade = () => {
+  // The RCAS & grade effects of each terminal pass: sharpness and edge glow are synced across all of them
+  const toneMapAndGrade = (chain: Pick<Chain, "rcas" | "grades">) => {
     const rcas = new RcasEffect(sharpnessNow);
-    rcasEffects.push(rcas);
+    chain.rcas.push(rcas);
     const grade = new DisplayGradeEffect(contrastNow, GRADE_SATURATION);
     if (edgeGlowSinceMs !== null) {
       grade.setEdgeGlow(edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs), edgeGlowColor ?? undefined);
     }
-    grades.push(grade);
+    chain.grades.push(grade);
     return [rcas, new ToneMappingEffect({ mode: ToneMappingMode.AGX }), grade];
   };
-  // When the edge glow came on (null: off), and whether it holds still for reduced motion
-  let edgeGlowSinceMs: number | null = null;
-  let edgeGlowSteady = false;
-  const bloomPass = new EffectPass(camera, bloom, ...toneMapAndGrade());
-  // Low and cloudless Medium have no bloom and no clouds: the same pass without either.
-  const plainPass = new EffectPass(camera, ...toneMapAndGrade());
-  plainPass.enabled = false;
-  // Terminal passes end the chain and one runs at a time, so each draws to the screen itself. Set before they are
-  // added, this also stops the composer moving the screen output to whichever pass is last
-  bloomPass.renderToScreen = true;
-  plainPass.renderToScreen = true;
 
-  composer.addPass(renderPass);
-  composer.addPass(bloomPass);
-  composer.addPass(plainPass);
+  // `outputBuffer` only ever receives fullscreen post passes (cloudsPass on High), never 3D geometry, so keeping its
+  // samples at 0 avoids a duplicate MSAA HalfFloat allocation and a redundant second MSAA resolve blit per frame.
+  const keepOutputNonMsaa = (composer: EffectComposer) => {
+    if (composer.outputBuffer.samples !== 0) {
+      composer.outputBuffer.samples = 0;
+      composer.outputBuffer.dispose();
+    }
+  };
 
-  const syncPassRouting = () => {
+  /** A chain's size again after a pass joined it: EffectComposer.addPass sizes a new pass to the whole canvas */
+  const resize = (chain: Chain) => {
+    if (chain.sizePx) sizeComposer(chain.composer, chain.sizePx.w, chain.sizePx.h);
+  };
+
+  const buildChain = (cam: THREE.Camera, samples: number): Chain => {
+    const composer = new EffectComposer(renderer, {
+      frameBufferType: THREE.HalfFloatType,
+      multisampling: samples,
+    });
+    keepOutputNonMsaa(composer);
+    const renderPass = new RenderPass(scene, cam);
+    renderPass.needsDepthBlit = false;
+    const parts = { rcas: [] as RcasEffect[], grades: [] as DisplayGradeEffect[] };
+    const bloom = new BloomEffect({
+      mipmapBlur: true,
+      luminanceThreshold: 1.1,
+      luminanceSmoothing: 0.1,
+      intensity: 0.4,
+      radius: 0.7,
+      levels: 5,
+    });
+    const bloomPass = new EffectPass(cam, bloom, ...toneMapAndGrade(parts));
+    // Low and cloudless Medium have no bloom and no clouds: the same pass without either.
+    const plainPass = new EffectPass(cam, ...toneMapAndGrade(parts));
+    plainPass.enabled = false;
+    // Terminal passes end the chain and one runs at a time, so each draws to the screen itself. Set before they are
+    // added, this also stops the composer moving the screen output to whichever pass is last
+    bloomPass.renderToScreen = true;
+    plainPass.renderToScreen = true;
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+    composer.addPass(plainPass);
+    return {
+      camera: cam,
+      composer,
+      renderPass,
+      bloomPass,
+      plainPass,
+      cloudsPass: null,
+      aerialPass: null,
+      cloudsPlainPass: null,
+      sky: null,
+      ownSky: null,
+      scenePasses: [],
+      ...parts,
+      sizePx: null,
+    };
+  };
+
+  // Volumetric clouds (physical sky only, added by setClouds):
+  // - On High (with bloom): `cloudsPass` composites clouds into the non-MSAA `outputBuffer` before `bloomPass`, so
+  //   bright cloud edges bloom too.
+  // - On Medium / non-bloom: `cloudsPlainPass` merges clouds + AgX + display grade into ONE fullscreen pass straight
+  //   to screen, eliminating the intermediate HalfFloat write+read round-trip (and when MSAA is off, reading
+  //   `inputBuffer.depthTexture` directly with zero depth-copy blits).
+  const addClouds = (chain: Chain, next: PostFxSky) => {
+    if (chain.cloudsPass) return;
+    chain.sky = next;
+    const cam = chain.camera;
+    const includeAerial = Boolean(next.aerialPerspective && !mobileClassGpu());
+    // On High desktop, merge AerialPerspectiveEffect (transmittance + inscatter + drifting cloud ground shadows)
+    // directly into the pre-bloom clouds pass with zero extra FBO or fullscreen draw; keep a cloudless fallback pass.
+    const cloudsPass = includeAerial ? new EffectPass(cam, next.aerialPerspective!, next.clouds) : new EffectPass(cam, next.clouds);
+    // EffectPass gives its camera to its own material only; the clouds/aerial effects read mainCamera directly
+    cloudsPass.mainCamera = cam;
+    cloudsPass.enabled = false;
+    chain.cloudsPass = cloudsPass;
+    if (includeAerial) {
+      chain.aerialPass = new EffectPass(cam, next.aerialPerspective!);
+      chain.aerialPass.mainCamera = cam;
+      chain.aerialPass.enabled = false;
+    }
+    const cloudsPlainPass = new EffectPass(cam, next.clouds, ...toneMapAndGrade(chain));
+    cloudsPlainPass.mainCamera = cam;
+    cloudsPlainPass.renderToScreen = true;
+    cloudsPlainPass.enabled = false;
+    chain.cloudsPlainPass = cloudsPlainPass;
+    const afterScene = 1 + chain.scenePasses.length;
+    chain.composer.addPass(cloudsPass, afterScene);
+    if (chain.aerialPass) chain.composer.addPass(chain.aerialPass, afterScene + 1);
+    chain.composer.addPass(cloudsPlainPass);
+    resize(chain);
+    syncPassRouting(chain);
+  };
+
+  const syncPassRouting = (chain: Chain) => {
+    const { sky, cloudsPass, aerialPass, cloudsPlainPass, bloomPass, plainPass, renderPass, composer } = chain;
     const cloudsOn = Boolean(sky?.cloudsActive && cloudsPass && cloudsPlainPass);
     const bloomOn = bloomPass.enabled;
     const aerialOnlyOn = Boolean(bloomOn && !cloudsOn && sky?.aerialActive && aerialPass);
@@ -1143,78 +1267,180 @@ export function createPostFx(
     }
   };
 
+  const applyQuality = (chain: Chain) => {
+    // Tile-based mobile GPUs suffer heavy DRAM bandwidth penalties resolving HalfFloat MSAA buffers, so touch stays 0×
+    chain.composer.multisampling = quality.samples;
+    keepOutputNonMsaa(chain.composer);
+    chain.bloomPass.enabled = quality.bloom;
+    syncPassRouting(chain);
+  };
+
+  const disposeChain = (chain: Chain) => {
+    // EffectPass.dispose() also disposes the bloom, tone-mapping and grade effects, and the clouds (which the
+    // PhysicalSky disposes again: three's dispose calls are idempotent)
+    chain.composer.removeAllPasses();
+    chain.renderPass.dispose();
+    chain.cloudsPass?.dispose();
+    chain.aerialPass?.dispose();
+    chain.cloudsPlainPass?.dispose();
+    chain.bloomPass.dispose();
+    chain.plainPass.dispose();
+    chain.ownSky?.dispose();
+    chain.composer.dispose();
+  };
+
+  const main = buildChain(camera, quality.samples);
+  /** The camera the main chain draws with on one screen (setCamera); the centre screen's camera replaces it on three */
+  let baseCamera = camera;
+  /** The other screens' chains (left, right) while there are three, else none */
+  let sides: Chain[] = [];
+  /** Where each screen draws (left, centre, right) while there are three */
+  let views: PostFxView[] | null = null;
+  const chains = () => (sides.length > 0 ? [main, ...sides] : [main]);
+
+  const sizeChainToView = (chain: Chain, view: PostFxView) => {
+    const pr = renderer.getPixelRatio();
+    const w = Math.max(1, Math.round(view.rect.w * pr * view.scale));
+    const h = Math.max(1, Math.round(view.rect.h * pr * view.scale));
+    chain.sizePx = { w, h };
+    sizeComposer(chain.composer, w, h);
+  };
+
+  const fullViewport = new THREE.Vector4();
+  const fullScissor = new THREE.Vector4();
+
   return {
-    composer,
+    get composer() {
+      return main.composer;
+    },
 
     render(dtSeconds: number): void {
-      syncPassRouting();
-      if (edgeGlowSinceMs !== null) {
-        const level = edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs);
-        for (const grade of grades) grade.setEdgeGlow(level);
+      const glowLevel = edgeGlowSinceMs === null ? 0 : edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs);
+      if (!views) {
+        syncPassRouting(main);
+        if (edgeGlowSinceMs !== null) for (const grade of main.grades) grade.setEdgeGlow(glowLevel);
+        main.composer.render(dtSeconds);
+        return;
       }
-      composer.render(dtSeconds);
+      // Each screen draws its own chain into its part of the canvas: a render target's viewport is its own, so only
+      // the last pass (to the screen) is placed by the renderer's viewport and scissor
+      renderer.getViewport(fullViewport);
+      renderer.getScissor(fullScissor);
+      const scissorWas = renderer.getScissorTest();
+      const height = renderer.domElement.clientHeight || views[1].rect.h;
+      // The main chain (centre screen) first: the side screens' clouds catch up with its drift and draw with no time
+      // step of their own
+      const order: Array<[Chain, PostFxView]> = [
+        [main, views[1]],
+        ...(sides[0] ? ([[sides[0], views[0]]] as Array<[Chain, PostFxView]>) : []),
+        ...(sides[1] ? ([[sides[1], views[2]]] as Array<[Chain, PostFxView]>) : []),
+      ];
+      for (const [chain, view] of order) {
+        const { x, y, w, h } = view.rect;
+        // three's viewport is from the bottom left, and floors each value times the pixel ratio: a quarter pixel in
+        // keeps neighbouring screens on the same device-pixel seam
+        const pr = renderer.getPixelRatio();
+        const bottom = height - y - h;
+        const vx = (Math.round(x * pr) + 0.25) / pr;
+        const vy = (Math.round(bottom * pr) + 0.25) / pr;
+        const vw = (Math.round(w * pr) + 0.25) / pr;
+        const vh = (Math.round(h * pr) + 0.25) / pr;
+        renderer.setViewport(vx, vy, vw, vh);
+        renderer.setScissor(vx, vy, vw, vh);
+        renderer.setScissorTest(true);
+        if (chain !== main) chain.ownSky?.beforeRender();
+        syncPassRouting(chain);
+        if (edgeGlowSinceMs !== null) for (const grade of chain.grades) grade.setEdgeGlow(glowLevel);
+        chain.composer.render(chain === main ? dtSeconds : 0);
+      }
+      renderer.setViewport(fullViewport);
+      renderer.setScissor(fullScissor);
+      renderer.setScissorTest(scissorWas);
     },
 
     setSize(width: number, height: number): void {
-      composer.setSize(width, height);
+      if (!views) {
+        main.sizePx = null;
+        main.composer.setSize(width, height);
+        return;
+      }
+      // The canvas stays whole; each screen's chain is sized to its own part (the caller passes the new views)
+      const size = renderer.getSize(new THREE.Vector2());
+      if (size.x !== width || size.y !== height) renderer.setSize(width, height);
+      sizeChainToView(main, views[1]);
+      sides.forEach((chain, i) => sizeChainToView(chain, views![i === 0 ? 0 : 2]));
+    },
+
+    setViews(next: [PostFxView, PostFxView, PostFxView] | null): void {
+      if (!next) {
+        if (!views) return;
+        for (const chain of sides) disposeChain(chain);
+        sides = [];
+        views = null;
+        main.sizePx = null;
+        setChainCamera(main, baseCamera);
+        const size = renderer.getSize(new THREE.Vector2());
+        main.composer.setSize(size.x, size.y);
+        return;
+      }
+      views = next;
+      // The centre screen draws with its own camera through the main chain (the water on the glass is there)
+      setChainCamera(main, next[1].camera);
+      for (const [i, viewIndex] of [[0, 0], [1, 2]] as const) {
+        let chain = sides[i];
+        if (!chain) {
+          chain = buildChain(next[viewIndex].camera, quality.samples);
+          sides[i] = chain;
+          applyQuality(chain);
+          if (skySource?.createView) {
+            chain.ownSky = skySource.createView(chain.camera);
+            addClouds(chain, chain.ownSky);
+          }
+        } else if (chain.camera !== next[viewIndex].camera) {
+          setChainCamera(chain, next[viewIndex].camera);
+        }
+        sizeChainToView(chain, next[viewIndex]);
+      }
+      sizeChainToView(main, next[1]);
     },
 
     setCamera(next: THREE.Camera): void {
-      mainCamera = next;
-      renderPass.mainCamera = next;
-      if (cloudsPass) cloudsPass.mainCamera = next;
-      if (aerialPass) aerialPass.mainCamera = next;
-      if (cloudsPlainPass) cloudsPlainPass.mainCamera = next;
-      bloomPass.mainCamera = next;
-      plainPass.mainCamera = next;
+      baseCamera = next;
+      if (!views) setChainCamera(main, next);
     },
 
-    setQuality(quality: "low" | "medium" | "high", msaa = true, bloom = quality === "high" && msaa): void {
+    setQuality(q: "low" | "medium" | "high", msaa = true, bloom = q === "high" && msaa): void {
       const touch = mobileClassGpu();
-      // Tile-based mobile GPUs suffer heavy DRAM bandwidth penalties resolving HalfFloat MSAA buffers, so touch stays 0×
-      composer.multisampling = !msaa || touch ? 0 : quality === "high" ? 4 : quality === "medium" ? 2 : 0;
-      keepOutputNonMsaa();
-      bloomPass.enabled = bloom && quality === "high";
-      syncPassRouting();
+      quality = { samples: !msaa || touch ? 0 : q === "high" ? 4 : q === "medium" ? 2 : 0, bloom: bloom && q === "high" };
+      for (const chain of chains()) {
+        applyQuality(chain);
+        // A new sample count re-made the buffers at the composer's own idea of the size
+        resize(chain);
+      }
     },
 
     setClouds(next): void {
-      if (cloudsPass) return;
-      sky = next;
-      const includeAerial = Boolean(next.aerialPerspective && !mobileClassGpu());
-      // On High desktop, merge AerialPerspectiveEffect (transmittance + inscatter + drifting cloud ground shadows)
-      // directly into the pre-bloom clouds pass with zero extra FBO or fullscreen draw; keep a cloudless fallback pass.
-      cloudsPass = includeAerial
-        ? new EffectPass(mainCamera, next.aerialPerspective!, next.clouds)
-        : new EffectPass(mainCamera, next.clouds);
-      // EffectPass gives its camera to its own material only; the clouds/aerial effects read mainCamera directly
-      cloudsPass.mainCamera = mainCamera;
-      cloudsPass.enabled = false;
-      if (includeAerial) {
-        aerialPass = new EffectPass(mainCamera, next.aerialPerspective!);
-        aerialPass.mainCamera = mainCamera;
-        aerialPass.enabled = false;
+      if (main.cloudsPass) return;
+      skySource = next;
+      addClouds(main, next);
+      // Side screens already up get their own view of the sky
+      for (const chain of sides) {
+        if (chain.cloudsPass || !next.createView) continue;
+        chain.ownSky = next.createView(chain.camera);
+        addClouds(chain, chain.ownSky);
       }
-      cloudsPlainPass = new EffectPass(mainCamera, next.clouds, ...toneMapAndGrade());
-      cloudsPlainPass.mainCamera = mainCamera;
-      cloudsPlainPass.renderToScreen = true;
-      cloudsPlainPass.enabled = false;
-      const afterScene = 1 + scenePasses.length;
-      composer.addPass(cloudsPass, afterScene);
-      if (aerialPass) composer.addPass(aerialPass, afterScene + 1);
-      composer.addPass(cloudsPlainPass);
-      syncPassRouting();
     },
 
     addScenePass(pass): void {
-      if (scenePasses.includes(pass)) return;
-      composer.addPass(pass, 1 + scenePasses.length);
-      scenePasses.push(pass);
+      if (main.scenePasses.includes(pass)) return;
+      main.composer.addPass(pass, 1 + main.scenePasses.length);
+      main.scenePasses.push(pass);
+      resize(main);
     },
 
     setSharpness(amount: number): void {
       sharpnessNow = THREE.MathUtils.clamp(amount, 0, 1);
-      for (const rcas of rcasEffects) rcas.setSharpness(sharpnessNow);
+      for (const chain of chains()) for (const rcas of chain.rcas) rcas.setSharpness(sharpnessNow);
     },
 
     setEdgeGlow(color: string | null): void {
@@ -1222,12 +1448,12 @@ export function createPostFx(
         if (edgeGlowSinceMs === null) return;
         edgeGlowSinceMs = null;
         edgeGlowColor = null;
-        for (const grade of grades) grade.setEdgeGlow(0);
+        for (const chain of chains()) for (const grade of chain.grades) grade.setEdgeGlow(0);
         return;
       }
       const rgb = hexColor(color);
       if (rgb) edgeGlowColor = rgb;
-      for (const grade of grades) grade.setEdgeGlow(1, rgb ?? undefined);
+      for (const chain of chains()) for (const grade of chain.grades) grade.setEdgeGlow(1, rgb ?? undefined);
       edgeGlowSinceMs = performance.now();
       edgeGlowSteady = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     },
@@ -1237,22 +1463,25 @@ export function createPostFx(
       const next = THREE.MathUtils.lerp(GRADE_CONTRAST, GRADE_CONTRAST_NIGHT, k);
       if (Math.abs(next - contrastNow) < 1e-4) return;
       contrastNow = next;
-      for (const grade of grades) grade.setContrast(contrastNow);
+      for (const chain of chains()) for (const grade of chain.grades) grade.setContrast(contrastNow);
     },
 
     dispose(): void {
-      // EffectPass.dispose() also disposes the bloom, tone-mapping and grade effects, and the clouds (which the
-      // PhysicalSky disposes again: three's dispose calls are idempotent)
-      composer.removeAllPasses();
-      renderPass.dispose();
-      cloudsPass?.dispose();
-      aerialPass?.dispose();
-      cloudsPlainPass?.dispose();
-      bloomPass.dispose();
-      plainPass.dispose();
-      composer.dispose();
+      for (const chain of chains()) disposeChain(chain);
+      sides = [];
+      views = null;
     },
   };
+
+  function setChainCamera(chain: Chain, next: THREE.Camera): void {
+    chain.camera = next;
+    chain.renderPass.mainCamera = next;
+    if (chain.cloudsPass) chain.cloudsPass.mainCamera = next;
+    if (chain.aerialPass) chain.aerialPass.mainCamera = next;
+    if (chain.cloudsPlainPass) chain.cloudsPlainPass.mainCamera = next;
+    chain.bloomPass.mainCamera = next;
+    chain.plainPass.mainCamera = next;
+  }
 }
 
 // ---------------------------------------------------------------------------
