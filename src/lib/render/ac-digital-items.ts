@@ -7,10 +7,11 @@
  *
  * AC draws an item in its node's XY plane, from its POSITION along the node's -X (the driver's right), its baseline
  * there and SIZE metres high, facing the driver (-Z). Each item here is a quad of that size with a canvas of its text,
- * redrawn only when the text changes. The 'digital_big' font is AC's seven-segment one: digits are drawn as segments,
- * SIZE high. AC's text fonts (f2004, audi_vln, arial_big) are a cell SIZE high whose digits stand 0.68 of it tall, on a
- * line 0.22 of it above POSITION (the Ferrari's LCD windows fit them so, and no other way); f2004 and audi_vln are
- * narrow. Those are drawn in a bold sans with the same metrics (`fontMetrics`).
+ * redrawn only when the text changes. AC's fonts set a cell SIZE high with the digits in its upper part: the text
+ * fonts (f2004, audi_vln, arial_big) 0.68 of it tall on a line 0.22 above POSITION, f2004 and audi_vln narrow; the
+ * seven-segment 'digital_big' 0.54 tall, 0.39 above it (the mods' LCD windows, the Ferrari's cells and the BMW's,
+ * Red Bull's and Spyker's windows, fit them so and no other way). Those are drawn in a bold sans or as segments with
+ * the same metrics (`fontMetrics`).
  */
 import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
@@ -48,8 +49,6 @@ const PX = 64;
 /** Margins round the text, in text heights */
 const MARGIN_X = 0.12;
 const MARGIN_Y = 0.15;
-/** Width of one seven-segment character, in text heights */
-const CHAR_W = 0.62;
 /** A bold sans's cap (digit) height and digit advance, in ems */
 const SANS_CAP_EM = 0.716;
 const SANS_DIGIT_EM = 0.556;
@@ -67,7 +66,7 @@ interface FontMetrics {
 /** AC's fonts by name: 'digital_*' its seven-segment, f2004 and audi_vln narrow, any other (arial_big) a plain sans */
 export function fontMetrics(font: string): FontMetrics {
   const name = font.toLowerCase();
-  if (name.startsWith("digital")) return { segments: true, digitH: 1, lift: 0, advance: CHAR_W, narrow: 1 };
+  if (name.startsWith("digital")) return { segments: true, digitH: 0.54, lift: 0.39, advance: 0.55, narrow: 1 };
   const narrow = /^(f2004|audi_vln)/.test(name) ? 0.78 : 1;
   return { segments: false, digitH: 0.68, lift: 0.22, advance: SANS_DIGIT_EM * narrow * 1.05, narrow };
 }
@@ -285,21 +284,24 @@ export class AcDigitalItems {
     const textW = text.length * metrics.advance * PX;
     const left = item.align === "LEFT" ? MARGIN_X * PX : item.align === "RIGHT" ? w - MARGIN_X * PX - textW : (w - textW) / 2;
     if (metrics.segments) {
-      const cw = CHAR_W * PX;
+      const cw = metrics.advance * PX;
+      // The digits' box: metrics.digitH tall, metrics.lift above the item's line (the canvas's top + PX)
+      const dh = metrics.digitH * PX;
+      const dTop = top + PX * (1 - metrics.lift) - dh;
       for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         const x = left + i * cw;
         if (ch === "." || ch === ":") {
-          const d = PX * 0.12;
-          if (ch === ":") ctx.fillRect(x + cw * 0.4, top + PX * 0.3, d, d);
-          ctx.fillRect(x + cw * 0.4, top + PX - d, d, d);
+          const d = dh * 0.14;
+          if (ch === ":") ctx.fillRect(x + cw * 0.4, dTop + dh * 0.3, d, d);
+          ctx.fillRect(x + cw * 0.4, dTop + dh - d, d, d);
           continue;
         }
         if (ch === " ") continue;
-        if (!drawSegments(ctx, ch, x + cw * 0.08, top, cw * 0.84, PX)) {
-          ctx.font = `bold ${PX}px Arial, Helvetica, sans-serif`;
-          ctx.textBaseline = "bottom";
-          ctx.fillText(ch, x, top + PX);
+        if (!drawSegments(ctx, ch, x + cw * 0.08, dTop, cw * 0.84, dh)) {
+          ctx.font = `bold ${Math.round(dh / SANS_CAP_EM)}px Arial, Helvetica, sans-serif`;
+          ctx.textBaseline = "alphabetic";
+          ctx.fillText(ch, x, dTop + dh);
         }
       }
       return;
