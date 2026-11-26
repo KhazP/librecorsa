@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "use-intl/react";
+import { useLocale, useTranslations } from "use-intl/react";
 import { isVehicleModelId, type TurnMetadata, type VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SessionLapEntry } from "@/lib/sim/lap-analysis";
@@ -135,6 +135,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   jumpTarget = null,
 }) => {
   const tx = useTranslations("hud.leaderboardPanel");
+  // Dates in the game's language, not the browser's
+  const locale = useLocale();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const keyFileRef = useRef<HTMLInputElement | null>(null);
   // Laps on their way to the online board from here, by lap. An answer redraws the rows (their state is in storage);
@@ -308,8 +310,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       meta: e.conditions ? (
         <LapConditionBadges assists={e.conditions.assists} realism={e.conditions.realism} surface={e.conditions.surface} />
       ) : undefined,
-      detail: new Date(e.recordedAt).toLocaleDateString(),
-      detailTitle: `${board ? `${board} · ` : ""}${new Date(e.recordedAt).toLocaleString()}`,
+      detail: new Date(e.recordedAt).toLocaleDateString(locale),
+      detailTitle: `${board ? `${board} · ` : ""}${new Date(e.recordedAt).toLocaleString(locale)}`,
       lapMs: e.lapTimeMs,
       fastest: i === 0 && rows.length > 1,
       sectorsMs: e.sectorTimesMs,
