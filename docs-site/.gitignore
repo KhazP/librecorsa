@@ -2,8 +2,10 @@
 dist/
 .astro/
 .wrangler/
-# Written by scripts/sync-docs.mjs from ../docs and ../public/branding
+# Written by scripts/sync-docs.mjs from ../docs, ../public/branding and ../src/app
 src/content/docs/
 src/assets/brand/
 public/files/
 public/favicon.svg
+public/apple-touch-icon.png
+public/opengraph-image.jpg

@@ -124,28 +124,50 @@ function splitTitle(text, source) {
   const firstParagraph = body.split(/\n\s*\n/).find((p) => p.trim() && !/^\s*[#>|`!-]/.test(p)) ?? "";
   const plain = firstParagraph
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[`*_]/g, "")
+    .replace(/[`*]/g, "")
+    .replace(/(^|[^\w])_([^_]+)_(?=[^\w]|$)/g, "$1$2")
     .replace(/\s+/g, " ")
+    .replace(/:\s*$/, ".")
     .trim();
-  const description = plain.length > 160 ? `${plain.slice(0, plain.lastIndexOf(" ", 157))}...` : plain;
+  const cut = plain.lastIndexOf(" ", 157);
+  const description = plain.length > 160 ? `${plain.slice(0, cut > 0 ? cut : 157)}...` : plain;
   return { title, body, description };
 }
 
-const BRANDING = ["librecorsa-logo.svg", "librecorsa-logo-on-light.svg", "librecorsa-mark.svg"];
+const SITE_ASSETS = [
+  ["public/branding/librecorsa-logo.svg", join(BRAND, "librecorsa-logo.svg")],
+  ["public/branding/librecorsa-logo-on-light.svg", join(BRAND, "librecorsa-logo-on-light.svg")],
+  ["public/branding/librecorsa-mark.svg", join(SITE, "public/favicon.svg")],
+  ["public/branding/apple-touch-icon.png", join(SITE, "public/apple-touch-icon.png")],
+  ["src/app/opengraph-image.jpg", join(SITE, "public/opengraph-image.jpg")],
+];
+
+function validatePages() {
+  const seenSources = new Set();
+  const seenSlugs = new Set();
+  for (const { source, slug } of PAGES) {
+    if (seenSources.has(source)) throw new Error(`pages.mjs: duplicate source ${source}`);
+    if (seenSlugs.has(slug)) throw new Error(`pages.mjs: duplicate slug ${JSON.stringify(slug)}`);
+    seenSources.add(source);
+    seenSlugs.add(slug);
+  }
+}
 
 function check() {
+  validatePages();
   const copied = new Set();
   for (const { source } of PAGES) {
     const { body } = splitTitle(readFileSync(join(REPO, source), "utf8"), source);
     rewriteLinks(body, source, copied);
   }
-  for (const name of BRANDING) {
-    if (!existsSync(join(REPO, "public/branding", name))) throw new Error(`public/branding/${name} is missing`);
+  for (const [repoPath] of SITE_ASSETS) {
+    if (!existsSync(join(REPO, repoPath))) throw new Error(`${repoPath} is missing`);
   }
   console.log(`docs: ${PAGES.length} pages, ${copied.size} files, every link resolves`);
 }
 
 function main() {
+  validatePages();
   rmSync(CONTENT, { recursive: true, force: true });
   rmSync(PUBLIC_FILES, { recursive: true, force: true });
   const copied = new Set();
@@ -156,7 +178,7 @@ function main() {
       `title: ${JSON.stringify(title)}`,
       ...(description ? [`description: ${JSON.stringify(description)}`] : []),
       // Starlight titles a page "<page> | <site>", which reads "LibreCorsa docs | LibreCorsa docs" on the front page
-      ...(slug ? [] : ["head:", "  - tag: title", `    content: ${JSON.stringify(title)}`]),
+      ...(slug ? [] : ["prev: false", "head:", "  - tag: title", `    content: ${JSON.stringify(title)}`]),
       `editUrl: ${JSON.stringify(`${REPO_URL}/edit/main/${source}`)}`,
       "---",
       "",
@@ -170,12 +192,11 @@ function main() {
     mkdirSync(dirname(out), { recursive: true });
     cpSync(join(REPO, repoPath), out);
   }
-  // The game's own logo and mark, so the two sites can't drift apart
-  mkdirSync(BRAND, { recursive: true });
-  for (const name of ["librecorsa-logo.svg", "librecorsa-logo-on-light.svg"]) {
-    cpSync(join(REPO, "public/branding", name), join(BRAND, name));
+  // The game's own logo, icons and social card, so the two sites can't drift apart
+  for (const [repoPath, dest] of SITE_ASSETS) {
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(join(REPO, repoPath), dest);
   }
-  cpSync(join(REPO, "public/branding/librecorsa-mark.svg"), join(SITE, "public/favicon.svg"));
   console.log(`docs: ${PAGES.length} pages, ${copied.size} files (${relative(REPO, CONTENT)})`);
 }
 
