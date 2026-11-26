@@ -1318,8 +1318,9 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
         sid = ids[skin]
         os.makedirs(os.path.join(out_dir, sid), exist_ok=True)
         own = []
+        shows = preset.get('variant_files', {}).get(preset.get('skin_variants', {}).get(skin, 'base'))
         for fname, key in files:
-            if all(src[n] == base[n] for n in sources(key)):
+            if all(src[n] == base[n] for n in sources(key)) or (shows is not None and fname not in shows):
                 continue
             im = image(key, src)
             out = os.path.join(out_dir, sid, fname)
@@ -1506,6 +1507,123 @@ def add_extension_parts(car_dir, preset, textures, materials, nodes):
                 part_of[i] = parts[name]
                 break
     return part_of
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# A livery's own body (an automatic preset's car). A skin's ext_config.ini may swap part of the model for its season
+# ([MODEL_REPLACEMENT_n] on the main kn5: HIDE these nodes, INSERT this kn5 from the skin's folder under INSERT_IN, at
+# OFFSET). The skins that swap alike share a variant (named by the word their folder names end in, as `_early`); the
+# hidden nodes become a part shown for the other liveries and the inserted model one shown for that variant's
+# (`parts`, CarSkin.variant). A mirror mirrors.ini names stays the main model's for every livery, the game's live
+# mirror being one node.
+# ---------------------------------------------------------------------------------------------------------------------
+
+def skin_model_replacements(car_dir, kn5_name):
+    """{skin folder: (hidden node names, inserted kn5 path, INSERT_IN, OFFSET)} for the skins whose ext_config.ini
+    swaps part of the main model (`kn5_name`), ACTIVE ones only"""
+    out = {}
+    for skin in skin_folders(car_dir):
+        path = os.path.join(car_dir, 'skins', skin, 'ext_config.ini')
+        if not os.path.isfile(path):
+            continue
+        sections, cur = [], None
+        for line in open(path, 'rb').read().decode('latin1').splitlines():
+            line = line.split(';', 1)[0].strip()
+            if line.startswith('[') and line.endswith(']'):
+                cur = {} if line[1:-1].strip().upper().startswith('MODEL_REPLACEMENT') else None
+                if cur is not None:
+                    sections.append(cur)
+            elif cur is not None and '=' in line:
+                k, v = (s.strip() for s in line.split('=', 1))
+                cur[k.upper()] = v
+        for sec in sections:
+            if sec.get('FILE', '').lower() != kn5_name.lower() or sec.get('ACTIVE', '1').strip() == '0':
+                continue
+            insert = os.path.join(car_dir, 'skins', skin, sec.get('INSERT', ''))
+            if not sec.get('INSERT') or not os.path.isfile(insert):
+                continue
+            hide = tuple(sorted(s.strip() for s in sec.get('HIDE', '').split(',') if s.strip()))
+            offset = tuple(float(re.sub(r'[^0-9.eE+-]', '', v) or 0) for v in sec.get('OFFSET', '0,0,0').split(',')[:3])
+            out[skin] = (hide, insert, sec.get('INSERT_IN', '').strip(), offset)
+    return out
+
+
+def add_model_replacements(car_dir, kn5_name, textures, materials, nodes, mirror_names=()):
+    """Appends each variant's inserted model to `nodes` (its materials and textures to the car's, a clashing name
+    as `<name>~<variant>`) and returns {part_nodes: {node index: part}, part_variants, skin_variants} for the preset,
+    or {} when no skin swaps anything"""
+    swaps = skin_model_replacements(car_dir, kn5_name)
+    if not swaps:
+        return {}
+    groups = {}
+    for skin, (hide, insert, insert_in, offset) in sorted(swaps.items()):
+        digest = hashlib.sha1(open(insert, 'rb').read()).hexdigest()
+        groups.setdefault((hide, digest, insert_in, offset), []).append((skin, insert))
+    by_name = {m['name']: i for i, m in enumerate(materials)}
+    part_nodes, part_variants, skin_variants = {}, {}, {}
+    hidden_by = {}  # hidden node name -> variants hiding it
+    used_names = {'base'}
+    for (hide, _, insert_in, offset), members in groups.items():
+        words = {re.split(r'[_\s-]+', s.lower())[-1] for s, _ in members}
+        variant = words.pop() if len(words) == 1 else os.path.splitext(os.path.basename(members[0][1]))[0].lower()
+        base_name, n = variant, 2
+        while variant in used_names:
+            variant, n = f'{base_name}_{n}', n + 1
+        used_names.add(variant)
+        for skin, _ in members:
+            skin_variants[skin] = variant
+        for h in hide:
+            hidden_by.setdefault(h, []).append(variant)
+        parent = next((i for i, nd in enumerate(nodes) if nd['name'] == insert_in), None)
+        ptx = (nodes[parent]['world'] if parent is not None else np.eye(4)).copy()
+        ptx[:3, 3] += offset
+        tex, mats, ext_nodes = read_kn5(members[0][1])
+        rename = {}
+        for k, v in tex.items():
+            if k in textures and textures[k] != v:
+                rename[k] = f'{k}~{variant}'
+            textures.setdefault(rename.get(k, k), v)
+        remap = {}
+        for i, m in enumerate(mats):
+            m = {**m, 'maps': {s: rename.get(t, t) for s, t in m['maps'].items()}}
+            own = by_name.get(m['name'])
+            if own is not None and materials[own]['maps'] == m['maps'] and materials[own]['shader'] == m['shader']:
+                remap[i] = own
+                continue
+            if own is not None:
+                m['name'] = f"{m['name']}~{variant}"
+            materials.append(m)
+            by_name[m['name']] = len(materials) - 1
+            remap[i] = len(materials) - 1
+        part = f'{variant}_model'
+        part_variants[part] = (variant,)
+        first = len(nodes)
+        for nd in ext_nodes:
+            nd = dict(nd, world=ptx @ nd['world'])
+            nd['parent'] = parent if nd['parent'] is None else nd['parent'] + first
+            if nd['mesh'] is not None:
+                nd['mesh'] = {**nd['mesh'], 'mat': remap[nd['mesh']['mat']]}
+                # The live mirror stays the main model's
+                if nd['name'] in mirror_names:
+                    nd['mesh'] = {**nd['mesh'], 'visible': False}
+                else:
+                    part_nodes[len(nodes)] = part
+            nodes.append(nd)
+    # The main model's hidden nodes: a part for the liveries that keep them
+    variants = sorted(set(skin_variants.values()))
+    for i, nd in enumerate(nodes):
+        if nd['mesh'] is None or i in part_nodes:
+            continue
+        names = [nd['name'], *ancestors(nodes, i)]
+        if nd['name'] in mirror_names or (len(names) > 1 and names[1] in mirror_names):
+            continue
+        h = next((h for h in names if h in hidden_by), None)
+        if h is None:
+            continue
+        part = f'{h.lower()}_main'
+        part_nodes[i] = part
+        part_variants[part] = ('base', *[v for v in variants if v not in hidden_by[h]])
+    return {'part_nodes': part_nodes, 'part_variants': part_variants, 'skin_variants': skin_variants}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -2095,6 +2213,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     textures, materials, nodes = loaded if loaded is not None else read_kn5(kn5_path)
     pose_nodes(car_dir, preset, nodes)
     part_of = add_extension_parts(car_dir, preset, textures, materials, nodes)
+    # A livery's own body (`add_model_replacements`, by node index)
+    part_of.update(preset.get('part_nodes', {}))
     part_variants = preset.get('part_variants', {})
     by_name = {m['name']: m for m in materials}
     auto = bool(preset.get('auto'))
@@ -2445,6 +2565,19 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         body_kids.append(writer.add_node(f'PART_{part}', children=kids))
         variant_nodes[f'PART_{part}'] = list(part_variants.get(part, ('base',)))
     body_node = writer.add_node('BODY', children=body_kids)
+    if variant_nodes and skin_files:
+        # The livery files each variant's liveries show (a file only a hidden part wears is no livery's)
+        seen = {}  # glTF material name -> the variants that show it (None: every one)
+        for p in body_parts + [q for q in parts if q[0] != 'body']:
+            mi = mat_index.get(p[2])
+            if mi is None or id(p) in mirror_section:
+                continue
+            name = writer.j['materials'][mi]['name']
+            vis = part_variants.get(p[8], ('base',)) if p[8] is not None else None
+            seen[name] = None if vis is None or seen.get(name, ()) is None else {*seen.get(name, ()), *vis}
+        everyone = {'base', *preset.get('skin_variants', {}).values()}
+        preset['variant_files'] = {v: sorted({f for n, (f, _) in skin_files.items() if seen.get(n, ()) is None or v in seen[n]})
+                                   for v in everyone}
     # The cameras read the body as the first livery wears it
     body_parts = [p for p in body_parts if p[8] is None or 'base' in part_variants.get(p[8], ('base',))]
 
@@ -2661,6 +2794,15 @@ def main():
         replaced = apply_skin_shader_replacements(a.car_dir, a.skin or preset['default_skin'], loaded[1])
         if replaced:
             print(f'  skin material values: {replaced}')
+        # The skins that bring a body of their own
+        mirror_names = {n for _, n in read_mirrors(data)}
+        swap = add_model_replacements(a.car_dir, kn5_name, *loaded, mirror_names=mirror_names)
+        if swap:
+            preset.update(swap)
+            # The textures the skins replace, the inserted models' among them
+            by_lower = {t.lower(): t for t in loaded[0]}
+            preset['skin_textures'] = tuple(sorted(by_lower.get(t, t) for t in skin_override_counts(a.car_dir, loaded[0])))
+            print(f"  liveries' own bodies: {swap['skin_variants']}, parts {swap['part_variants']}")
         car = 'auto'
         print(f'automatic preset for {a.car_dir} ({kn5_name}):')
         print('  ' + json.dumps(preset['detected']))
@@ -2675,7 +2817,10 @@ def main():
         if a.skins_out:
             kn5 = os.path.join(a.car_dir, a.kn5 or preset.get('kn5') or
                                f'{os.path.basename(os.path.normpath(a.car_dir))}.kn5')
-            textures, materials, _ = read_kn5(kn5)
+            textures, materials, kn5_nodes = read_kn5(kn5)
+            if preset.get('part_nodes'):
+                add_model_replacements(a.car_dir, os.path.basename(kn5), textures, materials, kn5_nodes,
+                                       mirror_names={n for _, n in read_mirrors(read_car_data(a.car_dir))})
             if preset.get('auto'):
                 if not skin_files and preset.get('generated'):
                     # Nothing a skin repaints: the model's own paint is the one livery
