@@ -7,6 +7,7 @@ import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LapRecording, type 
 import type { SessionLapEntry } from "@/lib/sim/lap-analysis";
 import { LapTelemetryView } from "./LapTelemetryView";
 import { boardLabel } from "@/lib/net/leaderboard";
+import { boardWords } from "@/lib/net/board-words";
 import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
@@ -315,7 +316,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       bestSectors: e.sectorTimesMs.map((s, k) => s > 0 && s === bestSector[k] && rows.length > 1),
       note: unposted ? (
         unposted.error ? (
-          <span className="text-lc-amber">{tx("notPosted", { error: unposted.error })}</span>
+          // The board's answer was kept as it came (in English): shown in the player's language
+          <span className="text-lc-amber">{tx("notPosted", { error: boardWords(unposted.error) })}</span>
         ) : (
           <span className="text-lc-slate">{tx("notPostedYet")}</span>
         )
