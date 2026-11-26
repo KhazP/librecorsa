@@ -36,7 +36,7 @@ import { revLights, useFuelPerLap } from "./third-party-parts";
 import { useErsState, type ErsState } from "./game-style-parts";
 import { anchor, gearLabel, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
 import { BLADE_W, CORNER_EDGE, DEEP, EDGE, HARD, LBL, LBL_TYPE, NONE, PLATE, scaleOf, useBladeFit, useBladeWords, useOwnWidth, type Words } from "./BladeParts";
-import { CORNER_BESIDE_START, cornerBeside } from "./corner-beside";
+import { cornerBeside } from "./corner-beside";
 import { BladeMap, BladeOrder } from "./BladeOrder";
 
 /**
@@ -527,11 +527,14 @@ export const BladeHud: React.FC<HudDesignProps> = ({
   // A panel in a bottom corner sits beside the blade where there is the room for it at the sizes the player has set
   // (the blade's end slants away from a low panel, so touching widths still leave a gap), else above the blade's bar
   const bladeK = scaleOf(centre);
-  const beside = useRef({ left: CORNER_BESIDE_START, right: CORNER_BESIDE_START });
+  const beside = useRef({ left: true, right: true });
   const cornerBottom = (side: "left" | "right", width: number, style: React.CSSProperties) => {
     const spare = half - (BLADE_W / 2) * bladeK - width * scaleOf(style);
-    beside.current[side] = cornerBeside(beside.current[side], width, spare);
-    return beside.current[side].on ? EDGE : `calc(${EDGE} + ${Math.round(108 * bladeK)}px)`;
+    // The panel's width changes when the fonts arrive, which re-renders this with them loaded
+    const fontsLoaded = typeof document === "undefined" || document.fonts?.status !== "loading";
+    const { beside: on, keep } = cornerBeside(beside.current[side], spare, fontsLoaded);
+    beside.current[side] = keep;
+    return on ? EDGE : `calc(${EDGE} + ${Math.round(108 * bladeK)}px)`;
   };
 
   return (
