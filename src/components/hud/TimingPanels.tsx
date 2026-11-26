@@ -63,7 +63,9 @@ export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps =
       <span />
       <span>{L.driver}</span>
       <span className="text-end">{gaps === "leader" ? L.gap : L.interval}</span>
-      <span className="text-end whitespace-nowrap" title={L.lastVsYouTitle}>
+      {/* Sized to its words and held to the end: a longer language's label (German's "vs. dich") reaches into the gap
+          before it rather than past the card's edge, where the card cut it off */}
+      <span className="justify-self-end text-end whitespace-nowrap" title={L.lastVsYouTitle}>
         {L.lastVsYou}
       </span>
     </div>
