@@ -2306,6 +2306,33 @@ def auto_preset(car_dir, loaded, data, kn5_name, title=None, overrides=None, n_s
     return preset
 
 
+# A single-seater's T-cam: how far over the top of its airbox (the camera pod there), and the stretch behind the
+# driver's eyes searched for it
+TCAM_OVER_HOOP = 0.05
+TCAM_HOOP_BEHIND = (0.1, 0.8)
+
+
+def open_cockpit_hoop(solid, eyes, bin_m=0.02):
+    """The top of an open cockpit's roll hoop / airbox (x, y, z): the highest of the body points within 15 cm of the
+    centre line, between 10 and 80 cm behind the driver's eyes, or None. Heights are taken per 2 cm along the car and a
+    height counts only where the next stretch reaches it too, so a thin spike (an aerial, a pitot) is not the hoop"""
+    z0, z1 = eyes[2] - TCAM_HOOP_BEHIND[1], eyes[2] + TCAM_HOOP_BEHIND[0]
+    pts = solid[(np.abs(solid[:, 0]) < 0.15) & (solid[:, 2] > z0) & (solid[:, 2] < z1)]
+    if not len(pts):
+        return None
+    k = np.floor((pts[:, 2] - z0) / bin_m).astype(int)
+    tops = np.full(k.max() + 1, -np.inf)
+    np.maximum.at(tops, k, pts[:, 1])
+    held = np.array([min(tops[i], max(tops[i - 1] if i > 0 else -np.inf, tops[i + 1] if i + 1 < len(tops) else -np.inf))
+                     for i in range(len(tops))])
+    i = int(np.argmax(held))
+    if not np.isfinite(held[i]) or held[i] < eyes[1] + 0.15:
+        return None
+    sel = pts[(k >= i - 1) & (k <= i + 1)]
+    top = sel[sel[:, 1] <= held[i] + 1e-6]
+    return np.array([0.0, float(held[i]), float(top[top[:, 1].argmax(), 2])])
+
+
 def synthetic_model(spec):
     """Materials and nodes (as `read_kn5` gives them) of a model described in JSON, for testing the detection without a
     car: nodes [{name, parent, t: [x, y, z] (a transform), or mat + shape: ring (r, r0, w) / disc (r, w) / box (size)}]"""
@@ -2803,6 +2830,12 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     over = (np.abs(solid[:, 0]) < 0.2) & (np.abs(solid[:, 2] - eyes[2]) < 0.2)
     roof_y = float(solid[over, 1].max()) if over.any() else float(eyes[1]) + 0.1
     tcam_pos, tcam_pitch = [0.0, roof_y + 0.22, float(eyes[2] - 0.13)], -8.0
+    # (a roof: anything right over the eyes)
+    roofed = ((np.abs(solid[:, 0]) < 0.2) & (np.abs(solid[:, 2] - eyes[2]) < 0.08) & (solid[:, 1] > eyes[1] + 0.05)).any()
+    hoop = None if roofed else open_cockpit_hoop(solid, eyes)
+    if hoop is not None:
+        # An open cockpit (nothing over the driver's head): on the airbox behind it, where a single-seater's T-cam is
+        tcam_pos = [0.0, hoop[1] + TCAM_OVER_HOOP, hoop[2]]
     r3 = lambda v: [round(float(x), 3) for x in v]  # noqa: E731
     cameras = {
         'cockpit': {'pos': r3(eyes), 'pitchDeg': -2.0, 'fov': 60},
