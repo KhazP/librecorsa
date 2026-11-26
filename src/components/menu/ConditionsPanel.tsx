@@ -53,6 +53,8 @@ export interface ConditionsPanelProps {
   onChangeRealism: (next: SimRealism) => void;
   /** A multiplayer guest: the host's weather applies, the choices are read-only */
   hostControlled?: boolean;
+  /** A career round on track: the round set its own weather, time of day and grip, the choices are read-only */
+  roundControlled?: boolean;
   readout?: ConditionsReadout | null;
   /**
    * Opens Settings at a category. Simulation realism lives in Settings > Driving: with this the panel shows its value
@@ -99,6 +101,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
   onChangeConditions,
   onChangeRealism,
   hostControlled,
+  roundControlled,
   readout,
   onOpenSettings,
   session = false,
@@ -106,16 +109,18 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
   const units = useUnits();
   const tx = useTranslations("menu.conditions");
   const set = (patch: Partial<SessionConditions>) => onChangeConditions({ ...conditions, ...patch });
-  const locked = Boolean(hostControlled);
+  const locked = Boolean(hostControlled || roundControlled);
   // A row of steps changes value on every left / right. With a session on track each change restarts the weather, so
   // there the same choices are a list that changes once
   const steps = (p: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[] }) =>
     session ? <Select<string> {...p} /> : <Segmented {...p} />;
   const temp = (c: number) => `${Math.round(temperatureIn(c, units.temperature))} ${TEMPERATURE_LABEL[units.temperature]}`;
-  const hostBadge = locked ? (
+  const hostBadge = hostControlled ? (
     <Badge tone="info" icon="host">
       {tx("hostSet")}
     </Badge>
+  ) : roundControlled ? (
+    <Badge tone="info">{tx("roundSet")}</Badge>
   ) : undefined;
   const forecast = conditions.weatherNodes ?? defaultWeatherNodesForPreset(conditions.weather, conditions.timeOfDay, conditions.seed);
   const grip = conditions.surfacePreset ?? "natural";

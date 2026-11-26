@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Do chủ phòng thiết lập",
+    "roundSet": "Do chặng đua thiết lập",
     "weather": "Thời tiết",
     "weatherGroup": "Thời tiết",
     "forecastShow": "Dự báo trong suốt phiên chạy",

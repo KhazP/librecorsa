@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Diatur oleh host",
+    "roundSet": "Diatur oleh ronde",
     "weather": "Cuaca",
     "weatherGroup": "Cuaca",
     "forecastShow": "Prakiraan sepanjang sesi",

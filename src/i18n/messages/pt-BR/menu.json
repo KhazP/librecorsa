@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Definido pelo anfitrião",
+    "roundSet": "Definido pela etapa",
     "weather": "Clima",
     "weatherGroup": "Clima",
     "forecastShow": "Previsão durante a sessão",

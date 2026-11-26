@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Vom Host festgelegt",
+    "roundSet": "Vom Lauf festgelegt",
     "weather": "Wetter",
     "weatherGroup": "Wetter",
     "forecastShow": "Vorhersage für die Session",
