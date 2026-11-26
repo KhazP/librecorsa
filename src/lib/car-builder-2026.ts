@@ -26,6 +26,8 @@ export interface PortedSkin {
   variant?: string;
   /** Procedural livery id painted onto the car's body paint material (`gt3-livery-painter.ts`) */
   procedural?: string;
+  /** The body it comes on (`CarSkin.modelUrl`): absent, the car's own GLB */
+  modelUrl?: string;
 }
 
 export interface SimCarRig {

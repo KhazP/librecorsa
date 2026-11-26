@@ -1783,9 +1783,12 @@ export class DriveSession {
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
     /** The livery the player picked for a car with its own (null: the paint its model was made in) */
     const skinFor = (car: CarId): PortedSkin | null => portedSkinFor(car, carSkinFor(car));
+    // The body the player's rig was built with when its livery brings its own (a team's car of a season)
+    let carRigBody: string | null = null;
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);
       const model = rigModel(car);
+      carRigBody = skinFor(car)?.modelUrl ?? null;
       const rig = def.modelUrl
         ? createPortedCarRig({
             url: def.modelUrl,
@@ -1843,10 +1846,15 @@ export class DriveSession {
       carHeadlights = new CarHeadlights(carRigCar, { spotCount: wanted });
       carHeadlights.attach(carRig.chassisGroup);
     };
-    // A livery picked in the menus goes onto the car at once
-    const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinFor(carRigCar)));
-    const swapCarRig = (car: CarId) => {
-      if (car === carRigCar) return;
+    // A livery picked in the menus goes onto the car at once; one on another body builds the car again, as another
+    // car would be (its cockpit extras belong to the old body)
+    const unsubscribeCarSkins = subscribeCarSkins(() => {
+      const next = skinFor(carRigCar);
+      if ((next?.modelUrl ?? null) !== carRigBody) swapCarRig(carRigCar, true);
+      else void carRig.setSkin?.(next);
+    });
+    const swapCarRig = (car: CarId, rebuild = false) => {
+      if (car === carRigCar && !rebuild) return;
       // The cockpit extras belong to the old body
       wheelDisplay?.dispose();
       wheelDisplay = null;

@@ -177,6 +177,11 @@ export interface CarSkin {
    * model's PART_ nodes the GLB's `partVariants` extras list for this name are shown, the others hidden. Absent: "base"
    */
   variant?: string;
+  /**
+   * The body it comes on, when not the car's `modelUrl`: a season's cars under one entry (F1 2007), where picking a
+   * team's driver puts that team's car on the same physics. With `useModelPaint`, that body's own paint
+   */
+  modelUrl?: string;
   /** Procedural livery id (`gt3-livery-painter.ts`), projected directly onto the GLB's exterior paint material */
   procedural?: string;
   /** Explicitly keeps the GLB's built-in factory paint (even when this skin is not `skins[0]`) */
@@ -747,10 +752,17 @@ export const carSkinBaseUrl = (id: CarId, skinId: string): string => `/cars/${id
 export function portedSkinFor(id: CarId, skin: CarSkin | null | undefined): PortedSkin | null {
   if (!skin) return null;
   if (skin.procedural) return { baseUrl: "", procedural: skin.procedural, variant: skin.variant };
+  // Another body's own paint: that body, no livery files over it
+  if (skin.modelUrl && skin.useModelPaint) return { baseUrl: "", files: [], variant: skin.variant, modelUrl: skin.modelUrl };
   if (skin.useModelPaint) return null;
   const skins = anyCarById(id)?.skins;
   if (!skins?.length || skin.id === skins[0].id) return null;
-  return { baseUrl: skin.baseUrl ?? carSkinBaseUrl(id, skin.id), files: skin.files, variant: skin.variant };
+  return {
+    baseUrl: skin.baseUrl ?? carSkinBaseUrl(id, skin.id),
+    files: skin.files,
+    variant: skin.variant,
+    modelUrl: skin.modelUrl,
+  };
 }
 
 /** Rich CSS gradient swatch background for a car's skin picker (supports 2-colour mod skins and 3-colour GT3 skins) */

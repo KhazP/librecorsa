@@ -395,16 +395,16 @@ function bodyDropOf(
   offset: THREE.Vector3,
   frontAxleZ: number,
   rearAxleZ: number,
-  options: PortedCarOptions
+  url: string,
+  f: StaticFloor
 ): number {
-  const f = options.floor;
-  const key = `${options.url}|${offset.y}|${offset.z}|${f.frontAxleZ}|${f.rearAxleZ}|${f.frontY}|${f.rearY}`;
+  const key = `${url}|${offset.y}|${offset.z}|${f.frontAxleZ}|${f.rearAxleZ}|${f.frontY}|${f.rearY}`;
   let drop = bodyDrops.get(key);
   if (drop === undefined) {
     const body = model.getObjectByName("BODY");
     const toCar = new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z).multiply(car.matrixWorld.clone().invert());
     const clearance = body ? bodyFloorClearance(body, toCar, frontAxleZ + offset.z, rearAxleZ + offset.z, f) : null;
-    if (clearance === null) console.warn(`Ported car model ${options.url}: no floor found under BODY, body left as modelled`);
+    if (clearance === null) console.warn(`Ported car model ${url}: no floor found under BODY, body left as modelled`);
     drop = clearance ?? 0;
     bodyDrops.set(key, drop);
   }
@@ -514,8 +514,26 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     return Promise.all(pending).then(() => undefined);
   };
 
-  void loadTemplate(options.url).then((template) => {
-    if (!template || disposed) return;
+  // The body it wears: the livery's own when it brings one (a season's team cars under one entry), else the car's
+  const bodyUrlOf = (s: PortedSkin | null) => s?.modelUrl ?? options.url;
+  let bodyUrl = bodyUrlOf(skin);
+  // The latest body asked for (a later livery's supersedes a load still under way), and how to take the one on the
+  // car off again when another replaces it
+  let bodyLoad = 0;
+  let clearBody: (() => void) | null = null;
+  // Settles once that body is on the car in its livery (or a later pick superseded it)
+  const loadBody = (url: string): Promise<void> => {
+    const load = ++bodyLoad;
+    return loadTemplate(url).then((template) => {
+      if (!template || disposed || load !== bodyLoad) return;
+      clearBody?.();
+      clearBody = null;
+      return buildBody(template, url);
+    });
+  };
+
+  /** Puts a body on the rig; settles once its livery's textures are on */
+  const buildBody = (template: THREE.Group, url: string): Promise<void> => {
     const model = template.clone(true);
     model.updateMatrixWorld(true);
     const car = portedCarRoot(model);
@@ -534,7 +552,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // The body, and everything placed on it, moves on its wheels to put its floor on the physics'; the wheels keep
     // `offset`
     const bodyOffset = offset.clone();
-    bodyOffset.y -= bodyDropOf(model, car, offset, lf[2], lr[2], options);
+    bodyOffset.y -= bodyDropOf(model, car, offset, lf[2], lr[2], url, options.floor);
     const bodyGroup = new THREE.Group();
     bodyGroup.name = "PORTED_BODY";
     bodyGroup.position.copy(bodyOffset);
@@ -672,17 +690,37 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         proceduralLivery = installPortedProceduralLivery(procSurfaces, procProfile);
       }
     }
-    applySkin();
+    const skinned = applySkin();
     if (options.opponent) {
       disableCarCastShadow(bodyGroup);
       for (const c of corners) disableCarCastShadow(c.steer);
       opponentLod = createOpponentLodController([bodyGroup, ...corners.map((c) => c.spin)]);
       opponentLod.setLod(lastLod);
     }
-    placeholder.removeFromParent();
-    placeholder.geometry.dispose();
-    (placeholder.material as THREE.Material).dispose();
+    if (placeholder.parent) {
+      placeholder.removeFromParent();
+      placeholder.geometry.dispose();
+      (placeholder.material as THREE.Material).dispose();
+    }
     chassisGroup.add(bodyGroup);
+    // What this body put on the rig, for a livery that brings another (the template's own geometry and materials stay
+    // with the template, for every car still wearing it)
+    clearBody = () => {
+      opponentLod?.dispose();
+      opponentLod = null;
+      proceduralLivery?.dispose();
+      proceduralLivery = null;
+      for (const c of corners) {
+        c.tyre?.dispose();
+        c.steer.removeFromParent();
+      }
+      corners.length = 0;
+      for (const slot of skinSlots) if (slot.ownedBySkin) slot.mat.dispose();
+      skinSlots.length = 0;
+      parts.length = 0;
+      steerPivot = null;
+      bodyGroup.removeFromParent();
+    };
 
     const cams = extras.cameras ?? {};
     const anchors = {} as Lc26ModelInstance["cameraAnchors"];
@@ -701,7 +739,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       fovDeg: anchors.cockpit.fovDeg + 3,
     };
     cameraAnchors = options.cameraAnchors?.(cameraFit, anchors) ?? anchors;
-  });
+    return skinned;
+  };
+  void loadBody(bodyUrl);
 
   const updateFromTelemetry = (
     t: CarTelemetry,
@@ -734,10 +774,21 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // compound
     setLivery: () => {},
     setSkin: (next) => {
-      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant && next?.procedural === skin?.procedural) {
+      const nextBody = bodyUrlOf(next);
+      if (
+        nextBody === bodyUrl &&
+        next?.baseUrl === skin?.baseUrl &&
+        next?.variant === skin?.variant &&
+        next?.procedural === skin?.procedural
+      ) {
         return Promise.resolve();
       }
       skin = next;
+      if (nextBody !== bodyUrl) {
+        // Another body: the livery goes on with it once it has loaded (`buildBody` applies the skin)
+        bodyUrl = nextBody;
+        return loadBody(nextBody);
+      }
       return applySkin();
     },
     setTireCompound: (c) => {
