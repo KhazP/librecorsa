@@ -412,28 +412,47 @@ def add_driver(pac, writer, pool, car_dir, data, shift, steer_frame, skin):
     """Write the car's driver into `writer` (its textures through `pool`, the body's): returns (DRIVER node index,
     {gltf material: livery file}) or None. `shift` moves the car's kn5 frame to the model's; `steer_frame` is the STEER
     node's 4x4 in the model's frame"""
-    setup = driver_setup(pac, car_dir, data)
-    if setup is None:
+    try:
+        setup = driver_setup(pac, car_dir, data)
+        if setup is None:
+            return None
+        drv = driver_materials(pac, car_dir, setup)
+        knh = read_knh(setup['knh']) if os.path.isfile(setup['knh']) else {}
+        clip = read_clip(setup['steer']) if os.path.isfile(setup['steer']) else None
+    except (OSError, ValueError, KeyError, IndexError, struct.error) as err:
+        # A driver whose files don't read as AC's: the car without it
+        print(f'  driver: not read ({err}); left out')
         return None
-    drv = driver_materials(pac, car_dir, setup)
     nodes, plan = drv['nodes'], drv['plan']
+    place = np.eye(4)
+    place[:3, 3] = np.asarray(shift, np.float64) + np.asarray(setup['position'], np.float64)
+
+    # What the driver needs, checked before anything is written: a driver the porter can't seat is left out, and the
+    # car ported without it
+    def skip(why):
+        print(f"  driver {setup['name']}: {why}; left out")
+        return None
+
+    root = next((i for i, n in enumerate(nodes) if n['kind'] == 1 and n['name'] == 'DRIVER:DRIVER'), None)
+    if root is None:
+        return skip('no DRIVER:DRIVER node')
+    under_root = {nodes[i]['name'] for i in range(len(nodes)) if nodes[i]['kind'] == 1 and (i == root or root in ancestor_ids(nodes, i))}
+    outside = sorted({b for n in nodes if n['kind'] == 3 and n['mesh'] for b, _ in n['mesh']['bones']} - under_root)
+    if outside:
+        return skip(f'skinned to nodes outside its skeleton ({", ".join(outside[:4])})')
+    fit = fit_steer(nodes, knh, clip, np.linalg.inv(steer_frame) @ place) if clip else None
+    if clip is not None and fit is None:
+        return skip(f"its steering animation's hands don't turn about the wheel ({os.path.basename(setup['steer'])})")
+    # Later frames turn the wheel left: the exported clip runs the other way, so its time grows to the right
+    reverse = bool(fit and fit['direction'] < 0)
+    rest = posed_locals(nodes, knh, clip, 0.5)
+
     # The textures and materials the pool reads, under names of their own (a driver's `glass.dds` is not the car's)
     pool.src.update(drv['tex'])
     pool.src.update(skin_textures(car_dir, skin, drv['textures']))
     for mat, e in plan.items():
         src = e['kn5']
         pool.mats[f'drv:{mat}'] = dict(src, name=f'drv:{mat}', maps={k: f'drv:{v}' for k, v in src['maps'].items()})
-
-    knh = read_knh(setup['knh']) if os.path.isfile(setup['knh']) else {}
-    clip = read_clip(setup['steer']) if os.path.isfile(setup['steer']) else None
-    place = np.eye(4)
-    place[:3, 3] = np.asarray(shift, np.float64) + np.asarray(setup['position'], np.float64)
-    fit = fit_steer(nodes, knh, clip, np.linalg.inv(steer_frame) @ place) if clip else None
-    if clip is not None and fit is None:
-        raise SystemExit(f"driver: the steering animation's hands don't turn about the wheel ({setup['steer']})")
-    # Later frames turn the wheel left: the exported clip runs the other way, so its time grows to the right
-    reverse = bool(fit and fit['direction'] < 0)
-    rest = posed_locals(nodes, knh, clip, 0.5)
 
     # Materials
     mat_index = {}
@@ -471,9 +490,6 @@ def add_driver(pac, writer, pool, car_dir, data, shift, steer_frame, skin):
     for i, n in enumerate(nodes):
         if n['parent'] is not None:
             children[n['parent']].append(i)
-    root = next((i for i, n in enumerate(nodes) if n['kind'] == 1 and n['name'] == 'DRIVER:DRIVER'), None)
-    if root is None:
-        raise SystemExit(f"driver: {setup['kn5']} has no DRIVER:DRIVER node")
 
     gl_index = {}
     tris = {'hr': 0, 'lod': 0}
@@ -518,9 +534,6 @@ def add_driver(pac, writer, pool, car_dir, data, shift, steer_frame, skin):
         if key not in skins:
             ibm = np.array([bm.T.reshape(-1) for _, bm in bones], np.float32)  # glTF: column-major
             acc = writer.add_accessor(ibm, 'MAT4', 5126)
-            missing = [b for b in key if b not in gl_index]
-            if missing:
-                raise SystemExit(f'driver: skinned to nodes outside the skeleton: {missing}')
             writer.j.setdefault('skins', []).append({'name': gltf_name(n['name']), 'inverseBindMatrices': acc,
                                                      'joints': [gl_index[b] for b in key], 'skeleton': skeleton})
             skins[key] = len(writer.j['skins']) - 1
