@@ -1065,7 +1065,7 @@
     "remove": "移除",
     "removeNamed": "移除 {name}",
     "removeTitle": "要移除 {name} 嗎？",
-    "removeBody": "重新啟動遊戲後，其賽道、車輛與塗裝將從遊戲中移除。你留下的單圈紀錄仍會保留。",
+    "removeBody": "重新啟動遊戲後，其賽道、車輛與塗裝將從遊戲中移除。你在其賽道上的最佳單圈紀錄仍會保留。",
     "removeFailed": "無法移除 {name}：",
     "broken": "發現問題（受影響的項目不會載入至遊戲）：",
     "moreProblems": "{count, plural, other {以及另外 # 個問題}}",

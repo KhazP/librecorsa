@@ -1065,7 +1065,7 @@
     "remove": "Quitar",
     "removeNamed": "Quitar {name}",
     "removeTitle": "¿Quitar {name}?",
-    "removeBody": "Sus circuitos, autos y libreas salen del juego cuando se reinicie. Tus vueltas con ellos se conservan.",
+    "removeBody": "Sus circuitos, autos y libreas salen del juego cuando se reinicie. Tus mejores vueltas en sus circuitos se conservan.",
     "removeFailed": "No se pudo quitar {name}:",
     "broken": "Problemas (lo que afectan queda fuera del juego):",
     "moreProblems": "{count, plural, one {y # problema más} other {y # problemas más}}",

@@ -1065,7 +1065,7 @@
     "remove": "Entfernen",
     "removeNamed": "{name} entfernen",
     "removeTitle": "{name} entfernen?",
-    "removeBody": "Seine Strecken, Autos und Lackierungen verschwinden beim nächsten Neustart aus dem Spiel. Deine Runden damit bleiben gespeichert.",
+    "removeBody": "Seine Strecken, Autos und Lackierungen verschwinden beim nächsten Neustart aus dem Spiel. Deine Bestzeiten auf seinen Strecken bleiben gespeichert.",
     "removeFailed": "{name} konnte nicht entfernt werden:",
     "broken": "Probleme (was sie betreffen, bleibt außerhalb des Spiels):",
     "moreProblems": "{count, plural, one {und # weiteres Problem} other {und # weitere Probleme}}",

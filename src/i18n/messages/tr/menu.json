@@ -1065,7 +1065,7 @@
     "remove": "Kaldır",
     "removeNamed": "Kaldır: {name}",
     "removeTitle": "{name} kaldırılsın mı?",
-    "removeBody": "Pistleri, araçları ve kaplamaları oyun yeniden başladığında oyundan çıkar. Onlarla attığın turlar kayıtlı kalır.",
+    "removeBody": "Pistleri, araçları ve kaplamaları oyun yeniden başladığında oyundan çıkar. Pistlerinde attığın en iyi turlar kayıtlı kalır.",
     "removeFailed": "{name} kaldırılamadı:",
     "broken": "Sorunlar (etkiledikleri şeyler oyuna alınmaz):",
     "moreProblems": "{count, plural, one {ve # sorun daha} other {ve # sorun daha}}",

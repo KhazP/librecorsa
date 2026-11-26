@@ -1065,7 +1065,7 @@
     "remove": "Remove",
     "removeNamed": "Remove {name}",
     "removeTitle": "Remove {name}?",
-    "removeBody": "Its circuits, cars and liveries leave the game when it restarts. Your laps with them stay saved.",
+    "removeBody": "Its circuits, cars and liveries leave the game when it restarts. Best laps you set on its circuits stay saved.",
     "removeFailed": "{name} couldn't be removed:",
     "broken": "Problems (what they touch stays out of the game):",
     "moreProblems": "{count, plural, one {and # more problem} other {and # more problems}}",

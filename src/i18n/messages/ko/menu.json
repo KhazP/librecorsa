@@ -1065,7 +1065,7 @@
     "remove": "제거",
     "removeNamed": "{name} 제거",
     "removeTitle": "{name}을(를) 제거하시겠습니까?",
-    "removeBody": "게임을 재시작하면 해당 패키지의 서킷, 차량 및 리버리가 제거됩니다. 기존 랩 기록은 그대로 유지됩니다.",
+    "removeBody": "게임을 재시작하면 해당 패키지의 서킷, 차량 및 리버리가 제거됩니다. 해당 서킷에서 세운 베스트 랩 기록은 그대로 유지됩니다.",
     "removeFailed": "{name}을(를) 제거하지 못했습니다:",
     "broken": "문제 발견(영향을 받는 항목은 게임에서 제외됩니다):",
     "moreProblems": "{count, plural, other {외 문제 #건 더 있음}}",

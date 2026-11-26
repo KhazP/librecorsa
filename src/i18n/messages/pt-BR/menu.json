@@ -1065,7 +1065,7 @@
     "remove": "Remover",
     "removeNamed": "Remover {name}",
     "removeTitle": "Remover {name}?",
-    "removeBody": "Os circuitos, carros e pinturas dele saem do jogo quando ele reiniciar. Suas voltas com eles continuam salvas.",
+    "removeBody": "Os circuitos, carros e pinturas dele saem do jogo quando ele reiniciar. Suas melhores voltas nos circuitos dele continuam salvas.",
     "removeFailed": "Não foi possível remover {name}:",
     "broken": "Problemas (o que eles afetam fica fora do jogo):",
     "moreProblems": "{count, plural, one {e mais # problema} other {e mais # problemas}}",
