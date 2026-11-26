@@ -131,8 +131,15 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   const race = (over: Partial<RaceStatus>): RaceStatus => ({ phase: "racing", lightsOn: 0, position: 3, fieldSize: 12, lap: 2, standings: [], totalLaps: 10, ...over });
   const tel = (over: Partial<CarTelemetry>) =>
     ({ speedKmh: 187.4, gear: 4, lapCount: 1, currentLapTimeMs: 61_234, lastLapTimeMs: 92_104, bestLapTimeMs: null, ...over }) as CarTelemetry;
+  // The lap under way, as the page's lap counter shows it (TimingPanels.tsx): the telemetry counts from 1. The plate
+  // read one lap ahead of the page (Lap 2 on the first timed lap)
+  const lapOf = (m: ReturnType<typeof driveModel>) => (m.kind === "drive" ? m.lap : "");
   const practice = driveModel(tel({}), "kmh");
-  check("practice: no position, lap counted from laps done", practice.kind === "drive" && practice.position === null && practice.lap === "Lap 2", practice.kind === "drive" ? practice.lap : "");
+  check("practice: no position, the lap under way as the page counts it", practice.kind === "drive" && practice.position === null && lapOf(practice) === "Lap 1", lapOf(practice));
+  check("practice: lap 3 under way reads Lap 3", lapOf(driveModel(tel({ lapCount: 3 }), "kmh")) === "Lap 3", lapOf(driveModel(tel({ lapCount: 3 }), "kmh")));
+  check("practice: a count of 0 still reads Lap 1", lapOf(driveModel(tel({ lapCount: 0 }), "kmh")) === "Lap 1");
+  check("the out-lap reads Out lap", lapOf(driveModel(tel({ outLap: true }), "kmh")) === "Out lap", lapOf(driveModel(tel({ outLap: true }), "kmh")));
+  check("a point-to-point course counts runs", lapOf(driveModel(tel({ lapCount: 2 }), "kmh", null, true)) === "Run 2", lapOf(driveModel(tel({ lapCount: 2 }), "kmh", null, true)));
   const racing = driveModel(tel({ race: race({}) }), "mph");
   check("race: position and lap of the total, speed in mph", racing.kind === "drive" && racing.position === "P3/12" && racing.lap === "Lap 2/10" && racing.speed === 116 && racing.speedUnit === "mph");
   const lights = driveModel(tel({ race: race({ phase: "lights", lightsOn: 3 }) }), "kmh");

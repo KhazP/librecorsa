@@ -5113,7 +5113,12 @@ export class DriveSession {
             ? menuVrHud()
             : this.snapshot.paused
               ? pausedVrHud()
-              : driveVrHud(physics.telemetry, settingsNow.ui.units.speed, vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null);
+              : driveVrHud(
+                  physics.telemetry,
+                  settingsNow.ui.units.speed,
+                  vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null,
+                  Boolean(track.pointToPoint)
+                );
           vr.render(scene, camera.position, camera.quaternion, hudModel, nowMs);
         } else {
           const t0 = loggedFirstFrame ? 0 : performance.now();

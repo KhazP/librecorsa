@@ -836,6 +836,8 @@
     "pauseHint": "B halten zum Pausieren",
     "menusOutside": "Die Menüs erscheinen außerhalb des Headsets",
     "lap": "Runde {lap}",
+    "run": "Lauf {lap}",
+    "outLap": "Outlap",
     "lapOf": "Runde {lap}/{total}",
     "last": "Letzte",
     "best": "Beste"

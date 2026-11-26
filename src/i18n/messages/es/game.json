@@ -836,6 +836,8 @@
     "pauseHint": "Mantén B para pausar",
     "menusOutside": "Los menús se ven fuera del visor",
     "lap": "Vuelta {lap}",
+    "run": "Intento {lap}",
+    "outLap": "Vuelta de salida",
     "lapOf": "Vuelta {lap}/{total}",
     "last": "Última",
     "best": "Mejor"

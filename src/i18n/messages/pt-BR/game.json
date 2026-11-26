@@ -836,6 +836,8 @@
     "pauseHint": "Segure B para pausar",
     "menusOutside": "Os menus aparecem fora do headset",
     "lap": "Volta {lap}",
+    "run": "Subida {lap}",
+    "outLap": "Volta de saída",
     "lapOf": "Volta {lap}/{total}",
     "last": "Última",
     "best": "Melhor"

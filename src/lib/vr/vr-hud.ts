@@ -68,19 +68,30 @@ export function formatLapTime(ms: number | null | undefined): string {
 
 export const gearLabel = (gear: number): string => (gear < 0 ? "R" : gear === 0 ? "N" : String(gear));
 
+/**
+ * The lap on the plate, as the page's lap counter has it (TimingPanels.tsx): the telemetry's lap count is the lap under
+ * way (1 from the start), the out-lap is called so, and a point-to-point course counts runs
+ */
+function lapLabel(t: CarTelemetry, pointToPoint: boolean): string {
+  const race = t.race;
+  const total = race?.totalLaps;
+  if (race && total) return tx("game.vr.lapOf", { lap: Math.max(1, Math.min(race.lap, total)), total });
+  if (!race && t.outLap) return tx("game.vr.outLap");
+  const lap = Math.max(1, race ? race.lap : t.lapCount);
+  return pointToPoint ? tx("game.vr.run", { lap }) : tx("game.vr.lap", { lap });
+}
+
 /** What the panel shows while driving */
-export function driveModel(t: CarTelemetry, unit: SpeedUnit, hint: string | null = null): VrHudModel {
+export function driveModel(t: CarTelemetry, unit: SpeedUnit, hint: string | null = null, pointToPoint = false): VrHudModel {
   const race = t.race;
   const racing = race && race.phase !== "finished" && race.fieldSize > 1;
-  const lapNo = race ? race.lap : t.lapCount + 1;
-  const total = race?.totalLaps;
   return {
     kind: "drive",
     speed: Math.round(speedIn(Math.abs(t.speedKmh), unit)),
     speedUnit: SPEED_LABEL[unit],
     gear: gearLabel(t.gear),
     position: racing ? `P${race.position}/${race.fieldSize}` : null,
-    lap: total ? tx("game.vr.lapOf", { lap: Math.min(lapNo, total), total }) : tx("game.vr.lap", { lap: Math.max(1, lapNo) }),
+    lap: lapLabel(t, pointToPoint),
     lapTime: formatLapTime(t.currentLapTimeMs),
     last: formatLapTime(t.lastLapTimeMs),
     best: formatLapTime(t.bestLapTimeMs),

@@ -836,6 +836,8 @@
     "pauseHint": "Hold B to pause",
     "menusOutside": "The menus show outside the headset",
     "lap": "Lap {lap}",
+    "run": "Run {lap}",
+    "outLap": "Out lap",
     "lapOf": "Lap {lap}/{total}",
     "last": "Last",
     "best": "Best"

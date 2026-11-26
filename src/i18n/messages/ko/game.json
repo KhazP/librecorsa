@@ -836,6 +836,8 @@
     "pauseHint": "B를 길게 눌러 일시정지",
     "menusOutside": "메뉴는 헤드셋 밖에서 표시됩니다",
     "lap": "랩 {lap}",
+    "run": "런 {lap}",
+    "outLap": "아웃 랩",
     "lapOf": "랩 {lap}/{total}",
     "last": "이전",
     "best": "최고"
