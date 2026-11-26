@@ -21,6 +21,7 @@ import {
 } from "@/lib/render/golden-hour-environment";
 import { presetPlan } from "@/lib/render/adaptive-quality";
 import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/venue-night-lighting";
+import { applyCircuitNightLights, circuitNightSpec } from "@/lib/render/circuit-night-lights";
 import { VENUE_HERO_CAMERAS, type VenueHeroCameraOverride } from "./cameras";
 
 export interface HeroShotInfo {
@@ -506,12 +507,15 @@ async function main(): Promise<void> {
   ]);
 
   let venueNight: VenueNightLighting | null = null;
-  if (isNight && track.nightLighting) {
-    venueNight = createVenueNightLighting(trackRoot, track, track.nightLighting);
+  const lampSpec = track.nightLighting ? null : circuitNightSpec(trackId);
+  if (isNight && (track.nightLighting || lampSpec)) {
+    const modelLamps = lampSpec ? applyCircuitNightLights(trackRoot, track, lampSpec) : [];
+    const mode = lampSpec?.mode ?? "floodlit";
+    venueNight = createVenueNightLighting(trackRoot, track, track.nightLighting ?? {}, { mode, modelLamps });
     venueNight.setQuality("high");
     venueNight.setNight(1);
     scene.add(venueNight.group);
-    env.setFloodlitNight(venueNight.look);
+    if (mode === "floodlit") env.setFloodlitNight(venueNight.look);
   }
 
   // Wait for physical atmosphere LUTs so real sky scattering & volumetric clouds render

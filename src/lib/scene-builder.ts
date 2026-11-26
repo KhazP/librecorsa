@@ -1180,16 +1180,18 @@ export function buildCircuitScene(
       // The glTF's own node name: the loader renames repeated names (a second `AC_SEMAPHORE_RED01` becomes `..._1`)
       const nm = inheritedTag<string>(obj, "name", root) ?? obj.name;
       const red = /^AC_SEMAPHORE_RED0?([1-5])$/i.exec(nm);
+      const ksRed = !red ? /^KS_START_LIGHT_([0-4])$/i.exec(nm) : null;
       const green = /^AC_SEMAPHORE_GREEN/i.test(nm);
-      if (!red && !green) return;
+      if (!red && !ksRed && !green) return;
       const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
       obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
       for (const m of cloned) {
         if (!(m instanceof THREE.MeshStandardMaterial)) continue;
         if (red) acRedSemaphores[Number(red[1]) - 1].push(m);
+        else if (ksRed) acRedSemaphores[Number(ksRed[1])].push(m);
         else acGreenSemaphores.push(m);
       }
-      if (red) ownLamps = true;
+      if (red || ksRed) ownLamps = true;
     });
     if (startLightState !== undefined) applySemaphoreMaterials(startLightState);
 
