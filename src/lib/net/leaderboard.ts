@@ -13,7 +13,7 @@ import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { isPointToPointTrack } from "@/lib/track-kinds";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
 import { isCurrentLapPhysics, lapBoardClass, lapGoesOnBoards, lapPhysicsVersion, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
-import { getOrCreateDriverKey } from "./driver-key";
+import { getOrCreateDriverKey, loadDriverKey, type ImportedDriverIdentity } from "./driver-key";
 import { getOnlineConfig, markOnlineAnswered, markOnlineUnreachable, onlineUrl, readOnlineConfig } from "./online-config";
 import { cappedString, clampLimit, fetchBoardPage, finiteNumber, parseBoardPage, requestJson, type BoardFilter } from "./board-client";
 
@@ -425,4 +425,27 @@ export async function fetchRemoteGhost(id: string): Promise<LapRecording | null>
   const res = await requestJson(`${base}/${encodeURIComponent(id)}`, { method: "GET" });
   if (!res || res.status !== 200) return null;
   return validateLapRecording(res.body);
+}
+
+/**
+ * Asks the online board which driver name and three-letter code this browser's saved driver key currently claims
+ * (POST /api/drivers/lookup). Returns null when there is no saved key, the board is off/unreachable, or the server
+ * does not support the route yet (so key import still works offline and on older deployments).
+ */
+export async function lookupDriverByKey(hintName?: string): Promise<ImportedDriverIdentity | null> {
+  const driverKey = loadDriverKey();
+  if (!driverKey) return null;
+  const url = onlineUrl("/drivers/lookup");
+  if (!url) return null;
+  const online = await readOnlineConfig();
+  if (online.reach === "unreachable" || !online.config.board) return null;
+  const trimmed = hintName?.trim().slice(0, 64) ?? "";
+  const body = JSON.stringify({ driverKey, ...(trimmed ? { name: trimmed } : {}) });
+  const res = await requestJson(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  if (!res || res.status !== 200 || !isRecord(res.body) || res.body.ok !== true) return null;
+  return {
+    name: cappedString(res.body.name, 64),
+    code: cappedString(res.body.code, 16),
+    nameKey: cappedString(res.body.nameKey, 64),
+  };
 }

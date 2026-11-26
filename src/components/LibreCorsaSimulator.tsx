@@ -54,6 +54,7 @@ import {
   loadBoardBest,
   loadChallengeBest,
   localLeaderboard,
+  lookupDriverByKey,
   renameOnBoard,
   saveBoardMiss,
   MOD_LAP,
@@ -61,7 +62,7 @@ import {
 } from "@/lib/net/leaderboard";
 import { boardWords } from "@/lib/net/board-words";
 import { challengeOf, flushQueuedLaps, postLap } from "@/lib/net/board-queue";
-import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
+import { applyImportedDriverIdentity, exportDriverKeyFile, importDriverKeyFile, resolveImportedDriverName } from "@/lib/net/driver-key";
 import { challengeAt } from "@/lib/net/weekly-challenge";
 import { countUsageLap, useUsageCounter } from "@/lib/net/use-usage-counter"; // polish:E
 import { timeTrialRules } from "@/lib/sim/time-trial";
@@ -425,6 +426,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The card's lap while it waits for the board (and the card's request then): sent later, its answer lands there */
   const waitingCardRef = useRef<{ req: number; recordedAt: number } | null>(null);
   const [driverKeyNotice, setDriverKeyNotice] = useState<string | null>(null);
+  /** Bumped on every key import so a slower lookup from an earlier file never overwrites a newer import */
+  const keyImportReqRef = useRef(0);
   const ghostSourceRef = useRef<"pb" | "other">("pb");
   /** Bumped by every ghost choice, so a slower PB load cannot replace a ghost picked after it started */
   const ghostReqRef = useRef(0);
@@ -1530,17 +1533,62 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
 
   const handleExportDriverKey = useCallback(() => {
+    const { name, code } = settingsRef.current.profile;
     setDriverKeyNotice(
-      exportDriverKeyFile(settingsRef.current.profile.name)
+      exportDriverKeyFile(name, code)
         ? tx("keySaved")
         : tx("noKeyYet")
     );
   }, [tx]);
 
   const handleImportDriverKey = useCallback(async (file: File) => {
+    const req = ++keyImportReqRef.current;
     const res = await importDriverKeyFile(file);
-    setDriverKeyNotice(res.ok ? (res.name ? tx("keyImportedFor", { name: res.name }) : tx("keyImported")) : res.error);
-  }, [tx]);
+    if (req !== keyImportReqRef.current) return;
+    if (!res.ok) {
+      setDriverKeyNotice(res.error);
+      return;
+    }
+    // A previous "this name is taken" refusal was for the old key: clear it now that this browser holds the imported one
+    refusedNameRef.current = null;
+    const before = settingsRef.current.profile;
+    const fileIdentity = { name: res.name, code: res.code };
+    const fromFile = applyImportedDriverIdentity(before, fileIdentity);
+    if (fromFile !== before) {
+      setSettings((s) => ({ ...s, profile: applyImportedDriverIdentity(s.profile, fileIdentity) }));
+    }
+    const fileNoticeName = resolveImportedDriverName(fileIdentity);
+    setDriverKeyNotice(fileNoticeName ? tx("keyImportedFor", { name: fileNoticeName }) : tx("keyImported"));
+    setBoardVersion((v) => v + 1);
+
+    let flushAs: { name: string; code: string } | undefined =
+      fromFile !== before ? { name: fromFile.name, code: fromFile.code } : undefined;
+    if (boardStateRef.current !== "off") {
+      const looked = await lookupDriverByKey(res.name || undefined).catch(() => null);
+      if (req !== keyImportReqRef.current) return;
+      const cur = settingsRef.current.profile;
+      const untouched =
+        (cur.name === fromFile.name && cur.code === fromFile.code) ||
+        (cur === before);
+      if (!untouched) {
+        flushAs = undefined;
+      } else if (looked && (looked.name || looked.nameKey || looked.code)) {
+        const resolved = applyImportedDriverIdentity(before, looked, fileIdentity);
+        flushAs = { name: resolved.name, code: resolved.code };
+        if (resolved.name !== fromFile.name || resolved.code !== fromFile.code || resolved.generated !== fromFile.generated) {
+          setSettings((s) =>
+            s.profile.name === fromFile.name && s.profile.code === fromFile.code
+              ? { ...s, profile: { ...s.profile, name: resolved.name, code: resolved.code, generated: resolved.generated } }
+              : s
+          );
+          if (resolved.name !== fromFile.name) setBoardVersion((v) => v + 1);
+        }
+        const resolvedNoticeName = resolveImportedDriverName(looked, fileIdentity);
+        if (resolvedNoticeName) setDriverKeyNotice(tx("keyImportedFor", { name: resolvedNoticeName }));
+      }
+    }
+    if (boardStateRef.current === "on") flushQueued(flushAs);
+  }, [flushQueued, tx]);
 
   const handleExportBest = useCallback(async () => {
     const rec = await loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).catch(() => null);
