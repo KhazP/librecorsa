@@ -105,7 +105,7 @@ export const RACING_LINE_STYLE: HudStyleOptions = {
 };
 
 /** The gap between the groups and the window (32 px at 1080p) */
-const EDGE = "clamp(16px,1.67vw,40px)";
+const EDGE = "clamp(16px,1.67cqw,40px)";
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Top left: position, lap and flag over the cars round the player                                                    */

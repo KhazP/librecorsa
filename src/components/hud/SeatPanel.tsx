@@ -244,7 +244,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
     >
       {/* The HUD's own glass (74 % void, blurred), as on every panel over the scene */}
       <div
-        className={`pointer-events-auto flex max-h-full w-[340px] max-w-[calc(100vw-24px)] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-lc-card p-3.5 text-lc-chalk [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] ${HUD_GLASS}`}
+        className={`pointer-events-auto flex max-h-full w-[340px] max-w-[calc(100cqw-24px)] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-lc-card p-3.5 text-lc-chalk [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] ${HUD_GLASS}`}
       >
         <div className="flex flex-col gap-0.5 px-1">
           <h2 className="lc-h3">{tx("title")}</h2>

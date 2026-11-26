@@ -76,7 +76,7 @@ import palette from "./blocks.module.css";
 import { usePitGap } from "../pit-clock";
 
 /** The corner groups' distance from the screen edge (the game's other layouts use the same) */
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 /** The touch controls' pause and camera buttons reach this far down the top-left */
 const TOUCH_TOP = 68;
 /** The delta bar's full width is this many seconds, as in the source (on a ^0.3 curve) */
@@ -835,7 +835,7 @@ export const BlocksHud: React.FC<HudDesignProps> = ({
           is wide enough for the two to sit side by side */}
       <div
         data-hud-avoid
-        className={`absolute left-1/2 -translate-x-1/2 ${touch ? "bottom-[176px] min-[1180px]:bottom-[clamp(14px,2.2vw,24px)]" : "bottom-[clamp(14px,2.2vw,24px)]"}`}
+        className={`absolute left-1/2 -translate-x-1/2 ${touch ? "bottom-[176px] min-[1180px]:bottom-[clamp(14px,2.2cqw,24px)]" : "bottom-[clamp(14px,2.2cqw,24px)]"}`}
       >
         <div style={anchor(scale, "bottom center")}>
           <Essentials t={t} revRange={revRange} />

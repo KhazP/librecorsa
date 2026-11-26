@@ -39,7 +39,7 @@
 /* ---- Mode A: Top-Left Timing Tower ---- */
 
 .tvTower {
-  width: clamp(205px, 19vw, 248px);
+  width: clamp(205px, 19cqw, 248px);
   overflow: hidden;
   border-radius: 6px;
 }
@@ -164,7 +164,7 @@
   position: absolute;
   left: 56.6%;
   bottom: 15%;
-  width: clamp(600px, 54vw, 1040px);
+  width: clamp(600px, 54cqw, 1040px);
   transform: translateX(-50%);
   transform-origin: center center;
   pointer-events: none;
@@ -173,14 +173,29 @@
 @media (min-aspect-ratio: 2/1) {
   .haloAnchor {
     bottom: 14%;
-    width: clamp(560px, 40vw, 1000px);
+    width: clamp(560px, 40cqw, 1000px);
   }
 }
 
 @media (max-aspect-ratio: 4/3) {
   .haloAnchor {
     bottom: 18%;
-    width: clamp(480px, 70vw, 860px);
+    width: clamp(480px, 70cqw, 860px);
+  }
+}
+
+/* On three screens the window is 48:9 but the HUD has the centre screen (a size container): its own shape decides */
+@container (max-aspect-ratio: 2/1) {
+  .haloAnchor {
+    bottom: 15%;
+    width: clamp(600px, 54cqw, 1040px);
+  }
+}
+
+@container (max-aspect-ratio: 4/3) {
+  .haloAnchor {
+    bottom: 18%;
+    width: clamp(480px, 70cqw, 860px);
   }
 }
 
@@ -296,7 +311,7 @@
 /* ---- Mode B: Standard HUD ---- */
 
 .stdSessionCard {
-  width: clamp(220px, 21vw, 276px);
+  width: clamp(220px, 21cqw, 276px);
   overflow: hidden;
   border-radius: 5px;
 }
@@ -346,7 +361,7 @@
 }
 
 .stdDeltaCard {
-  width: clamp(230px, 22vw, 290px);
+  width: clamp(230px, 22cqw, 290px);
   overflow: hidden;
   border-radius: 5px;
 }

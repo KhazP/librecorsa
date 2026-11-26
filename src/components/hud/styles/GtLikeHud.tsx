@@ -73,7 +73,7 @@ import {
  * suggested corner gear and vertical brake/throttle bars; bottom-right MFD and car identity plate.
  */
 
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 
 /** Running order's longest list: past it, the top three and a window round the player */
 const TOWER_ROWS = 8;

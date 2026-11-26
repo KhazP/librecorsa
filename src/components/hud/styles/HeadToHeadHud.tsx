@@ -544,7 +544,7 @@ const Spotter: React.FC<{ t: CarTelemetry; top?: number }> = ({ t, top }) => {
     <div
       role="status"
       aria-label={w.alongside(left && right ? "both" : left ? "left" : "right")}
-      className={`absolute left-1/2 flex -translate-x-1/2 gap-[min(46vw,560px)] ${top === undefined ? "top-[18%]" : ""}`}
+      className={`absolute left-1/2 flex -translate-x-1/2 gap-[min(46cqw,560px)] ${top === undefined ? "top-[18%]" : ""}`}
       style={top === undefined ? undefined : { top }}
     >
       <SpotterSide label={w.left} seg={left} />
@@ -641,7 +641,7 @@ const H2hDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid
 
 /* ---- The layout */
 
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 
 /**
  * Head to Head: the cars either side of the player in a race, as a stack of cards top-left (the car ahead, the

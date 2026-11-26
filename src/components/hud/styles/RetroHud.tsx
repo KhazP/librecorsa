@@ -119,7 +119,7 @@ function useRetroWords() {
 type RetroWords = ReturnType<typeof useRetroWords>;
 
 /** The corner groups' distance from the screen's edges, as the game's own layouts */
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 
 type Edge = "outline" | "soft" | "dim" | "cream" | "metal";
 type Face = "panel" | "void" | "raised" | "surface" | "row";

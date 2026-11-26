@@ -57,6 +57,7 @@ import { useFuelPerLap, useSessionClock } from "./third-party-parts";
 import { arcPath, onFinalLap, useErsState, type ErsState } from "./game-style-parts";
 import { TracksideRadar } from "./TracksideRadar";
 import { LapMarkGlyph, MiniMap, anchor, formatOnce, gearLabel, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
+import { onUiViewportChange, uiViewportWidth } from "@/lib/display/ui-frame";
 
 /**
  * Trackside: almost no panels. The readouts sit on the scene in the four corners, with a 12-degree slanted tag only
@@ -78,7 +79,7 @@ export const TRACKSIDE_STYLE: HudStyleOptions = {
   ownRadar: true,
 };
 
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 
 /** Bare type over the scene: a tight dark edge and a soft halo, no blur of the scene itself */
 const SH = "[text-shadow:0_0_2px_rgb(0_0_0/0.9),0_1px_2px_rgb(0_0_0/0.95),0_0_10px_rgb(0_0_0/0.75)]";
@@ -188,12 +189,10 @@ function useTracksideWords() {
 /* The window: this layout is drawn for a 1600 x 900 canvas or more, and steps down a little on a smaller one          */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-const subscribeView = (listener: () => void) => {
-  window.addEventListener("resize", listener);
-  return () => window.removeEventListener("resize", listener);
-};
+// The window, or the centre screen of three
+const subscribeView = onUiViewportChange;
 /** Width and height in one number, so a resize re-renders once */
-const viewKey = () => window.innerWidth * 100_000 + window.innerHeight;
+const viewKey = () => Math.round(uiViewportWidth()) * 100_000 + window.innerHeight;
 const serverViewKey = () => 1920 * 100_000 + 1080;
 
 /**

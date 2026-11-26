@@ -146,7 +146,7 @@ const SceneCut: React.FC<{ light: boolean }> = ({ light }) => (
         <>
           <span className="h-full w-4 bg-lc-volt sm:w-6" />
           <span className="h-full w-1.5 bg-lc-chalk" />
-          <span className="h-full w-[26vw] max-w-[300px] bg-lc-void/95" />
+          <span className="h-full w-[26cqw] max-w-[300px] bg-lc-void/95" />
           <span className="h-full w-2 bg-lc-volt/75" />
         </>
       )}

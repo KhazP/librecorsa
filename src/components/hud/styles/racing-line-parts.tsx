@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl/react";
 import type { TireCompound } from "@/types/f1";
 import type { ErsState } from "./game-style-parts";
 import { formatOnce } from "./hud-style-parts";
+import { onUiViewportChange, uiViewportWidth } from "@/lib/display/ui-frame";
 
 /**
  * What the Racing line layout's files share (RacingLineHud.tsx, racing-line-pages.tsx): its one shape, its label, its
@@ -40,14 +41,12 @@ const NEED_H = 780;
 const readCap = () => {
   const h = window.innerHeight;
   // The HUD keeps to a centred 2.4:1 frame on an ultrawide screen
-  const w = Math.min(window.innerWidth, h * 2.4);
+  const w = Math.min(uiViewportWidth(), h * 2.4);
   // In steps of 2 %, so dragging a window edge re-renders the HUD a few times, not on every pixel
   return Math.floor(Math.min(w / NEED_W, h / NEED_H) * 50) / 50;
 };
-const onResize = (listener: () => void) => {
-  window.addEventListener("resize", listener);
-  return () => window.removeEventListener("resize", listener);
-};
+// The window, or the centre screen of three
+const onResize = onUiViewportChange;
 
 /**
  * The size the layout draws at: the HUD size, held to what the window has room for. Its groups are wide (it is drawn

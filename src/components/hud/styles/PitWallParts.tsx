@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl/react";
 import type { CarTelemetry } from "@/types/f1";
 import { Trend } from "@/components/ui/icons/Trend";
 import { formatOnce } from "./hud-style-parts";
+import { onUiViewportChange, uiViewportWidth } from "@/lib/display/ui-frame";
 
 /**
  * What the Pit wall layout's boxes share: the hard plate, its hairlines and type, the words, and how much of the
@@ -12,7 +13,7 @@ import { formatOnce } from "./hud-style-parts";
  */
 
 /** Distance of each corner group from the HUD frame's edge: 32 px on a 1080p window, less on a small one */
-export const EDGE = "clamp(12px,1.67vw,32px)";
+export const EDGE = "clamp(12px,1.67cqw,32px)";
 /** The one box: a hard void plate with a line edge, no radius and no blur */
 export const BOX = "border border-lc-line bg-lc-void/93 text-lc-chalk";
 /** A box's head bar */
@@ -233,11 +234,9 @@ export const GapTrend: React.FC<{ changeS: number | undefined; side: "ahead" | "
   );
 };
 
-const subscribeResize = (listener: () => void) => {
-  window.addEventListener("resize", listener);
-  return () => window.removeEventListener("resize", listener);
-};
-const windowWidth = () => window.innerWidth;
+// The window, or the centre screen of three
+const subscribeResize = onUiViewportChange;
+const windowWidth = uiViewportWidth;
 const windowHeight = () => window.innerHeight;
 
 /** How much room the layout has, in its own pixels (the window over the HUD size) */

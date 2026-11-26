@@ -106,6 +106,7 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
+import { centreFrame, setUiFrame, type UiFrame } from "@/lib/display/ui-frame";
 import { accountActions, useAccountState } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
@@ -2063,6 +2064,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // wheel (as the force feedback settings read it). Without one the layout puts something else in its place (Blade: the
   // driver's inputs)
   const ffbBridge = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
+
+  // Three screens: the menus and the HUD keep to the centre one (the 3D view spans all three); a headset has its own
+  const [windowSize, setWindowSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const read = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
+  const uiFrameRect: UiFrame | null = useMemo(
+    () => (settings.screens.mode === "triple" && vrState !== "on" && windowSize ? centreFrame(windowSize.w, windowSize.h) : null),
+    [settings.screens.mode, vrState, windowSize]
+  );
+  useEffect(() => {
+    setUiFrame(uiFrameRect);
+    return () => setUiFrame(null);
+  }, [uiFrameRect]);
   const ffbHid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
   const ffbLive =
     (settings.wheel.hidFfb && ffbHid.state === "ready") ||
@@ -2516,6 +2534,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       <div ref={containerRef} className="h-full w-full" />
       <OverheadNameplates overlayRef={nameplatesRef} />
 
+      {/* Everything else: the whole window (no box of its own), or the centre screen of three. There its layout
+          containment makes it the box the fixed layers inside place themselves in (and clips them to it), and as a
+          size container their cqw widths measure it */}
+      <div
+        className={uiFrameRect ? "absolute inset-y-0" : "contents"}
+        style={uiFrameRect ? { left: uiFrameRect.x, width: uiFrameRect.w, containerType: "size", contain: "layout paint" } : undefined}
+      >
+
       {phase === "driving" && seatPanel ? (
         <SeatPanel
           carTitle={carById(carId).title}
@@ -2854,6 +2880,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         trackName={getTrackInfo(trackId).name}
         onClose={() => setAnalysisOpen(false)}
       />
+      </div>
     </div>
   );
 };

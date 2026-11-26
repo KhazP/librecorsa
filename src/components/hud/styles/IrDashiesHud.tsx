@@ -655,7 +655,7 @@ export const IrDashiesHud: React.FC<HudDesignProps> = ({
   <div className={`pointer-events-none absolute inset-0 select-none ${palette.palette}`}>
     {/* With the touch controls up (a tablet), the standings start under their pause and camera buttons */}
     <div
-      className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)] flex flex-col items-start gap-2"
+      className="absolute top-[clamp(14px,2.2cqw,24px)] left-[clamp(14px,2.2cqw,24px)] flex flex-col items-start gap-2"
       style={{ ...(touch ? { top: 68 } : null), ...anchor(scale, "top left") }}
     >
       {t.race ? <Standings t={t} lengthM={map.lengthM} gaps={towerGaps} weather={weather} /> : <LapTimer t={t} deltaS={deltaS} lapInvalid={lapInvalid} />}
@@ -665,13 +665,13 @@ export const IrDashiesHud: React.FC<HudDesignProps> = ({
     {showDeltaBar ? (
       <div
         className="absolute left-1/2 hidden -translate-x-1/2 md:block"
-        style={{ top: topInset ?? "clamp(14px,2.2vw,24px)", ...anchor(scale, "top center") }}
+        style={{ top: topInset ?? "clamp(14px,2.2cqw,24px)", ...anchor(scale, "top center") }}
       >
         <IrDashiesDeltaBar t={t} deltaS={deltaS} lapInvalid={lapInvalid} />
       </div>
     ) : null}
 
-    <div className="absolute top-[clamp(14px,2.2vw,24px)] right-[clamp(14px,2.2vw,24px)] hidden w-[210px] md:block" style={anchor(scale, "top right")}>
+    <div className="absolute top-[clamp(14px,2.2cqw,24px)] right-[clamp(14px,2.2cqw,24px)] hidden w-[210px] md:block" style={anchor(scale, "top right")}>
       <MiniMap map={map} t={t} local={mapMode === "local"} className="block h-[150px] w-full drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" stroke={20} />
       {!t.race && weather ? (
         <div className="mt-2">
@@ -684,7 +684,7 @@ export const IrDashiesHud: React.FC<HudDesignProps> = ({
     {showRadar ? <IrDashiesRadar t={t} /> : null}
 
     {mfd ? (
-      <div className="absolute right-[clamp(14px,2.2vw,24px)] bottom-[clamp(14px,2.2vw,24px)] hidden lg:block" style={anchor(scale, "bottom right")}>
+      <div className="absolute right-[clamp(14px,2.2cqw,24px)] bottom-[clamp(14px,2.2cqw,24px)] hidden lg:block" style={anchor(scale, "bottom right")}>
         {mfd}
       </div>
     ) : null}
@@ -692,7 +692,7 @@ export const IrDashiesHud: React.FC<HudDesignProps> = ({
     {/* Bottom centre; on a tablet with the touch controls, lifted over the steering pad and the pedals, and narrower */}
     <div
       data-hud-avoid
-      className="absolute bottom-[clamp(14px,2.2vw,24px)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
+      className="absolute bottom-[clamp(14px,2.2cqw,24px)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
       style={{ ...(touch ? { bottom: 170 } : null), ...anchor(scale, "bottom center") }}
     >
       <ShiftLights t={t} revRange={revRange} />

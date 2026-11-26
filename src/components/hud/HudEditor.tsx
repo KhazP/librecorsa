@@ -18,6 +18,7 @@ import {
   type HudPart,
   type HudPartId,
 } from "@/lib/settings/hud-parts";
+import { uiFrame, uiViewportWidth } from "@/lib/display/ui-frame";
 
 type Box = { left: number; top: number; width: number; height: number };
 
@@ -178,13 +179,15 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
     const onMove = (e: PointerEvent) => {
       const d = drag.current;
       if (!d || e.pointerId !== d.pointerId) return;
-      const vw = window.innerWidth;
+      // The window, or the centre screen of three (the panels' boxes are in window pixels)
+      const vw = uiViewportWidth();
+      const left = d.box.left - (uiFrame()?.x ?? 0);
       const vh = window.innerHeight;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
       if (d.mode === "move") {
         // The whole panel stays on screen
-        const mx = clamp(dx, -d.box.left, vw - d.box.left - d.box.width);
+        const mx = clamp(dx, -left, vw - left - d.box.width);
         const my = clamp(dy, -d.box.top, vh - d.box.top - d.box.height);
         setPart(d.id, {
           ...d.part,
