@@ -355,6 +355,17 @@ async function driverChecks(): Promise<void> {
       worstBoth < 3 && worstHand < 12 && rMin > 0.12 && rMax < 0.2 && span > 280 && span < 450,
       `both off by ${fmt(worstBoth, 1)}°, one by ${fmt(worstHand, 1)}° at most, ${fmt(rMin * 100, 1)}–${fmt(rMax * 100, 1)} cm, clip ±${fmt(span, 0)}° (LOCK ${extras.steer?.lockDeg})`,
     );
+    // Each end of the clip reaches the rim's full lock in the game (225 degrees each way): past its last key the arms
+    // would hold still while the wheel turns on
+    const steerClip = gltf.animations.find((c) => c.name === extras.steer?.clip);
+    const times = steerClip?.tracks.flatMap((tr) => [tr.times[0], tr.times[tr.times.length - 1]]) ?? [];
+    const leftEnd = (Math.min(...times) - 0.5) * 2 * span;
+    const rightEnd = (Math.max(...times) - 0.5) * 2 * span;
+    check(
+      `${team}: the steering clip reaches full lock both ways (±225° of rim)`,
+      leftEnd <= -225 && rightEnd >= 225,
+      `${fmt(leftEnd, 0)}° to +${fmt(rightEnd, 0)}°`,
+    );
     // Seated where the car's eyes are: the head joint within 25 cm of the cockpit camera
     const eye = new THREE.Vector3(...((car.userData as { cameras: { cockpit: { pos: number[] } } }).cameras.cockpit.pos));
     const head = node.getObjectByName(extras.head?.node ?? 'DRV_RIG_Head')!.getWorldPosition(new THREE.Vector3());
