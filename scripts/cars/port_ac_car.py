@@ -958,8 +958,9 @@ def auto_spec(m, stats, preset, by_name=None):
 # Finishes from AC's shader values (an automatic preset's materials). AC draws a material as its diffuse lit through
 # ksAmbient / ksDiffuse, a highlight of ksSpecular and ksSpecularEXP, and a reflection of its surroundings rising from
 # fresnelC head on to fresnelMaxLevel at grazing angles; a multimap masks those per pixel with its txMaps (R specular,
-# G gloss, B reflection) and, where its detail is drawn, the detail's alpha (a livery's panel gaps and matte stickers,
-# a carbon weave's tows). glTF gets the same: roughness from the highlight, KHR_materials_specular for the reflection
+# G gloss, B reflection) and, where its detail is drawn, the detail's alpha, read here as a reflection mask too (it
+# follows what reflects in the mods' renders: the McLaren's chrome bright, a livery's panel gaps and matte stickers
+# dark, a carbon weave's tows; inferred from those, not from the shader's code). glTF gets the same: roughness from the highlight, KHR_materials_specular for the reflection
 # head on (its colour factor over a dielectric's 0.04) and at grazing angles (its factor), and a polished coat's sharp
 # reflections as KHR_materials_clearcoat; a map holds what varies per pixel (R clearcoat, G roughness, B metalness), and
 # a tiled detail's weave stays a repeating roughness map. extras.acFinish marks the material, so the game keeps the
