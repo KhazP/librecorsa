@@ -115,7 +115,7 @@ Supported built-in `car` IDs: `amg-gt3`, `bmw-m4-gt3`, `mtr-496r`, `lc-lmdh`, `l
 
 ### Cars (`cars`)
 
-A mod car pairs a custom 3D body and audio bank with one of LibreCorsa's built-in vehicle physics models (`physics`): `lc26`, `f12026-car`, `amg-gt3`, `liana`, `mtr-496r`, `lc-lmdh`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, or `porsche-934-rsr`. By default, it inherits that base model's handling, garage setup ranges, tyres, and AI.
+A mod car pairs a custom 3D body and audio bank with one of LibreCorsa's built-in vehicle physics models (`physics`): `lc26`, `lc25`, `f12026-car`, `amg-gt3`, `liana`, `mtr-496r`, `lc-lmdh`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, or `porsche-934-rsr`. By default, it inherits that base model's handling, garage setup ranges, tyres, and AI.
 
 - **`model`:** Path to a GLB matching LibreCorsa's car rig. `scripts/cars/port_ac_car.py` generates compatible models (see [Porting cars](PORTING-CARS.md)).
 - **`bodyPlan`:** Optional barrier-height outline polygon so wall collisions match your custom bodywork instead of the base car's shape. Generate one with `scripts/cars/measure-car-plans.ts`.
@@ -157,7 +157,7 @@ The patched profile runs in the exact same 500 Hz simulation worker as built-in 
 
 If a patch violates any rule, contains a typo, or uses the wrong type, that car is skipped (the rest of the package still loads) and the **Mods** panel pinpoints the failing field path. Updating `gearbox.gears.redline_rpm` automatically adjusts audio pitch scaling and the shift warning beep. Garage setup ranges, AI profiles, and HUD layouts remain inherited from the base model.
 
-All base vehicle models support physics patches except `lc26`, which uses its own separate simulation engine. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
+All base vehicle models support physics patches except `lc26` and `lc25`, which each run on a simulation of their own. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
 
 ## Checking, packing, and importing with the CLI
 
@@ -196,7 +196,7 @@ Because `npm run dev` does not run the production service worker, packages impor
 npm run mod -- index
 ```
 
-This writes `public/mods/_index.json` so the dev server discovers your package immediately (`npm run mod -- import` and `from-circuit` refresh this index automatically when writing to `public/mods/`). Re-run `npm run mod -- index` after editing files so the content hash updates. Both production builds (`npm run build`, served from `out/`) and the live site run the service worker and support full in-browser imports through the **Mods** panel.
+This writes `public/mods/_index.json` so the dev server discovers your package immediately (`npm run mod -- import` and `from-circuit` refresh this index automatically when writing to `public/mods/`). Re-run `npm run mod -- index` after editing files so the content hash updates. A production build (`npm run build`, served from `out/` on `localhost`) and the offline launcher run the service worker and support full in-browser imports through the **Mods** panel. The live site takes no mods at all.
 
 ## Sharing packages through a catalogue
 
