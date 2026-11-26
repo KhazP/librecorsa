@@ -196,6 +196,8 @@ export interface SimulatorCar {
    */
   /** `pitLane`: the car is put back in the pit lane (a flashback to a moment in it, a handover from the sim worker) */
   restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean; pitLane?: boolean }): void;
+  /** A new set of the compound already on (a pit stop's): fresh tyres without a change of compound */
+  fitNewTyres?(): void;
   /** The AI field drives the car down the pit lane on its own path, no forces (pit/pit-lane.ts) */
   driveInPitLane?(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void;
   /** Out of the pit lane, back on the road rolling at `speedMs`: the physics drive the car again */

@@ -2045,9 +2045,13 @@ export class DriveSession {
     this.togglePitLimiter = () => {
       if (!disposed) pitStop.toggleLimiter();
     };
-    /** The crew's work done: fresh tyres of the compound (the compound setter fits a new set), and the repairs */
+    /**
+     * The crew's work done: fresh tyres of the compound (another compound by the compound setter, which fits a new set;
+     * the same one as a new set of it), and the repairs
+     */
     const servicePitStop = (compound: TireCompound, repair: boolean) => {
-      this.setTireCompound(compound);
+      if (compound === physics.tireCompound) physics.fitNewTyres?.();
+      else this.setTireCompound(compound);
       if (!repair) return;
       physics.setDamageEffects?.(null);
       aiFieldOf(raceNow())?.repairPlayerDamage?.();
