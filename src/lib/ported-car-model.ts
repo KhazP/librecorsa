@@ -513,8 +513,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const steerRest = new THREE.Quaternion();
   let opponentLod: OpponentLodController | null = null;
   let lastLod: 0 | 1 = 0;
-  // The mod's driver, when the model has one
+  // The mod's driver, when the model has one, and an opponent's steering wheel it holds
   let driver: PortedDriver | null = null;
+  let opponentWheel: THREE.Object3D | null = null;
   let disposed = false;
   // The compound the sidewalls show; the tyres are built when the model loads
   let compound: TireCompound = "medium";
@@ -673,6 +674,13 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     if (driverNode) {
       bodyGroup.add(driverNode);
       driver = installPortedDriver(driverNode, model.animations, { opponent: !!options.opponent });
+      if (options.opponent && steerNode) {
+        // Its hands hold a wheel: shown and turned while the driver is posed (near), hidden past it
+        opponentWheel = steerNode;
+        steerPivot = steerNode;
+        steerRest.copy(steerNode.quaternion);
+        steerNode.visible = lastLod === 0;
+      }
     }
     for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
       const node = bodyGroup.getObjectByName(name) ?? find(name);
@@ -771,6 +779,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       opponentLod = null;
       driver?.dispose();
       driver = null;
+      opponentWheel = null;
       proceduralLivery?.dispose();
       proceduralLivery = null;
       for (const c of corners) {
@@ -829,6 +838,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       // Posed near, the low-detail figure at rest past LOD1's reach, none where the tyres flatten (past ~150 m, and
       // past LOD1's 12 m on Low graphics)
       driver?.setLevel(lod === 0 ? 0 : (wheels?.detail ?? 1) === 0 ? 2 : 1);
+      if (opponentWheel) opponentWheel.visible = lod === 0;
     }
     driver?.update(t.steering * options.steerLockDeg, t, _dtSeconds ?? 1 / 60);
   };
