@@ -119,7 +119,7 @@ You can also adjust live in-car dials on track, such as brake bias and the diffe
 
 ## Career mode
 
-Career mode is a merit-based championship progression across two separate disciplines, each with its own ladder, regional calendars, persistent AI rivals, test days, bonus objectives, and season-by-season promotion. There is no in-game currency, budget, or contract negotiation system — finishing inside a series' promotion places unlocks the next tier directly.
+Career mode is a merit-based championship progression across two separate disciplines, each with its own ladder, regional calendars, persistent AI rivals, test days, bonus objectives, and season-by-season promotion. There is no in-game currency, budget, or contract negotiation system: finishing inside a series' promotion places unlocks the next tier directly.
 
 ### Disciplines and progression ladders
 
@@ -165,7 +165,7 @@ Round weather and time of day are seeded deterministically from your career seed
 
 ### Test days
 
-Before starting a season (on round 1's circuit) or before any upcoming round, you can launch an optional **Test day** in that season's car. Test days track total laps completed and your best clean lap against a **promotion-pace target lap** — computed from the qualifying pace of the AI rival occupying the last promotion spot at your current AI difficulty. Test-day results stay saved on the season per circuit and car.
+Before starting a season (on round 1's circuit) or before any upcoming round, you can launch an optional **Test day** in that season's car. Test days track total laps completed and your best clean lap against a **promotion-pace target lap**, computed from the qualifying pace of the AI rival occupying the last promotion spot at your current AI difficulty. Test-day results stay saved on the season per circuit and car.
 
 ### Points, persistent rivals, and promotion
 

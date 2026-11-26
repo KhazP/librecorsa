@@ -6,7 +6,7 @@ LibreCorsa supports driving in virtual reality through **WebXR** (`immersive-vr`
 
 - **Standalone headsets:** **Meta Quest** (Quest 2, Quest 3, Quest 3S via Meta Quest Browser), **Pico** (Pico Browser), and **Wolvic**. LibreCorsa detects standalone headset browsers automatically (`OculusBrowser`, `Quest`, `PicoBrowser`, `Wolvic`, `Mobile VR`) and applies mobile-class GPU defaults. *(Note: Apple Vision Pro Safari reports itself as macOS rather than a standalone mobile-VR user agent.)*
 - **PCVR headsets:** **Chrome**, **Edge**, **Brave**, or **Chromium** on Windows or Linux connected to an active **OpenXR** runtime (such as **SteamVR**, **Meta Quest Link / Air Link**, **Virtual Desktop**, or Windows Mixed Reality).
-- **Secure context requirement:** Browsers only expose WebXR (`navigator.xr`) on HTTPS or loopback origins — `https://librecorsa.org` or `http://127.0.0.1` / `http://localhost` (including the [LibreCorsa desktop app](DOWNLOADS.md)). If your browser does not report an `immersive-vr` WebXR runtime, Settings displays `Requires WebXR headset`.
+- **Secure context requirement:** Browsers only expose WebXR (`navigator.xr`) on HTTPS or loopback origins: `https://librecorsa.org` or `http://127.0.0.1` / `http://localhost` (including the [LibreCorsa desktop app](DOWNLOADS.md)). If your browser does not report an `immersive-vr` WebXR runtime, Settings displays `Requires WebXR headset`.
 
 ## Entering and leaving VR
 
@@ -28,7 +28,7 @@ In VR, LibreCorsa locks the camera to the **cockpit** view at the driver's eye p
 
 ### Recentering and seat position
 
-- VR uses a seated (`local`) WebXR reference space. Whenever a VR session starts — or whenever your headset triggers a system recenter — LibreCorsa places your eye position at the car's driver eye point facing straight down the nose. Recentering aligns heading (yaw) only so the horizon stays level regardless of head tilt.
+- VR uses a seated (`local`) WebXR reference space. Whenever a VR session starts, or whenever your headset triggers a system recenter, LibreCorsa places your eye position at the car's driver eye point facing straight down the nose. Recentering aligns heading (yaw) only so the horizon stays level regardless of head tilt.
 - While paused inside VR, press **Y** on a headset controller or connected gamepad (`Y: recentre the view`) to recenter at any time.
 - Per-car cockpit seat offsets configured via **Adjust seat** (hold the camera key/button or press `Alt` + arrow keys on the flat page, or reset under **Settings > Display > Camera**) apply underneath the VR rig. Because the **Adjust seat** panel itself is an HTML overlay on the flat page, opening it while presenting in VR holds the car paused and shows the in-headset paused panel until you resume (`A` / right trigger) or leave VR (`B`).
 
@@ -75,7 +75,7 @@ Standalone headset browsers report themselves like desktop Linux browsers even t
 
 ### Refresh rate, foveation, and render resolution
 
-- **Standalone refresh rate and foveation:** On standalone headsets, LibreCorsa requests **72 Hz** when offered by the headset (keeping frame budgets steadier than 90 Hz) and sets **medium fixed foveation (`0.5`)** — sharper at the centre than WebXR's strongest default foveation while still saving peripheral fill-rate.
+- **Standalone refresh rate and foveation:** On standalone headsets, LibreCorsa requests **72 Hz** when offered by the headset (keeping frame budgets steadier than 90 Hz) and sets **medium fixed foveation (`0.5`)**, which stays sharper at the centre than WebXR's strongest default foveation while still saving peripheral fill-rate.
 - **Render resolution:** Your **Render resolution** setting (**Settings > Display > Graphics**) sets the WebXR eye-buffer scale factor, clamped between `50%` and `100%`. Lowering **Render resolution** before clicking **Enter VR** is the most effective way to gain GPU headroom on demanding circuits.
 
 ### VR rendering pipeline

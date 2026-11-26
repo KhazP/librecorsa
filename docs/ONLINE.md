@@ -111,7 +111,7 @@ How the track-limits rule sets score off-track strikes:
 Outside of races (in practice and Time Trials), track-limits enforcement is strict:
 
 - **Off-track and kerb-hop probing:** Putting all four wheels outside track limits invalidates the running lap immediately with no option to give time back. When 1–3 wheels lift momentarily over a kerb or collider seam while the remaining grounded wheels sit on runoff or grass, the simulator probes straight down beneath each lifted wheel (falling back to its last contact only over a collider gap) so an aggressive kerb hop does not falsely invalidate the lap.
-- **Final-corner forfeit zone:** Going off-track or wall-riding inside the final-corner zone — starting `120 m` before the final turn's apex (or `450 m` before start/finish on circuits without turn markers, also covering the flying-start run-up, and never reaching back past Sector 3) through the timing line — invalidates **both the current lap and the next lap** to prevent carrying an illegal launch onto the main straight. Restarting the run clears the next-lap forfeit. Using **Flashback** in practice or time trials also invalidates the current lap, and rewinding across Start/Finish or inside Sector 3 forfeits the next lap as well.
+- **Final-corner forfeit zone:** Going off-track or wall-riding inside the final-corner zone (starting `120 m` before the final turn's apex, or `450 m` before start/finish on circuits without turn markers, also covering the flying-start run-up and never reaching back past Sector 3) through the timing line invalidates **both the current lap and the next lap** to prevent carrying an illegal launch onto the main straight. Restarting the run clears the next-lap forfeit. Using **Flashback** in practice or time trials also invalidates the current lap, and rewinding across Start/Finish or inside Sector 3 forfeits the next lap as well.
 - **Course cuts:** Skipping part of the circuit triggers `"Course cut · lap deleted"`.
 - **Wall contact:** Scraping or riding a barrier (`≥ 0.35 s` of cumulative moving contact within any `3 s` window) triggers `"Wall contact · lap deleted"` while allowing brief glancing brushes. On hill climbs, any barrier touch ends the run immediately.
 - **Autopilot:** Any lap where autopilot was engaged at any point is displayed locally but never ranked.
@@ -151,7 +151,7 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 
 ## Time trials and weekly challenge
 
-The **Time Trials** view pairs the rotating **Weekly challenge** with permanent time trials. Every time trial standardizes track and car conditions — dry, fully rubbered-in asphalt (no marbles or rain wash-off), the car's softest dry tyre compound (such as soft slicks, street tyres on the Liana/Scirocco, or vintage slicks/slicks on historic cars), and the car's minimum permitted fuel load with fuel burn disabled (`"Dry track · Soft tyres · Low fuel"` on most cars). Clicking **Drive challenge** (after confirming your driver name if you still have a generated one) applies those rules automatically and restores your personal assists, realism, and weather settings afterward.
+The **Time Trials** view pairs the rotating **Weekly challenge** with permanent time trials. Every time trial standardizes track and car conditions: dry, fully rubbered-in asphalt (no marbles or rain wash-off), the car's softest dry tyre compound (such as soft slicks, street tyres on the Liana/Scirocco, or vintage slicks/slicks on historic cars), and the car's minimum permitted fuel load with fuel burn disabled (`"Dry track · Soft tyres · Low fuel"` on most cars). Clicking **Drive challenge** (after confirming your driver name if you still have a generated one) applies those rules automatically and restores your personal assists, realism, and weather settings afterward.
 
 ### Rotating weekly challenge
 
@@ -181,7 +181,7 @@ The **Time Trials** view pairs the rotating **Weekly challenge** with permanent 
 
 ## Public stats
 
-LibreCorsa publishes live and 30-day aggregate statistics at [librecorsa.org/stats](https://librecorsa.org/stats). Everything shown on `/stats` comes from anonymous single-dimension daily totals or public lap board and open-race aggregates — no individual player names, accounts, IP addresses, or cross-tabulated slices are exposed.
+LibreCorsa publishes live and 30-day aggregate statistics at [librecorsa.org/stats](https://librecorsa.org/stats). Everything shown on `/stats` comes from anonymous single-dimension daily totals or public lap board and open-race aggregates; no individual player names, accounts, IP addresses, or cross-tabulated slices are exposed.
 
 The page covers:
 

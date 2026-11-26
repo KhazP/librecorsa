@@ -2,7 +2,7 @@
 
 LibreCorsa runs directly in your browser with nothing to install, and also offers optional desktop and Android apps.
 
-- **The desktop app** for Windows, macOS, and Linux. It runs a lightweight local server on `127.0.0.1` that mirrors `librecorsa.org` while caching every page, car, and circuit it loads — so you play the live game when online and your cached copy when offline. It opens the game in a dedicated Chromium app window (so WebHID wheels, pedals, and DualSense controllers work out of the box), loads mod packages from `Documents/LibreCorsa/mods/`, converts circuits and cars from other games inside the in-game Mods panel, and updates itself from signed releases.
+- **The desktop app** for Windows, macOS, and Linux. It runs a lightweight local server on `127.0.0.1` that mirrors `librecorsa.org` while caching every page, car, and circuit it loads, so you play the live game when online and your cached copy when offline. It opens the game in a dedicated Chromium app window (so WebHID wheels, pedals, and DualSense controllers work out of the box), loads mod packages from `Documents/LibreCorsa/mods/`, converts circuits and cars from other games inside the in-game Mods panel, and updates itself from signed releases.
 - **The Android app**, which opens the live site full-screen as a Trusted Web Activity (TWA) with no browser bar (requires Android 7 or later and Chrome).
 
 ## Installing and running
@@ -20,9 +20,9 @@ When opened, the desktop app looks for **Chrome**, **Edge**, **Brave**, or **Chr
 
 On first launch, the desktop app creates two folders in your system **Documents** folder (following Windows' Known Folder / OneDrive path, Linux's `XDG_DOCUMENTS_DIR`, or `~/Documents`), both openable directly via **Open folder** in the in-game **Mods** panel:
 
-- **`Documents/LibreCorsa/mods/`** — Drop unpacked mod packages here, one `<author>.<name>` folder with its `mod.json` inside (reload the game after adding or editing a package). See [Making mods](modding.md).
-- **`Documents/LibreCorsa/mods/_catalogue/`** — Optional local catalogue folder holding `catalogue.json`, `.zip` mod packages, and `.webp` / `.png` / `.jpg` previews for one-click installation from the Mods panel.
-- **`Documents/LibreCorsa/import/`** — Copy unzipped circuit or car folders from other games here to convert them into LibreCorsa mod packages from the Mods panel.
+- **`Documents/LibreCorsa/mods/`**: Drop unpacked mod packages here, one `<author>.<name>` folder with its `mod.json` inside (reload the game after adding or editing a package). See [Making mods](modding.md).
+- **`Documents/LibreCorsa/mods/_catalogue/`**: Optional local catalogue folder holding `catalogue.json`, `.zip` mod packages, and `.webp` / `.png` / `.jpg` previews for one-click installation from the Mods panel.
+- **`Documents/LibreCorsa/import/`**: Copy unzipped circuit or car folders from other games here to convert them into LibreCorsa mod packages from the Mods panel.
 
 ### App data, cache, and logs
 
@@ -36,15 +36,15 @@ Everything else lives in your per-user application data folder:
 
 Inside that folder:
 
-- **`browser/`** — Dedicated Chromium profile storing your local saves (personal bests, settings, setups, career saves, and driver identity key). If Linux uses a Snap or Flatpak Chromium browser, the profile lives inside that browser's sandbox directory instead (`~/snap/<name>/common/LibreCorsa` or `~/.var/app/<id>/config/LibreCorsa`).
-- **`site/`** — Cached mirror of pages, cars, and circuits fetched from `librecorsa.org`. Deleting this folder frees disk space without touching your saves; files simply re-download when loaded again.
-- **`toolchain/`** — Isolated `uv`, Node.js, and Python 3.14 tools downloaded on first use of the mod converter (about `770 MB` unpacked on macOS). Deleting this folder removes the converter toolchain cleanly.
-- **`update/`** — Staged self-updates waiting to be installed on restart.
-- **`launcher.log`** — Diagnostic log written by the desktop app (rotates to `launcher.log.1` past `1 MB`).
+- **`browser/`**: Dedicated Chromium profile storing your local saves (personal bests, settings, setups, career saves, and driver identity key). If Linux uses a Snap or Flatpak Chromium browser, the profile lives inside that browser's sandbox directory instead (`~/snap/<name>/common/LibreCorsa` or `~/.var/app/<id>/config/LibreCorsa`).
+- **`site/`**: Cached mirror of pages, cars, and circuits fetched from `librecorsa.org`. Deleting this folder frees disk space without touching your saves; files simply re-download when loaded again.
+- **`toolchain/`**: Isolated `uv`, Node.js, and Python 3.14 tools downloaded on first use of the mod converter (about `770 MB` unpacked on macOS). Deleting this folder removes the converter toolchain cleanly.
+- **`update/`**: Staged self-updates waiting to be installed on restart.
+- **`launcher.log`**: Diagnostic log written by the desktop app (rotates to `launcher.log.1` past `1 MB`).
 
 ## Playing offline
 
-- **Online mirroring with offline fallback:** Every page, car, and circuit served from `librecorsa.org` is streamed to the browser and cached atomically in `site/`. When you are offline — or if `librecorsa.org` fails to respond within 6 seconds — the desktop app seamlessly serves cached copies (or the bundled static export beside the app for files never fetched).
+- **Online mirroring with offline fallback:** Every page, car, and circuit served from `librecorsa.org` is streamed to the browser and cached atomically in `site/`. When you are offline, or if `librecorsa.org` fails to respond within 6 seconds, the desktop app seamlessly serves cached copies (or the bundled static export beside the app for files never fetched).
 - **Load hosted content once online:** Most cars and circuits are hosted on `librecorsa.org` rather than bundled inside the installer, so load any circuit or car you want to drive offline at least once while connected.
 - **Force offline mode:** Run the launcher from a terminal with `--offline` to skip all network checks immediately.
 - **Accounts in the desktop app:** Because third-party sign-in redirects and passkeys belong to `librecorsa.org`, signing in to an optional account from the desktop app uses a one-time link code: on a browser signed in to `librecorsa.org`, open **Settings > Profile and data > Account > Show a code for another device**, then enter that code under **Use a code from another device** in the desktop app (codes work once and expire after 10 minutes).
