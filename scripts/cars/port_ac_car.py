@@ -86,7 +86,9 @@ class _Reader:
 
 def read_kn5(path):
     """Textures {name: bytes}, materials [{name, shader, blend, alpha_tested, props, maps}] and nodes (depth-first) with
-    `parent` (index or None), `active` (own flag and every ancestor's), `world` (4x4) and `mesh`."""
+    `parent` (index or None), `active` (own flag and every ancestor's), `world` (4x4), `local` (4x4, a transform node's
+    own) and `mesh`. A skinned mesh (a driver's suit) also has `bones` ([(node name, inverse bind 4x4)]), `joints` and
+    `weights` (4 per vertex, the joints as indices into `bones`)."""
     r = _Reader(open(path, 'rb').read())
     if bytes(r.take(6)) != b'sc6969':
         raise ValueError(f'{path}: not a kn5 file')
@@ -124,16 +126,17 @@ def read_kn5(path):
         nchild = r.i32()
         active = bool(r.u8()) and parent_active
         mat4 = parent_mat
+        local = np.eye(4)
         mesh = None
+        bones = None
         if kind == 1:
-            mat4 = parent_mat @ r.f32(16).reshape(4, 4).T
+            local = r.f32(16).reshape(4, 4).T
+            mat4 = parent_mat @ local
         elif kind in (2, 3):
             r.u8()  # cast shadows
             visible, transparent = bool(r.u8()), bool(r.u8())
-            if kind == 3:  # skinned: bone names and bind matrices
-                for _ in range(r.i32()):
-                    r.str()
-                    r.take(64)
+            if kind == 3:  # skinned: bone names and inverse bind matrices
+                bones = [(r.str(), r.f32(16).reshape(4, 4).T) for _ in range(r.i32())]
             n = r.i32()
             stride = 44 if kind == 2 else 76
             v = np.frombuffer(r.take(n * stride), '<f4').reshape(n, stride // 4).astype(np.float32)
@@ -147,8 +150,12 @@ def read_kn5(path):
                 renderable = bool(r.u8())
             mesh = {'pos': v[:, 0:3], 'nrm': v[:, 3:6], 'uv': v[:, 6:8], 'idx': idx, 'mat': mat_idx,
                     'visible': visible, 'transparent': transparent, 'renderable': renderable}
+            if bones is not None:
+                # After the tangent: 4 weights, then 4 joints (as floats)
+                mesh.update(bones=bones, weights=v[:, 11:15].copy(), joints=v[:, 15:19].copy())
         me = len(nodes)
-        nodes.append({'name': name, 'kind': kind, 'active': active, 'world': mat4, 'mesh': mesh, 'parent': parent})
+        nodes.append({'name': name, 'kind': kind, 'active': active, 'world': mat4, 'local': local, 'mesh': mesh,
+                      'parent': parent})
         for _ in range(nchild):
             parse_node(mat4, active, me)
 
