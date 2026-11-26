@@ -13,7 +13,7 @@ What you may do with the result depends on the source's licence. Read [Licences 
 
 The offline launcher converts a circuit or a car from another game into a mod package by itself: no clone, no Python or Node to install.
 
-1. Copy the circuit's or the car's folder into `import/`, beside the launcher (it has a README on what goes there):
+1. Copy the circuit's or the car's folder into `Documents/LibreCorsa/import` (or `launcher/import` when running from a git clone; the folder has a README on what goes there):
    - Assetto Corsa: `content/tracks/<name>` or `content/cars/<name>`
    - Speed Dreams: `data/tracks/<category>/<name>` or `data/cars/models/<name>`
    - your own Blender circuit: a folder with the `.glb` export and its settings `.json`
@@ -22,7 +22,7 @@ The offline launcher converts a circuit or a car from another game into a mod pa
 2. Open the game's **Mods** panel, in the window the launcher opened (another window, or another browser, can't convert). Under **Convert from another game** each folder is listed with what it was recognised as. Press **Convert**.
 3. The first time, the panel asks to download the converter's tools: uv and Node.js (pinned versions, each checked against a SHA-256 built into the launcher, and checked again before every run), then Python 3.14 and its packages through uv. That is about 200 MB, once, into the launcher's own folder beside its browser profile. Nothing is downloaded until you agree.
 4. The conversion shows its progress and, under **Show the log**, the converter's output. A car takes about a minute. A circuit takes longer, typically 10 to 20 minutes: the AI's racing lines are worked out on full physics laps.
-5. The package goes into the launcher's `mods/` folder and is checked as the game will load it. Press **Restart now** and it is in the game.
+5. The package goes into `Documents/LibreCorsa/mods` (`public/mods` in a clone) and is checked as the game will load it. Press **Restart now** and it is in the game.
 
 A converted package keeps its source's credit and licence, which the panel shows when it is done. Nothing in the import folder is ever run; the converter only reads a copy of it, which the launcher makes first and removes afterwards. A folder holding a link to somewhere else is refused: copy the files themselves. How the launcher keeps this safe is in [launcher/README.md](../launcher/README.md).
 
