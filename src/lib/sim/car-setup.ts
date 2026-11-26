@@ -285,7 +285,7 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   lc26: 11,
   lc25: 11,
   "f12026-car": 11,
-  "amg-gt3": 12.6,
+  "amg-gt3": 14.2,
   liana: 15,
   "mtr-496r": 14,
   // 388.5° (~390°) of rim lock for 18.5° at the road wheels (prototype butterfly wheel)
