@@ -599,7 +599,7 @@ const SeasonDebriefModal: React.FC<{
       {archive && archive.rounds.length > 0 ? (
         <Card title={tx("seasonRacesTitle")}>
           <div className="flex flex-col gap-1">
-            <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_3rem_4.25rem] items-center gap-2 px-2.5 pb-1 text-lc-slate phone:grid-cols-[2.25rem_minmax(0,1fr)_4.5rem_2.75rem_3.75rem]">
+            <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_5.5rem_3rem_4.25rem] items-center gap-2 px-2.5 pb-1 text-lc-slate phone:grid-cols-[3.25rem_minmax(0,1fr)_4.5rem_2.75rem_3.75rem]">
               <span className="lc-lbl">{tx("seasonColRound")}</span>
               <span className="lc-lbl">{tx("seasonColCircuit")}</span>
               <span className="lc-lbl text-center">{tx("seasonColGridFinish")}</span>
@@ -613,7 +613,7 @@ const SeasonDebriefModal: React.FC<{
                 <div
                   key={`${trackId}-${idx}`}
                   className={cx(
-                    "grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_3rem_4.25rem] items-center gap-2 rounded-lc-row px-2.5 py-1.5 phone:grid-cols-[2.25rem_minmax(0,1fr)_4.5rem_2.75rem_3.75rem]",
+                    "grid grid-cols-[3.5rem_minmax(0,1fr)_5.5rem_3rem_4.25rem] items-center gap-2 rounded-lc-row px-2.5 py-1.5 phone:grid-cols-[3.25rem_minmax(0,1fr)_4.5rem_2.75rem_3.75rem]",
                     idx % 2 === 0 ? "bg-lc-well/80" : "bg-transparent",
                   )}
                 >
