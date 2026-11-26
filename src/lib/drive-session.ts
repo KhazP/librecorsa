@@ -5226,14 +5226,19 @@ export class DriveSession {
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
         // The car's own mirrors are live in the views that can have them in shot. A ported car's outside mirrors render
-        // from the chase and T-cam views too, while their glass is on screen (any of three screens, or the headset's
-        // view: not judged there); a cockpit whose mirrors are out of frame (F1 2007's Ferrari, at 70 degrees) keeps the
-        // HUD mirror, their being on screen held a second so a glance to the frame's edge doesn't flash it
+        // from the chase and T-cam views too (not the menus' or the pre-race show's), while their glass is on screen (any
+        // of three screens, or the headset's view: not judged there). A cockpit whose mirrors are out of frame (F1 2007's
+        // Ferrari, at 70 degrees) or only at its edge keeps the HUD mirror: it gives way to glass whose centre is in the
+        // frame, that held a second so a glance to the frame's edge doesn't flash it
+        const outsideMirrorsLive = view.outsideMirrorsInShot && !inMenu && !preRaceShow.playing;
         const carMirrorsInShot = wingMirrors?.outside
-          ? view.outsideMirrorsInShot && (inVr || screensNow !== null || wingMirrors.inView(camera, container.clientHeight))
+          ? outsideMirrorsLive && (inVr || screensNow !== null || wingMirrors.inView(camera, container.clientHeight))
           : view.mirrorsInShot;
-        if (carMirrorsInShot !== carMirrorsHeld && nowMs - carMirrorsHeldAtMs >= 1000) {
-          carMirrorsHeld = carMirrorsInShot;
+        const carMirrorsFramed = wingMirrors?.outside
+          ? outsideMirrorsLive && (inVr || screensNow !== null || wingMirrors.inView(camera, container.clientHeight, true))
+          : view.mirrorsInShot;
+        if (carMirrorsFramed !== carMirrorsHeld && nowMs - carMirrorsHeldAtMs >= 1000) {
+          carMirrorsHeld = carMirrorsFramed;
           carMirrorsHeldAtMs = nowMs;
         }
         const wingMirrorsActive = Boolean(wingMirrors?.found && wingMirrors.coversSides && (!wingMirrors.outside || carMirrorsHeld));

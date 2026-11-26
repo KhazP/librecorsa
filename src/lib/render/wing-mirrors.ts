@@ -310,9 +310,10 @@ export class WingMirrors {
 
   /**
    * Whether any reflecting glass is on screen from `camera` (`heightPx` tall): facing it, inside its frustum and
-   * over a pixel or two across. True for mirrors that aren't reflecting ones (the caller's view flags decide those)
+   * over a pixel or two across; `framed`: with its centre inside the frame, not just an edge of it in shot. True for
+   * mirrors that aren't reflecting ones (the caller's view flags decide those)
    */
-  inView(camera: THREE.Camera, heightPx: number): boolean {
+  inView(camera: THREE.Camera, heightPx: number, framed = false): boolean {
     if (!this.found) return false;
     if (this.islands.length === 0) return true;
     camera.updateMatrixWorld();
@@ -332,6 +333,12 @@ export class WingMirrors {
       this.camWorld.setFromMatrixPosition(camera.matrixWorld);
       if (!facing || !(dist > 0)) continue;
       if (!this.frustum.intersectsSphere(this.sphere.set(this.islandCentre, isl.radius))) continue;
+      if (framed) {
+        const c = this.islandCentre.applyMatrix4(camera.matrixWorldInverse);
+        if (c.z >= 0) continue;
+        c.applyMatrix4(camera.projectionMatrix);
+        if (Math.abs(c.x) > 1 || Math.abs(c.y) > 1) continue;
+      }
       if ((isl.radius / dist) * pxPerM >= 1.5) return true;
     }
     return false;
