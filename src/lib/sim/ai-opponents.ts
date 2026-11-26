@@ -3807,6 +3807,9 @@ export class AiOpponentField implements AiRace {
       return false;
     }
     this.weatherTyres.noteEntry(car.code, this.raceTimeS);
+    // The crew repairs the damage the car comes in with, whatever the stop was called for: a stop for the weather's
+    // tyres sent out a car with a broken wing, and it was back in for the repair a lap later
+    if (car.pitWant.repairS <= 0 && !car.damage.pristine) car.pitWant.repairS = repairS(car.damage.overall, 0);
     const box = lane.boxes[car.pitBox] ?? null;
     car.pitRun = new AiPitRun(lane, box, { x: sim.worldPosition.x, z: sim.worldPosition.z, speedMs: sim.vxMs }, car.pitWant, car.rng);
     car.pitWant = null;
