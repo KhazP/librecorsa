@@ -3962,14 +3962,16 @@ export class AiOpponentField implements AiRace {
   private syncPeer(car: FieldCar): void {
     const sim = car.sim;
     const p = car.peer;
-    p.position.copy(sim.worldPosition);
+    p.linearVelocity.set(sim.vyMs, 0, sim.vxMs).applyQuaternion(sim.worldQuaternion);
+    // Drawn at the frame's time, as the player's car is: the fixed-step physics leaves up to 2 ms unstepped each frame,
+    // and the last whole step drawn as is lurched every few frames (#65). A field in the worker steps whole steps: none
+    p.position.copy(sim.worldPosition).addScaledVector(sim.worldVelocity ?? p.linearVelocity, sim.renderLeadS ?? 0);
     p.quaternion.copy(sim.worldQuaternion);
     // The rig seats the wheels on the road under each corner, as the player's: the body keeps its heave
     if (sim.tyreVisuals) {
       p.wheels ??= { tyres: sim.tyreVisuals, ground: null };
       p.wheels.ground = sim.groundQuery ?? null;
     }
-    p.linearVelocity.set(sim.vyMs, 0, sim.vxMs).applyQuaternion(sim.worldQuaternion);
     p.steerAngle = steerAngleOf(sim.steerAngleNorm);
     for (let i = 0; i < 4; i++) p.wheelRPMs[i] = wheelRpmOf(sim.wheels[i].spinVel);
     p.throttle = sim.telemetry.throttle;
