@@ -132,7 +132,7 @@ const CIRCUIT_NIGHT_SPECS: Readonly<Record<string, CircuitNightSpec>> = {
     mode: "floodlit",
     lamps: [
       // Continuous stadium floodlight fixtures lining the Corniche circuit
-      { materials: ["lightlens"], color: COOL_WHITE, glowMaterial: true, glow: 8, pool: 0.9, glowSizeM: 2.4 },
+      { materials: ["lightlens"], color: COOL_WHITE, glowMaterial: true, glow: 9, pool: 1.0, glowSizeM: 1.1 },
       // Tall floodlight tower lenses (lightin.dds)
       { materials: ["mat51"], color: COOL_WHITE, glowMaterial: true, glow: 9, pool: 1.0, glowSizeM: 4.5 },
     ],
