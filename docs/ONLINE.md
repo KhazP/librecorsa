@@ -55,8 +55,8 @@ A few ground rules for rooms:
 How the track-limits rule sets score off-track strikes:
 
 - **Classic:** Every third strike incurs a time penalty (`+3 s`, then `+5 s`).
-- **Open-wheel:** Counts strikes—4 strikes = `+5 s`, 8 = `+10 s`, 12 = disqualification.
-- **Endurance:** Uses weighted severity points—5 points = `+5 s`, 10 = `+10 s`, 15 = disqualification.
+- **Open-wheel:** Counts strikes: 4 strikes = `+5 s`, 8 = `+10 s`, 12 = disqualification.
+- **Endurance:** Uses weighted severity points: 5 points = `+5 s`, 10 = `+10 s`, 15 = disqualification.
 - **Auto:** Applies **Open-wheel** rules to single-seaters and **Endurance** rules to all other classes.
 
 ### Connection architecture and fallbacks
@@ -88,7 +88,7 @@ How the track-limits rule sets score off-track strikes:
 - If you disconnect mid-race, the client automatically attempts to reconnect; only drivers who started on the grid can rejoin an active race.
 - Each car submits its finish time. Official results finalize once every car finishes or 90 seconds after the winner crosses the line.
 - The open-races card tracks **This week's top drivers** (top five ranked by wins, then podiums) alongside your personal record (races, wins, podiums, and best finish).
-- Results only count toward your standings if your client proves ownership of your driver name with its driver key—meaning you must first claim your name by posting a lap to any leaderboard.
+- Results only count toward your standings if your client proves ownership of your driver name with its driver key, meaning you must first claim your name by posting a lap to any leaderboard.
 
 ## Lap boards
 
@@ -119,7 +119,7 @@ Outside of races, track-limits enforcement is strict:
 
 Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on the lap card. Before accepting an upload, the server also validates that the lap starts and ends at the timing line (except hill climbs), sector times sum to the total lap time, the lap time matches the ghost telemetry duration, recorded speeds match distance covered without exceeding `420 km/h` or teleporting, and the lap was set on the current physics version.
 
-> **Honest limitation:** Server checks catch casual tampering—such as pasting a faster lap time onto a genuine ghost—but browser-side telemetry cannot cryptographically prove a lap was genuinely driven. A carefully fabricated payload can still pass validation. If you spot a cheated time on a board, please report it on [GitHub Issues](https://github.com/librecorsa/librecorsa/issues).
+> **Honest limitation:** Server checks catch casual tampering (such as pasting a faster lap time onto a genuine ghost), but browser-side telemetry cannot cryptographically prove a lap was genuinely driven. A carefully fabricated payload can still pass validation. If you spot a cheated time on a board, please report it on [GitHub Issues](https://github.com/librecorsa/librecorsa/issues).
 
 ### Driver name and identity key
 
@@ -148,7 +148,7 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 ### Recovering unposted bests
 
 - If the leaderboard server is temporarily unreachable, the game queues your lap and retries automatically once connectivity returns (up to 5 attempts per session, and again after a reload if the queued lap is your saved personal best). Laps explicitly rejected by the server are not retried automatically.
-- Under **Lap times > Your best laps**, any local best missing from the online board is flagged with `"Not on the online board yet"` (**Post**) or `"Not on the online board"` with the rejection reason (**Retry**)—including laps set with auto-upload off or before online boards launched.
+- Under **Lap times > Your best laps**, any local best missing from the online board is flagged with `"Not on the online board yet"` (**Post**) or `"Not on the online board"` with the rejection reason (**Retry**), including laps set with auto-upload off or before online boards launched.
 
 ## Weekly challenge
 

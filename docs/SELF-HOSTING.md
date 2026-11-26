@@ -4,7 +4,7 @@ LibreCorsa is a static Next.js export (`out/`) that runs on any static file host
 
 ## Static-only hosting
 
-Running `npm run build` outputs a complete static bundle to `./out` (including `offline-manifest.json` for offline service-worker support). Served from any static host—GitHub Pages, Cloudflare Pages, Netlify, or Nginx—a static-only copy provides:
+Running `npm run build` outputs a complete static bundle to `./out` (including `offline-manifest.json` for offline service-worker support). Served from any static host (GitHub Pages, Cloudflare Pages, Netlify, or Nginx), a static-only copy provides:
 
 - Full single-player driving, AI races, local replays, local ghosts, and car setups
 - Peer-to-peer multiplayer rooms paired via the public PeerJS broker (plus manual WebRTC offer/answer and local-tab racing)
@@ -94,12 +94,12 @@ Configure two local gitignored files for dev:
 
 Setting `RACE_SLOT_S=120` starts open races every 2 minutes instead of every 20 minutes during development.
 
-To run all backend verification tests without a Cloudflare account (using an in-memory D1/R2 harness), run `npm run verify`—which covers `verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`, `verify-leaderboard.ts`, `verify-board-stats.ts`, `verify-usage.ts`, and `verify-admin.ts`.
+To run all backend verification tests without a Cloudflare account (using an in-memory D1/R2 harness), run `npm run verify`, which covers `verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`, `verify-leaderboard.ts`, `verify-board-stats.ts`, `verify-usage.ts`, and `verify-admin.ts`.
 
 ## Operational notes
 
 - **HTTP caching:** Public endpoints shared across all drivers use short edge caches (`GET /api/laps` without a driver parameter and `GET /api/stats` cache for `30 s`; `/api/stats/circuit`, `/api/hall-of-fame`, and `/api/badges` cache for `60 s`). Personalized responses and errors return `no-store` so newly uploaded laps appear immediately.
 - **Rate limits:** Lap uploads and renames are limited to `20/min` at the Worker edge (`BOARD_LIMIT`) and `30/hour` in D1 (`lap_posts`). Usage reports cap at `10/min` (`USAGE_LIMIT`, `240` min max per report), live heartbeats cap at `6/min` (`LIVE_LIMIT`), and `/api/admin/*` caps at `20/min` (`ADMIN_LIMIT`) before checking the token. Unauthenticated or misconfigured admin routes return a standard `404` indistinguishable from unknown paths.
 - **Privacy by design:** Driver keys are stored strictly as SHA-256 hashes, raw IP addresses are never stored in D1, usage counters aggregate only per-day totals without cookies or player IDs, and the live counter holds only one-minute heartbeat timestamps in memory.
-- **Weekly challenge and race schedule:** Both derive deterministically from the UTC clock in `src/lib/net/weekly-challenge.ts` and `src/lib/net/race-schedule.ts`—edit those files to customize a league's calendar.
+- **Weekly challenge and race schedule:** Both derive deterministically from the UTC clock in `src/lib/net/weekly-challenge.ts` and `src/lib/net/race-schedule.ts`; edit those files to customize a league's calendar.
 - **Cost profile:** The room server and lap boards generally sit within Cloudflare's free tier for small communities. TURN relays bill per gigabyte relayed (only for peers unable to connect directly; omit the TURN secrets to disable relaying). Live presence and scheduled open races use Durable Object requests and duration (~1¢ per 8-car race hour for open races; `ONLINE_LIVE` and `ONLINE_RACES` can be switched off independently at any time).

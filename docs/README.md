@@ -10,24 +10,24 @@ Everything here is maintained alongside the source code and published at [docs.l
 
 ## Playing
 
-- **[Controls, controllers, and wheels](CONTROLS.md)** — Keyboard bindings, gamepads, DualSense features, touch controls, wheel calibration, and force feedback.
-- **[Driving, setups, weather, and 2026 rules](DRIVING.md)** — Realism levels, tyre thermodynamics and wet grip, track evolution, 2026 active aero and MGU-K rules, and Garage setup sheets.
-- **[Racing online and lap boards](ONLINE.md)** — Private multiplayer rooms, scheduled open races, leaderboards, ghosts, setup sharing, and the weekly challenge.
-- **[UDP telemetry and the local bridge](TELEMETRY.md)** — Streaming 60 Hz JSON telemetry to dashboards, SimHub, bass shakers, and motion rigs, plus bridge CLI flags.
-- **[Performance and troubleshooting](PERFORMANCE.md)** — System requirements, graphics presets, automatic quality scaling, offline caching, URL parameters, and fixing common issues.
-- **[Verifying downloads](DOWNLOADS.md)** — The desktop and Android apps: official release sources, app IDs, SHA-256 checksums, how the desktop app updates itself, and Android signing certificate verification.
+- **[Controls, controllers, and wheels](CONTROLS.md)**: Keyboard bindings, gamepads, DualSense features, touch controls, wheel calibration, and force feedback.
+- **[Driving, setups, weather, and 2026 rules](DRIVING.md)**: Realism levels, tyre thermodynamics and wet grip, track evolution, 2026 active aero and MGU-K rules, and Garage setup sheets.
+- **[Racing online and lap boards](ONLINE.md)**: Private multiplayer rooms, scheduled open races, leaderboards, ghosts, setup sharing, and the weekly challenge.
+- **[UDP telemetry and the local bridge](TELEMETRY.md)**: Streaming 60 Hz JSON telemetry to dashboards, SimHub, bass shakers, and motion rigs, plus bridge CLI flags.
+- **[Performance and troubleshooting](PERFORMANCE.md)**: System requirements, graphics presets, automatic quality scaling, offline caching, URL parameters, and fixing common issues.
+- **[Verifying downloads](DOWNLOADS.md)**: The desktop and Android apps: official release sources, app IDs, SHA-256 checksums, how the desktop app updates itself, and Android signing certificate verification.
 
 ## Modding
 
-- **[Making mods](modding.md)** — Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, and custom physics patches.
-- **[Importing mods from other games](importing-mods.md)** — Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
+- **[Making mods](modding.md)**: Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, and custom physics patches.
+- **[Importing mods from other games](importing-mods.md)**: Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
 
 ## Porting
 
-- **[Porting cars](PORTING-CARS.md)** — Converting car mods or Sketchfab-style GLB models and FMOD audio banks for a local build.
-- **[Porting circuits](PORTING-TRACKS.md)** — Converting Assetto Corsa track mods or modelling and exporting an original circuit in Blender.
-- **[Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md)** — Extracting `.erp` track archives for personal, local use.
-- **[Porting wheels](PORTING-WHEELS.md)** — Debugging and adding WebHID force feedback support for steering wheel bases.
+- **[Porting cars](PORTING-CARS.md)**: Converting car mods or Sketchfab-style GLB models and FMOD audio banks for a local build.
+- **[Porting circuits](PORTING-TRACKS.md)**: Converting Assetto Corsa track mods or modelling and exporting an original circuit in Blender.
+- **[Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md)**: Extracting `.erp` track archives for personal, local use.
+- **[Porting wheels](PORTING-WHEELS.md)**: Debugging and adding WebHID force feedback support for steering wheel bases.
 
 ## Contributing
 

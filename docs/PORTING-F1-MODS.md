@@ -8,7 +8,7 @@ Because the extractor was written specifically for Qiddiya, porting a different 
 
 > Any circuit you extract with this tool is strictly for local, personal use on your own machine. Do not commit it to a repository or fork, upload it to a file host, or serve it publicly.
 
-- Permission granted by Maxim555 and Zhenix covers the official Qiddiya files hosted by LibreCorsa only—it does not extend to third-party copies.
+- Permission granted by Maxim555 and Zhenix covers the official Qiddiya files hosted by LibreCorsa only; it does not extend to third-party copies.
 - Only extract mods that are their authors' original creations, and only with their permission. Because `.erp` archives can also bundle base-game assets, the extractor intentionally reads only the mod's own `tracks/<id>/` directory and prefixed materials; preserve that boundary.
 - All [circuit licensing rules](PORTING-TRACKS.md#licences) apply equally here.
 
@@ -48,7 +48,7 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
 | `--skip-fence02` | On | Drops one exceptionally dense Qiddiya fence mesh |
 | `--simplify` | On | Simplifies scenery with UV and normal preservation while keeping road, kerbs, pit lane, and painted lines untouched |
 
-The extractor outputs an uncompressed `.glb` and matching settings `.json`. If the circuit ID already exists in `public/tracks/index.json`, the script copies its existing `credit` block—so update credits in `index.json` before re-running if needed.
+The extractor outputs an uncompressed `.glb` and matching settings `.json`. If the circuit ID already exists in `public/tracks/index.json`, the script copies its existing `credit` block, so update credits in `index.json` before re-running if needed.
 
 ## Building the circuit
 
@@ -61,7 +61,7 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
 
 Register and verify the circuit as described in [Porting circuits](PORTING-TRACKS.md). To render menu preview images for the venue, run `npm run venue-heroes -- <id>`.
 
-Every geometry and lighting issue documented under [Common issues and fixes](PORTING-TRACKS.md#common-issues-and-fixes) originally surfaced during the Qiddiya port—see the commented settings block inside `main()` near the bottom of `extract_erp_track.py` for concrete reference values.
+Every geometry and lighting issue documented under [Common issues and fixes](PORTING-TRACKS.md#common-issues-and-fixes) originally surfaced during the Qiddiya port; see the commented settings block inside `main()` near the bottom of `extract_erp_track.py` for concrete reference values.
 
 ## Adapting the extractor to another mod
 

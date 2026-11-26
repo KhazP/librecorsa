@@ -208,7 +208,7 @@ The physics is checked against data, not just tuned by feel, and the evidence is
 | `W` / `↑` · `S` / `↓` | Throttle · brake (ramped like a pedal) |
 | `A` / `D` or `←` / `→` | Steer (speed-sensitive on keyboard) |
 | `E` / `Q` | Upshift / downshift |
-| `Space` / `Shift` / `B` | Boost (hold / latch) — overrides ERS cuts any time |
+| `Space` / `Shift` / `B` | Boost (hold / latch); overrides ERS cuts any time |
 | `Z` | 2026 Overtake Mode toggle (in races, once earned within `1 s`) |
 | `X` | Active aero (Z-mode / X-mode) or DRS |
 | `C` | Cycle driving cameras |
