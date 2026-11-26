@@ -1300,7 +1300,14 @@ AC_TRACKS = {
         ],
         'notRoadMaterials': r'PALAZZO|SOUTH_|kuwait_bridge',
         'hideNodes': r'^(CROWD_STAND|CROWD_SIT)',
-        'doubleSidedMaterials': r'metal_frame_40cm|wiremeshl|fence_transparent|loxia|BELLAGIO_Shingles|BELLAGIOWallPillar2|baranda_pasarela',
+        'doubleSidedMaterials': r'metal_frame_40cm|wiremeshl|loxia|BELLAGIO_Shingles|BELLAGIOWallPillar2|baranda_pasarela',
+        'singleSidedMaterials': r'^(lv_gs_railings|fence_transparent)$',
+        'dedupeSameNormalMaterials': r'^lv_gs_railings$',
+        'autoOpaqueMasks': True,
+        'atlasSmallMaterials': True,
+        'materialMaxTex': [(r'^material1$', 2048)],
+        'subdivideSphereMaterials': [(r'^material1$', 1)],
+        'noShadowMaterials': r'^(fence_transparent|concrete_wall_nd|metal_surfaces|tecpro_barriers|Aluminum2|Steel_Brushed_Stainless|metal_frame_40cm|vegas-sponsors-main|lv_gs_railings|lv_grandstand_seats|material1|Background|COSMO|SOUTH_|PALAZZO|BELLAGIO|WYNN|WAR_|H1_|vegasbackdrop_1|purewhite|marbles5|Line )',
         'minWidthM': 8.5,
         'maxWidthM': 26.0,
         'maxWidthRatio': 2.2,
@@ -1315,7 +1322,7 @@ AC_TRACKS = {
         'autoKn5EmissiveMax': 3.5,
         'autoKn5EmissiveDefault': 2.2,
         'nightEmissiveMaterials': [
-            {'match': r'^material1$', 'day': 0.35, 'night': 3.6, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^material1$', 'day': 0.35, 'night': 2.7, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
             {'match': r'^rgb(_|$)', 'day': 0.25, 'night': 2.8, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
             {'match': r'^(tv_screen|tv_screens|tv_screens2|vegas-screen-[12]|start_ads)$', 'day': 0.2, 'night': 2.6, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
             {'match': r'^lv_signs$', 'day': 0.1, 'night': 2.8, 'color': [1.0, 0.98, 0.9], 'emissiveMap': 'extension/lv_signs_emissive.dds', 'spill': True},
@@ -1333,13 +1340,12 @@ AC_TRACKS = {
             {'match': r'^(Hughes500_(Red|Green|White)Light)', 'day': 0.2, 'night': 3.0, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
         ],
         'materialDepthOffset': [
-            (r'^(Line White|Line Yellow|Line Red|flat_kerbs_white|flat_kerbs_red|vegas track overlays|tyre_skids[12]|decal5|marbles5)$', -2),
+            (r'^(Line White|Line Yellow|Line Red|flat_kerbs_white|flat_kerbs_red|vegas track overlays|tyre_skids[12]|decal5|marbles5|vegas-sponsors-main(\.\d+)?|wall-colours)$', -2),
         ],
         'simplifyMaterials': [
-            (r'^(metal_surfaces|concrete_wall_nd)$', 0.22, 0.14, True),
-            (r'^fence_transparent$', 0.20, 0.22, True),
-            (r'^(Aluminum2|Steel_Brushed_Stainless|tecpro_barriers|metal_frame_40cm|marbles5)', 0.22, 0.16, True),
-            (r'^(concrete_smooth|Metal1|vegas-sponsors-main|Tents1|Textures (WheeL|Body))', 0.28, 0.10, True),
+            (r'^concrete_wall_nd$', 0.35, 0.02),
+            (r'^(metal_surfaces|tecpro_barriers|Aluminum2|Steel_Brushed_Stainless|metal_frame_40cm|marbles5)', 0.28, 0.04),
+            (r'^(concrete_smooth|Metal1|Tents1|Textures (WheeL|Body))', 0.32, 0.05),
         ],
         'turns_override': [
             (225, 'Turn 1 — Harbor Island'),
@@ -1410,12 +1416,22 @@ AC_TRACKS = {
         ],
         'nightEmissiveMaterials': [
             {'match': r'^rgb$', 'day': 0.0, 'night': 2.4, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
-            {'match': r'^jeddahglassMaterial$', 'day': 0.0, 'night': 1.35, 'color': [0.85, 0.94, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
-            {'match': r'^mat11$', 'day': 0.0, 'night': 1.4, 'color': [1.0, 0.95, 0.85], 'emissiveMap': 'diffuse', 'spill': True},
-            {'match': r'^(mat29|mat93|mat97)$', 'day': 0.0, 'night': 1.1, 'color': [1.0, 0.92, 0.78], 'emissiveMap': 'diffuse', 'spill': True},
-            {'match': r'^SS [25]$', 'day': 0.0, 'night': 0.95, 'color': [0.95, 0.96, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
-            {'match': r'^glassgreen$', 'day': 0.0, 'night': 0.85, 'color': [0.75, 1.0, 0.88], 'emissiveMap': 'diffuse', 'spill': False},
-            {'match': r'^led_flag2?$', 'day': 0.1, 'night': 0.6, 'color': [0.4, 0.9, 0.5], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^jeddahglassMaterial$', 'day': 0.0, 'night': 1.5, 'color': [0.85, 0.94, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^mat11$', 'day': 0.0, 'night': 14.0, 'color': [1.0, 0.94, 0.80], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^mat7$', 'day': 0.0, 'night': 1.6, 'color': [1.0, 0.97, 0.92], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^mat8$', 'day': 0.0, 'night': 0.8, 'color': [1.0, 0.96, 0.90], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^Pit02c2$', 'day': 0.0, 'night': 0.32, 'color': [1.0, 0.96, 0.90], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(mat18|mat22)$', 'day': 0.0, 'night': 0.55, 'color': [0.88, 0.93, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^mat20$', 'day': 0.0, 'night': 0.30, 'color': [0.90, 0.94, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(mat24|jeddahseats)$', 'day': 0.0, 'night': 0.45, 'color': [0.88, 0.94, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(startgantry|start_ads)$', 'day': 0.0, 'night': 3.5, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^tracksigns$', 'day': 0.0, 'night': 0.45, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^signs_new_1$', 'day': 0.0, 'night': 0.25, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(mat29|mat93|mat97)$', 'day': 0.0, 'night': 2.6, 'color': [1.0, 0.92, 0.78], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^SS 5$', 'day': 0.0, 'night': 1.6, 'color': [0.94, 0.96, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^SS 2$', 'day': 0.0, 'night': 1.2, 'color': [0.96, 0.96, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^glassgreen$', 'day': 0.0, 'night': 1.8, 'color': [0.75, 1.0, 0.88], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^led_flag2?$', 'day': 0.1, 'night': 0.7, 'color': [0.4, 0.9, 0.5], 'emissiveMap': 'diffuse', 'spill': False},
         ],
         'description': 'Jeddah Corniche Circuit along the Red Sea waterfront in Saudi Arabia — a 6.17 km high-speed 27-turn floodlit night street circuit featuring blind sweeps, the banked Turn 13 hairpin, and wall-lined esses.',
         'credit': {
@@ -2471,9 +2487,316 @@ def encode_webp_tex(raw_bytes, keep_alpha, max_tex=MAX_TEX):
     return out.getvalue()
 
 
+def _dedupe_same_normal_tris(pos, idx):
+    """Drop coincident duplicate triangles whose 3 vertices match within 1 mm and face the same direction."""
+    tris = np.asarray(idx, np.uint32).reshape(-1, 3)
+    if len(tris) == 0:
+        return idx
+    p = np.asarray(pos, np.float64)
+    q = np.round(p * 1000.0).astype(np.int64)
+    v0, v1, v2 = p[tris[:, 0]], p[tris[:, 1]], p[tris[:, 2]]
+    fn = np.cross(v1 - v0, v2 - v0)
+    fn_len = np.linalg.norm(fn, axis=1)
+    kept = []
+    buckets = {}
+    for k in range(len(tris)):
+        fl = float(fn_len[k])
+        if fl <= 1e-9:
+            continue
+        n_unit = fn[k] / fl
+        i0, i1, i2 = int(tris[k, 0]), int(tris[k, 1]), int(tris[k, 2])
+        key = tuple(sorted((
+            (int(q[i0, 0]), int(q[i0, 1]), int(q[i0, 2])),
+            (int(q[i1, 0]), int(q[i1, 1]), int(q[i1, 2])),
+            (int(q[i2, 0]), int(q[i2, 1]), int(q[i2, 2])),
+        )))
+        prev = buckets.get(key)
+        if prev is not None and any(float(np.dot(n_unit, pn)) > 0.95 for pn in prev):
+            continue
+        buckets.setdefault(key, []).append(n_unit)
+        kept.append(k)
+    if len(kept) == len(tris):
+        return idx
+    return tris[np.asarray(kept, np.int64)].reshape(-1).astype(np.uint32)
+
+
+def _subdivide_sphere_mesh(pos, nrm, uv, idx, levels):
+    """Spherical midpoint subdivision preserving each vertex's radial distance from the mesh's bbox center."""
+    p = np.asarray(pos, np.float64)
+    n = np.asarray(nrm, np.float64)
+    u = np.asarray(uv, np.float64)
+    tris = np.asarray(idx, np.uint32).reshape(-1, 3)
+    if len(tris) == 0 or len(p) == 0 or levels <= 0:
+        return pos, nrm, uv, idx
+    center = 0.5 * (p.min(0) + p.max(0))
+    for _ in range(int(levels)):
+        radii = np.linalg.norm(p - center, axis=1)
+        p_list = list(p)
+        n_list = list(n)
+        u_list = list(u)
+        r_list = list(radii)
+        edge_cache = {}
+
+        def mid(a, b):
+            key = (a, b) if a < b else (b, a)
+            hit = edge_cache.get(key)
+            if hit is not None:
+                return hit
+            pm = 0.5 * (p_list[a] + p_list[b])
+            d = pm - center
+            dl = float(np.linalg.norm(d))
+            rm = 0.5 * (r_list[a] + r_list[b])
+            if dl > 1e-9 and rm > 1e-9:
+                pm = center + (d / dl) * rm
+            nm = 0.5 * (n_list[a] + n_list[b])
+            nl = float(np.linalg.norm(nm))
+            if nl > 1e-9:
+                nm = nm / nl
+            elif dl > 1e-9:
+                nm = d / dl
+            else:
+                nm = np.array([0.0, 1.0, 0.0], np.float64)
+            ua, ub = u_list[a], u_list[b]
+            u0 = 0.5 * (ua[0] + ub[0])
+            if abs(ua[0] - ub[0]) > 0.5:
+                u0 = (0.5 * (ua[0] + (ub[0] + (1.0 if ua[0] > ub[0] else -1.0)))) % 1.0
+            um = np.array([u0, 0.5 * (ua[1] + ub[1])], np.float64)
+            vi = len(p_list)
+            p_list.append(pm)
+            n_list.append(nm)
+            u_list.append(um)
+            r_list.append(rm)
+            edge_cache[key] = vi
+            return vi
+
+        new_tris = np.empty((len(tris) * 4, 3), np.uint32)
+        for k, (a, b, c) in enumerate(tris):
+            a, b, c = int(a), int(b), int(c)
+            ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
+            o = k * 4
+            new_tris[o] = (a, ab, ca)
+            new_tris[o + 1] = (ab, b, bc)
+            new_tris[o + 2] = (ca, bc, c)
+            new_tris[o + 3] = (ab, bc, ca)
+        p = np.asarray(p_list, np.float64)
+        n = np.asarray(n_list, np.float64)
+        u = np.asarray(u_list, np.float64)
+        tris = new_tris
+    return p.astype(np.float32), n.astype(np.float32), u.astype(np.float32), tris.reshape(-1)
+
+
+SMALL_ATLAS_TILE = 256
+SMALL_ATLAS_GUTTER = 12
+SMALL_ATLAS_GRID = 8
+
+
+def _pack_small_material_atlases(merged_nodes, special_nodes, materials, tex_pool, auto_opaque_mats,
+                                 mat_emissive, double_sided_re, single_sided_re, no_shadow_re,
+                                 depth_offset_rules, skip_bake, cfg):
+    """Pack small opaque non-emissive non-tiling materials (<= 1500 tris, UV span <= 1.05) into 2048x2048
+    texture atlases grouped by castShadow so dense city/hotel KN5s collapse into a handful of draw calls."""
+    special_mats = {m_idx for _, _, m_idx, _, _ in special_nodes}
+    simplify_res = [r[0] for r in ((cfg or {}).get('simplifyMaterials') or ())]
+    nodes_by_mat = {}
+    for idx_n, entry in enumerate(merged_nodes):
+        nodes_by_mat.setdefault(entry[2], []).append(idx_n)
+
+    eligible_by_shadow = {True: [], False: []}
+    node_uv_shifts = {}
+    for old_mi, n_idxs in nodes_by_mat.items():
+        if old_mi in special_mats or old_mi in mat_emissive:
+            continue
+        m = materials[old_mi]
+        mname = m['name']
+        sh = m['shader'].lower()
+        if mname in (skip_bake or ()) or 'multilayer' in sh:
+            continue
+        is_mask = ac_alpha_masked(m, sh, cfg) and (old_mi not in auto_opaque_mats)
+        is_blend = (m['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask and (old_mi not in auto_opaque_mats)
+        if is_mask or is_blend:
+            continue
+        is_single = bool(single_sided_re and re.search(single_sided_re, mname, re.I))
+        is_ds = (not is_single) and ('tree' in sh or 'grass' in sh or bool(double_sided_re and re.search(double_sided_re, mname, re.I)))
+        if is_ds:
+            continue
+        if any(re.search(rx, mname, re.I) for rx, _ in depth_offset_rules):
+            continue
+        if any(re.search(rx, mname, re.I) for rx in simplify_res):
+            continue
+        tname = m['maps'].get('txDiffuse')
+        if not tname or tname not in tex_pool:
+            continue
+        total_tris = 0
+        ok = True
+        shifts_for_mat = {}
+        for ni in n_idxs:
+            _, it, _, is_decal, groove_cfg = merged_nodes[ni]
+            if is_decal or groove_cfg is not None or it.get('keepShape') or it.get('fromModel') or it.get('drift') is not None or it.get('nodeExtras'):
+                ok = False
+                break
+            total_tris += len(it['idx']) // 3
+            uv = np.asarray(it['uv'], np.float64)
+            if len(uv) == 0 or not np.all(np.isfinite(uv)):
+                ok = False
+                break
+            u_min, u_max = float(uv[:, 0].min()), float(uv[:, 0].max())
+            v_min, v_max = float(uv[:, 1].min()), float(uv[:, 1].max())
+            du = math.floor(u_min + 0.05)
+            dv = math.floor(v_min + 0.05)
+            if (u_min - du) < -0.05 or (u_max - du) > 1.05 or (v_min - dv) < -0.05 or (v_max - dv) > 1.05:
+                ok = False
+                break
+            shifts_for_mat[ni] = (du, dv)
+        if not ok or total_tris <= 0 or total_tris > 1500:
+            continue
+        cast_shadow = not bool(no_shadow_re and re.search(no_shadow_re, mname, re.I))
+        eligible_by_shadow[cast_shadow].append((old_mi, tname, n_idxs))
+        node_uv_shifts.update(shifts_for_mat)
+
+    replaced_node_idxs = set()
+    new_atlas_nodes = []
+    inner = SMALL_ATLAS_TILE - 2 * SMALL_ATLAS_GUTTER
+    per_atlas = SMALL_ATLAS_GRID * SMALL_ATLAS_GRID
+    n_packed_mats = n_packed_tex = n_atlases = 0
+
+    for cast_shadow in (False, True):
+        group = eligible_by_shadow[cast_shadow]
+        if len(group) < 2:
+            continue
+        # Decode each unique texture once; drop any material whose texture fails to decode
+        tex_tiles = {}
+        valid_group = []
+        for old_mi, tname, n_idxs in group:
+            if tname not in tex_tiles:
+                try:
+                    im = decode_rgba(tex_pool[tname]).convert('RGB').resize((inner, inner), Image.LANCZOS)
+                    arr = np.asarray(im, np.uint8)
+                    arr = np.pad(
+                        arr,
+                        ((SMALL_ATLAS_GUTTER, SMALL_ATLAS_GUTTER), (SMALL_ATLAS_GUTTER, SMALL_ATLAS_GUTTER), (0, 0)),
+                        mode='wrap',
+                    )
+                    tex_tiles[tname] = Image.fromarray(arr, 'RGB')
+                except Exception:
+                    tex_tiles[tname] = None
+            if tex_tiles[tname] is not None:
+                valid_group.append((old_mi, tname, n_idxs))
+        if len(valid_group) < 2:
+            continue
+        # Group materials by texture so materials sharing one texture share one tile
+        mats_by_tex = {}
+        for old_mi, tname, n_idxs in valid_group:
+            mats_by_tex.setdefault(tname, []).append((old_mi, n_idxs))
+        tex_list = list(mats_by_tex.keys())
+        tag = 'sh' if cast_shadow else 'ns'
+        for batch_i in range(0, len(tex_list), per_atlas):
+            batch_tex = tex_list[batch_i:batch_i + per_atlas]
+            batch_mats = [entry for tn in batch_tex for entry in mats_by_tex[tn]]
+            if len(batch_mats) < 2:
+                continue
+            cols = min(SMALL_ATLAS_GRID, len(batch_tex))
+            rows = math.ceil(len(batch_tex) / cols)
+            W, H = cols * SMALL_ATLAS_TILE, rows * SMALL_ATLAS_TILE
+            atlas = Image.new('RGB', (W, H))
+            corners = {}
+            for k, tn in enumerate(batch_tex):
+                xy = ((k % cols) * SMALL_ATLAS_TILE, (k // cols) * SMALL_ATLAS_TILE)
+                atlas.paste(tex_tiles[tn], xy)
+                corners[tn] = xy
+            atlas_tname = f'__small_atlas_{tag}_{n_atlases}.png'
+            buf = io.BytesIO()
+            atlas.save(buf, 'PNG')
+            tex_pool[atlas_tname] = buf.getvalue()
+            atlas_mname = f'SmallAtlas_{tag}_{n_atlases}'
+            materials.append({
+                'name': atlas_mname,
+                'shader': 'ksPerPixel',
+                'blend': 0,
+                'alpha_tested': False,
+                'props': {},
+                'maps': {'txDiffuse': atlas_tname},
+                'maxTex': max(W, H),
+            })
+            atlas_mi = len(materials) - 1
+            n_atlases += 1
+            n_packed_tex += len(batch_tex)
+            n_packed_mats += len(batch_mats)
+
+            cur_p, cur_n, cur_uv, cur_idx = [], [], [], []
+            v_count = 0
+            chunk_id = 0
+
+            def flush_atlas():
+                nonlocal cur_p, cur_n, cur_uv, cur_idx, v_count, chunk_id
+                if not cur_idx:
+                    return
+                it_out = {
+                    'pos': np.concatenate(cur_p, 0),
+                    'nrm': np.concatenate(cur_n, 0),
+                    'uv': np.concatenate(cur_uv, 0),
+                    'idx': np.concatenate(cur_idx, 0),
+                }
+                if not cast_shadow:
+                    it_out['nodeExtras'] = {'castShadow': False}
+                new_atlas_nodes.append((f'{atlas_mname}_chunk{chunk_id}', it_out, atlas_mi, False, None))
+                chunk_id += 1
+                cur_p, cur_n, cur_uv, cur_idx = [], [], [], []
+                v_count = 0
+
+            for tn in batch_tex:
+                x0, y0 = corners[tn]
+                for _, n_idxs in mats_by_tex[tn]:
+                    for ni in n_idxs:
+                        replaced_node_idxs.add(ni)
+                        _, it, _, _, _ = merged_nodes[ni]
+                        nv = len(it['pos'])
+                        if v_count + nv > 65534:
+                            flush_atlas()
+                        du, dv = node_uv_shifts[ni]
+                        uv = np.asarray(it['uv'], np.float64)
+                        uv_a = np.stack([
+                            (x0 + SMALL_ATLAS_GUTTER + (uv[:, 0] - du) * inner) / W,
+                            (y0 + SMALL_ATLAS_GUTTER + (uv[:, 1] - dv) * inner) / H,
+                        ], 1).astype(np.float32)
+                        cur_p.append(it['pos'])
+                        cur_n.append(it['nrm'])
+                        cur_uv.append(uv_a)
+                        cur_idx.append(it['idx'].astype(np.uint32) + v_count)
+                        v_count += nv
+            flush_atlas()
+
+    if not replaced_node_idxs:
+        return merged_nodes
+    kept = [entry for i, entry in enumerate(merged_nodes) if i not in replaced_node_idxs]
+    log(f'  atlasSmallMaterials: packed {n_packed_mats} materials ({n_packed_tex} textures) into {n_atlases} atlas(es) '
+        f'({len(new_atlas_nodes)} node(s), saved {len(replaced_node_idxs) - len(new_atlas_nodes)} draw calls)')
+    return kept + new_atlas_nodes
+
+
 def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_meshes, out_path, clip=4000.0,
                  double_sided_re=None, bake_masks=False, skip_bake=None, cfg=None):
     """Build a glTF 2.0 binary (GLB) directly from the AC visual meshes and generated physics colliders."""
+    # Optional auto-opaque promotion for MASK materials whose txDiffuse has no real alpha cutouts (min_alpha >= 250)
+    auto_opaque_mats = set()
+    if cfg and cfg.get('autoOpaqueMasks'):
+        alpha_min_cache = {}
+        for m_idx, mat in enumerate(materials):
+            sh = mat['shader'].lower()
+            if 'tree' in sh or 'grass' in sh or not ac_alpha_masked(mat, sh, cfg):
+                continue
+            tname = mat['maps'].get('txDiffuse')
+            if not tname or tname not in tex_pool:
+                continue
+            if tname not in alpha_min_cache:
+                try:
+                    alpha_min_cache[tname] = int(np.asarray(decode_rgba(tex_pool[tname]).getchannel('A'), np.uint8).min())
+                except Exception:
+                    alpha_min_cache[tname] = 0
+            if alpha_min_cache[tname] >= 250:
+                auto_opaque_mats.add(m_idx)
+        if auto_opaque_mats:
+            log(f'  autoOpaqueMasks: {len(auto_opaque_mats)} material(s) promoted from MASK to OPAQUE')
+
     # 1. Group static visual meshes by (mat_idx, is_decal) while keeping semaphores and dynamic grooves separate
     special_nodes = []
     grouped = {}
@@ -2486,8 +2809,8 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         mat_idx = item['mat']
         mat = materials[mat_idx]
         sh = mat['shader'].lower()
-        is_mask = ac_alpha_masked(mat, sh, cfg)
-        is_decal = (mat['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask
+        is_mask = ac_alpha_masked(mat, sh, cfg) and (mat_idx not in auto_opaque_mats)
+        is_decal = (mat['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask and (mat_idx not in auto_opaque_mats)
         # `ownNode`: drawn as its own node, unmerged (the drifting objects, which carry a vertex attribute of their own)
         if is_semaphore_node(name) or name in grooves or item.get('ownNode'):
             special_nodes.append((name, item, mat_idx, is_decal, grooves.get(name)))
@@ -2542,31 +2865,47 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             v_count += nv
         flush()
 
+    # Optional per-material geometry cleanup: dedupe coincident same-normal tris and spherical subdivision
+    dedupe_re = (cfg or {}).get('dedupeSameNormalMaterials')
+    subdiv_rules = list((cfg or {}).get('subdivideSphereMaterials', ()))
+    if dedupe_re or subdiv_rules:
+        n_deduped = n_subdiv = 0
+        for lst in (special_nodes, merged_nodes):
+            for k, (nm, it, mi, is_d, gcfg) in enumerate(lst):
+                mname = materials[mi]['name']
+                changed = False
+                it_new = dict(it)
+                if dedupe_re and re.search(dedupe_re, mname, re.I):
+                    old_t = len(it_new['idx']) // 3
+                    new_idx = _dedupe_same_normal_tris(it_new['pos'], it_new['idx'])
+                    if len(new_idx) != len(it_new['idx']):
+                        it_new['idx'] = new_idx
+                        n_deduped += old_t - len(new_idx) // 3
+                        changed = True
+                for rx, levels in subdiv_rules:
+                    if re.search(rx, mname, re.I):
+                        p2, n2, u2, i2 = _subdivide_sphere_mesh(
+                            it_new['pos'], it_new['nrm'], it_new['uv'], it_new['idx'], levels
+                        )
+                        it_new['pos'], it_new['nrm'], it_new['uv'], it_new['idx'] = p2, n2, u2, i2
+                        n_subdiv += 1
+                        changed = True
+                        break
+                if changed:
+                    lst[k] = (nm, it_new, mi, is_d, gcfg)
+        if n_deduped:
+            log(f'  dedupeSameNormalMaterials: dropped {n_deduped} coincident duplicate triangle(s)')
+        if n_subdiv:
+            log(f'  subdivideSphereMaterials: subdivided {n_subdiv} sphere mesh(es)')
+
     all_visual = special_nodes + merged_nodes
     used_mats = sorted({m_idx for _, _, m_idx, _, _ in all_visual})
-    mat_remap = {old: new for new, old in enumerate(used_mats)}
-
-    # `bakeMultilayerMasks`: terrain drawn from a mask over a blank carrier gets the colour AC draws baked into its
-    # diffuse (the road's materials are left alone: the game draws them with its own asphalt shader)
-    if bake_masks:
-        bake_cache = {}
-        n_baked = 0
-        for old_mi in used_mats:
-            m = materials[old_mi]
-            if m['name'] in (skip_bake or ()):
-                continue
-            png = bake_multilayer(m, tex_pool, bake_cache)
-            if png is None:
-                continue
-            key = f"{m['name']}__baked.png"
-            tex_pool[key] = png
-            m['maps'] = {**m['maps'], 'txDiffuse': key}
-            m['baked'] = True
-            n_baked += 1
-        log(f'  multilayer masks baked into {n_baked} materials')
 
     # Resolve per-material night emissive rules (explicit nightEmissiveMaterials + optional autoKn5Emissive)
     base_max_tex = int((cfg or {}).get('maxTex', MAX_TEX))
+    mat_max_tex_rules = list((cfg or {}).get('materialMaxTex', ()))
+    single_sided_re = (cfg or {}).get('singleSidedMaterials')
+    no_shadow_re = (cfg or {}).get('noShadowMaterials')
     emissive_rules = []
     for rule in (cfg or {}).get('nightEmissiveMaterials', ()):
         if isinstance(rule, dict):
@@ -2639,14 +2978,45 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
     if mat_emissive:
         log(f'  nightEmissive: {len(mat_emissive)} material(s) configured')
 
+    # Optional small-material texture atlasing & mesh merging (collapses dense city/hotel draw calls)
+    if cfg and cfg.get('atlasSmallMaterials'):
+        merged_nodes = _pack_small_material_atlases(
+            merged_nodes, special_nodes, materials, tex_pool, auto_opaque_mats,
+            mat_emissive, double_sided_re, single_sided_re, no_shadow_re,
+            depth_offset_rules, skip_bake, cfg,
+        )
+        all_visual = special_nodes + merged_nodes
+        used_mats = sorted({m_idx for _, _, m_idx, _, _ in all_visual})
+
+    mat_remap = {old: new for new, old in enumerate(used_mats)}
+
+    # `bakeMultilayerMasks`: terrain drawn from a mask over a blank carrier gets the colour AC draws baked into its
+    # diffuse (the road's materials are left alone: the game draws them with its own asphalt shader)
+    if bake_masks:
+        bake_cache = {}
+        n_baked = 0
+        for old_mi in used_mats:
+            m = materials[old_mi]
+            if m['name'] in (skip_bake or ()):
+                continue
+            png = bake_multilayer(m, tex_pool, bake_cache)
+            if png is None:
+                continue
+            key = f"{m['name']}__baked.png"
+            tex_pool[key] = png
+            m['maps'] = {**m['maps'], 'txDiffuse': key}
+            m['baked'] = True
+            n_baked += 1
+        log(f'  multilayer masks baked into {n_baked} materials')
+
     # Determine which textures are used and whether any user material requires alpha
     tex_alpha_need = {}
-    # A material's `maxTex` lets its texture keep more than MAX_TEX px (the drifting objects' atlas)
+    # A material's `maxTex` lets its texture keep more than MAX_TEX px (the drifting objects' atlas or materialMaxTex)
     tex_max = {}
     for old_mi in used_mats:
         m = materials[old_mi]
         sh = m['shader'].lower()
-        needs_alpha = (
+        needs_alpha = (old_mi not in auto_opaque_mats) and (
             m['alpha_tested']
             or m['blend'] in (1, 2)
             or 'at' in sh
@@ -2654,15 +3024,19 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             or 'tree' in sh
             or 'grass' in sh
         )
+        m_max_tex = m.get('maxTex', base_max_tex)
+        for rx, px in mat_max_tex_rules:
+            if re.search(rx, m['name'], re.I):
+                m_max_tex = max(m_max_tex, int(px))
         tname = m['maps'].get('txDiffuse')
         if tname and tname in tex_pool:
             tex_alpha_need[tname] = tex_alpha_need.get(tname, False) or needs_alpha
-            tex_max[tname] = max(tex_max.get(tname, base_max_tex), m.get('maxTex', base_max_tex))
+            tex_max[tname] = max(tex_max.get(tname, base_max_tex), m_max_tex)
         em_spec = mat_emissive.get(old_mi)
         if em_spec and em_spec['tex'] and em_spec['tex'] in tex_pool:
             etex = em_spec['tex']
             tex_alpha_need[etex] = tex_alpha_need.get(etex, False)
-            tex_max[etex] = max(tex_max.get(etex, base_max_tex), m.get('maxTex', base_max_tex))
+            tex_max[etex] = max(tex_max.get(etex, base_max_tex), m_max_tex)
 
     chunks = []
     accessors = []
@@ -2722,8 +3096,8 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         tint = None if m.get('baked') else multilayer_tint(m, tex_pool, img_cache)
         if tint is not None:
             pbr['baseColorFactor'] = tint
-        is_mask = ac_alpha_masked(m, sh, cfg)
-        is_blend = (m['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask
+        is_mask = ac_alpha_masked(m, sh, cfg) and (old_mi not in auto_opaque_mats)
+        is_blend = (m['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask and (old_mi not in auto_opaque_mats)
         gmat = {'name': m['name'], 'pbrMetallicRoughness': pbr}
         if is_mask:
             gmat['alphaMode'] = 'MASK'
@@ -2733,7 +3107,9 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             bcf = list(pbr.get('baseColorFactor', [1.0, 1.0, 1.0, 1.0]))
             bcf[3] = 0.85
             pbr['baseColorFactor'] = bcf
-        if 'tree' in sh or 'grass' in sh or is_mask:
+        if single_sided_re and re.search(single_sided_re, m['name'], re.I):
+            pass
+        elif 'tree' in sh or 'grass' in sh or is_mask:
             gmat['doubleSided'] = True
         elif double_sided_re and re.search(double_sided_re, m['name'], re.I):
             gmat['doubleSided'] = True
@@ -2800,6 +3176,8 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             extras['keepShape'] = True
         if item.get('fromModel'):
             extras['fromModel'] = item['fromModel']
+        if no_shadow_re and re.search(no_shadow_re, materials[old_mi]['name'], re.I):
+            extras['castShadow'] = False
         extras.update(item.get('nodeExtras', {}))
         if extras:
             nd['extras'] = extras

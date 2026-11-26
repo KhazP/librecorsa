@@ -4,8 +4,9 @@
  *
  *   node scripts/tracks/simplify-ac-glb.mjs <raw.glb> '<json rules: [[regex, ratio, errorM, flags?], ...]>'
  *
- * Optional 4th element `flags` may be an array of meshoptimizer flags (e.g. ["ErrorAbsolute", "Permissive"]),
- * `true` as shorthand for ["ErrorAbsolute", "Permissive"], or omitted for ["ErrorAbsolute"].
+ * Welds vertices by (pos, normal, uv) so opposite-facing thin barriers/walls never merge into zero-crossing normals
+ * (which produce NaN in Three.js normalize(vNormal) and bloom into flashing black blocks). Rejects any simplification
+ * that introduces new opposite-normal triangles (dot < -0.95).
  */
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
@@ -45,22 +46,25 @@ const walk = (node, prot) => {
 };
 for (const scene of doc.getRoot().listScenes()) for (const node of scene.listChildren()) walk(node, false);
 
-/** Per-primitive (pos, uv) weld so unwelded KN5 faces can collapse edges without smearing UV seams */
-function weldPrimitiveIndices(u32Idx, posArr, uvAcc) {
+/** Per-primitive (pos, normal, uv) weld so hard edges & opposite-facing thin walls never merge normals */
+function weldPrimitiveIndices(u32Idx, posArr, nrmAcc, uvAcc) {
   const nv = posArr.length / 3;
   const map = new Map();
   const remap = new Uint32Array(nv);
+  const nrm = [0, 0, 0];
   const uv = [0, 0];
   for (let i = 0; i < nv; i++) {
     const px = Math.round(posArr[i * 3] * 1000);
     const py = Math.round(posArr[i * 3 + 1] * 1000);
     const pz = Math.round(posArr[i * 3 + 2] * 1000);
-    let key;
+    let key = `${px},${py},${pz}`;
+    if (nrmAcc) {
+      nrmAcc.getElement(i, nrm);
+      key += `|${Math.round(nrm[0] * 100)},${Math.round(nrm[1] * 100)},${Math.round(nrm[2] * 100)}`;
+    }
     if (uvAcc) {
       uvAcc.getElement(i, uv);
-      key = `${px},${py},${pz}|${Math.round(uv[0] * 1e4)},${Math.round(uv[1] * 1e4)}`;
-    } else {
-      key = `${px},${py},${pz}`;
+      key += `|${Math.round(uv[0] * 1e4)},${Math.round(uv[1] * 1e4)}`;
     }
     const existing = map.get(key);
     if (existing !== undefined) {
@@ -75,9 +79,29 @@ function weldPrimitiveIndices(u32Idx, posArr, uvAcc) {
   return out;
 }
 
+/** Count triangles whose vertex normals oppose each other (interpolates through 0 -> NaN in normalize(vNormal)) */
+function countOppositeNormalTris(idxArr, nrmAcc) {
+  if (!nrmAcc) return 0;
+  const e0 = [0, 0, 0];
+  const e1 = [0, 0, 0];
+  const e2 = [0, 0, 0];
+  let count = 0;
+  for (let t = 0; t < idxArr.length; t += 3) {
+    nrmAcc.getElement(idxArr[t], e0);
+    nrmAcc.getElement(idxArr[t + 1], e1);
+    nrmAcc.getElement(idxArr[t + 2], e2);
+    const d01 = e0[0] * e1[0] + e0[1] * e1[1] + e0[2] * e1[2];
+    const d12 = e1[0] * e2[0] + e1[1] * e2[1] + e1[2] * e2[2];
+    const d20 = e2[0] * e0[0] + e2[1] * e0[1] + e2[2] * e0[2];
+    if (d01 < -0.95 || d12 < -0.95 || d20 < -0.95) count++;
+  }
+  return count;
+}
+
 let beforeTris = 0;
 let afterTris = 0;
 let matchedPrims = 0;
+let guardedPrims = 0;
 
 for (const mesh of doc.getRoot().listMeshes()) {
   const prot = protectedMeshes.has(mesh);
@@ -111,13 +135,16 @@ for (const mesh of doc.getRoot().listMeshes()) {
     matchedPrims++;
     const nrmAcc = prim.getAttribute("NORMAL");
     const uvAcc = prim.getAttribute("TEXCOORD_0");
-    const weldedIdx = weldPrimitiveIndices(u32Idx, posArr, uvAcc);
-    let newIdx;
+    const origOpp = countOppositeNormalTris(u32Idx, nrmAcc);
+    const weldedIdx = weldPrimitiveIndices(u32Idx, posArr, nrmAcc, uvAcc);
+
+    let attrs = null;
+    let stride = 0;
+    const weights = [];
     if (nrmAcc || uvAcc) {
       const nv = posAcc.getCount();
-      const stride = (nrmAcc ? 3 : 0) + (uvAcc ? 2 : 0);
-      const attrs = new Float32Array(nv * stride);
-      const weights = [];
+      stride = (nrmAcc ? 3 : 0) + (uvAcc ? 2 : 0);
+      attrs = new Float32Array(nv * stride);
       let off = 0;
       if (nrmAcc) {
         const el = [0, 0, 0];
@@ -127,7 +154,7 @@ for (const mesh of doc.getRoot().listMeshes()) {
           attrs[i * stride + off + 1] = el[1];
           attrs[i * stride + off + 2] = el[2];
         }
-        weights.push(0.5, 0.5, 0.5);
+        weights.push(1.0, 1.0, 1.0);
         off += 3;
       }
       if (uvAcc) {
@@ -139,11 +166,27 @@ for (const mesh of doc.getRoot().listMeshes()) {
         }
         weights.push(0.5, 0.5);
       }
-      [newIdx] = MeshoptSimplifier.simplifyWithAttributes(
-        weldedIdx, posArr, 3, attrs, stride, weights, null, targetCount, rule.errorM, rule.flags
-      );
-    } else {
-      [newIdx] = MeshoptSimplifier.simplify(weldedIdx, posArr, 3, targetCount, rule.errorM, rule.flags);
+    }
+
+    const runSimplify = (flags) => {
+      if (attrs) {
+        return MeshoptSimplifier.simplifyWithAttributes(
+          weldedIdx, posArr, 3, attrs, stride, weights, null, targetCount, rule.errorM, flags
+        )[0];
+      }
+      return MeshoptSimplifier.simplify(weldedIdx, posArr, 3, targetCount, rule.errorM, flags)[0];
+    };
+
+    let newIdx = runSimplify(rule.flags);
+    if (nrmAcc && countOppositeNormalTris(newIdx, nrmAcc) > origOpp) {
+      // Retry conservatively without Permissive and with LockBorder so thin walls/posts never invert normals
+      const safeIdx = runSimplify(["ErrorAbsolute", "LockBorder"]);
+      if (countOppositeNormalTris(safeIdx, nrmAcc) <= origOpp) {
+        newIdx = safeIdx;
+      } else {
+        newIdx = u32Idx;
+      }
+      guardedPrims++;
     }
 
     if (newIdx.length >= 3 && newIdx.length < u32Idx.length) {
@@ -173,5 +216,5 @@ for (const mesh of doc.getRoot().listMeshes()) {
 await doc.transform(prune({ keepLeaves: true }));
 await io.write(glbPath, doc);
 console.log(
-  `meshopt simplify (${matchedPrims} prims): ${Math.round(beforeTris).toLocaleString()} -> ${Math.round(afterTris).toLocaleString()} tris`
+  `meshopt simplify (${matchedPrims} prims, ${guardedPrims} normal-guarded): ${Math.round(beforeTris).toLocaleString()} -> ${Math.round(afterTris).toLocaleString()} tris`
 );
