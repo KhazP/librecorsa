@@ -662,6 +662,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         a centred frame instead of the far edges. What belongs to the whole window is fixed to it instead. */}
     <div
       ref={hudRootRef}
+      data-hud-root=""
       inert={hudMode === "hidden"}
       dir="ltr"
       className={`lc-safe-frame pointer-events-none fixed z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""} ${skinRootClass(thirdPartySkin) ?? ""}`}
