@@ -1022,6 +1022,8 @@ FINISH_MAP_SIZE = 1024
 CLEARCOAT_ROUGHNESS = 0.06
 # Chrome under such a coat (`metal_mask`)
 CHROME_ROUGHNESS = 0.12
+# A metallic paint whose coat reflects in its own colour (`ac_finish`)
+COLORED_COAT_ROUGHNESS = 0.25
 
 
 def skin_shader_replacements(car_dir, skin):
@@ -1068,14 +1070,27 @@ def apply_skin_shader_replacements(car_dir, skin, materials):
 
 def ac_finish(m, cls, spec):
     """The glTF finish of kn5 material `m` (its class and `auto_spec`) from its AC values, or None for a class the
-    game finishes itself: {rough, metal, specular (F90), specular_color (F0 over 0.04), clearcoat, lacquer, ...}"""
+    game finishes itself: {rough, metal, specular (F90), specular_color (F0 over 0.04), clearcoat, lacquer, ...}. A
+    paint the mod's extension config makes metallic (`m['car_paint']`, `ext_car_paint`) takes that paint's values"""
     if cls not in FINISH_CLASSES:
         return None
     p = m['props']
     exp_ = max(0.0, p.get('ksSpecularEXP', 20.0))
     fc, fmax = max(0.0, p.get('fresnelC', 0.0)), max(0.0, p.get('fresnelMaxLevel', 0.0))
+    metal = float(spec.get('metal', 0.0))
+    paint = m.get('car_paint')
+    if paint:
+        # Its coat's reflection from FresnelC to FresnelMax over flakes whose highlight is SpecularBase's; with its
+        # coat's specular COLORED, the share of the paint's light BrightnessAdjustment takes from the diffuse comes
+        # back as reflection in the paint's own colour, as a metal's does
+        fc, fmax, exp_ = paint['fresnel_c'], paint['fresnel_max'], paint['base_exp']
+        if paint['colored']:
+            # (glTF's coat reflects white: the coloured coat's reflection is the metal's, as sharp as a coat's)
+            metal = max(metal, float(np.clip(1.0 - paint['brightness'], 0.0, 1.0)))
+            exp_ = 2.0 / COLORED_COAT_ROUGHNESS ** 4 - 2.0
+            fmax = fc
     fmax = max(fmax, fc)
-    lacquer = fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP
+    lacquer = (bool(paint) and not paint['colored']) or (fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP and not paint)
     f0 = float(np.clip(fc, 0.004, 1.0))
     # A polished coat: its sharp reflection (the clearcoat, 4 % head on) rises to fresnelMaxLevel at grazing angles, over
     # a base reflecting fresnelC all round. Any other surface: one reflection from fresnelC head on to fresnelMaxLevel
@@ -1083,12 +1098,35 @@ def ac_finish(m, cls, spec):
     return dict(
         rough=round(float(np.clip((2.0 / (exp_ + 2.0)) ** 0.25, 0.08, 0.95)), 3),
         exp=exp_,
-        metal=float(spec.get('metal', 0.0)),
+        metal=metal,
         specular=round(f90, 3),
         specular_color=round(f0 / (0.04 * f90), 3),
         clearcoat=round(min(1.0, fmax), 3) if lacquer else 0.0,
         lacquer=lacquer,
     )
+
+
+def ext_car_paint(car_dir):
+    """The metallic car paint the mod's extension config gives some of its materials, or None: the materials its
+    [INCLUDE: common/materials_carpaint.ini] section names (CarPaintMaterial) and its [Material_CarPaint] values
+    {materials, fresnel_c, fresnel_max, brightness, base_exp, colored}"""
+    sections = ext_config_sections(car_dir)
+    names = []
+    for name, kv in sections:
+        if name.upper().startswith('INCLUDE') and 'materials_carpaint' in name.lower() and kv.get('CARPAINTMATERIAL'):
+            names = [s.strip() for s in kv['CARPAINTMATERIAL'].split(',') if s.strip()]
+    block = next((kv for name, kv in sections if name.upper() == 'MATERIAL_CARPAINT'), None)
+    if not names or block is None:
+        return None
+
+    def num(key, default, i=0):
+        try:
+            return float(block.get(key, '').split(',')[i])
+        except (ValueError, IndexError):
+            return default
+    return dict(materials=names, fresnel_c=num('FRESNELC', 0.04), fresnel_max=num('FRESNELMAX', 1.0),
+                brightness=num('BRIGHTNESSADJUSTMENT', 1.0), base_exp=num('SPECULARBASE', 70.0, 1),
+                colored='COLORED' in block.get('CLEARCOATSPECULAR', '').upper())
 
 
 def detail_drawn_once(m, src):
@@ -2318,6 +2356,12 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     part_variants = preset.get('part_variants', {})
     by_name = {m['name']: m for m in materials}
     auto = bool(preset.get('auto'))
+    if auto and preset.get('generated'):
+        # The metallic paint the mod's extension config gives its paints (`ext_car_paint`), read by `ac_finish`
+        car_paint = ext_car_paint(car_dir) if car_dir else None
+        for m in materials:
+            if car_paint and m['name'] in car_paint['materials']:
+                m['car_paint'] = car_paint
     skin_tex = {}
     if auto:
         skin_tex = skin_overrides(car_dir, skin, textures)
