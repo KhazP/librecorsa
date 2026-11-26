@@ -692,7 +692,8 @@ export const BadgeLegend: React.FC<BadgeLegendProps> = ({ badges, context, class
           <li key={type} className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <span aria-hidden="true" className="inline-flex">
               <Badge tone={tone} variant={s.variant} size="sm" icon={s.icon} className="px-1.5">
-                {short || null}
+                {/* Isolated, or a right-to-left page shows "S.T.I.G." as ".S.T.I.G" */}
+                {short ? <bdi>{short}</bdi> : null}
               </Badge>
             </span>
             <span className="text-[12px] leading-none text-lc-fog">{t(MEANING[type])}</span>
