@@ -107,11 +107,26 @@ All other circuit data (surfaces, kerbs, DRS zones, racing lines, AI plans, and 
 
 ### Liveries for built-in cars (`skins`)
 
-Supported built-in `car` IDs: `amg-gt3`, `bmw-m4-gt3`, `mtr-496r`, `lc-lmdh`, `liana`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, and `porsche-934-rsr`.
+A livery is either a painted picture projected onto the car (`atlas`) or a set of texture files swapped onto the model's materials. Which one depends on the car:
 
-- Each entry requires `id`, `name`, and a `swatch` array of 2 or 3 `"#rrggbb"` hex colours shown in the livery picker.
-- Texture files live in `skins/<id>/` by default (or a custom `dir` path) and must match the model's exact texture filenames from `public/cars/<car>/skins/<skin>/`.
-- Use `files` when overriding only a subset of textures (every listed file must exist in the folder), `variant` to select a body variant on cars that support them, and an optional `thumb.webp` inside the folder for a livery picker preview.
+- **Painted picture (`atlas`)**: `lc26` (2026 Prototype), `lc25` (LC25 Prototype), `amg-gt3`, `bmw-m4-gt3`, and `lc-lmdh`. [Painting liveries](LIVERIES.md) has each car's template and how to paint one.
+- **Texture files**: `mtr-496r`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, `porsche-934-rsr`, and `liana` (also `amg-gt3`, `bmw-m4-gt3` and `lc-lmdh` for older packages, though their models have no texture slots to swap, so a texture livery leaves them in their factory paint).
+
+For both kinds:
+
+- Each entry requires `car`, `id`, `name`, and a `swatch` array of 2 or 3 `"#rrggbb"` hex colours shown in the livery picker.
+- Its files live in `skins/<id>/` by default (or a custom `dir` path), with an optional `thumb.webp` there for a livery picker preview.
+
+For a painted picture:
+
+- `atlas` names the picture inside the livery's folder (`.png`, `.webp`, `.jpg`, or `.jpeg`), painted on the car's template. It must be square, from 1024 to 4096 pixels; `check` warns if it isn't 2048 × 2048, the size the game is made for. `atlas` can't be combined with `files`, and the F1 cars take only this kind.
+- `finish` (optional) is the paint's finish: `gloss` (the default), `satin`, `matte`, `metallic`, or `chrome`.
+- An F1 livery shows up in that car's livery picker under Installed mods; a livery made for `lc26` doesn't appear on `lc25`, or the other way round.
+
+For texture files:
+
+- The files must use the model's exact texture filenames from `public/cars/<car>/skins/<skin>/`.
+- Use `files` when overriding only a subset of textures (every listed file must exist in the folder), and `variant` to select a body variant on cars that support them.
 
 ### Cars (`cars`)
 
