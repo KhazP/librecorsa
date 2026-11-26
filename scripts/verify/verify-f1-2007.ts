@@ -32,7 +32,7 @@ import { carListed } from '../../src/lib/hosted-content';
 import { carTakesPhysicsSwitch } from '../../src/lib/cars/f1-mod-physics';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { hasFile, noteSkip } from '../lib/hosted-files';
-import { fitMirrorView, mirrorLookup, mirrorProjection, MIRROR_FOCUS_M, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
+import { aimMirrorCamera, fitMirrorView, mirrorLookup, MIRROR_FOCUS_M, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -155,8 +155,10 @@ function checkMirrors(team: string, glb: string): void {
   const cam = new THREE.PerspectiveCamera();
   cam.position.copy(view.camera);
   cam.updateMatrixWorld(true);
-  mirrorProjection(view, 0.3, 250, cam.projectionMatrix);
-  cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  aimMirrorCamera(cam, view, 0.3, 250);
+  // As the renderer rebuilds it for its reversed depth buffer: the window must survive that
+  (cam as unknown as { _reversedDepth: boolean })._reversedDepth = true;
+  cam.updateProjectionMatrix();
   let worst = 0;
   let outside = 0;
   const p = new THREE.Vector3();

@@ -271,9 +271,19 @@ export function reflectingMirrorMaterial(
   return material;
 }
 
-/** The rear view's projection for `view` (an off-axis frustum through its window) */
-export function mirrorProjection(view: MirrorView, near: number, far: number, out = new THREE.Matrix4()): THREE.Matrix4 {
-  return out.makePerspective(view.left * near, view.right * near, view.top * near, view.bottom * near, near, far);
+/**
+ * Aims `camera`'s frustum through `view`'s window (off-axis): a symmetric frustum round it with the window as its view
+ * offset, so the renderer's own rebuilds of the projection (it makes it anew for the reversed depth buffer) keep it
+ */
+export function aimMirrorCamera(camera: THREE.PerspectiveCamera, view: MirrorView, near: number, far: number): void {
+  const halfW = Math.max(Math.abs(view.left), Math.abs(view.right));
+  const halfH = Math.max(Math.abs(view.bottom), Math.abs(view.top));
+  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(halfH));
+  camera.aspect = halfW / halfH;
+  camera.near = near;
+  camera.far = far;
+  camera.setViewOffset(2 * halfW, 2 * halfH, view.left + halfW, halfH - view.top, view.right - view.left, view.top - view.bottom);
+  camera.updateProjectionMatrix();
 }
 
 /** A ported body's mirror glass: the meshes of the porter's MIRROR_n nodes (`userData.mirror`, from mirrors.ini) */

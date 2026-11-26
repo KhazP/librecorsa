@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { planarUvGeometry } from "./planar-uv";
-import { fitMirrorView, mirrorProjection, reflectingGeometry, reflectingMirrorMaterial, type MirrorIsland } from "./mirror-reflection";
+import { aimMirrorCamera, fitMirrorView, reflectingGeometry, reflectingMirrorMaterial, type MirrorIsland } from "./mirror-reflection";
 
 /**
  * Wing mirrors for the LC26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
@@ -220,8 +220,7 @@ export class WingMirrors {
     if (!view) for (const r of reflecting) r.geometry.dispose();
     if (view) {
       this.camInModel = view.camera.clone();
-      mirrorProjection(view, CAMERA_NEAR, CAMERA_FAR, this.cam.projectionMatrix);
-      this.cam.projectionMatrixInverse.copy(this.cam.projectionMatrix).invert();
+      aimMirrorCamera(this.cam, view, CAMERA_NEAR, CAMERA_FAR);
       for (const r of reflecting) this.islands.push(...r.islands.filter((i) => i.normal));
       // Wing mirrors when any glass is off the centre line, else a cockpit's interior mirror alone
       this.coversSides = options.coversSides ?? this.islands.some((i) => Math.abs(i.centre.x) > 0.25);
