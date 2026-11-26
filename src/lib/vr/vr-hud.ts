@@ -176,6 +176,9 @@ class Plate {
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.textBaseline = "alphabetic";
+    // The canvas is not in the page, so it would inherit no direction and lay Arabic lines out left to right ("B: leave
+    // VR" read from its end). The page's own direction, as the language set it (i18n/runtime.ts)
+    ctx.direction = document.documentElement.dir === "rtl" ? "rtl" : "ltr";
     draw(ctx, this.w, this.h, (weight, px) => `${weight} ${px}px ${family}`);
     this.texture.needsUpdate = true;
   }
@@ -260,6 +263,13 @@ export class VrHud {
     const right = { p: model.position, lap: model.lap, t: model.lapTime, last: model.last, best: model.best, hint: model.hint };
     this.right.show(right, (ctx, w, h, font) => {
       const pad = h * 0.1;
+      // A lap time reads left to right in every language: under a right-to-left direction "-:--.---" came out mirrored
+      const time = (value: string, x: number, y: number, maxWidth?: number) => {
+        const dir = ctx.direction;
+        ctx.direction = "ltr";
+        ctx.fillText(value, x, y, maxWidth);
+        ctx.direction = dir;
+      };
       ctx.textAlign = "left";
       ctx.fillStyle = "#ffffff";
       ctx.font = font(800, Math.round(h * 0.2));
@@ -267,7 +277,8 @@ export class VrHud {
       ctx.textAlign = "right";
       ctx.font = font(600, Math.round(h * 0.15));
       ctx.fillStyle = model.position ? DIM : "#ffffff";
-      ctx.fillText(model.position ? model.lap : model.lapTime, w - pad, h * 0.23, w * 0.5);
+      if (model.position) ctx.fillText(model.lap, w - pad, h * 0.23, w * 0.5);
+      else time(model.lapTime, w - pad, h * 0.23, w * 0.5);
       if (model.hint) {
         ctx.textAlign = "left";
         ctx.fillStyle = ACCENT;
@@ -275,7 +286,7 @@ export class VrHud {
         ctx.fillText(model.hint, pad, h * 0.55, w - 2 * pad);
         ctx.fillStyle = "#ffffff";
         ctx.font = font(600, Math.round(h * 0.15));
-        if (model.position) ctx.fillText(model.lapTime, pad, h * 0.84, w - 2 * pad);
+        if (model.position) time(model.lapTime, pad, h * 0.84, w - 2 * pad);
         return;
       }
       const row = (label: string, value: string, y: number, colour: string) => {
@@ -286,7 +297,7 @@ export class VrHud {
         ctx.textAlign = "right";
         ctx.fillStyle = colour;
         ctx.font = font(700, Math.round(h * 0.16));
-        ctx.fillText(value, w - pad, y);
+        time(value, w - pad, y);
       };
       if (model.position) row("", model.lapTime, h * 0.48, "#ffffff");
       row(tx("game.vr.last"), model.last, model.position ? h * 0.69 : h * 0.55, "#ffffff");
