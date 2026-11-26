@@ -82,8 +82,8 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   frontCamberRange: [-4.0, -1.5],
   rearCamberRange: [-3.2, -1.0],
   setupPressureRefC: 25,
-  // ~609° lock to lock on the 14.2 : 1 GT3 rack
-  steerRatio: 14.2,
+  // 540° lock to lock on the 12.6 : 1 rack
+  steerRatio: 12.6,
   // An endurance GT3's electronics: twelve ABS maps, three traction dials
   enduranceAbsMaps: true,
   tcSlipAngleDial: true,
@@ -116,8 +116,10 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
     semi_pro: { tcLevel: 10, tc2Level: 6, absLevel: 9, tcSlipAngleLevel: 10 },
     assisted: { tcLevel: 12, tc2Level: 9, absLevel: 11, tcSlipAngleLevel: 12 },
   },
-  // Planted GT3 keyboard steer-in: progressive rather than open-wheeler twitchy at both low and high speeds
-  keyboardSteer: { lowSpeedRate: 1.18, highSpeedRate: 0.78, returnRate: 1.0 },
+  // A heavy car on a slow rack: quicker keys in slow and medium corners (half the grip limit ≈210 ms after the key at
+  // 70–120 km/h instead of ≈300, the yaw ≈130 ms sooner at 70) and at speed as the base, where the car is calm; a
+  // touch quicker back to centre
+  keyboardSteer: { lowSpeedRate: 1.6, highSpeedRate: 1.05, returnRate: 1.1 },
 };
 
 /** An AMG GT3; `bodyPlan`, the plan of another GT3 body it wears (`CarDefinition.bodyPlan`) */
