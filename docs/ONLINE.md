@@ -108,11 +108,12 @@ How the track-limits rule sets score off-track strikes:
 
 ### Lap validity and anti-cheat limits
 
-Outside of races, track-limits enforcement is strict:
+Outside of races (in practice and Time Trials), track-limits enforcement is strict:
 
-- **Off-track:** Putting all four wheels outside track limits invalidates the lap immediately with no option to give time back. When 1–3 wheels lift momentarily over a kerb while another wheel sits off-track, the simulator probes straight down beneath the lifted wheels so a kerb hop does not falsely invalidate the lap. Going off-track in the **final corner zone** (from `120 m` before the final turn's apex, or `450 m` before the line on circuits without turn markers, to start/finish) also invalidates the following lap to prevent gaining an illegal launch onto the main straight; restarting clears that flag.
+- **Off-track and kerb-hop probing:** Putting all four wheels outside track limits invalidates the running lap immediately with no option to give time back. When 1–3 wheels lift momentarily over a kerb or collider seam while the remaining grounded wheels sit on runoff or grass, the simulator probes straight down beneath each lifted wheel (falling back to its last contact only over a collider gap) so an aggressive kerb hop does not falsely invalidate the lap.
+- **Final-corner forfeit zone:** Going off-track or wall-riding inside the final-corner zone — starting `120 m` before the final turn's apex (or `450 m` before start/finish on circuits without turn markers, also covering the flying-start run-up, and never reaching back past Sector 3) through the timing line — invalidates **both the current lap and the next lap** to prevent carrying an illegal launch onto the main straight. Restarting the run clears the next-lap forfeit. Using **Flashback** in practice or time trials also invalidates the current lap, and rewinding across Start/Finish or inside Sector 3 forfeits the next lap as well.
 - **Course cuts:** Skipping part of the circuit triggers `"Course cut · lap deleted"`.
-- **Wall contact:** Grinding or riding a barrier triggers `"Wall contact · lap deleted"` (light glancing brushes are allowed). On hill climbs, any wall contact ends the run.
+- **Wall contact:** Scraping or riding a barrier (`≥ 0.35 s` of cumulative moving contact within any `3 s` window) triggers `"Wall contact · lap deleted"` while allowing brief glancing brushes. On hill climbs, any barrier touch ends the run immediately.
 - **Autopilot:** Any lap where autopilot was engaged at any point is displayed locally but never ranked.
 
 Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on the lap card. Before accepting an upload, the server also validates that the lap starts and ends at the timing line (except hill climbs), sector times sum to the total lap time, the lap time matches the ghost telemetry duration, recorded speeds match distance covered without exceeding `420 km/h` or teleporting, and the lap was set on the current physics version.
@@ -148,17 +149,61 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 - If the leaderboard server is temporarily unreachable, the game queues your lap and retries automatically once connectivity returns (up to 5 attempts per session, and again after a reload if the queued lap is your saved personal best). Laps explicitly rejected by the server are not retried automatically.
 - Under **Lap times > Your best laps**, any local best missing from the online board is flagged with `"Not on the online board yet"` (**Post**) or `"Not on the online board"` with the rejection reason (**Retry**), including laps set with auto-upload off or before online boards launched.
 
-## Weekly challenge
+## Time trials and weekly challenge
 
-The **Time Trials** view pairs the rotating **Weekly challenge** with permanent time trials:
+The **Time Trials** view pairs the rotating **Weekly challenge** with permanent time trials. Every time trial standardizes track and car conditions — dry, fully rubbered-in asphalt (no marbles or rain wash-off), the car's softest dry tyre compound (such as soft slicks, street tyres on the Liana/Scirocco, or vintage slicks/slicks on historic cars), and the car's minimum permitted fuel load with fuel burn disabled (`"Dry track · Soft tyres · Low fuel"` on most cars). Clicking **Drive challenge** (after confirming your driver name if you still have a generated one) applies those rules automatically and restores your personal assists, realism, and weather settings afterward.
 
-- **Rotating weekly challenge:** Weeks run from **Monday 00:00 UTC** to the next Monday, following a curated schedule through the week of **4 October 2027** before looping. Every driver runs the same circuit, car, assists, and realism preset: every fourth week enforces **Pro** assists with **Full** realism; all other weeks use **Semi** assists with **Standard** realism.
-- **Middle Gear Lap Board (permanent):** An always-active time trial in the **Suzuki Liana 1.6** around **Dunsfold Aerodrome** with a locked factory baseline setup, lowest fuel, **Semi** assists, and **Standard** realism. The current P1 record holder wears the **`S.T.I.G.`** badge.
-- **Standardized conditions:** Both time trials run on a dry, fully rubbered-in track, the car's softest dry tyre compound, and minimum permitted fuel (`"Dry track · Soft tyres · Low fuel"` for most cars).
-- Clicking **Drive challenge** (after confirming your driver name if you still have a generated one) applies these rules automatically and puts you on track; your personal assists, realism, and weather settings are restored afterward.
-- **This week's times** displays the challenge's dedicated leaderboard (including the physics version picker), and valid challenge laps also count on the circuit's regular open board. You can open any driver's **Driver Profile** for cross-circuit ratings and compare laps in the built-in **Lap telemetry analysis** view.
-- Laps only qualify for the weekly challenge if driven under that week's rules and submitted before the week closes; late uploads still post to the regular open board.
-- The **Hall of Fame** tracks **Fastest Lap record holders**, **Weekly podiums**, and **Most decorated** drivers (the top of Most Decorated earns the **`GOAT`** badge).
+### Rotating weekly challenge
+
+- **Schedule:** Weeks run from **Monday 00:00 UTC** to the next Monday (`YYYY-Www` ISO week IDs), following a curated 48-week rotation through the week of **4 October 2027** before looping.
+- **Fixed rules per week:** Every driver runs the same circuit, car, assists, and realism preset. Every fourth week enforces **Pro** assists with **Full** realism; all other weeks use **Semi** assists with **Standard** realism.
+- **Dual board posting:** Valid weekly challenge laps post to both the dedicated weekly board (**This week's times**, with physics version picker) and the circuit's regular open board. Laps only qualify for the weekly board if driven under that week's rules and uploaded before the week closes; late uploads still post to the open board.
+- **Custom setups:** Garage setups remain open on the weekly challenge (only fuel load and tyre compound are locked).
+
+### Middle Gear Lap Board
+
+- **Permanent benchmark:** Always active (`event: "middle-gear"`) in the **Suzuki Liana 1.6** around **Dunsfold Aerodrome**.
+- **Fixed factory setup:** Unlike the rotating weekly challenge, Middle Gear locks chassis and tyre setup to the factory baseline (with lowest fuel), **Semi** assists, and **Standard** realism so every driver runs an identical car.
+- **`S.T.I.G.` badge:** Middle Gear never expires and does not award rotating weekly medals. Instead, whoever holds **P1** on the current shipping physics revision wears the live **`S.T.I.G.`** badge everywhere on the boards; the badge moves automatically as soon as someone beats the record.
+
+### Ghosts, setups, and lap telemetry
+
+- **Racing ghosts:** Your personal best ghost can be toggled in Settings, and clicking **Race ghost** on any row of an open or time-trial board for your loaded circuit loads that driver's recorded lap onto the track. You can also export and import `.json` ghost files from the lap summary card or pause menu (**Lap times**).
+- **Applying setups:** Every uploaded lap embeds its car setup (minus setup name and fuel load). Clicking **Apply setup** on a row for your current car loads that exact setup directly into your Garage (disabled on fixed-setup trials).
+- **Driver profiles and telemetry analysis:** Click any driver on a board to open their **Driver Profile** (best laps, rankings, and cross-circuit ratings), and use the built-in **Lap telemetry analysis** view to compare speed, pedal traces, and sector splits against another lap.
+
+### Hall of Fame and driver badges
+
+- **Weekly medals:** Once a week finishes, P1, P2, and P3 earn **Gold**, **Silver**, and **Bronze** weekly medals (recorded per named physics version such as Physics V1 and V2, so medals survive across physics updates).
+- **`GOAT` badge:** Awarded dynamically to the driver(s) at the top of **Most decorated** (most finished-week golds, then silvers, then bronzes; requires at least one gold; shared on exact ties).
+- **`Fastest Lap` record holders:** Holding P1 on a contested open board (at least **5 unique drivers** on an official circuit and shipping physics revision) awards a Fastest Lap record and ranks you in the Hall of Fame overall and by car class.
+- **`S.T.I.G.` and `OG` badges:** **`S.T.I.G.`** marks the live Middle Gear P1 holder; **`OG`** marks drivers who posted a lap on Physics V1.
+
+## Public stats
+
+LibreCorsa publishes live and 30-day aggregate statistics at [librecorsa.org/stats](https://librecorsa.org/stats). Everything shown on `/stats` comes from anonymous single-dimension daily totals or public lap board and open-race aggregates — no individual player names, accounts, IP addresses, or cross-tabulated slices are exposed.
+
+The page covers:
+
+- **Overview:** Live tabs currently on `/play` (updated every 30 seconds), all-time hours, laps, countries, and drivers on the boards, alongside 30-day totals.
+- **Daily activity:** 30-day daily trends (hours, sessions, laps, countries) and average hours by day of the week.
+- **Circuits & cars:** Top active circuits and cars (requiring at least **10 sessions** in the 30-day window), driving-mode shares (`practice`, `time_trial`, `ai_race`, `open_race`, `room_race`), and top 15 countries (`≥ 10` sessions).
+- **How people play:** Independent 30-day hour shares by input device (`keyboard`, `controller`, `wheel`, `touch`), device class (`desktop`, `tablet`, `phone`), assists (`pro`, `semi_pro`, `assisted`), and weather (`dry`, `wet`).
+- **Boards & races:** Standing lap counts, 30-day board realism/tyre splits, recent weekly challenge participation, and scheduled open-race volume, grid size, and finish rate.
+
+### Public JSON endpoints
+
+Community dashboards and tools can read the same read-only JSON endpoints directly (no authentication required, rate-limited per IP):
+
+| Endpoint | Cache TTL | Query parameters | Returns |
+| :-- | :-- | :-- | :-- |
+| `GET /api/stats/public` | 1 hour (`3600 s`) | None *(query strings return `400`)* | Full `/stats` payload: `{ ok, days, from, to, allTime, totals, perDay, byCircuit, byCar, byMode, byCountry, extras, boards, races }` |
+| `GET /api/stats` | 30 seconds | None | `{ ok, drivers, live }` (all-time verified drivers and live tabs currently on `/play`) |
+| `GET /api/stats/totals` | 1 hour (`3600 s`) | None *(query strings return `400`)* | `{ ok, since, hours, laps, countries, drivers }` |
+| `GET /api/stats/popular` | 6 hours (`21600 s`) | None *(query strings return `400`)* | `{ ok, days, circuits, cars }` (30-day ranked IDs with `≥ 50` sessions, most hours first, no counts) |
+| `GET /api/stats/circuit` | 60 seconds | `track=<id>&vehicle=<id\|all>` (optional `physics` / `version`) | `{ ok, laps, drivers }` for one circuit and car (or all cars) |
+
+All three aggregate endpoints (`/api/stats/public`, `/api/stats/totals`, `/api/stats/popular`) reject query strings so every caller shares a single edge-cached snapshot. `byCircuit`, `byCar`, and `byCountry` in `/api/stats/public` omit entries with fewer than 10 sessions in the 30-day window, and `boards` / `races` / `extras` return `null` on self-hosted instances where those features are disabled.
 
 ## Accounts
 

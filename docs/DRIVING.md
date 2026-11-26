@@ -119,11 +119,69 @@ You can also adjust live in-car dials on track, such as brake bias and the diffe
 
 ## Career mode
 
-Career mode offers two progression ladders with regional calendars (Americas, Europe, and Asia-Pacific on regional tiers), persistent rivals, and season-by-season promotion:
+Career mode is a merit-based championship progression across two separate disciplines, each with its own ladder, regional calendars, persistent AI rivals, test days, bonus objectives, and season-by-season promotion. There is no in-game currency, budget, or contract negotiation system — finishing inside a series' promotion places unlocks the next tier directly.
 
-- **Road ladder:** Club Cup (Suzuki Liana 1.6) or Coupé Cup (VW Scirocco GTX 16V) -> Touring Cup (Nissan R32 JTCC) -> Classic GT (Nissan R33 JGTC) or Prototype Cup (MTRacing 496R) -> GT3 (BMW M4 / Mercedes-AMG) -> Endurance Prototypes (LC-LMDH) -> Grand Prix (LC26 Prototype).
-- **Historic ladder:** Procar Series (BMW M1 Procar) -> Group 4 Classic (Porsche 934 Turbo RSR) -> Can-Am Legends (Chaparral 2D / 2D 427).
-- **Test days and season structure:** Optional **Test days** let you practice the next round's circuit against a promotion-pace lap target before racing. Each season sets configurable length, **mulligans** (round restarts), three **bonus objectives**, optional qualifying (with free flying-lap restart and **End qualifying** in the pause menu), and a championship score. Finishing inside a series' promotion places unlocks the next tier; missing promotion three times in one series ends the career. New career seasons default to **Expert** AI difficulty.
+### Disciplines and progression ladders
+
+Every series uses circuits with pit lanes. In two-car series (**GT3** and **Can-Am Legends**), you choose your car in pre-season and the entire AI field races that same car. Regional tiers offer separate **Americas**, **Europe**, and **Asia-Pacific** calendars.
+
+#### Road ladder
+
+| Tier | Series | Region | Car(s) | Default grid | Full distance | Promotion cutoff | Mandatory pit stops |
+| :-- | :-- | :-- | :-- | --: | --: | :-- | :-- |
+| **0** | **Club Cup** | Americas / Europe / Asia-Pacific | Suzuki Liana 1.6 | 8 | 40 km | Top 3 | None |
+| **0** | **Coupé Cup** | Americas / Europe / Asia-Pacific | VW Scirocco GTX 16V | 8 | 40 km | Top 3 | None |
+| **1** | **Touring Cup** | Americas / Europe / Asia-Pacific | Nissan R32 JTCC | 8 | 60 km | Top 3 | None |
+| **2** | **Classic GT** | Global | Nissan R33 JGTC | 10 | 90 km | Top 4 | 1 stop on Long / Full |
+| **2** | **Prototype Cup** | Global | MTRacing 496R | 10 | 80 km | Top 4 | 1 stop on Long / Full |
+| **3** | **GT3** | Americas / Europe / Asia-Pacific | BMW M4 GT3 Evo or Mercedes-AMG GT3 Evo | 10 | 120 km | Top 4 | 1 stop on Medium / Long / Full |
+| **4** | **Endurance Prototypes** | Global | LC-LMDH | 10 | 240 km | Top 4 | 1 stop on Short / Medium; 2 on Long / Full |
+| **5** *(Final)* | **Grand Prix** | Global | LC26 Prototype | 12 | 305 km | Top 3 | 1 stop on Medium / Long / Full |
+
+Both **Club Cup** and **Coupé Cup** promote into **Touring Cup**, which branches into **Classic GT** (leading to **GT3**) or **Prototype Cup** (which opens both **GT3** and direct entry into **Endurance Prototypes**).
+
+#### Historic ladder
+
+| Tier | Series | Car(s) | Default grid | Full distance | Promotion cutoff | Mandatory pit stops |
+| :-- | :-- | :-- | --: | --: | :-- | :-- |
+| **0** | **Procar Series** | BMW M1 Procar | 8 | 60 km | Top 3 | None |
+| **1** | **Group 4 Classic** | Porsche 934 Turbo RSR | 10 | 100 km | Top 4 | 1 stop on Long / Full |
+| **2** *(Final)* | **Can-Am Legends** | Chaparral 2D or Chaparral 2D 427 | 10 | 150 km | Top 3 | 1 stop on Long / Full |
+
+Mandatory pit stops are capped by race lap count so the field has room to spread its stops: a race needs at least **5 laps** for 1 mandatory stop and at least **8 laps** for 2 stops.
+
+### Season setup, race settings, and weather
+
+Each season starts in **pre-season**. Until you click to start the season, you can switch freely among any unlocked series at your current tier (for example, changing region or switching between Club Cup and Coupé Cup at Tier 0) and configure the settings that lock once round 1 opens:
+
+- **Locked at season start:** Series, car (in two-car series), **Season length** (`Short` 40%, `Medium` 60% default, `Long` 80%, `Full` 100% of the calendar, minimum 3 rounds), custom circuit picks from the series calendar, **Grid size** (`4`–`12`, up to the series default), and **Mulligans** (`0`–`6`, default `3`).
+- **Adjustable before any round:**
+  - **Race length:** `Short` (`25%`, default), `Medium` (`50%`), `Long` (`75%`), or `Full` (`100%`) of the series' full race distance (clamped to `3`–`60` laps).
+  - **AI level:** `Low` (`-16` skill), `Medium` (`-8`), `High` (series baseline), or **`Expert`** (`+7`, default for new careers).
+  - **Damage:** `Off`, `Reduced` (default), or `Full`.
+  - **Qualifying:** `Off`, `3`, `5` (default), or `10` minutes, with free flying-lap restarts and **End qualifying** in the pause menu. If qualifying is turned off, you start from the back of the grid.
+
+Round weather and time of day are seeded deterministically from your career seed so re-running a round keeps identical conditions: most rounds are clear daytime sessions, **Touring Cup**, **GT3**, **Endurance Prototypes**, and **Grand Prix** also include occasional overcast or light-rain rounds, and night circuits always run at night.
+
+### Test days
+
+Before starting a season (on round 1's circuit) or before any upcoming round, you can launch an optional **Test day** in that season's car. Test days track total laps completed and your best clean lap against a **promotion-pace target lap** — computed from the qualifying pace of the AI rival occupying the last promotion spot at your current AI difficulty. Test-day results stay saved on the season per circuit and car.
+
+### Points, persistent rivals, and promotion
+
+- **Championship points:** Top-10 F1 scale (`25, 18, 15, 12, 10, 8, 6, 4, 2, 1`; DNFs and disqualifications score `0`). Ties break by wins, then podiums, then best single race finish.
+- **Persistent rivals:** Starting a career generates a pool of **48 fictional AI drivers**, each with their own pace rating, aggression, consistency, race number, and three-letter code (never clashing with your own code). When you earn promotion, up to **3 top-finishing rivals** are promoted alongside you into the next tier.
+- **Promotion, retries, and career end:** Promotion places scale proportionally if you reduce grid size. Finishing inside the promotion cutoff unlocks the next tier's series; earning promotion in the final series (**Grand Prix** or **Can-Am Legends**) completes the career. Missing promotion starts another attempt in the same series (up to **3 attempts** total); missing promotion three times in one series ends the career.
+
+### Mulligans, bonus objectives, and career score
+
+- **Mulligans:** Restarting a round or retiring early spends a mulligan to race the round again without recording a result. Leaving an active career round (including closing the tab mid-race) settles the round on your next visit as a mulligan if one remains, or as a retirement (DNF, last place, `0` points, with the field simulated) if none are left. Allowing fewer mulligans earns a season score bonus (`(6 − allowed) × 300`).
+- **Bonus objectives:** Starting a season draws **3 objectives** from distinct skill categories (qualifying pace, finishing/consistency, leading laps or fastest lap, and clean races or ≥ 90% lap completion; qualifying objectives are excluded when qualifying is off).
+- **Career score:** Every race awards points for finishing position, grid spot, laps led, lap completion, clean driving (`0 s` penalty full bonus; `≤ 3 s` partial), and podium finishes, multiplied by a challenge multiplier combining **AI level** (`8` / `14` / `20` / `26`), **Damage** (`0` / `1` / `3`), and **Race length** (`0` / `2` / `4` / `6`). At season end, your championship position, points, completed bonus objectives (`2,000` each), first-attempt promotion bonus (`10,000`), and mulligan bonus are added and multiplied by an attempt multiplier (`6×` on attempt 1, `5×` on attempt 2, `4×` on attempt 3).
+
+### Saving and resuming
+
+You can maintain multiple active careers at once (across both Road and Historic ladders). Progress saves automatically in your browser (`librecorsa.career`) after every setting change, test day, round start, and race finish, and syncs across devices when signed in to an optional [account](ONLINE.md#accounts). Completed seasons are stored in your career's **History** tab with full round results, standings, objectives, and score breakdowns.
 
 ## Cameras, HUD, replay, and voice spotter
 
