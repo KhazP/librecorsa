@@ -68,19 +68,30 @@ export function formatLapTime(ms: number | null | undefined): string {
 
 export const gearLabel = (gear: number): string => (gear < 0 ? "R" : gear === 0 ? "N" : String(gear));
 
+/**
+ * The lap on the plate, as the page's lap counter has it (TimingPanels.tsx): the telemetry's lap count is the lap under
+ * way (1 from the start), the out-lap is called so, and a point-to-point course counts runs
+ */
+function lapLabel(t: CarTelemetry, pointToPoint: boolean): string {
+  const race = t.race;
+  const total = race?.totalLaps;
+  if (race && total) return tx("game.vr.lapOf", { lap: Math.max(1, Math.min(race.lap, total)), total });
+  if (!race && t.outLap) return tx("game.vr.outLap");
+  const lap = Math.max(1, race ? race.lap : t.lapCount);
+  return pointToPoint ? tx("game.vr.run", { lap }) : tx("game.vr.lap", { lap });
+}
+
 /** What the panel shows while driving */
-export function driveModel(t: CarTelemetry, unit: SpeedUnit, hint: string | null = null): VrHudModel {
+export function driveModel(t: CarTelemetry, unit: SpeedUnit, hint: string | null = null, pointToPoint = false): VrHudModel {
   const race = t.race;
   const racing = race && race.phase !== "finished" && race.fieldSize > 1;
-  const lapNo = race ? race.lap : t.lapCount + 1;
-  const total = race?.totalLaps;
   return {
     kind: "drive",
     speed: Math.round(speedIn(Math.abs(t.speedKmh), unit)),
     speedUnit: SPEED_LABEL[unit],
     gear: gearLabel(t.gear),
     position: racing ? `P${race.position}/${race.fieldSize}` : null,
-    lap: total ? tx("game.vr.lapOf", { lap: Math.min(lapNo, total), total }) : tx("game.vr.lap", { lap: Math.max(1, lapNo) }),
+    lap: lapLabel(t, pointToPoint),
     lapTime: formatLapTime(t.currentLapTimeMs),
     last: formatLapTime(t.lastLapTimeMs),
     best: formatLapTime(t.bestLapTimeMs),
@@ -165,6 +176,9 @@ class Plate {
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.textBaseline = "alphabetic";
+    // The canvas is not in the page, so it would inherit no direction and lay Arabic lines out left to right ("B: leave
+    // VR" read from its end). The page's own direction, as the language set it (i18n/runtime.ts)
+    ctx.direction = document.documentElement.dir === "rtl" ? "rtl" : "ltr";
     draw(ctx, this.w, this.h, (weight, px) => `${weight} ${px}px ${family}`);
     this.texture.needsUpdate = true;
   }
@@ -249,6 +263,13 @@ export class VrHud {
     const right = { p: model.position, lap: model.lap, t: model.lapTime, last: model.last, best: model.best, hint: model.hint };
     this.right.show(right, (ctx, w, h, font) => {
       const pad = h * 0.1;
+      // A lap time reads left to right in every language: under a right-to-left direction "-:--.---" came out mirrored
+      const time = (value: string, x: number, y: number, maxWidth?: number) => {
+        const dir = ctx.direction;
+        ctx.direction = "ltr";
+        ctx.fillText(value, x, y, maxWidth);
+        ctx.direction = dir;
+      };
       ctx.textAlign = "left";
       ctx.fillStyle = "#ffffff";
       ctx.font = font(800, Math.round(h * 0.2));
@@ -256,7 +277,8 @@ export class VrHud {
       ctx.textAlign = "right";
       ctx.font = font(600, Math.round(h * 0.15));
       ctx.fillStyle = model.position ? DIM : "#ffffff";
-      ctx.fillText(model.position ? model.lap : model.lapTime, w - pad, h * 0.23, w * 0.5);
+      if (model.position) ctx.fillText(model.lap, w - pad, h * 0.23, w * 0.5);
+      else time(model.lapTime, w - pad, h * 0.23, w * 0.5);
       if (model.hint) {
         ctx.textAlign = "left";
         ctx.fillStyle = ACCENT;
@@ -264,7 +286,7 @@ export class VrHud {
         ctx.fillText(model.hint, pad, h * 0.55, w - 2 * pad);
         ctx.fillStyle = "#ffffff";
         ctx.font = font(600, Math.round(h * 0.15));
-        if (model.position) ctx.fillText(model.lapTime, pad, h * 0.84, w - 2 * pad);
+        if (model.position) time(model.lapTime, pad, h * 0.84, w - 2 * pad);
         return;
       }
       const row = (label: string, value: string, y: number, colour: string) => {
@@ -275,7 +297,7 @@ export class VrHud {
         ctx.textAlign = "right";
         ctx.fillStyle = colour;
         ctx.font = font(700, Math.round(h * 0.16));
-        ctx.fillText(value, w - pad, y);
+        time(value, w - pad, y);
       };
       if (model.position) row("", model.lapTime, h * 0.48, "#ffffff");
       row(tx("game.vr.last"), model.last, model.position ? h * 0.69 : h * 0.55, "#ffffff");

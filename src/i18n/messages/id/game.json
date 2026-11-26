@@ -853,6 +853,8 @@
     "pauseHint": "Tahan B untuk jeda",
     "menusOutside": "Menu tampil di luar headset",
     "lap": "Lap {lap}",
+    "run": "Run {lap}",
+    "outLap": "Out lap",
     "lapOf": "Lap {lap}/{total}",
     "last": "Sebelumnya",
     "best": "Terbaik"

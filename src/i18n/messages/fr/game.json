@@ -853,6 +853,8 @@
     "pauseHint": "Maintenez B pour mettre en pause",
     "menusOutside": "Les menus s’affichent hors du casque",
     "lap": "Tour {lap}",
+    "run": "Montée {lap}",
+    "outLap": "Tour de sortie",
     "lapOf": "Tour {lap}/{total}",
     "last": "Dernier",
     "best": "Meilleur"

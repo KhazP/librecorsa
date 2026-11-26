@@ -853,6 +853,8 @@
     "pauseHint": "Giữ B để tạm dừng",
     "menusOutside": "Menu hiển thị bên ngoài kính",
     "lap": "Vòng {lap}",
+    "run": "Lượt {lap}",
+    "outLap": "Vòng xuất pit",
     "lapOf": "Vòng {lap}/{total}",
     "last": "Vòng trước",
     "best": "Tốt nhất"

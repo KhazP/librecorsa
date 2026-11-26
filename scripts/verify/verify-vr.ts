@@ -10,7 +10,7 @@
  */
 import * as THREE from "three";
 import { toReversedDepth } from "../../src/lib/vr/reversed-depth";
-import { HeadsetButtons, PAUSE_HOLD_MS, XR_PAD_ID, XrPadMapper, type XrHandSource } from "../../src/lib/vr/xr-pad";
+import { HeadsetButtons, PAUSE_HOLD_MS, XR_PAD_ID, XrPadMapper, headsetTookPress, type XrHandSource } from "../../src/lib/vr/xr-pad";
 import { isStandaloneHeadset } from "../../src/lib/vr/headset";
 import { driveModel, formatLapTime } from "../../src/lib/vr/vr-hud";
 import type { CarTelemetry, RaceStatus } from "../../src/types/f1";
@@ -102,10 +102,14 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   b.read(pad([]), (t += 16), paused);
   check("Y while paused recentres", b.read(pad([3]), (t += 16), paused).recenter);
   b.read(pad([]), (t += 16), paused);
-  check("A while paused resumes", b.read(pad([0]), (t += 16), paused).resume);
+  const resumed = b.read(pad([0]), (t += 16), paused);
+  check("A while paused resumes", resumed.resume);
+  // The drive is handed back in the same frame: that A (Gear up on the default layout) is the headset's, not a shift
+  check("the press that resumes is the headset's, not the drive's", headsetTookPress(resumed));
   b.read(pad([7]), (t += 16), paused);
   check("a trigger held over does not resume again", !b.read(pad([7]), (t += 16), paused).resume);
   check("no pad: nothing", Object.values(b.read(null, (t += 16), false)).every((v) => v === false));
+  check("a frame the headset did nothing in leaves the drive its presses", !headsetTookPress(b.read(pad([0]), (t += 16), false)));
 }
 
 // --- Standalone headset detection ---------------------------------------------------------------------------------
@@ -127,8 +131,15 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   const race = (over: Partial<RaceStatus>): RaceStatus => ({ phase: "racing", lightsOn: 0, position: 3, fieldSize: 12, lap: 2, standings: [], totalLaps: 10, ...over });
   const tel = (over: Partial<CarTelemetry>) =>
     ({ speedKmh: 187.4, gear: 4, lapCount: 1, currentLapTimeMs: 61_234, lastLapTimeMs: 92_104, bestLapTimeMs: null, ...over }) as CarTelemetry;
+  // The lap under way, as the page's lap counter shows it (TimingPanels.tsx): the telemetry counts from 1. The plate
+  // read one lap ahead of the page (Lap 2 on the first timed lap)
+  const lapOf = (m: ReturnType<typeof driveModel>) => (m.kind === "drive" ? m.lap : "");
   const practice = driveModel(tel({}), "kmh");
-  check("practice: no position, lap counted from laps done", practice.kind === "drive" && practice.position === null && practice.lap === "Lap 2", practice.kind === "drive" ? practice.lap : "");
+  check("practice: no position, the lap under way as the page counts it", practice.kind === "drive" && practice.position === null && lapOf(practice) === "Lap 1", lapOf(practice));
+  check("practice: lap 3 under way reads Lap 3", lapOf(driveModel(tel({ lapCount: 3 }), "kmh")) === "Lap 3", lapOf(driveModel(tel({ lapCount: 3 }), "kmh")));
+  check("practice: a count of 0 still reads Lap 1", lapOf(driveModel(tel({ lapCount: 0 }), "kmh")) === "Lap 1");
+  check("the out-lap reads Out lap", lapOf(driveModel(tel({ outLap: true }), "kmh")) === "Out lap", lapOf(driveModel(tel({ outLap: true }), "kmh")));
+  check("a point-to-point course counts runs", lapOf(driveModel(tel({ lapCount: 2 }), "kmh", null, true)) === "Run 2", lapOf(driveModel(tel({ lapCount: 2 }), "kmh", null, true)));
   const racing = driveModel(tel({ race: race({}) }), "mph");
   check("race: position and lap of the total, speed in mph", racing.kind === "drive" && racing.position === "P3/12" && racing.lap === "Lap 2/10" && racing.speed === 116 && racing.speedUnit === "mph");
   const lights = driveModel(tel({ race: race({ phase: "lights", lightsOn: 3 }) }), "kmh");

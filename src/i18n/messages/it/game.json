@@ -853,6 +853,8 @@
     "pauseHint": "Tieni premuto B per la pausa",
     "menusOutside": "I menu si vedono fuori dal visore",
     "lap": "Giro {lap}",
+    "run": "Salita {lap}",
+    "outLap": "Giro di uscita",
     "lapOf": "Giro {lap}/{total}",
     "last": "Ultimo",
     "best": "Migliore"

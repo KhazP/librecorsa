@@ -853,6 +853,8 @@
     "pauseHint": "Duraklatmak için B’yi basılı tut",
     "menusOutside": "Menüler gözlüğün dışında görünür",
     "lap": "Tur {lap}",
+    "run": "Tırmanış {lap}",
+    "outLap": "Çıkış turu",
     "lapOf": "Tur {lap}/{total}",
     "last": "Son",
     "best": "En iyi"

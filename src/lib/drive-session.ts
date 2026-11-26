@@ -179,6 +179,7 @@ import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 import { VrPresenter } from "@/lib/vr/vr-presenter";
 import { isStandaloneHeadset, mobileClassGpu } from "@/lib/vr/headset";
 import { driveModel as driveVrHud, menuModel as menuVrHud, pausedModel as pausedVrHud } from "@/lib/vr/vr-hud";
+import { headsetTookPress } from "@/lib/vr/xr-pad";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -3352,6 +3353,8 @@ export class DriveSession {
         if (v.resume && !inMenu) this.endPause();
         if (v.recenter) vr.recenter();
         if (v.leave) vr.exit();
+        // The press was the headset's: the A that drove on must not also shift up as the car is handed back
+        if (headsetTookPress(v)) device.pressed.clear();
       }
       // The pause menu, the seat panel or a lost GPU context: the car waits
       // The career's pre-race show holds the car too: the physics, the lights and the qualifying clock wait under it
@@ -3403,6 +3406,8 @@ export class DriveSession {
             if (this.snapshot.seatPanel) this.closeSeatPanel();
             // Opening only: in the pause menu, B / Menu resume through the menu's own navigation
             else if (!this.snapshot.paused) this.togglePause();
+            // In a headset the page's pause menu is not shown: a pad's or a wheel's Menu drives on again
+            else if (vr.presenting) this.endPause();
             continue;
           }
           if (!driving) continue;
@@ -5113,7 +5118,12 @@ export class DriveSession {
             ? menuVrHud()
             : this.snapshot.paused
               ? pausedVrHud()
-              : driveVrHud(physics.telemetry, settingsNow.ui.units.speed, vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null);
+              : driveVrHud(
+                  physics.telemetry,
+                  settingsNow.ui.units.speed,
+                  vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null,
+                  Boolean(track.pointToPoint)
+                );
           vr.render(scene, camera.position, camera.quaternion, hudModel, nowMs);
         } else {
           const t0 = loggedFirstFrame ? 0 : performance.now();

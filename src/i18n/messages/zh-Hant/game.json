@@ -853,6 +853,8 @@
     "pauseHint": "按住 B 暫停",
     "menusOutside": "選單顯示在頭戴裝置外",
     "lap": "第 {lap} 圈",
+    "run": "第 {lap} 趟",
+    "outLap": "出場圈",
     "lapOf": "第 {lap}/{total} 圈",
     "last": "上一圈",
     "best": "最佳"

@@ -125,6 +125,15 @@ export interface VrPauseInput {
 }
 
 /**
+ * The headset's buttons did something this frame (paused, drove on, recentred or left): the pad's presses of the same
+ * frame are theirs, not the drive's. The A that drives on is Gear up on the default layout, and the drive is handed
+ * back within the same frame, so the press would shift up a gear as well.
+ */
+export function headsetTookPress(v: VrPauseInput): boolean {
+  return v.pause || v.resume || v.recenter || v.leave;
+}
+
+/**
  * The headset's own buttons, read from the controllers' pad: the pause menu in a headset is the HUD's paused panel.
  * Driving, a long B pauses (a tap of B stays the pad's B). Paused, A or the throttle trigger drives on, Y recentres
  * and B leaves the headset; the B that paused has to be let go first, so holding it never leaves as well.
