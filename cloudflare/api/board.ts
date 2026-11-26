@@ -17,6 +17,8 @@
  *   GET  /api/laps/<id>   -> the lap's LapRecording (its ghost), or 404
  *   POST /api/drivers/rename  { from, to, code?, driverKey }
  *                         -> { ok: true, moved } | { ok: false, error, taken? }
+ *   POST /api/drivers/lookup  { driverKey, name? }
+ *                         -> { ok: true, name: string | null, code: string | null, nameKey: string | null }
  *
  * One board per circuit, car and revision (lap-types.ts `lapPhysicsVersion`: the physics version, the circuit's own
  * restarts, the LC26's engine): every driver appears once, with their fastest lap and what it
@@ -619,4 +621,95 @@ export async function renameDriver(deps: BoardDeps, request: Request): Promise<A
     await moveDriverAwards(deps.db, toKey, toKey, to);
   }
   return { status: 200, body: { ok: true, moved } };
+}
+
+/**
+ * Resolves the driver name and three-letter code held by a driver key (POST /api/drivers/lookup), used when importing
+ * a key file on another browser or device so a stale or omitted name in the file recovers the current identity on the
+ * boards. When `name` (from the key file) is still actively claimed by this key (or its account), that claim is
+ * preferred; otherwise the most recently seen active claim is returned. Only public display fields come back (no
+ * hashes, account ids, or timestamps).
+ */
+export async function lookupDriver(deps: BoardDeps, request: Request): Promise<Answer> {
+  if (Number(request.headers.get("Content-Length") ?? 0) > MAX_RENAME_BYTES) return fail("Body is too large", 413);
+  const text = await request.text();
+  if (text.length > MAX_RENAME_BYTES) return fail("Body is too large", 413);
+  let body: { driverKey?: unknown; name?: unknown };
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return fail("Body is not valid JSON");
+  }
+  if (typeof body !== "object" || body === null) return fail("Body is not valid JSON");
+  if (typeof body.driverKey !== "string" || !DRIVER_KEY_RE.test(body.driverKey)) {
+    return fail("Missing driver key. Reload the game and try again");
+  }
+  const rawHint = typeof body.name === "string" ? body.name.trim() : "";
+  const hintKey = rawHint.length > 0 && rawHint.length <= MAX_NAME_LENGTH ? driverNameKey(rawHint) : "";
+
+  const keyHash = await sha256Hex(body.driverKey);
+  const cutoff = deps.now() - CLAIM_LAPSES_MS;
+  const account = await accountOfKey(deps.db, keyHash);
+  const accounts = account !== undefined;
+  const accountId = account?.accountId ?? null;
+
+  let matchedKey: string | null = null;
+  if (hintKey) {
+    const hinted = await deps.db
+      .prepare(`SELECT key_hash, last_seen${accounts ? ", account_id" : ""} FROM drivers WHERE name_key = ?`)
+      .bind(hintKey)
+      .first<NameOwner & { last_seen: number }>();
+    const active = hinted && (hinted.last_seen >= cutoff || (accounts && Boolean(hinted.account_id)));
+    if (active && keyProvesName(hinted, keyHash, accountId)) matchedKey = hintKey;
+  }
+
+  if (!matchedKey) {
+    const row = accounts
+      ? accountId
+        ? await deps.db
+            .prepare(
+              "SELECT name_key FROM drivers WHERE (key_hash = ? OR account_id = ?) AND (last_seen >= ? OR account_id IS NOT NULL) ORDER BY (CASE WHEN key_hash = ? THEN 1 ELSE 0 END) DESC, last_seen DESC, claimed_at DESC LIMIT 1",
+            )
+            .bind(keyHash, accountId, cutoff, keyHash)
+            .first<{ name_key: string }>()
+        : await deps.db
+            .prepare(
+              "SELECT name_key FROM drivers WHERE key_hash = ? AND (last_seen >= ? OR account_id IS NOT NULL) ORDER BY last_seen DESC, claimed_at DESC LIMIT 1",
+            )
+            .bind(keyHash, cutoff)
+            .first<{ name_key: string }>()
+      : await deps.db
+          .prepare("SELECT name_key FROM drivers WHERE key_hash = ? AND last_seen >= ? ORDER BY last_seen DESC, claimed_at DESC LIMIT 1")
+          .bind(keyHash, cutoff)
+          .first<{ name_key: string }>();
+    matchedKey = row?.name_key ?? null;
+  }
+
+  if (!matchedKey) return { status: 200, body: { ok: true, name: null, code: null, nameKey: null } };
+
+  let display = await deps.db
+    .prepare("SELECT driver_name AS name, driver_code AS code FROM laps WHERE name_key = ? ORDER BY created_at DESC LIMIT 1")
+    .bind(matchedKey)
+    .first<{ name: string; code: string }>();
+  if (!display) {
+    try {
+      display = await deps.db
+        .prepare("SELECT name, code FROM race_cars WHERE name_key = ? ORDER BY rowid DESC LIMIT 1")
+        .bind(matchedKey)
+        .first<{ name: string; code: string }>();
+    } catch (err) {
+      // Minimal databases without migration 0002 have no race_cars table
+      if (!/no such table/i.test(String(err))) throw err;
+    }
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      name: display?.name ?? null,
+      code: display?.code ?? null,
+      nameKey: matchedKey,
+    },
+  };
 }

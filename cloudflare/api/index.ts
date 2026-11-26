@@ -4,6 +4,7 @@
  *   GET /api/rooms/<CODE>         WebSocket to a private room's server (room.ts)
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
  *   POST /api/drivers/rename                           a driver's new name, their laps with it (board.ts)
+ *   POST /api/drivers/lookup                           the driver name and code held by a driver key (board.ts)
  *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
  *   GET /api/races/waiting                              who is waiting for the next race (race.ts, read only)
  *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
@@ -29,7 +30,7 @@
  */
 import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/race-schedule";
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
-import { boardDeps, ghostOf, listLaps, renameDriver, submitLap } from "./board";
+import { boardDeps, ghostOf, listLaps, lookupDriver, renameDriver, submitLap } from "./board";
 import { driverRecord, listRaceResults } from "./results";
 import { driverProfile } from "./profile";
 import { ROOM_CODE_RE } from "./room";
@@ -340,6 +341,19 @@ export async function handleApi(request: Request, env: Env, url: URL, inject: Ap
       return json(answer.body, answer.status, origin);
     } catch (err) {
       console.error("rename", err);
+      return json({ ok: false, error: "The lap board had a problem. Try again in a moment" }, 500, origin);
+    }
+  }
+
+  if (path === "/api/drivers/lookup" && request.method === "POST") {
+    const deps = config.board ? boardDeps(env, challengeProblem) : null;
+    if (!deps) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    if (await overLimit(env.BOARD_LIMIT, request)) return json({ ok: false, error: "Too many requests, try again later" }, 429, origin);
+    try {
+      const answer = await lookupDriver(deps, request);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("driver lookup", err);
       return json({ ok: false, error: "The lap board had a problem. Try again in a moment" }, 500, origin);
     }
   }
