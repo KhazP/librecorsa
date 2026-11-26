@@ -2179,6 +2179,11 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         print(f'  palettes: {len(palettes)} materials for {sum(len(c) for c in palette_cells.values())} colours, '
               f'{len(palette_uv)} kn5 materials')
     steer_out = writer.add_node('STEER', children=steer_kids, matrix=M_steer)
+    # The driver driver3d.ini seats in the car, where the mod ships its model (scripts/cars/ac_driver.py)
+    driver = None
+    if preset.get('driver', True):
+        import ac_driver
+        driver = ac_driver.add_driver(sys.modules[__name__], writer, pool, car_dir, data, shift, M_steer, skin)
 
     # Cameras. The driver's eyes from car.ini (DRIVEREYES is in the kn5's frame: 27 cm over and 47 cm behind the
     # steering wheel); the others from the geometry (car.ini's bonnet / bumper positions land inside the dash and the
@@ -2264,7 +2269,11 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             'converted': 'scripts/cars/port_ac_car.py',
         },
     }
-    car_root = writer.add_node('CAR', children=[body_node, steer_out, *wheel_nodes, *hub_nodes], extras=extras)
+    if driver is not None:
+        # Its helmet, suit and gloves are the livery's
+        extras['skinMaps'] = {**extras.get('skinMaps', {}), **driver[1]}
+    car_root = writer.add_node('CAR', children=[body_node, steer_out, *wheel_nodes, *hub_nodes,
+                                                *([driver[0]] if driver is not None else [])], extras=extras)
     # Not 'CAR' (GlbWriter's default): three's GLTFLoader names the scene first, so the root node would load as
     # CAR_1 and the rig's getObjectByName('CAR') would find the scene, without the extras
     writer.j['scenes'][0] = {'name': 'Scene', 'nodes': [car_root]}
@@ -2310,6 +2319,8 @@ def main():
                     help="also write every skin's livery files (the preset's skin_maps) into this folder")
     ap.add_argument('--skins-only', default=None,
                     help="with --skins-out: the skin folders to export, comma-separated")
+    ap.add_argument('--no-driver', action='store_true',
+                    help="leave out the driver driver3d.ini names, even where the mod ships its model")
     ap.add_argument('--report', default=None,
                     help='also write what was made as JSON: the preset (and what an automatic one found), the rig '
                          'measurements and the skins')
@@ -2360,6 +2371,8 @@ def main():
         print('  ' + json.dumps(preset['detected']))
     else:
         preset = PRESETS[car]
+    if a.no_driver:
+        preset = {**preset, 'driver': False}
     listing = None
     with np.errstate(all='ignore'):
         extras, skin_files = port(a.car_dir, a.out, preset, a.skin or preset['default_skin'], a.kn5, a.max_tex,
@@ -2381,6 +2394,20 @@ def main():
                     only = set(a.skins_only.split(',')) if a.skins_only else None
                     listing = export_auto_skins(a.car_dir, preset, textures, materials, skin_files, a.skins_out,
                                                 a.max_tex, a.jpeg_quality, a.skin or preset['default_skin'], only)
+                    if preset.get('driver', True):
+                        # Each livery's driver: its helmet, and its suit and gloves where they differ
+                        import ac_driver
+                        folders = sorted(d for d in os.listdir(os.path.join(a.car_dir, 'skins'))
+                                         if os.path.isdir(os.path.join(a.car_dir, 'skins', d)))
+                        ids = unique_skin_ids(preset, folders)
+                        own = ac_driver.export_driver_skins(sys.modules[__name__], a.car_dir, a.skins_out, ids,
+                                                            a.skin or preset['default_skin'], a.jpeg_quality, only)
+                        folder_of = {sid: f for f, sid in ids.items()}
+                        for entry in listing:
+                            entry['files'] = entry['files'] + own.get(folder_of.get(entry['id']), [])
+                        with open(os.path.join(a.skins_out, 'skins.json'), 'w') as fh:
+                            json.dump(listing, fh, indent=1, ensure_ascii=False)
+                        print(f"  driver livery files: {sum(len(v) for v in own.values())}")
             elif not preset['skin_maps'] and a.report:
                 # The importer's run: the model's own paint is the one livery
                 listing = []
