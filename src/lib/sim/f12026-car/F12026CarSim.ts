@@ -1134,6 +1134,7 @@ const _groundProj: TrackProjectionResult = { sample: createTrackSampleBuffer(), 
 const _simProj: TrackProjectionResult = { sample: createTrackSampleBuffer(), s: 0, lateralOffset: 0, distSq: 0 };
 const _simSample: TrackSamplePoint = createTrackSampleBuffer();
 const _apSample: TrackSamplePoint = createTrackSampleBuffer();
+const _offTrackProbeHit = createGroundHit();
 const _planSpeedOut = { v: 0, pedalFF: 0 };
 
 /**
@@ -3761,14 +3762,38 @@ export class F12026CarSim implements SimulatorCar {
     const fenced = inLapStretch(this.track.otherLayoutRoads, this.s, this.track.totalLengthM);
     let anyGrounded = false;
     let allOff = true;
+    let anyUngrounded = false;
+    const surfaceValidAt = (hit: GroundHit, x: number, z: number): boolean => {
+      if (!hit.props.validTrack) return false;
+      const kind = hit.surface;
+      if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, x, z)) return false;
+      return true;
+    };
     for (let i = 0; i < 4; i++) {
       const w = W[i];
-      if (!w.grounded) continue;
+      if (!w.grounded) {
+        anyUngrounded = true;
+        continue;
+      }
       anyGrounded = true;
-      const kind = w.ground.surface;
-      if (!w.ground.props.validTrack) continue;
-      if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
-      allOff = false;
+      if (surfaceValidAt(w.ground, w.hardpointWorld.x, w.hardpointWorld.z)) allOff = false;
+    }
+    // If 1–3 wheels are briefly ungrounded (e.g. hopping a kerb or passing over a collider seam) while the remaining
+    // grounded wheels sit on runoff/grass, probe straight down beneath the lifted wheels (falling back to their last
+    // contact only when the collider has a gap/seam there) so a kerb hop doesn't falsely count as all four wheels off.
+    if (anyGrounded && allOff && anyUngrounded) {
+      const activeGround = this.vehicle.getGround();
+      for (let i = 0; i < 4; i++) {
+        const w = W[i];
+        if (w.grounded) continue;
+        const wx = w.hardpointWorld.x;
+        const wz = w.hardpointWorld.z;
+        const hit = activeGround.query(wx, wz, w.hardpointWorld.y + 2.0, _offTrackProbeHit) ? _offTrackProbeHit : w.ground;
+        if (surfaceValidAt(hit, wx, wz)) {
+          allOff = false;
+          break;
+        }
+      }
     }
     // In the pit lane the car is off the racing surface but not off the track
     const inPitLane = Boolean(this.pitTracker?.spot);

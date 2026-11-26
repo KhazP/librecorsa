@@ -1928,6 +1928,10 @@ export class VehiclePhysics {
     this.ground = ground;
   }
 
+  public getGround(): GroundQuery {
+    return this.ground;
+  }
+
   public setWalls(walls: WallQuery | undefined): void {
     this.walls = walls;
   }
