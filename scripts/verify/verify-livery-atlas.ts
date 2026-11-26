@@ -1010,7 +1010,12 @@ async function main(): Promise<void> {
             ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, overlayOnly, clampedEdgePixels > 0, stampSurface)
             : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, labelBlockedMask, overlayOnly, stampSurface);
         assert.ok(!JARGON_RE.test(layers.labelsSvg), `${target.id} (${overlayOnly ? "overlay" : "template"}) labels must not contain engine jargon`);
-        if (!overlayOnly) {
+        if (overlayOnly) {
+          const lCount = (layers.labelsSvg.match(/>L<\/text>/g) ?? []).length;
+          const rCount = (layers.labelsSvg.match(/>R<\/text>/g) ?? []).length;
+          assert.equal(lCount, 3, `${target.id} overlay must have 3 L markers (TOP, REAR, FRONT), got ${lCount}`);
+          assert.equal(rCount, 3, `${target.id} overlay must have 3 R markers (TOP, REAR, FRONT), got ${rCount}`);
+        } else {
           assert.ok(layers.placedStamps.length > 0, `${target.id}: expected at least one placed in-body stamp`);
           for (const st of layers.placedStamps) {
             assert.ok(st.coverage >= 0.88, `${target.id} ${st.pid} stamp "${st.text}" has low flat coverage ${st.coverage.toFixed(2)}`);

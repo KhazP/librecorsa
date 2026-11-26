@@ -948,33 +948,42 @@ function createLabelEmitter(labelParts: string[], placer: PanelLabelPlacer, pane
     return false;
   };
 
-  /** Places an outlined reference label (axle, centre line, or overlay tag) strictly off painted pixels */
+  /** Places an outlined reference label (single or multi-line variants) strictly off painted pixels */
   const placeRefText = (
     pid: AnyPanelId,
-    text: string,
+    textOrVariants: string | readonly (string | readonly string[])[],
     targets: readonly [number, number][],
     opts?: { startFontSize?: number; minFontSize?: number; xRange?: readonly [number, number]; yRange?: readonly [number, number]; cls?: "ref" | "hdr" }
   ): boolean => {
     const startFs = opts?.startFontSize ?? 20;
     const minFs = opts?.minFontSize ?? 14;
     const cls = opts?.cls ?? "ref";
+    const variants: (readonly string[])[] =
+      typeof textOrVariants === "string"
+        ? [[textOrVariants]]
+        : textOrVariants.map((v) => (typeof v === "string" ? [v] : v));
     for (const strictMargin of [true, false]) {
-      for (let fs = startFs; fs >= minFs; fs -= 2) {
-        const w = estimateTextWidth(text, fs) + 12;
-        const h = Math.round(fs * 1.25) + 8;
-        const box = placer.findBox(pid, w, h, targets, {
-          strictMargin,
-          xRange: opts?.xRange,
-          yRange: opts?.yRange,
-        });
-        if (!box) continue;
-        placer.reserve(pid, box);
-        const cx = box.x + box.w / 2;
-        const ty = box.y + Math.round(fs * 0.96) + 3;
-        labelParts.push(
-          `<text x="${cx.toFixed(1)}" y="${ty}" text-anchor="middle" font-size="${fs}" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="${cls}">${escXml(text)}</text>`
-        );
-        return true;
+      for (const lines of variants) {
+        for (let fs = startFs; fs >= minFs; fs -= 2) {
+          const lineH = Math.round(fs * 1.22);
+          const w = Math.max(...lines.map((l) => estimateTextWidth(l, fs))) + 12;
+          const h = lines.length * lineH + 8;
+          const box = placer.findBox(pid, w, h, targets, {
+            strictMargin,
+            xRange: opts?.xRange,
+            yRange: opts?.yRange,
+          });
+          if (!box) continue;
+          placer.reserve(pid, box);
+          const cx = box.x + box.w / 2;
+          for (let i = 0; i < lines.length; i++) {
+            const ty = box.y + i * lineH + Math.round(fs * 0.96) + 3;
+            labelParts.push(
+              `<text x="${cx.toFixed(1)}" y="${ty}" text-anchor="middle" font-size="${fs}" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="${cls}">${escXml(lines[i])}</text>`
+            );
+          }
+          return true;
+        }
       }
     }
     return false;
@@ -1276,6 +1285,20 @@ function buildF1VectorLayers(
     placeRefText("front", "FRONT", [[p.front.x + 12, p.front.y + 10]], { startFontSize: 22, cls: "hdr" });
     placeRefText("fwEndplateLeft", "FW ENDPLATE L (←)", [[p.fwEndplateLeft.x + 10, p.fwEndplateLeft.y + 10]], { startFontSize: 18, minFontSize: 14, cls: "hdr" });
     placeRefText("fwEndplateRight", "FW ENDPLATE R (→)", [[p.fwEndplateRight.x + p.fwEndplateRight.w - 210, p.fwEndplateRight.y + 10]], { startFontSize: 18, minFontSize: 14, cls: "hdr" });
+
+    // Small L / R orientation markers in empty space on TOP (L=upper, R=lower), REAR (L=left, R=right), FRONT (R=left, L=right)
+    const lrChecks: [string, boolean][] = [
+      ["top:L", placeRefText("top", "L", [[p.top.x + 18, p.top.y + 62], [p.top.x + 18, p.top.y + 110]], { startFontSize: 22, minFontSize: 16, yRange: [p.top.y + 8, topCentreY - 12], cls: "hdr" })],
+      ["top:R", placeRefText("top", "R", [[p.top.x + 18, p.top.y + p.top.h - 46], [p.top.x + 18, p.top.y + p.top.h - 110]], { startFontSize: 22, minFontSize: 16, yRange: [topCentreY + 12, p.top.y + p.top.h - 8], cls: "hdr" })],
+      ["rear:L", placeRefText("rear", "L", [[p.rear.x + 18, p.rear.y + p.rear.h - 52], [p.rear.x + 18, p.rear.y + 52], [rearCentreX - 180, p.rear.y + 52]], { startFontSize: 22, minFontSize: 16, xRange: [p.rear.x + 8, rearCentreX - 12], cls: "hdr" })],
+      ["rear:R", placeRefText("rear", "R", [[p.rear.x + p.rear.w - 48, p.rear.y + p.rear.h - 52], [p.rear.x + p.rear.w - 48, p.rear.y + 52], [rearCentreX + 140, p.rear.y + 52]], { startFontSize: 22, minFontSize: 16, xRange: [rearCentreX + 12, p.rear.x + p.rear.w - 8], cls: "hdr" })],
+      ["front:R", placeRefText("front", "R", [[p.front.x + 18, p.front.y + 58], [p.front.x + 18, p.front.y + p.front.h - 52]], { startFontSize: 20, minFontSize: 14, xRange: [p.front.x + 8, frontCentreX - 12], cls: "hdr" })],
+      ["front:L", placeRefText("front", "L", [[p.front.x + p.front.w - 48, p.front.y + 58], [p.front.x + p.front.w - 48, p.front.y + p.front.h - 52]], { startFontSize: 20, minFontSize: 14, xRange: [frontCentreX + 12, p.front.x + p.front.w - 8], cls: "hdr" })],
+    ];
+    const missingLr = lrChecks.filter(([, ok]) => !ok).map(([k]) => k);
+    if (missingLr.length > 0) {
+      throw new Error(`${target.id} (overlay): failed to place L/R marker(s): ${missingLr.join(", ")}`);
+    }
   } else {
     // 0. Emit & reserve in-body orientation stamps on verified flat, view-facing surfaces (drop any that lack a flat spot)
     if (stampPlacer) {
@@ -1470,11 +1493,43 @@ function buildPortedVectorLayers(
   }
 
   if (overlayOnly) {
-    placeRefText("top", `${target.id.toUpperCase()} — TOP (FRONT →)`, [[p.top.x + 400, p.top.y + 140], [p.top.x + 12, p.top.y + 10]], { startFontSize: 22, minFontSize: 14, cls: "hdr" });
+    if (target.id === "lc-lmdh") {
+      // Place LC-LMDH TOP title cleanly inside the spacious rear-deck vent cutout (avoiding the cramped wheel-arch louver)
+      placeRefText(
+        "top",
+        [[`${target.id.toUpperCase()} — TOP`, "(FRONT →)"], `${target.id.toUpperCase()} — TOP (FRONT →)`],
+        [[p.top.x + 365, p.top.y + 302], [p.top.x + 365, p.top.y + 478], [p.top.x + 1435, p.top.y + 340]],
+        { startFontSize: 20, minFontSize: 14, xRange: [p.top.x + 300, p.top.x + 1560], yRange: [p.top.y + 240, p.top.y + 580], cls: "hdr" }
+      );
+    } else {
+      placeRefText("top", `${target.id.toUpperCase()} — TOP (FRONT →)`, [[p.top.x + 400, p.top.y + 140], [p.top.x + 12, p.top.y + 10]], { startFontSize: 22, minFontSize: 14, cls: "hdr" });
+    }
     placeRefText("left", "LEFT SIDE (← FRONT)", [[p.left.x + 12, p.left.y + 10]], { startFontSize: 24, cls: "hdr" });
     placeRefText("right", "RIGHT SIDE (FRONT →)", [[p.right.x + p.right.w - 320, p.right.y + 10]], { startFontSize: 24, cls: "hdr" });
     placeRefText("rear", "REAR", [[p.rear.x + 440, p.rear.y + 40], [p.rear.x + 12, p.rear.y + 10]], { startFontSize: 22, cls: "hdr" });
     placeRefText("front", "FRONT", [[p.front.x + 440, p.front.y + 40], [p.front.x + 12, p.front.y + 10]], { startFontSize: 22, cls: "hdr" });
+
+    // Small L / R orientation markers in empty space on TOP (L=upper, R=lower), REAR (L=left, R=right), FRONT (R=left, L=right)
+    const topLTargets: [number, number][] =
+      target.id === "lc-lmdh"
+        ? [[p.top.x + 1468, p.top.y + 336], [p.top.x + 440, p.top.y + 312], [p.top.x + 1540, p.top.y + 56]]
+        : [[p.top.x + 1120, p.top.y + 210], [p.top.x + 1280, p.top.y + 210], [p.top.x + 420, p.top.y + 310]];
+    const topRTargets: [number, number][] =
+      target.id === "lc-lmdh"
+        ? [[p.top.x + 1468, p.top.y + 462], [p.top.x + 440, p.top.y + 492], [p.top.x + 1540, p.top.y + 742]]
+        : [[p.top.x + 1120, p.top.y + 590], [p.top.x + 1280, p.top.y + 590], [p.top.x + 420, p.top.y + 500]];
+    const lrChecks: [string, boolean][] = [
+      ["top:L", placeRefText("top", "L", topLTargets, { startFontSize: 22, minFontSize: 16, yRange: [p.top.y + 8, topCentreY - 12], cls: "hdr" })],
+      ["top:R", placeRefText("top", "R", topRTargets, { startFontSize: 22, minFontSize: 16, yRange: [topCentreY + 12, p.top.y + p.top.h - 8], cls: "hdr" })],
+      ["rear:L", placeRefText("rear", "L", [[p.rear.x + 100, p.rear.y + 52], [p.rear.x + 240, p.rear.y + 46], [p.rear.x + 240, p.rear.y + p.rear.h - 52]], { startFontSize: 22, minFontSize: 16, xRange: [p.rear.x + 8, rearCentreX - 12], cls: "hdr" })],
+      ["rear:R", placeRefText("rear", "R", [[p.rear.x + p.rear.w - 130, p.rear.y + 52], [p.rear.x + p.rear.w - 260, p.rear.y + 46], [p.rear.x + p.rear.w - 260, p.rear.y + p.rear.h - 52]], { startFontSize: 22, minFontSize: 16, xRange: [rearCentreX + 12, p.rear.x + p.rear.w - 8], cls: "hdr" })],
+      ["front:R", placeRefText("front", "R", [[p.front.x + 100, p.front.y + 52], [p.front.x + 240, p.front.y + 46], [p.front.x + 240, p.front.y + p.front.h - 52]], { startFontSize: 22, minFontSize: 16, xRange: [p.front.x + 8, frontCentreX - 12], cls: "hdr" })],
+      ["front:L", placeRefText("front", "L", [[p.front.x + p.front.w - 130, p.front.y + 52], [p.front.x + p.front.w - 260, p.front.y + 46], [p.front.x + p.front.w - 260, p.front.y + p.front.h - 52]], { startFontSize: 22, minFontSize: 16, xRange: [frontCentreX + 12, p.front.x + p.front.w - 8], cls: "hdr" })],
+    ];
+    const missingLr = lrChecks.filter(([, ok]) => !ok).map(([k]) => k);
+    if (missingLr.length > 0) {
+      throw new Error(`${target.id} (overlay): failed to place L/R marker(s): ${missingLr.join(", ")}`);
+    }
   } else {
     // 0. Emit & reserve in-body orientation stamps on verified flat, view-facing surfaces (drop any that lack a flat spot)
     if (stampPlacer) {
