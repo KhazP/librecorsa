@@ -27,14 +27,14 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#5 Felipe Massa · Ferrari",
     swatch: ["#c8102e", "#f2f2f2"],
     sound: f12007Sound("ferrari"),
-    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   {
     id: "ferrari-massa-early",
     name: "#5 Felipe Massa · Ferrari, early season",
     swatch: ["#c8102e", "#f2f2f2"],
     sound: f12007Sound("ferrari"),
-    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   {
     id: "ferrari-raikkonen-early",
@@ -59,7 +59,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#b8bcc2", "#141414", "#d8232a"],
     modelUrl: f12007BodyUrl("mclaren"),
     sound: f12007Sound("mclaren"),
-    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Renault R27
   {
@@ -77,7 +77,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#f27f1b", "#1c3f94"],
     modelUrl: f12007BodyUrl("renault"),
     sound: f12007Sound("renault"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Honda RA107
   {
@@ -95,7 +95,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#1f4e8c", "#4e8f3a"],
     modelUrl: f12007BodyUrl("honda"),
     sound: f12007Sound("honda"),
-    files: ["honda_07extra4.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
+    files: ["honda_07extra4.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // BMW Sauber F1.07
   {
@@ -113,7 +113,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#f2f2f2", "#1e4fa0"],
     modelUrl: f12007BodyUrl("bmw-sauber"),
     sound: f12007Sound("bmw-sauber"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   {
     id: "bmw-sauber-vettel",
@@ -121,7 +121,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#f2f2f2", "#1e4fa0"],
     modelUrl: f12007BodyUrl("bmw-sauber"),
     sound: f12007Sound("bmw-sauber"),
-    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "wcwing.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "wcwing.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Toyota TF107
   {
@@ -130,7 +130,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#f2f2f2", "#d0021b"],
     modelUrl: f12007BodyUrl("toyota"),
     sound: f12007Sound("toyota"),
-    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   {
     id: "toyota-trulli",
@@ -157,7 +157,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#1c2a55", "#d8232a", "#f5c400"],
     modelUrl: f12007BodyUrl("red-bull"),
     sound: f12007Sound("red-bull"),
-    files: ["red_bull_14extra4.jpg", "wccarbody.jpg"],
+    files: ["red_bull_14extra4.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Williams FW29
   {
@@ -175,7 +175,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#1d2a5a", "#f2f2f2"],
     modelUrl: f12007BodyUrl("williams"),
     sound: f12007Sound("williams"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Toro Rosso STR2
   {
@@ -193,7 +193,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#1c2552", "#c8102e"],
     modelUrl: f12007BodyUrl("toro-rosso"),
     sound: f12007Sound("toro-rosso"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   {
     id: "toro-rosso-vettel",
@@ -201,7 +201,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#1c2552", "#c8102e"],
     modelUrl: f12007BodyUrl("toro-rosso"),
     sound: f12007Sound("toro-rosso"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Spyker F8-VII
   {
@@ -219,7 +219,7 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#f07a1a", "#b8bcc2"],
     modelUrl: f12007BodyUrl("spyker"),
     sound: f12007Sound("spyker"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   // Super Aguri SA07
   {
@@ -237,6 +237,6 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     swatch: ["#f2f2f2", "#d0021b"],
     modelUrl: f12007BodyUrl("super-aguri"),
     sound: f12007Sound("super-aguri"),
-    files: ["t_cam1.jpg", "wccarbody.jpg"],
+    files: ["t_cam1.jpg", "wccarbody.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
 ];
