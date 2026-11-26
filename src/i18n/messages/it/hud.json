@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Frenata ~{distance} {unit} prima in ingresso di Curva {turn}.",
       "brakeLaterDetail": "Frenata ~{distance} {unit} più tardi in ingresso di Curva {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Tre schermi",
+    "text": "<b>Tre schermi?</b> · dai a ognuno la sua visuale",
+    "setUp": "Configura",
+    "dismiss": "Non ora"
   }
 }

@@ -39,7 +39,8 @@
         "graphics": "Grafica",
         "hud": "HUD",
         "camera": "Camera",
-        "interface": "Interfaccia"
+        "interface": "Interfaccia",
+        "screens": "Schermi"
       },
       "audio": {
         "main": "Audio"
@@ -442,7 +443,8 @@
       "label": "Campo visivo",
       "hintCarOwn": "Predefinito di ogni auto",
       "hintCarDefault": "Predefinito dell’auto: {degrees}°",
-      "valueCar": "{value}° (auto)"
+      "valueCar": "{value}° (auto)",
+      "offTrueFov": "Impostato da Campo visivo reale in Schermi"
     },
     "headMovement": {
       "label": "Movimento della testa",
@@ -548,6 +550,47 @@
         "reduced": "Danni dimezzati; un’auto distrutta ricomincia il giro lanciato già riparata",
         "full": "Danni da gara; un’auto distrutta ricomincia il giro lanciato già riparata"
       }
+    },
+    "screensMode": {
+      "label": "Schermi",
+      "hint": "Tre schermi affiancati mostrano ciascuno la propria visuale, con menu e HUD su quello centrale. Estendi il gioco su tutti e tre con NVIDIA Surround o AMD Eyefinity.",
+      "options": {
+        "single": "Uno",
+        "triple": "Tre"
+      }
+    },
+    "screenSize": {
+      "label": "Dimensione schermo",
+      "hint": "La diagonale dell’immagine di uno schermo, come venduto",
+      "value": "{value}″"
+    },
+    "screenDistance": {
+      "label": "Distanza dallo schermo",
+      "hint": "Dai tuoi occhi allo schermo centrale, in linea retta"
+    },
+    "screenBezel": {
+      "label": "Cornice",
+      "hint": "La cornice di uno schermo accanto all’immagine. 0 se Surround o Eyefinity compensa già le cornici, sotto 0 per le strisce che le nascondono"
+    },
+    "sideAngle": {
+      "label": "Angolo schermi laterali",
+      "hint": "Quanto sono angolati gli schermi laterali rispetto a quello centrale. A {degrees}° il loro centro guarda i tuoi occhi",
+      "valueFacing": "{value}° (verso di te)"
+    },
+    "eyeHeight": {
+      "label": "Altezza degli occhi",
+      "hint": "I tuoi occhi sopra (+) o sotto (−) il centro degli schermi"
+    },
+    "trueFov": {
+      "label": "Campo visivo reale",
+      "hint": "Le visuali del pilota mostrano esattamente ciò che gli schermi inquadrano dalla tua posizione. Off: il Campo visivo in Camera"
+    },
+    "sideScale": {
+      "label": "Risoluzione schermi laterali",
+      "hint": "Meno dettagli sugli schermi laterali, dove l’occhio ne coglie meno, per più fotogrammi al secondo"
+    },
+    "screens": {
+      "tripleOnly": "Solo con tre schermi"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Lingua",
       "units": "Unità",
       "sizeColour": "Dimensione e colore"
+    },
+    "screens": {
+      "title": "Schermi",
+      "viewTitle": "Visuale",
+      "diagramTitle": "Vista dall’alto",
+      "diagramLabel": "I tuoi schermi visti dall’alto, con ciò che mostra ciascuno",
+      "picture": "Uno schermo: {width} × {height} cm",
+      "trueFov": "Campo visivo reale: {degrees}°",
+      "total": "Su tre schermi: {degrees}°",
+      "useFov": "Usa {degrees}°",
+      "useFovHint": "Imposta Campo visivo su ciò che lo schermo inquadra dalla tua posizione",
+      "fovNow": "Campo visivo attuale: {degrees}°",
+      "notWide": "Questa finestra non è larga quanto tre schermi. Estendi il gioco su tutti e tre (NVIDIA Surround o AMD Eyefinity, poi schermo intero) per dare a ciascuno la propria visuale.",
+      "looksTriple": "Questa finestra sembra estesa su tre schermi affiancati. Scegli Tre per dare a ogni schermo la propria visuale."
     }
   },
   "audio": {

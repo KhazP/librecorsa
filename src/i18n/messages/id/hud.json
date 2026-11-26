@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Mengerem ~{distance} {unit} lebih awal memasuki Tikungan {turn}.",
       "brakeLaterDetail": "Mengerem ~{distance} {unit} lebih lambat memasuki Tikungan {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Tiga layar",
+    "text": "<b>Tiga layar?</b> · beri tiap layar tampilan sendiri",
+    "setUp": "Atur",
+    "dismiss": "Nanti saja"
   }
 }

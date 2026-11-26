@@ -39,7 +39,8 @@
         "graphics": "그래픽",
         "hud": "HUD",
         "camera": "카메라",
-        "interface": "인터페이스"
+        "interface": "인터페이스",
+        "screens": "화면"
       },
       "audio": {
         "main": "오디오"
@@ -442,7 +443,8 @@
       "label": "시야각(FOV)",
       "hintCarOwn": "각 차량의 기본값 사용",
       "hintCarDefault": "차량 기본값: {degrees}°",
-      "valueCar": "{value}°(차량)"
+      "valueCar": "{value}°(차량)",
+      "offTrueFov": "화면의 실제 시야각으로 설정됨"
     },
     "headMovement": {
       "label": "시선 흔들림",
@@ -548,6 +550,47 @@
         "reduced": "손상 절반 적용; 차량이 파손되면 수리된 상태로 플라잉 랩을 재시작합니다",
         "full": "레이스 손상 적용; 차량이 파손되면 수리된 상태로 플라잉 랩을 재시작합니다"
       }
+    },
+    "screensMode": {
+      "label": "화면",
+      "hint": "나란히 배치한 화면 3개가 각자의 시점을 표시하며, 메뉴와 HUD는 중앙 화면에 표시됩니다. NVIDIA Surround 또는 AMD Eyefinity로 게임을 세 화면에 걸쳐 확장하십시오.",
+      "options": {
+        "single": "1개",
+        "triple": "3개"
+      }
+    },
+    "screenSize": {
+      "label": "화면 크기",
+      "hint": "화면 1개의 표시 영역 대각선 길이(제품 표기 크기)",
+      "value": "{value}인치"
+    },
+    "screenDistance": {
+      "label": "화면과의 거리",
+      "hint": "눈에서 중앙 화면까지 정면으로 잰 거리"
+    },
+    "screenBezel": {
+      "label": "베젤",
+      "hint": "화면 1개의 표시 영역 옆 테두리 너비입니다. Surround나 Eyefinity에서 이미 베젤을 보정하면 0, 베젤을 가리는 광학 스트립을 쓰면 음수로 설정하십시오"
+    },
+    "sideAngle": {
+      "label": "측면 화면 각도",
+      "hint": "중앙 화면 기준으로 측면 화면이 안쪽으로 꺾인 각도입니다. {degrees}°에서 화면 중앙이 눈을 정면으로 향합니다",
+      "valueFacing": "{value}°(눈 정면)"
+    },
+    "eyeHeight": {
+      "label": "눈높이",
+      "hint": "화면 중앙보다 눈이 위(+) 또는 아래(−)에 있는 높이"
+    },
+    "trueFov": {
+      "label": "실제 시야각",
+      "hint": "앉은 위치에서 화면이 담는 범위를 운전 시점에 그대로 표시합니다. 꺼짐 시 카메라의 시야각(FOV)을 사용합니다"
+    },
+    "sideScale": {
+      "label": "측면 화면 해상도",
+      "hint": "시야가 덜 집중되는 측면 화면의 디테일을 줄여 초당 프레임을 높입니다"
+    },
+    "screens": {
+      "tripleOnly": "화면 3개 전용"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "언어",
       "units": "단위",
       "sizeColour": "크기 및 색상"
+    },
+    "screens": {
+      "title": "화면",
+      "viewTitle": "시야",
+      "diagramTitle": "위에서 본 배치",
+      "diagramLabel": "위에서 본 화면 배치와 각 화면이 표시하는 범위",
+      "picture": "화면 1개: {width} × {height} cm",
+      "trueFov": "실제 시야각: {degrees}°",
+      "total": "화면 3개 합산: {degrees}°",
+      "useFov": "{degrees}° 적용",
+      "useFovHint": "앉은 위치에서 화면이 담는 범위에 맞춰 시야각(FOV)을 설정합니다",
+      "fovNow": "현재 시야각(FOV): {degrees}°",
+      "notWide": "창 너비가 화면 3개 분량이 아닙니다. 각 화면에 개별 시점을 표시하려면 NVIDIA Surround 또는 AMD Eyefinity로 세 화면에 걸쳐 확장한 뒤 전체 화면으로 전환하십시오.",
+      "looksTriple": "창이 나란히 배치한 화면 3개 비율로 보입니다. 각 화면에 개별 시점을 표시하려면 3개를 선택하십시오."
     }
   },
   "audio": {

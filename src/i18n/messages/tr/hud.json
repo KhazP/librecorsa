@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Viraj {turn} girişinde ~{distance} {unit} daha erken fren yaptınız.",
       "brakeLaterDetail": "Viraj {turn} girişinde ~{distance} {unit} daha geç fren yaptınız."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Üç ekran",
+    "text": "<b>Üç ekran mı?</b> · her birine kendi görünümünü ver",
+    "setUp": "Ayarla",
+    "dismiss": "Şimdi değil"
   }
 }

@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Phanh sớm hơn ~{distance} {unit} khi vào Khúc cua {turn}.",
       "brakeLaterDetail": "Phanh muộn hơn ~{distance} {unit} khi vào Khúc cua {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Ba màn hình",
+    "text": "<b>Ba màn hình?</b> · đặt góc nhìn riêng cho từng màn",
+    "setUp": "Thiết lập",
+    "dismiss": "Để sau"
   }
 }

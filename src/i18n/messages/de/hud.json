@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "~{distance} {unit} früher für Kurve {turn} gebremst.",
       "brakeLaterDetail": "~{distance} {unit} später für Kurve {turn} gebremst."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Drei Bildschirme",
+    "text": "<b>Drei Bildschirme?</b> · jedem eine eigene Ansicht geben",
+    "setUp": "Einrichten",
+    "dismiss": "Nicht jetzt"
   }
 }

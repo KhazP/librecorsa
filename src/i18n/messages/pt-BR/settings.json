@@ -39,7 +39,8 @@
         "graphics": "Gráficos",
         "hud": "HUD",
         "camera": "Câmera",
-        "interface": "Interface"
+        "interface": "Interface",
+        "screens": "Telas"
       },
       "audio": {
         "main": "Áudio"
@@ -442,7 +443,8 @@
       "label": "Campo de visão",
       "hintCarOwn": "Usando o padrão de cada carro",
       "hintCarDefault": "Padrão do carro: {degrees}°",
-      "valueCar": "{value}° (carro)"
+      "valueCar": "{value}° (carro)",
+      "offTrueFov": "Definido por Campo de visão real em Telas"
     },
     "headMovement": {
       "label": "Movimento da cabeça",
@@ -548,6 +550,47 @@
         "reduced": "Metade dos danos; um carro destruído reinicia uma volta lançada, reparado",
         "full": "Danos de corrida; um carro destruído reinicia uma volta lançada, reparado"
       }
+    },
+    "screensMode": {
+      "label": "Telas",
+      "hint": "Três telas lado a lado exibem cada uma sua própria visão, com menus e HUD na tela central. Estenda o jogo pelas três com NVIDIA Surround ou AMD Eyefinity.",
+      "options": {
+        "single": "Uma",
+        "triple": "Três"
+      }
+    },
+    "screenSize": {
+      "label": "Tamanho da tela",
+      "hint": "A diagonal da imagem de uma tela, como vendida",
+      "value": "{value} pol."
+    },
+    "screenDistance": {
+      "label": "Distância da tela",
+      "hint": "Dos seus olhos até a tela central, medido em linha reta"
+    },
+    "screenBezel": {
+      "label": "Borda",
+      "hint": "Borda de uma tela ao lado da imagem. 0 quando Surround ou Eyefinity já corrige as bordas, abaixo de 0 para fitas que as ocultam"
+    },
+    "sideAngle": {
+      "label": "Ângulo das telas laterais",
+      "hint": "Quanto as telas laterais giram para dentro em relação à central. Em {degrees}°, o centro delas aponta para seus olhos",
+      "valueFacing": "{value}° (de frente para você)"
+    },
+    "eyeHeight": {
+      "label": "Altura dos olhos",
+      "hint": "Seus olhos acima (+) ou abaixo (−) do centro das telas"
+    },
+    "trueFov": {
+      "label": "Campo de visão real",
+      "hint": "As visões do piloto mostram exatamente o que suas telas enquadram de onde você senta. Desligado: o Campo de visão em Câmera"
+    },
+    "sideScale": {
+      "label": "Resolução das telas laterais",
+      "hint": "Menos detalhes nas telas laterais, onde seus olhos percebem menos, para mais quadros por segundo"
+    },
+    "screens": {
+      "tripleOnly": "Só com três telas"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Idioma",
       "units": "Unidades",
       "sizeColour": "Tamanho e cor"
+    },
+    "screens": {
+      "title": "Telas",
+      "viewTitle": "Visão",
+      "diagramTitle": "Vista de cima",
+      "diagramLabel": "Suas telas vistas de cima, com o que cada uma mostra",
+      "picture": "Uma tela: {width} × {height} cm",
+      "trueFov": "Campo de visão real: {degrees}°",
+      "total": "Nas três telas: {degrees}°",
+      "useFov": "Usar {degrees}°",
+      "useFovHint": "Define o Campo de visão para o que sua tela enquadra de onde você senta",
+      "fovNow": "Campo de visão atual: {degrees}°",
+      "notWide": "Esta janela não tem a largura de três telas. Estenda o jogo pelas três (NVIDIA Surround ou AMD Eyefinity, depois tela cheia) para dar a cada uma sua própria visão.",
+      "looksTriple": "Esta janela parece ter três telas lado a lado. Escolha Três para dar a cada tela sua própria visão."
     }
   },
   "audio": {

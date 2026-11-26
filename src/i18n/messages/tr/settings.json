@@ -39,7 +39,8 @@
         "graphics": "Grafikler",
         "hud": "HUD",
         "camera": "Kamera",
-        "interface": "Arayüz"
+        "interface": "Arayüz",
+        "screens": "Ekranlar"
       },
       "audio": {
         "main": "Ses"
@@ -442,7 +443,8 @@
       "label": "Görüş açısı",
       "hintCarOwn": "Her aracın kendi varsayılanı kullanılıyor",
       "hintCarDefault": "Araç varsayılanı: {degrees}°",
-      "valueCar": "{value}° (araç)"
+      "valueCar": "{value}° (araç)",
+      "offTrueFov": "Ekranlar’daki Gerçek görüş açısı belirler"
     },
     "headMovement": {
       "label": "Baş hareketi",
@@ -548,6 +550,47 @@
         "reduced": "Hasar yarıya iner; araç pert olursa onarılıp uçan tur yeniden başlar",
         "full": "Yarış hasarı; araç pert olursa onarılıp uçan tur yeniden başlar"
       }
+    },
+    "screensMode": {
+      "label": "Ekranlar",
+      "hint": "Yan yana üç ekranın her biri kendi görünümünü gösterir; menüler ve HUD ortadakinde olur. Oyunu NVIDIA Surround veya AMD Eyefinity ile üç ekrana yay.",
+      "options": {
+        "single": "Tek",
+        "triple": "Üç"
+      }
+    },
+    "screenSize": {
+      "label": "Ekran boyutu",
+      "hint": "Tek ekran görüntüsünün satışta belirtilen köşegeni",
+      "value": "{value} inç"
+    },
+    "screenDistance": {
+      "label": "Ekrana uzaklık",
+      "hint": "Gözlerinden orta ekrana düz olarak ölçülen mesafe"
+    },
+    "screenBezel": {
+      "label": "Çerçeve",
+      "hint": "Bir ekranın görüntüsünün yanındaki çerçevesi. Surround veya Eyefinity çerçeveleri zaten düzeltiyorsa 0, çerçeveleri gizleyen şeritler için 0’ın altı"
+    },
+    "sideAngle": {
+      "label": "Yan ekran açısı",
+      "hint": "Yan ekranların orta ekrandan içe dönme açısı. {degrees}° değerinde ortaları gözlerine bakar",
+      "valueFacing": "{value}° (sana dönük)"
+    },
+    "eyeHeight": {
+      "label": "Göz yüksekliği",
+      "hint": "Gözlerinin ekranların ortasına göre yukarısı (+) veya aşağısı (−)"
+    },
+    "trueFov": {
+      "label": "Gerçek görüş açısı",
+      "hint": "Pilot görünümleri, oturduğun yerden ekranlarının çerçevelediği alanı birebir gösterir. Kapalı: Kamera altındaki Görüş açısı"
+    },
+    "sideScale": {
+      "label": "Yan ekran çözünürlüğü",
+      "hint": "Saniyede daha fazla kare için, gözlerinin daha az ayrıntı seçtiği yan ekranlarda daha düşük detay"
+    },
+    "screens": {
+      "tripleOnly": "Yalnızca üç ekranla"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Dil",
       "units": "Birimler",
       "sizeColour": "Boyut ve renk"
+    },
+    "screens": {
+      "title": "Ekranlar",
+      "viewTitle": "Görünüm",
+      "diagramTitle": "Üstten görünüm",
+      "diagramLabel": "Her birinin ne gösterdiğiyle birlikte ekranlarının üstten görünümü",
+      "picture": "Tek ekran: {width} × {height} cm",
+      "trueFov": "Gerçek görüş açısı: {degrees}°",
+      "total": "Üç ekran toplamı: {degrees}°",
+      "useFov": "{degrees}° kullan",
+      "useFovHint": "Görüş açısı ayarını oturduğun yerden ekranının çerçevelediği alana ayarlar",
+      "fovNow": "Mevcut görüş açısı: {degrees}°",
+      "notWide": "Bu pencere üç ekran genişliğinde değil. Her ekrana kendi görünümünü vermek için oyunu üçüne birden yay (NVIDIA Surround veya AMD Eyefinity, ardından tam ekran).",
+      "looksTriple": "Bu pencere yan yana üç ekran gibi görünüyor. Her ekrana kendi görünümünü vermek için Üç’ü seç."
     }
   },
   "audio": {

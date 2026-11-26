@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "코너 {turn} 진입 시 약 {distance} {unit} 더 일찍 제동했습니다.",
       "brakeLaterDetail": "코너 {turn} 진입 시 약 {distance} {unit} 더 늦게 제동했습니다."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "화면 3대",
+    "text": "<b>화면 3대?</b> · 각 화면에 개별 시점 설정",
+    "setUp": "설정",
+    "dismiss": "나중에"
   }
 }
