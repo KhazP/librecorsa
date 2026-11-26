@@ -1313,6 +1313,12 @@ export class AiOpponentField implements AiRace {
       car.heldPlan = null;
     }
     const weather = this.environment.weatherPaceScale(sim);
+    // On a wet road or on rain tyres the weather's pace counts only the water: the tyres' own state takes more (cold
+    // slicks the wet rubber's grip, rain tyres past their window their temperature grip), taken to the same 0.65 power
+    // (`aiTyreGrip`, in 0.01 steps so a degree of tyre temperature is no new plan). Planned on the water alone, the
+    // GT3 on 0.1-0.4 mm left RISE's esses every lap on either tyre, as often alone as in a field
+    const tyreShare = weather < 0.999 ? Math.round(clamp(sim.aiTyreGrip?.() ?? 1, 0.5, 1) * 100) / 100 : 1;
+    const tyres = Math.pow(tyreShare, 0.65);
     // A damaged car (a broken wing, bent suspension) has less grip to plan with, and a puncture leaves its tyre under
     // half: the plan takes the weaker axle's grip too, as a car through a corner is held by its worse end, with the
     // weak tyre on the outside carrying 70 % of its axle (a puncture: 0.6)
@@ -1329,7 +1335,7 @@ export class AiOpponentField implements AiRace {
       this.started && car.clock.lapsDone === 0 ? (weather < 0.92 ? 0 : 0.45 * this.mods.gripReach) : this.mods.gripReach;
     const wetLap1Margin = this.started && car.clock.lapsDone === 0 && weather < 0.88 ? 0.94 : 1;
     const planGrip = (PLAN_GRIP + (ceiling - PLAN_GRIP) * reach) * wetLap1Margin;
-    const rawGrip = planGrip * car.pace * car.pace * weather * weather * damaged;
+    const rawGrip = planGrip * car.pace * car.pace * weather * weather * tyres * tyres * damaged;
     // Never plan past a circuit's checked clean grip ceiling in dry conditions (keeps Alien fast without overshooting kerbs)
     const maxSafeGrip = checked !== undefined && weather >= 0.999 ? Math.max(0.85, checked - 0.01) : Infinity;
     const grip = Math.round(Math.min(rawGrip, maxSafeGrip) * 200) / 200;
