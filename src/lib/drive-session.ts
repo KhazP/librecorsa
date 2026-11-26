@@ -2033,8 +2033,14 @@ export class DriveSession {
         }
       }
     };
+    /**
+     * The tyres the car had on before the crew first changed them this run: the next run (a restart, the race left)
+     * starts on them again, as the garage set them. Cleared when the driver picks a compound themselves
+     */
+    let preStopCompound: TireCompound | null = null;
     this.setTireCompound = (compound) => {
       if (disposed) return;
+      preStopCompound = null;
       physics.tireCompound = compound;
       carRig.setTireCompound(compound);
       this.publish({ tireCompound: compound });
@@ -2047,11 +2053,13 @@ export class DriveSession {
     };
     /**
      * The crew's work done: fresh tyres of the compound (another compound by the compound setter, which fits a new set;
-     * the same one as a new set of it), and the repairs
+     * the same one as a new set of it), and the repairs. A race's first stop keeps the tyres the car started on
      */
     const servicePitStop = (compound: TireCompound, repair: boolean) => {
+      const own = preStopCompound ?? physics.tireCompound;
       if (compound === physics.tireCompound) physics.fitNewTyres?.();
       else this.setTireCompound(compound);
+      if (raceNow().kind === "ai") preStopCompound = own;
       if (!repair) return;
       physics.setDamageEffects?.(null);
       aiFieldOf(raceNow())?.repairPlayerDamage?.();
@@ -2853,6 +2861,12 @@ export class DriveSession {
     this.resetRun = (reason) => {
       if (disposed) return;
       runId++;
+      // The crew's tyres were for the run just ended: the car starts the next on the ones it had before its first stop
+      if (preStopCompound !== null) {
+        const own = preStopCompound;
+        if (physics.tireCompound !== own) this.setTireCompound(own);
+        preStopCompound = null;
+      }
       // A restart from the pause menu during the pre-race show is a wish to race: the show hands over (it is not
       // played again for the same round)
       if (reason === "restart") this.preRaceShow?.startNow();
