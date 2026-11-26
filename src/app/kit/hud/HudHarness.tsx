@@ -12,6 +12,14 @@ import type { PitStrategyState } from "@/types/f1";
 import { cleanHudLayoutParts, HUD_PART_IDS, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import { useLapDeltaTracker } from "@/components/hud/useLapDelta";
 import { HudRunProvider } from "@/components/hud/styles/third-party-parts";
+import { HudSkinProvider, skinRootClass, thirdPartySkinOf } from "@/components/hud/styles/third-party-skin";
+import { IrDashiesHud } from "@/components/hud/styles/IrDashiesHud";
+import { RaceVisionHud } from "@/components/hud/styles/RaceVisionHud";
+import { HeadToHeadHud } from "@/components/hud/styles/HeadToHeadHud";
+import { RetroHud } from "@/components/hud/styles/RetroHud";
+import { BlocksHud } from "@/components/hud/styles/BlocksHud";
+import { GrandPrixHud } from "@/components/hud/styles/GrandPrixHud";
+import { PhoneHud, usePhoneLayout } from "@/components/hud/styles/PhoneHud";
 import { anchor, buildHudMap, revRangeOf, setActiveHudParts, type HudDesignProps, type HudStyleOptions } from "@/components/hud/styles/hud-style-parts";
 import { BladeHud, BLADE_STYLE } from "@/components/hud/styles/BladeHud";
 import { TracksideHud, TRACKSIDE_STYLE } from "@/components/hud/styles/TracksideHud";
@@ -22,7 +30,7 @@ import { TelemetryHud } from "@/components/hud/styles/TelemetryHud";
 import { GtLikeHud } from "@/components/hud/styles/GtLikeHud";
 import { F1LikeHud } from "@/components/hud/styles/F1LikeHud";
 import { HudPreview } from "@/components/settings/hud-preview";
-import { HUD_LAYOUTS } from "@/lib/settings/hud-layouts";
+import { HUD_LAYOUTS, isHudPreset } from "@/lib/settings/hud-layouts";
 import { HUD_SCENARIOS, hudFixture, type HudScenario } from "./hud-fixture";
 
 /** The layouts this page draws, with the options the in-race HUD gives each */
@@ -35,6 +43,15 @@ const STYLES: Record<string, { component: React.FC<HudDesignProps>; options: Hud
   telemetry: { component: TelemetryHud, options: { bottomClearance: 252, mfdFolded: true } },
   touring: { component: GtLikeHud, options: { bottomClearance: 228, mfdFolded: true } },
   formula: { component: F1LikeHud, options: { bottomClearance: 160, mfdFolded: true } },
+  // The third-party layouts, as F1TelemetryHud's HUD_STYLES gives them
+  irdashies: { component: IrDashiesHud, options: { bottomClearance: 200, mfdFolded: true } },
+  racevision: { component: RaceVisionHud, options: { bottomClearance: 200, mfdFolded: true, topClearance: 80 } },
+  h2h: { component: HeadToHeadHud, options: { bottomClearance: 200, mfdFolded: true } },
+  retro: { component: RetroHud, options: { bottomClearance: 292, mfdFolded: true, topClearance: 120 } },
+  blocks: { component: BlocksHud, options: { bottomClearance: 200, mfdFolded: true, topClearance: 124 } },
+  "grand-prix": { component: GrandPrixHud, options: { bottomClearance: 120, mfdFolded: true } },
+  // What every layout gives way to on a phone-sized screen (showsPhoneHud); `style=phone` asks for it at any size
+  phone: { component: PhoneHud, options: { bottomClearance: 16 } },
 };
 
 const DEFAULT_BG = "/press/screenshots/rise-side-by-side.jpg";
@@ -100,6 +117,8 @@ function readQuery(): HarnessQuery {
 /**
  * The HUD test page: one layout over a still game frame, fed a fixed moment of a session (hud-fixture.ts).
  * `?style=blade&scenario=race|practice|gt3|lights|final&bg=/path.jpg&mfd=0&extras=1&map=local&chrome=0&ffb=1&trace=1`.
+ * `style=` takes any layout id but Minimal (hud-layouts.ts), or `phone`; a phone-sized window draws the Phone HUD for
+ * every layout, as the game does.
  * `ffb=1` draws a force-feedback wheel's meter (without it, the HUD is a controller's or the keyboard's), `trace=1`
  * turns the Input trace setting on. The MFD's Pit page takes its choices (pointer, D-pad keys , . − =), and the top
  * centre calls the last lap (`scenario=final`).
@@ -145,8 +164,11 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
   const [parts, setParts] = useState<HudLayoutParts>(query.parts);
   // As F1TelemetryHud does: the layout's corner groups read the parts while they render (`anchor`)
   setActiveHudParts(parts);
-  const style = STYLES[query.style];
+  // A phone-sized screen draws the Phone HUD whatever the layout, as the in-race HUD does
+  const phone = usePhoneLayout() || query.style === "phone";
+  const style = phone ? STYLES.phone : STYLES[query.style];
   const Style = style.component;
+  const skin = isHudPreset(query.style) ? thirdPartySkinOf(query.style, phone) : null;
   const mfd = query.mfd ? (
     <div data-hud-avoid>
       <MultiPageMfd
@@ -166,7 +188,8 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
       {/* eslint-disable-next-line @next/next/no-img-element -- a still game frame, drawn as is */}
       <img src={query.bg} alt="" className="absolute inset-0 h-full w-full object-cover" />
       {/* Left to right in every language, as the in-race HUD is */}
-      <div ref={frameRef} dir="ltr" className="lc-safe-frame pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4">
+      <HudSkinProvider skin={skin}>
+      <div ref={frameRef} dir="ltr" className={`lc-safe-frame pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${skinRootClass(skin) ?? ""}`}>
         <HudRunProvider t={t}>
           <Style
             t={t}
@@ -176,7 +199,7 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
             revRange={revRangeOf(fixture.t)}
             scale={zoom * query.size}
             trackCode="RWA"
-            mfd={mfd}
+            mfd={phone ? undefined : mfd}
             ffb={query.ffb ? <FfbMeter force={0.34} clipping={false} peak={0.78} /> : null}
             lapInvalid={false}
             towerGaps="interval"
@@ -191,12 +214,13 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
           />
         </HudRunProvider>
         {/* The top centre's race notices, where the in-race HUD stacks them under the layout's own group */}
-        <div className="absolute left-1/2 w-max -translate-x-1/2" style={{ top: 16 + Math.round((style.options.topClearance ?? 0) * zoom * query.size) }}>
+        <div className="absolute left-1/2 w-max -translate-x-1/2" style={{ top: phone ? 96 : 16 + Math.round((style.options.topClearance ?? 0) * zoom * query.size) }}>
           <div className="flex flex-col items-center gap-2" style={anchor(zoom * query.size, "top center")}>
             <FinalLapNotice race={t.race} hold />
           </div>
         </div>
       </div>
+      </HudSkinProvider>
       {query.edit ? <HudEditor parts={parts} hudRootRef={frameRef} onChange={setParts} onDone={() => {}} onCancel={() => setParts(query.parts)} /> : null}
       {query.chrome ? (
         <div className="fixed top-1/2 left-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-wrap items-center gap-2 bg-lc-void/90 p-2 text-[12px] opacity-0 transition-opacity hover:opacity-100">

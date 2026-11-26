@@ -1,5 +1,5 @@
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
-import type { BuiltTrackData } from "@/lib/track-data";
+import { TURN_METADATA, type BuiltTrackData } from "@/lib/track-data";
 import type { CarTelemetry, F12026Channels, PitTelemetry, RaceStandingEntry, TireCompound } from "@/types/f1";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 
@@ -117,6 +117,8 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     trackDistanceM: progress * track.totalLengthM,
     currentSector: 3,
     currentTurnNumber: 7,
+    // The corner's own name, as the track gives it (else the start pose's would show under turn 7)
+    currentTurnName: TURN_METADATA.find((c) => c.number === 7)?.name ?? "",
     lapCount: lap,
     currentLapTimeMs: lights ? 0 : 72_408,
     lastLapTimeMs: lights ? null : 101_902,
@@ -124,6 +126,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     sectorTimesMs: lights ? [0, 0, 0] : [31_204, 34_870, 6_334],
     bestSectorTimesMs: lights ? [null, null, null] : [31_316, 34_972, 35_089],
     topSpeedThisLapKmh: 296,
+    allTimeTopSpeedKmh: 301,
     tireTempsC: [96, 98, 104, 112],
     tireBandTempsC: [[94, 96, 98], [99, 98, 97], [101, 104, 107], [115, 112, 108]],
     tirePressuresPsi: [23.1, 23.3, 21.8, 22.0],
