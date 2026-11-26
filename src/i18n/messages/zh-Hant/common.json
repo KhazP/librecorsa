@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "超軟胎",
       "soft": "軟胎",
       "medium": "中性胎",
       "hard": "硬胎",
@@ -80,6 +81,7 @@
       "wet": "全雨胎"
     },
     "short": {
+      "supersoft": "超軟胎",
       "soft": "軟胎",
       "medium": "中性",
       "hard": "硬胎",
@@ -87,6 +89,7 @@
       "wet": "全雨"
     },
     "long": {
+      "supersoft": "超軟胎",
       "soft": "軟胎",
       "medium": "中性胎",
       "hard": "硬胎",
@@ -94,6 +97,7 @@
       "wet": "全雨胎（積水路面）"
     },
     "tyres": {
+      "supersoft": "超軟胎",
       "soft": "軟胎",
       "medium": "中性胎",
       "hard": "硬胎",

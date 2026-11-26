@@ -192,6 +192,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onChangeRaceSetup?: (patch: Partial<import("@/lib/sim/race-setup").RaceSetup>) => void;
   carId: CarId;
   vehicleModel: VehicleModelId;
+  /** The car's compounds, softest first (`carTyreCompounds`): the pre-race show's tyre cards. Absent: the usual five */
+  tyreCompounds?: readonly TireCompound[];
   onChangeCar: (car: CarId) => void;
   onToggleGamepadAssist?: () => void;
   onToggleGamepadRumble: () => void;
@@ -1070,6 +1072,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         onStart={props.preRaceShow.onStart}
         weather={props.weather}
         compound={tireCompound}
+        compounds={props.tyreCompounds}
         trackInfo={trackInfo}
       />
     ) : null}

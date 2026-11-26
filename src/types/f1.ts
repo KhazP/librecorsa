@@ -60,8 +60,14 @@ export type CameraMode =
   | "tv_side"
   | "free";
 
-/** Dry slicks, then the treaded rain tyres: intermediate (damp / light rain) and full wet (standing water) */
-export type TireCompound = "soft" | "medium" | "hard" | "intermediate" | "wet";
+/**
+ * Dry slicks, then the treaded rain tyres: intermediate (damp / light rain) and full wet (standing water). A super soft
+ * slick only on a car whose data has a fourth dry compound (`CarPhysicsConfig.compoundSlots.supersoft`)
+ */
+export type TireCompound = "supersoft" | "soft" | "medium" | "hard" | "intermediate" | "wet";
+
+/** Every compound, softest first (what a lap, a shared setup or a peer may name; a car offers its own: `carTyreCompounds`) */
+export const TIRE_COMPOUNDS: readonly TireCompound[] = ["supersoft", "soft", "medium", "hard", "intermediate", "wet"];
 
 export type LiveryCategory = "house" | "grid2026" | "retro" | "custom" | "mod";
 
@@ -745,6 +751,8 @@ export interface PitTelemetry {
   /** Damage the crew would repair (0..1) */
   damage: number;
   strategy: PitStrategyState;
+  /** The compounds the crew has for this car, softest first (a super soft only where the car's data has one); absent: the usual five */
+  compounds?: readonly TireCompound[];
   stopsMade: number;
   /** Stops this race requires (0: none) */
   stopsRequired: number;
@@ -882,7 +890,8 @@ export type VehicleModelId =
   | "vw-scirocco-gtx"
   | "chaparral-2d"
   | "chaparral-2d-67"
-  | "porsche-934-rsr";
+  | "porsche-934-rsr"
+  | "f1-2007";
 
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
 const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
@@ -900,6 +909,7 @@ const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
   "chaparral-2d": true,
   "chaparral-2d-67": true,
   "porsche-934-rsr": true,
+  "f1-2007": true,
 };
 
 /** Every vehicle model id, for validating ids from storage and the network */

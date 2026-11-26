@@ -37,6 +37,7 @@ const rubberOf = (c: TireCompound): Rubber =>
 
 /** The art's colours as the pack prints them (sRGB) */
 const ART_COLORS: Readonly<Record<TireCompound, number>> = {
+  supersoft: 0x7a1fb8,
   soft: 0xb20006,
   medium: 0xffd600,
   hard: 0xffffff,

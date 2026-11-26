@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Kuru pist · {tyres} · Az yakıt",
+    "tyresSuperSoft": "Süper yumuşak lastikler",
     "tyresSoft": "Yumuşak lastikler",
     "tyresStreet": "Sokak lastikleri",
     "tyresVintageSlicks": "Klasik slick lastikler",
@@ -727,6 +728,7 @@
     "aeroLow": "Düşük hava direnci",
     "aeroBalanced": "Dengeli aero",
     "aeroHigh": "Yüksek yere basma",
+    "supersoft": "Süper yumuşak",
     "soft": "Yumuşak",
     "medium": "Orta",
     "hard": "Sert",

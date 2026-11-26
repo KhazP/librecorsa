@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Supermorbida",
       "soft": "Morbida",
       "medium": "Media",
       "hard": "Dura",
@@ -80,6 +81,7 @@
       "wet": "Bagnato"
     },
     "short": {
+      "supersoft": "S.Morb.",
       "soft": "Morb.",
       "medium": "Med",
       "hard": "Dura",
@@ -87,6 +89,7 @@
       "wet": "Bagnato"
     },
     "long": {
+      "supersoft": "Gomme supermorbide",
       "soft": "Gomme morbide",
       "medium": "Gomme medie",
       "hard": "Gomme dure",
@@ -94,6 +97,7 @@
       "wet": "Gomme da bagnato (acqua sulla pista)"
     },
     "tyres": {
+      "supersoft": "Gomme supermorbide",
       "soft": "Gomme morbide",
       "medium": "Gomme medie",
       "hard": "Gomme dure",

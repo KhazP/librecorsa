@@ -203,6 +203,26 @@ async function main(): Promise<void> {
     check('skin folders all in another script, or alike but for case and spaces: an id each, none empty', ids.length === 4 && new Set(ids).size === 4 && ids.every((id) => /^[a-z0-9_-]+$/.test(id)), JSON.stringify(got?.ids));
     check("the driver's eyes from CAR.INI in capitals; none from a car.ini without them, not a crash", JSON.stringify(got?.upper) === '[0.1,0.7,-0.3]' && got?.none === null);
     check("a preset's liveries: --skins-only's alone", JSON.stringify(got?.exported) === '["Red car"]', JSON.stringify(got?.exported));
+
+    // mirrors.ini: each [MIRROR_n] NAME is a mesh, matched by its whole name (F1 2007's Honda names a bare
+    // `hon_body_a`, beside its `hon_body_a.001`...), the kn5's transform of the same name passed over
+    const mirrorCode = [
+      'import json, sys',
+      "sys.path.insert(0, 'scripts/cars')",
+      'import port_ac_car as p',
+      "ini = '[MIRROR_1]\\nNAME=inner\\n[MIRROR_0]\\nNAME=hon_body_a\\n[MIRROR_2]\\nNAME=\\n[OTHER]\\nNAME=x\\n'",
+      'mirrors = p.read_mirrors({"MIRRORS.INI": ini})',
+      "mesh = lambda name, parent=None: {'name': name, 'mesh': {}, 'parent': parent}",
+      "nodes = [{'name': 'hon_body_a', 'mesh': None, 'parent': None}, mesh('hon_body_a', 0), mesh('hon_body_a.001'), {'name': 'inner', 'mesh': None, 'parent': None}, mesh('glass_in', 3)]",
+      "print(json.dumps({'mirrors': mirrors, 'meshes': p.mirror_meshes(nodes, mirrors), 'none': p.read_mirrors({})}))",
+    ].join('\n');
+    const mr = spawnSync('uv', ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'pillow', 'python', '-P', '-c', mirrorCode], { encoding: 'utf8' });
+    const mg = mr.status === 0 ? (JSON.parse(mr.stdout.trim().split('\n').at(-1) ?? '{}') as { mirrors: string[][]; meshes: Record<string, string>; none: unknown[] }) : null;
+    check(
+      "mirrors.ini's sections in order, the mesh of each NAME exactly (not hon_body_a.001), else the meshes under it",
+      JSON.stringify(mg?.mirrors) === '[["MIRROR_0","hon_body_a"],["MIRROR_1","inner"]]' && JSON.stringify(mg?.meshes) === '{"1":"MIRROR_0","4":"MIRROR_1"}' && JSON.stringify(mg?.none) === '[]',
+      mg ? JSON.stringify(mg) : mr.stderr.slice(-300),
+    );
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -491,6 +511,7 @@ async function main(): Promise<void> {
       ['pfa_vw_scirocco_53b', 'vw-scirocco-gtx', []],
       ['pfa_porsche_934t_rsr_rr', 'porsche-934-rsr', []],
       ['mt_mtr_496r', 'mtr-496r', []],
+      ['cim_2007_ferrari', 'f1-2007', []],
     ];
     const PATHS = [
       'config.chassis.totalMassKg', 'config.chassis.wheelbase', 'config.chassis.frontWeightFraction', 'config.chassis.trackWidthFront',

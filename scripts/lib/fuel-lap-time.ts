@@ -16,6 +16,7 @@ export type FuelLapGroup = "modern" | "classic" | "road";
 export const FUEL_LAP_GROUP: Record<VehicleModelId, FuelLapGroup> = {
   lc26: "modern",
   lc25: "modern",
+  "f1-2007": "modern",
   "f12026-car": "modern",
   "amg-gt3": "modern",
   "mtr-496r": "modern",

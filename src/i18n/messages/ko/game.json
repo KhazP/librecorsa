@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "마른 노면 · {tyres} · 저연료",
+    "tyresSuperSoft": "슈퍼소프트 타이어",
     "tyresSoft": "소프트 타이어",
     "tyresStreet": "스트리트 타이어",
     "tyresVintageSlicks": "빈티지 슬릭",
@@ -727,6 +728,7 @@
     "aeroLow": "낮은 항력",
     "aeroBalanced": "균형 에어로",
     "aeroHigh": "고다운포스",
+    "supersoft": "슈퍼소프트",
     "soft": "소프트",
     "medium": "미디엄",
     "hard": "하드",

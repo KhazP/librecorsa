@@ -469,6 +469,13 @@ const Credits: React.FC = () => {
             ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza,
             config by Valentin K, sound by Felix789
           </CreditRow>
+          <CreditRow title="F1 2007">
+            Models, liveries, sound and physics of the eleven 2007 Formula 1 cars by{" "}
+            <a href="https://www.gtplanet.net/forum/members/kakauiyt.314068/" target="_blank" rel="noreferrer" className={linkClass}>
+              Cimmerian Iter
+            </a>{" "}
+            · used with permission
+          </CreditRow>
           <CreditRow title="Suzuki Liana">
             Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
             <a

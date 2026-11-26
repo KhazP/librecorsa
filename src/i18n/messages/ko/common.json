@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "슈퍼소프트",
       "soft": "소프트",
       "medium": "미디엄",
       "hard": "하드",
@@ -80,6 +81,7 @@
       "wet": "웻"
     },
     "short": {
+      "supersoft": "슈퍼소프트",
       "soft": "소프트",
       "medium": "미디엄",
       "hard": "하드",
@@ -87,6 +89,7 @@
       "wet": "웻"
     },
     "long": {
+      "supersoft": "슈퍼소프트 타이어",
       "soft": "소프트 타이어",
       "medium": "미디엄 타이어",
       "hard": "하드 타이어",
@@ -94,6 +97,7 @@
       "wet": "풀 웻 타이어(고인 물)"
     },
     "tyres": {
+      "supersoft": "슈퍼소프트 타이어",
       "soft": "소프트 타이어",
       "medium": "미디엄 타이어",
       "hard": "하드 타이어",

@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Đường khô · {tyres} · Ít nhiên liệu",
+    "tyresSuperSoft": "Lốp siêu mềm",
     "tyresSoft": "Lốp mềm",
     "tyresStreet": "Lốp đường phố",
     "tyresVintageSlicks": "Lốp trơn cổ điển",
@@ -727,6 +728,7 @@
     "aeroLow": "Lực cản thấp",
     "aeroBalanced": "Khí động cân bằng",
     "aeroHigh": "Lực ép cao",
+    "supersoft": "Siêu mềm",
     "soft": "Mềm",
     "medium": "Trung bình",
     "hard": "Cứng",

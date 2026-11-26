@@ -168,6 +168,8 @@ export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   "chaparral-2d": 720,
   "chaparral-2d-67": 720,
   "porsche-934-rsr": 1080,
+  // 225° of rim lock each way [spec car.ini STEER_LOCK]
+  "f1-2007": 450,
 };
 
 /** Range of a player-set steering lock (deg, lock to lock): never slower than the real car's */

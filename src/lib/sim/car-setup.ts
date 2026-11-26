@@ -212,6 +212,8 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   "chaparral-2d-67": { front: 0, rear: 0 },
   // A fixed spoiler and wing (setup.ini has no wing entry)
   "porsche-934-rsr": { front: 0, rear: 0 },
+  // Its wings in the setup's own positions, front 0–100 in steps of 5, rear in steps of 10 [spec setup.ini WING_1/2]
+  "f1-2007": { front: 5, rear: 10 },
 };
 
 /**
@@ -244,6 +246,8 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "chaparral-2d-67": { defaultKg: 22, minKg: 4, maxKg: 102 },
   // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL], filled as far as the garage's +80 kg goes (138 l)
   "porsche-934-rsr": { defaultKg: 22, minKg: 4, maxKg: 89 },
+  // A 2007 race stint's start, as the LC25's [est]; 10 l to the 130 l tank at 0.74 kg/l [spec car.ini FUEL / MAX_FUEL]
+  "f1-2007": { defaultKg: 35, minKg: 7, maxKg: 96 },
 };
 
 /**
@@ -298,6 +302,7 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "chaparral-2d": 14.1,
   "chaparral-2d-67": 14.1,
   "porsche-934-rsr": 16.9,
+  "f1-2007": 12,
 };
 
 export function clampChassisSetup(v: unknown): ChassisSetup {

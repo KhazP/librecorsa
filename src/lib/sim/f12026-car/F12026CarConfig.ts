@@ -31,6 +31,7 @@ export type SuspensionTypeEnum =
 
 /** `PhysicsTyreCompound`: F1, GT3 and prototype slicks, their treaded rain tyres, and a road car's street tyre */
 export type PhysicsTyreCompound =
+  | 'PhysicsTyreCompound_F1_SuperSoft'
   | 'PhysicsTyreCompound_F1_Soft'
   | 'PhysicsTyreCompound_F1_Medium'
   | 'PhysicsTyreCompound_F1_Hard'
@@ -48,8 +49,27 @@ export type PhysicsTyreCompound =
   | 'PhysicsTyreCompound_Proto_Wet'
   | 'PhysicsTyreCompound_Road_Street';
 
-/** The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet */
-export type CompoundSlot = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet';
+/**
+ * The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet, and a super soft slick for a
+ * car whose data has one (`CarPhysicsConfig.compoundSlots.supersoft`)
+ */
+export type CompoundSlot = 'supersoft' | 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet';
+
+/** The compounds every car has a slot for */
+export type BaseCompoundSlot = Exclude<CompoundSlot, 'supersoft'>;
+
+/** Every compound slot, softest first: the order the garage, the pit wall and the HUD list them in */
+export const COMPOUND_SLOT_ORDER: readonly CompoundSlot[] = ['supersoft', 'soft', 'medium', 'hard', 'intermediate', 'wet'];
+
+/** The compounds a car's data fills, softest first (a super soft only where the car has one) */
+export function carCompoundSlots(slots: CarPhysicsConfig['compoundSlots']): CompoundSlot[] {
+  return COMPOUND_SLOT_ORDER.filter((c) => slots[c] !== undefined);
+}
+
+/** The physics compound a slot asks for on a car: a slot the car lacks (a super soft) takes its soft */
+export function compoundForSlot(slots: CarPhysicsConfig['compoundSlots'], slot: CompoundSlot): PhysicsTyreCompound {
+  return slots[slot] ?? slots.soft;
+}
 
 /** `PerformanceModeData.performance_mode_name` */
 export type PerformanceModeName = 'PSH' | 'RAC' | 'BAL' | 'LIC' | 'CHR';
@@ -1002,9 +1022,30 @@ export interface TyresThermalPatchData {
   hysteresis: number;
   /** Surface → core conductance (W/K) */
   surfaceToCore: number;
-  /** Convective cooling: G = g0 + g1·v (W/K) for surface and core */
-  surfaceCooling: [number, number];
+  /**
+   * Convective cooling: G = g0 + g1·v (W/K) for surface and core. The surface's may add a third term, g2·v² (W/K per
+   * (m/s)²), for a tread whose air cooling grows with the square of its speed
+   */
+  surfaceCooling: [number, number] | [number, number, number];
   coreCooling: [number, number];
+  /**
+   * The sliding heat taken from the grip the tyre could give rather than the force it gives: its peak force at this
+   * load (μ × load, every grip factor in) × its sliding speed, so a tyre sliding below its peak heats as one at it.
+   * Absent: the force it gives × its sliding speed
+   */
+  slipHeatAtPeak?: boolean;
+  /**
+   * Rolling heat made in the tread surface (W per N per m/s, × the same pressure factor as `hysteresis`), on top of
+   * `hysteresis`'s in the bulk and liner. Absent: none
+   */
+  surfaceHysteresis?: number;
+  /** The tread surface's conductance to the road under it (W/K at the front tyre's size). Absent: the shared 30 */
+  roadConductance?: number;
+  /**
+   * Shift of the contact pressure onto the inner strip per radian of camber leaning toward the car, which moves the
+   * heat and the grip temperature across the strips. Absent: the shared 6.5
+   */
+  stripCamberShift?: number;
   /** Vertical-rate change per °C of core temperature away from the reference */
   thermalVerticalK: number;
   thermalVerticalRefC: number;
@@ -1041,9 +1082,9 @@ export interface TyresThermalPatchData {
   rollingHeatToSubsurface?: number;
   /**
    * The wheel rim and the inflation gas (`RimGasCavityThermalData`): the gas warmed by the carcass liner and by the rim
-   * the brake disc heats. Absent: typical 18" racing-wheel values
+   * the brake disc heats. Absent (or any value absent): typical 18" racing-wheel values
    */
-  rimGas?: RimGasCavityThermalData;
+  rimGas?: Partial<RimGasCavityThermalData>;
 }
 
 /**
@@ -1126,7 +1167,7 @@ export interface TyresCamberData {
 
 export interface TyresCompoundData {
   name: string;
-  shortName: 'S' | 'M' | 'H' | 'I' | 'W';
+  shortName: 'SS' | 'S' | 'M' | 'H' | 'I' | 'W';
   tyre_compound: PhysicsTyreCompound;
   /** Behaviour on a wet road (`wet-tyres.ts`); absent = a slick */
   wetTraits?: WetTyreTraits;
@@ -1156,6 +1197,8 @@ export interface TyresCompoundData {
     modelData?: Partial<TyresModelData>;
     camberData?: Partial<TyresCamberData>;
     pressureData?: Partial<TyresPressureData>;
+    /** The rear's own heat values (at the front tyre's size: the rear's capacities and conductances scale with it) */
+    thermalData?: Partial<TyresThermalPatchData>;
   };
 }
 
@@ -1179,9 +1222,12 @@ export interface CarPhysicsConfig {
   brakes: BrakesData;
   suspensions: SuspensionsData;
   aero: AeroData;
-  /** The car's compounds; `compoundSlots` picks one for each of the simulator's soft / medium / hard */
+  /**
+   * The car's compounds; `compoundSlots` picks one for each of the simulator's soft / medium / hard / intermediate / wet,
+   * and for its super soft where the car's data has a fourth dry compound
+   */
   tyreCompounds: Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
-  compoundSlots: Record<CompoundSlot, PhysicsTyreCompound>;
+  compoundSlots: Record<BaseCompoundSlot, PhysicsTyreCompound> & { supersoft?: PhysicsTyreCompound };
   /** A prototype's own hybrid controls in place of the performance modes (`EnduranceHybridDialsData`) */
   hybridDials?: EnduranceHybridDialsData;
   /**
@@ -1302,20 +1348,28 @@ export function deriveRainCompound(
   const camberData = design
     ? { ...base.camberData, camberGain: base.camberData.camberGain * design.camberGainScale }
     : base.camberData;
+  // The design's heat ratios on whichever heat values a part gives (the compound's, or its rear's own): the tread-to-bulk
+  // and bulk-to-liner conductances where they are stated, else `surfaceToCore`, which sets them
+  const heat = (t: Partial<TyresThermalPatchData>): Partial<TyresThermalPatchData> => {
+    if (!design) return {};
+    const out: Partial<TyresThermalPatchData> = {};
+    if (t.slipHeatShare !== undefined) out.slipHeatShare = Math.min(0.85, t.slipHeatShare * design.slipHeatScale);
+    if (t.hysteresis !== undefined) out.hysteresis = t.hysteresis * design.hysteresisScale;
+    if (t.surfaceHysteresis !== undefined) out.surfaceHysteresis = t.surfaceHysteresis * design.hysteresisScale;
+    if (t.surfaceToCore !== undefined) out.surfaceToCore = t.surfaceToCore * design.surfaceToCoreScale;
+    if (t.surfaceToSubsurfaceTransfer !== undefined) out.surfaceToSubsurfaceTransfer = t.surfaceToSubsurfaceTransfer * design.surfaceToCoreScale;
+    if (t.subsurfaceToCoreTransfer !== undefined) out.subsurfaceToCoreTransfer = t.subsurfaceToCoreTransfer * design.surfaceToCoreScale;
+    if (t.surfaceCooling) out.surfaceCooling = t.surfaceCooling.map((g) => g * design.surfaceCoolingScale) as TyresThermalPatchData['surfaceCooling'];
+    if (t.coreCooling) out.coreCooling = [t.coreCooling[0] * design.coreCoolingScale, t.coreCooling[1] * design.coreCoolingScale];
+    return out;
+  };
   const thermalData: TyresThermalPatchData = {
     ...th,
     thermalPerformanceCurve,
     optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
-    ...(design
-      ? {
-          slipHeatShare: Math.min(0.85, th.slipHeatShare * design.slipHeatScale),
-          hysteresis: th.hysteresis * design.hysteresisScale,
-          surfaceToCore: th.surfaceToCore * design.surfaceToCoreScale,
-          surfaceCooling: [th.surfaceCooling[0] * design.surfaceCoolingScale, th.surfaceCooling[1] * design.surfaceCoolingScale],
-          coreCooling: [th.coreCooling[0] * design.coreCoolingScale, th.coreCooling[1] * design.coreCoolingScale],
-        }
-      : {}),
+    ...heat(th),
   };
+  const rearThermal = base.rearOverride?.thermalData;
   return {
     ...base,
     name,
@@ -1335,6 +1389,7 @@ export function deriveRainCompound(
               ? { ...base.rearOverride.camberData, camberGain: base.rearOverride.camberData.camberGain * design.camberGainScale }
               : base.rearOverride.camberData,
           pressureData: base.rearOverride.pressureData && unblanketed ? { ...base.rearOverride.pressureData, setPsi: undefined } : base.rearOverride.pressureData,
+          ...(rearThermal ? { thermalData: { ...rearThermal, ...heat(rearThermal) } } : {}),
         }
       : undefined,
   };

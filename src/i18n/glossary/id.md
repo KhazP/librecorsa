@@ -97,6 +97,7 @@
 | tyre temperatures | suhu ban | — |
 | tyre pressure | tekanan ban | — |
 | tyre compound: soft, medium, hard, intermediate, wet | kompon ban: Soft, Medium, Hard, Intermediate, Wet | Nama kompon dipertahankan sesuai kode ban dan siaran F1 Indonesia |
+| super soft | Super Soft | Kompon; nama kompon dipertahankan seperti Soft |
 | tyre blankets | selimut ban | Penghangat ban sebelum turun ke trek |
 | setup | setup | Setelan teknis mobil; dibedakan dari *Pengaturan* (Settings) |
 | apply setup | terapkan setup | — |

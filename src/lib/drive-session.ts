@@ -30,7 +30,7 @@ import {
   type HeadlightBeam,
   type HeadlightMode,
 } from "@/lib/render/car-headlights";
-import { createVehicleSim, vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { carTyreCompounds, createVehicleSim, switchedCarCompound, vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
@@ -60,6 +60,7 @@ import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
+import { portedMirrorMeshes } from "@/lib/render/mirror-reflection";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { TripleViewRig } from "@/lib/render/triple-views";
 import { physicalVerticalFovDeg, screenRig, tripleFits, tripleRects, type ScreenRect } from "@/lib/display/screen-layout";
@@ -71,7 +72,7 @@ import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { finalCornerZoneStartS, LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
-import { SimVisualFxManager } from "@/lib/sim/visual-fx";
+import { opponentLiveryOf, SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar, type AiDriverDef } from "@/lib/sim/ai-opponents";
 import { resolveRaceRules } from "@/lib/sim/race-rules";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
@@ -318,7 +319,8 @@ const approach = (value: number, target: number, maxStep: number) =>
   value + Math.max(-maxStep, Math.min(maxStep, target - value));
 
 /** The sound bank each car plays (the F1 cars share one bank) */
-const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
+/** The car's sound, or the picked livery's where it brings its own (an F1 2007 team's engine) */
+const soundFor = (car: CarId): CarSoundSource => carSkinFor(car)?.sound ?? carById(car).sound;
 /** A car's own physics (a mod car's physics file) while it drives on the model they were made for; else none */
 const ownProfile = (car: CarId, vehicle: VehicleModelId) => {
   const def = carById(car);
@@ -1264,7 +1266,7 @@ export class DriveSession {
       car.autoClutch = prefs.autoClutch;
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
-        car.tireCompound = prev.tireCompound;
+        car.tireCompound = switchedCarCompound(prev.tireCompound, prev.tyreCompounds, car.tyreCompounds);
       } else {
         car.tireCompound = autoCompoundFor(getTrackEnv().weather.lineWaterMm, car.tireCompound);
       }
@@ -1690,7 +1692,8 @@ export class DriveSession {
     const racingLineShown = (on: boolean) => on && (appPhaseNow === "driving" || appPhaseNow === "loading");
     builtCircuit.racingLineMesh.visible = racingLineShown(settings.racingLine);
     /** The player's pit stops (pit/pit-stop.ts); a circuit without a pit lane has none */
-    const pitStop = new PitStopManager(track.pitLane ?? null, physics.tireCompound);
+    // The crew has the compounds of whichever car the player drives now
+    const pitStop = new PitStopManager(track.pitLane ?? null, physics.tireCompound, () => carTyreCompounds(vehicleNow));
     /** The race's required stops were not made: called once per run, at the player's flag */
     let pitMissCalled = false;
     /** The player's box painted in the lane; it follows the box the race gives the player */
@@ -1788,9 +1791,12 @@ export class DriveSession {
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
     /** The livery the player picked for a car with its own (null: the paint its model was made in) */
     const skinFor = (car: CarId): PortedSkin | null => portedSkinFor(car, carSkinFor(car));
+    // The body the player's rig was built with when its livery brings its own (a team's car of a season)
+    let carRigBody: string | null = null;
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);
       const model = rigModel(car);
+      carRigBody = skinFor(car)?.modelUrl ?? null;
       const rig = def.modelUrl
         ? createPortedCarRig({
             url: def.modelUrl,
@@ -1848,16 +1854,30 @@ export class DriveSession {
       carHeadlights = new CarHeadlights(carRigCar, { spotCount: wanted });
       carHeadlights.attach(carRig.chassisGroup);
     };
-    // A livery picked in the menus goes onto the car at once
-    const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinFor(carRigCar)));
-    const swapCarRig = (car: CarId) => {
-      if (car === carRigCar) return;
+    // A livery with an engine of its own (an F1 2007 team's) is heard at once
+    let liverySound = soundFor(carIdNow);
+    // A livery picked in the menus goes onto the car at once; one on another body builds the car again, as another
+    // car would be (its cockpit extras belong to the old body)
+    const unsubscribeCarSkins = subscribeCarSkins(() => {
+      const heard = soundFor(carIdNow);
+      if (heard !== liverySound) {
+        liverySound = heard;
+        prefetchSoundBank(heard.assetDir);
+        audio?.setCar(heard);
+      }
+      const next = skinFor(carRigCar);
+      if ((next?.modelUrl ?? null) !== carRigBody) swapCarRig(carRigCar, true);
+      else void carRig.setSkin?.(next);
+    });
+    const swapCarRig = (car: CarId, rebuild = false) => {
+      if (car === carRigCar && !rebuild) return;
       // The cockpit extras belong to the old body
       wheelDisplay?.dispose();
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
       lc26ExtrasFor = null;
+      portedMirrorsFor = null;
       gt3Dash?.dispose();
       gt3Dash = null;
       portedDash?.dispose();
@@ -3029,6 +3049,11 @@ export class DriveSession {
     let wingMirrors: WingMirrors | null = null;
     /** The LC26 body the wheel display and mirrors above were built for */
     let lc26ExtrasFor: THREE.Object3D | null = null;
+    /** The ported body (`PORTED_BODY`) whose mirrors.ini mirrors were looked for: a livery can bring another body */
+    let portedMirrorsFor: THREE.Object3D | null = null;
+    /** Whether a ported car's outside mirrors are on screen, for the HUD mirror: held a second after each change */
+    let carMirrorsHeld = false;
+    let carMirrorsHeldAtMs = -Infinity;
     // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
     // A ported body's wheel screen and shift lights (the 496R's, LC-LMDH's), once its GLB has loaded under the rig
@@ -3107,7 +3132,8 @@ export class DriveSession {
     const kbAxleSlip = createAxleSlipSample();
     // The other cars, heard where they are from the active camera
     const opponentAudio = new OpponentAudio();
-    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "lc26").sound;
+    const opponentSound = (p: InterpolatedPeerState): CarSoundSource =>
+      opponentLiveryOf(p)?.sound ?? carForVehicle(p.vehicle ?? "lc26").sound;
     const trackEnv = getTrackEnv();
     // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
     let lastSkyMs = -Infinity;
@@ -4675,6 +4701,28 @@ export class DriveSession {
               });
             }
           }
+          // A ported AC car's mirrors (its GLB's MIRROR_n, from mirrors.ini): each glass reflects from the driver's eye,
+          // the whole car left out of the rear view (its wheels too, which hang off the rig's root)
+          const portedBody = anchors ? (carRig.chassisGroup.getObjectByName("PORTED_BODY") ?? null) : null;
+          if (anchors && portedBody && portedBody !== portedMirrorsFor) {
+            portedMirrorsFor = portedBody;
+            // The last body's (only these mirrors are `outside`)
+            if (wingMirrors?.outside) {
+              wingMirrors.dispose();
+              wingMirrors = null;
+            }
+            const glass = portedMirrorMeshes(portedBody);
+            if (glass.length) {
+              wingMirrors?.dispose();
+              wingMirrors = new WingMirrors(renderer, scene, carRig.chassisGroup, {
+                materials: [],
+                eyeInModel: anchors.cockpit.pos,
+                reflecting: glass,
+                hide: carRig.root,
+                outside: true,
+              });
+            }
+          }
         }
         // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
         if (view.wheelInShot && (wheelDisplay || gt3Dash?.found || portedDash?.found)) {
@@ -5190,7 +5238,23 @@ export class DriveSession {
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
-        const wingMirrorsActive = Boolean(wingMirrors?.found && wingMirrors.coversSides);
+        // The car's own mirrors are live in the views that can have them in shot. A ported car's outside mirrors render
+        // from the chase and T-cam views too (not the menus' or the pre-race show's), while their glass is on screen (any
+        // of three screens, or the headset's view: not judged there). A cockpit whose mirrors are out of frame (F1 2007's
+        // Ferrari, at 70 degrees) or only at its edge keeps the HUD mirror: it gives way to glass whose centre is in the
+        // frame, that held a second so a glance to the frame's edge doesn't flash it
+        const outsideMirrorsLive = view.outsideMirrorsInShot && !inMenu && !preRaceShow.playing;
+        const carMirrorsInShot = wingMirrors?.outside
+          ? outsideMirrorsLive && (inVr || screensNow !== null || wingMirrors.inView(camera, container.clientHeight))
+          : view.mirrorsInShot;
+        const carMirrorsFramed = wingMirrors?.outside
+          ? outsideMirrorsLive && (inVr || screensNow !== null || wingMirrors.inView(camera, container.clientHeight, true))
+          : view.mirrorsInShot;
+        if (carMirrorsFramed !== carMirrorsHeld && nowMs - carMirrorsHeldAtMs >= 1000) {
+          carMirrorsHeld = carMirrorsFramed;
+          carMirrorsHeldAtMs = nowMs;
+        }
+        const wingMirrorsActive = Boolean(wingMirrors?.found && wingMirrors.coversSides && (!wingMirrors.outside || carMirrorsHeld));
         const vmView =
           view.virtualMirror === "always" ||
           (view.virtualMirror === "noSideMirrors" && !wingMirrorsActive) ||
@@ -5214,7 +5278,7 @@ export class DriveSession {
         }
         // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204), in a headset
         // too, where they are the only rear view
-        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !podium.playing, carRig.chassisGroup);
+        wingMirrors?.update(mirrorRefresh, carMirrorsInShot && !podium.playing, carRig.chassisGroup);
         if (inVr) {
           // The head's pose on top of the driver's eye point; the HUD panel shows what the page's HUD would
           const panel = headsetPanel({ inMenu, paused: this.snapshot.paused, seatPanel: this.snapshot.seatPanel });

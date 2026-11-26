@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Süper yumuşak",
       "soft": "Yumuşak",
       "medium": "Orta",
       "hard": "Sert",
@@ -80,6 +81,7 @@
       "wet": "Yağmur"
     },
     "short": {
+      "supersoft": "S.Yumuşak",
       "soft": "Yumuşak",
       "medium": "Orta",
       "hard": "Sert",
@@ -87,6 +89,7 @@
       "wet": "Yağmur"
     },
     "long": {
+      "supersoft": "Süper yumuşak lastikler",
       "soft": "Yumuşak lastikler",
       "medium": "Orta lastikler",
       "hard": "Sert lastikler",
@@ -94,6 +97,7 @@
       "wet": "Tam yağmur lastikleri (su birikintisi)"
     },
     "tyres": {
+      "supersoft": "Süper yumuşak lastikler",
       "soft": "Yumuşak lastikler",
       "medium": "Orta lastikler",
       "hard": "Sert lastikler",

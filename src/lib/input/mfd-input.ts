@@ -63,7 +63,7 @@ export class MfdRepeatController {
   }
 }
 
-/** The Pit page's compounds, left to right */
+/** The Pit page's compounds, left to right, for a car with the usual five (a car's own: `PitTelemetry.compounds`) */
 export const PIT_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 
 /** The Pit page's settings, top to bottom: where left / right move its cursor (wrapping round, as the dials do) */
@@ -79,10 +79,15 @@ export function pitPick(item: PitItem, dir: -1 | 1): PitItem {
  * Up (+1) or down (−1) on a Pit setting: the next compound to the right or left (no further than the ends), repairs
  * and the box call on with up and off with down, so a held button repeating never flickers them. Null: no change.
  */
-export function pitDial(s: PitStrategyState, item: PitItem, dir: -1 | 1): Partial<PitStrategyState> | null {
+export function pitDial(
+  s: PitStrategyState,
+  item: PitItem,
+  dir: -1 | 1,
+  compounds: readonly TireCompound[] = PIT_COMPOUNDS
+): Partial<PitStrategyState> | null {
   if (item === "tyres") {
-    const at = Math.max(0, PIT_COMPOUNDS.indexOf(s.nextCompound));
-    const next = PIT_COMPOUNDS[Math.max(0, Math.min(PIT_COMPOUNDS.length - 1, at + dir))];
+    const at = Math.max(0, compounds.indexOf(s.nextCompound));
+    const next = compounds[Math.max(0, Math.min(compounds.length - 1, at + dir))];
     return next === s.nextCompound ? null : { nextCompound: next };
   }
   if (item === "repair") return s.repairDamage === dir > 0 ? null : { repairDamage: dir > 0 };

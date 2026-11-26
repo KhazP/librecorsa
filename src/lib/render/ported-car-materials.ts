@@ -89,6 +89,11 @@ export function sharpenCarMaps(mat: THREE.Material, anisotropy = 8): void {
   }
 }
 
+/** Whether the GLB gives the material a finish of its own from its AC values (glTF extras `acFinish`) */
+export function hasAcFinish(mat: THREE.Material): boolean {
+  return typeof mat.userData?.acFinish === "object" && mat.userData.acFinish !== null;
+}
+
 /** The cleaned-up material (shared: a source material used by several meshes maps to one result) */
 export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
   const done = upgraded.get(mat);
@@ -96,6 +101,13 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
   const std = mat as THREE.MeshStandardMaterial;
   if (!std.isMeshStandardMaterial) return mat;
   const name = mat.name ?? "";
+  if (hasAcFinish(mat)) {
+    // A finish the AC porter made from the material's own shader values (scripts/cars/port_ac_car.py `apply_ac_finish`):
+    // its roughness, reflection head on and at grazing angles, and coat are the source's, kept as made
+    mat.needsUpdate = true;
+    upgraded.set(mat, mat);
+    return mat;
+  }
   // a solid-white placeholder map says nothing: drop it and fall back to the rules below
   // Each map judged on its own channel (B for metal, G for roughness): glTF shares one texture between the two
   // slots, but a model with separate maps must not have its roughness decided by the metal map

@@ -10,6 +10,7 @@ import {
   axlePressures,
   foldVehicleModelId,
   isVehicleModelId,
+  TIRE_COMPOUNDS,
   type AeroSetupPreset,
   type TireCompound,
   type TyreSetup,
@@ -31,7 +32,8 @@ export const SHARE_CODE_PREFIX = "LC1-";
 export const MAX_SHARED_SETUP_BYTES = 4096;
 const MAX_SETUP_NAME_LEN = 40;
 
-const VALID_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
+/** A shared setup may name any compound; a car without its super soft fits its soft (`F12026CarSim.tireCompound`) */
+const VALID_COMPOUNDS: readonly TireCompound[] = TIRE_COMPOUNDS;
 const VALID_AERO: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
 
 const TUNER_BOUNDS: Readonly<Record<keyof GarageTuner, { min: number; max: number; step: number }>> = {
@@ -56,6 +58,7 @@ const AERO_LABELS = {
 } as const satisfies Readonly<Record<AeroSetupPreset, string>>;
 
 const COMPOUND_LABELS = {
+  supersoft: "game.setupShare.supersoft",
   soft: "game.setupShare.soft",
   medium: "game.setupShare.medium",
   hard: "game.setupShare.hard",

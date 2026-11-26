@@ -41,6 +41,8 @@
   "flags.doubleYellow": "Double yellow flag: two waved yellow flags, a serious hazard.",
   "flags.blackWhite": "The black and white diagonal flag: a warning for unsporting behaviour.",
   "flags.chequered": "The chequered flag that ends a race or session.",
+  "compounds.name.supersoft": "Tyre compound name: the softest dry slick, softer than Soft (shown only for cars whose data has one, such as the 2007 F1 car). Use your language's F1 word for 'super soft', built on the word used for Soft.",
+  "compounds.short.supersoft": "Short form of Super Soft (tyre compound) in a narrow HUD label: as short as the Soft label, or barely longer.",
   "compounds.name.soft": "Tyre compound name, in badges and menus.",
   "compounds.name.medium": "Tyre compound name.",
   "compounds.name.hard": "Tyre compound name.",

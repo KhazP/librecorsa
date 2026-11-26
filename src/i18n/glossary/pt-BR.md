@@ -105,6 +105,7 @@
 | tyre temperatures | temperaturas dos pneus | |
 | tyre pressure | pressão dos pneus | |
 | soft | macio | |
+| super soft | supermacio | Compound; one word: pneus supermacios |
 | medium | médio | |
 | hard | duro | |
 | intermediate | intermediário | |

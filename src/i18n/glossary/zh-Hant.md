@@ -98,6 +98,7 @@
 | tyre temperatures | 輪胎溫度 | 簡稱「胎溫」 |
 | tyre pressure | 胎壓 | |
 | tyre compound: soft, medium, hard, intermediate, wet | 輪胎配方：軟胎、中性胎、硬胎、半雨胎、全雨胎 | |
+| super soft | 超軟胎 | 比軟胎更軟的乾地胎 |
 | tyre blankets | 暖胎毯 | |
 | setup (car setup) | 車輛調校 | 簡稱「調校」 |
 | apply setup | 套用調校 | |

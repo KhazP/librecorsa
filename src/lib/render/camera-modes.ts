@@ -30,6 +30,11 @@ export interface CameraModeSpec {
   wheelInShot: boolean;
   /** The car's own mirrors or dash rear-view monitor can be in shot, so their live rear-view pass runs */
   mirrorsInShot: boolean;
+  /**
+   * The car's outside mirrors (on its sidepods or doors: a ported AC car's, `WingMirrors.outside`) can be in shot, so
+   * their live pass runs while their glass is on screen: the cabin views, the T-cam, the chase views and the free camera
+   */
+  outsideMirrorsInShot: boolean;
   /** The player's field-of-view setting shifts it (onboard views only) */
   playerFov: boolean;
   /** Plays the mod's interior engine event; outside views hear the exterior one */
@@ -51,6 +56,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: true,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -63,6 +69,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: true,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -75,6 +82,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: true,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -87,6 +95,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: true,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "onRequest",
@@ -99,6 +108,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: true,
     mirrorsInShot: false,
+    outsideMirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "always",
@@ -110,6 +120,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: true,
     wheelInShot: true,
     mirrorsInShot: true,
+    outsideMirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "always",
@@ -122,6 +133,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: true,
     wheelInShot: true,
     mirrorsInShot: true,
+    outsideMirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "noSideMirrors",
@@ -134,6 +146,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: true,
     mirrorsInShot: true,
+    outsideMirrorsInShot: true,
     playerFov: true,
     interiorAudio: true,
     virtualMirror: "always",
@@ -145,6 +158,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: false,
     playerFov: false,
     interiorAudio: true,
     virtualMirror: "always",
@@ -156,6 +170,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "never",
@@ -167,6 +182,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: false,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "never",
@@ -179,6 +195,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     driverHead: false,
     wheelInShot: false,
     mirrorsInShot: false,
+    outsideMirrorsInShot: true,
     playerFov: false,
     interiorAudio: false,
     virtualMirror: "never",

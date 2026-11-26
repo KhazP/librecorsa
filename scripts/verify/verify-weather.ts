@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { getActiveTrackData } from '../../src/lib/track-data';
 import { parsePlayerSettings } from '../../src/lib/settings/player-settings';
 import { FlatGroundQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
-import { F12026_CAR_CONFIG } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { compoundData, compoundForSlot, F12026_CAR_CONFIG } from '../../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
 import { VehiclePhysics, type VehicleInputs } from '../../src/lib/sim/f12026-car/VehiclePhysics';
 import { computeTyreForces, createTyreRuntime, updateTyreThermal } from '../../src/lib/sim/ac-tyre';
@@ -465,6 +465,7 @@ console.log('\n== Weather & time of day');
     'chaparral-2d',
     'chaparral-2d-67',
     'porsche-934-rsr',
+    'f1-2007',
   ] as const;
   check(
     'Every car in the registry resolves a measured headlight and taillight profile',
@@ -488,7 +489,7 @@ const flat = new FlatGroundQuery();
  * which the speed-hold pedal's kicks and the road texture move by more than the tyres differ
  */
 function peakLateralG(config: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG, compound: TireCompound, waterMm: number, kmh: number): number {
-  const car = new VehiclePhysics({ ground: flat, config, airDensity: 1.06, compound: config.compoundSlots[compound] });
+  const car = new VehiclePhysics({ ground: flat, config, airDensity: 1.06, compound: compoundForSlot(config.compoundSlots, compound) });
   car.waterMm = waterMm;
   car.wetness = wetnessFromWater(waterMm);
   car.reset(0, 0, 0, kmh / 3.6);
@@ -512,7 +513,7 @@ function peakLateralG(config: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG, 
   return best;
 }
 function brakingDistance(config: typeof F12026_CAR_CONFIG, compound: TireCompound, waterMm: number): number {
-  const car = new VehiclePhysics({ ground: flat, config, airDensity: 1.06, compound: config.compoundSlots[compound] });
+  const car = new VehiclePhysics({ ground: flat, config, airDensity: 1.06, compound: compoundForSlot(config.compoundSlots, compound) });
   car.waterMm = waterMm;
   car.wetness = wetnessFromWater(waterMm);
   car.reset(0, 0, 0, 200 / 3.6);
@@ -546,7 +547,7 @@ for (const [label, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['AMG GT3', AMG_G
 // Rain tyres in the dry run hot for their window: 90 s of steady 1.7 g cornering at 150 km/h
 {
   const soak = (compound: TireCompound, waterMm: number) => {
-    const car = new VehiclePhysics({ ground: flat, config: F12026_CAR_CONFIG, airDensity: 1.06, compound: F12026_CAR_CONFIG.compoundSlots[compound] });
+    const car = new VehiclePhysics({ ground: flat, config: F12026_CAR_CONFIG, airDensity: 1.06, compound: compoundForSlot(F12026_CAR_CONFIG.compoundSlots, compound) });
     car.waterMm = waterMm;
     car.wetness = wetnessFromWater(waterMm);
     car.reset(0, 0, 0, 150 / 3.6);
@@ -555,7 +556,7 @@ for (const [label, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['AMG GT3', AMG_G
       pedal = THREE.MathUtils.clamp(pedal + (car.telemetry.speedKmh < 150 ? 0.02 : -0.02), 0, 1);
       car.step(DT, { throttle: pedal, brake: 0, steer: -0.12 });
     }
-    const td = F12026_CAR_CONFIG.tyreCompounds[F12026_CAR_CONFIG.compoundSlots[compound]]!.thermalData;
+    const td = compoundData(F12026_CAR_CONFIG, compoundForSlot(F12026_CAR_CONFIG.compoundSlots, compound)).thermalData;
     const surf = Math.max(...car.wheels.map((w) => w.surfaceTempC));
     return { surf, over: surf - (td.optimalTempC[0] + td.optimalTempC[1]) / 2, window: td.optimalTempC };
   };

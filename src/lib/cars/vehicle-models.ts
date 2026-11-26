@@ -1,12 +1,12 @@
 import type * as THREE from "three";
 import { text as t } from "@/lib/text";
-import type { VehicleModelId } from "@/types/f1";
+import type { TireCompound, VehicleModelId } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { CarClassRule } from "@/lib/sim/multiplayer-sync";
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import { F12026CarSim, F12026_SIM_PROFILE, type CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
-import { F12026_CAR_CONFIG, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
+import { F12026_CAR_CONFIG, carCompoundSlots, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
 import { createLc26Sim } from "@/lib/sim/f12026-car/Lc26Sim";
 import { LC25_SIM_PROFILE, createLc25Sim } from "@/lib/sim/f12025-car/Lc25Sim";
 import { LC25_CAR_CONFIG } from "@/lib/sim/f12025-car/Lc25Config";
@@ -29,6 +29,8 @@ import { CHAPARRAL_2D_67_SIM_PROFILE, CHAPARRAL_2D_SIM_PROFILE, createChaparral2
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "@/lib/sim/classic/Chaparral2dConfig";
 import { PORSCHE_934_RSR_SIM_PROFILE, createPorsche934RsrSim } from "@/lib/sim/classic/Porsche934RsrSim";
 import { PORSCHE_934_RSR_CONFIG } from "@/lib/sim/classic/Porsche934RsrConfig";
+import { F12007_SIM_PROFILE, createF12007Sim } from "@/lib/sim/f1-2007/F12007Sim";
+import { F12007_CONFIG } from "@/lib/sim/f1-2007/F12007Config";
 import { VW_SCIROCCO_SIM_PROFILE, createVwSciroccoSim } from "@/lib/sim/road/VwSciroccoSim";
 import { VW_SCIROCCO_CONFIG } from "@/lib/sim/road/VwSciroccoConfig";
 import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
@@ -59,7 +61,7 @@ export interface VehicleModel {
   telemetryMaxRpm: number;
   tyreSetupRanges: TyreSetupRanges;
   /** The chassis a ported body on this model is fitted to (axles, floor), and the axles it drives (the car's card) */
-  rigConfig: Pick<CarPhysicsConfig, "chassis" | "aero" | "drivenAxle" | "awd">;
+  rigConfig: Pick<CarPhysicsConfig, "chassis" | "aero" | "drivenAxle" | "awd" | "compoundSlots">;
   /** The model's own car (no ported GLB) has the GT3 dash and mirrors rather than the LC26 wheel display */
   gt3Cockpit: boolean;
   /** The plank throws sparks off the road at speed */
@@ -263,6 +265,20 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     gt3Cockpit: false,
     floorSparks: false,
   },
+  // Cimmerian Iter's 2007 grid: one physics for every team; each team's body is its ported GLB, chosen by the livery,
+  // and brings its own cameras
+  "f1-2007": {
+    id: "f1-2007",
+    classId: "f1",
+    createSim: (track, trackRoot) => createF12007Sim(track, trackRoot),
+    limiterRpm: F12007_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 20000,
+    tyreSetupRanges: F12007_SIM_PROFILE,
+    simProfile: F12007_SIM_PROFILE,
+    rigConfig: F12007_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: true,
+  },
 };
 
 export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => VEHICLE_MODELS[id];
@@ -289,6 +305,26 @@ export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
   typeof value === "string" && Object.hasOwn(VEHICLE_MODELS, value);
 
 /** The vehicle models an online room's class rule lets in: "any" every model, a class its own models */
+/**
+ * The tyre compounds a car's data fills, softest first: the garage, the pit wall and the pre-race show list these (a
+ * super soft only on a car whose data has one). The first is the one the car starts on in the dry
+ */
+export function carTyreCompounds(vehicle: VehicleModelId): TireCompound[] {
+  return carCompoundSlots(VEHICLE_MODELS[vehicle].rigConfig.compoundSlots);
+}
+
+/**
+ * The compound a car switched to starts on: the last car's, but a car left on its own first (softest) compound starts
+ * the next on that one's first (from any car to the F1 2007 its super soft, and back to the other car's soft)
+ */
+export function switchedCarCompound(
+  last: TireCompound,
+  lastCompounds: readonly TireCompound[] | undefined,
+  nextCompounds: readonly TireCompound[] | undefined
+): TireCompound {
+  return last === (lastCompounds?.[0] ?? "soft") ? (nextCompounds?.[0] ?? "soft") : last;
+}
+
 export function vehicleModelsFor(rule: CarClassRule): VehicleModelId[] {
   return Object.values(VEHICLE_MODELS)
     .filter((m) => rule === "any" || m.classId === rule)

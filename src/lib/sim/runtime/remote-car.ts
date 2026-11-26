@@ -72,6 +72,8 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   autoXMode: "config",
   autoOvertake: "config",
   tireCompound: "config",
+  // The car's data, the same on the twin and the worker's car
+  tyreCompounds: "local",
   trackLimitsMode: "config",
   trackLimitsHold: "config",
   gridHold: "config",

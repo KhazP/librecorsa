@@ -99,6 +99,7 @@
 | tyre temperatures | 타이어 온도 | |
 | tyre pressure | 타이어 공기압 | |
 | tyre compound | 타이어 컴파운드 | 소프트, 미디엄, 하드, 인터미디어트, 웻 |
+| super soft | 슈퍼소프트 | 컴파운드; 소프트보다 무른 드라이 타이어 |
 | tyre blankets | 타이어 워머 | 주행 전 타이어 예열 장비 |
 | setup | 셋업 | 차량 세팅 |
 | apply setup | 셋업 적용 | |

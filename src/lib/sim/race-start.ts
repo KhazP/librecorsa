@@ -46,6 +46,8 @@ export const LAUNCH_RPM: Readonly<Partial<Record<VehicleModelId, readonly [numbe
   'vw-scirocco-gtx': [3000, 5000],
   // The turbo needs revs to make boost, and from 5500 the cold slicks spin (TC off, as on semi-pro) [est]
   'porsche-934-rsr': [3500, 4500],
+  // Above about 7000 rpm its rears spin up off the line, traction control on or off [est, flat-pad launches 26 Nov 2026]
+  'f1-2007': [6500, 7500],
   liana: [4500, 6500],
 };
 

@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Trockene Strecke · {tyres} · Wenig Kraftstoff",
+    "tyresSuperSoft": "Supersoft-Reifen",
     "tyresSoft": "Soft-Reifen",
     "tyresStreet": "Straßenreifen",
     "tyresVintageSlicks": "Vintage-Slicks",
@@ -727,6 +728,7 @@
     "aeroLow": "Wenig Luftwiderstand",
     "aeroBalanced": "Ausgewogene Aero",
     "aeroHigh": "Hoher Abtrieb",
+    "supersoft": "Supersoft",
     "soft": "Soft",
     "medium": "Medium",
     "hard": "Hart",

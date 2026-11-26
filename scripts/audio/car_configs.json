@@ -757,5 +757,102 @@
     },
     "lift": { "popMinRpm": 8000, "crackleMinRpm": 8800, "downshiftPopChance": 0.55 },
     "limiterRetriggerS": 0.8
+  },
+  "f1-2007": {
+    "outDir": "public/cars/f1-2007/audio",
+    "limiterRpm": 19000,
+    "idleRpm": 4000,
+    "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Ferrari F2007 sound (content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank), used with permission",
+    "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank",
+    "rawPcm16": true,
+    "engineFromBank": {
+      "int": { "event": "engine_int" },
+      "ext": { "event": "engine_ext", "fixed": { "Event Cone Angle": 0 }, "front": { "Event Cone Angle": 180 } },
+      "foldStereo": true
+    },
+    "eventsFromBank": {
+      "transmission": { "event": "transmission", "speedParam": "drivetrain_speed", "key": 87.5 },
+      "gear": { "int": "gear_int", "ext": "gear_ext" },
+      "backfire": { "int": "backfire_int", "ext": "backfire_ext" },
+      "skid": { "int": "skid_int", "ext": "skid_ext" },
+      "tractionControl": { "int": "tractioncontrol_int", "ext": "tractioncontrol_ext" },
+      "wind": { "event": "wind", "param": "speed", "fixed": { "air_pressure": 1.0 } },
+      "tyreRolling": { "event": "wheel", "param": "speed", "fixed": { "inflation": 1.0, "suspension_damage": 0.0, "brake": 0.0 } },
+      "bodywork": { "event": "bodywork", "param": "susp_travel_speed" },
+      "silent": {
+        "limiter": { "decay": 0.0, "Event Cone Angle": 0.0 },
+        "turbo": { "boost": 0.0, "bov": 0.0, "bov_decay": 0.0 }
+      },
+      "distanceM": 1.0,
+      "spatialDb": {
+        "engine_int": 0.65, "engine_ext": 0.7, "transmission": 1.17, "gear_int": -3.93, "gear_ext": 0.52, "backfire_int": 4.13,
+        "backfire_ext": 0.58, "skid_int": -0.2, "skid_ext": 0.14, "tractioncontrol_int": 0.44, "tractioncontrol_ext": 0.48,
+        "wind": 0.76, "wheel": -0.12, "bodywork": 1.5
+      },
+      "outsideDb": {
+        "transmission": -0.93, "gear_ext": -2.37, "backfire_ext": -0.62, "skid_ext": -2.83, "tractioncontrol_ext": -0.92,
+        "wind": -0.06, "wheel": -5.91, "bodywork": -0.95
+      }
+    },
+    "soundsIni": {
+      "skidMixVolume": 0.7,
+      "backfire": { "maxGas": 0.4, "minRpm": 5000, "maxRpm": 19000, "triggerGas": 0.8, "volumeIn": 1.0, "volumeOut": 0.5 },
+      "wind": { "speedGain0": 0.0005, "speedGain1": 0.0002, "volumeGain": 0.95 },
+      "tyreRolling": { "speedGain0": 0.0, "speedGain1": 0.0002, "volumeGain": 0.6 }
+    },
+    "manifestExtras": {
+      "shift": {
+        "style": "sequential",
+        "cutS": 0.025,
+        "throttleCut": true,
+        "blip": { "level": 0.75, "riseS": 0.002, "holdS": 0.01, "endS": 0.04 }
+      }
+    },
+    "variants": {
+      "ferrari": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Ferrari F2007 sound (content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank), used with permission"
+      },
+      "mclaren": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_mclaren/sfx/cim_2007_mclaren.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, McLaren MP4-22 sound (content/cars/cim_2007_mclaren/sfx/cim_2007_mclaren.bank), used with permission"
+      },
+      "renault": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_renault/sfx/cim_2007_renault.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Renault R27 sound (content/cars/cim_2007_renault/sfx/cim_2007_renault.bank), used with permission"
+      },
+      "bmw-sauber": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_bmw_sauber/sfx/cim_2007_bmw_sauber.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, BMW Sauber F1.07 sound (content/cars/cim_2007_bmw_sauber/sfx/cim_2007_bmw_sauber.bank), used with permission"
+      },
+      "red-bull": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_redbull/sfx/cim_2007_redbull.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Red Bull RB3 sound (content/cars/cim_2007_redbull/sfx/cim_2007_redbull.bank), used with permission"
+      },
+      "williams": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_williams/sfx/cim_2007_williams.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Williams FW29 sound (content/cars/cim_2007_williams/sfx/cim_2007_williams.bank), used with permission"
+      },
+      "toyota": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_toyota/sfx/cim_2007_toyota.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Toyota TF107 sound (content/cars/cim_2007_toyota/sfx/cim_2007_toyota.bank), used with permission"
+      },
+      "toro-rosso": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_tororosso/sfx/cim_2007_tororosso.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Toro Rosso STR2 sound (content/cars/cim_2007_tororosso/sfx/cim_2007_tororosso.bank), used with permission"
+      },
+      "honda": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_honda_V2/sfx/cim_2007_honda_V2.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Honda RA107 sound (content/cars/cim_2007_honda_V2/sfx/cim_2007_honda_V2.bank), used with permission"
+      },
+      "super-aguri": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_superaguri/sfx/cim_2007_superaguri.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Super Aguri SA07 sound (content/cars/cim_2007_superaguri/sfx/cim_2007_superaguri.bank), used with permission"
+      },
+      "spyker": {
+        "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_spyker/sfx/cim_2007_spyker.bank",
+        "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Spyker F8-VII sound (content/cars/cim_2007_spyker/sfx/cim_2007_spyker.bank), used with permission"
+      }
+    }
   }
 }

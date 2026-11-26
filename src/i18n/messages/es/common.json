@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Superblando",
       "soft": "Blando",
       "medium": "Medio",
       "hard": "Duro",
@@ -80,6 +81,7 @@
       "wet": "Lluvia"
     },
     "short": {
+      "supersoft": "S.Blando",
       "soft": "Blando",
       "medium": "Med",
       "hard": "Duro",
@@ -87,6 +89,7 @@
       "wet": "Lluvia"
     },
     "long": {
+      "supersoft": "Neumáticos superblandos",
       "soft": "Neumáticos blandos",
       "medium": "Neumáticos medios",
       "hard": "Neumáticos duros",
@@ -94,6 +97,7 @@
       "wet": "Neumáticos de lluvia (agua acumulada)"
     },
     "tyres": {
+      "supersoft": "Neumáticos superblandos",
       "soft": "Neumáticos blandos",
       "medium": "Neumáticos medios",
       "hard": "Neumáticos duros",

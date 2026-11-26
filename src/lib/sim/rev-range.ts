@@ -37,6 +37,9 @@ export function revRangeFor(carId: string | undefined): [number, number] {
   if (carId === "chaparral-2d" || carId === "chaparral-2d-67") return [5600, 6700];
   // The 934 has no shift light: up to its 7200 rpm shift point [spec drivetrain.ini AUTO_SHIFTER UP]
   if (carId === "porsche-934-rsr") return [6000, 7200];
+  // The F2007's four wheel LEDs: 17,500, 18,000, 18,500 and 18,700 rpm, under its 18,800 rpm up-shift and 19,000 rpm
+  // limiter [spec digital_instruments.ini LED_0–3, drivetrain.ini AUTO_SHIFTER UP]
+  if (carId === "f1-2007") return [17_500, 18_700];
   // The GT3 up to its 7250 rpm up-shift under the endurance trim's 7450 rpm limiter
   return carId === "amg-gt3" ? [5900, 7250] : [...F1_REV_RANGE];
 }

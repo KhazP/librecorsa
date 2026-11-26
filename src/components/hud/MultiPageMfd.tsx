@@ -752,7 +752,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         pitRef.current.item = next;
         setPitItem(next);
       } else {
-        const patch = pitDial(pit.strategy, item, dir);
+        const patch = pitDial(pit.strategy, item, dir, pit.compounds);
         if (patch) onChange(patch);
       }
       armAutoFold();

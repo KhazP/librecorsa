@@ -184,6 +184,8 @@ export interface SimulatorCar {
   autoOvertake?: boolean;
   activeAeroMode: ActiveAeroMode;
   tireCompound: TireCompound;
+  /** The compounds the car's data fills, softest first (a super soft only where it has one); absent: the usual five */
+  readonly tyreCompounds?: readonly TireCompound[];
 
   /** Advance by a render frame */
   step(dtSeconds: number, inputs: Partial<ControlInputs>): unknown;

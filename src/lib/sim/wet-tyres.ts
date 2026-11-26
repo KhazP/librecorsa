@@ -44,6 +44,7 @@ export const SLICK_TRAITS: WetTyreTraits = {
 };
 
 export const WET_TYRE_TRAITS: Record<TireCompound, WetTyreTraits> = {
+  supersoft: SLICK_TRAITS,
   soft: SLICK_TRAITS,
   medium: SLICK_TRAITS,
   hard: SLICK_TRAITS,

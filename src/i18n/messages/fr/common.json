@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Supertendre",
       "soft": "Tendre",
       "medium": "Medium",
       "hard": "Dur",
@@ -80,6 +81,7 @@
       "wet": "Pluie"
     },
     "short": {
+      "supersoft": "S.Tendre",
       "soft": "Tendre",
       "medium": "Med",
       "hard": "Dur",
@@ -87,6 +89,7 @@
       "wet": "Pluie"
     },
     "long": {
+      "supersoft": "Pneus supertendres",
       "soft": "Pneus tendres",
       "medium": "Pneus medium",
       "hard": "Pneus durs",
@@ -94,6 +97,7 @@
       "wet": "Pneus pluie (eau stagnante)"
     },
     "tyres": {
+      "supersoft": "Pneus supertendres",
       "soft": "Pneus tendres",
       "medium": "Pneus medium",
       "hard": "Pneus durs",

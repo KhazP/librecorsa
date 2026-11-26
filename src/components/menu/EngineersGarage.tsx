@@ -31,7 +31,7 @@ import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import { Button, Card, IconButton, Segmented, SettingRow, Slider, Tabs, TextField, Toast } from "@/components/ui";
 import { StatusDot } from "@/components/ui/Badge";
 import { CompoundGlyph } from "@/components/ui/badges/CompoundBadge";
-import { COMPOUND_ORDER, COMPOUNDS } from "@/components/ui/badges/compounds";
+import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { Icon } from "@/components/ui/icons";
 import { PadGlyph } from "@/components/ui/prompts";
 import { useUnits } from "@/lib/settings/ui-prefs";
@@ -45,7 +45,7 @@ import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { liveriesForCar } from "@/lib/track-data";
 import { FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { carTyreCompounds, vehicleModelSpec } from "@/lib/cars/vehicle-models";
 
 /** Short tab names (message keys) for the pages whose full name would push the strip onto a second row, by page id */
 const TAB_NAME = { aero: "tabAero", geometry: "tabGeometry", mechanical: "tabMechanical" } as const;
@@ -59,7 +59,6 @@ const subscribePhone = (cb: () => void) => {
 };
 const isPhone = () => window.matchMedia(PHONE_QUERY).matches;
 
-const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
 const AERO_PRESET_HINT = {
   low_downforce: "lowDownforceHint",
@@ -291,7 +290,8 @@ export const EngineersGarage: React.FC<
     );
     p.onChangeChassisSetup?.(loaded.chassis);
     p.onChangeTyreSetup(loaded.tyre);
-    if (TIRE_COMPOUNDS.includes(x.compound)) p.onChangeTireCompound(x.compound);
+    // A compound this car has (a saved super soft on a car without one keeps the compound on)
+    if (carTyreCompounds(p.vehicleModel).includes(x.compound)) p.onChangeTireCompound(x.compound);
     if (AERO_PRESETS.includes(x.aero)) p.onChangeAeroPreset(x.aero);
     p.onChangeLiveTuner?.(loaded.tuner);
     setNote(tx("loaded", { name: x.name }), () => restore(before));
@@ -506,7 +506,7 @@ export const EngineersGarage: React.FC<
             byContent
             value={p.tireCompound}
             onChange={p.onChangeTireCompound}
-            options={COMPOUND_ORDER.map((c) => ({
+            options={carTyreCompounds(p.vehicleModel).map((c) => ({
               id: c,
               label: COMPOUNDS[c].name,
               icon: <CompoundGlyph compound={c} size={18} decorative />,

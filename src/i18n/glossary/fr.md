@@ -106,6 +106,7 @@
 | tyre temperatures | températures des pneus | |
 | tyre pressure | pression des pneus | |
 | soft | tendre | |
+| super soft | supertendre | Compound; one word: pneus supertendres |
 | medium | medium | F1 broadcasts say "medium"; keep |
 | hard | dur | |
 | intermediate | intermédiaire | |

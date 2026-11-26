@@ -187,7 +187,8 @@ def inspect_fmod_pmlb(bank_path: str | Path) -> list[dict[str, Any]]:
         for i in range(cnt):
             base = 52 + i * 24
             iguid = p[base : base + 16]
-            span, start = struct.unpack("<ff", p[base + 16 : base + 24])
+            # The instrument's place on the parameter: where it starts, then its length
+            start, length = struct.unpack("<ff", p[base + 16 : base + 24])
             # Find instrument chunk containing iguid
             loc = 0
             root_rpm = 0.0
@@ -221,7 +222,7 @@ def inspect_fmod_pmlb(bank_path: str | Path) -> list[dict[str, Any]]:
             entries.append(
                 {
                     "start": round(start, 1),
-                    "end": round(start + span, 1),
+                    "end": round(start + length, 1),
                     "rootRpm": round(root_rpm, 1),
                     "samples": wav_names,
                 }
@@ -229,6 +230,410 @@ def inspect_fmod_pmlb(bank_path: str | Path) -> list[dict[str, Any]]:
         if entries and entries[0]["end"] > 500:
             results.append({"pmlbGuid": p[0:4].hex(), "entries": entries})
     return results
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# An engine event as its bank plays it (`engineFromBank`), read from the tables of an FMOD Studio 1.x bank (format 0x50,
+# what Assetto Corsa's sound projects build). An event mixes tracks (buses into its master track), each track's volume
+# automated by the event's parameters (throttle, the cone angle). On the rpm parameter sheet each instrument covers
+# [start, start + length), loops one recording from its start offset, pitched by autopitch (rate = rpm / root), and
+# fades in and out by its own curves on rpm. Curves, maps and the curve shape were checked against the FMOD runtime
+# playing the bank: pitch, start offset, fades and throttle gains agree within 0.2 dB
+# ---------------------------------------------------------------------------------------------------------------------
+
+# A curve segment with shape s runs y0 + (y1 - y0) * (e^(k u) - 1) / (e^k - 1), k = FMOD_SHAPE_K * s, over u = 0..1
+# (measured: FMOD's throttle volume curves of shape -0.76 and +0.64 fit k = 6.95 s within 0.1 dB)
+FMOD_SHAPE_K = 6.95
+# An instrument's own volume counts twice: the FMOD runtime playing these banks turns each dB stored on an instrument into
+# 2 dB of output (measured: 0, -2 and -6 dB stored give 0, -4 and -12 dB)
+FMOD_INST_VOLUME_TIMES = 2.0
+# The part of a recording its loop is cut from: FMOD starts an instrument from its start offset each time the revs
+# enter its range, so the opening seconds are what is heard most (a long recording's later stretches can sound apart)
+BANK_LOOP_FROM_S = 3.0
+
+
+def fmod_segment(u: float, shape: float) -> float:
+    if abs(shape) < 1e-6:
+        return u
+    k = FMOD_SHAPE_K * shape
+    return float(np.expm1(k * u) / np.expm1(k))
+
+
+def fmod_curve(points: list[tuple[float, float, float]], x: float) -> float:
+    """An automation curve's value at x: its points (x, y, shape of the segment after it), held flat past both ends"""
+    if x <= points[0][0]:
+        return points[0][1]
+    for (x0, y0, s0), (x1, y1, _s1) in zip(points, points[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * fmod_segment((x - x0) / max(1e-9, x1 - x0), s0)
+    return points[-1][1]
+
+
+# An S-curve segment (a point of kind 1): two halves of the exponential shape, the second the first turned about the
+# middle, k = FMOD_S_SHAPE_K * shape (fitted to the runtime's stock wind and tyre-rolling speed curves within 0.3 dB)
+FMOD_S_SHAPE_K = 4.42
+
+
+def fmod_curve_at(points: list[tuple[float, float, float]], kinds: list[int], x: float) -> float:
+    """fmod_curve, with the segments whose first point is of kind 1 as S-curves"""
+    if x <= points[0][0]:
+        return points[0][1]
+    for (x0, y0, s0), (x1, y1, _s1), kind in zip(points, points[1:], kinds):
+        if x <= x1:
+            u = (x - x0) / max(1e-9, x1 - x0)
+            if kind == 1:
+                k = FMOD_S_SHAPE_K * s0
+
+                def half(v: float) -> float:
+                    return v if abs(k) < 1e-6 else float(np.expm1(k * v) / np.expm1(k))
+
+                f = 0.5 * half(2 * u) if u < 0.5 else 1.0 - 0.5 * half(2 - 2 * u)
+            else:
+                f = fmod_segment(u, s0)
+            return y0 + (y1 - y0) * f
+    return points[-1][1]
+
+
+def fmod_map(points: list[tuple[float, float]], x: float) -> float:
+    """A property's mapping (a fader's curve value to dB, an EQ's to Hz), linear between its points"""
+    return float(np.interp(x, [p[0] for p in points], [p[1] for p in points]))
+
+
+def _fmod_list(d: bytes, o: int) -> tuple[int, int, int]:
+    """An FMOD list: a u16 count * 2 + 1, then the u16 item size when there are items. (count, size, first item)"""
+    n = struct.unpack_from("<H", d, o)[0] >> 1
+    return (n, struct.unpack_from("<H", d, o + 2)[0], o + 4) if n else (0, 0, o + 2)
+
+
+def _fmod_guids(d: bytes, o: int) -> tuple[list[bytes], int]:
+    n, size, o = _fmod_list(d, o)
+    return [d[o + i * size : o + i * size + 16] for i in range(n)], o + n * size
+
+
+def _fmod_playlist(d: bytes) -> list[bytes]:
+    """A multi instrument's playlist (PLST: two u32, then a list of instrument guid + weight): its instruments' guids"""
+    guids, _ = _fmod_guids(d, 8)
+    return guids
+
+
+class FmodEventTables:
+    """The tables an engine event is built from: events, parameters, tracks, instruments, automation, curves, maps"""
+
+    def __init__(self, bank_path: str | Path) -> None:
+        self.raw = Path(bank_path).read_bytes()
+        self.event_paths: dict[bytes, str] = {}
+        guids_txt = Path(bank_path).parent / "GUIDs.txt"
+        if guids_txt.exists():
+            for line in guids_txt.read_text(encoding="latin1").splitlines():
+                m = re.match(r"\{([0-9a-fA-F-]{36})\}\s+(event:\S+)", line.strip())
+                if m:
+                    self.event_paths[_uuid_bytes(m.group(1))] = m.group(2)
+        self.params: dict[bytes, dict[str, Any]] = {}
+        self.sheets: list[dict[str, Any]] = []
+        self.insts: dict[bytes, dict[str, Any]] = {}
+        self.wav_index: dict[bytes, int] = {}
+        self.ctrls: dict[bytes, dict[str, Any]] = {}
+        self.curves: dict[bytes, list[tuple[float, float, float]]] = {}
+        self.curve_kinds: dict[bytes, list[int]] = {}
+        self.maps: dict[bytes, list[tuple[float, float]]] = {}
+        self.buses: dict[bytes, dict[str, Any]] = {}
+        self.effects: dict[bytes, dict[str, Any]] = {}
+        self.events: dict[bytes, dict[str, Any]] = {}
+        # Modulators (MODU): what follows the guid and the target, by guid
+        self.mods: dict[bytes, bytes] = {}
+        self._walk(0, len(self.raw), None)
+
+    def _walk(self, p: int, end: int, parent: dict[str, Any] | None) -> None:
+        raw = self.raw
+        while p + 8 <= end:
+            cid = raw[p : p + 4].decode("latin1")
+            size = struct.unpack_from("<I", raw, p + 4)[0]
+            if cid in ("RIFF", "LIST"):
+                node: dict[str, Any] = {"type": raw[p + 8 : p + 12].decode("latin1"), "chunks": {}, "lists": []}
+                if node["type"] != "SND ":
+                    self._walk(p + 12, p + 8 + size, node)
+                self._take(node)
+                if parent is not None:
+                    parent["lists"].append(node)
+            elif parent is not None and cid != "SND ":
+                parent["chunks"].setdefault(cid, []).append(raw[p + 8 : p + 8 + size])
+            p += 8 + size + (size & 1)
+
+    @staticmethod
+    def _props(node: dict[str, Any]) -> list[dict[str, Any]]:
+        """A PRPS list: per automated property, its id, its mapping and its automation (controller guids)"""
+        out = []
+        for pr in (n for n in node["lists"] if n["type"] == "PRPS"):
+            for d in pr["chunks"].get("PROP", []):
+                ctrls, o = _fmod_guids(d, 24)
+                mods, _ = _fmod_guids(d, o)
+                out.append({"prop": struct.unpack_from("<I", d, 0)[0], "map": d[8:24], "ctrls": ctrls, "mods": mods})
+        return out
+
+    def _take(self, node: dict[str, Any]) -> None:
+        t, ch = node["type"], node["chunks"]
+        if t == "WAVS":
+            for d in ch.get("WAV ", []):
+                self.wav_index[d[:16]] = struct.unpack_from("<H", d, 22)[0]
+        elif t == "PARM":
+            d = ch["PRMB"][0]
+            n = struct.unpack_from("<H", d, 21)[0]
+            self.params[d[:16]] = {
+                "name": d[23 : 23 + n].decode("latin1"),
+                "min": struct.unpack_from("<f", d, 23 + n)[0],
+                "max": struct.unpack_from("<f", d, 27 + n)[0],
+            }
+        elif t == "PMLO":
+            d = ch["PMLB"][0]
+            n, size, o = _fmod_list(d, 48)
+            entries = [(d[o + i * size : o + i * size + 16],) + struct.unpack_from("<ff", d, o + i * size + 16) for i in range(n)]
+            self.sheets.append({"param": d[16:32], "event": d[32:48], "entries": entries})
+        elif t in ("WAIT", "MUIT"):
+            d = ch["INST"][0]
+            head = ch["WAIB" if t == "WAIT" else "MUIB"][0]
+            self.insts[head[:16]] = {
+                "wav": head[16:32] if t == "WAIT" else None,
+                # A multi instrument plays one of its playlist's instruments each time it is triggered
+                "playlist": _fmod_playlist(ch["PLST"][0]) if t == "MUIT" else [],
+                "volumeDb": struct.unpack_from("<f", d, 16)[0],
+                "pitch": struct.unpack_from("<f", d, 20)[0],
+                # -1: loops until stopped; 0: plays once
+                "loop": struct.unpack_from("<i", d, 24)[0],
+                # The chance (%) that a trigger plays it
+                "probability": struct.unpack_from("<f", d, 33)[0],
+                "autopitchParam": d[53:69],
+                "root": struct.unpack_from("<f", d, 69)[0],
+                "bus": d[83:99],
+                "startOffsetPct": struct.unpack_from("<f", d, 115)[0] if len(d) >= 119 else 0.0,
+                "props": self._props(node),
+            }
+        elif t == "CTRS":
+            for d in ch.get("CTRL", []):
+                self.ctrls[d[:16]] = {"target": d[16:32], "param": d[32:48], "curve": d[48:64], "prop": struct.unpack_from("<I", d, 64)[0]}
+        elif t == "MODS":
+            for d in ch.get("MODU", []):
+                self.mods[d[:16]] = d[32:]
+        elif t == "CRVS":
+            for d in ch.get("CURV", []):
+                n, size, o = _fmod_list(d, 32)
+                self.curves[d[:16]] = [struct.unpack_from("<fff", d, o + i * size) for i in range(n)]
+                # Each point's segment kind: 0 the exponential shape, 1 an S-curve (fmod_curve_at)
+                self.curve_kinds[d[:16]] = [struct.unpack_from("<I", d, o + i * size + 12)[0] for i in range(n)]
+        elif t == "MPGS":
+            for d in ch.get("MAP ", []):
+                n, size, o = _fmod_list(d, 16)
+                self.maps[d[:16]] = [struct.unpack_from("<ff", d, o + i * size) for i in range(n)]
+        elif t in ("IBUS", "GBUS", "MBUS"):
+            d, body = ch[t[0] + "BSB"][0], ch["BUS "][0]
+            # The bus body: two lists (its effects), a u16, then its volume (dB)
+            o, effects = 5, []
+            for _ in range(2):
+                listed, o = _fmod_guids(body, o)
+                effects += listed
+            self.buses[d[:16]] = {
+                "out": d[18:34],
+                "volumeDb": struct.unpack_from("<f", body, o + 2)[0],
+                "effects": effects,
+                "props": self._props(node),
+            }
+        elif t in ("BEFF", "PEFF"):
+            d = ch[t[0] + "EFB"][0]
+            self.effects[d[:16]] = {"dsp": struct.unpack_from("<I", d, 20)[0], "props": self._props(node)}
+        elif t == "EVNT":
+            d = ch["EVTB"][0]
+            params, _ = _fmod_guids(d, 93)
+            self.events[d[:16]] = {"master": d[64:80], "params": params}
+
+    def event(self, name: str) -> bytes:
+        """An event's guid by the end of its path ("engine_int"), from the GUIDs.txt beside the bank"""
+        found = [g for g, path in self.event_paths.items() if path.rsplit("/", 1)[-1] == name and g in self.events]
+        if len(found) != 1:
+            raise ValueError(f"{len(found)} events named {name!r} in the bank's GUIDs.txt")
+        return found[0]
+
+    def param_name(self, guid: bytes) -> str:
+        return self.params[guid]["name"] if guid in self.params else "?"
+
+    def volume_db(self, obj: dict[str, Any], values: dict[str, float], vary: str | None = None) -> float:
+        """A track's or instrument's volume (prop 0, dB) at these parameter values: its automation curves, each mapped to
+        dB and summed, replace its own volume. `vary`: only the curves on that parameter (the rest held at 0 dB)"""
+        auto = [pr for pr in obj["props"] if pr["prop"] == 0 and pr["ctrls"]]
+        if not auto:
+            return 0.0 if vary else obj.get("volumeDb", 0.0)
+        db = 0.0
+        for pr in auto:
+            for c in pr["ctrls"]:
+                ct = self.ctrls[c]
+                pname = self.param_name(ct["param"])
+                if vary is not None and pname != vary:
+                    continue
+                if pname not in values:
+                    raise ValueError(f"a volume curve on parameter {pname!r}, which the config does not set")
+                db += fmod_map(self.maps[pr["map"]], fmod_curve(self.curves[ct["curve"]], values[pname]))
+        return db
+
+    def fade(self, inst: dict[str, Any], param: str, x: float) -> float:
+        """An instrument's fade-in and fade-out (prop 4: a gain, 0..1) at this value of its sheet's parameter"""
+        g = 1.0
+        for pr in inst["props"]:
+            if pr["prop"] != 4:
+                continue
+            for c in pr["ctrls"]:
+                ct = self.ctrls[c]
+                if self.param_name(ct["param"]) != param:
+                    raise ValueError(f"an instrument fade on {self.param_name(ct['param'])!r}, not on its sheet's {param!r}")
+                g *= fmod_map(self.maps[pr["map"]], fmod_curve(self.curves[ct["curve"]], x))
+        return g
+
+    def fade_breaks(self, inst: dict[str, Any]) -> list[tuple[float, float, float]]:
+        """Every point of an instrument's fade curves"""
+        return [p for pr in inst["props"] if pr["prop"] == 4 for c in pr["ctrls"] for p in self.curves[self.ctrls[c]["curve"]]]
+
+
+def _uuid_bytes(text: str) -> bytes:
+    import uuid
+
+    return uuid.UUID(text).bytes_le
+
+
+def _curve_grid(lo: float, hi: float, points: list[tuple[float, float, float]]) -> list[float]:
+    """Where to sample curves on [lo, hi]: both ends, every point, and steps along each bent segment (finer the more it
+    bends) so that a linear table follows the curve within 1 % of full gain"""
+    xs = {lo, hi}
+    for (x0, _y0, s0), (x1, _y1, _s1) in zip(points, points[1:]):
+        n = 1 if abs(s0) < 1e-6 else int(np.ceil(4 + 16 * abs(s0)))
+        xs.update(float(v) for v in np.linspace(x0, x1, n + 1))
+    xs.update(p[0] for p in points)
+    return sorted(x for x in xs if lo <= x <= hi)
+
+
+def bank_engine_view(tables: FmodEventTables, event: str, fixed: dict[str, float]) -> dict[str, Any]:
+    """One view's engine (an engine_int or engine_ext event) as the bank mixes it, with the parameters other than rpm
+    and throttle held at `fixed` (the cone angle a view is heard from). Per layer ("on": the tracks the throttle opens,
+    "off": the ones it closes): the throttle's gain on it, and its recordings, each with its root (the rpm at which it
+    plays at its own pitch) and its gain over rpm: the fades, the instrument's and track's volume at `fixed` and the
+    event's master volume. Tracks `fixed` silences are left out. One recording played by several instruments of a layer
+    is one loop: instruments with the same range and start offset play in step (their gains add), the others add as
+    unrelated sounds (in power)"""
+    ev_guid = tables.event(event)
+    ev = tables.events[ev_guid]
+    master = tables.buses[ev["master"]]
+    master_db = master["volumeDb"]
+    for pr in master["props"]:
+        if pr["prop"] == 0 and pr["ctrls"]:
+            raise ValueError(f"{event}: its master volume is automated, which this port does not follow")
+    # The master's effects (a panner, a distance filter, an EQ or low-pass) are not applied: report what their automation
+    # on the held parameters sets them to, so a view held where one closes (engine_ext's cone-angle low-pass, ~5.4 kHz at
+    # 180 degrees, open at 30 and below) is seen
+    effects_note = []
+    for fx_guid in master["effects"]:
+        fx = tables.effects.get(fx_guid)
+        for pr in fx["props"] if fx else []:
+            for c in pr["ctrls"]:
+                pname = tables.param_name(tables.ctrls[c]["param"])
+                if pname in fixed:
+                    value = fmod_map(tables.maps[pr["map"]], fmod_curve(tables.curves[tables.ctrls[c]["curve"]], fixed[pname]))
+                    effects_note.append(f"DSP type {fx['dsp']} parameter {pr['prop'] - 1000 if pr['prop'] >= 1000 else pr['prop']} = {value:g} at {pname} {fixed[pname]:g}")
+    sheets = [s for s in tables.sheets if s["event"] == ev_guid and s["entries"]]
+    if len(sheets) != 1 or tables.param_name(sheets[0]["param"]) != "rpms":
+        raise ValueError(f"{event}: instruments on sheets other than one 'rpms' sheet")
+    rpm_param = tables.params[sheets[0]["param"]]
+    rpm_max = rpm_param["max"]
+    # Tracks: the throttle's part of each volume and the rest (at `fixed`); on or off by which end of the pedal is louder
+    tracks: dict[bytes, dict[str, Any]] = {}
+    for g, bus in tables.buses.items():
+        if bus["out"] != ev["master"]:
+            continue
+        def at(t: float, bus: dict[str, Any] = bus) -> float:
+            return tables.volume_db(bus, {"throttle": t, **fixed}, vary="throttle")
+
+        if abs(at(1.0) - at(0.0)) < 1.0:
+            raise ValueError(f"{event}: a track the throttle does not open or close")
+        static_db = tables.volume_db(bus, {"throttle": 0.0, **fixed}) - at(0.0)
+        tracks[g] = {"layer": "on" if at(1.0) > at(0.0) else "off", "throttleDb": at, "staticDb": static_db, "bus": bus}
+    layers: dict[str, dict[str, Any]] = {"on": {"recordings": {}, "throttle": None}, "off": {"recordings": {}, "throttle": None}}
+    silent: list[str] = []
+    for inst_guid, start, length in sheets[0]["entries"]:
+        inst = tables.insts.get(inst_guid)
+        if inst is None or inst["wav"] is None:
+            raise ValueError(f"{event}: an instrument on the rpm sheet that is no single recording (a multi instrument)")
+        if tables.param_name(inst["autopitchParam"]) != "rpms" or inst["root"] <= 0:
+            raise ValueError(f"{event}: an instrument without autopitch on rpm")
+        if abs(inst["pitch"]) > 1e-6:
+            raise ValueError(f"{event}: an instrument with a pitch offset")
+        track = tracks.get(inst["bus"])
+        if track is None:
+            raise ValueError(f"{event}: an instrument on a bus that is no track of the event")
+        level_db = track["staticDb"] + FMOD_INST_VOLUME_TIMES * inst["volumeDb"] + master_db
+        if level_db < -60:
+            silent.append(f"{tables.wav_index[inst['wav']]}@{start:.0f}")
+            continue
+        layer = layers[track["layer"]]
+        # One throttle curve per layer: the player has one on-load and one overrun gain
+        curve = [round(track["throttleDb"](t), 3) for t in np.linspace(0, 1, 41)]
+        if layer["throttle"] is None:
+            layer["throttle"] = (curve, track["throttleDb"])
+        elif layer["throttle"][0] != curve:
+            raise ValueError(f"{event}: two {track['layer']} tracks with different throttle curves")
+        sample = tables.wav_index[inst["wav"]]
+        rec = layer["recordings"].setdefault((sample, round(inst["root"], 1)), {"sample": sample, "root": inst["root"], "instances": []})
+        rec["instances"].append({"start": start, "end": start + length, "offset": inst["startOffsetPct"], "levelDb": level_db, "inst": inst})
+    out: dict[str, Any] = {"masterDb": master_db, "silent": silent, "layers": {}, "effectsNotApplied": effects_note}
+    for name, layer in layers.items():
+        if layer["throttle"] is None:
+            raise ValueError(f"{event}: no {name} track at {fixed}")
+        at = layer["throttle"][1]
+        ts = _curve_grid(0.0, 1.0, [p for tr in tracks.values() if tr["layer"] == name for p in _throttle_points(tables, tr["bus"])])
+        # A fader at its floor (-80 dB) is silence: 0, so the player stops the layer's loops instead of running them
+        throttle_gain = [(t, 0.0 if at(t) <= -79.9 else 10 ** (at(t) / 20)) for t in ts]
+        recordings = []
+        for rec in layer["recordings"].values():
+            xs: set[float] = set()
+            for inst in rec["instances"]:
+                # A range that runs to the parameter's end (stored as 20000.0005 for 20000) is open there
+                if inst["end"] >= rpm_max - 0.01:
+                    inst["end"] = float("inf")
+                lo, hi = inst["start"], min(inst["end"], rpm_max)
+                xs.update(_curve_grid(lo, hi, tables.fade_breaks(inst["inst"]) or [(lo, 0, 0), (hi, 0, 0)]))
+                # Silent outside its range: a step where the range ends on a sounding instrument
+                if lo > rpm_param["min"]:
+                    xs.add(lo - 0.5)
+                if hi < rpm_max:
+                    xs.add(hi + 0.5)
+                    xs.add(hi - 0.5)
+
+            def gain(x: float, rec: dict[str, Any] = rec) -> float:
+                groups: dict[tuple[float, float, float], float] = {}
+                for inst in rec["instances"]:
+                    if inst["start"] <= x < inst["end"]:
+                        k = (inst["start"], inst["end"], inst["offset"])
+                        groups[k] = groups.get(k, 0.0) + 10 ** (inst["levelDb"] / 20) * tables.fade(inst["inst"], "rpms", x)
+                return float(np.sqrt(sum(v * v for v in groups.values())))
+
+            table = [(x, gain(x)) for x in sorted(xs)]
+            # Only the points that shape it: drop runs of zeros inside, keep their edges
+            kept = [p for i, p in enumerate(table) if p[1] > 1e-6 or (i > 0 and table[i - 1][1] > 1e-6) or (i + 1 < len(table) and table[i + 1][1] > 1e-6)]
+            recordings.append({
+                "sample": rec["sample"], "root": rec["root"], "gain": kept, "instances": len(rec["instances"]),
+                "offsetPct": min(inst["offset"] for inst in rec["instances"]),
+            })
+        recordings.sort(key=lambda r: r["root"])
+        roots = [round(r["root"]) for r in recordings]
+        if len(set(roots)) != len(roots):
+            raise ValueError(f"{event} {name}: two recordings share a root rpm (the player keys loops by it)")
+        out["layers"][name] = {"throttleGain": throttle_gain, "recordings": recordings}
+    return out
+
+
+def _throttle_points(tables: FmodEventTables, bus: dict[str, Any]) -> list[tuple[float, float, float]]:
+    return [
+        p
+        for pr in bus["props"]
+        if pr["prop"] == 0
+        for c in pr["ctrls"]
+        if tables.param_name(tables.ctrls[c]["param"]) == "throttle"
+        for p in tables.curves[tables.ctrls[c]["curve"]]
+    ]
 
 
 def rms(x: np.ndarray) -> float:
@@ -629,6 +1034,593 @@ class LazyBank:
         return self.items[idx][1].name, self._cache[idx]
 
 
+# A loop file's level when its gain table carries the bank's own level, and the on-load mix's average level at full
+# throttle (both the middle of the repository's level curve, 0.165 to 0.22)
+BANK_MIX_FILE_RMS = 0.2
+BANK_MIX_RMS = 0.2
+
+
+def fold_stereo(x: np.ndarray) -> np.ndarray:
+    """A stereo recording folded to the centre, (L + R) / sqrt 2: what FMOD's spatialiser makes of it as a point source"""
+    x = ensure_2d(x)
+    return x if x.shape[1] == 1 else ((x[:, :1] + x[:, 1:2]) / np.sqrt(2.0)).astype(np.float32)
+
+
+def _table_at(table: list[tuple[float, float]] | list[list[float]], x: float) -> float:
+    return float(np.interp(x, [p[0] for p in table], [p[1] for p in table]))
+
+
+def port_engine_from_bank(
+    cfg: dict[str, Any], out_dir: Path, int_bank: LazyBank, ext_bank: LazyBank, ffmpeg: str, manifest: dict[str, Any],
+    used_samples: set[str],
+) -> dict[str, Any]:
+    """
+    The engine as the bank's own FMOD events play it (`engineFromBank`: per view, the event and the parameters held
+    fixed, e.g. {"int": {"event": "engine_int"}, "ext": {"event": "engine_ext", "fixed": {"Event Cone Angle": 0}}}).
+
+    Each recording an event plays becomes one loop at its own pitch, keyed by its autopitch root, with a `gain` table
+    over rpm: its fades and volumes as the event mixes them (bank_engine_view). The player sounds every loop of a layer
+    at once, each at its gain and at rate rpm / root, as FMOD does: no anchor crossfade, so no recording ever plays
+    against a copy of itself. The throttle's gain on each layer is `throttleGain`; `throttleCurve` is fitted to it for
+    what follows the on/off blend elsewhere (the transmission). Levels: a loop file sits at BANK_MIX_FILE_RMS and its
+    table carries the recording's own level, the event's volumes, and one scale per view that puts the on-load mix at
+    full throttle, averaged from idle (`idleRpm`, else the lowest root) to the limiter, at BANK_MIX_RMS: the bank's balance across
+    rpm and between on and off load is kept, while every bank still plays at the same loudness
+    """
+    spec = cfg["engineFromBank"]
+    limiter = float(cfg["limiterRpm"])
+    manifest["throttleGain"] = {}
+    manifest["throttleCurve"] = {}
+    manifest["flatEngine"] = True
+    specs: dict[str, dict[str, list[str]]] = {}
+    # Per view, what a recording's level in the bank is multiplied by in the manifest: the bank's other events
+    # (`eventsFromBank`) play on the same scale, so they keep their level against the engine
+    scales: dict[str, float] = {}
+    max_jump = 0.0
+    for view, bank in (("int", int_bank), ("ext", ext_bank)):
+        vs = spec[view]
+        mix = bank_engine_view(FmodEventTables(bank.bank_path), vs["event"], vs.get("fixed", {}))
+        made: dict[str, list[tuple[dict[str, Any], str, np.ndarray, float]]] = {}
+        for layer in ("on", "off"):
+            made[layer] = []
+            for rec in mix["layers"][layer]["recordings"]:
+                sname, raw_x = bank.get(int(rec["sample"]))
+                # `foldStereo`: the events' spatialiser plays the engine as a point source, its recordings folded to
+                # the centre (the FMOD runtime's cockpit engine comes out with L = R)
+                if spec.get("foldStereo"):
+                    raw_x = fold_stereo(raw_x)
+                used_samples.add(f"{view}:{sname}")
+                # The loop from the opening seconds after the start offset (BANK_LOOP_FROM_S); its level the whole
+                # recording's, as FMOD loops all of it
+                first = int(len(raw_x) * rec["offsetPct"] / 100.0)
+                part = raw_x[first : first + int(BANK_LOOP_FROM_S * RATE)]
+                part = part if len(part) >= int((LOOP_S + XFADE_S + 0.05) * RATE) else raw_x
+                made[layer].append((rec, sname, make_seamless_loop(part, LOOP_S, XFADE_S, RATE), rms(raw_x)))
+        # The on-load mix at full throttle, its power averaged from idle to the limiter (the recordings are unrelated
+        # sounds: their powers add)
+        on_full = _table_at(mix["layers"]["on"]["throttleGain"], 1.0)
+        idle = float(cfg.get("idleRpm") or min(rec["root"] for rec, *_ in made["on"]))
+        grid = np.arange(idle, limiter + 1.0, 250.0)
+        power = [sum((native * _table_at(rec["gain"], r) * on_full) ** 2 for rec, _n, _l, native in made["on"]) for r in grid]
+        scale = BANK_MIX_RMS / max(1e-9, float(np.sqrt(np.mean(power))))
+        scales[view] = scale
+        specs[view] = {}
+        for layer in ("on", "off"):
+            specs[view][layer] = []
+            for rec, sname, loop, native in made[layer]:
+                loop = level_signal(loop, BANK_MIX_FILE_RMS)
+                k = scale * native / max(1e-9, rms(loop))
+                max_jump = max(max_jump, float(np.max(np.abs(loop[0] - loop[-1]))))
+                root = round(float(rec["root"]), 1)
+                fn = f"engine_{view}_{layer}_{int(round(root))}.ogg"
+                ch = encode_ogg(ffmpeg, loop, out_dir / fn, quality=4)
+                manifest["engine"][view].append(
+                    {
+                        "file": fn,
+                        "fsbName": sname,
+                        "layer": layer,
+                        "rpm": int(root) if root == int(root) else root,
+                        "channels": ch,
+                        "rms": round(rms(loop), 4),
+                        "gain": [[round(x, 1), round(g * k, 5)] for x, g in rec["gain"]],
+                    }
+                )
+                specs[view][layer].append(f"{sname}#{rec['sample']}")
+        # The highest recording last (the derived one-shots take it)
+        for layer in ("on", "off"):
+            pairs = sorted(zip([r["root"] for r, *_ in made[layer]], specs[view][layer]))
+            specs[view][layer] = [s for _, s in pairs]
+        tg = {layer: [[round(t, 4), round(g, 5)] for t, g in mix["layers"][layer]["throttleGain"]] for layer in ("on", "off")}
+        manifest["throttleGain"][view] = tg
+        # The blend that one sin/cos pair would give: atan2 of the two gains, rising from [0, 0] to [1, 1]
+        ts = sorted({p[0] for layer in tg.values() for p in layer})
+        onness = [float(np.arctan2(_table_at(tg["on"], t), _table_at(tg["off"], t)) / (np.pi / 2)) for t in ts]
+        onness = list(np.maximum.accumulate(np.clip(onness, 0.0, 1.0)))
+        onness[0], onness[-1] = 0.0, 1.0
+        curve = [[0.0, 0.0]] + [[round(t, 4), round(o, 4)] for t, o in zip(ts[1:-1], onness[1:-1])] + [[1.0, 1.0]]
+        manifest["throttleCurve"][view] = curve
+        print(
+            f"[port_ac_bank] {view}: {vs['event']} at {vs.get('fixed', {})}: master {mix['masterDb']:+.1f} dB, "
+            f"{sum(len(m) for m in made.values())} recordings, {len(mix['silent'])} instruments silent there, scale {scale:.3f}"
+            + "".join(f"\n  master effect not applied: {n}" for n in mix["effectsNotApplied"]),
+            file=sys.stderr,
+        )
+    # `ext.front`: the outside heard from ahead of the car as well. engine_ext's tracks are a rear set, full at the cone
+    # angle the view is held at (0: behind the car), and a front set, full at 120 degrees and over; at `front` (the
+    # front's own angle) the front set's recordings are ported on the outside scale as `engineFront`, and `cone` gives
+    # each set's gain over the cone angle (its tracks' cone curves, against the angle it was ported at) and the master's
+    # cone low-pass (Hz), so a listener anywhere round the car hears the two sets as the event mixes them
+    front = spec["ext"].get("front")
+    if front:
+        bank = ext_bank
+        tables = FmodEventTables(bank.bank_path)
+        mix = bank_engine_view(tables, spec["ext"]["event"], front)
+        angle_param = "Event Cone Angle"
+        manifest["engineFront"] = []
+        for layer in ("on", "off"):
+            for rec in mix["layers"][layer]["recordings"]:
+                sname, raw_x = bank.get(int(rec["sample"]))
+                if spec.get("foldStereo"):
+                    raw_x = fold_stereo(raw_x)
+                used_samples.add(f"extFront:{sname}")
+                first = int(len(raw_x) * rec["offsetPct"] / 100.0)
+                part = raw_x[first : first + int(BANK_LOOP_FROM_S * RATE)]
+                part = part if len(part) >= int((LOOP_S + XFADE_S + 0.05) * RATE) else raw_x
+                loop = level_signal(make_seamless_loop(part, LOOP_S, XFADE_S, RATE), BANK_MIX_FILE_RMS)
+                k = scales["ext"] * rms(raw_x) / max(1e-9, rms(loop))
+                root = round(float(rec["root"]), 1)
+                fn = f"engine_extFront_{layer}_{int(round(root))}.ogg"
+                ch = encode_ogg(ffmpeg, loop, out_dir / fn, quality=4)
+                manifest["engineFront"].append({
+                    "file": fn, "fsbName": sname, "layer": layer, "rpm": int(root) if root == int(root) else root, "channels": ch,
+                    "rms": round(rms(loop), 4), "gain": [[round(x, 1), round(g * k, 5)] for x, g in rec["gain"]],
+                })
+        ev_master = tables.events[tables.event(spec["ext"]["event"])]["master"]
+        sets: dict[str, list[tuple[float, float, float]]] = {}
+        curve_of: dict[str, tuple[bytes, bytes]] = {}
+        for bus in tables.buses.values():
+            if bus["out"] != ev_master:
+                continue
+            for pr in bus["props"]:
+                for c in pr["ctrls"]:
+                    ct = tables.ctrls[c]
+                    if pr["prop"] == 0 and tables.param_name(ct["param"]) == angle_param:
+                        pts = tables.curves[ct["curve"]]
+                        name = "rear" if pts[0][1] > pts[-1][1] else "front"
+                        sets.setdefault(name, pts)
+                        curve_of[name] = (pr["map"], ct["curve"])
+        if set(sets) != {"rear", "front"}:
+            raise ValueError(f"{spec['ext']['event']}: no rear and front track sets on the cone angle")
+        ref = {"rear": float(spec["ext"].get("fixed", {}).get(angle_param, 0.0)), "front": float(front[angle_param])}
+
+        def set_db(name: str, a: float) -> float:
+            mp, cv = curve_of[name]
+            return fmod_map(tables.maps[mp], fmod_curve_at(tables.curves[cv], tables.curve_kinds[cv], a))
+
+        angles = _curve_grid(0.0, 180.0, [p for pts in sets.values() for p in pts])
+        manifest["cone"] = {
+            name: [[round(a, 2), round(_db_to_gain(set_db(name, a) - set_db(name, ref[name])), 5)] for a in angles] for name in ("rear", "front")
+        }
+        manifest["throttleGainFront"] = {
+            layer: [[round(t, 4), round(g, 5)] for t, g in mix["layers"][layer]["throttleGain"]] for layer in ("on", "off")
+        }
+        # The master's cone low-pass (a DSP of type 3, its parameter 0 the cutoff through its Hz map)
+        lp = []
+        for fx_guid in tables.buses[ev_master]["effects"]:
+            fx = tables.effects.get(fx_guid)
+            for pr in fx["props"] if fx and fx["dsp"] == 3 else []:
+                for c in pr["ctrls"]:
+                    ct = tables.ctrls[c]
+                    if tables.param_name(ct["param"]) == angle_param:
+                        pts = tables.curves[ct["curve"]]
+                        a_grid = _curve_grid(0.0, 180.0, pts)
+                        lp = [[round(a, 2), round(fmod_map(tables.maps[pr["map"]], fmod_curve_at(pts, tables.curve_kinds[ct["curve"]], a)), 1)] for a in a_grid]
+        if lp:
+            manifest["cone"]["lowpassHz"] = lp
+        print(f"[port_ac_bank] extFront: {spec['ext']['event']} at {front}: {len(manifest['engineFront'])} recordings", file=sys.stderr)
+    roots = {e["fsbName"]: float(e["rpm"]) for e in manifest["engine"]["int"]}
+    return {"specs": specs, "maxBoundaryJump": max_jump, "roots": roots, "scales": scales}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The bank's other events (`eventsFromBank`), read from the same tables as its engine: the transmission, the gear
+# changes, the backfires, the skids, the traction control's cut, the wind, the tyres rolling and the bodywork, each at
+# its own pitch and curves and at its own level against the engine (on the view's engine scale). An instrument's level is
+# its own volume (counted twice, as on the engine's sheet) and its volume curves, plus every bus's from its track up to
+# the event's master, a bus's curves replacing its own volume. A stereo recording is heard folded to the centre
+# ((L + R) / sqrt 2: the events' spatialiser plays a point source), and what each event's spatialiser does beyond that
+# at the reference listener is `spatialDb` (measured with the FMOD runtime). Pitches are in semitones
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def _db_to_gain(db: float) -> float:
+    return 0.0 if db <= -79.9 else float(10.0 ** (db / 20.0))
+
+
+def event_instruments(tables: FmodEventTables, name: str) -> list[dict[str, Any]]:
+    """An event's instruments (single recordings and multi instruments, on its timeline or on a parameter sheet), each
+    with its buses from its track up to the event's master (`chain`) and its sheet (parameter, start, end) or None"""
+    ev_guid = tables.event(name)
+    master = tables.events[ev_guid]["master"]
+
+    def chain(bus: bytes) -> list[dict[str, Any]] | None:
+        out, g = [], bus
+        for _ in range(8):
+            if g not in tables.buses:
+                return None
+            out.append(tables.buses[g])
+            if g == master:
+                return out
+            g = tables.buses[g]["out"]
+        return None
+
+    sheet_of: dict[bytes, tuple[str, float, float]] = {}
+    for sh in tables.sheets:
+        if sh["event"] == ev_guid:
+            pmax = tables.params[sh["param"]]["max"]
+            for inst_guid, start, length in sh["entries"]:
+                end = start + length
+                # A range that runs to the parameter's end is open there
+                sheet_of[inst_guid] = (tables.param_name(sh["param"]), start, float("inf") if end >= pmax - 0.01 else end)
+    in_playlists = {g for inst in tables.insts.values() for g in inst["playlist"]}
+    out = []
+    for g, inst in tables.insts.items():
+        c = chain(inst["bus"])
+        if c is None or g in in_playlists:
+            continue
+        out.append({**inst, "guid": g, "chain": c, "sheet": sheet_of.get(g)})
+    return out
+
+
+def _auto_db(tables: FmodEventTables, obj: dict[str, Any], values: dict[str, float]) -> float | None:
+    """An object's volume automation (prop 0) at these values, its curves mapped to dB and summed; None when it has
+    none. Curves on the event's timeline (no parameter: the stock backfire track has one) are left out, as the runtime
+    playing the bank does"""
+    db, found = 0.0, False
+    for pr in obj["props"]:
+        if pr["prop"] != 0:
+            continue
+        for c in pr["ctrls"]:
+            ct = tables.ctrls[c]
+            if ct["param"] not in tables.params:
+                continue
+            pname = tables.param_name(ct["param"])
+            if pname not in values:
+                raise ValueError(f"a volume curve on parameter {pname!r}, which the config does not set")
+            db += fmod_map(tables.maps[pr["map"]], fmod_curve_at(tables.curves[ct["curve"]], tables.curve_kinds[ct["curve"]], values[pname]))
+            found = True
+    return db if found else None
+
+
+def instrument_level_db(tables: FmodEventTables, inst: dict[str, Any], values: dict[str, float]) -> float:
+    """An instrument's level as its event plays it at these parameter values (dB), its fades included. Its own volume
+    counts twice and its volume curves add to it (measured: the transmission's -6 dB instrument under a 0 dB curve
+    plays at -12 dB); a bus's curves replace its own volume"""
+    own = _auto_db(tables, inst, values)
+    db = FMOD_INST_VOLUME_TIMES * inst["volumeDb"] + (own or 0.0)
+    for bus in inst["chain"]:
+        auto = _auto_db(tables, bus, values)
+        db += auto if auto is not None else bus["volumeDb"]
+    if inst["sheet"] and any(pr["prop"] == 4 and pr["ctrls"] for pr in inst["props"]):
+        fade = tables.fade(inst, inst["sheet"][0], values[inst["sheet"][0]])
+        db += 20.0 * np.log10(fade) if fade > 1e-6 else -80.0
+    return max(-80.0, db)
+
+
+def instrument_pitch_st(tables: FmodEventTables, inst: dict[str, Any], values: dict[str, float]) -> float:
+    """An instrument's pitch (semitones): its own, and the pitch curves (prop 1) on it and its buses"""
+    st = inst["pitch"]
+    for obj in [inst] + inst["chain"]:
+        for pr in obj["props"]:
+            if pr["prop"] != 1:
+                continue
+            for c in pr["ctrls"]:
+                ct = tables.ctrls[c]
+                st += fmod_map(tables.maps[pr["map"]], fmod_curve_at(tables.curves[ct["curve"]], tables.curve_kinds[ct["curve"]], values[tables.param_name(ct["param"])]))
+    return st
+
+
+def instrument_pitch_jitter_st(tables: FmodEventTables, inst: dict[str, Any]) -> float:
+    """The widest random pitch modulator (prop 1) on an instrument or its buses (semitones either way), 0 for none. A
+    random modulator's body: u32 1, u32 1, u16 8, then its lowest and highest offset (f32)"""
+    jitter = 0.0
+    for obj in [inst] + inst["chain"]:
+        for pr in obj["props"]:
+            if pr["prop"] != 1:
+                continue
+            for m in pr["mods"]:
+                d = tables.mods.get(m, b"")
+                if len(d) >= 18 and struct.unpack_from("<I", d, 0)[0] == 1:
+                    lo, hi = struct.unpack_from("<ff", d, 10)
+                    jitter = max(jitter, abs(lo), abs(hi))
+    return jitter
+
+
+def instrument_attack(tables: FmodEventTables, inst: dict[str, Any]) -> tuple[float, float] | None:
+    """An AHDSR modulator on the volume (prop 0) of an instrument or its buses: (its starting level in dB, its attack in
+    s), None for none. Its body: u32 0, u32 0, u16, then f32 starting level, two f32, f32 attack, f32 hold, f32 decay,
+    f32 release (the stock outside backfire: -42 dB over 0.05 s, which the runtime's output fits best)"""
+    for obj in [inst] + inst["chain"]:
+        for pr in obj["props"]:
+            if pr["prop"] != 0:
+                continue
+            for m in pr["mods"]:
+                d = tables.mods.get(m, b"")
+                if len(d) >= 26 and struct.unpack_from("<I", d, 0)[0] == 0:
+                    start_db, attack = struct.unpack_from("<f", d, 10)[0], struct.unpack_from("<f", d, 22)[0]
+                    if attack > 0:
+                        return float(start_db), float(attack)
+    return None
+
+
+def _on_sheet(inst: dict[str, Any], values: dict[str, float]) -> bool:
+    if inst["sheet"] is None:
+        return True
+    pname, start, end = inst["sheet"]
+    return start <= values[pname] < end
+
+
+def _curve_points(tables: FmodEventTables, inst: dict[str, Any], param: str) -> list[tuple[float, float, float]]:
+    """Every point of the curves on `param`, on the instrument and its buses, volume and pitch alike"""
+    return [
+        p
+        for obj in [inst] + inst["chain"]
+        for pr in obj["props"]
+        for c in pr["ctrls"]
+        if tables.ctrls[c]["param"] in tables.params and tables.param_name(tables.ctrls[c]["param"]) == param
+        for p in tables.curves[tables.ctrls[c]["curve"]]
+    ]
+
+
+def port_events_from_bank(
+    cfg: dict[str, Any], out_dir: Path, bank: LazyBank, ffmpeg: str, manifest: dict[str, Any], scales: dict[str, float],
+    used_samples: set[str],
+) -> None:
+    """
+    The bank's other events as it plays them (`eventsFromBank`), on the engine's scale per view (`scales`, from
+    port_engine_from_bank): a level x in the bank plays at scales[view] * x, as the engine's recordings do. Each section
+    names its event(s); "ext" levels also take the event's loss at the chase camera's distance (`outsideDb`, measured
+    with the runtime: the engine loses nothing there). The car's sounds.ini values come in `soundsIni`.
+
+    - transmission: its one recording, pitched by road speed (`drivetrainSpeed` its root), a `gain` table over speed and
+      `transmissionMix` (the throttle's gain on it, the view's scale)
+    - gear: per view an up-shift and a down-shift one-shot (the event's `state` parameter: 1 up, 0 down) at their own
+      pitch (`rate`) and level (`gain`)
+    - backfire: the multi instruments' recordings per view, with `backfire` (the sounds.ini trigger, the throttle's gain
+      on the event, the chance it plays, the random pitch)
+    - skid, tractionControl: loops per view at their pitch and level (sounds.ini MIX_VOLUME on the skid), the cut's
+      release from the event's `decay` curve
+    - wind, tyreRolling, bodywork: one loop each, with `gain` and `rate` tables over road speed (the suspension's travel
+      speed for the bodywork)
+    - silent: events that must play nothing (the port stops if one does), listed as `silentEvents`
+    """
+    spec = cfg["eventsFromBank"]
+    ini = cfg.get("soundsIni", {})
+    tables = FmodEventTables(bank.bank_path)
+    outside_db = spec.get("outsideDb", {})
+    spatial_db = spec.get("spatialDb", {})
+    engine_events = {v: cfg["engineFromBank"][v]["event"] for v in ("int", "ext")}
+    lin = _db_to_gain
+    raw_bank = bank
+
+    class Folded:
+        """The bank's recordings folded to the centre (fold_stereo), as the events' spatialiser plays them"""
+
+        bank_path = raw_bank.bank_path
+
+        @staticmethod
+        def get(idx: int) -> tuple[str, np.ndarray]:
+            name, x = raw_bank.get(idx)
+            return name, fold_stereo(x)
+
+    bank = Folded()
+
+    def at_view(view: str, event: str, db: float) -> float:
+        # Against the view's engine: what each one's spatialiser adds at the reference listener, and outside the loss
+        # at the chase camera's distance
+        rel = spatial_db.get(event, 0.0) - spatial_db.get(engine_events[view], 0.0)
+        return scales[view] * lin(db + rel + (outside_db.get(event, 0.0) if view == "ext" else 0.0))
+
+    def wav_of(inst: dict[str, Any]) -> int:
+        return int(tables.wav_index[inst["wav"]])
+
+    def sounding(insts: list[dict[str, Any]], values: dict[str, float]) -> list[dict[str, Any]]:
+        return [i for i in insts if _on_sheet(i, values) and instrument_level_db(tables, i, values) > -60.0]
+
+    def loop_file(fn: str, x: np.ndarray) -> tuple[np.ndarray, int]:
+        loop = level_signal(make_seamless_loop(x, LOOP_S, XFADE_S, RATE), BANK_MIX_FILE_RMS)
+        return loop, encode_ogg(ffmpeg, loop, out_dir / fn, quality=4)
+
+    def oneshot(role: str, idx: int, gain_at_raw: float, rate: float, n: int | None = None, attack: tuple[float, float] | None = None) -> dict[str, Any]:
+        """A one-shot cut from recording `idx`, its `gain` what plays the recording at `gain_at_raw` of its own level;
+        `attack` (instrument_attack) shapes its start as the event does, from the recording's first sample"""
+        sname, raw = bank.get(idx)
+        used_samples.add(f"oneshot:{sname}")
+        if attack:
+            start_db, attack_s = attack
+            t = np.arange(len(raw), dtype=np.float32) / RATE
+            raw = raw * (10.0 ** (np.minimum(0.0, start_db * (1.0 - t / attack_s)) / 20.0)).astype(np.float32)[:, None]
+        clip = prepare_oneshot(raw)
+        # prepare_oneshot trims and scales to its peak: playing the clip at `gain` is the raw recording at gain_at_raw
+        c = float(np.abs(clip).max()) / max(1e-9, float(np.abs(ensure_2d(raw)).max()))
+        fn = f"oneshot_{role}{'' if n is None else f'_{n}'}.ogg"
+        ch = encode_ogg(ffmpeg, clip, out_dir / fn, quality=4)
+        return {
+            "file": fn, "fsbName": sname, "role": role, "channels": ch, "seconds": round(len(clip) / RATE, 3),
+            "peak": round(float(np.abs(clip).max()), 3), "gain": round(gain_at_raw / c, 6), "rate": round(rate, 5),
+        }
+
+    # Transmission: one recording on the speed sheet, pitched by it; the throttle's curve on its track
+    tr = spec.get("transmission")
+    if tr:
+        speed = tr.get("speedParam", "drivetrain_speed")
+        insts = [i for i in event_instruments(tables, tr["event"]) if i["wav"] is not None]
+        if len(insts) != 1 or not insts[0]["sheet"] or insts[0]["sheet"][0] != speed or tables.param_name(insts[0]["autopitchParam"]) != speed:
+            raise ValueError(f"{tr['event']}: not one recording on the {speed!r} sheet, pitched by it")
+        inst = insts[0]
+        speed_max = next(p["max"] for p in tables.params.values() if p["name"] == speed)
+        xs = _curve_grid(0.0, speed_max, _curve_points(tables, inst, speed) or [(0.0, 0, 0), (speed_max, 0, 0)])
+        ts = _curve_grid(0.0, 1.0, _curve_points(tables, inst, "throttle") or [(0.0, 0, 0), (1.0, 0, 0)])
+        full = {"throttle": 1.0}
+        sname, raw = bank.get(wav_of(inst))
+        used_samples.add(f"trans:{sname}")
+        # Keyed a little above its root so that 20 to 320 km/h stay within the player's 0.25 to 4 playback rates
+        root = float(inst["root"])
+        key = float(tr.get("key", root))
+        loop, ch = loop_file("transmission.ogg", pitch_resample(raw, key, root, (0.25, 4.0)))
+        k = rms(raw) / max(1e-9, rms(loop))
+        manifest["transmission"] = [{
+            "file": "transmission.ogg", "fsbName": sname, "layer": "on", "drivetrainSpeed": round(key, 1), "channels": ch,
+            "rms": round(rms(loop), 4),
+            "gain": [[round(x, 1), round(lin(instrument_level_db(tables, inst, {speed: x, **full})) * k, 6)] for x in xs],
+        }]
+        x0 = 100.0
+        manifest["transmissionMix"] = {
+            "throttleGain": [[round(t, 4), round(lin(instrument_level_db(tables, inst, {speed: x0, "throttle": t}) - instrument_level_db(tables, inst, {speed: x0, **full})), 5)] for t in ts],
+            "view": {v: round(at_view(v, tr["event"], 0.0), 6) for v in ("int", "ext")},
+            "maxSpeed": speed_max,
+        }
+
+    # Gear changes: the `state` sheet's upper half is an up-shift, its lower half a down-shift
+    gear = spec.get("gear")
+    if gear:
+        for view in ("int", "ext"):
+            insts = event_instruments(tables, gear[view])
+            for role, state in (("gear_up", 1.0), ("gear_down", 0.0)):
+                values = {"state": state, "Distance": float(spec.get("distanceM", 1.0))}
+                active = [i for i in sounding(insts, values) if i["wav"] is not None]
+                if len(active) != 1:
+                    raise ValueError(f"{gear[view]}: {len(active)} recordings at state {state}")
+                inst = active[0]
+                db = instrument_level_db(tables, inst, values)
+                manifest["oneshots"].append(oneshot(f"{role}_{view}", wav_of(inst), at_view(view, gear[view], db), 2.0 ** (instrument_pitch_st(tables, inst, values) / 12.0)))
+
+    # Backfires: one multi instrument per view, played on a lift (sounds.ini [BACKFIRE]); its level at a shut throttle,
+    # the throttle's curve on it kept for while it plays
+    bf = spec.get("backfire")
+    if bf:
+        bini = ini.get("backfire", {})
+        section: dict[str, Any] = {
+            "triggerGas": bini.get("triggerGas", 0.8), "maxGas": bini.get("maxGas", 0.4),
+            "minRpm": bini.get("minRpm", 0), "maxRpm": bini.get("maxRpm", 1e9),
+            "throttleGain": {}, "chance": {}, "pitchJitterSt": {},
+        }
+        for view in ("int", "ext"):
+            insts = [i for i in event_instruments(tables, bf[view]) if i["playlist"]]
+            if len(insts) != 1:
+                raise ValueError(f"{bf[view]}: not one multi instrument")
+            mu = insts[0]
+            values = {"throttle": 0.0, "Event Cone Angle": 0.0}
+            db0 = instrument_level_db(tables, mu, values)
+            ts = _curve_grid(0.0, 1.0, _curve_points(tables, mu, "throttle") or [(0.0, 0, 0), (1.0, 0, 0)])
+            section["throttleGain"][view] = [[round(t, 4), round(lin(instrument_level_db(tables, mu, {**values, "throttle": t}) - db0), 5)] for t in ts]
+            section["chance"][view] = round(mu["probability"] / 100.0, 4)
+            section["pitchJitterSt"][view] = round(instrument_pitch_jitter_st(tables, mu), 4)
+            # sounds.ini VOLUME_IN / VOLUME_OUT: the event's volume inside and outside
+            volume = float(bini.get("volumeIn" if view == "int" else "volumeOut", 1.0))
+            for n, g in enumerate(mu["playlist"], start=1):
+                sub = tables.insts[g]
+                sub_db = db0 + FMOD_INST_VOLUME_TIMES * sub["volumeDb"]
+                rate = 2.0 ** ((mu["pitch"] + sub["pitch"]) / 12.0)
+                manifest["oneshots"].append(oneshot(f"backfire_{view}", int(tables.wav_index[sub["wav"]]), at_view(view, bf[view], sub_db) * volume, rate, n, instrument_attack(tables, mu)))
+        manifest["backfire"] = section
+
+    # Skids: a recording per view on the event's timeline, at the sounds.ini mix volume
+    sk = spec.get("skid")
+    if sk:
+        manifest["skid"] = {}
+        for view in ("int", "ext"):
+            insts = [i for i in event_instruments(tables, sk[view]) if i["wav"] is not None]
+            if len(insts) != 1:
+                raise ValueError(f"{sk[view]}: not one recording")
+            inst = insts[0]
+            db = instrument_level_db(tables, inst, {})
+            sname, raw = bank.get(wav_of(inst))
+            used_samples.add(f"skid:{sname}")
+            fn = f"skid_{view}.ogg"
+            loop, ch = loop_file(fn, raw)
+            manifest["skid"][view] = {
+                "file": fn, "fsbName": sname, "channels": ch, "rms": round(rms(loop), 4),
+                "gain": round(at_view(view, sk[view], db) * float(ini.get("skidMixVolume", 1.0)) * rms(raw) / rms(loop), 6),
+                "rate": round(2.0 ** (instrument_pitch_st(tables, inst, {}) / 12.0), 5),
+            }
+
+    # Traction control: its recording looped while the cut is on, per view at its level and pitch; its `decay` curve
+    # (the time since the cut, s) is the release
+    tc = spec.get("tractionControl")
+    if tc:
+        entry: dict[str, Any] = {"gain": {}, "rate": {}}
+        for view in ("int", "ext"):
+            insts = [i for i in event_instruments(tables, tc[view]) if i["wav"] is not None]
+            if len(insts) != 1:
+                raise ValueError(f"{tc[view]}: not one recording")
+            inst = insts[0]
+            db = instrument_level_db(tables, inst, {"decay": 0.0})
+            sname, raw = bank.get(wav_of(inst))
+            if "file" not in entry:
+                used_samples.add(f"tc:{sname}")
+                loop, ch = loop_file("tc.ogg", raw)
+                entry.update(file="tc.ogg", fsbName=sname, channels=ch, rms=round(rms(loop), 4))
+                native = rms(raw) / rms(loop)
+                ds = _curve_grid(0.0, 1.0, _curve_points(tables, inst, "decay"))
+                entry["release"] = [[round(d, 4), round(lin(instrument_level_db(tables, inst, {"decay": d}) - db), 5)] for d in ds if d <= 0.5]
+            entry["gain"][view] = round(at_view(view, tc[view], db) * native, 6)
+            entry["rate"][view] = round(2.0 ** (instrument_pitch_st(tables, inst, {"decay": 0.0}) / 12.0), 5)
+        manifest["tractionControl"] = entry
+
+    # Wind, tyres rolling, bodywork: the recordings that sound at the held parameters, mixed into one loop (they share
+    # their track's curves), with gain and rate tables over the driving parameter and, from sounds.ini, the volume AC's
+    # SPEED_GAIN / VOLUME_GAIN give the event (min(VOLUME_GAIN, a v + b v^2), v in km/h)
+    for key, tag in (("wind", "wind"), ("tyreRolling", "tyre_rolling"), ("bodywork", "bodywork")):
+        es = spec.get(key)
+        if not es:
+            continue
+        param = es["param"]
+        held = {**es.get("fixed", {})}
+        pmax = next(p["max"] for p in tables.params.values() if p["name"] == param)
+        insts = [i for i in sounding(event_instruments(tables, es["event"]), {**held, param: pmax * 0.8}) if i["wav"] is not None]
+        if not insts:
+            raise ValueError(f"{es['event']}: nothing sounds at {held}")
+        xs = _curve_grid(0.0, pmax, [p for i in insts for p in _curve_points(tables, i, param)] or [(0.0, 0, 0), (pmax, 0, 0)])
+        ref = {**held, param: pmax * 0.8}
+        parts = []
+        for inst in insts:
+            sname, raw = bank.get(wav_of(inst))
+            used_samples.add(f"{tag}:{sname}")
+            part = level_signal(make_seamless_loop(raw, LOOP_S, XFADE_S, RATE), rms(raw))
+            parts.append(ensure_2d(part) * lin(instrument_level_db(tables, inst, ref)))
+        width = max(p.shape[1] for p in parts)
+        mix = sum(np.repeat(p, width // p.shape[1], axis=1) for p in parts)
+        fn = f"{tag}.ogg"
+        loop = level_signal(mix, BANK_MIX_FILE_RMS)
+        ch = encode_ogg(ffmpeg, loop, out_dir / fn, quality=4)
+        k = rms(mix) / rms(loop) / lin(instrument_level_db(tables, insts[0], ref))
+        vol = ini.get(key, {})
+
+        def ini_volume(v: float, vol: dict[str, Any] = vol) -> float:
+            if not vol:
+                return 1.0
+            return min(float(vol["volumeGain"]), float(vol.get("speedGain0", 0.0)) * v + float(vol.get("speedGain1", 0.0)) * v * v)
+
+        manifest[key] = {
+            "file": fn, "fsbName": "+".join(bank.get(wav_of(i))[0] for i in insts), "channels": ch, "rms": round(rms(loop), 4),
+            "param": "bodywork" if key == "bodywork" else "speedKmh",
+            # The first recording's curves stand for all: they share the track that carries them
+            "gain": [[round(x, 3), round(lin(instrument_level_db(tables, insts[0], {**held, param: x})) * k * ini_volume(x), 6)] for x in xs],
+            "rate": [[round(x, 3), round(2.0 ** (instrument_pitch_st(tables, insts[0], {**held, param: x}) / 12.0), 5)] for x in xs],
+            "view": {v: round(at_view(v, es["event"], 0.0), 6) for v in ("int", "ext")},
+        }
+
+    # Events that must stay silent at the parameters the car gives them
+    silent = []
+    for name, values in spec.get("silent", {}).items():
+        loud = [i for i in event_instruments(tables, name) if _on_sheet(i, values) and instrument_level_db(tables, i, values) > -60.0]
+        if loud:
+            raise ValueError(f"{name}: {len(loud)} instruments sound at {values}")
+        silent.append(name)
+    manifest["silentEvents"] = silent
+
+
 def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = BANKS_ROOT) -> dict[str, Any]:
     out_dir = REPO_ROOT / cfg["outDir"]
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -648,8 +1640,9 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
         "turbo": [],
         "transmission": [],
         "oneshots": [],
-        "throttleCurve": cfg["throttleCurve"],
-        "lift": cfg["lift"],
+        "throttleCurve": cfg.get("throttleCurve"),
+        # The player's generic lift-off pops; a bank whose backfires come from its own events (`eventsFromBank`) has none
+        **({"lift": cfg["lift"]} if "lift" in cfg else {}),
         "limiterRetriggerS": cfg.get("limiterRetriggerS", 0.85),
     }
     if "shift" in cfg:
@@ -663,7 +1656,18 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
     # 1. Engine loops (ext and int, on and off). `viewEq`: the EQ the bank's own mixer puts on a view (an outside sound
     # made from the cockpit recordings), run over each loop as heard at its anchor, before it is looped and levelled
     view_eq: dict[str, list[dict[str, Any]]] = cfg.get("viewEq", {})
-    for view, bank in (("int", int_bank), ("ext", ext_bank)):
+    # `engineFromBank`: the engine events' own mix instead of hand-picked anchors (port_engine_from_bank)
+    from_bank = port_engine_from_bank(cfg, out_dir, int_bank, ext_bank, ffmpeg, manifest, used_samples) if "engineFromBank" in cfg else None
+    if from_bank:
+        max_boundary_jump = from_bank["maxBoundaryJump"]
+    # `eventsFromBank`: the transmission, gears, backfires, skids, traction control and ambient loops from the bank's own
+    # events (port_events_from_bank); none of them is then derived or taken by sample name below
+    events_port = "eventsFromBank" in cfg
+    if events_port:
+        if from_bank is None:
+            raise SystemExit(f"{car_id}: eventsFromBank needs engineFromBank (its levels are on the engine's scale)")
+        port_events_from_bank(cfg, out_dir, int_bank, ffmpeg, manifest, from_bank["scales"], used_samples)
+    for view, bank in (("int", int_bank), ("ext", ext_bank)) if from_bank is None else ():
         for layer in ("on", "off"):
             items = cfg["engine"][view][layer]
             n_items = len(items)
@@ -729,7 +1733,9 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
 
     # 3. Transmission loops
     trans_cfg = cfg.get("transmission", [])
-    if trans_cfg:
+    if events_port:
+        pass
+    elif trans_cfg:
         for tr_item in trans_cfg:
             layer = tr_item["layer"]
             speed = int(tr_item["drivetrainSpeed"])
@@ -753,7 +1759,8 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
             )
     else:
         # Derive straight-cut gearbox whine from mid-RPM interior recording
-        mid_spec = cfg["engine"]["int"]["on"][len(cfg["engine"]["int"]["on"]) // 2]["sample"]
+        int_on = from_bank["specs"]["int"]["on"] if from_bank else [e["sample"] for e in cfg["engine"]["int"]["on"]]
+        mid_spec = int_on[len(int_on) // 2]
         sname, mid_x = int_bank.get(mid_spec)
         for layer, speed in (("on", 200), ("off", 200)):
             loop = derive_transmission_from_engine(mid_x, is_on=(layer == "on"))
@@ -839,11 +1846,16 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
             )
 
     existing_roles = {o["role"] for o in manifest["oneshots"]}
-    high_on_spec = cfg["engine"]["int"]["on"][-1]["sample"]
+    # A bank ported from its events makes no one-shot of its own: its gear, backfire and limiter events are what they are
+    if events_port:
+        existing_roles |= {"gear_up", "gear_down", "shift_cut", "limiter", "backfire_int", "backfire_ext", "blowoff"}
+    # The highest recordings (the bank's own, by root, with `engineFromBank`): sources of the derived one-shots
+    specs = from_bank["specs"] if from_bank else {v: {lay: [e["sample"] for e in cfg["engine"][v][lay]] for lay in ("on", "off")} for v in ("int", "ext")}
+    high_on_spec = specs["int"]["on"][-1]
     _, high_on_x = int_bank.get(high_on_spec)
-    high_off_spec = cfg["engine"]["int"]["off"][-1]["sample"]
+    high_off_spec = specs["int"]["off"][-1]
     _, high_off_x = int_bank.get(high_off_spec)
-    ext_off_spec = cfg["engine"]["ext"]["off"][-1]["sample"]
+    ext_off_spec = specs["ext"]["off"][-1]
     _, ext_off_x = ext_bank.get(ext_off_spec)
 
     shift_source_name = cfg.get("shiftFallbackSample")
@@ -879,9 +1891,11 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
         lim_spec = cfg.get("limiterFallbackSample", high_on_spec)
         lim_name, lim_x = int_bank.get(lim_spec)
         used_samples.add(f"oneshot:{lim_name}")
-        if "limiterRootRpm" in cfg:
-            # The source's FMOD autopitch root: pitch it to the car's limiter like the engine loops around it
-            lim_x = pitch_resample(lim_x, float(cfg["limiterRpm"]), float(cfg["limiterRootRpm"]), resample_range)
+        # The source's FMOD autopitch root (the bank's own, for a recording its engine plays): pitch it to the car's
+        # limiter like the engine loops around it
+        lim_root = cfg.get("limiterRootRpm") or (from_bank["roots"].get(lim_name) if from_bank else None)
+        if lim_root:
+            lim_x = pitch_resample(lim_x, float(cfg["limiterRpm"]), float(lim_root), resample_range)
         clip = derive_limiter_from_high_rpm(lim_x)
         fn = "oneshot_limiter.ogg"
         ch = encode_ogg(ffmpeg, clip, out_dir / fn, force_mono=True, quality=4)
@@ -978,6 +1992,8 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
     for view in ("ext", "int"):
         for e in manifest["engine"][view]:
             referenced_files.add(e["file"])
+    for e in manifest.get("engineFront", []):
+        referenced_files.add(e["file"])
     for e in manifest["turbo"]:
         referenced_files.add(e["file"])
     for e in manifest["transmission"]:
@@ -998,7 +2014,11 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
             existing.unlink()
 
     manifest_path = out_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    text = json.dumps(manifest, indent=2)
+    if "engineFromBank" in cfg:
+        # A table's [x, y] points one to a line (its gain tables run to hundreds of them)
+        text = re.sub(r"\[\s+(-?[\d.e+-]+),\s+(-?[\d.e+-]+)\s+\]", r"[\1, \2]", text)
+    manifest_path.write_text(text + "\n", encoding="utf-8")
 
     total_bytes = sum(f.stat().st_size for f in out_dir.iterdir() if f.is_file())
     return {
@@ -1200,6 +2220,18 @@ def auto_config(samples: list[dict[str, Any]], limiter_rpm: float, idle_rpm: flo
     return cfg
 
 
+def expand_variants(car_id: str, cfg: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """A config with `variants` (one car, a bank per team: F1 2007) is one port per variant, each the config with the
+    variant's keys over it and its sound in a folder of its own (`outDir`/<variant>)"""
+    if "variants" not in cfg:
+        return [(car_id, cfg)]
+    base = {k: v for k, v in cfg.items() if k != "variants"}
+    return [
+        (f"{car_id}/{name}", {**base, **over, "outDir": f"{cfg['outDir']}/{name}"})
+        for name, over in cfg["variants"].items()
+    ]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", metavar="BANK", help="List all FSB5 samples inside an FMOD .bank file")
@@ -1256,13 +2288,13 @@ def main() -> None:
     if args.car:
         if args.car not in configs:
             raise SystemExit(f"Unknown car '{args.car}'. Available: {', '.join(configs.keys())}")
-        summary = port_car(args.car, configs[args.car], args.ffmpeg, args.banks_dir)
-        print(json.dumps(summary, indent=2))
+        summaries = [port_car(vid, vcfg, args.ffmpeg, args.banks_dir) for vid, vcfg in expand_variants(args.car, configs[args.car])]
+        print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=2))
         return
 
     if args.all:
         summaries = []
-        for cid, cfg in configs.items():
+        for cid, cfg in ((vid, vcfg) for car, car_cfg in configs.items() for vid, vcfg in expand_variants(car, car_cfg)):
             print(f"[port_ac_bank] Porting {cid} -> {cfg['outDir']} ...", file=sys.stderr)
             s = port_car(cid, cfg, args.ffmpeg, args.banks_dir)
             summaries.append(s)

@@ -13,7 +13,7 @@
 import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-builder-2026';
-import { anyCarForVehicle, carForVehicle, portedSkinFor } from '@/lib/cars/car-registry';
+import { anyCarForVehicle, carForVehicle, portedSkinFor, type CarSkin } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
 import { defaultGtTyreBrand, type GtTyreBrand } from '@/lib/render/gt-tyre-sidewall';
@@ -27,6 +27,8 @@ import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
 import { BMW_M1_PROCAR_CONFIG } from './classic/BmwM1ProcarConfig';
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from './classic/Chaparral2dConfig';
 import { PORSCHE_934_RSR_CONFIG } from './classic/Porsche934RsrConfig';
+import { F12007_CONFIG } from './f1-2007/F12007Config';
+import { f12007BodyUrl } from '@/lib/cars/f1-2007-skins';
 import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC25_MODEL_URL, LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
@@ -833,8 +835,10 @@ export class SimVisualFxManager {
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
     const livery = this.liveryOf(peer);
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
+    // A ported car with liveries of its own races each driver in one of them (the ghost in the car's first)
+    const skin = ghost ? null : opponentSkin(peer.vehicle, liveryCodeOf(peer));
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
-    const rig = pooled ?? buildOpponentRig(peer.vehicle, livery);
+    const rig = pooled ?? buildOpponentRig(peer.vehicle, livery, skin);
     if (!ghost && !this.rigHeadlights.has(rig)) {
       const carId = peer.vehicle ? carForVehicle(peer.vehicle).id : 'lc26';
       const hl = new CarHeadlights(carId, { lightsOnly: true });
@@ -845,8 +849,7 @@ export class SimVisualFxManager {
       pooled.root.visible = true;
       if (!ghost) pooled.setLivery(livery);
     }
-    // A ported car with liveries of its own races each driver in one of them (the ghost in the car's first)
-    rig.setSkin?.(ghost ? null : opponentSkin(peer.vehicle, liveryCodeOf(peer)));
+    rig.setSkin?.(skin);
     return rig;
   }
 
@@ -875,17 +878,28 @@ export class SimVisualFxManager {
         ? loadLc26Template(LC26_MODEL_URL, 'opponents')
         : kind === 'lc25'
           ? loadLc26Template(LC25_MODEL_URL, 'opponents')
-          : loadPortedTemplate(PORTED_ONLY[kind as PortedKind].url);
+          : // The car's GLB and the bodies the warm-up's drivers race in (a livery may bring its own)
+            Promise.all([
+              loadPortedTemplate(PORTED_ONLY[kind as PortedKind].url),
+              ...PREWARM_DRIVERS.flatMap((code) => {
+                const body = opponentSkin(vehicle, code)?.modelUrl;
+                return body ? [loadPortedTemplate(body)] : [];
+              }),
+            ]);
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
         // rig per AI driver, in its livery, and one ghost
-        const builds: { ghost: boolean; livery: LiveryConfig }[] = [
-          ...PREWARM_DRIVERS.map((code) => ({ ghost: false, livery: this.mapDriverToLivery(code) })),
-          { ghost: true, livery: LIVERIES[0] },
+        const builds: { ghost: boolean; livery: LiveryConfig; skin: PortedSkin | null }[] = [
+          ...PREWARM_DRIVERS.map((code) => ({
+            ghost: false,
+            livery: this.mapDriverToLivery(code),
+            skin: opponentSkin(vehicle, code),
+          })),
+          { ghost: true, livery: LIVERIES[0], skin: null },
         ];
-        for (const { ghost, livery } of builds) {
-          const rig = buildOpponentRig(vehicle, livery);
+        for (const { ghost, livery, skin } of builds) {
+          const rig = buildOpponentRig(vehicle, livery, skin);
           if (!ghost) {
             const carId = vehicle ? carForVehicle(vehicle).id : 'lc26';
             const hl = new CarHeadlights(carId, { lightsOnly: true });
@@ -1227,6 +1241,12 @@ const PORTED_ONLY = {
     config: PORSCHE_934_RSR_CONFIG,
     lockDeg: CAR_WHEEL_LOCKS_DEG['porsche-934-rsr'],
   },
+  // The Ferrari; each driver's livery brings their team's car (`opponentSkin`)
+  'f1-2007': {
+    url: f12007BodyUrl('ferrari'),
+    config: F12007_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['f1-2007'],
+  },
 } as const satisfies Partial<Record<VehicleModelId, { url: string; config: unknown; lockDeg: number }>>;
 type PortedKind = keyof typeof PORTED_ONLY;
 const isPortedKind = (vehicle: VehicleModelId | undefined): vehicle is PortedKind => vehicle !== undefined && vehicle in PORTED_ONLY;
@@ -1241,7 +1261,7 @@ export function opponentGtTyreBrand(vehicle: VehicleModelId | undefined): GtTyre
   return def ? defaultGtTyreBrand(def.id, def.classId) : defaultGtTyreBrand(vehicle);
 }
 
-function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
+function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig, skin: PortedSkin | null = null): SimCarRig {
   let rig: SimCarRig;
   const kind = rigKind(vehicle);
   if (kind === 'f1') {
@@ -1257,6 +1277,8 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       floor: staticFloorOf(own.config),
       gtSidewall: opponentGtTyreBrand(vehicle),
       opponent: true,
+      // Its livery from the start: one that brings its own body loads that body, not the car's first
+      skin,
     });
   }
   addContactShadow(rig.root, vehicle);
@@ -1293,13 +1315,23 @@ function liveryKeyOf(peer: InterpolatedPeerState): string {
  */
 function opponentSkin(vehicle: VehicleModelId | undefined, driverCode: string): PortedSkin | null {
   if (!vehicle) return null;
+  return portedSkinFor(carForVehicle(vehicle).id, opponentCarSkin(vehicle, driverCode));
+}
+
+function opponentCarSkin(vehicle: VehicleModelId | undefined, driverCode: string): CarSkin | null {
+  if (!vehicle) return null;
   const car = carForVehicle(vehicle);
   const skins = car.physics === vehicle ? car.skins : undefined;
   if (!skins || skins.length < 2) return null;
   let h = 0;
   for (const ch of driverCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const skin = skins[h % skins.length];
-  return portedSkinFor(car.id, skin);
+  return skins[h % skins.length];
+}
+
+/** The livery an opponent races in (`opponentSkin`), for what else it brings (its sound); null for a ghost or the first */
+export function opponentLiveryOf(peer: InterpolatedPeerState): CarSkin | null {
+  if (peer.ghost || peer.passThrough || peer.stale) return null;
+  return opponentCarSkin(peer.vehicle, liveryCodeOf(peer));
 }
 
 /** The translucent materials `ghostify` gave a car */

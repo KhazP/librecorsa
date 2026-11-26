@@ -255,6 +255,7 @@ export function challengesSoFar(nowMs: number, max = 104): WeeklyChallenge[] {
 
 /** The words for a challenge's tyres, in the conditions line */
 const CHALLENGE_TYRE_LABEL = {
+  superSoft: "game.challenge.tyresSuperSoft",
   soft: "game.challenge.tyresSoft",
   street: "game.challenge.tyresStreet",
   vintageSlicks: "game.challenge.tyresVintageSlicks",
@@ -263,7 +264,8 @@ const CHALLENGE_TYRE_LABEL = {
 
 /**
  * The one tyre a car runs in the challenge: the softest dry compound it has. Every car's softest dry slot is its
- * "soft" (the Liana's street tyre fills every slot, so "soft" is that tyre). Listed here, not read from the car
+ * "soft" (the Liana's street tyre fills every slot, so "soft" is that tyre), but the F1 2007's, whose data has a super
+ * soft. Listed here, not read from the car
  * configs, because the Worker imports this file.
  */
 const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound; tyres: keyof typeof CHALLENGE_TYRE_LABEL }>> = {
@@ -284,6 +286,8 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   "chaparral-2d-67": { compound: "soft", tyres: "slicks" },
   // The slicks, the mod's default set (the Group 4 tyres are its hard)
   "porsche-934-rsr": { compound: "soft", tyres: "slicks" },
+  // The data's own default, its softest: the super soft
+  "f1-2007": { compound: "supersoft", tyres: "superSoft" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */

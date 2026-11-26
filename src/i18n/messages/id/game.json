@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Trek kering · {tyres} · Bahan bakar sedikit",
+    "tyresSuperSoft": "Ban Super Soft",
     "tyresSoft": "Ban Soft",
     "tyresStreet": "Ban jalan raya",
     "tyresVintageSlicks": "Ban slick klasik",
@@ -727,6 +728,7 @@
     "aeroLow": "Hambatan rendah",
     "aeroBalanced": "Aero seimbang",
     "aeroHigh": "Downforce tinggi",
+    "supersoft": "Super Soft",
     "soft": "Soft",
     "medium": "Medium",
     "hard": "Hard",

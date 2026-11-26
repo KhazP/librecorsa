@@ -30,6 +30,8 @@ export interface PortedSkin {
   atlas?: string;
   /** Paint finish profile for an atlas livery (absent: "gloss") */
   finish?: LiveryFinish;
+  /** The body it comes on (`CarSkin.modelUrl`): absent, the car's own GLB */
+  modelUrl?: string;
 }
 
 export interface SimCarRig {

@@ -106,6 +106,7 @@
 | tyre temperatures | Reifentemperaturen | |
 | tyre pressure | Reifendruck | |
 | soft | Soft | Compound; English is standard |
+| super soft | Supersoft | Compound; English is standard, one word: Supersoft-Reifen |
 | medium | Medium | |
 | hard | Hart | |
 | intermediate | Intermediate | |

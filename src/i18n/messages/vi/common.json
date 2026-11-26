@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Siêu mềm",
       "soft": "Mềm",
       "medium": "Trung bình",
       "hard": "Cứng",
@@ -80,6 +81,7 @@
       "wet": "Mưa"
     },
     "short": {
+      "supersoft": "Siêu mềm",
       "soft": "Mềm",
       "medium": "Trung bình",
       "hard": "Cứng",
@@ -87,6 +89,7 @@
       "wet": "Mưa"
     },
     "long": {
+      "supersoft": "Lốp siêu mềm",
       "soft": "Lốp mềm",
       "medium": "Lốp trung bình",
       "hard": "Lốp cứng",
@@ -94,6 +97,7 @@
       "wet": "Lốp mưa toàn phần (đọng nước)"
     },
     "tyres": {
+      "supersoft": "Lốp siêu mềm",
       "soft": "Lốp mềm",
       "medium": "Lốp trung bình",
       "hard": "Lốp cứng",

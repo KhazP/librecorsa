@@ -50,7 +50,21 @@ export interface CarSoundSource {
   physicsLimiterRpm?: number;
   /** Optional per-car tuning for downshift/lift-off exhaust pops and crackles */
   popTuning?: Partial<SoundBankPopTuning>;
+  /**
+   * Another bank with the same outside loops (F1 2007's teams: one exterior recording set under eleven cockpit
+   * engines): the other cars, heard from outside only, play that bank's, so the same loops decode once
+   */
+  outsideAssetDir?: string;
+  /**
+   * Nothing in place of the bank: while it is missing (not uploaded, the network down) the engine stays silent and the
+   * bank is fetched again every few seconds, instead of the bundled V6 loops and the synthesised turbo and axle whine,
+   * which belong to another kind of car
+   */
+  noFallback?: boolean;
 }
+
+/** How long a `noFallback` car waits before fetching its missing bank again (s) */
+const BANK_RETRY_MS = 10_000;
 
 export const LC26_SOUND: CarSoundSource = { id: 'lc26', assetDir: LC26_AUDIO_DIR, limiterRpm: LC26_ENGINE.limiterRpm };
 export const F1_2026_SOUND: CarSoundSource = { id: 'f12026', assetDir: '/cars/f12026/audio/', limiterRpm: 12500 };
@@ -628,6 +642,13 @@ export class CarAudioEngine {
       return;
     }
     bank.dispose();
+    if (this.sound.noFallback) {
+      // Silent until the bank is there: fetched again a little later, unless the car or the context has changed
+      setTimeout(() => {
+        if (loadId === this.bankLoadId && this.ctx === ctx && !this.lc26) void this.loadEngineSounds(ctx);
+      }, BANK_RETRY_MS);
+      return;
+    }
     if (this.samplesLoaded) {
       this.setEngineVoice('samples');
       return;
@@ -879,6 +900,7 @@ export class CarAudioEngine {
           limiterRpm: this.sound.limiterRpm,
           // sqrt: the recordings are already a full skid, so a light slide comes in early
           skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
+          skidAmount: bankSkid ? Math.sqrt(squeal.amp) : 0,
           skidRate: 0.85 + 0.25 * squeal.pitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
           bodywork: this.bodyworkLevel(telemetry, legacyDt),

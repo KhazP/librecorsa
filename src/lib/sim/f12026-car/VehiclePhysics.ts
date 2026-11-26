@@ -846,9 +846,10 @@ export function computeBandLoadShares(
   pressurePsi: number,
   optimalPsi: number,
   crownGain: number,
-  growthM: number
+  growthM: number,
+  camberShift = STRIP_CAMBER_SHIFT
 ): void {
-  const dCam = clamp(camberInRad * STRIP_CAMBER_SHIFT, -STRIP_CAMBER_SHIFT_MAX, STRIP_CAMBER_SHIFT_MAX);
+  const dCam = clamp(camberInRad * camberShift, -STRIP_CAMBER_SHIFT_MAX, STRIP_CAMBER_SHIFT_MAX);
   const pRel = optimalPsi > 0 ? (pressurePsi - optimalPsi) / optimalPsi : 0;
   const dCrown = clamp(crownGain * pRel + STRIP_CENTRIFUGAL_CROWN_PER_M * growthM, STRIP_CROWN_MIN, STRIP_CROWN_MAX);
   const s1 = clamp(1 / 3 + dCrown, 0.14, 0.62);
@@ -987,6 +988,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
         modelData: { ...compound.modelData, ...o.modelData },
         camberData: { ...compound.camberData, ...o.camberData },
         pressureData: { ...compound.pressureData, ...o.pressureData },
+        thermalData: o.thermalData ? { ...compound.thermalData, ...o.thermalData } : compound.thermalData,
       }
     : compound;
   const model = data.modelData;
@@ -3496,7 +3498,8 @@ export class VehiclePhysics {
           w.pressurePsi,
           td.pressureData.optimalPsi,
           td.thermalData.pressureHeat?.crownGain ?? 0,
-          tyreCentrifugalGrowthM(w.omega)
+          tyreCentrifugalGrowthM(w.omega),
+          td.thermalData.stripCamberShift
         );
         const k = tyre.brush ? GRIP_TEMP_SURFACE_SHARE : 1;
         const g0 = tyre.thermal.evaluate(w.bandCarcassTempsC[0] + k * (w.bandTempsC[0] - w.bandCarcassTempsC[0]));
@@ -5173,9 +5176,13 @@ export class VehiclePhysics {
       // A rain tyre on a dry road squirms and runs hot; water on the road cools every tread
       const traits = td.wetTraits ?? SLICK_TRAITS;
       const heatScale = wetHeatScale(traits, this.wetness);
-      const roadG = ROAD_CONDUCTANCE + wetRoadCoolingWK(this.wetness, v);
+      const roadG = (th.roadConductance ?? ROAD_CONDUCTANCE) + wetRoadCoolingWK(this.wetness, v);
       const extWetCool = wetExternalGasCoolingWK(this.wetness, v);
       const slipPower = (Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy)) * heatScale;
+      // The sliding heat: what the tyre's force does against its slide, or (`slipHeatAtPeak`) the force it could give
+      const slideHeatPower = th.slipHeatAtPeak
+        ? (w.fz > 0 ? w.muY * w.fz * Math.hypot(w.slipVelX, w.vy) : 0) * heatScale
+        : slipPower;
       const hyst = th.hysteresis * w.fz * v * heatScale;
 
       // One thermal model: three bands, each a tread surface over the tread's bulk over the carcass liner, each a third
@@ -5193,13 +5200,17 @@ export class VehiclePhysics {
       // Inflation pressure in the heat: an under-inflated tyre works its rubber harder and flexes more
       // (`TyresThermalPatchData.pressureHeat`); where it runs on its crown or its shoulders is in the band shares
       const ph = th.pressureHeat;
-      let slipHeat = slipPower;
+      let slipHeat = slideHeatPower;
       let rollHeat = hyst;
+      // Rolling heat made in the tread surface itself (`surfaceHysteresis`), with the same pressure factor
+      let surfaceRollHeat = th.surfaceHysteresis !== undefined ? th.surfaceHysteresis * w.fz * v * heatScale : 0;
       if (ph) {
         const pd = td.pressureData;
         const pRel = w.pressurePsi / pd.optimalPsi - 1;
-        slipHeat = slipPower * Math.max(0, 1 - ph.slipGain * pRel);
-        rollHeat = hyst * Math.max(0, 1 + (pd.pressureRollingGain ?? 0) * (pd.optimalPsi / Math.max(1, w.pressurePsi) - 1));
+        slipHeat = slideHeatPower * Math.max(0, 1 - ph.slipGain * pRel);
+        const rollFactor = Math.max(0, 1 + (pd.pressureRollingGain ?? 0) * (pd.optimalPsi / Math.max(1, w.pressurePsi) - 1));
+        rollHeat = hyst * rollFactor;
+        surfaceRollHeat *= rollFactor;
       }
       // Three layers per band: the tread surface over the tread's bulk over the carcass liner. The sliding heat taken
       // into the tyre lands mostly in the surface, some in the bulk; the rolling (hysteresis) heat is made in the bulk and
@@ -5215,11 +5226,14 @@ export class VehiclePhysics {
         const tC = w.bandCoreTempsC[b];
         const q12 = g12 * (tS - tB);
         const q23 = g23 * (tB - tC);
-        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (tS - this.ambientC);
+        const bSurfCool =
+          (th.surfaceCooling[0] + th.surfaceCooling[1] * v + (th.surfaceCooling[2] === undefined ? 0 : th.surfaceCooling[2] * v * v)) *
+          size *
+          (tS - this.ambientC);
         const bRoadCool = w.fz > 0 ? roadG * size * share * (tS - this.trackTempC) : 0;
         const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * size * (tC - this.ambientC);
         const bGas = gGas * (tC - w.gasTempC);
-        w.bandTempsC[b] = tS + (((1 - L.fricToSub) * fricIn * share - q12 - bSurfCool - bRoadCool) / surfaceCap) * dt;
+        w.bandTempsC[b] = tS + (((1 - L.fricToSub) * fricIn * share + surfaceRollHeat * share - q12 - bSurfCool - bRoadCool) / surfaceCap) * dt;
         w.bandCarcassTempsC[b] = tB + ((L.fricToSub * fricIn * share + L.rollToSub * rollHeat * share + q12 - q23) / subCap) * dt;
         w.bandCoreTempsC[b] = tC + (((1 - L.rollToSub) * rollHeat * share + q23 - bCoreCool - bGas) / coreCap) * dt;
       }

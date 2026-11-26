@@ -22,6 +22,7 @@ export const BODY_KIND: Readonly<Record<VehicleModelId, BodyKind>> = {
   "chaparral-2d": "classic",
   "chaparral-2d-67": "classic",
   "porsche-934-rsr": "classic",
+  "f1-2007": "f1",
 };
 
 /** A model's body kind; an open-wheeler's when the model isn't known (a peer's car from a newer build) */

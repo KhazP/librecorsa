@@ -14,7 +14,7 @@
  *
  * Fuel is not part of a stop: fuel use is off at every realism level (sim-realism.ts).
  */
-import type { ControlInputs, PitPhase, PitStrategyState, PitTelemetry, TireCompound } from "@/types/f1";
+import { TIRE_COMPOUNDS, type ControlInputs, type PitPhase, type PitStrategyState, type PitTelemetry, type TireCompound } from "@/types/f1";
 import type { PitLaneModel } from "./pit-lane";
 
 /** Over the limit by more than this (km/h) ... */
@@ -66,6 +66,9 @@ export function repairS(damage: number, punctures: number): number {
   return Math.round(Math.min(14, 1.5 + damage * 9 + punctures * 1.5) * 10) / 10;
 }
 
+/** A car's compounds where none are given: every one but the super soft */
+const BASE_COMPOUNDS: readonly TireCompound[] = TIRE_COMPOUNDS.filter((c) => c !== "supersoft");
+
 export class PitStopManager {
   private phase: PitPhase = "track";
   private manualLimiter = false;
@@ -91,7 +94,9 @@ export class PitStopManager {
 
   constructor(
     readonly lane: PitLaneModel | null,
-    compound: TireCompound
+    compound: TireCompound,
+    /** The compounds the crew has for the player's car now, softest first (`carTyreCompounds`) */
+    private readonly compoundsNow: () => readonly TireCompound[] = () => BASE_COMPOUNDS
   ) {
     this.strategy = { nextCompound: compound, repairDamage: true, boxRequested: false };
   }
@@ -256,6 +261,7 @@ export class PitStopManager {
       repairS: this.phase === "servicing" ? this.repairSNow : this.strategy.repairDamage ? repairS(f.damage, f.punctures) : 0,
       damage: f.damage,
       strategy: { ...this.strategy },
+      compounds: this.compoundsNow(),
       stopsMade: this.stopsMade,
       stopsRequired: this.stopsRequired,
     };
