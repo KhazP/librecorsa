@@ -20,6 +20,18 @@ import { modDefinitions } from "../../../src/lib/mods/mod-content";
 import { packageFileProblems, packageRoot } from "../../../src/lib/mods/mod-store";
 import { isArchiveJunk, readZip } from "../../../src/lib/mods/zip-reader";
 import { checkPackage, hashFolder } from "./package-check";
+import { PERSONAL_USE_NOTE } from "./licences";
+import type { ModManifest } from "../../../src/lib/mods/mod-manifest";
+
+/** The package, circuits and cars whose credit carries the importers' personal-use note (lib/licences.ts `creditLicence`) */
+function personalUseParts(m: ModManifest): string[] {
+  const marked = (note: string | undefined) => !!note?.includes(PERSONAL_USE_NOTE);
+  return [
+    ...(marked(m.credit.note) ? ["credit"] : []),
+    ...(m.tracks ?? []).filter((t) => marked(t.credit?.note)).map((t) => `circuit ${t.id}`),
+    ...(m.cars ?? []).filter((c) => marked(c.credit?.note)).map((c) => `car ${c.id}`),
+  ];
+}
 
 /** An entry as the catalogue file holds it (its links as written, not yet resolved) */
 export interface CatalogueFileEntry {
@@ -111,6 +123,11 @@ export async function packedEntry(file: string, link: string): Promise<{ ok: tru
     const result = validateModManifest(JSON.parse(readFileSync(join(dir, "mod.json"), "utf8")), modDefinitions());
     if (!result.ok) return { ok: false, problems: result.errors };
     const m = result.manifest;
+    // An importer marks what it converted without a licence that lets it be shared: a catalogue offers it to anyone
+    const personal = personalUseParts(m);
+    if (personal.length) {
+      return { ok: false, problems: personal.map((what) => `${what}: marked "${PERSONAL_USE_NOTE}"; a catalogue lists only packages that may be shared`) };
+    }
     const entry: CatalogueFileEntry = {
       id: m.id,
       name: m.name,

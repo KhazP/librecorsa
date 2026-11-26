@@ -214,7 +214,7 @@ Put the zips in one folder and run:
 npm run mod -- catalogue <folder of zips> [--base-url <url>] [--out <file>]
 ```
 
-It reads each zip with the game's own zip reader, unpacks it into a temporary folder, checks it as `npm run mod -- check` does, and lists it with the zip's size and SHA-256 and the package's content hash. It writes `catalogue.json` in the folder (or `--out`), and nothing at all if any zip fails, a second zip holds a package already listed, or the game would drop an entry. Links are `--base-url` followed by the file name. Without `--base-url` they are just the file names, so the catalogue must sit beside the zips.
+It reads each zip with the game's own zip reader, unpacks it into a temporary folder, checks it as `npm run mod -- check` does, and lists it with the zip's size and SHA-256 and the package's content hash. It writes `catalogue.json` in the folder (or `--out`), and nothing at all if any zip fails, a second zip holds a package already listed, the game would drop an entry, or a package's credit (or a circuit's or car's) carries the importers' "For personal use only" note. Links are `--base-url` followed by the file name. Without `--base-url` they are just the file names, so the catalogue must sit beside the zips.
 
 The game reads catalogues from two places, only when the Mods panel opens, and gives each 6 seconds:
 
