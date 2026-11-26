@@ -681,10 +681,41 @@ def bake_multimap(diffuse, detail, uv_mult, flat=False):
     return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB')
 
 
+def diffuse_dimming(props):
+    """How much a material's ksDiffuse / ksAmbient dim its colour against AC's usual ~0.4 (a modder darkens a grey map
+    so instead of painting it black), 0.05..1"""
+    return float(np.clip(max(props.get('ksDiffuse', 0.4), props.get('ksAmbient', 0.4)) / 0.4, 0.05, 1.0))
+
+
+# A txMaps alpha varying this much carries a mask (`metal_mask`)
+METAL_MASK_STD = 0.05
+
+
+def metal_mask(m, src, size=None):
+    """The metal a multimap's txMaps alpha marks (1 - alpha, 0..1), at `size`, or None when it marks none. Most mods'
+    txMaps carry an alpha of 1 all over; a modder who paints one in (the F1 2007 McLaren's skins: about 0.27 on the
+    chrome silver, 0.95 on the red and black) marks chrome with its low values: in the mod's renders those pixels
+    mirror their surroundings tinted by their own colour, as a metal does (inferred from the renders). A flat alpha,
+    1, or a 0 the exporter never wrote, marks nothing"""
+    t = m['maps'].get('txMaps')
+    if 'MultiMap' not in m['shader'] or t not in src:
+        return None
+    a = decode(src[t]).getchannel('A')
+    if size is not None and a.size != tuple(size):
+        a = a.resize(tuple(size), Image.BILINEAR)
+    a = np.asarray(a, np.float32) / 255.0
+    if a.std() < METAL_MASK_STD:
+        return None
+    return 1.0 - a
+
+
 def baked_image(key, src, mats, limit):
     """The colour map of 'bake:<kn5 material>' / 'bakemean:<kn5 material>' from textures `src`: its diffuse times its
     detail as AC's multimap shades them ('bakemean:': the detail as its mean colour, for a fine pattern such as paint
-    flake tiled past any bake size; the diffuse comes down to `limit` first)"""
+    flake tiled past any bake size; the diffuse comes down to `limit` first). Where its txMaps marks chrome
+    (`metal_mask`), the colour is the chrome's reflectance: as bright as txMaps' reflection mask (B) lets AC's
+    reflection shine there, in the pixel's own hue, and not dimmed by ksDiffuse, which dims diffuse light and a metal
+    has none (the material's colour factor still dims the rest, so those pixels are brightened by as much)"""
     m = mats[key.split(':', 1)[1]]
     diffuse = decode(src[m['maps']['txDiffuse']])
     detail = decode(src[m['maps']['txDetail']])
@@ -692,7 +723,17 @@ def baked_image(key, src, mats, limit):
     if mean and max(diffuse.size) > limit:
         k = limit / max(diffuse.size)
         diffuse = resize_straight(diffuse, (round(diffuse.width * k), round(diffuse.height * k)))
-    return bake_multimap(diffuse, detail, m['props'].get('detailUVMultiplier', 1.0), flat=mean)
+    im = bake_multimap(diffuse, detail, m['props'].get('detailUVMultiplier', 1.0), flat=mean)
+    metal = metal_mask(m, src, im.size)
+    if metal is None:
+        return im
+    rgb = np.asarray(im, np.float32) / 255.0
+    refl = np.asarray(decode(src[m['maps']['txMaps']]).getchannel('B').resize(im.size, Image.BILINEAR), np.float32) / 255.0
+    top = rgb.max(-1, keepdims=True)
+    hue = np.where(top > 0.05, rgb / np.maximum(top, 1e-3), 1.0)
+    chrome = hue * refl[..., None] * (1.0 / diffuse_dimming(m['props'])) ** (1 / 2.2)
+    rgb = rgb * (1.0 - metal[..., None]) + chrome * metal[..., None]
+    return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB')
 
 
 def skin_overrides(car_dir, skin, textures, names=None):
@@ -852,8 +893,7 @@ def auto_spec(m, stats, preset, by_name=None):
     rough = float(np.clip((2.0 / (exp_ + 2.0)) ** 0.25, 0.08, 0.95))
     fc, fmax = props.get('fresnelC', 0.0), props.get('fresnelMaxLevel', 0.0)
     metal = 1.0 if fc >= 0.5 or (fmax >= 0.35 and _METALISH.search(words)) else 0.0
-    lum = max(props.get('ksDiffuse', 0.4), props.get('ksAmbient', 0.4))
-    scale = float(np.clip(lum / 0.4, 0.05, 1.0))
+    scale = diffuse_dimming(props)
     blend = m['blend'] == 1
     glass = shader == 'ksWindscreen' or (blend and bool(_GLASSISH.search(words)))
     spec = dict(rough=round(rough, 2), metal=metal)
@@ -977,6 +1017,8 @@ LACQUER_EXP = 100.0
 FULL_COAT_ALPHA = 0.25
 FINISH_MAP_SIZE = 1024
 CLEARCOAT_ROUGHNESS = 0.06
+# Chrome under such a coat (`metal_mask`)
+CHROME_ROUGHNESS = 0.12
 
 
 def skin_shader_replacements(car_dir, skin):
@@ -1076,7 +1118,13 @@ def finish_map(m, src, fin):
     rough = np.clip((2.0 / (fin['exp'] * gloss + 2.0)) ** 0.25, 0.08, 0.95)
     cc = fin['clearcoat'] * coat
     metal = np.full(size[::-1], fin['metal'], np.float32)
-    if cc.std() < 0.01 and rough.std() < 0.01:
+    marked = metal_mask(m, src, size)
+    if marked is not None:
+        metal = np.maximum(metal, marked)
+        if fin['lacquer']:
+            # Chrome under a polished coat is polished too: it mirrors as sharply as the coat does
+            rough = rough * (1.0 - marked) + CHROME_ROUGHNESS * marked
+    if cc.std() < 0.01 and rough.std() < 0.01 and metal.std() < 0.01:
         return None, mean
     rgb = np.stack([cc, rough, metal], -1)
     return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB'), mean
@@ -1296,7 +1344,8 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
     def sources(key):
         if key.startswith(('bake:', 'bakemean:')):
             maps = by_name[key.split(':', 1)[1]]['maps']
-            return [maps[s] for s in ('txDiffuse', 'txDetail') if maps.get(s)]
+            # (txMaps too: where it marks metal, the bake brightens it, `baked_image`)
+            return [maps[s] for s in ('txDiffuse', 'txDetail', 'txMaps') if maps.get(s) in src]
         return [key]
 
     def image(key, src):
