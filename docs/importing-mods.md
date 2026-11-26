@@ -125,7 +125,7 @@ The track folder is the circuit's folder in Assetto Corsa's `content/tracks`: th
 There is nothing to set up. The importer reads the circuit's settings from the mod and prints each one with where it came from:
 
 - **Layouts**: each folder with an AI lane (`ai/fast_lane.ai`). If the mod has several, the import lists them; pick one with `--layout`, by its folder or its name in Assetto Corsa. A layout without an AI lane can't be imported.
-- **Models**: the ones `models_<layout>.ini` places where they were modelled. Models it moves (a helicopter in the sky), Assetto Corsa's moving objects and Custom Shaders Patch's animated ones are left out, and the import says so.
+- **Models**: the ones `models_<layout>.ini` places where they were modelled. Models it moves (a helicopter in the sky), Assetto Corsa's moving objects and animated extension objects are left out, and the import says so.
 - **Name, country, city, pitboxes, length, author, version and link**: from `ui_track.json`. A circuit tagged street, hill climb or oval gets that type.
 - **Surfaces**: the mod's own surface names in `data/surfaces.ini`, read from their grip, whether they count as track, their sound and the pit-lane flag.
 - **Author and licence**: from `ui_track.json`, else the readme.

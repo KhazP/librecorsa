@@ -398,7 +398,7 @@ const Credits: React.FC = () => {
             </a>{" "}
             · used with permission
             <br />
-            &ldquo;RSS GT-M Tyre Extension Packs&rdquo; (Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) by
+            &ldquo;GT-M Tyre Extension Packs&rdquo; (Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) by
             sagatron918
             <SagatronDonateLink /> · GT, prototype and classic racing tyres · used with permission
           </CreditRow>
@@ -455,7 +455,7 @@ const Credits: React.FC = () => {
             <a href="https://www.paypal.com/paypalme/williampasta" target="_blank" rel="noreferrer" className={linkClass}>
               the team&rsquo;s PayPal
             </a>
-            ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP
+            ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza,
             config by Valentin K, sound by Felix789
           </CreditRow>
           <CreditRow title="Suzuki Liana">

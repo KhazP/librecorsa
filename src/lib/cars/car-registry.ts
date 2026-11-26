@@ -238,7 +238,7 @@ const npanic = (title: string): CarCredit => ({
   author: "NPanic",
   url: NPANIC_CHAPARRAL_URL,
   authorUrl: "https://www.overtake.gg/members/npanic.761347/",
-  note: "3D model by Nugget & NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP config by Valentin K, sound by Felix789.",
+  note: "3D model by Nugget & NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, config by Valentin K, sound by Felix789.",
   license: "Used with the author's permission",
   licenseUrl: NPANIC_CHAPARRAL_URL,
 });
