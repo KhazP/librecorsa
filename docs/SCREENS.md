@@ -46,4 +46,4 @@ Three screens draw the scene three times each frame, each with its own shadows a
 
 - All three monitors are taken to be the same size and resolution, and the two side monitors turn in by the same angle.
 - Rain on the windscreen or visor shows on the centre screen only.
-- VR and touch controls use one view; turning on VR switches the screens off until you leave it.
+- VR and touch controls use one view; turning on VR switches triple screens off until you leave it (see [VR headsets](VR.md)).

@@ -29,9 +29,9 @@ No. LibreCorsa is an independent fan project, not affiliated with Formula 1, the
 ### What can I play it on?
 
 - **In a browser** on Windows, macOS or Linux: any browser with WebGL2 and hardware acceleration turned on.
-- **The desktop app** for Windows, macOS and Linux, which plays offline too and takes mods, and an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Verifying downloads](DOWNLOADS.md).
+- **The desktop app** for Windows, macOS and Linux, which plays offline, loads mod packages, converts circuits and cars from other games, and updates itself, plus an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Desktop and Android apps](DOWNLOADS.md).
 - **iPhone and iPad** in Safari. Share, then Add to Home Screen, gives you full screen.
-- **VR headsets** through WebXR (Quest Browser, or Chrome with SteamVR or OpenXR), from **Settings > Display > Graphics** or **Enter VR** in the pause menu, with in-cockpit HUD plates and an in-headset pause and seat panel. It's a work in progress, so expect rough edges.
+- **VR headsets** through WebXR (standalone headsets like Quest and Pico, or PCVR in Chrome/Chromium with SteamVR or OpenXR), from **Settings > Display > Graphics** or **Enter VR** in the pause menu, with in-cockpit HUD plates, headset controller support, and an in-headset pause and recenter panel. It's experimental, so expect rough edges. See [VR headsets](VR.md).
 
 ### Can I play offline?
 
@@ -82,6 +82,13 @@ Yes, but a request alone rarely gets one in, since I can only add what I have pe
 ### Will you add real F1 teams, drivers or liveries?
 
 No. What I add myself needs the rights to it. Some cars ported from mods carry real brand names and liveries. Those are their makers' work, and their responsibility.
+
+### Can I paint my own liveries or install mods?
+
+Yes, in the [desktop app](DOWNLOADS.md) (the hosted web version on `librecorsa.org` does not load local mods):
+
+- **Custom liveries:** LibreCorsa ships painting templates for **13 cars** — **5 projected-atlas templates** (LC26 Prototype, LC25 Prototype, Mercedes-AMG GT3 Evo, BMW M4 GT3 Evo, and LC-LMDH) and **8 classic UV templates** (BMW M1 Procar, Chaparral 2D, Chaparral 2D 427, MTRacing 496R, Nissan R32 JTCC, Nissan R33 JGTC, Porsche 934 Turbo RSR, and VW Scirocco GTX 16V). See [Painting liveries](LIVERIES.md) for downloads and packaging instructions.
+- **Mods and conversions:** Drop mod packages into `Documents/LibreCorsa/mods/` (see [Making mods](modding.md)), or drop Assetto Corsa, Speed Dreams, or Blender circuits and cars into `Documents/LibreCorsa/import/` and convert them directly from the desktop app's **Mods** panel (see [Importing mods from other games](importing-mods.md)).
 
 ### Will LibreCorsa come to Steam or consoles?
 
