@@ -1,8 +1,6 @@
 # Racing online and lap boards
 
-LibreCorsa has four online parts: private rooms for racing friends, open races that start every 20 minutes, lap boards with a weekly challenge, and optional accounts that keep your names and your save on all your devices. On librecorsa.org they run on the site's own server. A copy of the game without that server still has peer-to-peer rooms, paired through the public PeerJS service, and keeps your lap times in your browser.
-
-On `librecorsa.org`, these features are backed by the site's Cloudflare Worker (see [Self-hosting and the online backend](SELF-HOSTING.md) to run your own). Self-hosted copies without that backend still support peer-to-peer private rooms (via the public PeerJS broker) and save personal best laps locally in the browser.
+LibreCorsa has four online parts: private rooms for racing friends, open races that start every 20 minutes, lap boards with Time Trials (the rotating weekly challenge plus the permanent Middle Gear Lap Board), and optional accounts that keep your names and your save across devices. On `librecorsa.org`, they run on the site's Cloudflare Worker (see [Self-hosting and the online backend](SELF-HOSTING.md) to run your own). Self-hosted copies without that backend still support peer-to-peer private rooms (via the public PeerJS broker) and save personal best laps locally in the browser.
 
 ## Driver profile
 
@@ -50,7 +48,7 @@ A few ground rules for rooms:
 | Rules | **Track limits** | **On** or **Off** |
 | Rules | **Penalties** | **On** or **Off** (time penalties for track limits and jump starts) |
 | Rules | **Damage** | **Off**, **Reduced**, or **Full** |
-| Rules | **Collisions** | **On**, **Ghosted lap 1** (no contact on lap 1), or **Off** |
+| Rules | **Collisions** | **On** (default, with safety guards), **Ghosted lap 1** (no contact on lap 1), or **Off** |
 
 How the track-limits rule sets score off-track strikes:
 
@@ -112,7 +110,7 @@ How the track-limits rule sets score off-track strikes:
 
 Outside of races, track-limits enforcement is strict:
 
-- **Off-track:** Putting all four wheels outside track limits invalidates the lap immediately with no option to give time back. Going off-track in the final sector also invalidates the following lap (to prevent gaining an illegal launch onto the main straight); restarting clears that flag.
+- **Off-track:** Putting all four wheels outside track limits invalidates the lap immediately with no option to give time back. When 1–3 wheels lift momentarily over a kerb while another wheel sits off-track, the simulator probes straight down beneath the lifted wheels so a kerb hop does not falsely invalidate the lap. Going off-track in the **final corner zone** (from `120 m` before the final turn's apex, or `450 m` before the line on circuits without turn markers, to start/finish) also invalidates the following lap to prevent gaining an illegal launch onto the main straight; restarting clears that flag.
 - **Course cuts:** Skipping part of the circuit triggers `"Course cut · lap deleted"`.
 - **Wall contact:** Grinding or riding a barrier triggers `"Wall contact · lap deleted"` (light glancing brushes are allowed). On hill climbs, any wall contact ends the run.
 - **Autopilot:** Any lap where autopilot was engaged at any point is displayed locally but never ranked.
@@ -126,7 +124,7 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 - The first lap you post claims your name with your driver key, a random code kept in your browser. Later laps under that name, ignoring case and extra spaces, need the same key.
 - Without it the board answers "This name is taken. Sign in to the account that holds it, import your driver key under Lap Times, or race under another name".
 - With an account, every device that joined it posts under its names (see [Accounts](#accounts)).
-- To use your name in another browser, save the key to a file: **Settings > Profile and data > Data**, **Identity key**, **Save**. Then **Load** it in the other browser. **Lap times** has the same pair as **Export key** and **Import key**. Keep the file private.
+- To use your name in another browser, save the key to a file: **Settings > Profile and data > Data**, **Identity key**, **Save**. Then **Load** it in the other browser. **Lap times** has the same pair as **Export key** and **Import key**. Importing a key automatically looks up and restores the driver name and three-letter code claimed by that key. Keep the file private.
 - **Clear saved data**, or clearing the site's data in your browser, deletes the key. Save it first.
 - Renaming (in the settings, or **Rename** on the lap card) moves your laps and race results to the new name and frees the old one. If you already had laps under the new name, the fastest of each kind stays. Ghosts keep the name they were driven under.
 - After six months without an upload, someone else can claim the name. The laps left under it are removed when they do. A name on an account doesn't lapse.
@@ -152,13 +150,15 @@ Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on t
 
 ## Weekly challenge
 
-- The **Weekly challenge** card on the main menu shows the active event and remaining time. Weeks run from **Monday 00:00 UTC** to the next Monday, following a curated schedule through the week of **4 October 2027** before looping.
-- Every driver runs the same circuit, car, assists, and realism preset: every fourth week enforces **Pro** assists with **Full** realism; all other weeks use **Semi** assists with **Standard** realism.
-- Conditions are standardized: a dry, fully rubbered-in track, the car's softest dry tyre compound, and minimum permitted fuel (`"Dry track · Soft tyres · Low fuel"` for most cars).
-- Clicking **Drive challenge** applies these rules automatically and puts you on track; your personal assists, realism, and weather settings are restored afterward.
-- **This week's times** displays the challenge's dedicated leaderboard (including the physics version picker), and valid challenge laps also count on the circuit's regular open board.
+The **Time Trials** view pairs the rotating **Weekly challenge** with permanent time trials:
+
+- **Rotating weekly challenge:** Weeks run from **Monday 00:00 UTC** to the next Monday, following a curated schedule through the week of **4 October 2027** before looping. Every driver runs the same circuit, car, assists, and realism preset: every fourth week enforces **Pro** assists with **Full** realism; all other weeks use **Semi** assists with **Standard** realism.
+- **Middle Gear Lap Board (permanent):** An always-active time trial in the **Suzuki Liana 1.6** around **Dunsfold Aerodrome** with a locked factory baseline setup, lowest fuel, **Semi** assists, and **Standard** realism. The current P1 record holder wears the **`S.T.I.G.`** badge.
+- **Standardized conditions:** Both time trials run on a dry, fully rubbered-in track, the car's softest dry tyre compound, and minimum permitted fuel (`"Dry track · Soft tyres · Low fuel"` for most cars).
+- Clicking **Drive challenge** (after confirming your driver name if you still have a generated one) applies these rules automatically and puts you on track; your personal assists, realism, and weather settings are restored afterward.
+- **This week's times** displays the challenge's dedicated leaderboard (including the physics version picker), and valid challenge laps also count on the circuit's regular open board. You can open any driver's **Driver Profile** for cross-circuit ratings and compare laps in the built-in **Lap telemetry analysis** view.
 - Laps only qualify for the weekly challenge if driven under that week's rules and submitted before the week closes; late uploads still post to the regular open board.
-- The **Hall of Fame** tracks **Fastest Lap record holders**, **Weekly podiums**, and **Most decorated** drivers.
+- The **Hall of Fame** tracks **Fastest Lap record holders**, **Weekly podiums**, and **Most decorated** drivers (the top of Most Decorated earns the **`GOAT`** badge).
 
 ## Accounts
 
