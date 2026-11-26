@@ -109,7 +109,7 @@ All other circuit data (surfaces, kerbs, DRS zones, racing lines, AI plans, and 
 
 A livery is either a painted picture projected onto the car (`atlas`) or a set of texture files swapped onto the model's materials. Which one depends on the car:
 
-- **Painted picture (`atlas`)**: `lc26` (2026 Prototype), `lc25` (LC25 Prototype), `amg-gt3`, `bmw-m4-gt3`, and `lc-lmdh`. [Painting liveries](LIVERIES.md) has each car's template and how to paint one.
+- **Painted picture (`atlas`)**: `lc26` (LC26 Prototype), `lc25` (LC25 Prototype), `amg-gt3`, `bmw-m4-gt3`, and `lc-lmdh`. [Painting liveries](LIVERIES.md) has each car's template and how to paint one.
 - **Texture files**: `mtr-496r`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, `porsche-934-rsr`, and `liana` (also `amg-gt3`, `bmw-m4-gt3` and `lc-lmdh` for older packages, though their models have no texture slots to swap, so a texture livery leaves them in their factory paint).
 
 For both kinds:

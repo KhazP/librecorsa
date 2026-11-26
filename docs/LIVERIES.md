@@ -1,6 +1,6 @@
 # Painting liveries
 
-You can paint your own livery for five cars: the 2026 Prototype, the LC25 Prototype, the Mercedes-AMG GT3 Evo, the BMW M4 GT3 Evo and the LC-LMDH. Their bodywork has no UV map, so a livery isn't a texture wrapped around the car like in most sims. It's one square picture with flat views of the car (top, both sides, front and rear, plus the front wing endplates on the F1 cars), and the game projects each view onto the body from that direction, like a slide projector.
+You can paint your own livery for five cars: the LC26 Prototype, the LC25 Prototype, the Mercedes-AMG GT3 Evo, the BMW M4 GT3 Evo and the LC-LMDH. Their bodywork has no UV map, so a livery isn't a texture wrapped around the car like in most sims. It's one square picture with flat views of the car (top, both sides, front and rear, plus the front wing endplates on the F1 cars), and the game projects each view onto the body from that direction, like a slide projector.
 
 Each car has its own template, drawn from its model, so a livery painted for one car won't line up on another, not even between the two F1 cars.
 
@@ -13,7 +13,7 @@ Every car has two files, both 2048 × 2048 pixels, the size the game uses:
 
 | Car | Guide | Overlay |
 | :--- | :--- | :--- |
-| 2026 Prototype | [2026 Prototype guide (PNG, 301 KB)](livery-templates/lc26/lc26-template.png) | [2026 Prototype overlay (PNG, 270 KB)](livery-templates/lc26/lc26-overlay.png) |
+| LC26 Prototype | [LC26 Prototype guide (PNG, 301 KB)](livery-templates/lc26/lc26-template.png) | [LC26 Prototype overlay (PNG, 270 KB)](livery-templates/lc26/lc26-overlay.png) |
 | LC25 Prototype | [LC25 Prototype guide (PNG, 294 KB)](livery-templates/lc25/lc25-template.png) | [LC25 Prototype overlay (PNG, 264 KB)](livery-templates/lc25/lc25-overlay.png) |
 | Mercedes-AMG GT3 Evo | [AMG GT3 Evo guide (PNG, 356 KB)](livery-templates/amg-gt3/amg-gt3-template.png) | [AMG GT3 Evo overlay (PNG, 320 KB)](livery-templates/amg-gt3/amg-gt3-overlay.png) |
 | BMW M4 GT3 Evo | [M4 GT3 Evo guide (PNG, 310 KB)](livery-templates/bmw-m4-gt3/bmw-m4-gt3-template.png) | [M4 GT3 Evo overlay (PNG, 277 KB)](livery-templates/bmw-m4-gt3/bmw-m4-gt3-overlay.png) |
@@ -21,7 +21,7 @@ Every car has two files, both 2048 × 2048 pixels, the size the game uses:
 
 Open a link and save the image (right-click, Save image as).
 
-![The 2026 Prototype's guide. The top half shows the car from above with its nose to the right. Under it are the left side with the nose to the left and the right side with the nose to the right. Along the bottom are the rear view, the front view and the two front wing endplates. Each view is framed and labelled in capitals, the top and side views have an arrow pointing to the front, and dashed lines mark the centre line and the axles.](livery-templates/lc26/lc26-preview.webp)
+![The LC26 Prototype's guide. The top half shows the car from above with its nose to the right. Under it are the left side with the nose to the left and the right side with the nose to the right. Along the bottom are the rear view, the front view and the two front wing endplates. Each view is framed and labelled in capitals, the top and side views have an arrow pointing to the front, and dashed lines mark the centre line and the axles.](livery-templates/lc26/lc26-preview.webp)
 
 How to read a guide:
 
@@ -53,12 +53,12 @@ A view paints every surface that faces it along its line of sight, so parts that
 
 ### Car notes
 
-- **2026 Prototype and LC25 Prototype**: separate templates. The LC25 is wider and longer than the painting area in a few places, see the hatching above.
+- **LC26 Prototype and LC25 Prototype**: separate templates. The LC25 is wider and longer than the painting area in a few places, see the hatching above.
 - **The GT3s and the LC-LMDH**: windows, grilles and vents are left out of the views (the grey areas inside the outlines), so paint there never shows.
 
 ## Try it in the game
 
-Your own liveries go in a mod package, which the [LibreCorsa desktop app](modding.md) loads (the game on librecorsa.org takes no mods). A package with one livery for the 2026 Prototype is a folder like this:
+Your own liveries go in a mod package, which the [LibreCorsa desktop app](modding.md) loads (the game on librecorsa.org takes no mods). A package with one livery for the LC26 Prototype is a folder like this:
 
 ```text
 yourname.lc26-liveries/
@@ -80,7 +80,7 @@ yourname.lc26-liveries/
 }
 ```
 
-- `car` is `lc26` (2026 Prototype), `lc25` (LC25 Prototype), `amg-gt3`, `bmw-m4-gt3` or `lc-lmdh`.
+- `car` is `lc26` (LC26 Prototype), `lc25` (LC25 Prototype), `amg-gt3`, `bmw-m4-gt3` or `lc-lmdh`.
 - `swatch` is two or three of the livery's main colours, shown in the picker.
 - `finish` is optional: `gloss` (the default), `satin`, `matte`, `metallic` or `chrome`.
 
@@ -94,7 +94,7 @@ If you'd like your livery in the game for everyone, open a [content request](htt
 
 `scripts/cars/build-livery-templates.ts` draws the templates from the cars' own models with the same projection the game uses, so they always match. The models, and so the shapes in the templates, are their authors' work:
 
-- 2026 Prototype: [F1 2026 concept (polygon model)](https://qvistdesigns.framer.website/) by **Qvist Designs**, CC BY 4.0.
+- LC26 Prototype: [F1 2026 concept (polygon model)](https://qvistdesigns.framer.website/) by **Qvist Designs**, CC BY 4.0.
 - LC25 Prototype: [F1 2025 McLaren MCL39](https://sketchfab.com/3d-models/f1-2025-mclaren-mcl39-c6194270002b401bb25be7e35ab56e34) by **shunqi**, CC BY 4.0.
 - LC-LMDH: [LMDh prototype](https://sketchfab.com/models/d786aa263a804254aa92543dda11dba0) by **kilianhoffmann13**, CC BY 4.0.
 - Mercedes-AMG GT3 Evo: [Mercedes-AMG GT3](https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07) by **Vecarz**, CC BY-NC-SA 4.0.
