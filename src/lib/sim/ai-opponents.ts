@@ -369,12 +369,12 @@ export interface RacecraftParams {
    * that far off its line, with or without `planOffLinePace`), had the attacker come round the outside on the plan's
    * later braking point, and was still on the inside, its bias coming back at the rate `planBiasShare` allows, when the
    * attacker's line cut across to the apex. On their own driver the same cars make the same move, but the attacker
-   * follows them in and both brake at one point.
+   * follows them in and both brake at one point. At 0.5 m a plan car defending all but keeps its line.
    * 24 career-grid races of 4 laps (Liana at Grobnik, Sachsenring and VIR North, R32 at Grobnik, R33 at Sachsenring,
-   * LMDh at RISE), the same seeds: AI v AI contacts 194 -> 65 at 2 m (own driver 57), passes 203 -> 68 (68), spins,
-   * offs and wall hits 30 -> 3 (3), the leader's lap still the quickest (116.7 -> 115.1 s; own driver 119.8). Over
-   * 10-12 laps (one seed each: Liana and R32 at Grobnik, R33 at Sachsenring, LMDh at RISE) contacts 28 -> 7, 27 -> 14,
-   * 21 -> 10 and 30 -> 10, the own driver's 1, 9, 2 and 0: better, not yet the own driver's
+   * LMDh at RISE), the same seeds, no limit -> 2 m -> 0.5 m (own driver): AI v AI contacts 194 -> 65 -> 39 (57),
+   * passes 203 -> 68 -> 65 (68), spins, offs and wall hits 30 -> 3 -> 1 (3), the leader's mean lap 116.7 -> 115.1 ->
+   * 114.9 s (119.8). 8 races of 10-12 laps (two seeds: Liana and R32 at Grobnik, R33 at Sachsenring, LMDh at RISE):
+   * contacts 146 -> 63 -> 26 (26), spins, offs and wall hits 24 -> 4 -> 5 (0)
    */
   planDefendReachM: number;
   /**
@@ -431,7 +431,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   planCornerShare: 0.5,
   planUrgentShare: 0.5,
   planPlayerMarginM: 1,
-  planDefendReachM: 2,
+  planDefendReachM: 0.5,
   planAids: 0,
 };
 /** The path check's step (s) */
