@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Port the full-wet tread from Nuzzi's "All F1 Tyres for VRC Formula Alpha 2023 (Wet Physics Included)" (OverTake, used
-with permission; see CREDITS.md) into the full-wet rubber strip the F1 tyre shader reads (`src/lib/render/tyre-wrap.ts`).
+Port the full-wet tread from Nuzzi's F1 tyre pack with wet physics (OverTake, used with
+permission; see CREDITS.md) into the full-wet rubber strip the F1 tyre shader reads (`src/lib/render/tyre-wrap.ts`).
 
-Purple Sector's 2025 Pirelli pack provides the clean sidewalls (with no VRC markings) and the slick / intermediate
+Purple Sector's 2025 Pirelli pack provides the clean sidewalls (with no third-party markings) and the slick / intermediate
 rubber (`pirelli-2025-ps-slick.webp`, `pirelli-2025-ps-intermediate.webp`), but its wet strip carries the slick tread.
 Nuzzi's `W.dds` uses the same 4096 x 1024 UV strip layout (tread rows 190..836) and provides the deep-grooved Pirelli
 Cinturato full-wet tread. This script composites only Nuzzi's tread band onto Purple Sector's clean slick sidewalls,

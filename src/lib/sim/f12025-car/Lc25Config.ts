@@ -8,7 +8,7 @@
  *  - [model]    Measured hardpoints & outline of `public/cars/lc25/model/lc25.glb`
  *  - [mercedes] Mercedes-AMG F1's 2025 / 2026 power unit table (mercedesamgf1.com, "Facts and Stats: Power Unit
  *               Regulation Changes"): the 2025 MGU-H's 75 kW
- *  - [nuzzi]    Nuzzi's "All F1 Tyres for VRC Formula Alpha 2023 (Wet Physics Included)" (OverTake, used with
+ *  - [nuzzi]    Nuzzi's F1 tyre pack with wet physics (OverTake, used with
  *               permission; see CREDITS.md): rain-tyre water-clearing and thermal ratios (`NUZZI_RAIN_TYRE_DESIGN`)
  *  - [est]      Engineering estimate for a 2025 ground-effect Formula 1 car
  *  - [ref]      the project's own 2025 reference set, used for the car's character where the values above were
