@@ -1310,6 +1310,11 @@ export class F12026CarSim implements SimulatorCar {
   /** The plan's top speed is no limit (`SimulatorCar.aiTopSpeedOpen`) */
   public aiTopSpeedOpen = false;
   /**
+   * The AI field's choice: the autopilot's TC and ABS at the car's Assisted dials, not its Semi-pro ones
+   * (`RacecraftParams.planAids`). The player's car is never given it
+   */
+  public aiAssistedAids = false;
+  /**
    * AI tuning (`ai-tuning.ts`): target speed along the lap (m/s, uniform spacing) used instead of this car's own
    * limit profile (`aiBaseSpeedProfile`), e.g. with earlier braking points; null = the limit profile
    */
@@ -2735,8 +2740,8 @@ export class F12026CarSim implements SimulatorCar {
    * threshold braking, which the autopilot's pedal alone does not do)
    */
   private autopilotDials(): AidDials {
-    const d = this.profile.assistDials.semi_pro;
     const assisted = this.profile.assistDials.assisted;
+    const d = this.aiAssistedAids ? assisted : this.profile.assistDials.semi_pro;
     const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
     const wet = clamp(this.vehicle.wetness, 0, 1);
     if (wet <= 0.15) {

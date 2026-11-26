@@ -375,6 +375,14 @@ export interface RacecraftParams {
    * offs and wall hits 30 -> 3 (3), the leader's lap still the quickest (116.7 -> 115.1 s; own driver 119.8)
    */
   planDefendReachM: number;
+  /**
+   * The same cars drive their plans with their Assisted TC and ABS (1) instead of the Semi-pro dials every AI car's
+   * autopilot uses (0; the `pro` preset the field gives its cars is the driver's, which the autopilot never reads). The
+   * player's car and its dials are never touched. 9 races of 8-10 laps (R32 at Chang, LMDh at Istanbul, Liana at
+   * Okayama Piper), the same seeds: spins, offs and wall hits 9 -> 2, AI v AI contacts 35 -> 28 (all at Istanbul), the
+   * leader's lap within 0.13 s. Too few races to ship on: off until a bigger A/B
+   */
+  planAids: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -422,6 +430,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   planUrgentShare: 0.5,
   planPlayerMarginM: 1,
   planDefendReachM: 2,
+  planAids: 0,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -2792,6 +2801,7 @@ export class AiOpponentField implements AiRace {
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
+      if ('aiAssistedAids' in me) me.aiAssistedAids = this.rc.planAids > 0 && !!me.aiPlan && tracksOwnPlanChecks(me.vehicleId ?? '');
       // The own driver slows for damage as a plan does (its grip, in the plan): corner speed goes with √ grip. At full
       // pace a car with a front tyre at 45 % of its grip left the road at every corner of Sachsenring for two laps
       const planned = me.aiPlan ? 1 : car.pace * weatherPace * Math.sqrt(damagedGrip(car.damage));
