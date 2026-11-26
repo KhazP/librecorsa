@@ -1403,7 +1403,7 @@ function buildF1VectorLayers(
       ],
       ["tl", "tr", "bl", "br"],
       22,
-      11
+      10
     );
     if (!placedFrontPill) {
       throw new Error(`${target.id}: failed to place FRONT (SEEN FROM THE FRONT) pill`);
@@ -1558,13 +1558,14 @@ function buildPortedVectorLayers(
     // 0. Emit & reserve in-body orientation stamps on verified flat, view-facing surfaces (drop any that lack a flat spot)
     if (stampPlacer) {
       if (target.id === "lc-lmdh") {
-        const noseMinX = pt("top", 0, 0.62, 1.96)[0];
-        stampPlacer.emitStamp(stampParts!, placer, "top", "NOSE · TOP →", pt("top", 0, 0.58, 2.22), {
-          startFontSize: 32,
-          minFontSize: 22,
+        const noseMinX = pt("top", 0, 0.62, 2.02)[0];
+        stampPlacer.emitStamp(stampParts!, placer, "top", "NOSE · TOP →", pt("top", 0, 0.57, 2.26), {
+          startFontSize: 28,
+          minFontSize: 20,
           searchRadiusX: 110,
-          searchRadiusY: 20,
+          searchRadiusY: 16,
           xRange: [noseMinX, p.top.x + p.top.w - 16],
+          yRange: [topCentreY - 22, topCentreY + 22],
         });
         stampPlacer.emitStamp(stampParts!, placer, "top", "ROOF →", pt("top", 0, 1.05, 0.02), {
           startFontSize: 32,
@@ -1622,7 +1623,7 @@ function buildPortedVectorLayers(
         // GT3 coupes (`amg-gt3`, `bmw-m4-gt3`)
         const hoodZ = target.id === "amg-gt3" ? 1.15 : 1.5;
         const roofZ = target.id === "amg-gt3" ? -0.3 : -0.25;
-        const wingZ = target.id === "amg-gt3" ? -2.04 : -2.36;
+        const wingZ = target.id === "amg-gt3" ? -2.10 : -2.35;
         // Place TOP L / TOP R on flat unobstructed areas: AMG hood shoulders (clear of quarter vents) and BMW roof deck (clear of curved rear fenders)
         const sideX = target.id === "amg-gt3" ? 0.54 : 0.35;
         const sideZ = target.id === "amg-gt3" ? 1.34 : 0.02;
@@ -1659,13 +1660,13 @@ function buildPortedVectorLayers(
           maxSeamRatio: 0.14,
         });
         stampPlacer.emitStamp(stampParts!, placer, "top", "WING", pt("top", 0, 1.2, wingZ), {
-          startFontSize: 28,
-          minFontSize: 18,
+          startFontSize: 22,
+          minFontSize: 16,
           searchRadiusX: 80,
           searchRadiusY: 40,
           mask: "rearWingTop",
-          minCoverage: 0.94,
-          maxSeamRatio: 0.26,
+          minCoverage: 0.96,
+          maxSeamRatio: 0.24,
         });
 
         const doorY = target.id === "amg-gt3" ? 0.58 : 0.62;
@@ -1705,9 +1706,9 @@ function buildPortedVectorLayers(
         stampPlacer.emitStamp(stampParts!, placer, "front", "FRONT", pt("front", 0, 0.48, prof.max[2]), {
           startFontSize: 38,
           minFontSize: 20,
-          searchRadiusX: 80,
+          searchRadiusX: 20,
           searchRadiusY: 50,
-          minCoverage: 0.9,
+          minCoverage: 0.92,
         });
       }
     }
