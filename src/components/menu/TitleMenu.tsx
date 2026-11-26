@@ -44,6 +44,8 @@ import { CarClassTag, TrackQualityBadge } from "./menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "./menu-shell";
 import { feedbackContextOf, RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
+import { WhatsNewPanel } from "./WhatsNewPanel";
+import { useWhatsNewNotes } from "@/lib/whats-new-seen";
 /** For a value that never changes while the page is open */
 const noSubscription = () => () => {};
 // The Mods panel, and what it brings (the zip reader, the package store, the catalogue), loads only where mods are taken
@@ -74,7 +76,7 @@ import { UpdateReady } from "./UpdateReady";
 import { LauncherUpdate } from "@/components/launcher/LauncherUpdate";
 import { TitleMusic } from "./TitleMusic";
 
-type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "mods" | "request";
+type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "mods" | "request" | "whatsNew";
 
 /**
  * How far a panel reaches beside the rail, in CSS px (the big-screen zoom scales them): each as wide as its content
@@ -90,6 +92,7 @@ const PANEL_COLUMNS: Partial<Record<TitlePanel, string>> = {
   challenge: "lg:grid-cols-[240px_minmax(0,1360px)]",
   leaderboard: "lg:grid-cols-[240px_minmax(0,1200px)]",
   request: "lg:grid-cols-[240px_minmax(0,1080px)]",
+  whatsNew: "lg:grid-cols-[240px_minmax(0,960px)]",
   garage: "lg:grid-cols-[240px_minmax(0,1000px)]",
 };
 /**
@@ -653,7 +656,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const tc = useTranslations("menu.career");
   const tp = useTranslations("menu.prompts");
   const tn = useTranslations("menu.upNext");
+  const th = useTranslations("home.hub");
+  const tstate = useTranslations("common.state");
   const storeBuild = useStoreBuild();
+  // The home page's patch notes, loaded once the menu is up; a chip on the entry while they hold something unread
+  const whatsNew = useWhatsNewNotes();
   // The panel the circuit, car or conditions panel was opened from (the race setup's Event card, the room's Circuit
   // row): picking there returns to it
   const returnToRef = useRef<"race" | "multiplayer" | null>(null);
@@ -893,6 +900,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     ...(storeBuild
       ? []
       : [{ id: "support", label: t("support"), icon: "support" as const, href: SUPPORT_URL }]),
+    {
+      id: "whatsNew",
+      label: th("tabs.whatsNew"),
+      icon: "info" as const,
+      badge: whatsNew.unseen ? tstate("new") : undefined,
+      panel: "whatsNew",
+      run: () => openPanel("whatsNew"),
+    },
     { id: "github", label: "GitHub", icon: "source" as const, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
@@ -902,6 +917,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   useEffect(() => {
     if (chosenPanel && !panel) setPanel(null);
   }, [chosenPanel, panel]);
+  // Opening the notes marks them read, here and on the home page
+  const { markSeen: markWhatsNewSeen } = whatsNew;
+  useEffect(() => {
+    if (panel === "whatsNew") markWhatsNewSeen();
+  }, [panel, markWhatsNewSeen]);
   const byId = (ids: readonly string[]) => ids.flatMap((id) => items.filter((i) => i.id === id));
 
   // Ⓑ: out of the panel to its rail entry, then close the panel (straight out where the rail is hidden: phones)
@@ -1089,7 +1109,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div aria-hidden className="h-3" />
               {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
-              {byId(["credits", "mods", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "md", true))}
+              {byId(["credits", "mods", "request", "press", "privacy", "support", "whatsNew", "github"]).map((item) => row(item, "md", true))}
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
@@ -1179,6 +1199,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
                   ) : null}
                   {panel === "credits" ? <Credits /> : null}
+                  {panel === "whatsNew" ? <WhatsNewPanel days={whatsNew.days} /> : null}
                   {panel === "mods" && modsHere ? <ModsPanel /> : null}
                   {panel === "request" ? (
                     // The frame above names it, with Close beside the name: the panel leaves out its own heading
@@ -1210,7 +1231,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md"))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 border-t border-lc-line pt-2.5 short:pt-1.5">
-                  {byId(["credits", "mods", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "sm"))}
+                  {byId(["credits", "mods", "request", "press", "privacy", "support", "whatsNew", "github"]).map((item) => row(item, "sm"))}
                 </div>
               </div>
             </nav>

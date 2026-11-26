@@ -1,7 +1,7 @@
 /**
- * What's new patch notes (`src/lib/home/whats-new.json`, `HomeHub.tsx`):
+ * What's new patch notes (`src/lib/home/whats-new.json`, `HomeHub.tsx`, the title menu's What's new panel):
  * validates ordering, entry schema, historical git alignment (when full history is checked out),
- * UI tab order, unread pulse wiring, and the shared read state.
+ * UI tab order, unread pulse wiring, and the read state the home page and the title menu share.
  *
  *   npx tsx scripts/verify/verify-whats-new.ts
  */
@@ -14,6 +14,7 @@ import { WHATS_NEW_SEEN_KEY, whatsNewFingerprint } from "../../src/lib/whats-new
 const ROOT = process.cwd();
 const DATA_PATH = join(ROOT, "src/lib/home/whats-new.json");
 const HOME_HUB_PATH = join(ROOT, "src/components/home/HomeHub.tsx");
+const TITLE_MENU_PATH = join(ROOT, "src/components/menu/TitleMenu.tsx");
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -133,6 +134,13 @@ check("fingerprint is empty for no notes", whatsNewFingerprint([]) === "");
 check("fingerprint is stable for the same notes", print === whatsNewFingerprint(structuredClone(sample)) && /^[0-9a-f]{8}$/.test(print));
 check("fingerprint changes when a day is updated", print !== whatsNewFingerprint([{ ...sample[0], lastSha: "b".repeat(40) }]));
 check("fingerprint changes when a day is added", print !== whatsNewFingerprint([{ ...sample[0], date: "2026-11-27" }, ...sample]));
+
+// The title menu's What's new panel: beside GitHub in both rails, the notes loaded after mount (not in /play's bundle)
+const menu = readFileSync(TITLE_MENU_PATH, "utf8");
+const railLists = menu.match(/byId\(\[[^\]]*"github"\]\)/g) ?? [];
+check("title menu lists What's new before GitHub in both rails", railLists.length === 2 && railLists.every((l) => l.includes('"whatsNew", "github"')));
+check("title menu uses the shared notes and seen state", menu.includes("useWhatsNewNotes()") && menu.includes('panel === "whatsNew"'));
+check("title menu does not bundle whats-new.json", !/^import[^;]*whats-new\.json/m.test(menu));
 
 console.log(failed ? `\n${failed} What's new check(s) failed.` : "\nAll What's new checks passed.");
 if (failed) process.exit(1);
