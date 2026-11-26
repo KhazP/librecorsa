@@ -9,6 +9,7 @@ export const PAGES = [
   { source: "docs/TELEMETRY.md", slug: "playing/telemetry", group: "Playing" },
   { source: "docs/PERFORMANCE.md", slug: "playing/performance", group: "Playing" },
   { source: "docs/SCREENS.md", slug: "playing/screens", group: "Playing" },
+  { source: "docs/VR.md", slug: "playing/vr", group: "Playing" },
   { source: "docs/DOWNLOADS.md", slug: "playing/downloads", group: "Playing" },
   { source: "docs/modding.md", slug: "modding", group: "Modding" },
   { source: "docs/LIVERIES.md", slug: "modding/liveries", group: "Modding" },
