@@ -7,9 +7,15 @@
  * - The top bodywork's livery (the WCCARBODY multimap: an AO map under a 1:1 detail holding the nose, its race number,
  *   the headrest and the sidepod tops) is baked at the detail's own 2048 px, in each body and in every livery's file;
  *   never as the detail's mean colour, which painted the whole top one flat colour.
+ * - Finishes from each material's own AC values (`apply_ac_finish`), marked extras.acFinish so the game keeps them:
+ *   the paints' polished coat (a clearcoat masked by a per-pixel map) over their own ksDiffuse (the McLaren's silver at
+ *   0.25 of AC's 0.4, the Ferrari's red at its skin's 0.3), and the carbon's reflection capped at its fresnelMaxLevel,
+ *   with no coat and its weave tiled as many times as AC tiles it. Other cars' materials keep the game's name rules.
  */
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
+import * as THREE from 'three';
+import { cleanPortedCarMaterial, hasAcFinish } from '../../src/lib/render/ported-car-materials';
 import { F1_2007_SKINS, f12007BodyUrl } from '../../src/lib/cars/f1-2007-skins';
 import { hasFile, noteSkip } from '../lib/hosted-files';
 
@@ -21,10 +27,25 @@ const check = (name: string, ok: boolean, detail = '') => {
 
 const TEAMS = ['ferrari', 'mclaren', 'renault', 'honda', 'bmw-sauber', 'toyota', 'red-bull', 'williams', 'toro-rosso', 'spyker', 'super-aguri'];
 
+interface TextureInfo {
+  index: number;
+  extensions?: { KHR_texture_transform?: { scale?: number[] } };
+}
+interface GltfMaterial {
+  name: string;
+  extras?: { kn5?: string[]; acFinish?: Record<string, number> };
+  pbrMetallicRoughness?: { baseColorFactor?: number[]; metallicRoughnessTexture?: TextureInfo };
+  extensions?: {
+    KHR_materials_clearcoat?: { clearcoatFactor?: number; clearcoatTexture?: TextureInfo };
+    KHR_materials_specular?: { specularFactor?: number; specularColorFactor?: number[]; specularTexture?: TextureInfo };
+  };
+}
 interface GltfJson {
   images?: { name?: string; bufferView: number; mimeType: string }[];
+  textures?: { source: number }[];
   bufferViews: { byteOffset?: number; byteLength: number }[];
-  materials?: { name: string; extras?: Record<string, unknown> }[];
+  materials?: GltfMaterial[];
+  extensionsUsed?: string[];
 }
 
 /** A GLB's JSON and its binary chunk */
@@ -77,6 +98,44 @@ async function main(): Promise<void> {
   }
   check(`every livery's wccarbody.jpg at its detail's size (${listed.length} liveries)`, listed.length > 0 && small.length === 0, small.join(', '));
   check('every livery\'s wccarbody.jpg a picture, not one colour', listed.length > 0 && flatFiles.length === 0, flatFiles.join(', '));
+
+  console.log('\n== Finishes from the AC values');
+  const byKn5 = (glb: { json: GltfJson }, kn5: string) => (glb.json.materials ?? []).find((m) => m.extras?.kn5?.includes(kn5));
+  for (const [team, glb] of glbs) {
+    const paint = byKn5(glb, 'WCCARBODY');
+    const coat = paint?.extensions?.KHR_materials_clearcoat;
+    check(
+      `${team}: the paint's own finish, a polished coat masked per pixel`,
+      !!paint?.extras?.acFinish && (coat?.clearcoatFactor ?? 0) > 0 && coat?.clearcoatTexture !== undefined && !!paint.extensions?.KHR_materials_specular,
+      paint ? `${paint.name} coat ${coat?.clearcoatFactor}` : 'no WCCARBODY material',
+    );
+    const used = glb.json.extensionsUsed ?? [];
+    check(`${team}: the extensions it uses are declared`, ['KHR_materials_specular', 'KHR_materials_clearcoat'].every((e) => used.includes(e)), used.join(', '));
+    const board = byKn5(glb, 'board') ?? byKn5(glb, 'BOARD') ?? byKn5(glb, 'floor');
+    const spec = board?.extensions?.KHR_materials_specular;
+    const scale = board?.pbrMetallicRoughness?.metallicRoughnessTexture?.extensions?.KHR_texture_transform?.scale?.[0];
+    // Coated only where its AC values make it a polished coat (Toro Rosso's floor: fresnelMaxLevel 0.5 under a tight highlight)
+    const fmax = board?.extras?.acFinish?.fresnelMaxLevel ?? 0;
+    const coated = !!board?.extensions?.KHR_materials_clearcoat;
+    check(
+      `${team}: the floor's carbon reflects at most its fresnelMaxLevel, its weave tiled`,
+      !!board?.extras?.acFinish && (spec?.specularFactor ?? 1) <= Math.max(fmax, 0.1) + 1e-6 && coated === fmax >= 0.3 &&
+        spec?.specularTexture !== undefined && (scale ?? 0) > 100,
+      board ? `specular ${spec?.specularFactor}, fresnelMaxLevel ${fmax}, coat ${coated}, weave x${scale}` : 'no floor material',
+    );
+  }
+  const factor = (team: string) => byKn5(glbs.get(team)!, 'WCCARBODY')?.pbrMetallicRoughness?.baseColorFactor?.[0] ?? 0;
+  check("McLaren's silver under its own ksDiffuse 0.25 (of AC's usual 0.4)", Math.abs(factor('mclaren') - 0.625) < 1e-3, String(factor('mclaren')));
+  check("Ferrari's red under its skin's ksDiffuse 0.3", Math.abs(factor('ferrari') - 0.75) < 1e-3, String(factor('ferrari')));
+  check('a team at AC\'s usual 0.4 keeps its paint as baked', Math.abs(factor('williams') - 1) < 1e-3, String(factor('williams')));
+
+  // The game keeps a porter-made finish as made, and still finishes other cars' paint by its name
+  const made = new THREE.MeshPhysicalMaterial({ name: 'paint_002', clearcoat: 0.5, roughness: 0.27, specularIntensity: 0.1 });
+  made.userData = { acFinish: { ksDiffuse: 0.4 } };
+  const kept = cleanPortedCarMaterial(made) as THREE.MeshPhysicalMaterial;
+  check('a material with acFinish keeps its own coat, roughness and reflection', hasAcFinish(made) && kept === made && kept.clearcoat === 0.5 && kept.roughness === 0.27 && kept.specularIntensity === 0.1);
+  const other = cleanPortedCarMaterial(new THREE.MeshStandardMaterial({ name: 'mtr_body_paint', roughness: 0.1 })) as THREE.MeshPhysicalMaterial;
+  check("another car's paint still takes the satin finish by its name", other.roughness === 0.55 && other.clearcoat === 0.15, `${other.roughness} ${other.clearcoat}`);
 }
 
 main().then(
