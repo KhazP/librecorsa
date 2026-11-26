@@ -107,10 +107,11 @@ All other circuit data (surfaces, kerbs, DRS zones, racing lines, AI plans, and 
 
 ### Liveries for built-in cars (`skins`)
 
-A livery is either a painted picture projected onto the car (`atlas`) or a set of texture files swapped onto the model's materials. Which one depends on the car:
+A livery is either a painted picture projected onto the car (`atlas`) or a set of UV-mapped texture files swapped onto the model's materials. Across the 14 built-in cars, 13 have downloadable paint templates in [Painting liveries](LIVERIES.md):
 
-- **Painted picture (`atlas`)**: `lc26` (LC26 Prototype), `lc25` (LC25 Prototype), `amg-gt3`, `bmw-m4-gt3`, and `lc-lmdh`. [Painting liveries](LIVERIES.md) has each car's template and how to paint one.
-- **Texture files**: `mtr-496r`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, `porsche-934-rsr`, and `liana` (also `amg-gt3`, `bmw-m4-gt3` and `lc-lmdh` for older packages, though their models have no texture slots to swap, so a texture livery leaves them in their factory paint).
+- **Painted picture (`atlas`, 5 cars):** `lc26` (LC26 Prototype), `lc25` (LC25 Prototype), `amg-gt3` (Mercedes-AMG GT3 Evo), `bmw-m4-gt3` (BMW M4 GT3 Evo), and `lc-lmdh` (LC-LMDH). See [The templates](LIVERIES.md#the-templates) for each car's 2048 × 2048 guide and overlay.
+- **UV texture files (8 cars):** `bmw-m1-procar`, `chaparral-2d`, `chaparral-2d-67`, `mtr-496r`, `nissan-r32-jtcc`, `nissan-r33-jgtc`, `porsche-934-rsr`, and `vw-scirocco-gtx`. See [UV texture liveries](LIVERIES.md#uv-texture-liveries-classic-cars-and-mtr-496r) and the [UV templates table](LIVERIES.md#uv-templates) for every downloadable UV overlay and exact output filename.
+- **Suzuki Liana 1.6 (`liana`):** accepted by the manifest validator for compatibility, but its GLB has no swappable material texture slots (`skinMaps`) and it is not an atlas car — it uses only its factory Ice Blue Silver paint and the built-in procedural `#106 Middle Gear Special` livery. (Similarly, older texture-file packages targeting `amg-gt3`, `bmw-m4-gt3`, or `lc-lmdh` leave those models in their factory paint because they have no texture slots to swap.)
 
 For both kinds:
 
@@ -123,10 +124,10 @@ For a painted picture:
 - `finish` (optional) is the paint's finish: `gloss` (the default), `satin`, `matte`, `metallic`, or `chrome`.
 - An F1 livery shows up in that car's livery picker under Installed mods; a livery made for `lc26` doesn't appear on `lc25`, or the other way round.
 
-For texture files:
+For UV texture files:
 
-- The files must use the model's exact texture filenames from `public/cars/<car>/skins/<skin>/`.
-- Use `files` when overriding only a subset of textures (every listed file must exist in the folder), and `variant` to select a body variant on cars that support them.
+- The files must use the model's exact texture filenames (listed in the [UV templates table](LIVERIES.md#uv-templates), or matching `public/cars/<car>/skins/<skin>/` for secondary slots like rims or trim).
+- Use `files` when overriding only a subset of textures (every listed file must exist in the folder; omitted slots keep the model's default textures), and `variant` to select a body variant on cars that support them (such as `"sebring"` on `chaparral-2d` and `chaparral-2d-67`).
 
 ### Cars (`cars`)
 
@@ -137,6 +138,97 @@ A mod car pairs a custom 3D body and audio bank with one of LibreCorsa's built-i
 - **`sound`:** Either a package-local audio bank with its recorded rev limiter (`{ "dir": "cars/gt-x/audio", "limiterRpm": 7500 }`) or a reference to any built-in car's audio, including `lc26` (`{ "car": "amg-gt3" }`). In either case, the sound bank automatically scales to the car's active rev limiter.
 - **`skins`:** The first entry describes the default paint baked into the GLB; subsequent entries are file-based liveries stored in `<model folder>/skins/<id>/` by default.
 - **`classId`:** One of `f1`, `gt3`, `proto`, `classic`, or `road`. Together with `year`, this controls menu placement and, for `f1` cars, determines whether DRS or 2026 Overtake Mode rules apply.
+
+#### Custom sound bank format
+
+When a mod car uses its own audio (`"sound": { "dir": "cars/gt-x/audio", "limiterRpm": 7500 }`), LibreCorsa loads a multi-grid Web Audio sound bank (`src/lib/sim/lc26-audio.ts`) from `sound.dir`. The folder holds a `manifest.json` alongside the audio files it names:
+
+```text
+cars/gt-x/audio/
+  manifest.json
+  engine_int_on_2000.ogg        interior on-load RPM anchor loops
+  engine_int_on_4500.ogg
+  engine_int_on_7500.ogg
+  engine_int_off_2000.ogg       interior off-load (overrun) RPM anchor loops
+  engine_int_off_4500.ogg
+  engine_int_off_7500.ogg
+  engine_ext_on_2000.ogg        exterior on-load RPM anchor loops
+  …
+  trans_on_160.ogg              optional transmission whine loops
+  trans_off_160.ogg
+  turbo_on_16.ogg               optional turbo spool loops
+  turbo_off_16.ogg
+  oneshot_gear_up.ogg           optional shift, backfire, blow-off & limiter one-shots
+  oneshot_gear_down.ogg
+  oneshot_shift_cut.ogg
+  oneshot_limiter.ogg
+  oneshot_backfire_int_1.ogg
+  oneshot_backfire_ext_1.ogg
+```
+
+- **Supported audio formats:** `.ogg` (Ogg Vorbis — used by all built-in banks for small file size, 48 kHz recommended), `.wav`, and `.mp3`. All files are decoded through the browser's Web Audio `decodeAudioData`.
+- **Filenames:** The loader reads every filename from `manifest.json` (any safe relative filename inside the audio folder works); the built-in convention (`scripts/audio/port_ac_bank.py`) is `engine_<int|ext>_<on|off>_<rpm>.ogg`, `trans_<on|off>_<kmh>.ogg`, `turbo_<on|off>_<boost>.ogg`, and `oneshot_<role>[_<n>].ogg`.
+- **Required `manifest.json` fields:**
+  - `sampleRate` (e.g. `48000`) and `loopSeconds` (typically `2.0`–`2.4` s of seamless equal-power crossfaded audio).
+  - `engine.int` and `engine.ext`: **both arrays are required and must be non-empty** (if either is absent, or any loop in the active camera view fails to decode, the bank falls back to the built-in engine audio). Each entry has `{ "file", "layer": "on" | "off", "rpm", "channels": 1 | 2, "rms" }`. Neighbouring RPM anchors are crossfaded with equal-power weights and pitched continuously from `0.75 × minRpm` up to `max(1.35 × maxRpm, limiterRpm × 1.05)` — your lowest RPM anchor covers idle and low revs.
+- **Optional `manifest.json` sections:**
+  - `throttleCurve`: `{ "ext": [[0, 0], …, [1, 1]], "int": [[0, 0], …, [1, 1]] }` mapping effective throttle `0..1` to the `on`/`off` blend weight (defaults to linear when omitted).
+  - `turbo`: array of `{ "file", "layer": "on" | "off", "boost", "channels", "rms" }`, indexed by gauge boost in bar.
+  - `transmission`: array of `{ "file", "layer": "on" | "off", "drivetrainSpeed", "channels", "rms" }`, indexed by road speed in km/h. Add a `driveline` object (`kmhPerRadS`, `torqueRefNm`, `coastTorqueRefNm`, `floor`, `gain`) to drive pitch and load from the physics driveshafts instead of vehicle speed.
+  - `oneshots`: array of `{ "file", "role", "channels", "seconds", "peak" }`. Multiple entries with the same `role` are picked at random without repeating back-to-back. Supported roles:
+    - `gear_up`, `gear_down`, `shift_cut`: played on forward gear changes (skipped when `shift.style` is `"manual"`).
+    - `limiter`: retriggered every `limiterRetriggerS` seconds (default `0.9`) while held within 60 rpm of `limiterRpm` above 90% throttle.
+    - `blowoff`: played on throttle lift when gauge boost exceeds `0.8` bar.
+    - `backfire_int`, `backfire_ext`, `pop_ext`: played on throttle lifts, downshift blips, and coasting crackles above `lift.popMinRpm` / `lift.crackleMinRpm` (`pop_ext` falls back to `backfire_ext` if omitted).
+  - `mgu`: `{ "file", "channels", "rms", "baseRpm", "fullKw", "gain" }` for hybrid / electric motor whine.
+  - Raw ambient / assist loops: `skid` (`{ "int"?, "ext"? }`), `tractionControl`, `wind`, `tyreRolling`, and `bodywork` (`{ "file", "channels", "rms" }`). Any omitted loop leaves LibreCorsa's built-in procedural layer active.
+  - Mixing & shift tuning: `shift` (`{ "style": "sequential" | "manual", "clutchS"?, "cutS"? }`), `lift` (`{ "popMinRpm", "crackleMinRpm", "downshiftPopChance"? }`), `limiterRetriggerS`, `loadFilter` (`{ "coastHz", "loadHz", "tauS"? }`), and `viewTone` (`{ "int"?, "ext"? }` with `peakHz`, `peakDb`, `peakQ`, `shelfHz`, `shelfDb`).
+
+Minimal `manifest.json` example:
+
+```json
+{
+  "sampleRate": 48000,
+  "loopSeconds": 2.4,
+  "engine": {
+    "ext": [
+      { "file": "engine_ext_on_2500.ogg", "layer": "on", "rpm": 2500, "channels": 1, "rms": 0.16 },
+      { "file": "engine_ext_on_5000.ogg", "layer": "on", "rpm": 5000, "channels": 2, "rms": 0.19 },
+      { "file": "engine_ext_on_7500.ogg", "layer": "on", "rpm": 7500, "channels": 2, "rms": 0.22 },
+      { "file": "engine_ext_off_2500.ogg", "layer": "off", "rpm": 2500, "channels": 1, "rms": 0.12 },
+      { "file": "engine_ext_off_5000.ogg", "layer": "off", "rpm": 5000, "channels": 2, "rms": 0.15 },
+      { "file": "engine_ext_off_7500.ogg", "layer": "off", "rpm": 7500, "channels": 2, "rms": 0.17 }
+    ],
+    "int": [
+      { "file": "engine_int_on_2500.ogg", "layer": "on", "rpm": 2500, "channels": 2, "rms": 0.16 },
+      { "file": "engine_int_on_5000.ogg", "layer": "on", "rpm": 5000, "channels": 2, "rms": 0.19 },
+      { "file": "engine_int_on_7500.ogg", "layer": "on", "rpm": 7500, "channels": 2, "rms": 0.22 },
+      { "file": "engine_int_off_2500.ogg", "layer": "off", "rpm": 2500, "channels": 2, "rms": 0.12 },
+      { "file": "engine_int_off_5000.ogg", "layer": "off", "rpm": 5000, "channels": 2, "rms": 0.15 },
+      { "file": "engine_int_off_7500.ogg", "layer": "off", "rpm": 7500, "channels": 2, "rms": 0.17 }
+    ]
+  },
+  "turbo": [],
+  "transmission": [
+    { "file": "trans_on_160.ogg", "layer": "on", "drivetrainSpeed": 160, "channels": 1, "rms": 0.04 },
+    { "file": "trans_off_160.ogg", "layer": "off", "drivetrainSpeed": 160, "channels": 1, "rms": 0.03 }
+  ],
+  "oneshots": [
+    { "file": "oneshot_gear_up.ogg", "role": "gear_up", "channels": 1, "seconds": 0.15, "peak": 0.76 },
+    { "file": "oneshot_gear_down.ogg", "role": "gear_down", "channels": 1, "seconds": 0.20, "peak": 0.75 },
+    { "file": "oneshot_limiter.ogg", "role": "limiter", "channels": 1, "seconds": 0.80, "peak": 0.78 }
+  ],
+  "throttleCurve": {
+    "ext": [[0.0, 0.0], [0.25, 0.55], [0.6, 0.88], [1.0, 1.0]],
+    "int": [[0.0, 0.0], [0.25, 0.58], [0.6, 0.90], [1.0, 1.0]]
+  },
+  "lift": { "popMinRpm": 5200, "crackleMinRpm": 5600, "downshiftPopChance": 0.45 },
+  "limiterRetriggerS": 0.85
+}
+```
+
+- **How `limiterRpm` scales pitch:** `sound.limiterRpm` in `mod.json` (valid from `1000` to `25000`) records the top rev limiter of the audio bank itself. At runtime (`src/lib/sim/CarAudio.ts`), LibreCorsa scales the live engine RPM by `sound.limiterRpm / physicsLimiterRpm` before feeding it to the bank, where `physicsLimiterRpm` is your car's active physics redline (`config.gearbox.gears.redline_rpm`, or the base model's limiter). That ensures the recording sweeps its full RPM grid and hits its `limiter` one-shot right at the physics rev limiter, even if the bank was recorded for a different redline. The same scaling applies when borrowing a built-in car's sound with `{ "car": "<id>" }`.
+- **Converting FMOD banks:** In a clone of the repository, `scripts/audio/port_ac_bank.py` decodes Assetto Corsa FMOD `.bank` (FSB5) files directly into this folder layout and `manifest.json` format.
 
 ### Custom physics patches
 
@@ -161,18 +253,40 @@ The patch file contains only the fields you want to override from the base model
 }
 ```
 
-The patched profile runs in the exact same 500 Hz simulation worker as built-in cars, matching the structure of `*_SIM_PROFILE` and `*Config.ts` under `src/lib/sim/*/`. Patches are validated against strict safety invariants:
+The patched profile runs in the exact same 500 Hz simulation worker as built-in cars, matching the structure of `*_SIM_PROFILE` and `*Config.ts` under `src/lib/sim/*/`. Patches are validated against strict safety invariants (`src/lib/mods/mod-physics.ts`):
 
 - **Existing keys and types only:** Every patched key must already exist in the base profile and keep the same value type (numbers stay numbers, arrays stay arrays, objects merge recursively).
-- **Positive divisor guardrails:** Any parameter the simulation divides by must remain strictly greater than `0` when the base value is positive, including masses, inertias (the engine's too), wheelbase, track widths, centre-of-gravity height, wheel radius and width, gear ratios, redline, shift points, steering lock, a tyre's peak slip ratio (`slip_ratio_limit`), and a turbo's spool times and reference rpm. Other fields may be `0` (to disable a component) or negative (such as positions or camber angles).
-- **Structured tables and arrays:** Curve tables must keep `[x, y]` pairs with strictly increasing `x`; suspension coordinates stay `[x, y, z]`; two-value ranges stay length 2. You may change the number of gear ratios or ride-height map breakpoints (heights must stay strictly increasing), provided the map's value grids resize to match.
+- **Positive divisor guardrails:** Any parameter the simulation divides by must remain strictly greater than `0` when the base value is positive, including masses, inertias (the engine's too), wheelbase, track widths, centre-of-gravity height, wheel radius and width, gear ratios, redline, shift points, steering lock, a tyre's peak slip ratio (`slip_ratio_limit`), a turbo's spool times and reference rpm, and fuel work constants (`brakeThermalEfficiency`, `lowerHeatingValueMJPerKg`). Other fields may be `0` (to disable a component) or negative (such as positions or camber angles).
+- **Structured tables and arrays:** Curve tables must keep `[x, y]` pairs with strictly increasing `x`; suspension coordinates stay `[x, y, z]`; two-value ranges stay length 2. You may change the number of gear ratios (`ratios`), hybrid dial steps (`deployStepsKw`, `regenStepsKw`), or ride-height map breakpoints (`frontRh`, `rearRh`, strictly increasing), provided the map's `cl`, `cd`, and `balance` grids resize to match (`rearRh.length` rows × `frontRh.length` columns).
 - **Element-wise list validation:** List items are checked position-by-position against the base list (for example, rear wing against rear wing). A list that is empty on the base car (such as aero wings on a road car) cannot be populated by a patch.
-- **Physical sanity checks:** `frontWeightFraction` must stay between `0` and `1`, and `totalMassKg` must exceed the combined unsprung mass of all four wheels.
-- **Reserved and optional fields:** `id`, `model`, and `bodyPlan` are managed by the simulator (put custom collision outlines in `mod.json`). Optional base fields (`steerRatio`, `fuelFlowKgS`, `fuelLPerS1000Rpm`, `setupPressureRefC`, `understeerRadPerMs2`, `aiMaxKerbRiseM`) must be strictly positive when set.
+- **Physical sanity checks:** `frontWeightFraction` must stay between `0` and `1`, and `totalMassKg` must exceed the combined unsprung mass of all four wheels (`2 × unsprungMassFront + 2 × unsprungMassRear`).
+- **Reserved and optional fields:** `id`, `model`, and `bodyPlan` are managed by the simulator (put custom collision outlines in `mod.json`). Optional top-level profile fields (`steerRatio`, `fuelFlowKgS`, `fuelLPerS1000Rpm`, `setupPressureRefC`, `understeerRadPerMs2`, `aiMaxKerbRiseM`) may be added even if absent on the base model, and must be strictly positive when set.
 
 If a patch violates any rule, contains a typo, or uses the wrong type, that car is skipped (the rest of the package still loads) and the **Mods** panel pinpoints the failing field path. Updating `gearbox.gears.redline_rpm` automatically adjusts audio pitch scaling and the shift warning beep. Garage setup ranges, AI profiles, and HUD layouts remain inherited from the base model.
 
-All base vehicle models support physics patches except `lc26` and `lc25`. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
+All base vehicle models support physics patches except `lc26` and `lc25`.
+
+#### Physics patch field guide
+
+Every patch overrides fields on `CarSimProfile` (`profile.*`, defined in `src/lib/sim/f12026-car/F12026CarSim.ts`) and its nested `CarPhysicsConfig` (`profile.config.*`, defined in `src/lib/sim/f12026-car/F12026CarConfig.ts`). The most commonly tuned sections and units are:
+
+| Section | Commonly tuned fields | Units / notes |
+| :--- | :--- | :--- |
+| `profile` (top level) | `hasErs`, `hasDrs`, `turbo`, `coldPsiRange`, `frontCamberRange`, `rearCamberRange`, `tcMinSpeedMs`, `aeroPackagesDeg`, `braking` (`lowG`, `aeroG`, `refMs`), `padLateralMu`, `electronics` (`absLevels`, `tcLevels`, `absDefault`, `tcDefault`, `absRateHz`, `tcRateHz`, `tcMinSpeedKmh`), plus optional `steerRatio`, `fuelFlowKgS`, `fuelLPerS1000Rpm`, `setupPressureRefC`, `understeerRadPerMs2`, `aiMaxKerbRiseM` | Ranges are `[min, max]` (psi or deg); `aeroPackagesDeg` holds `[front, rear]` deg offsets per preset (`low_downforce`, `balanced`, `high_downforce`); `turbo: true` enables boost telemetry on the HUD |
+| `profile.config.chassis` | `totalMassKg`, `frontWeightFraction`, `wheelbase`, `trackWidthFront`, `trackWidthRear`, `cgHeight`, `inertia` (`pitch`, `roll`, `yaw`), `unsprungMassFront`, `unsprungMassRear`, `wheelInertiaFront`, `wheelInertiaRear`, `maxRoadWheelDeg` | Mass in kg (dry car + driver), distances in m, inertias in kg·m², lock in deg; `totalMassKg` must exceed `2 × (unsprungMassFront + unsprungMassRear)` |
+| `profile.config.engine` | `powerCurve`, `coastCurve`, `throttleResponseCurve`, `idleRpm`, `inertia`, `limiterCutS`, optional `torqueResponseS` (`rise`, `fall`), `outputPowerCap.curve`, `ramAirGainPerKPa`, `airDensitySensitivity` | `powerCurve`: `[[rpm, kW], …]` steady-state crank power (strictly rising RPM); `coastCurve`: `[[rpm, Nm], …]` overrun braking magnitude; `throttleResponseCurve`: `[[pedal, plate], …]` on `0..1`; `inertia` in kg·m²; times in s |
+| `profile.config.engine.turbo` | `maxBoost`, `referenceRpm`, `gamma`, `spoolUpS`, `spoolRefRpm`, `spoolDownS`, `displayMaxBoostBar`, `throttleInBoostLaw` | Available only when the base model already defines `engine.turbo` (e.g. `porsche-934-rsr`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `lc-lmdh`, `f12026-car`). Torque scales with `1 + boost`; `spoolUpS`, `spoolDownS` (s) and `referenceRpm` (rpm) must stay `> 0` |
+| `profile.config.gearbox` | `ratios`, `reverse`, `finalDrive`, `efficiency`, `shiftTimeS`, `downshiftTimeS`, `shiftTorqueFraction`, `upshiftCutS`, `upshiftNeutralS`, `gears` (`redline_rpm`, `upshift_rpm`, `downshift_rpm`, `brake_downshift_rpm`) | `ratios` is the forward gear list (variable length, all `> 0`); `efficiency` is `0..1`; shift durations in s; RPM values `> 0` |
+| `profile.config.brakes` | `maxTorqueNm`, `front_bias`, `ebbStep`, `brakeByWire`, `discMaterial`, `handbrakeTorqueNm` | `maxTorqueNm` is total brake torque (Nm) before the `front_bias` (`0..1`) split; `discMaterial` is `"carbon-ceramic"`, `"endurance-carbon"`, or `"endurance-steel"` |
+| `profile.config.tyreCompounds.<compound>` | `front` / `rear` (`width`, `radius`, `rimRadius`, `verticalRateScale`), `modelData` (`Dy0`, `Dx0`, `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`, `rollingResistance`, `verticalDamping`), `thermalData` (`thermalPerformanceCurve`, `optimalTempC`), `pressureData` (`optimalPsi`, `coldRefC`, `pressureSpringCurve`), `camberData` (`camberGain`, `dcamber0`, `dcamber1`), `rearOverride` | Replace `<compound>` with a key present on the base car (for example `PhysicsTyreCompound_GT3_Soft` or `PhysicsTyreCompound_Road_Street`, matched by `compoundSlots`). Lengths in m, `Fz0` in N, angles in deg, temperatures in °C, pressures in psi |
+| `profile.config.suspensions` | `front` / `rear` (`staticCamber`, `springs.wheel_rate`, `arb`, `droopTravel`, `rollCentreHeight`, `bumpStop` `{ range, rate, progression }`, `heave` `{ rate, gap, packerGap, packerRate }`, `hardpoints`), `dampers_controller.front` / `.rear` (`base`, `heave`, `roll`, `pitch` with `slow_bump`, `fast_bump`, `slow_rebound`, `fast_rebound`, plus `fastThresholdMs`) | Spring and ARB rates in N/m, damping in Ns/m, travel and heights in m, camber in deg, damper knee in m/s, `hardpoints` as `[x, y, z]` m triples |
+| `profile.config.aero` | `front_lift`, `rear_lift`, `drag`, `front_target_height`, `rear_target_height`, `airDensity`, `wings` (per element: `area`, `positionZ`, `angleDeg`, `lutAOA_CL`, `lutAOA_CD`, `lutGH_CL_mult`, `lutGH_CD_mult`), `rhMap` (`clA`, `cdA`, `frontRh`, `rearRh`, `cl`, `cd`, `balance`) | Lift/drag terms are coefficient × area in m², heights and positions in m, `airDensity` in kg/m³; `rhMap` is present on map-aero base cars (`lc-lmdh`, `f12026-car`) |
+
+**Inspecting a base car and verifying your patch:**
+
+1. Check `src/lib/cars/vehicle-models.ts` to find the base model's `*_SIM_PROFILE` and `*_CONFIG` files under `src/lib/sim/` (for example `src/lib/sim/gt3/AmgGt3Config.ts` and `AmgGt3Sim.ts`, `src/lib/sim/classic/Porsche934RsrConfig.ts`, or `src/lib/sim/road/VwSciroccoConfig.ts`). Pick a base that already has the subsystems your car needs (such as `engine.turbo`, `awd`, `wings`, or `rhMap`).
+2. Validate your package and patch guardrails with `npm run mod -- check <folder>`.
+3. Compare tyre curves, balance, and braking numbers against the reference benchmarks generated by `npm run physics:report` (which writes charts and tables to `docs/physics/`) and test drive behaviour with `npm run race:headless` or the `scripts/verify/verify-*.ts` suites.
 
 ## Checking, packing, and importing with the CLI
 
