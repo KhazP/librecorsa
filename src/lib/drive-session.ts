@@ -4324,7 +4324,7 @@ export class DriveSession {
           cueOvertakeDetAtMs = ot.atMs;
         }
         const playerRes = tc.race?.results?.find((r) => r.isPlayer);
-        const dnfNow = Boolean(tc.race?.damage?.terminal || (tc.race?.damage?.overall ?? 0) >= 0.65 || playerRes?.dnf);
+        const dnfNow = Boolean(tc.race?.damage?.terminal || (tc.race?.damage?.overall ?? 0) >= 1.0 || playerRes?.dnf);
         const winNow = Boolean(tc.race?.phase === "finished" && tc.race.position === 1 && !playerRes?.dnf);
         const yellowNow = Boolean(tc.race?.yellow || tc.race?.doubleYellow);
         const vscNow = Boolean(tc.race?.vsc);

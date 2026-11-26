@@ -68,7 +68,7 @@ function makeWalkieDistortionCurve(amount = 14): Float32Array<ArrayBuffer> {
  * iRacing-style contextual racing spotter.
  * Uses relative 3D vehicle position projected into the player's local car frame
  * with hysteresis and cooldowns to avoid flickering or repetitive callouts.
- * Plays pre-generated Apache-2.0 (Kokoro-82M) spotter voice clips with an optional Web Audio pit-radio filter.
+ * Plays pre-generated MIT (Chatterbox-Turbo) spotter and race engineer voice clips with an optional Web Audio pit-radio filter.
  */
 export class SpotterEngine {
   private state: SpotterSideState = "clear";
