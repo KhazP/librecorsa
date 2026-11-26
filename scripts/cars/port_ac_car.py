@@ -1088,6 +1088,13 @@ def ac_finish(m, cls, spec):
     )
 
 
+def detail_drawn_once(m, src):
+    """Whether multimap `m` draws its detail once over its own UVs (detailUVMultiplier 1): a livery, not a weave"""
+    uvm = m['props'].get('detailUVMultiplier', 1.0) or 1.0
+    return ('MultiMap' in m['shader'] and m['props'].get('useDetail', 0) >= 0.5 and m['maps'].get('txDetail') in src
+            and abs(uvm - 1.0) < 1e-3)
+
+
 def finish_map(m, src, fin):
     """The per-pixel finish of a multimap drawn once over its UVs (R clearcoat, G roughness, B metalness, at most
     FINISH_MAP_SIZE) and the mean of its reflection mask, or (None, 1) when nothing in it varies: the reflection masked
@@ -1103,8 +1110,7 @@ def finish_map(m, src, fin):
     refl = np.ones(size[::-1], np.float32)
     coat = np.ones(size[::-1], np.float32)
     gloss = np.ones(size[::-1], np.float32)
-    uvm = props.get('detailUVMultiplier', 1.0) or 1.0
-    if props.get('useDetail', 0) >= 0.5 and maps.get('txDetail') in src and abs(uvm - 1.0) < 1e-3:
+    if detail_drawn_once(m, src):
         at = np.asarray(decode(src[maps['txDetail']]).getchannel('A').resize(size, Image.BILINEAR), np.float32) / 255.0
         refl *= at * (1.0 - ad) + ad
         coat *= np.clip(refl / FULL_COAT_ALPHA, 0.0, 1.0)
@@ -1200,9 +1206,10 @@ def apply_ac_finish(gm, m, cls, spec, pool, writer):
         spec_ext['specularFactor'] = round(fin['specular'] * reflection_occlusion(m, pool.src), 3)
         uses('KHR_texture_transform')
     elif not fin['lacquer']:
-        # One reflection all over: dimmed as the material's txMaps B dims it on average
-        gm['extensions']['KHR_materials_specular']['specularFactor'] = round(
-            fin['specular'] * reflection_occlusion(m, pool.src), 3)
+        # One reflection all over: dimmed as the material's mask dims it on average (its txMaps B, and where a detail is
+        # drawn once over it, the detail's alpha: a black carbon wishbone's 0.02-0.2 keeps it from reading silver)
+        occlusion = refl_mean if detail_drawn_once(m, pool.src) else reflection_occlusion(m, pool.src)
+        gm['extensions']['KHR_materials_specular']['specularFactor'] = round(fin['specular'] * occlusion, 3)
     if fin['clearcoat'] > 0:
         coat = {'clearcoatFactor': 1.0 if fmap is not None else round(fin['clearcoat'] * reflection_occlusion(m, pool.src), 3),
                 'clearcoatRoughnessFactor': CLEARCOAT_ROUGHNESS}
