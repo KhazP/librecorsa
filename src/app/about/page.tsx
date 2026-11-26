@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { GAME_FACTS } from "@/components/home/home-data";
 import { LEAD, READ, SiteIntro, SitePage, SiteSection, TEXT_LINK } from "@/components/home/SitePage";
+import enHome from "@/i18n/messages/en/home.json";
 import { CONTACT_EMAIL, DOCS_URL, REPO_URL, SITE_NAME } from "@/lib/site";
 
 // What LibreCorsa is and what signing in is for, as a page that reads the same without running any script: the home
@@ -22,19 +23,23 @@ export default function AboutPage() {
     <SitePage>
       <SiteIntro title={`About ${SITE_NAME}`}>
         <p className={LEAD}>
-          {SITE_NAME} is a free, open-source racing simulator that runs in your browser. Drive hot laps, race against AI,
-          join multiplayer rooms and post lap times online, on a computer, phone or tablet, with nothing to install.
+          {SITE_NAME} is a free, open-source racing simulator that runs in your browser. Drive hot laps, career seasons, time
+          trials and races against AI, join multiplayer rooms and post lap times online, on a computer, phone or tablet, with
+          nothing to install.
         </p>
       </SiteIntro>
 
       <SiteSection id="game" title="What is in it">
         <dl className="m-0 flex max-w-[68ch] flex-col">
-          {GAME_FACTS.map(([label, text]) => (
-            <div key={label} className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-5 border-t border-lc-line py-3.5 max-sm:grid-cols-1 max-sm:gap-y-1">
-              <dt className="lc-lbl pt-0.5">{label}</dt>
-              <dd className="lc-body m-0 text-[16px] text-lc-chalk">{text}</dd>
-            </div>
-          ))}
+          {GAME_FACTS.map((fact) => {
+            const { label, text } = enHome.hub.facts[fact];
+            return (
+              <div key={fact} className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-5 border-t border-lc-line py-3.5 max-sm:grid-cols-1 max-sm:gap-y-1">
+                <dt className="lc-lbl pt-0.5">{label}</dt>
+                <dd className="lc-body m-0 text-[16px] text-lc-chalk">{text}</dd>
+              </div>
+            );
+          })}
         </dl>
       </SiteSection>
 
