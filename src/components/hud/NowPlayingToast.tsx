@@ -3,6 +3,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import { Icon } from "@/components/ui/icons/Icon";
+import { uiFrame } from "@/lib/display/ui-frame";
 
 /** How long each track's card stays, and its slide out at the end (ms) */
 const SHOW_MS = 4000;
@@ -50,13 +51,16 @@ function safeInsets(): { top: number; right: number; bottom: number; left: numbe
 /** The first spot whose box, for a card this size, covers no control on the screen; null when every one would */
 function clearSpot(card: HTMLElement): Spot | null {
   const { width: w, height: h } = card.getBoundingClientRect();
-  const vw = window.innerWidth;
+  // The card places itself in the window, or in the centre screen of three (the controls' boxes are in window pixels)
+  const frame = uiFrame();
+  const x0 = frame?.x ?? 0;
+  const vw = frame?.w ?? window.innerWidth;
   const vh = window.innerHeight;
   const rtl = getComputedStyle(card).direction === "rtl";
   const inset = safeInsets();
-  const left = Math.max(EDGE, inset.left);
+  const left = x0 + Math.max(EDGE, inset.left);
   const right = Math.max(EDGE, inset.right);
-  const x = { start: rtl ? vw - right - w : left, end: rtl ? left : vw - right - w, center: (vw - w) / 2 };
+  const x = { start: rtl ? x0 + vw - right - w : left, end: rtl ? left : x0 + vw - right - w, center: x0 + (vw - w) / 2 };
   const box = (spot: Spot) => {
     const [v, hz] = spot.split("-") as ["top" | "bottom", "start" | "end" | "center"];
     const top = v === "top" ? Math.max(EDGE, inset.top) : vh - Math.max(EDGE, inset.bottom) - h;

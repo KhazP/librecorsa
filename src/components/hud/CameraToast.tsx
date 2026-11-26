@@ -77,7 +77,7 @@ export function CameraToast({ cameraMode, active, freeCameraKey = "F7" }: Camera
       {shown && spec ? (
         <div
           key={shown.seq}
-          className={`${leaving ? "lc-np-out" : "lc-np-in"} flex max-w-[calc(100vw-2rem)] flex-col items-center gap-0.5 rounded-lc-tile px-4 py-2 text-center shadow-lc-pop ${HUD_GLASS}`}
+          className={`${leaving ? "lc-np-out" : "lc-np-in"} flex max-w-[calc(100cqw-2rem)] flex-col items-center gap-0.5 rounded-lc-tile px-4 py-2 text-center shadow-lc-pop ${HUD_GLASS}`}
         >
           <span className="inline-flex items-center gap-2 text-[13px] font-semibold tracking-[0.04em] text-lc-chalk">
             <Icon name="camera" size="sm" className="text-lc-fog" />

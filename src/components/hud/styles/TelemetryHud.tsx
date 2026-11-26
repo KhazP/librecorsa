@@ -204,7 +204,7 @@ export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
     {/* Narrower while the tyre and input panels sit either side */}
     <div
       data-hud-avoid
-      className="absolute bottom-5 left-1/2 w-[min(560px,calc(100vw-24px))] -translate-x-1/2 not-compact:w-[min(560px,calc(100vw-620px))]"
+      className="absolute bottom-5 left-1/2 w-[min(560px,calc(100cqw-24px))] -translate-x-1/2 not-compact:w-[min(560px,calc(100cqw-620px))]"
       style={anchor(scale, "bottom center")}
     >
       <WheelDash t={t} deltaS={deltaS} revRange={revRange} lapInvalid={lapInvalid} />

@@ -39,7 +39,8 @@
         "graphics": "畫面",
         "hud": "HUD",
         "camera": "視角",
-        "interface": "介面"
+        "interface": "介面",
+        "screens": "螢幕"
       },
       "audio": {
         "main": "音訊"
@@ -442,7 +443,8 @@
       "label": "視野角度（FOV）",
       "hintCarOwn": "使用各車款預設值",
       "hintCarDefault": "車款預設：{degrees}°",
-      "valueCar": "{value}°（車款預設）"
+      "valueCar": "{value}°（車款預設）",
+      "offTrueFov": "由「螢幕」中的「真實視野角度」設定"
     },
     "headMovement": {
       "label": "頭部動態",
@@ -548,6 +550,47 @@
         "reduced": "車損減半；車輛全毀後會修復並以飛行單圈重新開始",
         "full": "正賽車損；車輛全毀後會修復並以飛行單圈重新開始"
       }
+    },
+    "screensMode": {
+      "label": "螢幕",
+      "hint": "並排的三個螢幕會各自顯示獨立畫面，選單與 HUD 則顯示於中央螢幕。請使用 NVIDIA Surround 或 AMD Eyefinity 將遊戲橫跨三個螢幕。",
+      "options": {
+        "single": "單螢幕",
+        "triple": "三螢幕"
+      }
+    },
+    "screenSize": {
+      "label": "螢幕尺寸",
+      "hint": "單一螢幕顯示區域的對角線長度（即標稱尺寸）",
+      "value": "{value} 吋"
+    },
+    "screenDistance": {
+      "label": "與螢幕的距離",
+      "hint": "從雙眼到中央螢幕的直線距離"
+    },
+    "screenBezel": {
+      "label": "邊框",
+      "hint": "單一螢幕畫面旁的邊框寬度。若 Surround 或 Eyefinity 已補償邊框請設為 0；使用隱藏邊框的光學條則設為負值"
+    },
+    "sideAngle": {
+      "label": "側邊螢幕角度",
+      "hint": "側邊螢幕相對於中央螢幕的內折角度。設為 {degrees}° 時，螢幕中心會正對雙眼",
+      "valueFacing": "{value}°（正對你）"
+    },
+    "eyeHeight": {
+      "label": "眼睛高度",
+      "hint": "雙眼高於（+）或低於（−）螢幕中心的高度"
+    },
+    "trueFov": {
+      "label": "真實視野角度",
+      "hint": "駕駛視角會準確呈現從你坐姿透過螢幕所見的範圍。關閉時使用「視角」中的「視野角度（FOV）」"
+    },
+    "sideScale": {
+      "label": "側邊螢幕解析度",
+      "hint": "降低餘光所見側邊螢幕的畫質細節，以換取更高幀率"
+    },
+    "screens": {
+      "tripleOnly": "僅適用於三螢幕"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "語言",
       "units": "單位",
       "sizeColour": "大小與色彩"
+    },
+    "screens": {
+      "title": "螢幕",
+      "viewTitle": "視野",
+      "diagramTitle": "俯視圖",
+      "diagramLabel": "螢幕配置俯視圖與各螢幕顯示範圍",
+      "picture": "單一螢幕：{width} × {height} cm",
+      "trueFov": "真實視野角度：{degrees}°",
+      "total": "三螢幕總視野：{degrees}°",
+      "useFov": "套用 {degrees}°",
+      "useFovHint": "將「視野角度（FOV）」設為從你坐姿透過螢幕所見的範圍",
+      "fovNow": "目前視野角度（FOV）：{degrees}°",
+      "notWide": "此視窗寬度不足三個螢幕。請先使用 NVIDIA Surround 或 AMD Eyefinity 將畫面橫跨三螢幕並切換為全螢幕，讓各螢幕顯示獨立畫面。",
+      "looksTriple": "此視窗比例接近並排的三螢幕。請選擇「三螢幕」，讓每個螢幕各自顯示獨立畫面。"
     }
   },
   "audio": {

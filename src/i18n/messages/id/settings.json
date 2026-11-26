@@ -39,7 +39,8 @@
         "graphics": "Grafis",
         "hud": "HUD",
         "camera": "Kamera",
-        "interface": "Antarmuka"
+        "interface": "Antarmuka",
+        "screens": "Layar"
       },
       "audio": {
         "main": "Audio"
@@ -442,7 +443,8 @@
       "label": "Bidang pandang",
       "hintCarOwn": "Menggunakan bawaan masing-masing mobil",
       "hintCarDefault": "Bawaan mobil: {degrees}°",
-      "valueCar": "{value}° (mobil)"
+      "valueCar": "{value}° (mobil)",
+      "offTrueFov": "Diatur oleh Bidang pandang nyata di Layar"
     },
     "headMovement": {
       "label": "Gerakan kepala",
@@ -548,6 +550,47 @@
         "reduced": "Kerusakan dikurangi setengah; mobil yang hancur memulai ulang flying lap dalam kondisi diperbaiki",
         "full": "Kerusakan balapan; mobil yang hancur memulai ulang flying lap dalam kondisi diperbaiki"
       }
+    },
+    "screensMode": {
+      "label": "Layar",
+      "hint": "Tiga layar berdampingan masing-masing menampilkan tampilannya sendiri, dengan menu dan HUD di layar tengah. Bentangkan game ke ketiga layar dengan NVIDIA Surround atau AMD Eyefinity.",
+      "options": {
+        "single": "Satu",
+        "triple": "Tiga"
+      }
+    },
+    "screenSize": {
+      "label": "Ukuran layar",
+      "hint": "Diagonal gambar satu layar, seperti saat dijual",
+      "value": "{value} inci"
+    },
+    "screenDistance": {
+      "label": "Jarak ke layar",
+      "hint": "Dari matamu ke layar tengah, diukur lurus"
+    },
+    "screenBezel": {
+      "label": "Bezel",
+      "hint": "Bingkai satu layar di samping gambarnya. 0 jika Surround atau Eyefinity sudah mengoreksi bingkai, di bawah 0 untuk strip yang menyembunyikannya"
+    },
+    "sideAngle": {
+      "label": "Sudut layar samping",
+      "hint": "Seberapa miring layar samping mengarah ke dalam dari layar tengah. Pada {degrees}°, bagian tengahnya menghadap matamu",
+      "valueFacing": "{value}° (menghadapmu)"
+    },
+    "eyeHeight": {
+      "label": "Tinggi mata",
+      "hint": "Matamu di atas (+) atau di bawah (−) bagian tengah layar"
+    },
+    "trueFov": {
+      "label": "Bidang pandang nyata",
+      "hint": "Tampilan pembalap menunjukkan persis yang dibingkai layarmu dari tempat dudukmu. Mati: Bidang pandang di Kamera"
+    },
+    "sideScale": {
+      "label": "Resolusi layar samping",
+      "hint": "Detail lebih rendah di layar samping, tempat matamu menangkap lebih sedikit, untuk lebih banyak frame per detik"
+    },
+    "screens": {
+      "tripleOnly": "Hanya dengan tiga layar"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Bahasa",
       "units": "Satuan",
       "sizeColour": "Ukuran dan warna"
+    },
+    "screens": {
+      "title": "Layar",
+      "viewTitle": "Tampilan",
+      "diagramTitle": "Tampak dari atas",
+      "diagramLabel": "Layarmu dilihat dari atas, beserta tampilan tiap layar",
+      "picture": "Satu layar: {width} × {height} cm",
+      "trueFov": "Bidang pandang nyata: {degrees}°",
+      "total": "Di ketiga layar: {degrees}°",
+      "useFov": "Pakai {degrees}°",
+      "useFovHint": "Mengatur Bidang pandang sesuai yang dibingkai layarmu dari tempat dudukmu",
+      "fovNow": "Bidang pandang saat ini: {degrees}°",
+      "notWide": "Jendela ini tidak selebar tiga layar. Bentangkan game ke ketiga layar (NVIDIA Surround atau AMD Eyefinity, lalu layar penuh) agar tiap layar punya tampilannya sendiri.",
+      "looksTriple": "Jendela ini tampak seperti tiga layar berdampingan. Pilih Tiga agar tiap layar punya tampilannya sendiri."
     }
   },
   "audio": {

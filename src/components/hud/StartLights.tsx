@@ -15,7 +15,7 @@ const FLAG_WAVE = "M0 20 C90 0 170 40 260 20 C350 0 430 40 520 20 L520 50 C430 7
 
 /** One waving chequered strip above or below the flag banner */
 const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ patternId, defs = false }) => (
-  <svg viewBox="0 0 520 60" className="lc-wave h-auto w-[min(520px,82vw)] [animation-duration:2.4s]" aria-hidden="true">
+  <svg viewBox="0 0 520 60" className="lc-wave h-auto w-[min(520px,82cqw)] [animation-duration:2.4s]" aria-hidden="true">
     {defs ? (
       <defs>
         <pattern id={patternId} width="20" height="20" patternUnits="userSpaceOnUse">

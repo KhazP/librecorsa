@@ -632,7 +632,7 @@ export const RaceVisionHud: React.FC<HudDesignProps> = ({
   const narrow = useMedia("(max-width: 1535px)");
   const wide = useMedia("(min-width: 1024px)");
   const roomy = useMedia("(min-width: 1280px)");
-  const edge = "clamp(14px,2.2vw,24px)";
+  const edge = "clamp(14px,2.2cqw,24px)";
   const pill = <InputsPill t={t} deltaS={deltaS} revRange={revRange} narrow={narrow} showDeltaBar={showDeltaBar} />;
   const pillTop = topInset ?? 16;
   // Between 1024 and 1280 px the top-right group would run into the pill: it starts under it instead

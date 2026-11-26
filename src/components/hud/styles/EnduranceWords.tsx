@@ -10,7 +10,7 @@ import { formatOnce, liveMessage } from "./hud-style-parts";
  */
 
 /** Distance of each corner group from the HUD frame's edge */
-export const EDGE = "clamp(12px,1.3vw,24px)";
+export const EDGE = "clamp(12px,1.3cqw,24px)";
 /** The layout's plate: void at 90 %, square, no blur */
 export const PLATE = "bg-lc-void/90";
 /** A hairline between two rows of a plate */

@@ -38,7 +38,26 @@ import {
   speedUnit,
   temperatureUnit,
   uiScale,
+  screensMode,
+  screenSize,
+  screenDistance,
+  screenBezel,
+  sideAngle,
+  eyeHeight,
+  trueFov,
+  sideScale,
+  screenAspectNow,
 } from "../defs";
+import { ScreensDiagram } from "../ScreensDiagram";
+import {
+  looksLikeTriple,
+  physicalVerticalFovDeg,
+  screenRig,
+  totalHorizontalFovDeg,
+  tripleFits,
+  tripleViews,
+} from "@/lib/display/screen-layout";
+import { clampFov } from "@/lib/settings/player-settings";
 import { PHONE_HUD_PARTS, layoutMoved, withLayoutParts } from "@/lib/settings/hud-parts";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
@@ -175,6 +194,81 @@ export function CameraTab() {
         {tx("resetSeatsBody")}
       </ConfirmDialog>
     </SettingsCard>
+  );
+}
+
+/** The window's size, kept current (the screens' shape comes from it) */
+function useWindowShape(): { w: number; h: number } {
+  const [shape, setShape] = useState(() =>
+    typeof window === "undefined" ? { w: 1920, h: 1080 } : { w: window.innerWidth, h: window.innerHeight }
+  );
+  React.useEffect(() => {
+    const read = () => setShape({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
+  return shape;
+}
+
+/**
+ * One screen or three: the screens' size, distance, frames and angle (what the views are drawn from), a drawing of
+ * them from above with the field of view they give, and the view settings that go with three screens
+ */
+export function ScreensTab() {
+  const env = useSettingsEnv();
+  const tx = useTranslations("settings.display.screens");
+  const shape = useWindowShape();
+  const screens = env.settings.screens;
+  const triple = screens.mode === "triple";
+  // Read after a resize too: one screen's shape is the window's, or a third of it
+  void shape;
+  const aspect = screenAspectNow(screens.mode);
+  const rig = screenRig(screens, aspect);
+  const trueFovDeg = physicalVerticalFovDeg(rig);
+  const total = triple ? totalHorizontalFovDeg(tripleViews(rig, { x: 0, y: rig.eyeHeight, distance: rig.distance })) : null;
+  // Three chosen on a window one screen wide draws one view (the notice says why); one chosen on a window the shape of
+  // three suggests three
+  const notice = triple && !tripleFits(shape.w, shape.h) ? tx("notWide") : !triple && looksLikeTriple(shape.w, shape.h) ? tx("looksTriple") : null;
+  const fovNow = Math.round(env.settings.cockpitFovDeg ?? env.carFovDeg ?? 60);
+  const fovTarget = Math.round(clampFov(trueFovDeg));
+  const cm = (m: number) => (m * 100).toFixed(1);
+  return (
+    <>
+      <SettingsCard
+        title={tx("title")}
+        rows={[screensMode, screenSize, screenDistance, screenBezel, sideAngle, eyeHeight]}
+        first
+        before={
+          notice ? (
+            <p role="status" className="rounded-lc-row border border-lc-caution/40 bg-lc-caution/10 px-3.5 py-2.5 text-[13px] leading-snug text-lc-chalk">
+              {notice}
+            </p>
+          ) : undefined
+        }
+      >
+        <div className="flex flex-col gap-3 px-1 pt-1">
+          <ScreensDiagram screens={screens} aspect={aspect} label={tx("diagramLabel")} />
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-lc-slate tabular-nums">
+            <li>{tx("picture", { width: cm(rig.w), height: cm(rig.h) })}</li>
+            <li>{tx("trueFov", { degrees: trueFovDeg.toFixed(1) })}</li>
+            {total !== null ? <li>{tx("total", { degrees: Math.round(total) })}</li> : null}
+          </ul>
+        </div>
+        {!triple ? (
+          <SettingRow label={tx("trueFov", { degrees: fovTarget })} hint={`${tx("useFovHint")} · ${tx("fovNow", { degrees: fovNow })}`}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={fovNow === fovTarget}
+              onClick={() => env.update((s) => ({ ...s, cockpitFovDeg: fovTarget }))}
+            >
+              {tx("useFov", { degrees: fovTarget })}
+            </Button>
+          </SettingRow>
+        ) : null}
+      </SettingsCard>
+      <SettingsCard title={tx("viewTitle")} rows={[trueFov, sideScale]} />
+    </>
   );
 }
 

@@ -108,6 +108,9 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
+import { TripleScreenPrompt } from "@/components/hud/TripleScreenPrompt";
+import { centreFrame, setUiFrame, UI_FRAME_ID, type UiFrame } from "@/lib/display/ui-frame";
+import { physicalVerticalFovDeg, screenRig, tripleFits } from "@/lib/display/screen-layout";
 import { accountActions, useAccountState } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
@@ -983,7 +986,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** null returns to the car's own FOV */
   const handleCockpitFovChange = useCallback((fovDeg: number | null) => {
-    setSettings((prev) => ({ ...prev, cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)) }));
+    setSettings((prev) => ({
+      ...prev,
+      cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)),
+      // Picking a field of view by hand on three screens leaves the true one the screens give
+      screens: prev.screens.mode === "triple" && prev.screens.physicalFov ? { ...prev.screens, physicalFov: false } : prev.screens,
+    }));
   }, []);
 
   /** The seat panel's view: the one on screen (the panel switches to the cockpit from any other) */
@@ -2065,6 +2073,36 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // wheel (as the force feedback settings read it). Without one the layout puts something else in its place (Blade: the
   // driver's inputs)
   const ffbBridge = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
+
+  // Three screens: the menus and the HUD keep to the centre one (the 3D view spans all three); a headset has its own
+  const [windowSize, setWindowSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const read = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
+  const uiFrameRect: UiFrame | null = useMemo(
+    () =>
+      settings.screens.mode === "triple" && vrState !== "on" && windowSize && tripleFits(windowSize.w, windowSize.h)
+        ? centreFrame(windowSize.w, windowSize.h)
+        : null,
+    [settings.screens.mode, vrState, windowSize]
+  );
+  useEffect(() => {
+    setUiFrame(uiFrameRect);
+    return () => setUiFrame(null);
+  }, [uiFrameRect]);
+  /** On three screens with the true field of view: the driver's-eye field of view the screens give (degrees) */
+  const trueFovDeg = useMemo(
+    () =>
+      uiFrameRect && windowSize && settings.screens.physicalFov
+        ? physicalVerticalFovDeg(screenRig(settings.screens, uiFrameRect.w / Math.max(1, windowSize.h)))
+        : null,
+    [uiFrameRect, windowSize, settings.screens]
+  );
+  /** The driver's-eye field of view in use: the screens' true one, the player's own, or null for the car's own */
+  const cockpitFovInUse = trueFovDeg !== null ? Math.round(clampFov(trueFovDeg)) : settings.cockpitFovDeg;
   const ffbHid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
   const ffbLive =
     (settings.wheel.hidFfb && ffbHid.state === "ready") ||
@@ -2520,6 +2558,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       <div ref={containerRef} className="h-full w-full" />
       <OverheadNameplates overlayRef={nameplatesRef} />
 
+      {/* Everything else: the whole window (no box of its own), or the centre screen of three. There its layout
+          containment makes it the box the fixed layers inside place themselves in (and clips them to it), and as a
+          size container their cqw widths measure it */}
+      <div
+        id={UI_FRAME_ID}
+        className={uiFrameRect ? "absolute inset-y-0" : "contents"}
+        style={uiFrameRect ? { left: uiFrameRect.x, width: uiFrameRect.w, containerType: "size", contain: "layout paint" } : undefined}
+      >
+
       {phase === "driving" && seatPanel ? (
         <SeatPanel
           carTitle={carById(carId).title}
@@ -2527,7 +2574,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           nudge={nudgeOf(settings.cameraNudges, carId, seatView)}
           fovDeg={clampFov(
             (seatView === "dash" ? dashViewFovDeg(carId) : carCockpitFov) +
-              (settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carCockpitFov) +
+              (cockpitFovInUse === null ? 0 : cockpitFovInUse - carCockpitFov) +
               nudgeOf(settings.cameraNudges, carId, seatView).fovDeg
           )}
           onStep={handleSeatStep}
@@ -2557,7 +2604,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onCycleCamera={cycleCamera}
           onOffTrackGlow={handleOffTrackGlow}
           inviteRoom={inviteRoom}
-          cockpitFovDeg={settings.cockpitFovDeg}
+          cockpitFovDeg={cockpitFovInUse}
           cockpitFovDefaultDeg={carCockpitFov}
           onChangeCockpitFov={handleCockpitFovChange}
           onToggleXMode={handleToggleXMode}
@@ -2813,6 +2860,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           Settings, which offers it itself), never mid-lap */}
       <FfbPairPrompt wanted={hidFfbWanted && settings.wheel.steer !== null && !settingsOpen && (phase === "title" || (phase === "driving" && paused))} />
       <DualSensePairPrompt wanted={phase === "title" && !settingsOpen && !(hidFfbWanted && settings.wheel.steer !== null)} />
+      <TripleScreenPrompt
+        wanted={phase === "title" && !settingsOpen && settings.screens.mode === "single" && vrState !== "on"}
+        onSetUp={() => openSettings("title", "display", "screens")}
+      />
 
       {loadingVisible ? (
         // Under the GPU notice it takes no press: the notice's own buttons would start it too
@@ -2866,6 +2917,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         trackName={getTrackInfo(trackId).name}
         onClose={() => setAnalysisOpen(false)}
       />
+      </div>
     </div>
   );
 };

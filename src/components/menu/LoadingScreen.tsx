@@ -325,7 +325,7 @@ export const LoadingScreen: React.FC<{
             {/* Percentage and the start lights as the progress indicator: the lights under the number, so "100%" never
                 pushes them to another line as it arrives (beside it on a landscape phone, where height is short) */}
             <div className="flex flex-col items-start gap-4 short:flex-row short:items-end short:gap-x-5">
-              <span className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] text-lc-chalk tabular-nums phone:text-[48px]">
+              <span className="lc-disp text-[clamp(72px,12cqw,168px)] tracking-[-0.02em] text-lc-chalk tabular-nums phone:text-[48px]">
                 {Math.round(shown * 100)}%
               </span>
               <div

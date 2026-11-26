@@ -43,7 +43,7 @@ import palette from "./grand-prix.module.css";
 import { HaloCluster } from "./grand-prix-halo";
 import { usePitGap } from "../pit-clock";
 
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 const TOUCH_TOP = 68;
 
 

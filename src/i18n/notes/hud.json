@@ -881,5 +881,9 @@
   "lapTelemetry.insight.brakeTitle": "Observation title for a corner braking point without a proper name. {turn}: corner number.",
   "lapTelemetry.insight.brakeNamedTitle": "Observation title for a named corner braking point. {turn}: corner number; {name}: corner name (untranslated).",
   "lapTelemetry.insight.brakeEarlierDetail": "Observation text: braked earlier approaching the corner. {distance}: whole number; {unit}: m or ft; {turn}: corner number.",
-  "lapTelemetry.insight.brakeLaterDetail": "Observation text: braked later approaching the corner. {distance}: whole number; {unit}: m or ft; {turn}: corner number."
+  "lapTelemetry.insight.brakeLaterDetail": "Observation text: braked later approaching the corner. {distance}: whole number; {unit}: m or ft; {turn}: corner number.",
+  "tripleScreenPrompt.label": "Name of a small prompt shown when the game window is the shape of three monitors side by side.",
+  "tripleScreenPrompt.text": "Keep <b> and </b>. The prompt offers to set up triple monitors so each monitor shows its own view.",
+  "tripleScreenPrompt.setUp": "Button: opens the triple-monitor settings.",
+  "tripleScreenPrompt.dismiss": "Button: hides the prompt for good."
 }

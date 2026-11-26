@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Braked ~{distance} {unit} earlier into Turn {turn}.",
       "brakeLaterDetail": "Braked ~{distance} {unit} later into Turn {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Three screens",
+    "text": "<b>Three screens?</b> · give each one its own view",
+    "setUp": "Set up",
+    "dismiss": "Not now"
   }
 }

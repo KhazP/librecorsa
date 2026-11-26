@@ -4,12 +4,13 @@ import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type CSSP
 import { useTranslations } from "use-intl/react";
 import type { TireCompound } from "@/types/f1";
 import { formatOnce } from "./hud-style-parts";
+import { onUiViewportChange, uiViewportWidth } from "@/lib/display/ui-frame";
 
 /** What the Blade layout's files share: its plate, its label, its fit to the window and its words */
 
-export const EDGE = "clamp(14px,1.67vw,32px)";
+export const EDGE = "clamp(14px,1.67cqw,32px)";
 /** The bottom corners sit a little closer to the side, to leave a gap to the blade's end */
-export const CORNER_EDGE = "clamp(10px,1.04vw,20px)";
+export const CORNER_EDGE = "clamp(10px,1.04cqw,20px)";
 /** The plate every panel is cut from, and the darker strip of its column heads and footers */
 export const PLATE = "bg-lc-void/90";
 export const DEEP = "bg-lc-void/96";
@@ -29,12 +30,10 @@ export const BLADE_W = 1192;
 
 // No further than 0.9: the smallest labels are 10 px, and the HUD floor is 9 px (docs/DESIGN.md)
 const FIT_MIN = 0.9;
-const subscribeResize = (listener: () => void) => {
-  window.addEventListener("resize", listener);
-  return () => window.removeEventListener("resize", listener);
-};
+// The window, or the centre screen of three
+const subscribeResize = onUiViewportChange;
 // In steps of 16 px, so dragging a window edge re-renders the HUD a few times, not on every pixel
-const windowW = () => Math.round(window.innerWidth / 16) * 16;
+const windowW = () => Math.round(uiViewportWidth() / 16) * 16;
 const windowH = () => Math.round(window.innerHeight / 16) * 16;
 
 /**

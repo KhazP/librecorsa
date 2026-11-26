@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "進第 {turn} 彎時提早約 {distance} {unit} 煞車。",
       "brakeLaterDetail": "進第 {turn} 彎時延後約 {distance} {unit} 煞車。"
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "三螢幕",
+    "text": "<b>三螢幕？</b> · 為每個螢幕設定獨立視角",
+    "setUp": "設定",
+    "dismiss": "稍後再說"
   }
 }

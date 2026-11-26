@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Frenaste ~{distance} {unit} antes al entrar en la Curva {turn}.",
       "brakeLaterDetail": "Frenaste ~{distance} {unit} más tarde al entrar en la Curva {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Tres pantallas",
+    "text": "<b>¿Tres pantallas?</b> · dale a cada una su propia vista",
+    "setUp": "Configurar",
+    "dismiss": "Ahora no"
   }
 }

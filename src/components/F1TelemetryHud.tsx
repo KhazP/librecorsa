@@ -109,6 +109,7 @@ import type { PreRaceShowUi } from "@/lib/render/pre-race-show";
 import { PreRaceShow } from "./hud/pre-race/PreRaceShow";
 import { RaceBroadcast } from "./hud/RaceBroadcast";
 import type { RaceRecord } from "@/lib/sim/race-history";
+import { uiViewportWidth } from "@/lib/display/ui-frame";
 
 /** A full-screen HUD style and what the shared layer around it does for it */
 interface HudStyleDef extends HudStyleOptions {
@@ -437,7 +438,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const mouseSteerLabel = useMemo(() => tx("telemetryHud.mouseSteering", { key: mouseSteerKey }), [tx, mouseSteerKey]);
   // Under the virtual mirror's strip (its rect is shared with the renderer), with a little air
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
-  const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
+  const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(uiViewportWidth(), window.innerHeight) : null;
   const mirrorTop = mirrorRect ? mirrorRect.y + mirrorRect.h + 10 : null;
   const uiZoom = useUiZoom();
   // polish:B the podium shot comes first: the table waits for it, and the HUD gives it the screen
@@ -749,7 +750,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           widest notice up to the screen's width less a margin: placed at left 50 % it would otherwise get only half
           the screen, and in portrait the notices wrapped to three lines and spilled out of their pills */}
       <div
-        className={`absolute left-1/2 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 ${phone ? "top-[96px] portrait:top-[208px]" : "top-4"}`}
+        className={`absolute left-1/2 w-max max-w-[calc(100cqw-2rem)] -translate-x-1/2 ${phone ? "top-[96px] portrait:top-[208px]" : "top-4"}`}
         style={
           mirrorTop !== null
             ? { top: `calc(${mirrorTop + Math.round(topClearance * scale)}px - env(safe-area-inset-top, 0px))` }

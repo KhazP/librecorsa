@@ -201,7 +201,7 @@ export const anchor = (scale: number | undefined, origin: string): React.CSSProp
   const id = hudPartOfOrigin(origin);
   const part = id ? activeHudParts[id] : undefined;
   const s = (scale ?? 1) * (part?.scale ?? 1);
-  const move = part && (part.x !== 0 || part.y !== 0) ? `translate(${part.x}vw, ${part.y}vh) ` : "";
+  const move = part && (part.x !== 0 || part.y !== 0) ? `translate(${part.x}cqw, ${part.y}vh) ` : "";
   return {
     transformOrigin: origin,
     ...(id ? ({ "--lc-hud-part": id } as React.CSSProperties) : null),

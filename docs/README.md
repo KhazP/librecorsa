@@ -15,6 +15,7 @@ Everything here is maintained alongside the source code and published at [docs.l
 - **[Racing online and lap boards](ONLINE.md)**: Private multiplayer rooms, scheduled open races, leaderboards, ghosts, setup sharing, and the weekly challenge.
 - **[UDP telemetry and the local bridge](TELEMETRY.md)**: Streaming 60 Hz JSON telemetry to dashboards, SimHub, bass shakers, and motion rigs, plus bridge CLI flags.
 - **[Performance and troubleshooting](PERFORMANCE.md)**: System requirements, graphics presets, automatic quality scaling, offline caching, URL parameters, and fixing common issues.
+- **[Triple screens](SCREENS.md)**: Three monitors with a view of their own each: measurements, the true field of view, and performance.
 - **[Verifying downloads](DOWNLOADS.md)**: The desktop and Android apps: official release sources, app IDs, SHA-256 checksums, how the desktop app updates itself, and Android signing certificate verification.
 
 ## Modding

@@ -39,7 +39,8 @@
         "graphics": "Đồ họa",
         "hud": "HUD",
         "camera": "Camera",
-        "interface": "Giao diện"
+        "interface": "Giao diện",
+        "screens": "Màn hình"
       },
       "audio": {
         "main": "Âm thanh"
@@ -442,7 +443,8 @@
       "label": "Góc nhìn (FOV)",
       "hintCarOwn": "Đang dùng mặc định của từng xe",
       "hintCarDefault": "Mặc định của xe: {degrees}°",
-      "valueCar": "{value}° (theo xe)"
+      "valueCar": "{value}° (theo xe)",
+      "offTrueFov": "Do Góc nhìn thực trong Màn hình thiết lập"
     },
     "headMovement": {
       "label": "Chuyển động đầu",
@@ -548,6 +550,47 @@
         "reduced": "Giảm một nửa hư hại; xe hỏng nặng sẽ được sửa và bắt đầu lại vòng chạy đà",
         "full": "Hư hại như đua chính; xe hỏng nặng sẽ được sửa và bắt đầu lại vòng chạy đà"
       }
+    },
+    "screensMode": {
+      "label": "Màn hình",
+      "hint": "Ba màn hình đặt cạnh nhau, mỗi màn hiển thị góc nhìn riêng, còn menu và HUD ở màn giữa. Trải game ra cả ba màn bằng NVIDIA Surround hoặc AMD Eyefinity.",
+      "options": {
+        "single": "Một",
+        "triple": "Ba"
+      }
+    },
+    "screenSize": {
+      "label": "Kích thước màn hình",
+      "hint": "Đường chéo vùng hiển thị của một màn hình, đúng theo thông số bán ra",
+      "value": "{value} inch"
+    },
+    "screenDistance": {
+      "label": "Khoảng cách tới màn hình",
+      "hint": "Từ mắt bạn tới màn hình giữa, đo thẳng trực diện"
+    },
+    "screenBezel": {
+      "label": "Viền màn hình",
+      "hint": "Phần viền cạnh hình ảnh của một màn hình. Đặt 0 nếu Surround hoặc Eyefinity đã bù viền, dưới 0 nếu dùng dải che viền"
+    },
+    "sideAngle": {
+      "label": "Góc màn hình bên",
+      "hint": "Độ xoay vào trong của hai màn hình bên so với màn giữa. Ở {degrees}°, tâm hai màn hướng thẳng vào mắt bạn",
+      "valueFacing": "{value}° (hướng vào bạn)"
+    },
+    "eyeHeight": {
+      "label": "Độ cao tầm mắt",
+      "hint": "Mắt bạn cao hơn (+) hoặc thấp hơn (−) tâm màn hình"
+    },
+    "trueFov": {
+      "label": "Góc nhìn thực (FOV)",
+      "hint": "Các góc nhìn tay đua hiển thị đúng những gì màn hình đóng khung từ vị trí ngồi của bạn. Tắt: Góc nhìn (FOV) trong Camera"
+    },
+    "sideScale": {
+      "label": "Độ phân giải màn hình bên",
+      "hint": "Giảm chi tiết ở hai màn hình bên, nơi mắt bạn ít để ý hơn, để tăng số khung hình mỗi giây"
+    },
+    "screens": {
+      "tripleOnly": "Chỉ dùng với ba màn hình"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Ngôn ngữ",
       "units": "Đơn vị",
       "sizeColour": "Kích thước và màu sắc"
+    },
+    "screens": {
+      "title": "Màn hình",
+      "viewTitle": "Góc nhìn",
+      "diagramTitle": "Nhìn từ trên xuống",
+      "diagramLabel": "Các màn hình của bạn nhìn từ trên xuống, kèm vùng hiển thị của từng màn",
+      "picture": "Một màn hình: {width} × {height} cm",
+      "trueFov": "Góc nhìn thực (FOV): {degrees}°",
+      "total": "Trên cả ba màn hình: {degrees}°",
+      "useFov": "Dùng {degrees}°",
+      "useFovHint": "Đặt Góc nhìn (FOV) đúng theo vùng màn hình đóng khung từ vị trí ngồi của bạn",
+      "fovNow": "Góc nhìn (FOV) hiện tại: {degrees}°",
+      "notWide": "Cửa sổ này chưa rộng bằng ba màn hình. Hãy trải game ra cả ba màn (NVIDIA Surround hoặc AMD Eyefinity, rồi bật toàn màn hình) để mỗi màn có góc nhìn riêng.",
+      "looksTriple": "Cửa sổ này trông như ba màn hình đặt cạnh nhau. Hãy chọn Ba để mỗi màn hình có góc nhìn riêng."
     }
   },
   "audio": {

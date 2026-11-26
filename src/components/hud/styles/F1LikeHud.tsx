@@ -51,7 +51,7 @@ import { usePitGap } from "../pit-clock";
  * top-down car damage diagram flanked by four radial tyre-life rings.
  */
 
-const EDGE = "clamp(14px,2.2vw,24px)";
+const EDGE = "clamp(14px,2.2cqw,24px)";
 /** Rows in the running order: the player and two either side */
 const TOWER_ROWS = 5;
 

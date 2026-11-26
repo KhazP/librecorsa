@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "كبحت قبل بنحو {distance} {unit} عند دخول المنعطف {turn}.",
       "brakeLaterDetail": "كبحت بعد بنحو {distance} {unit} عند دخول المنعطف {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "ثلاث شاشات",
+    "text": "<b>ثلاث شاشات؟</b> · امنح كل شاشة منظورها الخاص",
+    "setUp": "إعداد",
+    "dismiss": "ليس الآن"
   }
 }

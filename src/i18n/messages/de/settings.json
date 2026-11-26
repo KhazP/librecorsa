@@ -39,7 +39,8 @@
         "graphics": "Grafik",
         "hud": "HUD",
         "camera": "Kamera",
-        "interface": "Oberfläche"
+        "interface": "Oberfläche",
+        "screens": "Bildschirme"
       },
       "audio": {
         "main": "Audio"
@@ -442,7 +443,8 @@
       "label": "Sichtfeld",
       "hintCarOwn": "Standard des jeweiligen Autos",
       "hintCarDefault": "Standard des Autos: {degrees}°",
-      "valueCar": "{value}° (Auto)"
+      "valueCar": "{value}° (Auto)",
+      "offTrueFov": "Durch Echtes Sichtfeld unter Bildschirme festgelegt"
     },
     "headMovement": {
       "label": "Kopfbewegung",
@@ -548,6 +550,47 @@
         "reduced": "Halber Schaden; ein zerstörtes Auto startet repariert in eine fliegende Runde",
         "full": "Rennschaden; ein zerstörtes Auto startet repariert in eine fliegende Runde"
       }
+    },
+    "screensMode": {
+      "label": "Bildschirme",
+      "hint": "Drei Bildschirme nebeneinander zeigen jeweils eine eigene Ansicht, mit Menüs und HUD in der Mitte. Erweitere das Spiel über alle drei mit NVIDIA Surround oder AMD Eyefinity.",
+      "options": {
+        "single": "Einer",
+        "triple": "Drei"
+      }
+    },
+    "screenSize": {
+      "label": "Bildschirmgröße",
+      "hint": "Die Bilddiagonale eines Bildschirms, wie beim Kauf angegeben",
+      "value": "{value} Zoll"
+    },
+    "screenDistance": {
+      "label": "Abstand zum Bildschirm",
+      "hint": "Von deinen Augen geradeaus bis zum mittleren Bildschirm"
+    },
+    "screenBezel": {
+      "label": "Rahmen",
+      "hint": "Der Rahmen eines Bildschirms neben dem Bild. 0, wenn Surround oder Eyefinity die Rahmen schon korrigiert, unter 0 für Streifen, die sie verdecken"
+    },
+    "sideAngle": {
+      "label": "Winkel der Seitenbildschirme",
+      "hint": "Wie weit die Seitenbildschirme gegenüber dem mittleren eingedreht sind. Bei {degrees}° zeigt ihre Mitte direkt auf deine Augen",
+      "valueFacing": "{value}° (auf dich gerichtet)"
+    },
+    "eyeHeight": {
+      "label": "Augenhöhe",
+      "hint": "Deine Augen über (+) oder unter (−) der Bildschirmmitte"
+    },
+    "trueFov": {
+      "label": "Echtes Sichtfeld",
+      "hint": "Die Fahreransichten zeigen genau den Ausschnitt deiner Bildschirme von deinem Sitzplatz aus. Aus: das Sichtfeld unter Kamera"
+    },
+    "sideScale": {
+      "label": "Auflösung der Seitenbildschirme",
+      "hint": "Weniger Details auf den Seitenbildschirmen, wo deine Augen weniger davon wahrnehmen, für mehr Bilder pro Sekunde"
+    },
+    "screens": {
+      "tripleOnly": "Nur mit drei Bildschirmen"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Sprache",
       "units": "Einheiten",
       "sizeColour": "Größe und Farbe"
+    },
+    "screens": {
+      "title": "Bildschirme",
+      "viewTitle": "Ansicht",
+      "diagramTitle": "Von oben gesehen",
+      "diagramLabel": "Deine Bildschirme von oben gesehen, mit dem Bildausschnitt jedes einzelnen",
+      "picture": "Ein Bildschirm: {width} × {height} cm",
+      "trueFov": "Echtes Sichtfeld: {degrees}°",
+      "total": "Über drei Bildschirme: {degrees}°",
+      "useFov": "{degrees}° nutzen",
+      "useFovHint": "Setzt Sichtfeld auf den Ausschnitt deines Bildschirms von deinem Sitzplatz aus",
+      "fovNow": "Aktuelles Sichtfeld: {degrees}°",
+      "notWide": "Dieses Fenster ist nicht drei Bildschirme breit. Erweitere das Spiel über alle drei (NVIDIA Surround oder AMD Eyefinity, dann Vollbild), damit jeder seine eigene Ansicht bekommt.",
+      "looksTriple": "Dieses Fenster wirkt wie drei Bildschirme nebeneinander. Wähle Drei, damit jeder Bildschirm seine eigene Ansicht bekommt."
     }
   },
   "audio": {

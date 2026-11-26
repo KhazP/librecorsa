@@ -2,6 +2,7 @@
  * The player's saved controls and driving preferences (localStorage, `bugesera.*` keys).
  * Everything is validated on load: a corrupt or partial save falls back field by field to the defaults.
  */
+import { DEFAULT_SCREEN_SETTINGS, parseScreenSettings, type ScreenSettings } from "@/lib/display/screen-layout";
 import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/race-setup";
 import { MUSIC_TRACK_IDS } from "@/lib/audio/music-catalog";
 import { RENDER_SCALE_FLOOR } from "@/lib/render/adaptive-quality";
@@ -116,6 +117,8 @@ export interface PlayerSettings {
   audio: AudioSettings;
   /** Units, UI scale, colour palette and how much of Settings is shown (Settings > Display > Interface) */
   ui: InterfaceSettings;
+  /** One screen or three, and where the screens stand round the driver (Settings > Display > Screens) */
+  screens: ScreenSettings;
 }
 
 export interface AudioSettings {
@@ -615,6 +618,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   library: DEFAULT_CONTENT_LIBRARY,
   audio: DEFAULT_AUDIO_SETTINGS,
   ui: DEFAULT_INTERFACE_SETTINGS,
+  screens: DEFAULT_SCREEN_SETTINGS,
 };
 
 /**
@@ -1036,6 +1040,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     library: parseLibrary(raw.library),
     audio: parseAudio(raw.audio),
     ui: parseInterface(raw.ui),
+    screens: parseScreenSettings(raw.screens),
   };
 }
 

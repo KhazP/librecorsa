@@ -25,6 +25,7 @@ import {
 import { SkinBanner, SkinButton, skinCss, SkinPanel, skinRootClass, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudMode } from "./hud-mode";
 import { claimSignInHint } from "@/lib/account/sign-in-hint";
+import { useUiPortalRoot } from "@/lib/display/ui-frame";
 
 const EMPTY = "-";
 const MINUS = "−";
@@ -176,14 +177,16 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   const lift = useLiftOverHud(boxRef);
   // The box is zoomed on big screens; the lift is in window pixels
   const zoom = useUiZoom();
+  // Pinned to the bottom right: on three screens, the centre one's
+  const portalRoot = useUiPortalRoot();
 
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined" || !portalRoot) return null;
   return createPortal(
     <div
       key={s.lapNumber}
       ref={boxRef}
       inert={hidden}
-      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-[calc(env(safe-area-inset-right,0px)+0.75rem)] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-(--z-lc-toast) w-[min(440px,calc(100vw-1.5rem))] sm:right-[calc(env(safe-area-inset-right,0px)+1rem)] pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:end-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""} ${skinRootClass(skin) ?? ""}`}
+      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-[calc(env(safe-area-inset-right,0px)+0.75rem)] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-(--z-lc-toast) w-[min(440px,calc(100cqw-1.5rem))] sm:right-[calc(env(safe-area-inset-right,0px)+1rem)] pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:end-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100cqw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""} ${skinRootClass(skin) ?? ""}`}
       style={
         lift === null
           ? undefined
@@ -207,7 +210,7 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
         </>
       )}
     </div>,
-    document.body
+    portalRoot
   );
 };
 

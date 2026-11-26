@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Freinage ~{distance} {unit} plus tôt pour le Virage {turn}.",
       "brakeLaterDetail": "Freinage ~{distance} {unit} plus tard pour le Virage {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Trois écrans",
+    "text": "<b>Trois écrans ?</b> · donnez à chacun sa propre vue",
+    "setUp": "Configurer",
+    "dismiss": "Pas maintenant"
   }
 }

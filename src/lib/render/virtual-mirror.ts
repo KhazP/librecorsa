@@ -149,12 +149,16 @@ export class VirtualMirror {
     }
   }
 
-  /** After the main render: draw the mirror over the frame (default framebuffer) */
-  draw(): void {
+  /**
+   * After the main render: draw the mirror over the frame (default framebuffer), top centre of the canvas or of
+   * `frame` (CSS px across the canvas: the centre screen of three)
+   */
+  draw(frame?: { x: number; w: number }): void {
     if (!this.active) return;
     const r = this.renderer;
     r.getSize(this.size);
-    const rect = virtualMirrorRect(this.size.x, this.size.y);
+    const rect = virtualMirrorRect(frame?.w ?? this.size.x, this.size.y);
+    if (frame) rect.x += frame.x;
     (this.material.uniforms.sizePx.value as THREE.Vector2).set(rect.w, rect.h);
     r.getViewport(this.prevViewport);
     r.getScissor(this.prevScissor);

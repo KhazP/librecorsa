@@ -1312,5 +1312,11 @@
       "brakeEarlierDetail": "Freou ~{distance} {unit} mais cedo para a Curva {turn}.",
       "brakeLaterDetail": "Freou ~{distance} {unit} mais tarde para a Curva {turn}."
     }
+  },
+  "tripleScreenPrompt": {
+    "label": "Três telas",
+    "text": "<b>Três telas?</b> · dê a cada uma sua própria visão",
+    "setUp": "Configurar",
+    "dismiss": "Agora não"
   }
 }

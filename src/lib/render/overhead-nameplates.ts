@@ -410,12 +410,17 @@ export class OverheadNameplateProjector {
   private readonly contenders: LapContender[] = [];
   private readonly entries: OverheadNameplateEntry[] = [];
 
+  /**
+   * `views`: the screens of three (left, centre, right), each with its own camera and its part of the canvas (CSS px
+   * across); a name goes on the screen its car is seen on. Without them `camera` draws the whole canvas.
+   */
   project(
     peers: readonly NameplatePeerInput[],
     camera: THREE.Camera,
     viewportWidth: number,
     viewportHeight: number,
     context: NameplateRankingContext = {},
+    views?: readonly { camera: THREE.Camera; x: number; w: number }[],
   ): readonly OverheadNameplateEntry[] {
     this.entries.length = 0;
     if (peers.length === 0 || viewportWidth <= 0 || viewportHeight <= 0) return this.entries;
@@ -423,6 +428,7 @@ export class OverheadNameplateProjector {
     camera.updateMatrixWorld();
     this.camPos.setFromMatrixPosition(camera.matrixWorld);
     camera.getWorldDirection(this.camForward);
+    for (const view of views ?? []) view.camera.updateMatrixWorld();
 
     this.rankings.clear();
     if (context.race) {
@@ -447,19 +453,37 @@ export class OverheadNameplateProjector {
       const distanceM = this.toRoof.length();
       if (!Number.isFinite(distanceM) || distanceM >= NAMEPLATE_MAX_DISTANCE_M) continue;
 
-      // Behind camera (dot product with camera forward <= 0)
-      if (this.toRoof.dot(this.camForward) <= 0) continue;
+      let screenX: number;
+      if (views && views.length > 0) {
+        // The screen whose view has it: each view's own edges, so a car on a seam is named once
+        let placed: number | null = null;
+        for (const view of views) {
+          view.camera.getWorldDirection(this.camForward);
+          if (this.toRoof.dot(this.camForward) <= 0) continue;
+          this.ndc.copy(this.roof).project(view.camera);
+          if (!Number.isFinite(this.ndc.x) || !Number.isFinite(this.ndc.y) || this.ndc.z > 1 || this.ndc.z < -1) continue;
+          if (Math.abs(this.ndc.x) > 1 || Math.abs(this.ndc.y) > SCREEN_NDC_MARGIN) continue;
+          placed = view.x + (this.ndc.x + 1) * view.w * 0.5;
+          break;
+        }
+        if (placed === null) continue;
+        screenX = placed;
+      } else {
+        // Behind camera (dot product with camera forward <= 0)
+        if (this.toRoof.dot(this.camForward) <= 0) continue;
 
-      this.ndc.copy(this.roof).project(camera);
-      if (!Number.isFinite(this.ndc.x) || !Number.isFinite(this.ndc.y) || !Number.isFinite(this.ndc.z)) continue;
-      if (this.ndc.z > 1 || this.ndc.z < -1) continue;
-      if (
-        this.ndc.x < -SCREEN_NDC_MARGIN ||
-        this.ndc.x > SCREEN_NDC_MARGIN ||
-        this.ndc.y < -SCREEN_NDC_MARGIN ||
-        this.ndc.y > SCREEN_NDC_MARGIN
-      ) {
-        continue;
+        this.ndc.copy(this.roof).project(camera);
+        if (!Number.isFinite(this.ndc.x) || !Number.isFinite(this.ndc.y) || !Number.isFinite(this.ndc.z)) continue;
+        if (this.ndc.z > 1 || this.ndc.z < -1) continue;
+        if (
+          this.ndc.x < -SCREEN_NDC_MARGIN ||
+          this.ndc.x > SCREEN_NDC_MARGIN ||
+          this.ndc.y < -SCREEN_NDC_MARGIN ||
+          this.ndc.y > SCREEN_NDC_MARGIN
+        ) {
+          continue;
+        }
+        screenX = (this.ndc.x + 1) * halfW;
       }
 
       const opacity = nameplateOpacity(distanceM);
@@ -471,7 +495,7 @@ export class OverheadNameplateProjector {
         label: nameplateLabel(peer),
         driverCode: peer.driverCode,
         isAiPeer: peer.isAiPeer,
-        x: (this.ndc.x + 1) * halfW,
+        x: screenX,
         y: (1 - this.ndc.y) * halfH,
         distanceM,
         opacity,

@@ -39,7 +39,8 @@
         "graphics": "Graphismes",
         "hud": "HUD",
         "camera": "Caméra",
-        "interface": "Interface"
+        "interface": "Interface",
+        "screens": "Écrans"
       },
       "audio": {
         "main": "Audio"
@@ -442,7 +443,8 @@
       "label": "Champ de vision",
       "hintCarOwn": "Valeur par défaut de chaque voiture",
       "hintCarDefault": "Défaut de la voiture : {degrees}°",
-      "valueCar": "{value}° (voiture)"
+      "valueCar": "{value}° (voiture)",
+      "offTrueFov": "Défini par Champ de vision réel dans Écrans"
     },
     "headMovement": {
       "label": "Mouvement de tête",
@@ -548,6 +550,47 @@
         "reduced": "Dégâts réduits de moitié ; une voiture détruite repart réparée en tour lancé",
         "full": "Dégâts de course ; une voiture détruite repart réparée en tour lancé"
       }
+    },
+    "screensMode": {
+      "label": "Écrans",
+      "hint": "Trois écrans côte à côte affichent chacun leur propre vue, avec les menus et le HUD au centre. Étendez le jeu sur les trois avec NVIDIA Surround ou AMD Eyefinity.",
+      "options": {
+        "single": "Un",
+        "triple": "Trois"
+      }
+    },
+    "screenSize": {
+      "label": "Taille d’écran",
+      "hint": "La diagonale de l’image d’un écran, telle qu’indiquée à l’achat",
+      "value": "{value} pouces"
+    },
+    "screenDistance": {
+      "label": "Distance à l’écran",
+      "hint": "De vos yeux à l’écran central, en ligne droite"
+    },
+    "screenBezel": {
+      "label": "Bordure",
+      "hint": "La bordure d’un écran à côté de l’image. 0 si Surround ou Eyefinity corrige déjà les bordures, sous 0 pour des bandes qui les masquent"
+    },
+    "sideAngle": {
+      "label": "Angle des écrans latéraux",
+      "hint": "L’angle des écrans latéraux par rapport à l’écran central. À {degrees}°, leur centre fait face à vos yeux",
+      "valueFacing": "{value}° (face à vous)"
+    },
+    "eyeHeight": {
+      "label": "Hauteur des yeux",
+      "hint": "Vos yeux au-dessus (+) ou en dessous (−) du centre des écrans"
+    },
+    "trueFov": {
+      "label": "Champ de vision réel",
+      "hint": "Les vues pilote montrent exactement ce que vos écrans cadrent depuis votre siège. Désactivé : le Champ de vision dans Caméra"
+    },
+    "sideScale": {
+      "label": "Résolution des écrans latéraux",
+      "hint": "Moins de détails sur les écrans latéraux, où vos yeux en perçoivent moins, pour plus d’images par seconde"
+    },
+    "screens": {
+      "tripleOnly": "Uniquement avec trois écrans"
     }
   },
   "driving": {
@@ -609,6 +652,20 @@
       "language": "Langue",
       "units": "Unités",
       "sizeColour": "Taille et couleur"
+    },
+    "screens": {
+      "title": "Écrans",
+      "viewTitle": "Vue",
+      "diagramTitle": "Vue de dessus",
+      "diagramLabel": "Vos écrans vus de dessus, avec ce que chacun affiche",
+      "picture": "Un écran : {width} × {height} cm",
+      "trueFov": "Champ de vision réel : {degrees}°",
+      "total": "Sur trois écrans : {degrees}°",
+      "useFov": "Utiliser {degrees}°",
+      "useFovHint": "Règle Champ de vision sur ce que votre écran cadre depuis votre siège",
+      "fovNow": "Champ de vision actuel : {degrees}°",
+      "notWide": "Cette fenêtre n’a pas la largeur de trois écrans. Étendez le jeu sur les trois (NVIDIA Surround ou AMD Eyefinity, puis plein écran) pour donner à chacun sa propre vue.",
+      "looksTriple": "Cette fenêtre ressemble à trois écrans côte à côte. Choisissez Trois pour donner à chaque écran sa propre vue."
     }
   },
   "audio": {

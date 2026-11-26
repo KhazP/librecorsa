@@ -23,7 +23,7 @@ interface BroadcastSlot {
   inset?: number;
 }
 
-const EDGE = "clamp(14px, 2.2vw, 24px)";
+const EDGE = "clamp(14px, 2.2cqw, 24px)";
 const LEFT: BroadcastSlot = { side: "left", top: 38 };
 const RIGHT: BroadcastSlot = { side: "right", top: 38 };
 /** Past a 252–264 px column at the left edge (Telemetry's), over the scenery */
@@ -190,7 +190,7 @@ const EventCard: React.FC<{ event: RaceEvent; context: ShowContext | null; leavi
       role="status"
       aria-label={text.region}
       data-event={event.kind}
-      className={`lc-cast-card relative w-[min(380px,calc(100vw-32px))] pt-6 ${leaving ? "lc-cast-out" : ""}`}
+      className={`lc-cast-card relative w-[min(380px,calc(100cqw-32px))] pt-6 ${leaving ? "lc-cast-out" : ""}`}
     >
       <div className="relative flex h-[96px] shadow-lc-sheet">
         {/* The driver's colour bay: halftone, a shine across it, and the silhouette standing in it */}
@@ -254,7 +254,7 @@ const BattleStrip: React.FC<{ battle: BattleView; context: ShowContext | null }>
   return (
     <InfoBar
       leadVolt
-      className="max-w-[min(640px,calc(100vw-32px))]"
+      className="max-w-[min(640px,calc(100cqw-32px))]"
       items={[
         text.battleFor(battle.position),
         { ...name(battle.ahead), tone: battle.ahead.isPlayer ? "volt" : "chalk" },
