@@ -1022,8 +1022,6 @@ FINISH_MAP_SIZE = 1024
 CLEARCOAT_ROUGHNESS = 0.06
 # Chrome under such a coat (`metal_mask`)
 CHROME_ROUGHNESS = 0.12
-# A metallic paint whose coat reflects in its own colour (`ac_finish`)
-COLORED_COAT_ROUGHNESS = 0.25
 
 
 def skin_shader_replacements(car_dir, skin):
@@ -1080,17 +1078,14 @@ def ac_finish(m, cls, spec):
     metal = float(spec.get('metal', 0.0))
     paint = m.get('car_paint')
     if paint:
-        # Its coat's reflection from FresnelC to FresnelMax over flakes whose highlight is SpecularBase's; with its
-        # coat's specular COLORED, the share of the paint's light BrightnessAdjustment takes from the diffuse comes
-        # back as reflection in the paint's own colour, as a metal's does
+        # A coat whose reflection rises from FresnelC to FresnelMax, over flakes whose highlight is SpecularBase's; with
+        # the coat's specular COLORED, the share of the paint's light BrightnessAdjustment takes from the diffuse comes
+        # back as reflection in the paint's own colour, as a metal's does (under the coat, which still mirrors sharply)
         fc, fmax, exp_ = paint['fresnel_c'], paint['fresnel_max'], paint['base_exp']
         if paint['colored']:
-            # (glTF's coat reflects white: the coloured coat's reflection is the metal's, as sharp as a coat's)
             metal = max(metal, float(np.clip(1.0 - paint['brightness'], 0.0, 1.0)))
-            exp_ = 2.0 / COLORED_COAT_ROUGHNESS ** 4 - 2.0
-            fmax = fc
     fmax = max(fmax, fc)
-    lacquer = (bool(paint) and not paint['colored']) or (fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP and not paint)
+    lacquer = bool(paint) or (fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP)
     f0 = float(np.clip(fc, 0.004, 1.0))
     # A polished coat: its sharp reflection (the clearcoat, 4 % head on) rises to fresnelMaxLevel at grazing angles, over
     # a base reflecting fresnelC all round. Any other surface: one reflection from fresnelC head on to fresnelMaxLevel

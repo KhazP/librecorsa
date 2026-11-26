@@ -108,20 +108,28 @@ async function main(): Promise<void> {
 
   console.log('\n== Finishes from the AC values');
   const byKn5 = (glb: { json: GltfJson }, kn5: string) => (glb.json.materials ?? []).find((m) => m.extras?.kn5?.includes(kn5));
-  // Red Bull's and Toro Rosso's paint is the metallic one their extension config gives them (its coat reflecting in
-  // the paint's own colour: a metal share instead of a white coat)
+  // Red Bull's and Toro Rosso's paint is the metallic one their extension config gives them: its coat still mirrors
+  // sharply, and the share of its light it reflects in its own colour is a metal share (0.4) under that coat
   const METALLIC = ['red-bull', 'toro-rosso'];
+  const metalShare = async (glb: { json: GltfJson; bin: Buffer }, ti: number | undefined) => {
+    if (ti === undefined) return NaN;
+    const view = glb.json.bufferViews[glb.json.images![glb.json.textures![ti].source].bufferView];
+    const { data, info } = await sharp(glb.bin.subarray(view.byteOffset ?? 0, (view.byteOffset ?? 0) + view.byteLength)).raw().toBuffer({ resolveWithObject: true });
+    const blue: number[] = [];
+    for (let i = 2; i < data.length; i += info.channels) blue.push(data[i] / 255);
+    blue.sort((a, b) => a - b);
+    return blue[Math.floor(blue.length / 2)];
+  };
   for (const [team, glb] of glbs) {
     const paint = byKn5(glb, 'WCCARBODY');
     const coat = paint?.extensions?.KHR_materials_clearcoat;
-    const metal = paint?.pbrMetallicRoughness?.metallicFactor ?? 0;
+    const paintCoated = (coat?.clearcoatFactor ?? 0) > 0 && coat?.clearcoatTexture !== undefined;
+    const metal = await metalShare(glb, paint?.pbrMetallicRoughness?.metallicRoughnessTexture?.index);
     check(
-      METALLIC.includes(team) ? `${team}: the paint's own finish, its config's metallic paint` : `${team}: the paint's own finish, a polished coat masked per pixel`,
-      !!paint?.extras?.acFinish && !!paint.extensions?.KHR_materials_specular &&
-        (METALLIC.includes(team)
-          ? coat === undefined && Math.abs(metal - 0.4) < 1e-3
-          : (coat?.clearcoatFactor ?? 0) > 0 && coat?.clearcoatTexture !== undefined),
-      paint ? `${paint.name} coat ${coat?.clearcoatFactor}, metal ${metal}` : 'no WCCARBODY material',
+      METALLIC.includes(team) ? `${team}: the paint's own finish, its config's metallic paint under a polished coat` : `${team}: the paint's own finish, a polished coat masked per pixel`,
+      !!paint?.extras?.acFinish && !!paint.extensions?.KHR_materials_specular && paintCoated &&
+        (!METALLIC.includes(team) || Math.abs(metal - 0.4) < 0.01),
+      paint ? `${paint.name} coat ${coat?.clearcoatFactor}, metal (median) ${fmt(metal)}` : 'no WCCARBODY material',
     );
     const used = glb.json.extensionsUsed ?? [];
     check(`${team}: the extensions it uses are declared`, ['KHR_materials_specular', 'KHR_materials_clearcoat'].every((e) => used.includes(e)), used.join(', '));
