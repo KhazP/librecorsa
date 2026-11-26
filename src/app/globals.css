@@ -680,16 +680,24 @@ body {
   .lc-toast-in {
     animation: lc-toast-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
   }
-  /* The music's now-playing card slides in from the right edge and back out */
+  /* The music's now-playing card slides in from the edge it sits against (--lc-np-from) and back out */
   @keyframes lc-np-in {
     from {
       opacity: 0;
-      transform: translateX(24px);
+      transform: translate(var(--lc-np-from, 24px, 0px));
     }
     to {
       opacity: 1;
       transform: none;
     }
+  }
+  .lc-np-in,
+  .lc-np-out {
+    --lc-np-end: 24px;
+  }
+  .lc-np-in:dir(rtl),
+  .lc-np-out:dir(rtl) {
+    --lc-np-end: -24px;
   }
   .lc-np-in {
     animation: lc-np-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
