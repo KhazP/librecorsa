@@ -56,6 +56,7 @@ import {
   localLeaderboard,
   renameOnBoard,
   saveBoardMiss,
+  MOD_LAP,
   type SubmitResult,
 } from "@/lib/net/leaderboard";
 import { boardWords } from "@/lib/net/board-words";
@@ -2607,6 +2608,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   submitRank,
                   // The boards answer in English: shown in the player's language
                   submitError: boardWords(submitError),
+                  // A lap with a mod car or on a mod circuit never goes up: the card says so where Post would be
+                  offBoards:
+                    (boardState === "on" || boardState === "unreachable") && !lapGoesOnBoards(lapSummary.recording)
+                      ? boardWords(MOD_LAP)
+                      : undefined,
                   driverName: settings.profile.name,
                   // A name changed from the card: the lap the card couldn't post goes up again under it
                   onRename: boardOn
