@@ -246,9 +246,11 @@ for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
 
   const transOn = (m.transmission ?? []).filter((t) => t.layer === "on");
   const transOff = (m.transmission ?? []).filter((t) => t.layer === "off");
+  // A bank ported from its FMOD events plays its one transmission recording with its event's throttle curve
+  const ownTransmission = !!m.transmissionMix && transOn.length >= 1 && transOn.every((t) => (t.gain?.length ?? 0) > 1);
   check(
-    `${bankId} transmission: has on and off layers`,
-    transOn.length >= 1 && transOff.length >= 1,
+    `${bankId} transmission: ${ownTransmission ? "its event's recording, with gain and throttle curves" : "has on and off layers"}`,
+    transOn.length >= 1 && (transOff.length >= 1 || ownTransmission),
     `on=${transOn.length}, off=${transOff.length}`
   );
   for (const t of m.transmission ?? []) {
@@ -290,11 +292,15 @@ for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
   // AC's "missgear" is the missed-gear grind: a shift built from it sounds like a crunched gearbox on every change
   const grind = (m.oneshots ?? []).filter((o) => /missgear/i.test(o.fsbName ?? ""));
   check(`${bankId} no one-shot is cut from the missed-gear grind`, grind.length === 0, grind.map((o) => o.role).join(", "));
-  const requiredRoles = ["gear_up", "gear_down", "backfire_int", "backfire_ext", "limiter"];
+  // A bank ported from its FMOD events has a gear one-shot per view (`gear_up_int` ...), and nothing for an event
+  // its source leaves silent (`silentEvents`: a muted limiter)
+  const requiredRoles = ["gear_up", "gear_down", "backfire_int", "backfire_ext"];
+  if (!m.silentEvents?.includes("limiter")) requiredRoles.push("limiter");
   if ((m.turbo ?? []).length > 0) requiredRoles.push("blowoff");
+  const hasRole = (r: string) => roles.has(r) || (roles.has(`${r}_int`) && roles.has(`${r}_ext`));
   check(
     `${bankId} oneshots cover required roles (${requiredRoles.join(", ")})`,
-    requiredRoles.every((r) => roles.has(r)),
+    requiredRoles.every(hasRole),
     `present=[${[...roles].join(", ")}]`
   );
 
@@ -367,11 +373,98 @@ if (HOSTED_CONTENT) {
   noteSkip("the LC-LMDH and LC25 engine sound credits on their car cards", "NEXT_PUBLIC_HOSTED_CONTENT=1");
 }
 
+// F1 2007's eleven banks, every layer from the team's own FMOD events (scripts/audio/car_configs.json "f1-2007"
+// `eventsFromBank`): nothing derived and nothing of another car's. The levels against the engine are the FMOD runtime's,
+// measured when ported (scripts/audio/README.md section 5); here, what they must stay
+console.log("\n4. F1 2007's banks against their own FMOD events");
+const F12007_TEAMS = ["ferrari", "mclaren", "renault", "bmw-sauber", "red-bull", "williams", "toyota", "toro-rosso", "honda", "super-aguri", "spyker"];
+const db = (x: number) => 20 * Math.log10(Math.max(1e-12, x));
+for (const team of F12007_TEAMS) {
+  const dir = join("public", "cars", "f1-2007", "audio", team);
+  const path = join(dir, "manifest.json");
+  if (!existsSync(path)) {
+    noteSkip(`F1 2007 ${team}'s bank`, path);
+    continue;
+  }
+  const m = JSON.parse(readFileSync(path, "utf8")) as Lc26AudioManifest;
+  const roles = new Set((m.oneshots ?? []).map((o) => o.role));
+  const one = (role: string) => (m.oneshots ?? []).find((o) => o.role === role);
+  // The engine at full throttle per view, its loops' power summed (rpm 12 000)
+  const engineDb = (view: "int" | "ext") =>
+    db(
+      Math.sqrt(
+        m.engine[view]
+          .filter((e) => e.layer === "on")
+          .reduce((p, e) => p + (lerpTable(e.gain ?? [], 12000) * lerpTable(m.throttleGain?.[view]?.on ?? [], 1) * e.rms) ** 2, 0)
+      )
+    );
+  check(
+    `${team}: engine loops folded to the centre as the events' spatialiser plays them (mono)`,
+    [...m.engine.int, ...m.engine.ext].every((e) => e.channels === 1)
+  );
+  check(
+    `${team}: no one-shot of the player's own (shift cut, limiter stutter, generic gear click)`,
+    !roles.has("shift_cut") && !roles.has("limiter") && !roles.has("gear_up") && !roles.has("gear_down") && !m.lift,
+    [...roles].join(", ")
+  );
+  check(`${team}: the limiter and turbo events are silent, and so is the bank`, (m.silentEvents ?? []).join() === "limiter,turbo");
+  const up = one("gear_up_int");
+  const down = one("gear_down_int");
+  check(
+    `${team}: cockpit gear click +4 semitones up, +2 down, 20 dB or more under the engine`,
+    !!up && !!down && Math.abs((up.rate ?? 0) - 2 ** (4 / 12)) < 1e-3 && Math.abs((down.rate ?? 0) - 2 ** (2 / 12)) < 1e-3 &&
+      db((up.gain ?? 1) * up.peak) < engineDb("int") - 8 && db((down.gain ?? 1) * down.peak) < engineDb("int") - 5,
+    `peaks ${db((up?.gain ?? 0) * (up?.peak ?? 0)).toFixed(1)} / ${db((down?.gain ?? 0) * (down?.peak ?? 0)).toFixed(1)} dB, engine ${engineDb("int").toFixed(1)} dB rms`
+  );
+  check(`${team}: outside gear sounds at their own pitch`, one("gear_up_ext")?.rate === 1 && one("gear_down_ext")?.rate === 1);
+  const tr = m.transmission[0];
+  const mix = m.transmissionMix;
+  const trDb = (kmh: number, thr: number) => db(lerpTable(tr?.gain ?? [], kmh) * lerpTable(mix?.throttleGain ?? [], thr) * (mix?.view.int ?? 0) * (tr?.rms ?? 0));
+  // FMOD: 15.5 (Ferrari) to 19.4 dB (McLaren) under the cockpit engine at 100 km/h, its loudest; 11 dB lower at 280
+  check(
+    `${team}: transmission 14-21 dB under the cockpit engine at 100 km/h, 11 dB lower at 280, 8.5 dB lower off throttle`,
+    m.transmission.length === 1 && !!mix &&
+      trDb(100, 1) - engineDb("int") < -14 && trDb(100, 1) - engineDb("int") > -21 && Math.abs(trDb(280, 1) - trDb(100, 1) + 11) < 0.5 &&
+      Math.abs(trDb(200, 1) - trDb(200, 0) - 8.5) < 0.3,
+    `${(trDb(100, 1) - engineDb("int")).toFixed(1)} / ${(trDb(280, 1) - engineDb("int")).toFixed(1)} dB, off ${(trDb(200, 0) - trDb(200, 1)).toFixed(1)} dB`
+  );
+  check(
+    `${team}: shift by the throttle alone, cut 25 ms, blip 0.75 over 2 / 10 / 40 ms (drivetrain.ini)`,
+    m.shift?.throttleCut === true && m.shift.cutS === 0.025 &&
+      JSON.stringify(m.shift.blip) === JSON.stringify({ level: 0.75, riseS: 0.002, holdS: 0.01, endS: 0.04 })
+  );
+  check(
+    `${team}: backfire on a lift from 0.8 to 0.4 between 5000 and 19000 rpm (sounds.ini), 80.5 % inside`,
+    m.backfire?.triggerGas === 0.8 && m.backfire.maxGas === 0.4 && m.backfire.minRpm === 5000 && m.backfire.maxRpm === 19000 &&
+      m.backfire.chance?.int === 0.805 && (m.backfire.pitchJitterSt?.ext ?? 0) > 3
+  );
+  for (const key of ["wind", "tyreRolling", "bodywork"] as const) {
+    const a = m[key];
+    const file = a ? join(dir, a.file) : "";
+    check(`${team}: ${key} from its event, with gain and pitch curves`, !!a && (a.gain?.length ?? 0) > 2 && existsSync(file) && readFileSync(file).subarray(0, 4).toString("ascii") === "OggS");
+  }
+  const cone = m.cone;
+  check(
+    `${team}: the outside from ahead (front microphones), the rear set gone and the front full by 120 degrees, darker by 180`,
+    (m.engineFront?.length ?? 0) >= 4 && !!cone && lerpTable(cone.rear, 0) === 1 && lerpTable(cone.rear, 125) === 0 &&
+      lerpTable(cone.front, 0) === 0 && lerpTable(cone.front, 125) === 1 && lerpTable(cone.lowpassHz ?? [], 0) >= 20000 &&
+      lerpTable(cone.lowpassHz ?? [], 180) < 6000,
+    `${m.engineFront?.length ?? 0} front loops, low-pass ${lerpTable(cone?.lowpassHz ?? [], 180).toFixed(0)} Hz at 180`
+  );
+  for (const e of m.engineFront ?? []) {
+    const file = join(dir, e.file);
+    check(`${team}: ${e.file} is there`, existsSync(file) && readFileSync(file).subarray(0, 4).toString("ascii") === "OggS");
+  }
+  check(`${team}: skid and traction control at their events' pitch`, m.skid?.int?.rate === 0.8409 && m.skid?.ext?.rate === 0.8909 && m.tractionControl?.rate?.int === 0.8909);
+}
+const f12007Sound = carById("f1-2007").sound;
+check("f1-2007: a missing bank leaves the engine silent (no V6 loops, turbo or axle whine)", f12007Sound.noFallback === true && (carById("f1-2007").skins ?? []).every((s) => s.sound?.noFallback === true));
+
 // hahmad's RB21 bank as its own FMOD events play it (scripts/audio/car_configs.json "lc25-v6"): its wind, skid and
 // limiter events are silent stubs, so it brings no wind or tyre loop of its own (CarAudio's procedural wind and the
 // full road roar play, as with the LC26); its outside sound is the cockpit loops through the engine_ext mixer's EQ,
 // baked into the outside loops, with no tone stage on top; and its overrun fades out between 10 and 40 % throttle
-console.log("\n4. The LC25's hosted RB21 bank against its own FMOD design");
+console.log("\n5. The LC25's hosted RB21 bank against its own FMOD design");
 const RB21_MANIFEST = join("public", "cars", "lc25-v6", "audio", "manifest.json");
 if (existsSync(RB21_MANIFEST)) {
   const m = JSON.parse(readFileSync(RB21_MANIFEST, "utf8")) as Lc26AudioManifest;

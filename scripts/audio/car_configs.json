@@ -767,27 +767,47 @@
     "rawPcm16": true,
     "engineFromBank": {
       "int": { "event": "engine_int" },
-      "ext": { "event": "engine_ext", "fixed": { "Event Cone Angle": 0 } }
+      "ext": { "event": "engine_ext", "fixed": { "Event Cone Angle": 0 }, "front": { "Event Cone Angle": 180 } },
+      "foldStereo": true
     },
-    "transmission": [
-      { "layer": "on", "drivetrainSpeed": 70, "sample": "transmission#9", "rms": 0.042 },
-      { "layer": "off", "drivetrainSpeed": 70, "sample": "transmission#9", "rms": 0.028 }
-    ],
-    "skid": { "int": "Skid#14", "ext": "skid_ext_mono#7" },
-    "tractionControl": "traction_control#40",
-    "oneshots": {
-      "gear_up": ["gearup#21", "gearupEXT#56"],
-      "gear_down": ["gearup#21", "geardnEXT#45"],
-      "backfire_int": ["500_backfire3#10", "500_backfire4#49", "500_backfire5#26", "500_backfire6#37", "500_backfire7#18"],
-      "backfire_ext": ["backfireEXT_1#31", "backfireEXT_2#52", "backfireEXT_3#34", "backfireEXT_4#43", "backfireEXT_5#33", "backfireEXT_6#42", "backfireEXT_7#32", "backfireEXT_8#20", "backfireEXT_9#24"]
+    "eventsFromBank": {
+      "transmission": { "event": "transmission", "speedParam": "drivetrain_speed", "key": 87.5 },
+      "gear": { "int": "gear_int", "ext": "gear_ext" },
+      "backfire": { "int": "backfire_int", "ext": "backfire_ext" },
+      "skid": { "int": "skid_int", "ext": "skid_ext" },
+      "tractionControl": { "int": "tractioncontrol_int", "ext": "tractioncontrol_ext" },
+      "wind": { "event": "wind", "param": "speed", "fixed": { "air_pressure": 1.0 } },
+      "tyreRolling": { "event": "wheel", "param": "speed", "fixed": { "inflation": 1.0, "suspension_damage": 0.0, "brake": 0.0 } },
+      "bodywork": { "event": "bodywork", "param": "susp_travel_speed" },
+      "silent": {
+        "limiter": { "decay": 0.0, "Event Cone Angle": 0.0 },
+        "turbo": { "boost": 0.0, "bov": 0.0, "bov_decay": 0.0 }
+      },
+      "distanceM": 1.0,
+      "spatialDb": {
+        "engine_int": 0.65, "engine_ext": 0.7, "transmission": 1.17, "gear_int": -3.93, "gear_ext": 0.52, "backfire_int": 4.13,
+        "backfire_ext": 0.58, "skid_int": -0.2, "skid_ext": 0.14, "tractioncontrol_int": 0.44, "tractioncontrol_ext": 0.48,
+        "wind": 0.76, "wheel": -0.12, "bodywork": 1.5
+      },
+      "outsideDb": {
+        "transmission": -0.93, "gear_ext": -2.37, "backfire_ext": -0.62, "skid_ext": -2.83, "tractioncontrol_ext": -0.92,
+        "wind": -0.06, "wheel": -5.91, "bodywork": -0.95
+      }
     },
-    "shiftFallbackSample": "500_backfire5#26",
-    "limiterFallbackSample": "max_on#4",
+    "soundsIni": {
+      "skidMixVolume": 0.7,
+      "backfire": { "maxGas": 0.4, "minRpm": 5000, "maxRpm": 19000, "triggerGas": 0.8, "volumeIn": 1.0, "volumeOut": 0.5 },
+      "wind": { "speedGain0": 0.0005, "speedGain1": 0.0002, "volumeGain": 0.95 },
+      "tyreRolling": { "speedGain0": 0.0, "speedGain1": 0.0002, "volumeGain": 0.6 }
+    },
     "manifestExtras": {
-      "shift": { "style": "sequential", "cutS": 0.025 }
+      "shift": {
+        "style": "sequential",
+        "cutS": 0.025,
+        "throttleCut": true,
+        "blip": { "level": 0.75, "riseS": 0.002, "holdS": 0.01, "endS": 0.04 }
+      }
     },
-    "lift": { "popMinRpm": 5000, "crackleMinRpm": 20000, "downshiftPopChance": 0.55 },
-    "limiterRetriggerS": 0.8,
     "variants": {
       "ferrari": {
         "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank",

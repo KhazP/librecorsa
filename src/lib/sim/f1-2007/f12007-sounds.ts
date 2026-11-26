@@ -30,6 +30,8 @@ const sound = (team: F12007Team): CarSoundSource => ({
   assetDir: `${DIR}${team}/`,
   limiterRpm: F12007_CONFIG.gearbox.gears.redline_rpm,
   ...(team === 'ferrari' || team === 'honda' ? {} : { outsideAssetDir: SHARED_OUTSIDE }),
+  // A 2007 V8 never sounds as the bundled V6 loops and their turbo and axle whine: silent until its bank is in
+  noFallback: true,
 });
 
 const TEAM_SOUNDS: Record<F12007Team, CarSoundSource> = {
