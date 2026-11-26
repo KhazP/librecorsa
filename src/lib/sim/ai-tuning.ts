@@ -8,8 +8,8 @@
  * A section override applies to a stretch of track given by distance (`fromM` / `toM`, like USR's `x bgn` / `x end`)
  * or by turn numbers (`turns`, with a braking lead-in), e.g. "be more careful through Sainte Dévote at Monaco".
  *
- * On top of the resolved parameters sits the player's AI skill level (0–100) and a per-driver personality; at the
- * default skill and the shipped defaults the field drives exactly as it did before this module existed.
+ * On top of the resolved parameters sits the player's AI skill level (0–100) and a per-driver personality; at Pro (70)
+ * and the shipped defaults the field drives at the baseline written pace.
  */
 import { text as tx } from '@/lib/text';
 import type { BuiltTrackData } from '@/lib/track-data';
@@ -207,8 +207,8 @@ export const AI_SKILL_LEVELS = [
   { id: 'alien', get label() { return tx('game.aiSkill.alien'); }, value: 100 },
 ] as const;
 
-/** Pro: the field as it drove before skill levels existed */
-export const AI_SKILL_DEFAULT = 70;
+/** Almost Alien: competitive pace out of the box, one step below max (100) */
+export const AI_SKILL_DEFAULT = 95;
 
 export function aiSkillLabel(skill: number): string {
   let best: (typeof AI_SKILL_LEVELS)[number] = AI_SKILL_LEVELS[0];

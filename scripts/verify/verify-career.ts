@@ -113,7 +113,7 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
 
 {
   let run = newCareer("road", "clubCup_europe", allContent, 42)!;
-  check("a new career starts in pre-season", Boolean(run) && run.season?.started === false && run.season.seriesId === "clubCup_europe");
+  check("a new career starts in pre-season at Expert AI level", Boolean(run) && run.season?.started === false && run.season.seriesId === "clubCup_europe" && run.season.race.aiLevel === "expert");
   run = updateSeasonSettings(run, { length: "short" }, allContent);
   run = updateRaceSettings(run, { gridSize: 6 });
   run = startSeason(run);

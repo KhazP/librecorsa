@@ -211,9 +211,10 @@ console.log("target");
   const series = seriesById(season.seriesId)!;
   const t = testTargetMs(run, 80000, 1)!;
   check("a target from the reference lap", t !== null && t > 80000 && t < 80000 * 1.1, String(t));
+  const mid = testTargetMs(updateRaceSettings(run, { aiLevel: "medium" }), 80000, 1)!;
   const slower = testTargetMs(updateRaceSettings(run, { aiLevel: "low" }), 80000, 1)!;
   const faster = testTargetMs(updateRaceSettings(run, { aiLevel: "expert" }), 80000, 1)!;
-  check("a weaker field: a slower target; a stronger one: quicker", slower > t && faster < t, `${slower} ${t} ${faster}`);
+  check("a weaker field: a slower target; a stronger one: quicker", slower > mid && faster < mid, `${slower} ${mid} ${faster}`);
   check("the line check's reference (a shade slower) gives a quicker target than a lone autopilot lap's", testTargetMs(run, 80000, 0.995)! < t);
   // At the last promotion place: the field's pace there, as the qualifying lap would be
   const paces = season.grid.map((id) => rivalPace(run.rivals.find((r) => r.id === id)!)).sort((a, b) => b - a);

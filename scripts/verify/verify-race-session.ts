@@ -536,7 +536,7 @@ console.log("Qualifying · the AI field's grid");
   const track = getActiveTrackData(1200);
   const player = new F1Physics2026(track);
   const drivers = AI_DRIVERS.slice(0, 4);
-  const field = new AiOpponentField(track, player, drivers, undefined, { seed: 3, learning: false });
+  const field = new AiOpponentField(track, player, drivers, undefined, { seed: 3, learning: false, skill: 70 });
   field.qualifying = { playerMs: 1, refLapMs: 90000, refBase: 1 };
   // The qualifying lap the car comes with (and its sectors) is not the race's
   Object.assign(player.telemetry, { lastLapTimeMs: 91000, bestLapTimeMs: 90500, sectorTimesMs: [30000, 30000, 31000], bestSectorTimesMs: [29900, 30000, 30600] });

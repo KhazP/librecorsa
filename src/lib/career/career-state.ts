@@ -198,7 +198,7 @@ export const EMPTY_SAVE: CareerSave = { v: 1, runs: [], activeId: null };
 
 export const DEFAULT_RACE_SETTINGS: Omit<RaceSettings, "gridSize"> = {
   raceLength: "short",
-  aiLevel: "medium",
+  aiLevel: "expert",
   damage: "reduced",
   qualifying: 5,
 };
