@@ -257,7 +257,7 @@
   },
   "conditions": {
     "hostSet": "호스트가 설정함",
-    "roundSet": "라운드가 정함",
+    "roundSet": "라운드가 설정함",
     "weather": "날씨",
     "weatherGroup": "날씨",
     "forecastShow": "세션 중 일기 예보",

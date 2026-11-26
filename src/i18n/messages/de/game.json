@@ -133,7 +133,7 @@
       "unreachable": "Die Online-Bestenliste ist nicht erreichbar, ich versuche es weiter",
       "unreachableGaveUp": "Die Online-Bestenliste ist nicht erreichbar",
       "olderPhysics": "Diese Runde stammt aus einer älteren Version der Physik oder der Strecke, und diese Bestenliste ist schreibgeschützt",
-      "olderPhysicsReload": "Diese Runde stammt aus einer älteren Version der Physik oder der Strecke. Lade das Spiel neu, um auf der neuen zu fahren",
+      "olderPhysicsReload": "Diese Runde stammt aus einer älteren Version der Physik oder der Strecke. Lade das Spiel neu, um mit der neuen Version zu fahren",
       "modLap": "Runden mit Mod-Autos oder auf Mod-Strecken bleiben außerhalb der Online-Bestenlisten",
       "unknownCircuit": "Runden auf Strecken, die nicht zum Spiel gehören, bleiben außerhalb der Online-Bestenlisten",
       "boardOff": "Die Online-Bestenliste ist gerade nicht verfügbar",
