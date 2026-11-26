@@ -49,12 +49,19 @@ import {
   RETIRED_GT_STYLE_BUTTONS,
 } from '../../src/lib/input/bindings';
 import {
+  anyButtonOrHatDown,
   autoConfigureWheel,
+  buttonBindingDown,
   CAR_WHEEL_LOCK_DEG,
   carWheelLockDeg,
   clearWheelButton,
+  decodeHatCardinal,
+  decodeHatDirections,
   DEFAULT_WHEEL_SETTINGS,
   DeviceInputReader,
+  hatAxesOf,
+  isHatRestValue,
+  newlyPressedButton,
   PAD_TRIGGER_PRESS,
   PAD_TRIGGER_RELEASE,
   padTriggerDown,
@@ -62,7 +69,10 @@ import {
   padPedals,
   pedalValue,
   rebindWheelButton,
+  resetObservedHatAxesForTests,
+  sameButtonBinding,
   snapshotAxes,
+  snapshotButtons,
   strongestAxisChange,
   wheelSteerValue,
   type PadLike,
@@ -960,6 +970,79 @@ check('#189 / #144: Thrustmaster TMX / T150 / T500RS are recognised by USB id (e
   assert.equal(t300?.hidFfb, true, 'a WebHID-supported Thrustmaster base (T300RS) still starts on WebHID');
   assert.equal(autoConfigureWheel([pad('T-LCM Pedals (Vendor: 044f Product: b371)', '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'pedals are not a wheel');
 });
+check('Logitech G920 POV hat-switch D-pad: decoding, capture, rebinding, persistence, calibration safety, and auto-setup', () => {
+  resetObservedHatAxesForTests();
+  const G920_ID = 'Logitech G920 Driving Force Racing Wheel (Vendor: 046d Product: c262)';
+  const g920Axes = (hatVal: number, steer = 0) => [steer, 1, 1, 1, 0, 0, 0, 0, 0, hatVal];
+  const g920 = (hatVal: number, pressed: number[] = [], steer = 0): PadLike => ({
+    id: G920_ID,
+    index: 0,
+    mapping: '',
+    axes: g920Axes(hatVal, steer),
+    buttons: Array.from({ length: 18 }, (_, i) => ({ pressed: pressed.includes(i), value: pressed.includes(i) ? 1 : 0 })),
+  });
+
+  // 1. Hat-switch rest sentinels and 8 compass positions
+  assert.ok(isHatRestValue(3.285714) && isHatRestValue(1.285714) && !isHatRestValue(0) && !isHatRestValue(-1) && !isHatRestValue(1));
+  assert.deepEqual(decodeHatDirections(3.285714), []);
+  assert.deepEqual(decodeHatDirections(-1), ['up']);
+  assert.deepEqual(decodeHatDirections(-5 / 7), ['up', 'right']);
+  assert.deepEqual(decodeHatDirections(-3 / 7), ['right']);
+  assert.deepEqual(decodeHatDirections(-1 / 7), ['down', 'right']);
+  assert.deepEqual(decodeHatDirections(1 / 7), ['down']);
+  assert.deepEqual(decodeHatDirections(3 / 7), ['down', 'left']);
+  assert.deepEqual(decodeHatDirections(5 / 7), ['left']);
+  assert.deepEqual(decodeHatDirections(1), ['up', 'left']);
+  assert.equal(decodeHatCardinal(-1), 'up');
+  assert.equal(decodeHatCardinal(-5 / 7), null, 'diagonals do not bind ambiguously during capture');
+  assert.equal(decodeHatCardinal(1 / 7), 'down');
+
+  // 2. Auto-detects hat axis at rest and remembers it while pressed; capture detects cardinal press & release
+  const restPad = g920(3.285714);
+  assert.deepEqual(hatAxesOf(restPad), [9]);
+  const prev = snapshotButtons([restPad]);
+  assert.equal(anyButtonOrHatDown(prev), false);
+  const upPad = g920(-1);
+  assert.deepEqual(hatAxesOf(upPad), [9], 'hat axis stays known while held inside [-1, 1]');
+  const hit = newlyPressedButton(prev, [upPad]);
+  assert.deepEqual(hit, { padId: G920_ID, button: -1, hat: { axis: 9, dir: 'up' } });
+  const heldSnap = snapshotButtons([upPad]);
+  assert.equal(anyButtonOrHatDown(heldSnap), true);
+  assert.equal(newlyPressedButton(heldSnap, [upPad]), null, 'held hat direction does not re-trigger');
+
+  // 3. Rebinding & collision handling + settings persistence round-trip
+  let btns = rebindWheelButton(DEFAULT_WHEEL_SETTINGS.buttons, 'mfdUp', hit!);
+  assert.ok(sameButtonBinding(btns.mfdUp, hit));
+  btns = rebindWheelButton(btns, 'camera', hit!);
+  assert.equal(btns.mfdUp, null, 'moving a hat direction clears the old action');
+  assert.deepEqual(btns.camera, hit);
+  const saved = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, wheel: { ...DEFAULT_WHEEL_SETTINGS, buttons: btns } })));
+  assert.deepEqual(saved.wheel.buttons.camera, hit, 'hat binding survives save/load');
+  assert.equal(parsePlayerSettings({ wheel: { buttons: { camera: { padId: G920_ID, button: -1, hat: { axis: 9, dir: 'diagonal' } } } } }).wheel.buttons.camera, null, 'invalid hat dir rejected');
+
+  // 4. DeviceInputReader reads hat-bound actions (including diagonals activating both cardinals)
+  const auto = autoConfigureWheel([restPad], DEFAULT_WHEEL_SETTINGS);
+  assert.ok(auto && auto.buttons);
+  assert.deepEqual(auto.buttons.shiftUp, { padId: G920_ID, button: 4 }, 'G920 right paddle');
+  assert.deepEqual(auto.buttons.shiftDown, { padId: G920_ID, button: 5 }, 'G920 left paddle');
+  assert.deepEqual(auto.buttons.mfdUp, { padId: G920_ID, button: -1, hat: { axis: 9, dir: 'up' } }, 'G920 D-pad auto-bound to MFD');
+  assert.deepEqual(auto.buttons.mfdNext, { padId: G920_ID, button: -1, hat: { axis: 9, dir: 'right' } });
+  const g920Wheel = { ...DEFAULT_WHEEL_SETTINGS, ...auto };
+  const reader = new DeviceInputReader();
+  reader.read([restPad], { wheel: g920Wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  const fUp = reader.read([g920(-1)], { wheel: g920Wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.ok(fUp.pressed.has('mfdUp') && !fUp.pressed.has('mfdDown'));
+  const fDiag = reader.read([g920(3 / 7)], { wheel: g920Wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.ok(fDiag.pressed.has('mfdDown') && fDiag.pressed.has('mfdPrev'), 'SW diagonal activates down + left');
+  assert.ok(buttonBindingDown(g920(-3 / 7), { padId: G920_ID, button: -1, hat: { axis: 9, dir: 'right' } }));
+
+  // 5. Calibration ignores hat-switch axes so bumping D-pad never hijacks steering/pedal calibration
+  const base = snapshotAxes([restPad]);
+  const calHit = strongestAxisChange(base, [g920(-1, [], 0.2)]);
+  assert.equal(calHit?.axis, 0, 'steering axis wins over hat-switch jump from 3.28 to -1');
+  resetObservedHatAxesForTests();
+});
+
 check('FFB gain and minimum force: continuous through zero, monotonic, sign kept', () => {
   const w = { ffbGain: 1.5, ffbMinForce: 0.1 };
   near(shapeFfbForce(0, w), 0);

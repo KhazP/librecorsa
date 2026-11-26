@@ -11,10 +11,12 @@ import {
   connectedPads,
   emptyWheelButtons,
   findPad,
+  HAT_ARROW,
   isLikelyWheel,
   padDisplayName,
   pedalValue,
   rebindWheelButton,
+  sameButtonBinding,
   snapshotAxes,
   STEER_LOCK_MIN_DEG,
   strongestAxisChange,
@@ -497,8 +499,8 @@ export function WheelSetup({ first }: { first?: boolean }) {
   const pads = useGamepads();
   const w = settings.wheel;
   const [mode, setModeState] = useState<WheelMode>(IDLE);
-  // "Btn 3 moved from Pause menu": a button taken from another action says so, as the keyboard screen does
-  const [buttonNotice, setButtonNotice] = useState<{ button: number; from: PadAction } | null>(null);
+  // "Btn 3 moved from Pause menu" / "D-pad ↑ moved from MFD value +": a button taken from another action says so
+  const [buttonNotice, setButtonNotice] = useState<{ binding: ButtonBinding; from: PadAction } | null>(null);
   // Read by the calibrator and capture callbacks, which a late frame can still call after the mode has moved on
   const modeRef = useRef(mode);
   const setMode = useCallback((next: WheelMode) => {
@@ -558,9 +560,9 @@ export function WheelSetup({ first }: { first?: boolean }) {
       const m = modeRef.current;
       if (m.kind !== "capturing") return;
       const taken = PAD_ACTIONS.find(
-        ({ id }) => id !== m.action && w.buttons[id]?.button === b.button && w.buttons[id]?.padId === b.padId,
+        ({ id }) => id !== m.action && sameButtonBinding(w.buttons[id], b),
       );
-      setButtonNotice(taken ? { button: b.button, from: taken.id } : null);
+      setButtonNotice(taken ? { binding: b, from: taken.id } : null);
       update((s) => ({ ...s, wheel: { ...s.wheel, buttons: rebindWheelButton(s.wheel.buttons, m.action, b) } }));
       setMode(IDLE);
     },
@@ -741,19 +743,31 @@ export function WheelSetup({ first }: { first?: boolean }) {
                   listening
                     ? tb("pressFor", { action: label })
                     : b
-                      ? tb("boundAria", { action: label, button: b.button })
+                      ? b.hat
+                        ? tb("boundHatAria", { action: label, dir: HAT_ARROW[b.hat.dir] })
+                        : tb("boundAria", { action: label, button: b.button })
                       : tb("unboundAria", { action: label })
                 }
                 onClick={() => setMode(listening ? IDLE : { kind: "capturing", action: id })}
               >
-                {listening ? tb("pressButton") : b ? tb("bound", { button: b.button }) : tb("add")}
+                {listening
+                  ? tb("pressButton")
+                  : b
+                    ? b.hat
+                      ? tb("boundHat", { dir: HAT_ARROW[b.hat.dir] })
+                      : tb("bound", { button: b.button })
+                    : tb("add")}
               </Button>
               {b && !listening ? (
                 <IconButton
                   size="sm"
                   variant="ghost"
                   disabled={calibrating !== null}
-                  aria-label={tb("unbind", { button: b.button, action: label })}
+                  aria-label={
+                    b.hat
+                      ? tb("unbindHat", { dir: HAT_ARROW[b.hat.dir], action: label })
+                      : tb("unbind", { button: b.button, action: label })
+                  }
                   icon={<Icon name="close" />}
                   onClick={() => {
                     setButtonNotice(null);
@@ -772,10 +786,15 @@ export function WheelSetup({ first }: { first?: boolean }) {
         ) : buttonNotice ? (
           <div className="pt-2">
             <StatusPill>
-              {tb("moved", {
-                button: buttonNotice.button,
-                action: PAD_ACTIONS.find((a) => a.id === buttonNotice.from)?.label ?? buttonNotice.from,
-              })}
+              {buttonNotice.binding.hat
+                ? tb("movedHat", {
+                    dir: HAT_ARROW[buttonNotice.binding.hat.dir],
+                    action: PAD_ACTIONS.find((a) => a.id === buttonNotice.from)?.label ?? buttonNotice.from,
+                  })
+                : tb("moved", {
+                    button: buttonNotice.binding.button,
+                    action: PAD_ACTIONS.find((a) => a.id === buttonNotice.from)?.label ?? buttonNotice.from,
+                  })}
             </StatusPill>
           </div>
         ) : null}

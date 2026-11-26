@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { connectedPads, newlyPressedButton, snapshotButtons, type ButtonBinding, type PadLike } from "@/lib/input/device-input";
+import { anyButtonOrHatDown, connectedPads, newlyPressedButton, snapshotButtons, type ButtonBinding, type PadLike } from "@/lib/input/device-input";
 import { suspendMenuNav } from "../useMenuNav";
 
 /** Longest the menus stay suspended after a capture waiting for every button to come up (a pad resting "pressed") */
@@ -40,8 +40,8 @@ export function useButtonCapture(
       const all = connectedPads();
       return standardOnly ? all.filter((p) => p.mapping === "standard") : all;
     };
-    // One predicate for "down" throughout: the capture's own (pressed, or an analogue button past half)
-    const anyDown = () => [...snapshotButtons(watched()).values()].some((buttons) => buttons.includes(true));
+    // One predicate for "down" throughout: the capture's own (pressed, analogue button past half, or POV hat direction)
+    const anyDown = () => anyButtonOrHatDown(snapshotButtons(watched()));
     let prev = snapshotButtons(watched());
     let raf = 0;
     const poll = () => {

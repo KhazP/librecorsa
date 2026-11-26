@@ -286,9 +286,13 @@
     "unbind": "Unbind button {button} from {action}",
     "pressButton": "Press a button",
     "bound": "Btn {button}",
+    "boundHat": "D-pad {dir}",
+    "boundHatAria": "{action}: D-pad {dir}. Change",
+    "unbindHat": "Unbind D-pad {dir} from {action}",
     "add": "Add",
     "capturing": "Press a button on any device. Esc cancels; it stops after {seconds} s",
-    "moved": "Btn {button} moved from {action}"
+    "moved": "Btn {button} moved from {action}",
+    "movedHat": "D-pad {dir} moved from {action}"
   },
   "bridge": {
     "takenOver": "Taken over",
