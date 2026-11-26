@@ -4,8 +4,8 @@
  *
  * 1. On its own driver the Liana covers the inside as it always did (more than 3 m toward it): unchanged.
  * 2. On its plan with no reach limit (the old rule) it makes a bigger move still: what the limit changes.
- * 3. On its plan with the shipped rules it still defends, within `planDefendReachM` of its line all the way to the
- *    corner, and the attacker never touches it.
+ * 3. On its plan with the shipped rules it still goes on the defence, but within `planDefendReachM` of its line all
+ *    the way to the corner, and the attacker never touches it.
  *
  * Grobnik is hosted on librecorsa.org only: skipped where this copy has no track file or mesh.
  *
