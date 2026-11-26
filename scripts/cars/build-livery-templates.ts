@@ -40,6 +40,8 @@ const OUT_ROOT = join(ROOT, "docs/livery-templates");
 const SIZE = F1_PROJECTION.atlasSize;
 const F1_PAINT_MATERIALS = new Set(["EXT_PAINT_PRIMARY", "EXT_PAINT_SECONDARY", "EXT_PAINT_ACCENT"]);
 const LABEL_PAINT_MARGIN_PX = 8;
+const CLAMP_EDGE_EPS = 1e-3;
+const CLAMP_EDGE_STRIP_PX = 12;
 
 type TemplateCarId = "lc26" | "lc25" | "amg-gt3" | "bmw-m4-gt3" | "lc-lmdh";
 type AnyPanelId = F1PanelId | PortedPanelId;
@@ -527,6 +529,121 @@ function dilateMaskInPanel(src: Uint8Array, rect: AtlasPanelRect, radius: number
   return out;
 }
 
+function clipPolygonHalfPlane(
+  poly: readonly (readonly [number, number])[],
+  evalFn: (p: readonly [number, number]) => number
+): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const da = evalFn(a);
+    const db = evalFn(b);
+    if (da >= 0) out.push([a[0], a[1]]);
+    if ((da >= 0) !== (db >= 0)) {
+      const t = da / (da - db);
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Marks a narrow hatched strip (`stripPx` px wide) strictly inside the edges of `rect`
+ * where a triangle in unclamped panel-local `(rawU, rawV)` space crosses outside `[0, 1] x [0, 1]`.
+ * Never marks pixels in the interior of the panel.
+ */
+function markClampedTriangleEdges(
+  outMask: Uint8Array,
+  rect: AtlasPanelRect,
+  raw0: readonly [number, number],
+  raw1: readonly [number, number],
+  raw2: readonly [number, number],
+  stripPx = CLAMP_EDGE_STRIP_PX
+): void {
+  const minU = Math.min(raw0[0], raw1[0], raw2[0]);
+  const maxU = Math.max(raw0[0], raw1[0], raw2[0]);
+  const minV = Math.min(raw0[1], raw1[1], raw2[1]);
+  const maxV = Math.max(raw0[1], raw1[1], raw2[1]);
+  if (
+    minU >= -CLAMP_EDGE_EPS &&
+    maxU <= 1 + CLAMP_EDGE_EPS &&
+    minV >= -CLAMP_EDGE_EPS &&
+    maxV <= 1 + CLAMP_EDGE_EPS
+  ) {
+    return;
+  }
+
+  const tri: readonly (readonly [number, number])[] = [raw0, raw1, raw2];
+  const pad = F1_PROJECTION.padPx;
+  const uToX = (u: number) => rect.x + pad + Math.max(0, Math.min(1, u)) * Math.max(rect.w - pad * 2, 1);
+  const vToY = (v: number) => rect.y + pad + Math.max(0, Math.min(1, v)) * Math.max(rect.h - pad * 2, 1);
+
+  const fillStrip = (x0: number, y0: number, x1: number, y1: number) => {
+    const rx0 = Math.max(rect.x, Math.floor(x0));
+    const rx1 = Math.min(rect.x + rect.w - 1, Math.ceil(x1));
+    const ry0 = Math.max(rect.y, Math.floor(y0));
+    const ry1 = Math.min(rect.y + rect.h - 1, Math.ceil(y1));
+    for (let y = ry0; y <= ry1; y++) {
+      const row = y * SIZE;
+      for (let x = rx0; x <= rx1; x++) outMask[row + x] = 1;
+    }
+  };
+
+  if (minU < -CLAMP_EDGE_EPS) {
+    const clipped = clipPolygonHalfPlane(tri, (p) => -p[0]);
+    if (clipped.length > 0) {
+      let vLo = 1;
+      let vHi = 0;
+      for (const p of clipped) {
+        const cv = Math.max(0, Math.min(1, p[1]));
+        if (cv < vLo) vLo = cv;
+        if (cv > vHi) vHi = cv;
+      }
+      fillStrip(rect.x, vToY(vLo), rect.x + stripPx - 1, vToY(vHi));
+    }
+  }
+  if (maxU > 1 + CLAMP_EDGE_EPS) {
+    const clipped = clipPolygonHalfPlane(tri, (p) => p[0] - 1);
+    if (clipped.length > 0) {
+      let vLo = 1;
+      let vHi = 0;
+      for (const p of clipped) {
+        const cv = Math.max(0, Math.min(1, p[1]));
+        if (cv < vLo) vLo = cv;
+        if (cv > vHi) vHi = cv;
+      }
+      fillStrip(rect.x + rect.w - stripPx, vToY(vLo), rect.x + rect.w - 1, vToY(vHi));
+    }
+  }
+  if (minV < -CLAMP_EDGE_EPS) {
+    const clipped = clipPolygonHalfPlane(tri, (p) => -p[1]);
+    if (clipped.length > 0) {
+      let uLo = 1;
+      let uHi = 0;
+      for (const p of clipped) {
+        const cu = Math.max(0, Math.min(1, p[0]));
+        if (cu < uLo) uLo = cu;
+        if (cu > uHi) uHi = cu;
+      }
+      fillStrip(uToX(uLo), rect.y, uToX(uHi), rect.y + stripPx - 1);
+    }
+  }
+  if (maxV > 1 + CLAMP_EDGE_EPS) {
+    const clipped = clipPolygonHalfPlane(tri, (p) => p[1] - 1);
+    if (clipped.length > 0) {
+      let uLo = 1;
+      let uHi = 0;
+      for (const p of clipped) {
+        const cu = Math.max(0, Math.min(1, p[0]));
+        if (cu < uLo) uLo = cu;
+        if (cu > uHi) uHi = cu;
+      }
+      fillStrip(uToX(uLo), rect.y + rect.h - stripPx, uToX(uHi), rect.y + rect.h - 1);
+    }
+  }
+}
+
 function quantKey(v: Vec3): string {
   return `${Math.round(v[0] * 2000)},${Math.round(v[1] * 2000)},${Math.round(v[2] * 2000)}`;
 }
@@ -913,7 +1030,8 @@ function buildF1VectorLayers(
   rearAxleZ: number,
   clamping: ClampingStats<AnyPanelId>,
   fillMask: Uint8Array,
-  overlayOnly: boolean
+  overlayOnly: boolean,
+  hasClampedEdges = clamping.dominantClampedTotal > 0
 ): VectorLayers {
   const p = F1_PROJECTION.panels;
   const pt = (panel: F1PanelId, x: number, y: number, z: number): [number, number] => {
@@ -1003,12 +1121,12 @@ function buildF1VectorLayers(
     placePill("top", [`${target.id.toUpperCase()} · TOP VIEW`], ["tl", "bl", "tr", "br"], 30, 18);
     placeArrow("top", 1, "FRONT", [[p.top.x + 1260, p.top.y + 12], [p.top.x + 1260, p.top.y + p.top.h - 68]]);
 
-    if (target.allowMainBoundsClamping && clamping.dominantClampedTotal > 0) {
+    if (hasClampedEdges) {
       placePill(
         "top",
         [
-          "HATCHED = OUTSIDE THE PAINTING AREA: COLOUR AT THE EDGE STRETCHES HERE",
-          ["HATCHED = OUTSIDE THE PAINTING AREA:", "COLOUR AT THE EDGE STRETCHES HERE"],
+          "HATCHED EDGE: THE COLOUR HERE STRETCHES ONTO PARTS BEYOND IT",
+          ["HATCHED EDGE: THE COLOUR HERE", "STRETCHES ONTO PARTS BEYOND IT"],
         ],
         ["bl", "tl", "bc"],
         22,
@@ -1336,7 +1454,8 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
 
   const fillMask = new Uint8Array(SIZE * SIZE);
   const paintableFillMask = new Uint8Array(SIZE * SIZE); // non-splitter painted triangles (for exact splitter-only hatching)
-  const hatchRaw = new Uint8Array(SIZE * SIZE); // clamped edge (lc25) or unpaintable carbon splitter (amg-gt3)
+  const carbonHatchRaw = new Uint8Array(SIZE * SIZE); // unpaintable forced-carbon splitter (amg-gt3)
+  const clampedEdgeHatch = new Uint8Array(SIZE * SIZE); // narrow strip strictly along panel edges where geometry clamps
   const meshEdges = new Uint8Array(SIZE * SIZE);
   const featureEdges = new Uint8Array(SIZE * SIZE);
 
@@ -1407,31 +1526,19 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
       rasterizeTriangle(fillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, fillVal);
 
       if (isForcedCarbonTri) {
-        rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+        rasterizeTriangle(carbonHatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
       } else {
         rasterizeTriangle(paintableFillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
       }
 
-      // Hatch clamped edges on lc25
-      if (target.kind === "f1" && target.allowMainBoundsClamping) {
-        const isMain = F1_MAIN_BOUND_PANELS.has(pid as F1PanelId);
-        const markClamped = (s: typeof s0) => {
-          if (!s.clamped || (!isMain && !s.clampedU)) return;
-          const ix = Math.max(rect.x, Math.min(rect.x + rect.w - 1, Math.round(s.px)));
-          const iy = Math.max(rect.y, Math.min(rect.y + rect.h - 1, Math.round(s.py)));
-          hatchRaw[iy * SIZE + ix] = 1;
-        };
-        markClamped(s0);
-        markClamped(s1);
-        markClamped(s2);
-        if (
-          (s0.clamped && (isMain || s0.clampedU)) ||
-          (s1.clamped && (isMain || s1.clampedU)) ||
-          (s2.clamped && (isMain || s2.clampedU))
-        ) {
-          rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
-        }
-      }
+      // Mark only a narrow strip inside each panel edge where geometry crosses out of [0, 1] bounds
+      markClampedTriangleEdges(
+        clampedEdgeHatch,
+        rect,
+        [s0.rawU, s0.rawV],
+        [s1.rawU, s1.rawV],
+        [s2.rawU, s2.rawV]
+      );
 
       const edges = panelEdges.get(pid)!;
       const addEdge = (ka: string, kb: string, a2d: [number, number], b2d: [number, number]) => {
@@ -1469,27 +1576,17 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     }
   }
 
-  // Expand clamped edge markers inward on lc25; on amg-gt3 hatch only pixels exclusively covered by forced-carbon
-  // triangles (never pixels shared with paintable bumper corners that sit above or behind the splitter shelf)
+  // Combine narrow clamped-edge strips with exclusively forced-carbon splitter pixels (never shared with paintable corners)
   const hatchBand = new Uint8Array(SIZE * SIZE);
+  let clampedEdgePixels = 0;
   let carbonHatchPixels = 0;
-  if (target.kind === "f1" && target.allowMainBoundsClamping) {
-    for (const pid of panelIds) {
-      const rect = panelRectOf(pid);
-      const dilated = dilateMaskInPanel(hatchRaw, rect, 14);
-      for (let y = rect.y; y < rect.y + rect.h; y++) {
-        const row = y * SIZE;
-        for (let x = rect.x; x < rect.x + rect.w; x++) {
-          if (dilated[row + x]) hatchBand[row + x] = 1;
-        }
-      }
-    }
-  } else if (splitterVerts > 0) {
-    for (let i = 0; i < hatchBand.length; i++) {
-      if (hatchRaw[i] && !paintableFillMask[i]) {
-        hatchBand[i] = 1;
-        carbonHatchPixels++;
-      }
+  for (let i = 0; i < hatchBand.length; i++) {
+    if (clampedEdgeHatch[i]) {
+      hatchBand[i] = 1;
+      clampedEdgePixels++;
+    } else if (splitterVerts > 0 && carbonHatchRaw[i] && !paintableFillMask[i]) {
+      hatchBand[i] = 1;
+      carbonHatchPixels++;
     }
   }
 
@@ -1581,21 +1678,26 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     }
   }
 
+  const labelBlockedMask = new Uint8Array(SIZE * SIZE);
+  for (let i = 0; i < labelBlockedMask.length; i++) {
+    if (fillMask[i] || clampedEdgeHatch[i]) labelBlockedMask[i] = 1;
+  }
+
   const templateLayers =
     target.kind === "f1"
-      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, fillMask, false)
-      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, fillMask, false);
+      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, false, clampedEdgePixels > 0)
+      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, labelBlockedMask, false);
   const overlayLayers =
     target.kind === "f1"
-      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, fillMask, true)
-      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, fillMask, true);
+      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, true, clampedEdgePixels > 0)
+      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, labelBlockedMask, true);
 
   const templateLabelsBuf = Buffer.from(templateLayers.labelsSvg);
   const overlayLabelsBuf = Buffer.from(overlayLayers.labelsSvg);
 
-  // Assert zero overlap between panel labels/pills/arrows/legends and painted geometry
-  await assertLabelsOffPaintedGeometry(target.id, "template", templateLabelsBuf, fillMask, panelRects);
-  await assertLabelsOffPaintedGeometry(target.id, "overlay", overlayLabelsBuf, fillMask, panelRects);
+  // Assert zero overlap between panel labels/pills/arrows/legends and painted geometry or clamped edge strips
+  await assertLabelsOffPaintedGeometry(target.id, "template", templateLabelsBuf, labelBlockedMask, panelRects);
+  await assertLabelsOffPaintedGeometry(target.id, "overlay", overlayLabelsBuf, labelBlockedMask, panelRects);
 
   const outDir = join(OUT_ROOT, target.id);
   mkdirSync(outDir, { recursive: true });
@@ -1648,6 +1750,7 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
       console.log(`    ${pid}: ${c.count} (u<0:${c.uLo}, u>1:${c.uHi}, v<0:${c.vLo}, v>1:${c.vHi})`);
     }
   }
+  if (clampedEdgePixels > 0) console.log(`  clamped-edge hatch px (<= ${CLAMP_EDGE_STRIP_PX}px strip): ${clampedEdgePixels}`);
   if (splitterVerts > 0) console.log(`  forced-carbon front splitter verts: ${splitterVerts}, exclusive carbon hatch px: ${carbonHatchPixels}`);
   console.log(`  label overlap check: 0 px overlapping painted bodywork (template + overlay)`);
   console.log(`  wrote ${templatePath} — ${fmtKb(templatePath)}`);
@@ -1706,7 +1809,9 @@ export {
   assertLabelsOffPaintedGeometry,
   buildF1VectorLayers,
   buildPortedVectorLayers,
+  CLAMP_EDGE_STRIP_PX,
   loadPaintGeometry,
+  markClampedTriangleEdges,
   rasterizeTriangle,
   TARGETS as LIVERY_TEMPLATE_TARGETS,
 };
