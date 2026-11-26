@@ -3348,7 +3348,10 @@ export class DriveSession {
       // The headset's own buttons (its pause menu is the HUD panel): a long B pauses; paused, or in the menus the page
       // alone shows, A or the throttle drives on, Y recentres and B leaves the headset for the page's menus
       if (vr.presenting && !gpuLost) {
-        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel);
+        // A pad plugged in presses the paused panel too, in the drive's pause only: in the menus its B is the page's
+        // Back, and the seat panel reads the pad itself
+        const panelPads = !inMenu && !this.snapshot.seatPanel ? pads : [];
+        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel, panelPads);
         if (v.pause && !inMenu) this.togglePause();
         if (v.resume && !inMenu) this.endPause();
         if (v.recenter) vr.recenter();

@@ -110,6 +110,32 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   check("a trigger held over does not resume again", !b.read(pad([7]), (t += 16), paused).resume);
   check("no pad: nothing", Object.values(b.read(null, (t += 16), false)).every((v) => v === false));
   check("a frame the headset did nothing in leaves the drive its presses", !headsetTookPress(b.read(pad([0]), (t += 16), false)));
+
+  // The first frame in the headset only notes what is held: the A that clicked Enter VR does not drive on
+  const fresh = new HeadsetButtons();
+  check("A still held from Enter VR does not drive on", !fresh.read(pad([0]), 0, true).resume && !fresh.read(pad([0]), 16, true).resume);
+  fresh.read(pad([]), 32, true);
+  check("a new A after it does", fresh.read(pad([0]), 48, true).resume);
+
+  // An Xbox pad on PC VR, no hand controllers: the paused panel's A / RT / Y / B work from it too
+  const xbox = (pressed: number[]) => ({ ...pad(pressed), id: "Xbox Wireless Controller" });
+  const pc = new HeadsetButtons();
+  let u = 0;
+  pc.read(null, (u += 16), false, [xbox([])]);
+  let padPaused = false;
+  for (let i = 0; i < 80; i++) if (pc.read(null, (u += 16), false, [xbox([1])]).pause) padPaused = true;
+  check("a pad's B held while driving does not pause (Boost on some layouts)", !padPaused);
+  pc.read(null, (u += 16), false, [xbox([7])]);
+  check("a pad's throttle held as the pause comes does not drive on", !pc.read(null, (u += 16), true, [xbox([7])]).resume);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  check("a pad's A on the paused panel drives on", pc.read(null, (u += 16), true, [xbox([0])]).resume);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  check("a pad's Y recentres", pc.read(null, (u += 16), true, [xbox([3])]).recenter);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  check("a pad's B leaves VR", pc.read(null, (u += 16), true, [xbox([1])]).leave);
+  pc.read(null, (u += 16), true, [xbox([])]);
+  const wheel = { ...xbox([0]), mapping: "" };
+  check("a pad without the standard mapping (a wheel) is not read", !pc.read(null, (u += 16), true, [wheel]).resume);
 }
 
 // --- Standalone headset detection ---------------------------------------------------------------------------------
