@@ -13,9 +13,9 @@
  *
  * No turbo, hybrid or DRS. Traction control, still legal in 2007, is on (electronics.ini TC PRESENT=1); there is no
  * ABS (PRESENT=0). Double wishbones at both ends with a third (heave) spring on each axle, four dry Bridgestone
- * compounds (three of them in the garage's slots, see `TYRES`) and seven aero elements: the front and rear wings on
- * their setup positions, the body's drag, and the floor at each end as one element that reads the body's pitch and one
- * that reads its ground height.
+ * compounds (the Super Soft in the garage's fourth dry slot, see `TYRES`) with the data's own warm-up, and seven aero
+ * elements: the front and rear wings on their setup positions, the body's drag, and the floor at each end as one element
+ * that reads the body's pitch and one that reads its ground height.
  */
 import type { LutPoints } from '../lut';
 import type {
@@ -607,6 +607,43 @@ const AERO: AeroData = {
 // Tyre tables [spec tyres.ini], per compound: peak μ against load (N) on each axle, wear and temperature
 // ---------------------------------------------------------------------------
 
+const SS_FRONT_DY: LutPoints = [
+  [0, 2.0606], [1000, 1.9648], [2000, 1.8721], [3000, 1.7832], [4000, 1.6985], [5000, 1.6185],
+  [6000, 1.5437], [7000, 1.4746], [8000, 1.4118], [9000, 1.3557], [10000, 1.3069], [11000, 1.2658],
+  [12000, 1.2329], [13000, 1.2089], [14000, 1.194], [15000, 1.189], [24000, 1.189],
+];
+const SS_FRONT_DX: LutPoints = [
+  [0, 1.9872], [1000, 1.889], [2000, 1.8012], [3000, 1.7233], [4000, 1.6547], [5000, 1.5949],
+  [6000, 1.5433], [7000, 1.4994], [8000, 1.4627], [9000, 1.4327], [10000, 1.4087], [11000, 1.3903],
+  [12000, 1.3769], [13000, 1.368], [14000, 1.3631], [15000, 1.3615], [24000, 1.3615],
+];
+const SS_REAR_DY: LutPoints = [
+  [0, 2.1224], [1000, 2.0279], [2000, 1.9381], [3000, 1.8535], [4000, 1.7741], [5000, 1.7004],
+  [6000, 1.6325], [7000, 1.5706], [8000, 1.5151], [9000, 1.4662], [10000, 1.4241], [11000, 1.3891],
+  [12000, 1.3614], [13000, 1.3414], [14000, 1.3291], [15000, 1.325], [24000, 1.325],
+];
+const SS_REAR_DX: LutPoints = [
+  [0, 2.0468], [1000, 1.9457], [2000, 1.8589], [3000, 1.7852], [4000, 1.7236], [5000, 1.6729],
+  [6000, 1.6322], [7000, 1.6002], [8000, 1.5761], [9000, 1.5587], [10000, 1.5468], [11000, 1.5396],
+  [12000, 1.5358], [13000, 1.5344], [14000, 1.5343], [15000, 1.5346], [24000, 1.5346],
+];
+const SS_WEAR: LutPoints = [
+  [0, 98], [0.2, 100], [0.4, 99.512], [0.6, 99.035], [0.8, 98.568], [1, 98.112],
+  [1.4, 97.667], [1.8, 96.808], [2.2, 95.992], [2.6, 95.219], [3, 94.488], [3.4, 93.8],
+  [3.8, 93.155], [4.2, 92.552], [4.6, 91.992], [5, 91.475], [5.4, 91], [5.8, 90.568],
+  [6.2, 90.179], [6.6, 89.832], [7, 89.528], [7.4, 89.267], [7.8, 89.048], [8.2, 88.872],
+  [8.6, 88.739], [9, 88.648], [9.4, 88.6], [9.8, 88.595], [10.2, 88.632], [10.6, 88.712],
+  [11, 88.835], [11.4, 89], [11.8, 89.208], [12.2, 89.459],
+];
+const SS_TEMP: LutPoints = [
+  [20, 0.937], [25, 0.94], [30, 0.943], [35, 0.947], [40, 0.952], [45, 0.958], [50, 0.964],
+  [55, 0.971], [60, 0.977], [65, 0.984], [70, 0.99], [75, 0.994], [80, 0.998], [85, 1],
+  [90, 1], [95, 1], [100, 1], [105, 1], [110, 1], [115, 0.999], [120, 0.997],
+  [125, 0.995], [130, 0.991], [135, 0.987], [140, 0.983], [145, 0.978], [150, 0.968], [155, 0.963],
+  [160, 0.958], [165, 0.954], [170, 0.95], [175, 0.947], [180, 0.943], [185, 0.941], [190, 0.939],
+  [195, 0.937], [200, 0.935],
+];
+
 const S_FRONT_DY: LutPoints = [
   [0, 2.04], [1000, 1.9451], [2000, 1.8534], [3000, 1.7654], [4000, 1.6815], [5000, 1.6023],
   [6000, 1.5283], [7000, 1.4599], [8000, 1.3977], [9000, 1.3422], [10000, 1.2938], [11000, 1.2531],
@@ -774,22 +811,95 @@ const REAR_CAMBER: LutPoints = [
 ];
 
 /**
- * Heat capacities, hysteresis and cooling: the LC25's F1 slicks' [est]. The data's own thermal constants are for another
- * tyre model, not this one, and its performance curves are wide (93 % of the grip at 20 °C), so the grip hardly hangs on
- * the fit
+ * The tyres' own warm-up [spec tyres.ini THERMAL_FRONT / THERMAL_REAR, the same in every compound but for the grip
+ * curve; ADDITIONAL1]. The data heats a tread of three strips round the tyre over a light core: the strips in the
+ * contact patch take the sliding heat and the rolling heat, the rest cool in the air, faster the faster the car goes,
+ * and the core follows the tread's mean about a minute behind, warmed by the rolling carcass; the grip reads the core,
+ * a quarter of the way to the contact patch. In this model's layers:
+ *  - the tread surface is the data's tread, 36 times the core's heat capacity: the sliding heat (the grip the tyre
+ *    could give × its sliding speed, `slipHeatAtPeak`), the rolling heat made in the tread (SURFACE_ROLLING_K) and the
+ *    air cooling (SURFACE_TRANSFER × COOL_FACTOR) heat and cool it at the data's rates. The strips out of the contact
+ *    patch cool, so the air takes 11/12 of SURFACE_TRANSFER and the road (in contact a twelfth of the time) a twelfth
+ *  - the bulk is the data's light core, a twelfth of a strip's heat capacity, joined to the tread by 36 ×
+ *    CORE_TRANSFER of its capacity and warmed by the rolling heat of INTERNAL_CORE_TRANSFER × ROLLING_K. The grip reads
+ *    it (`VehiclePhysics` weighs the surface 0.3 to the data's 0.25)
+ *  - the liner, with the gas in the tyre and the rim (which the data has not), is this model's own: barely joined to
+ *    the bulk, warmed by its own rolling heat and cooled by the air, set so that the gas follows the data's core, which
+ *    sets the data's pressure, on autopilot laps of RISE from cold and from blankets (within 3.5 °C, 0.5 psi) [est]
+ * The scale is the core's heat capacity, set so the front's sliding heat share stays the LC25's 0.35: the rates are
+ * the data's whatever it is. Replayed on the same RISE laps, the grip temperature is within 1–1.3 °C of the data's
+ * intent and the tread's within 0.2–0.4 °C [derived]
  */
+/** The data's core: one twelfth of a strip's heat capacity (J/K) [derived, the scale above] */
+const CORE_J_PER_K = 0.35 / (3 * 0.015 * 0.25);
+/** The tread: three strips of twelve, each the core's capacity [derived] */
+const TREAD_J_PER_K = 36 * CORE_J_PER_K;
+/** SURFACE_TRANSFER, as a rate (1/s) [spec] */
+const SURFACE_TRANSFER = 0.015;
+/** The rear tyre's size against the front's: its capacities and conductances scale with it (`VehiclePhysics`) */
+const REAR_SIZE = 0.325 / 0.27;
 const THERMAL_COMMON = {
-  // Pressure moves the heat: the sliding heat and the crown against the shoulders [est, as the LC25's]
-  pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
-  surfaceHeatCapacity: 1550,
-  coreHeatCapacity: 9800,
-  slipHeatShare: 0.35,
-  hysteresis: 0.008,
-  surfaceToCore: 40,
-  surfaceCooling: [5, 0.6] as [number, number],
-  coreCooling: [4, 0.1] as [number, number],
+  // Pressure moves the heat: all of it falls by half the pressure's rise over the ideal, and the middle strip takes
+  // (1 + 0.1 p) / 3 of it [spec, as the data spreads its heat]
+  pressureHeat: { slipGain: 0.5, crownGain: 0.1 / 3 },
+  // The heat goes to the inner strip by CAMBER_TEMP_SPREAD_K × the camber (rad) of the strips' thirds [spec
+  // ADDITIONAL1]
+  stripCamberShift: 1.42 / 3,
+  surfaceHeatCapacity: Number(TREAD_J_PER_K.toFixed(1)),
+  // Sliding heat into the tread at SURFACE_TRANSFER × FRICTION_K / 12 per joule [spec FRICTION_K 0.25, derived]
+  slipHeatShare: Number(((TREAD_J_PER_K * SURFACE_TRANSFER * 0.25) / 12).toFixed(4)),
+  slipHeatAtPeak: true,
+  frictionHeatToSubsurface: 0,
+  // SURFACE_ROLLING_K 1: SURFACE_TRANSFER / 12 × ω × load / 1000 °C/s, ω = v / R [spec, derived]
+  surfaceHysteresis: Number(((TREAD_J_PER_K * SURFACE_TRANSFER * 1) / (12 * 1000 * TYRE_RADIUS)).toPrecision(4)),
+  // In the air: 11/12 of SURFACE_TRANSFER at rest, × COOL_FACTOR 4 at 200 km/h, growing with the square of the speed
+  // [spec COOL_FACTOR, derived]
+  surfaceCooling: [
+    Number(((TREAD_J_PER_K * SURFACE_TRANSFER * 11) / 12).toFixed(2)),
+    0,
+    Number(((((TREAD_J_PER_K * SURFACE_TRANSFER * 11) / 12) * (4 - 1)) / (200 / 3.6) ** 2).toPrecision(4)),
+  ] as [number, number, number],
+  // The road, a twelfth of SURFACE_TRANSFER [derived]
+  roadConductance: Number(((TREAD_J_PER_K * SURFACE_TRANSFER) / 12).toFixed(2)),
+  subsurfaceHeatCapacity: Number(CORE_J_PER_K.toFixed(1)),
+  // 36 × CORE_TRANSFER 0.0005 of the core's capacity: it follows the tread's mean ≈ 55 s behind [spec, derived]
+  surfaceToSubsurfaceTransfer: Number((36 * CORE_J_PER_K * 0.0005).toFixed(3)),
+  surfaceToCore: Number((36 * CORE_J_PER_K * 0.0005).toFixed(3)),
+  subsurfaceToCoreTransfer: 0.02,
+  // The liner [est, see above]; its rolling heat and the core's, INTERNAL_CORE_TRANSFER 0.0005 × ROLLING_K 1 × ω ×
+  // load / 1000 °C/s on the core's capacity [spec, derived]
+  coreHeatCapacity: 2000,
+  coreCooling: [0.5, 1] as [number, number],
+  ...coreRolling(1, 1, 0.0115),
+  rimGas: {
+    // The pressure rises 0.08 psi per °C over the data's 16 psi at 26 °C (21 psi at 88 °C): the carcass stretches by
+    // this much per psi as the gas warms past its set temperature [spec PRESSURE_TEMPERATURE_GAIN, derived]
+    carcassVolumeStretchPerPsi: 0.0062,
+  },
   thermalVerticalK: -0.0012,
   thermalVerticalRefC: 95,
+};
+
+/**
+ * The rolling heat the bulk (the data's core) and the liner take, W per N per m/s: the core's INTERNAL_CORE_TRANSFER
+ * 0.0005 × ROLLING_K × ω × load / 1000 °C/s on its capacity (× `size` at the rear), the liner's `liner` [spec,
+ * derived]
+ */
+function coreRolling(rollingK: number, size: number, liner: number) {
+  const core = (CORE_J_PER_K * size * 0.0005 * rollingK) / (1000 * TYRE_RADIUS);
+  return { hysteresis: Number((core + liner).toPrecision(5)), rollingHeatToSubsurface: Number((core / (core + liner)).toPrecision(4)) };
+}
+
+/**
+ * The rear's own [spec THERMAL_REAR]: FRICTION_K 0.2, ROLLING_K and SURFACE_ROLLING_K 0.5 against the front's 0.25, 1, 1;
+ * the same rates on its larger tyre. Its liner [est, as the front's]
+ */
+const REAR_THERMAL = {
+  slipHeatShare: Number(((TREAD_J_PER_K * REAR_SIZE * SURFACE_TRANSFER * 0.2) / 12).toFixed(4)),
+  surfaceHysteresis: Number(((TREAD_J_PER_K * REAR_SIZE * SURFACE_TRANSFER * 0.5) / (12 * 1000 * TYRE_RADIUS)).toPrecision(4)),
+  coreHeatCapacity: 5600,
+  coreCooling: [0.5, 1.5] as [number, number],
+  ...coreRolling(0.5, REAR_SIZE, 0.03),
 };
 
 /** What a compound's data gives beyond the shape the four share [spec tyres.ini FRONT_n / REAR_n, THERMAL_*_n] */
@@ -878,6 +988,9 @@ function bridgestone(c: Bridgestone): TyresCompoundData {
       ...THERMAL_COMMON,
     },
     pressureData: {
+      // The data's 16 psi at 26 °C, at the blankets' 90 °C by its 0.08 psi per °C [spec PRESSURE_STATIC,
+      // PRESSURE_TEMPERATURE_GAIN; derived]
+      setPsi: Number((16 + 0.08 * (90 - 26)).toFixed(1)),
       // [spec PRESSURE_IDEAL]
       optimalPsi: 21,
       pressureSpringCurve: pressureSpring(c.front.rate, c.front.perPsi),
@@ -886,10 +999,8 @@ function bridgestone(c: Bridgestone): TyresCompoundData {
       pressureGripSensitivity: 1.0,
       // [spec PRESSURE_D_GAIN]
       pressureGripLossPerPsi: 0.0028,
-      // Off 90 °C blankets [spec ADDITIONAL1 BLANKETS_TEMP]. The data's 16 psi (PRESSURE_STATIC) is set cold and reaches
-      // the ideal 21 at ≈ 90 °C by its own 0.08 psi per °C; this model's pressure follows the gas, so the cold pressure is
-      // the one that reaches 21 psi in the middle of the working window, and the garage states it at 20 °C (the
-      // profile's `setupPressureRefC`) [est]
+      // Off 90 °C blankets [spec ADDITIONAL1 BLANKETS_TEMP], the pressure set there (`setPsi`); the garage states it at
+      // 20 °C (the profile's `setupPressureRefC`)
       coldRefC: 90,
     },
     camberData: {
@@ -927,9 +1038,26 @@ function bridgestone(c: Bridgestone): TyresCompoundData {
       },
       camberData: { dcamber0: 2.595, dcamber1: -29.731, dcamberLut: REAR_CAMBER },
       pressureData: { pressureSpringCurve: pressureSpring(c.rear.rate, c.rear.perPsi), pressureRollingGain: 1.3 },
+      thermalData: REAR_THERMAL,
     },
   };
 }
+
+/**
+ * Bridgestone Super Soft, the data's default set [spec tyres.ini FRONT / REAR, THERMAL_*; COMPOUND_DEFAULT 0]: 1 % more
+ * grip than the Soft at every load, its grip curve full from 85 °C where the Soft's is from 90, and its tread wears
+ * fastest
+ */
+const SUPER_SOFT = bridgestone({
+  name: 'Bridgestone Super Soft',
+  shortName: 'SS',
+  tyre_compound: 'PhysicsTyreCompound_F1_SuperSoft',
+  front: { dy: SS_FRONT_DY, dx: SS_FRONT_DX, rate: 264_521, perPsi: 12_100, damp: 736, rr0: 10, rrSlip: 3002, speedSensitivity: 0.00602 },
+  rear: { dy: SS_REAR_DY, dx: SS_REAR_DX, rate: 278_443, perPsi: 12_800, damp: 765, rr0: 10, rrSlip: 3055, speedSensitivity: 0.00588 },
+  wear: SS_WEAR,
+  temp: SS_TEMP,
+  optimalTempC: [85, 110],
+});
 
 /** Bridgestone Soft [spec tyres.ini FRONT_1 / REAR_1, THERMAL_*_1] */
 const SOFT = bridgestone({
@@ -971,19 +1099,29 @@ const HARD = bridgestone({
 });
 
 /**
+ * A rain tyre on the Medium's carcass, its pressure set where its cooler blankets leave it, on the data's 16 psi at 26 °C
+ * rising 0.08 psi per °C [spec PRESSURE_STATIC, PRESSURE_TEMPERATURE_GAIN; derived]
+ */
+function rainTyre(kind: 'intermediate' | 'wet', tyre_compound: PhysicsTyreCompound, name: string): TyresCompoundData {
+  const t = deriveRainCompound(MEDIUM, kind, tyre_compound, name, true, NUZZI_RAIN_TYRE_DESIGN[kind]);
+  return { ...t, pressureData: { ...t.pressureData, setPsi: Number((16 + 0.08 * (t.pressureData.coldRefC - 26)).toFixed(1)) } };
+}
+
+/**
  * The data has four dry compounds, Super Soft, Soft, Medium and Hard (COMPOUND_DEFAULT 0, the Super Soft), ≈ 1 % of
- * grip apart; the garage has three slots, so Soft, Medium and Hard fill them under their own names and the Super Soft
- * (and its copy, "Slick", FRONT_6) is left out. The data's Intermediate and Wet (FRONT_4, FRONT_5) are copies of the
- * Hard's dry data (the Wet adds a tread cover and depth, the Intermediate nothing), so the rain tyres are derived from
- * the Medium's carcass as the LC25's are: the F1 rain pack's temperature curves and the rain tyres' water clearing and
- * heat ratios [est]
+ * grip apart, and each fills its own slot: the Super Soft the garage's fourth dry slot, which only a car whose data has
+ * one offers. Its copy, "Slick" (FRONT_6), is left out. The data's Intermediate and Wet (FRONT_4, FRONT_5) are copies of
+ * the Hard's dry data (the Wet adds a tread cover and depth, the Intermediate nothing), so the rain tyres are derived
+ * from the Medium's carcass as the LC25's are: the F1 rain pack's temperature curves and the rain tyres' water clearing
+ * and heat ratios [est]
  */
 const TYRES = {
+  PhysicsTyreCompound_F1_SuperSoft: SUPER_SOFT,
   PhysicsTyreCompound_F1_Soft: SOFT,
   PhysicsTyreCompound_F1_Medium: MEDIUM,
   PhysicsTyreCompound_F1_Hard: HARD,
-  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true, NUZZI_RAIN_TYRE_DESIGN.intermediate),
-  PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Wet', true, NUZZI_RAIN_TYRE_DESIGN.wet),
+  PhysicsTyreCompound_F1_Intermediate: rainTyre('intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate'),
+  PhysicsTyreCompound_F1_Wet: rainTyre('wet', 'PhysicsTyreCompound_F1_Wet', 'Wet'),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
 /** Equivalent box 1.38 × 1.1 × 3.42 m [spec car.ini INERTIA, derived] */
@@ -1061,6 +1199,7 @@ export const F12007_CONFIG = {
   aero: AERO,
   tyreCompounds: TYRES,
   compoundSlots: {
+    supersoft: 'PhysicsTyreCompound_F1_SuperSoft',
     soft: 'PhysicsTyreCompound_F1_Soft',
     medium: 'PhysicsTyreCompound_F1_Medium',
     hard: 'PhysicsTyreCompound_F1_Hard',

@@ -29,6 +29,7 @@ import { F12007_CONFIG, F12007_ELECTRONICS } from '../../src/lib/sim/f1-2007/F12
 import { F12007_SIM_PROFILE } from '../../src/lib/sim/f1-2007/F12007Sim';
 import type { CarSimProfile } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { lutAt, lutGap, modDir, ModData, type Lut } from '../lib/mod-data';
+import { tyreGaugePressureOfGas } from '../../src/lib/sim/tyre-pressure';
 
 const failures: string[] = [];
 let checks = 0;
@@ -162,7 +163,7 @@ function axleTyre(compound: TyresCompoundData, axle: 'front' | 'rear') {
     model: { ...compound.modelData, ...rear?.modelData },
     camber: { ...compound.camberData, ...rear?.camberData },
     pressure: { ...compound.pressureData, ...rear?.pressureData },
-    thermal: compound.thermalData,
+    thermal: { ...compound.thermalData, ...rear?.thermalData },
     wear: compound.wear,
   };
 }
@@ -764,8 +765,8 @@ section('Porsche 934 Turbo RSR', 'pfa_porsche_934t_rsr_rr', (mod) => {
 });
 
 // Cimmerian Iter's F1 2007, from the Ferrari F2007's data (the eleven teams share all but their wheelbases, tracks and
-// CG): heave springs at both ends, three of the four dry compounds (Soft, Medium, Hard in their own slots), and the
-// wings and the floor as seven aero elements
+// CG): heave springs at both ends, the four dry compounds (Super Soft, Soft, Medium, Hard in their own slots) and their
+// warm-up, and the wings and the floor as seven aero elements
 section('F1 2007', 'cim_2007_ferrari', (mod) => {
   const config = F12007_CONFIG as unknown as CarPhysicsConfig;
   const profile = F12007_SIM_PROFILE;
@@ -808,31 +809,72 @@ section('F1 2007', 'cim_2007_ferrari', (mod) => {
     }
   }
 
-  // Soft, Medium and Hard (FRONT_1–3 / REAR_1–3): grip from the load tables, the newer shape data. One wear curve, the
-  // front's; the temperature curves are the same front and rear
+  // Super Soft, Soft, Medium and Hard (FRONT / REAR, FRONT_1–3 / REAR_1–3): grip from the load tables, the newer
+  // shape data. One wear curve, the front's; the temperature curves are the same front and rear
   const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'RADIUS_ANGULAR_K', 'DAMP', 'XMU', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD', ...V10_SHAPE.filter((k) => k !== 'COMBINED_FACTOR')];
-  (['soft', 'medium', 'hard'] as const).forEach((slot, i) => {
-    const compound = compoundData(config, config.compoundSlots[slot]);
+  const add1 = (key: string) => mod.num('tyres.ini', 'ADDITIONAL1', key);
+  /**
+   * The warm-up [THERMAL_*]: the tread 36 cores heavy; the sliding heat, the tread's rolling heat, its air cooling
+   * (11/12 of SURFACE_TRANSFER, COOL_FACTOR × at 200 km/h) and the road (a twelfth) at the data's rates on this axle's
+   * size; the core (the bulk) joined by 36 × CORE_TRANSFER and warmed by INTERNAL_CORE_TRANSFER × ROLLING_K
+   * (F12007Config)
+   */
+  const checkHeat = (label: string, tyre: AxleTyre, thermalName: string, size: number) => {
+    const t = (key: string) => mod.num('tyres.ini', thermalName, key);
+    const th = tyre.thermal;
+    const core = th.subsurfaceHeatCapacity ?? NaN;
+    const tread = th.surfaceHeatCapacity;
+    const R = tyre.geometry.radius;
+    const ST = t('SURFACE_TRANSFER');
+    eq(`${label} the tread: 36 × the core's heat capacity`, tread, 36 * core, 2e-3);
+    eq(`${label} FRICTION_K: sliding heat into the tread`, (th.slipHeatShare / (tread * size)) * 12, ST * t('FRICTION_K'), 2e-3);
+    eq(`${label} FRICTION_K: from the peak force`, th.slipHeatAtPeak ? 1 : 0, 1);
+    eq(`${label} SURFACE_ROLLING_K`, ((th.surfaceHysteresis ?? NaN) / (tread * size)) * 12 * 1000 * R, ST * t('SURFACE_ROLLING_K'), 2e-3);
+    eq(`${label} SURFACE_TRANSFER: air at rest (11/12)`, (th.surfaceCooling[0] / tread) * 12 / 11, ST, 2e-3);
+    eq(`${label} SURFACE_TRANSFER: no speed-linear cooling`, th.surfaceCooling[1], 0);
+    const g200 = th.surfaceCooling[0] + (th.surfaceCooling[2] ?? 0) * (200 / 3.6) ** 2;
+    eq(`${label} COOL_FACTOR: × at 200 km/h`, g200 / th.surfaceCooling[0], t('COOL_FACTOR'), 2e-3);
+    eq(`${label} SURFACE_TRANSFER: the road (1/12)`, ((th.roadConductance ?? NaN) / tread) * 12, ST, 2e-3);
+    eq(`${label} CORE_TRANSFER: 36 × of the core`, (th.surfaceToSubsurfaceTransfer ?? NaN) / (36 * core), t('CORE_TRANSFER'), 5e-3);
+    eq(
+      `${label} INTERNAL_CORE_TRANSFER × ROLLING_K`,
+      ((th.hysteresis * (th.rollingHeatToSubsurface ?? NaN)) / (core * size)) * 1000 * R,
+      t('INTERNAL_CORE_TRANSFER') * t('ROLLING_K'),
+      5e-3
+    );
+    eq(`${label} CAMBER_TEMP_SPREAD_K over the three strips`, (th.stripCamberShift ?? NaN) * 3, add1('CAMBER_TEMP_SPREAD_K'), 1e-6);
+  };
+  (['supersoft', 'soft', 'medium', 'hard'] as const).forEach((slot, i) => {
+    const compound = compoundData(config, config.compoundSlots[slot]!);
     for (const axle of ['front', 'rear'] as const) {
       const AX = axle.toUpperCase();
-      const sec = `${AX}_${i + 1}`;
+      const sec = i === 0 ? AX : `${AX}_${i}`;
       const tyre = axleTyre(compound, axle);
       checkTyre(`2007 ${slot} ${axle}`, mod, tyre, { sectionName: sec, thermalName: `THERMAL_${sec}`, keys, loadCurvesToN: 24_000, rate: true, wear: axle === 'front', thermalCurve: true, tread: true });
       eq(`2007 ${slot} ${axle} the tables at FZ0 (DY)`, tyre.model.Dy0, lutAt(mod.lutOf('tyres.ini', sec, 'DY_CURVE'), mod.num('tyres.ini', sec, 'FZ0')), 1e-4);
       eq(`2007 ${slot} ${axle} the tables at FZ0 (DX)`, tyre.model.Dx0, lutAt(mod.lutOf('tyres.ini', sec, 'DX_CURVE'), mod.num('tyres.ini', sec, 'FZ0')), 1e-4);
       sameCurve(`2007 ${slot} ${axle} DCAMBER_LUT`, tyre.camber.dcamberLut ?? [], mod.lutOf('tyres.ini', sec, 'DCAMBER_LUT'), 1e-9);
-      eq(`2007 ${slot} ${axle} BLANKETS_TEMP`, tyre.pressure.coldRefC, mod.num('tyres.ini', 'ADDITIONAL1', 'BLANKETS_TEMP'));
+      eq(`2007 ${slot} ${axle} BLANKETS_TEMP`, tyre.pressure.coldRefC, add1('BLANKETS_TEMP'));
+      checkHeat(`2007 ${slot} ${axle}`, tyre, `THERMAL_${sec}`, tyre.geometry.width / compound.front.width);
+      // The pressure: set at the blankets' temperature on the data's static pressure and its rise per °C, and rising by
+      // that much past it (the carcass stretching)
+      const gain = add1('PRESSURE_TEMPERATURE_GAIN');
+      eq(`2007 ${slot} ${axle} PRESSURE_STATIC at BLANKETS_TEMP`, tyre.pressure.setPsi ?? NaN, mod.num('tyres.ini', sec, 'PRESSURE_STATIC') + gain * (add1('BLANKETS_TEMP') - 26), 3e-3);
+      const stretch = tyre.thermal.rimGas?.carcassVolumeStretchPerPsi ?? NaN;
+      const rise = (tyreGaugePressureOfGas(tyre.pressure.setPsi ?? NaN, tyre.pressure.coldRefC, tyre.pressure.coldRefC + 20, stretch) - (tyre.pressure.setPsi ?? NaN)) / 20;
+      eq(`2007 ${slot} ${axle} PRESSURE_TEMPERATURE_GAIN past the blankets`, rise, gain, 0.05);
     }
     // The rear's COMBINED_FACTOR is the combined-slip exponent; the front's is 0, which stands for the friction circle
-    eq(`2007 ${slot} rear COMBINED_FACTOR`, axleTyre(compound, 'rear').model.combinedExponent ?? NaN, mod.num('tyres.ini', `REAR_${i + 1}`, 'COMBINED_FACTOR'));
-    eq(`2007 ${slot} front COMBINED_FACTOR 0: the friction circle`, axleTyre(compound, 'front').model.combinedExponent ?? NaN, mod.num('tyres.ini', `FRONT_${i + 1}`, 'COMBINED_FACTOR') === 0 ? 2 : NaN);
+    eq(`2007 ${slot} rear COMBINED_FACTOR`, axleTyre(compound, 'rear').model.combinedExponent ?? NaN, mod.num('tyres.ini', i === 0 ? 'REAR' : `REAR_${i}`, 'COMBINED_FACTOR'));
+    eq(`2007 ${slot} front COMBINED_FACTOR 0: the friction circle`, axleTyre(compound, 'front').model.combinedExponent ?? NaN, mod.num('tyres.ini', i === 0 ? 'FRONT' : `FRONT_${i}`, 'COMBINED_FACTOR') === 0 ? 2 : NaN);
   });
+  // The data's default compound is the car's: its softest, which a new car starts on
+  eq('2007 COMPOUND_DEFAULT 0, the Super Soft, has its own slot', config.compoundSlots.supersoft === 'PhysicsTyreCompound_F1_SuperSoft' && mod.num('tyres.ini', 'COMPOUND_DEFAULT', 'INDEX') === 0 ? 1 : 0, 1);
   const soft = compoundData(config, config.compoundSlots.soft);
   eq('2007 VIRTUALKM USE_LOAD', soft.wear?.loadScaled ? 1 : 0, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD'));
   eq('2007 VIRTUALKM USE_LOAD load per 2000 N', soft.wear?.loadRefN ?? NaN, 2000);
-  // What the config leaves out: the Super Soft (the data's default, FRONT / REAR) and its copy "Slick" (FRONT_6), and the
-  // Intermediate and Wet (FRONT_4, FRONT_5), which carry the Hard's dry grip (the rain tyres are derived instead)
-  eq('2007 COMPOUND_DEFAULT is the Super Soft (left out)', mod.num('tyres.ini', 'COMPOUND_DEFAULT', 'INDEX'), 0);
+  // What the config leaves out: the Super Soft's copy "Slick" (FRONT_6), and the Intermediate and Wet (FRONT_4,
+  // FRONT_5), which carry the Hard's dry grip (the rain tyres are derived instead)
   for (const AX of ['FRONT', 'REAR']) {
     sameCurve(`2007 ${AX}_6 (Slick) is the Super Soft`, mod.lutOf('tyres.ini', `${AX}_6`, 'DY_CURVE'), mod.lutOf('tyres.ini', AX, 'DY_CURVE'), 0);
     for (const n of [4, 5]) sameCurve(`2007 ${AX}_${n} (${n === 4 ? 'Intermediate' : 'Wet'}) has the Hard's grip`, mod.lutOf('tyres.ini', `${AX}_${n}`, 'DY_CURVE'), mod.lutOf('tyres.ini', `${AX}_3`, 'DY_CURVE'), 0);
