@@ -59,6 +59,7 @@ import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
+import { portedMirrorMeshes } from "@/lib/render/mirror-reflection";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { TripleViewRig } from "@/lib/render/triple-views";
 import { physicalVerticalFovDeg, screenRig, tripleFits, tripleRects, type ScreenRect } from "@/lib/display/screen-layout";
@@ -1871,6 +1872,7 @@ export class DriveSession {
       wingMirrors?.dispose();
       wingMirrors = null;
       lc26ExtrasFor = null;
+      portedMirrorsFor = null;
       gt3Dash?.dispose();
       gt3Dash = null;
       portedDash?.dispose();
@@ -3036,6 +3038,11 @@ export class DriveSession {
     let wingMirrors: WingMirrors | null = null;
     /** The LC26 body the wheel display and mirrors above were built for */
     let lc26ExtrasFor: THREE.Object3D | null = null;
+    /** The ported body (`PORTED_BODY`) whose mirrors.ini mirrors were looked for: a livery can bring another body */
+    let portedMirrorsFor: THREE.Object3D | null = null;
+    /** Whether a ported car's outside mirrors are on screen, for the HUD mirror: held a second after each change */
+    let carMirrorsHeld = false;
+    let carMirrorsHeldAtMs = -Infinity;
     // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
     // A ported body's wheel screen and shift lights (the 496R's, LC-LMDH's), once its GLB has loaded under the rig
@@ -4681,6 +4688,28 @@ export class DriveSession {
               });
             }
           }
+          // A ported AC car's mirrors (its GLB's MIRROR_n, from mirrors.ini): each glass reflects from the driver's eye,
+          // the whole car left out of the rear view (its wheels too, which hang off the rig's root)
+          const portedBody = anchors ? (carRig.chassisGroup.getObjectByName("PORTED_BODY") ?? null) : null;
+          if (anchors && portedBody && portedBody !== portedMirrorsFor) {
+            portedMirrorsFor = portedBody;
+            // The last body's (only these mirrors are `outside`)
+            if (wingMirrors?.outside) {
+              wingMirrors.dispose();
+              wingMirrors = null;
+            }
+            const glass = portedMirrorMeshes(portedBody);
+            if (glass.length) {
+              wingMirrors?.dispose();
+              wingMirrors = new WingMirrors(renderer, scene, carRig.chassisGroup, {
+                materials: [],
+                eyeInModel: anchors.cockpit.pos,
+                reflecting: glass,
+                hide: carRig.root,
+                outside: true,
+              });
+            }
+          }
         }
         // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
         if (view.wheelInShot && (wheelDisplay || gt3Dash?.found || portedDash?.found)) {
@@ -5196,7 +5225,18 @@ export class DriveSession {
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
-        const wingMirrorsActive = Boolean(wingMirrors?.found && wingMirrors.coversSides);
+        // The car's own mirrors are live in the views that can have them in shot. A ported car's outside mirrors render
+        // from the chase and T-cam views too, while their glass is on screen (any of three screens, or the headset's
+        // view: not judged there); a cockpit whose mirrors are out of frame (F1 2007's Ferrari, at 70 degrees) keeps the
+        // HUD mirror, their being on screen held a second so a glance to the frame's edge doesn't flash it
+        const carMirrorsInShot = wingMirrors?.outside
+          ? view.outsideMirrorsInShot && (inVr || screensNow !== null || wingMirrors.inView(camera, container.clientHeight))
+          : view.mirrorsInShot;
+        if (carMirrorsInShot !== carMirrorsHeld && nowMs - carMirrorsHeldAtMs >= 1000) {
+          carMirrorsHeld = carMirrorsInShot;
+          carMirrorsHeldAtMs = nowMs;
+        }
+        const wingMirrorsActive = Boolean(wingMirrors?.found && wingMirrors.coversSides && (!wingMirrors.outside || carMirrorsHeld));
         const vmView =
           view.virtualMirror === "always" ||
           (view.virtualMirror === "noSideMirrors" && !wingMirrorsActive) ||
@@ -5220,7 +5260,7 @@ export class DriveSession {
         }
         // Single 256x128 rear-view pass for the car's own mirrors and dash monitor across cabin views (#204), in a headset
         // too, where they are the only rear view
-        wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !podium.playing, carRig.chassisGroup);
+        wingMirrors?.update(mirrorRefresh, carMirrorsInShot && !podium.playing, carRig.chassisGroup);
         if (inVr) {
           // The head's pose on top of the driver's eye point; the HUD panel shows what the page's HUD would
           const panel = headsetPanel({ inMenu, paused: this.snapshot.paused, seatPanel: this.snapshot.seatPanel });

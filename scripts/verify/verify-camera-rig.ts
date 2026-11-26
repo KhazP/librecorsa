@@ -485,4 +485,13 @@ check('cabin views (cockpit, dash, shoulder) render live car mirrors while keepi
   assert.equal(CAMERA_MODES.cockpit_shoulder.driverEye, false);
 });
 
+check("a ported car's outside mirrors can be in shot from the cabin, T-cam, chase and free views, not the nose or far TV views", () => {
+  for (const mode of ['cockpit', 'dash', 'cockpit_shoulder', 'tv_pod', 'chase_close', 'chase', 'chase_far', 'chase_low', 'free'] as const) {
+    assert.equal(CAMERA_MODES[mode].outsideMirrorsInShot, true, `${mode} can see the car's outside mirrors`);
+  }
+  for (const mode of ['nose', 'helicopter', 'tv_side'] as const) {
+    assert.equal(CAMERA_MODES[mode].outsideMirrorsInShot, false, `${mode} should not render the car's outside mirrors`);
+  }
+});
+
 console.log(`\n${passed} camera rig checks passed`);
