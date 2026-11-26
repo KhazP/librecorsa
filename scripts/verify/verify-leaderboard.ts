@@ -47,7 +47,7 @@ import { handleApi } from '../../cloudflare/api/index';
 import { BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, boardKeyOf, loadBoardBest, loadChallengeBest, MOD_LAP, OLDER_PHYSICS_LAP, parseRemoteBoard, saveBoardBest, saveChallengeBest } from '../../src/lib/net/leaderboard';
 import { BOARD_SENTENCES, boardWords } from '../../src/lib/net/board-words';
 import { bindText } from '../../src/lib/text';
-import { challengePlaceLabel, challengeTarget, paceMedalOf, paceTargetMs } from '../../src/lib/net/challenge-target';
+import { challengePlaceLabel, challengeTarget } from '../../src/lib/net/challenge-target';
 import { boardDeps, driverNameKey, listLaps, OLDER_PHYSICS, renameDriver, submitLap, type BoardDeps } from '../../cloudflare/api/board';
 import { nameProblem } from '../../src/lib/net/name-filter';
 import { randomDriverProfile } from '../../src/lib/settings/player-settings';
@@ -637,17 +637,10 @@ async function main(): Promise<void> {
       delete g.localStorage;
       check('middle-gear: challenge bests remember both active trials independently', wBest === 91_000 && mBest === 104_500, `${wBest} / ${mBest}`);
     }
-    // GT7-style pace medal targets (+3% gold, +5% silver, +10% bronze) and permanent place label
+    // Permanent trial P1 HUD place label
     check(
-      'time trial: GT7-style pace medal targets (+3% / +5% / +10%) and permanent P1 label',
-      paceTargetMs(100_000, 'gold') === 103_000 &&
-        paceTargetMs(100_000, 'silver') === 105_000 &&
-        paceTargetMs(100_000, 'bronze') === 110_000 &&
-        paceMedalOf(102_500, 100_000) === 'gold' &&
-        paceMedalOf(104_000, 100_000) === 'silver' &&
-        paceMedalOf(108_000, 100_000) === 'bronze' &&
-        paceMedalOf(112_000, 100_000) === null &&
-        challengePlaceLabel({ bestMs: 100_000, leaderMs: 100_000, rank: 1, gapAboveMs: null, permanent: true }) === 'P1 · fastest on the board',
+      'time trial: permanent P1 label reads fastest on the board',
+      challengePlaceLabel({ bestMs: 100_000, leaderMs: 100_000, rank: 1, gapAboveMs: null, permanent: true }) === 'P1 · fastest on the board',
     );
   }
   {

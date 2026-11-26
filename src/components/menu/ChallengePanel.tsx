@@ -9,7 +9,6 @@ import { TRACKS, getTrackInfo, venueHeroUrl, venueOf } from "@/lib/track-registr
 import { withBasePath } from "@/lib/base-path";
 import { driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
 import { boardChoiceOf, boardChoices, currentBoardBase } from "@/lib/sim/lap-types";
-import { PACE_MEDAL_PCT, paceMedalOf, paceTargetMs, type PaceMedal } from "@/lib/net/challenge-target";
 import {
   challengeById,
   challengeConditionsLabel,
@@ -99,35 +98,6 @@ const resolveTrialCar = (event: TimeTrialEvent): CarDefinition | undefined => {
   return anyCarForVehicle(event.vehicle);
 };
 
-const MEDAL_ORDER: readonly PaceMedal[] = ["gold", "silver", "bronze"];
-
-const MEDAL_STYLE: Record<PaceMedal, { accent: string; text: string; ring: string; bg: string; dot: string }> = {
-  gold: {
-    accent: "#F5C542",
-    text: "text-[#F5C542]",
-    ring: "border-[#F5C542]/60 bg-[#F5C542]/10",
-    bg: "bg-[#F5C542]/16 text-[#F5C542] border-[#F5C542]/45",
-    dot: "bg-[#F5C542]",
-  },
-  silver: {
-    accent: "#CBD5E1",
-    text: "text-[#CBD5E1]",
-    ring: "border-[#CBD5E1]/55 bg-[#CBD5E1]/10",
-    bg: "bg-[#CBD5E1]/15 text-[#E2E8F0] border-[#CBD5E1]/40",
-    dot: "bg-[#CBD5E1]",
-  },
-  bronze: {
-    accent: "#D98A4E",
-    text: "text-[#E39A63]",
-    ring: "border-[#D98A4E]/55 bg-[#D98A4E]/10",
-    bg: "bg-[#D98A4E]/15 text-[#E39A63] border-[#D98A4E]/40",
-    dot: "bg-[#D98A4E]",
-  },
-};
-
-const medalLabel = (tx: ReturnType<typeof useTranslations<"menu.challenge">>, medal: PaceMedal): string =>
-  medal === "gold" ? tx("medalGold") : medal === "silver" ? tx("medalSilver") : tx("medalBronze");
-
 /** Compact GT7-style event banner card for selecting between active Online Time Trials */
 const TrialEventCard: React.FC<{
   trial: ChallengeTrialItem;
@@ -147,7 +117,6 @@ const TrialEventCard: React.FC<{
 
   const leader = summary?.entries[0] ?? null;
   const me = summary?.me ?? null;
-  const myMedal = me && leader ? paceMedalOf(me.entry.lapTimeMs, leader.lapTimeMs) : null;
 
   return (
     <button
@@ -263,16 +232,10 @@ const TrialEventCard: React.FC<{
         <div className="flex min-w-0 items-center gap-2">
           {me ? (
             <>
-              {myMedal ? (
-                <span
-                  className={cx(
-                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold tracking-wide uppercase",
-                    MEDAL_STYLE[myMedal].bg
-                  )}
-                >
-                  <span aria-hidden className={cx("size-1.5 rounded-full", MEDAL_STYLE[myMedal].dot)} />
-                  {medalLabel(tx, myMedal)}
-                </span>
+              {permanent && me.rank === 1 ? (
+                <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet" className="px-1.5">
+                  STIG
+                </Badge>
               ) : null}
               <span className="lc-data text-[13px] font-semibold text-lc-volt">P{me.rank}</span>
               <span className="lc-mono text-[13px] text-lc-chalk">{formatLapTime(me.entry.lapTimeMs)}</span>
@@ -297,117 +260,97 @@ const TrialEventCard: React.FC<{
   );
 };
 
-/** GT7-style Gold (+3%) / Silver (+5%) / Bronze (+10%) pace target block */
-const PaceTargetsSection: React.FC<{
-  board: RemoteBoard | null;
-}> = ({ board }) => {
+const PODIUM_SLOTS = [
+  { place: 1, tag: "P1", icon: "challenge" as const, tone: { color: "amber" as const }, variant: "soft" as const },
+  { place: 2, tag: "P2", icon: "medal" as const, tone: { color: "chalk" as const }, variant: "soft" as const },
+  { place: 3, tag: "P3", icon: "medal" as const, tone: { color: "amber" as const }, variant: "outline" as const },
+];
+
+/** Compact P1 / P2 / P3 podium preview for the rotating weekly challenge (matching Hall of Fame medals) */
+const WeeklyPodiumStrip: React.FC<{ board: RemoteBoard | null; myKey: string }> = ({ board, myKey }) => {
   const tx = useTranslations("menu.challenge");
-  const leader = board?.entries[0] ?? null;
-  const me = board?.me ?? null;
-
-  if (!leader) {
-    return (
-      <div className="rounded-lc-tile border border-lc-line bg-lc-well/55 px-3.5 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="lc-row-label flex items-center gap-1.5">
-            <Icon name="medal" size="sm" className="text-lc-fog" />
-            {tx("paceTargets")}
-          </span>
-          <span className="text-[11px] text-lc-slate">{tx("paceTargetsHint")}</span>
-        </div>
-        <p className="lc-hint m-0 mt-1.5">{tx("paceTargetsEmpty")}</p>
-      </div>
-    );
-  }
-
-  const leaderMs = leader.lapTimeMs;
-  const myMs = me?.entry.lapTimeMs ?? null;
-  const myMedal = myMs !== null ? paceMedalOf(myMs, leaderMs) : null;
-  const myPct = myMs !== null ? Math.max(0, ((myMs - leaderMs) / leaderMs) * 100) : null;
-
-  // Pace gauge scale: 0% (P1) to 12%
-  const GAUGE_MAX_PCT = 12;
-  const pctPos = (pct: number) => `${Math.min(100, Math.max(0, (pct / GAUGE_MAX_PCT) * 100)).toFixed(2)}%`;
-
-  const nextTargetStatus = (): string | null => {
-    if (myMs === null || myPct === null) return null;
-    if (me?.rank === 1 || myMs <= leaderMs) return tx("paceLeader");
-    if (myMedal === "gold") return tx("paceAchieved", { medal: medalLabel(tx, "gold") });
-    const nextMedal: PaceMedal = myMedal === "silver" ? "gold" : myMedal === "bronze" ? "silver" : "bronze";
-    const gapS = Math.max(0.001, (myMs - paceTargetMs(leaderMs, nextMedal)) / 1000).toFixed(3);
-    return tx("paceToTarget", { gap: gapS, medal: medalLabel(tx, nextMedal) });
-  };
-  const statusLine = nextTargetStatus();
+  const top3 = board?.entries.slice(0, 3) ?? [];
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-lc-tile border border-lc-line bg-lc-well/65 p-3.5">
+    <div className="flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="lc-row-label flex items-center gap-1.5">
-          <Icon name="medal" size="sm" className="text-[#F5C542]" />
-          {tx("paceTargets")}
+          <Icon name="podium" size="sm" className="text-lc-fog" />
+          {tx("podiumStanding")}
         </span>
-        <span className="inline-flex items-baseline gap-1.5 text-[12px]">
-          <span className="text-lc-slate">{tx("worldRecord")}</span>
-          <span className="lc-mono font-semibold text-lc-best-ink">{formatLapTime(leaderMs)}</span>
-          <span className="max-w-[9rem] truncate text-lc-fog">{leader.name}</span>
-        </span>
+        <span className="text-[11px] text-lc-slate">{tx("podiumRewardsHint")}</span>
       </div>
-
-      {/* Gold / Silver / Bronze target cards */}
-      <div className="grid grid-cols-3 gap-2">
-        {MEDAL_ORDER.map((medal) => {
-          const targetMs = paceTargetMs(leaderMs, medal);
-          const pct = Math.round(PACE_MEDAL_PCT[medal] * 100);
-          const achieved = myMs !== null && myMs <= targetMs;
-          const style = MEDAL_STYLE[medal];
-          return (
-            <div
-              key={medal}
-              className={cx(
-                "flex flex-col gap-0.5 rounded-lc-row border px-2.5 py-2 transition",
-                achieved ? style.ring : "border-lc-line/80 bg-lc-carbon/70"
-              )}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span className={cx("flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase", style.text)}>
-                  <span aria-hidden className={cx("size-2 rounded-full", style.dot)} />
-                  {medalLabel(tx, medal)}
-                </span>
-                {achieved ? (
-                  <Icon name="check" size="xs" className={style.text} />
+      {top3.length === 0 ? (
+        <p className="lc-hint m-0">{tx("podiumEmpty")}</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {PODIUM_SLOTS.map((slot, idx) => {
+            const entry = top3[idx];
+            const mine = Boolean(entry && myKey && driverNameKey(entry.name) === myKey);
+            return (
+              <div
+                key={slot.place}
+                className={cx(
+                  "flex min-w-0 flex-col gap-0.5 rounded-lc-row border px-2.5 py-2",
+                  mine ? "border-lc-volt/60 bg-lc-volt/10" : "border-lc-line/80 bg-lc-carbon/70"
+                )}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <Badge size="sm" tone={slot.tone} variant={slot.variant} icon={slot.icon} className="px-1.5">
+                    {slot.tag}
+                  </Badge>
+                </div>
+                {entry ? (
+                  <>
+                    <span className={cx("mt-0.5 truncate text-[12px] font-semibold", mine ? "text-lc-volt" : "text-lc-chalk")}>
+                      {entry.name}
+                    </span>
+                    <span className={cx("lc-mono text-[12px]", idx === 0 ? "text-lc-best-ink" : "text-lc-fog")}>
+                      {formatLapTime(entry.lapTimeMs)}
+                    </span>
+                  </>
                 ) : (
-                  <span className="lc-mono text-[10px] text-lc-slate">{tx("targetPct", { pct })}</span>
+                  <span className="lc-mono mt-1 text-[12px] text-lc-slate">—</span>
                 )}
               </div>
-              <span className="lc-mono text-[14px] font-semibold text-lc-chalk">{formatLapTime(targetMs)}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Live player pace gauge against Gold/Silver/Bronze thresholds */}
-      {myPct !== null && statusLine ? (
-        <div className="flex flex-col gap-1.5 pt-0.5">
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-lc-titanium">
-            {/* Threshold tick lines */}
-            <span aria-hidden className="absolute inset-y-0 w-px bg-[#F5C542]/75" style={{ left: pctPos(3) }} />
-            <span aria-hidden className="absolute inset-y-0 w-px bg-[#CBD5E1]/65" style={{ left: pctPos(5) }} />
-            <span aria-hidden className="absolute inset-y-0 w-px bg-[#D98A4E]/65" style={{ left: pctPos(10) }} />
-            {/* Player pace fill from P1 */}
-            <span
-              aria-hidden
-              className="absolute inset-y-0 left-0 rounded-full bg-lc-volt/85"
-              style={{ width: pctPos(Math.max(0.25, myPct)) }}
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
-            <span className="lc-mono font-semibold text-lc-volt">
-              {myPct < 0.005 ? tx("paceLeader") : tx("pacePct", { pct: myPct.toFixed(2) })}
-            </span>
-            <span className="font-medium text-lc-fog">{statusLine}</span>
-          </div>
+            );
+          })}
         </div>
-      ) : null}
+      )}
+    </div>
+  );
+};
+
+/** Live record-holder card for Middle Gear Lap Board's "The Stig" badge */
+const StigHolderStrip: React.FC<{ board: RemoteBoard | null; myKey: string }> = ({ board, myKey }) => {
+  const tx = useTranslations("menu.challenge");
+  const leader = board?.entries[0] ?? null;
+  const isMe = Boolean(leader && myKey && driverNameKey(leader.name) === myKey);
+
+  return (
+    <div
+      className={cx(
+        "flex flex-col gap-2 rounded-lc-tile border p-3",
+        isMe ? "border-lc-volt/65 bg-lc-volt/10" : "border-lc-line bg-lc-well/60"
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet">
+          {tx("stigAward")}
+        </Badge>
+        <span className="text-[11px] text-lc-slate">{tx("stigHolderHint")}</span>
+      </div>
+      {leader ? (
+        <div className="flex items-center justify-between gap-3 rounded-lc-row border border-lc-line/80 bg-lc-carbon/75 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="lc-data text-[12px] font-bold text-lc-best-ink">{tx("stigPlace")}</span>
+            <span className={cx("truncate text-[14px] font-semibold", isMe ? "text-lc-volt" : "text-lc-chalk")}>{leader.name}</span>
+          </div>
+          <span className="lc-mono shrink-0 text-[14px] font-semibold text-lc-best-ink">{formatLapTime(leader.lapTimeMs)}</span>
+        </div>
+      ) : (
+        <p className="lc-hint m-0">{tx("stigEmpty")}</p>
+      )}
     </div>
   );
 };
@@ -672,8 +615,8 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
                 ) : null}
               </div>
 
-              {/* GT7-style Gold / Silver / Bronze Pace Targets */}
-              <PaceTargetsSection board={board} />
+              {/* Weekly P1/P2/P3 podium standing or Middle Gear "The Stig" record holder */}
+              {isPermanent ? <StigHolderStrip board={board} myKey={myKey} /> : <WeeklyPodiumStrip board={board} myKey={myKey} />}
 
               {/* Event Regulations */}
               <div className="flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/40 px-3.5 py-3">

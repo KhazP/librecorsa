@@ -5,29 +5,6 @@
 import { text as tx } from "@/lib/text";
 import type { RemoteBoard } from "./leaderboard";
 
-export type PaceMedal = "gold" | "silver" | "bronze";
-
-/** Gran Turismo 7 Sport Mode Online Time Trial target thresholds relative to P1 (+3% gold, +5% silver, +10% bronze) */
-export const PACE_MEDAL_PCT: Readonly<Record<PaceMedal, number>> = {
-  gold: 0.03,
-  silver: 0.05,
-  bronze: 0.1,
-};
-
-/** Lap time ceiling (ms) for a pace medal tier given the board's leading time */
-export function paceTargetMs(leaderMs: number, medal: PaceMedal): number {
-  return Math.round(leaderMs * (1 + PACE_MEDAL_PCT[medal]));
-}
-
-/** Highest pace medal earned for `lapMs` against `leaderMs`, or null */
-export function paceMedalOf(lapMs: number | null, leaderMs: number | null): PaceMedal | null {
-  if (lapMs === null || leaderMs === null || leaderMs <= 0) return null;
-  if (lapMs <= paceTargetMs(leaderMs, "gold")) return "gold";
-  if (lapMs <= paceTargetMs(leaderMs, "silver")) return "silver";
-  if (lapMs <= paceTargetMs(leaderMs, "bronze")) return "bronze";
-  return null;
-}
-
 export interface ChallengeTarget {
   /** The player's best lap on the challenge's board (ms); null before their first */
   bestMs: number | null;
