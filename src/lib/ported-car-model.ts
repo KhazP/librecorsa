@@ -36,6 +36,8 @@ import {
  *     BODY      body, driver and fixed interior (sprung)
  *     STEER     steering wheel pivot, column along its local +Z (optional)
  *     WHEEL_xx  hub pivot at the tread centre in the car's axes; children WHEEL_xx_RIM / WHEEL_xx_TYRE
+ *     HUB_xx    a corner's parts that steer and ride with the wheel but don't spin (an upright, a fixed hub fairing),
+ *               at the same centre (optional)
  * Model space: +X left, +Y up, +Z forward, floor at y = 0 (the rig's axes). `chassis` puts the model's axle midpoint
  * on the vehicle model's.
  */
@@ -609,6 +611,16 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         .multiply(wheelBind)
         .decompose(wheel.position, wheel.quaternion, wheel.scale);
       steer.add(wheel);
+      // What hangs off the corner's suspension (an upright, the callipers, a fixed hub fairing): steered and sprung with
+      // the wheel, not spun
+      const hub = find(`HUB_${SIDE[i]}`);
+      if (hub) {
+        new THREE.Matrix4()
+          .makeTranslation(-centre.x, -centre.y, -centre.z)
+          .multiply(relativeMatrix(hub, car))
+          .decompose(hub.position, hub.quaternion, hub.scale);
+        steer.add(hub);
+      }
       root.add(steer);
 
       const tyreMesh = spin.getObjectByName(`${wheelName}_TYRE`) as THREE.Mesh | undefined;
@@ -651,7 +663,8 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // hooks, so keep them in place instead of cloning over them.
     const skinMaps = extras.skinMaps;
     if (skinMaps) {
-      skinSlots.push(...collectSkinSlots([bodyGroup, ...corners.map((c) => c.spin)], skinMaps, tyreMaterials));
+      // The corners' steer groups: the spinning wheel and any hub parts beside it
+      skinSlots.push(...collectSkinSlots([bodyGroup, ...corners.map((c) => c.steer)], skinMaps, tyreMaterials));
     }
     // Procedural bodywork livery controller (AMG GT3 Evo, BMW M4 GT3 Evo, LC-LMDH, Suzuki Liana)
     if (body) {
@@ -719,7 +732,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     if (options.opponent) {
       disableCarCastShadow(bodyGroup);
       for (const c of corners) disableCarCastShadow(c.steer);
-      opponentLod = createOpponentLodController([bodyGroup, ...corners.map((c) => c.spin)]);
+      opponentLod = createOpponentLodController([bodyGroup, ...corners.map((c) => c.steer)]);
       opponentLod.setLod(lastLod);
     }
     if (placeholder.parent) {

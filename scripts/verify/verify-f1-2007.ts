@@ -104,11 +104,12 @@ console.log('\n== Bodies and livery files');
       };
       const byName = new Map(json.nodes.map((n) => [n.name, n]));
       const extras = byName.get('CAR')?.extras as { wheelbaseM?: number; tyreRadius?: Record<string, number> } | undefined;
-      const rig = ['CAR', 'BODY', 'STEER', 'WHEEL_LF', 'WHEEL_RF', 'WHEEL_LR', 'WHEEL_RR'].every((n) => byName.has(n));
+      // Each corner's hub parts (its fixed hub fairing and callipers) ride and steer with the wheel without spinning
+      const rig = ['CAR', 'BODY', 'STEER', 'WHEEL_LF', 'WHEEL_RF', 'WHEEL_LR', 'WHEEL_RR', 'HUB_LF', 'HUB_RF', 'HUB_LR', 'HUB_RR'].every((n) => byName.has(n));
       // The mod's wheelbases run from the Toyota's 2.96 m to the Super Aguri's 3.17 m round the Ferrari's 3.13
       const wb = extras?.wheelbaseM ?? NaN;
       check(
-        `${team}: rig nodes, a 2.9–3.2 m wheelbase, tyres near the physics' radius`,
+        `${team}: rig and hub nodes, a 2.9–3.2 m wheelbase, tyres near the physics' radius`,
         rig && wb > 2.9 && wb < 3.2 && Math.abs((extras?.tyreRadius?.LR ?? 0) - F12007_CONFIG.tyreCompounds[F12007_CONFIG.compoundSlots.soft].rear.radius) < 0.02,
         `${fmt(wb, 3)} m, rear tyre ${fmt(extras?.tyreRadius?.LR ?? NaN, 3)} m`,
       );
