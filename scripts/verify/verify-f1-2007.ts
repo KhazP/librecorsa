@@ -32,7 +32,7 @@ import { carListed } from '../../src/lib/hosted-content';
 import { carTakesPhysicsSwitch } from '../../src/lib/cars/f1-mod-physics';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { hasFile, noteSkip } from '../lib/hosted-files';
-import { aimMirrorCamera, fitMirrorView, mirrorLookup, MIRROR_AIM_DEG, MIRROR_FOCUS_M, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
+import { aimMirrorCamera, fitMirrorView, mirrorLookup, MIRROR_AIM_DEG, MIRROR_FOCUS_M, MIRROR_INNER_EDGE_DEG, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -153,6 +153,28 @@ function checkMirrors(team: string, glb: string): void {
     return THREE.MathUtils.radToDeg(Math.asin(r.y));
   });
   check(`${team}: each glass aimed at the road, ${MIRROR_AIM_DEG}° below level through its centre`, pitch.every((p) => Math.abs(p + MIRROR_AIM_DEG) < 0.01), pitch.map((p) => fmt(p)).join(' / '));
+  // ... and its view starting near straight back: its inner edge (deg out from the car) inside the limits, so a car
+  // behind or one lane over is in a mirror (the McLaren's and Red Bull's, modelled 23-27 out, are turned in)
+  const range = islands.map((i) => {
+    const side = Math.sign(i.centre.x);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const tri of i.tris) {
+      for (let k = 0; k < 3; k++) {
+        const r = new THREE.Vector3().fromArray(built!.model, tri * 9 + k * 3).sub(eye).normalize();
+        r.addScaledVector(i.normal!, -2 * r.dot(i.normal!));
+        const a = THREE.MathUtils.radToDeg(Math.atan2(r.x * side, -r.z));
+        lo = Math.min(lo, a);
+        hi = Math.max(hi, a);
+      }
+    }
+    return [lo, hi];
+  });
+  check(
+    `${team}: each glass looks from ${MIRROR_INNER_EDGE_DEG.min}..${MIRROR_INNER_EDGE_DEG.max}° out to past 8°`,
+    range.every(([lo, hi]) => lo >= MIRROR_INNER_EDGE_DEG.min - 0.05 && lo <= MIRROR_INNER_EDGE_DEG.max + 0.05 && hi > 8),
+    range.map(([lo, hi]) => `${fmt(lo, 1)}..${fmt(hi, 1)}°`).join(' / '),
+  );
   check(
     `${team}: each glass faces back at the driver, the pair's views mirror images, neither flipped`,
     islands.every((i) => i.normal!.z < -0.5 && Math.sign(i.normal!.x) === -Math.sign(i.centre.x)) && Math.abs(looks[0] + looks[1]) < 0.5 && unflipped,

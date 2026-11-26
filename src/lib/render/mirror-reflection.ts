@@ -8,8 +8,11 @@ import * as THREE from "three";
  * - The glass is split into islands (one mesh holds both of F1 2007's mirrors), each a flat mirror with the
  *   area-weighted normal of its faces, turned toward the eye. An island seen edge-on (or from behind) has no reflection.
  * - Glass modelled upright is aimed as a driver sets a mirror: tilted so the ray from the eye through its centre leaves
- *   it `MIRROR_AIM_DEG` below level, its yaw as modelled. F1 2007's glass is upright and above the eye, so as modelled
- *   it showed the sky 3-5 degrees up and missed a car 12 m behind.
+ *   it `MIRROR_AIM_DEG` below level. F1 2007's glass is upright and above the eye, so as modelled it showed the sky 3-5
+ *   degrees up and missed a car 12 m behind.
+ * - Its yaw stays as modelled unless the glass looks nowhere near behind the car: one whose inner edge looks more than
+ *   `MIRROR_INNER_EDGE_DEG.max` out (F1 2007's McLaren and Red Bull, 23-27: only the wall) or more than `.min` across
+ *   the car (the Spyker's, 12) is turned until that edge is at the limit, as a driver would set it.
  * - A fragment at p reflects the ray from the eye: r = reflect(normalize(p - eye), n). What it shows is the scene
  *   point `MIRROR_FOCUS_M` along that ray, looked up in the rear view, which is rendered from one camera between the
  *   mirrors (`MirrorView.camera`) with the car's axes. Exact at that distance; nearer or farther things are off by the
@@ -29,6 +32,10 @@ const MIN_FACING = 0.1;
 export const MIRROR_AIM_DEG = 1;
 /** A glass whose normal is within this (sine) of level is taken as modelled upright, not aimed by its modeller */
 const UPRIGHT = 0.02;
+/** How far out (deg, + away from the car) a side mirror's inner edge may look before it is turned in, or across it */
+export const MIRROR_INNER_EDGE_DEG = { min: -3, max: 10 } as const;
+/** Glass this close to the centre line (m) is an interior mirror: its yaw is left alone */
+const SIDE_MIRROR_X = 0.15;
 /** Room round the fitted window, as a fraction of its size on each side */
 const WINDOW_MARGIN = 0.03;
 
@@ -120,16 +127,47 @@ export function glassIslands(model: ArrayLike<number>, eye: THREE.Vector3): Mirr
     for (const t of tris) for (let k = 0; k < 3; k++) radius = Math.max(radius, a.fromArray(model as number[], t * 9 + k * 3).distanceTo(centre));
     const normal = sum.normalize();
     const facing = normal.dot(toEye.subVectors(eye, centre).normalize());
-    if (facing >= MIN_FACING && Math.abs(normal.y) < UPRIGHT) aimUpright(normal, centre, eye);
+    if (facing >= MIN_FACING) aimGlass(normal, centre, eye, model, tris);
     islands.push({ tris, normal: facing >= MIN_FACING ? normal : null, centre, area, radius });
   }
   return islands;
 }
 
 /**
- * Tilts an upright glass's `normal` (in place) so the ray from `eye` through `centre` leaves it `MIRROR_AIM_DEG` below
- * level, in the direction it reflects to as modelled: the normal halfway between the incoming ray and that one
+ * Sets a glass as a driver would (`normal` in place): an upright one tilted to `MIRROR_AIM_DEG` below level, a side
+ * mirror looking nowhere near behind the car turned until its inner edge is inside `MIRROR_INNER_EDGE_DEG`. A turn
+ * about the vertical turns the reflection by about twice as much, so a few rounds settle both
  */
+function aimGlass(normal: THREE.Vector3, centre: THREE.Vector3, eye: THREE.Vector3, model: ArrayLike<number>, tris: readonly number[]): void {
+  const upright = Math.abs(normal.y) < UPRIGHT;
+  const side = Math.abs(centre.x) > SIDE_MIRROR_X ? Math.sign(centre.x) : 0;
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let round = 0; round < 4; round++) {
+    if (upright) aimUpright(normal, centre, eye);
+    if (!side) break;
+    const inner = innerEdgeDeg(normal, eye, model, tris, side);
+    const target = THREE.MathUtils.clamp(inner, MIRROR_INNER_EDGE_DEG.min, MIRROR_INNER_EDGE_DEG.max);
+    if (Math.abs(target - inner) < 0.01) break;
+    normal.applyAxisAngle(up, THREE.MathUtils.degToRad(-(target - inner) * side) / 2).normalize();
+  }
+}
+
+/** How far out from straight back (deg, + away from the car on `side`) the glass's innermost reflected ray looks */
+function innerEdgeDeg(normal: THREE.Vector3, eye: THREE.Vector3, model: ArrayLike<number>, tris: readonly number[], side: number): number {
+  const p = new THREE.Vector3();
+  let inner = Infinity;
+  for (const t of tris) {
+    for (let k = 0; k < 3; k++) {
+      const d = p.fromArray(model as number[], t * 9 + k * 3).sub(eye).normalize();
+      d.addScaledVector(normal, -2 * d.dot(normal));
+      inner = Math.min(inner, THREE.MathUtils.radToDeg(Math.atan2(d.x * side, -d.z)));
+    }
+  }
+  return inner;
+}
+
+/** Tilts an upright glass's `normal` (in place) so the ray from `eye` through `centre` leaves it `MIRROR_AIM_DEG` below
+ * level, in the direction it reflects to now: the normal halfway between the incoming ray and that one */
 function aimUpright(normal: THREE.Vector3, centre: THREE.Vector3, eye: THREE.Vector3): void {
   const d = new THREE.Vector3().subVectors(centre, eye).normalize();
   const r = d.clone().addScaledVector(normal, -2 * d.dot(normal));
