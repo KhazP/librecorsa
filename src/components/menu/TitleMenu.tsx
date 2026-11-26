@@ -145,7 +145,7 @@ const creditKey = (t: TrackInfo): string => t.credit?.url || `${t.credit?.title}
 
 /** A circuit's length in the player's units ("5.34 km") */
 // A no-break space: the number and its unit stay on one line
-const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)}\u00a0${DISTANCE_LABEL[unit]}`;
+const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `\u2066${distanceIn(t.lengthM / 1000, unit).toFixed(2)}\u00a0${DISTANCE_LABEL[unit]}\u2069`;
 
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="flex flex-col gap-1.5 border-t border-lc-line py-4">
