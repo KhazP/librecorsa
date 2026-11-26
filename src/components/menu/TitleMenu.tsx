@@ -141,6 +141,9 @@ export interface TitleMenuProps extends PauseMenuProps {
 }
 
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
+/** A link in the bottom bar, as the home page's bar links (a touch target's height on touch screens) */
+const BAR_LINK =
+  "inline-flex items-center rounded-lc-nub text-lc-slate underline decoration-lc-keyline decoration-1 underline-offset-4 transition-colors duration-200 ease-lc hover:text-lc-chalk hover:decoration-lc-chalk focus-visible:text-lc-chalk pointer-coarse:min-h-11";
 /** A licence's name never breaks at its hyphen or space ("CC BY-NC-" / "SA 4.0") */
 const licenceClass = cx(linkClass, "whitespace-nowrap");
 /** What a circuit's credit line is for: its source's address, else its own title and author (a mod circuit may have no link) */
@@ -657,6 +660,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const tp = useTranslations("menu.prompts");
   const tn = useTranslations("menu.upNext");
   const th = useTranslations("home.hub");
+  const tcommon = useTranslations("common");
   const tstate = useTranslations("common.state");
   const storeBuild = useStoreBuild();
   // The home page's patch notes, loaded once the menu is up; a chip on the entry while they hold something unread
@@ -894,8 +898,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "request",
       run: () => openPanel("request"),
     },
-    { id: "press", label: t("press"), icon: "press" as const, href: withBasePath("/press") },
-    { id: "privacy", label: t("privacy"), icon: "privacy" as const, href: withBasePath("/privacy") },
     // Not in the Android app (store-mode.ts)
     ...(storeBuild
       ? []
@@ -908,7 +910,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "whatsNew",
       run: () => openPanel("whatsNew"),
     },
-    { id: "github", label: "GitHub", icon: "source" as const, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
   // Some panels exist only while their props do: when an open one's go away, back to the title screen (and it stays
@@ -1109,7 +1110,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div aria-hidden className="h-3" />
               {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
-              {byId(["credits", "mods", "request", "press", "privacy", "support", "whatsNew", "github"]).map((item) => row(item, "md", true))}
+              {byId(["credits", "mods", "request", "support", "whatsNew"]).map((item) => row(item, "md", true))}
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
@@ -1231,7 +1232,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md"))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 border-t border-lc-line pt-2.5 short:pt-1.5">
-                  {byId(["credits", "mods", "request", "press", "privacy", "support", "whatsNew", "github"]).map((item) => row(item, "sm"))}
+                  {byId(["credits", "mods", "request", "support", "whatsNew"]).map((item) => row(item, "sm"))}
                 </div>
               </div>
             </nav>
@@ -1331,21 +1332,36 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           </div>
         )}
 
-        {/* Touch screens have no keys to show: the prompts come back with a pad. The music's control stays */}
-        <footer
-          className={`flex items-center justify-between gap-3 border-t border-lc-line pt-3 ${mode === "pad" || musicShown ? "" : "pointer-coarse:hidden"}`}
-        >
+        {/* The prompts on the left (touch screens have no keys to show: they come back with a pad); on the right the links
+            out of the game, each in a new tab, and the music's control */}
+        <footer className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-lc-line pt-3">
           <div className={`min-w-0 ${mode === "pad" ? "" : "pointer-coarse:hidden"}`}>
             <ShellPrompts prompts={prompts} phonePrompts={phonePrompts} />
           </div>
-          {musicShown ? (
-            <TitleMusic
-              nowPlaying={props.nowPlaying ?? null}
-              musicMuted={props.musicMuted === true}
-              onSkip={props.onSkipTrack}
-              onToggleMute={props.onToggleMusicMute!}
-            />
-          ) : null}
+          <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-x-6 gap-y-2">
+            <div className="flex shrink-0 items-center gap-x-5 text-[13px] font-semibold">
+              {(
+                [
+                  ["press", t("press"), withBasePath("/press")],
+                  ["privacy", t("privacy"), withBasePath("/privacy")],
+                  ["github", "GitHub", REPO_URL],
+                ] as const
+              ).map(([id, label, href]) => (
+                <a key={id} data-bar-link={id} href={href} target="_blank" rel="noopener" className={BAR_LINK}>
+                  {label}
+                  <span className="sr-only"> {tcommon("newTab")}</span>
+                </a>
+              ))}
+            </div>
+            {musicShown ? (
+              <TitleMusic
+                nowPlaying={props.nowPlaying ?? null}
+                musicMuted={props.musicMuted === true}
+                onSkip={props.onSkipTrack}
+                onToggleMute={props.onToggleMusicMute!}
+              />
+            ) : null}
+          </div>
         </footer>
       </div>
     </div>

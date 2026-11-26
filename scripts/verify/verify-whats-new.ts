@@ -135,10 +135,10 @@ check("fingerprint is stable for the same notes", print === whatsNewFingerprint(
 check("fingerprint changes when a day is updated", print !== whatsNewFingerprint([{ ...sample[0], lastSha: "b".repeat(40) }]));
 check("fingerprint changes when a day is added", print !== whatsNewFingerprint([{ ...sample[0], date: "2026-11-27" }, ...sample]));
 
-// The title menu's What's new panel: beside GitHub in both rails, the notes loaded after mount (not in /play's bundle)
+// The title menu's What's new panel: in both rails' link groups, the notes loaded after mount (not in /play's bundle)
 const menu = readFileSync(TITLE_MENU_PATH, "utf8");
-const railLists = menu.match(/byId\(\[[^\]]*"github"\]\)/g) ?? [];
-check("title menu lists What's new before GitHub in both rails", railLists.length === 2 && railLists.every((l) => l.includes('"whatsNew", "github"')));
+const railLists = menu.match(/byId\(\[[^\]]*"credits"[^\]]*\]\)/g) ?? [];
+check("title menu lists What's new in both rails", railLists.length === 2 && railLists.every((l) => l.includes('"whatsNew"')));
 check("title menu uses the shared notes and seen state", menu.includes("useWhatsNewNotes()") && menu.includes('panel === "whatsNew"'));
 check("title menu does not bundle whats-new.json", !/^import[^;]*whats-new\.json/m.test(menu));
 
