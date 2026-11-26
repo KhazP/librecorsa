@@ -1,6 +1,6 @@
 # Porting cars
 
-A fresh clone of LibreCorsa ships with one circuit (RISE Motordrome) and one car, the 2026 prototype (`public/cars/f12026/model/` and `public/cars/f12026/audio/`). This guide walks through porting additional cars into a local clone from two common sources:
+A fresh clone of LibreCorsa ships with one circuit (RISE Motordrome) and two cars, the LC26 Prototype (`public/cars/f12026/model/` and `public/cars/f12026/audio/`) and the LC25 Prototype (`public/cars/lc25/`). This guide walks through porting additional cars into a local clone from two common sources:
 
 - **Car mods from other racing sims:** Folders containing `.kn5` geometry, skins, and FMOD `.bank` audio.
 - **Sketchfab-style 3D models:** Standalone `.glb` / `.gltf` downloads.

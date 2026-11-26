@@ -76,7 +76,7 @@ How the track-limits rule sets score off-track strikes:
 
 - Under **Multiplayer** on the main menu, the featured event card counts down to the next open race and shows the circuit, car, lap count, and interval.
 - Races start every **20 minutes** using the current weekly challenge's circuit and car. Lap counts are tuned for roughly 10 minutes of racing, with a minimum of 3 laps.
-- When the weekly challenge visits Dunsfold (a time-trial-only venue), open races run at **RISE Motordrome (Grand Prix layout)** in the **2026 Prototype** instead.
+- When the weekly challenge visits Dunsfold (a time-trial-only venue), open races run at **RISE Motordrome (Grand Prix layout)** in the **LC26 Prototype** instead.
 - Click **Join next race** to register; the card previews the number of waiting drivers and a sample of their names. Click **Leave race** to withdraw at any time before entry closes.
 - Registration locks **15 seconds before lights out** (joining later places you in the following race), with a grid cap of 16 cars.
 

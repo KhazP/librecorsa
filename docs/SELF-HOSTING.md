@@ -10,7 +10,7 @@ Running `npm run build` outputs a complete static bundle to `./out` (including `
 - Peer-to-peer multiplayer rooms paired via the public PeerJS broker (plus manual WebRTC offer/answer and local-tab racing)
 - Browser-local personal bests
 
-A fresh clone includes **RISE Motordrome** and the **2026 Prototype** (`public/cars/f12026/`). Other hosted cars and circuits are stored outside git in R2 and are listed only when built with `NEXT_PUBLIC_HOSTED_CONTENT=1`.
+A fresh clone includes **RISE Motordrome**, the **LC26 Prototype** (`public/cars/f12026/`) and the **LC25 Prototype** (`public/cars/lc25/`). Other hosted cars and circuits are stored outside git in R2 and are listed only when built with `NEXT_PUBLIC_HOSTED_CONTENT=1`.
 
 ## Full online backend (Cloudflare Worker)
 
