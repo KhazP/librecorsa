@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icons/Icon";
 import { Toast } from "@/components/ui/Toast";
-import { launcherPresence, readLauncherUpdate, restartLauncherForUpdate, type LauncherUpdate as UpdateState } from "@/lib/mods/launcher-imports";
+import {
+  LauncherError,
+  launcherPresence,
+  readLauncherUpdate,
+  restartLauncherForUpdate,
+  type LauncherUpdate as UpdateState,
+} from "@/lib/mods/launcher-imports";
 
 /** How often the title screen asks the launcher again (it checks GitHub itself, every few hours) */
 const READ_EVERY_MS = 5 * 60_000;
@@ -26,10 +32,12 @@ const releaseLink = (u: UpdateState): string => (u.releaseUrl.startsWith(`${RELE
  */
 export function LauncherUpdate({ endsSession }: { endsSession?: string }) {
   const tx = useTranslations("menu.launcherUpdate");
+  const tConvert = useTranslations("menu.modConvert");
   const [info, setInfo] = useState<UpdateState | null>(null);
   const [restarting, setRestarting] = useState<"waiting" | "slow" | null>(null);
   const [asking, setAsking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /** Why the restart was refused: "busy" while a conversion or download runs (the launcher waits for it), else its words */
+  const [error, setError] = useState<{ busy: true } | { message: string } | null>(null);
   const poll = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -59,7 +67,7 @@ export function LauncherUpdate({ endsSession }: { endsSession?: string }) {
     try {
       await restartLauncherForUpdate();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(err instanceof LauncherError && err.code === "busy" ? { busy: true } : { message: err instanceof Error ? err.message : String(err) });
       return;
     }
     setRestarting("waiting");
@@ -102,7 +110,7 @@ export function LauncherUpdate({ endsSession }: { endsSession?: string }) {
             </Button>
           }
         >
-          {error ? tx("restartFailed", { error }) : tx("ready", { version })}
+          {error === null ? tx("ready", { version }) : "busy" in error ? tConvert("errorBusy") : tx("restartFailed", { error: error.message })}
         </Toast>
         {endsSession ? (
           <ConfirmDialog
