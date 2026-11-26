@@ -1077,13 +1077,15 @@ def ac_finish(m, cls, spec):
     fc, fmax = max(0.0, p.get('fresnelC', 0.0)), max(0.0, p.get('fresnelMaxLevel', 0.0))
     metal = float(spec.get('metal', 0.0))
     paint = m.get('car_paint')
-    if paint:
-        # A coat whose reflection rises from FresnelC to FresnelMax, over flakes whose highlight is SpecularBase's; with
-        # the coat's specular COLORED, the share of the paint's light BrightnessAdjustment takes from the diffuse comes
-        # back as reflection in the paint's own colour, as a metal's does (under the coat, which still mirrors sharply)
+    if paint and paint['colored']:
+        # A coat whose specular is COLORED reflects in the paint's own colour: the share of the paint's light
+        # BrightnessAdjustment takes from the diffuse comes back as that reflection, drawn as a metal's. glTF's
+        # clearcoat reflects white, so the paint's FresnelMax 1 is not one: the white coat over it is the material's
+        # own (fresnelC to fresnelMaxLevel under its own highlight, as on every other team's paint)
+        metal = max(metal, float(np.clip(1.0 - paint['brightness'], 0.0, 1.0)))
+    elif paint:
+        # A coat whose reflection rises from FresnelC to FresnelMax, over flakes whose highlight is SpecularBase's
         fc, fmax, exp_ = paint['fresnel_c'], paint['fresnel_max'], paint['base_exp']
-        if paint['colored']:
-            metal = max(metal, float(np.clip(1.0 - paint['brightness'], 0.0, 1.0)))
     fmax = max(fmax, fc)
     lacquer = bool(paint) or (fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP)
     f0 = float(np.clip(fc, 0.004, 1.0))
