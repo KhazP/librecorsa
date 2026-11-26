@@ -309,10 +309,52 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
 }
 
 /**
- * Re-bases each wheel so it spins about its own axle. Some exports bake 2-3 degrees of toe or camber into the wheel
- * geometry (SF-26 and W17 fronts, all four BMW M4 GT3 wheels), so spinning about the wheel node's X axis wobbled.
- * The axle is the tyre's least-spread direction; the geometry is turned to put it on X and the node takes the
- * inverse turn, so the wheel looks the same at rest and spins true. Done once on the template.
+ * A tyre's axle in the wheel's frame (`local`: the tyre mesh's transform there), or null for one with no faces. A tyre
+ * is a body of revolution, so the faces round its tread face away from the axle: the axle is the direction their
+ * area-weighted normals have least of, the faces tried being those within 60 degrees of square to the last guess
+ * (three passes from the wheel's X). Unlike the vertices' spread, this doesn't lean towards the side with more detail:
+ * a lettered outer sidewall pulled that estimate 0.7 degrees off F1 2007's true left tyres, and up to 4 off the 934's.
+ */
+export function tyreAxle(tyre: THREE.Mesh, local: THREE.Matrix4): THREE.Vector3 | null {
+  const pos = tyre.geometry.getAttribute("position");
+  const index = tyre.geometry.getIndex();
+  const faces = index ? index.count / 3 : pos.count / 3;
+  if (!faces) return null;
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const vert = (k: number, out: THREE.Vector3) => out.fromBufferAttribute(pos, index ? index.getX(k) : k).applyMatrix4(local);
+  const axle = new THREE.Vector3(1, 0, 0);
+  for (let pass = 0; pass < 3; pass++) {
+    const s = [0, 0, 0, 0, 0, 0]; // xx xy xz yy yz zz of the normals, by area
+    for (let f = 0; f < faces; f++) {
+      vert(3 * f, a);
+      vert(3 * f + 1, b);
+      vert(3 * f + 2, c);
+      n.crossVectors(b.sub(a), c.sub(a));
+      const area = n.length();
+      if (area < 1e-12) continue;
+      n.multiplyScalar(1 / area);
+      if (Math.abs(n.dot(axle)) > 0.5) continue;
+      s[0] += area * n.x * n.x; s[1] += area * n.x * n.y; s[2] += area * n.x * n.z;
+      s[3] += area * n.y * n.y; s[4] += area * n.y * n.z; s[5] += area * n.z * n.z;
+    }
+    // Its smallest eigenvector (power iteration on the shifted matrix)
+    const tr = s[0] + s[3] + s[5];
+    if (!(tr > 0)) return null;
+    const m = new THREE.Matrix3().set(tr - s[0], -s[1], -s[2], -s[1], tr - s[3], -s[4], -s[2], -s[4], tr - s[5]);
+    for (let k = 0; k < 64; k++) axle.applyMatrix3(m).normalize();
+    if (axle.x < 0) axle.negate();
+  }
+  return axle;
+}
+
+/**
+ * Re-bases each wheel so it spins about its own axle. Some exports bake 1.5-2 degrees of toe or camber into the wheel
+ * geometry (all four BMW M4 GT3 wheels, the M1 Procar's fronts), so spinning about the wheel node's X axis wobbled.
+ * The axle is the tyre's (`tyreAxle`); the geometry is turned to put it on X and the node takes the inverse turn, so
+ * the wheel looks the same at rest and spins true. Done once on the template.
  */
 function alignWheelAxles(scene: THREE.Object3D): void {
   for (const name of WHEELS) {
@@ -326,30 +368,8 @@ function alignWheelAxles(scene: THREE.Object3D): void {
     });
     const tyre = meshes.find((m) => m.name.endsWith("_TYRE"));
     if (!tyre) continue;
-    // Tyre vertices in the wheel's frame
-    const local = toWheel.clone().multiply(tyre.matrixWorld);
-    const pos = tyre.geometry.getAttribute("position");
-    const v = new THREE.Vector3();
-    const mean = new THREE.Vector3();
-    const pts: THREE.Vector3[] = [];
-    const step = Math.max(1, Math.floor(pos.count / 4000));
-    for (let i = 0; i < pos.count; i += step) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(local);
-      pts.push(v.clone());
-      mean.add(v);
-    }
-    mean.multiplyScalar(1 / pts.length);
-    // Covariance and its smallest eigenvector (power iteration on the shifted matrix)
-    const c = [0, 0, 0, 0, 0, 0]; // xx xy xz yy yz zz
-    for (const p of pts) {
-      const x = p.x - mean.x, y = p.y - mean.y, z = p.z - mean.z;
-      c[0] += x * x; c[1] += x * y; c[2] += x * z; c[3] += y * y; c[4] += y * z; c[5] += z * z;
-    }
-    const tr = c[0] + c[3] + c[5];
-    const m = new THREE.Matrix3().set(tr - c[0], -c[1], -c[2], -c[1], tr - c[3], -c[4], -c[2], -c[4], tr - c[5]);
-    const axle = new THREE.Vector3(1, 0, 0);
-    for (let k = 0; k < 64; k++) axle.applyMatrix3(m).normalize();
-    if (axle.x < 0) axle.negate();
+    const axle = tyreAxle(tyre, toWheel.clone().multiply(tyre.matrixWorld));
+    if (!axle) continue;
     const tiltDeg = THREE.MathUtils.radToDeg(axle.angleTo(new THREE.Vector3(1, 0, 0)));
     if (tiltDeg < 0.25) continue;
     const align = new THREE.Quaternion().setFromUnitVectors(axle, new THREE.Vector3(1, 0, 0));

@@ -9,10 +9,10 @@
  * "CAR_1". The GT3 ports did, and the rig read the scene's empty userData: nominal axles, tyres and cameras.
  */
 import { readFileSync } from "node:fs";
-import type * as THREE from "three";
+import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { CARS } from "../../src/lib/cars/car-registry";
-import { portedCarRoot } from "../../src/lib/ported-car-model";
+import { portedCarRoot, tyreAxle } from "../../src/lib/ported-car-model";
 import { hasFile, noteSkip } from "../lib/hosted-files";
 
 let passed = 0;
@@ -76,6 +76,21 @@ async function main(): Promise<void> {
       root !== scene && !!extras.wheelCentres?.WHEEL_LF && !!extras.wheelCentres?.WHEEL_LR && !!extras.tyreRadius?.LF,
       `root "${root.name}" under scene "${scene.name}"`
     );
+    // Each tyre's axle as the rig reads it, off the wheel node's X: what the rig turns the wheel by when it is 0.25 deg
+    // or more. F1 2007's tyres are true (their lettered sidewalls once read 0.7 deg off on the left), the M4 GT3's
+    // carry a real toe the rig must still find
+    const tilts = ["LF", "RF", "LR", "RR"].map((c) => {
+      const wheel = scene.getObjectByName(`WHEEL_${c}`);
+      const tyre = scene.getObjectByName(`WHEEL_${c}_TYRE`) as THREE.Mesh | undefined;
+      if (!wheel || !tyre?.isMesh) return NaN;
+      scene.updateMatrixWorld(true);
+      const axle = tyreAxle(tyre, wheel.matrixWorld.clone().invert().multiply(tyre.matrixWorld));
+      return axle ? THREE.MathUtils.radToDeg(axle.angleTo(new THREE.Vector3(1, 0, 0))) : NaN;
+    });
+    const shown = tilts.map((t) => t.toFixed(2)).join(" / ");
+    if (car.id === "f1-2007") check(`${car.id}: every tyre spins true on its hub (under 0.25 deg)`, tilts.every((t) => t < 0.25), shown);
+    if (car.id === "bmw-m4-gt3") check(`${car.id}: the tyres' baked toe is found (over 1 deg)`, tilts.every((t) => t > 1), shown);
+    if (car.id === "porsche-934-rsr") check(`${car.id}: every tyre spins true on its hub (under 0.25 deg)`, tilts.every((t) => t < 0.25), shown);
   }
   console.log(`\nPorted car roots: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
