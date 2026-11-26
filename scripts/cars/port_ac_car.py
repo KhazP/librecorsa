@@ -1902,6 +1902,12 @@ def item_surface_depth(nodes, materials, world, position, reach=0.015):
     return best
 
 
+# A digital_instruments.ini text under this height (m) is hidden (`read_digital_items`)
+MIN_ITEM_SIZE = 0.002
+# A text's box as wide as this many heights (three or four digits), for finding the screen under it
+ITEM_BOX_WIDTH = 2.0
+
+
 def read_digital_items(data, nodes, frames, materials=None):
     """The texts digital_instruments.ini draws ([ITEM_n]: a gear, speed, rpm, fuel, lap time ... on a node's plane), as
     the rig's `digitalItems` extras: each with its parent node's frame in the node the rig puts it on (`frames`: kn5
@@ -1937,11 +1943,22 @@ def read_digital_items(data, nodes, frames, materials=None):
                 item[field] = sec[key].strip()
         if sec.get('DECIMALS', '').strip():
             item['decimals'] = int(float(sec['DECIMALS']))
+        if item['size'] < MIN_ITEM_SIZE:
+            # A text a modder shrank out of sight (the BMW's 0.9 mm rpm): AC draws a speck of it, so none here
+            continue
         pnode = next((n for n in nodes if n['name'] == parent and n['kind'] == 1), None)
         if materials is not None and pnode is not None:
-            depth = item_surface_depth(nodes, materials, pnode['world'], item['position'])
-            if depth is not None:
-                item['depth'] = round(depth, 5)
+            # The nearest surface under the text's whole box, not only at its POSITION: the BMW's fuel and speed sank to
+            # their screen 0.9-1.05 mm behind POSITION, behind the plate 0.2-0.35 mm deep under the rest of their box,
+            # and were lost from the cockpit view
+            s_ = item['size']
+            w = ITEM_BOX_WIDTH * s_
+            xs = {'LEFT': (0.0, -w / 2, -w), 'RIGHT': (0.0, w / 2, w)}.get(item['align'], (-w / 2, 0.0, w / 2))
+            px, py, pz = item['position']
+            found = [d for x in xs for y in (0.3 * s_, 0.8 * s_)
+                     if (d := item_surface_depth(nodes, materials, pnode['world'], (px + x, py + y, pz))) is not None]
+            if found:
+                item['depth'] = round(min(found), 5)
         items.append(item)
     return items
 
