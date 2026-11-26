@@ -805,7 +805,7 @@
     "nextCarTitle": "下一輛車（{key}）",
     "cameraAngle": "重播視角",
     "cycleCamera": "循環切換重播視角",
-    "flashbackTitle": "回溯——從此刻繼續駕駛（{key}，本圈成績將無效）",
+    "flashbackTitle": "回溯：從此刻繼續駕駛（{key}，本圈成績將無效）",
     "flashback": "回溯",
     "exit": "離開",
     "hints": {

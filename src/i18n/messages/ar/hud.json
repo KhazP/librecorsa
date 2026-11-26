@@ -805,7 +805,7 @@
     "nextCarTitle": "السيارة التالية ({key})",
     "cameraAngle": "زاوية كاميرا الإعادة",
     "cycleCamera": "تبديل كاميرا الإعادة",
-    "flashbackTitle": "Flashback — استأنف القيادة من هذه اللحظة ({key}، يُلغي اللفة الحالية)",
+    "flashbackTitle": "Flashback: استأنف القيادة من هذه اللحظة ({key}، يُلغي اللفة الحالية)",
     "flashback": "Flashback",
     "exit": "خروج",
     "hints": {
