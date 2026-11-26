@@ -25,6 +25,8 @@ import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_ELECTRONICS }
 import { CHAPARRAL_2D_67_SIM_PROFILE, CHAPARRAL_2D_SIM_PROFILE } from '../../src/lib/sim/classic/Chaparral2dSim';
 import { PORSCHE_934_RSR_CONFIG, PORSCHE_934_RSR_ELECTRONICS } from '../../src/lib/sim/classic/Porsche934RsrConfig';
 import { PORSCHE_934_RSR_SIM_PROFILE } from '../../src/lib/sim/classic/Porsche934RsrSim';
+import { F12007_CONFIG, F12007_ELECTRONICS } from '../../src/lib/sim/f1-2007/F12007Config';
+import { F12007_SIM_PROFILE } from '../../src/lib/sim/f1-2007/F12007Sim';
 import type { CarSimProfile } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { lutAt, lutGap, modDir, ModData, type Lut } from '../lib/mod-data';
 
@@ -113,6 +115,9 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^electronics\.ini \[ABS_V2\] (CURVE|CHANNELS)$/, "the switch positions are listed in the config; the ABS (an aid the car doesn't have) works per wheel"],
   [/^drivetrain\.ini \[UPSHIFT_PROFILE\] \*$/, 'the auto clutch has no up-shift profile (UPSHIFT_PROFILE=NONE): unused'],
   [/^electronics\.ini \[EDL\] /, 'electronic diff lock by the brakes: not fitted to this car (PRESENT 0), or its switches'],
+  [/^tyres\.ini \[(FRONT|REAR)\] (TREAD_COVER|TREAD_DEPTH)$/, "a wet tyre's tread on a copy of a dry compound: the rain tyres are derived (F1 2007)"],
+  [/^car\.ini \[FUEL_EXT\] KG_PER_LITER$/, "fuel density: the sim's own"],
+  [/^engine\.ini \[OVERLAP\] /, 'valve overlap (FREQUENCY 0, GAIN 0 in the F1 2007): not modelled'],
 ];
 
 /** With `--unread`: the source's physics keys this suite never read, grouped by why they are not carried */
@@ -756,6 +761,143 @@ section('Porsche 934 Turbo RSR', 'pfa_porsche_934t_rsr_rr', (mod) => {
     if (ghCl.length) sameCurve(`934 ${sec} LUT_GH_CL`, wing.lutGH_CL_mult, shift(ghCl), 1e-3);
     if (ghCd.length) sameCurve(`934 ${sec} LUT_GH_CD`, wing.lutGH_CD_mult, shift(ghCd), 1e-3);
   }
+});
+
+// Cimmerian Iter's F1 2007, from the Ferrari F2007's data (the eleven teams share all but their wheelbases, tracks and
+// CG): heave springs at both ends, three of the four dry compounds (Soft, Medium, Hard in their own slots), and the
+// wings and the floor as seven aero elements
+section('F1 2007', 'cim_2007_ferrari', (mod) => {
+  const config = F12007_CONFIG as unknown as CarPhysicsConfig;
+  const profile = F12007_SIM_PROFILE;
+  checkChassis('2007', mod, config);
+  checkProfile('2007', mod, config, profile);
+  checkSuspension('2007', mod, config, { hardpoints: { front: ALL, rear: ALL } });
+  checkDriveline('2007', mod, config);
+  eq('2007 ALTITUDE_SENSITIVITY', config.engine.airDensitySensitivity ?? NaN, mod.num('engine.ini', 'ENGINE_DATA', 'ALTITUDE_SENSITIVITY'));
+  eq('2007 CHANGE_DN_TIME', config.gearbox.downshiftTimeS ?? NaN, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
+  eq('2007 AUTO_SHIFTER UP', config.gearbox.gears.upshift_rpm, mod.num('drivetrain.ini', 'AUTO_SHIFTER', 'UP'));
+  eq('2007 AUTO_SHIFTER DOWN', config.gearbox.gears.downshift_rpm, mod.num('drivetrain.ini', 'AUTO_SHIFTER', 'DOWN'));
+  eq('2007 HANDBRAKE_TORQUE', config.brakes.handbrakeTorqueNm ?? NaN, mod.num('brakes.ini', 'DATA', 'HANDBRAKE_TORQUE'));
+  eq('2007 brake ADJUST_STEP', config.brakes.ebbStep, mod.num('brakes.ini', 'DATA', 'ADJUST_STEP') / 100);
+  const el = (sec: string, key: string) => mod.num('electronics.ini', sec, key);
+  const E = F12007_ELECTRONICS;
+  eq('2007 ABS SLIP_RATIO_LIMIT', E.absDefault, el('ABS', 'SLIP_RATIO_LIMIT'));
+  eq('2007 ABS RATE_HZ', E.absRateHz, el('ABS', 'RATE_HZ'));
+  eq('2007 TC SLIP_RATIO_LIMIT', E.tcDefault, el('TRACTION_CONTROL', 'SLIP_RATIO_LIMIT'));
+  eq('2007 TC RATE_HZ', E.tcRateHz, el('TRACTION_CONTROL', 'RATE_HZ'));
+  eq('2007 TC MIN_SPEED_KMH', E.tcMinSpeedKmh, el('TRACTION_CONTROL', 'MIN_SPEED_KMH'));
+  // The TC's switch positions (its CURVE) are the loosest of the table's, in their order
+  const tcCurve = mod.lutOf('electronics.ini', 'TRACTION_CONTROL', 'CURVE');
+  tcCurve.forEach(([, slip], i) => eq(`2007 TC CURVE[${i}]`, E.tcLevels[E.tcLevels.length - tcCurve.length + i], slip));
+  // The semi-pro and pro TC dial (level 6) is the data's slip limit
+  eq('2007 TC level 6 is SLIP_RATIO_LIMIT', E.tcLevels[12 - profile.assistDials.semi_pro.tcLevel], el('TRACTION_CONTROL', 'SLIP_RATIO_LIMIT'));
+
+  // The garage's ranges [setup.ini]: cold pressures, camber, and the wing packages on the wings' own steps and limits
+  const st = (sec: string, key: string) => mod.num('setup.ini', sec, key);
+  eq('2007 setup PRESSURE MIN', profile.coldPsiRange[0], st('PRESSURE_LF', 'MIN'));
+  eq('2007 setup PRESSURE MAX', profile.coldPsiRange[1], st('PRESSURE_LF', 'MAX'));
+  eq('2007 setup CAMBER front MIN', profile.frontCamberRange[0], st('CAMBER_LF', 'MIN'));
+  eq('2007 setup CAMBER front MAX', profile.frontCamberRange[1], st('CAMBER_LF', 'MAX'));
+  eq('2007 setup CAMBER rear MIN', profile.rearCamberRange[0], st('CAMBER_LR', 'MIN'));
+  eq('2007 setup CAMBER rear MAX', profile.rearCamberRange[1], st('CAMBER_LR', 'MAX'));
+  for (const [preset, [front, rear]] of Object.entries(profile.aeroPackagesDeg)) {
+    for (const [sec, wingIdx, offset] of [['WING_1', 0, front], ['WING_2', 1, rear]] as const) {
+      const pos = config.aero.wings[wingIdx].angleDeg + offset;
+      const onStep = Math.abs(pos / st(sec, 'STEP') - Math.round(pos / st(sec, 'STEP'))) < 1e-9 && pos >= st(sec, 'MIN') && pos <= st(sec, 'MAX');
+      eq(`2007 ${preset} ${sec} on a setup step`, onStep ? 1 : 0, 1);
+    }
+  }
+
+  // Soft, Medium and Hard (FRONT_1–3 / REAR_1–3): grip from the load tables, the newer shape data. One wear curve, the
+  // front's; the temperature curves are the same front and rear
+  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'RADIUS_ANGULAR_K', 'DAMP', 'XMU', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD', ...V10_SHAPE.filter((k) => k !== 'COMBINED_FACTOR')];
+  (['soft', 'medium', 'hard'] as const).forEach((slot, i) => {
+    const compound = compoundData(config, config.compoundSlots[slot]);
+    for (const axle of ['front', 'rear'] as const) {
+      const AX = axle.toUpperCase();
+      const sec = `${AX}_${i + 1}`;
+      const tyre = axleTyre(compound, axle);
+      checkTyre(`2007 ${slot} ${axle}`, mod, tyre, { sectionName: sec, thermalName: `THERMAL_${sec}`, keys, loadCurvesToN: 24_000, rate: true, wear: axle === 'front', thermalCurve: true, tread: true });
+      eq(`2007 ${slot} ${axle} the tables at FZ0 (DY)`, tyre.model.Dy0, lutAt(mod.lutOf('tyres.ini', sec, 'DY_CURVE'), mod.num('tyres.ini', sec, 'FZ0')), 1e-4);
+      eq(`2007 ${slot} ${axle} the tables at FZ0 (DX)`, tyre.model.Dx0, lutAt(mod.lutOf('tyres.ini', sec, 'DX_CURVE'), mod.num('tyres.ini', sec, 'FZ0')), 1e-4);
+      sameCurve(`2007 ${slot} ${axle} DCAMBER_LUT`, tyre.camber.dcamberLut ?? [], mod.lutOf('tyres.ini', sec, 'DCAMBER_LUT'), 1e-9);
+      eq(`2007 ${slot} ${axle} BLANKETS_TEMP`, tyre.pressure.coldRefC, mod.num('tyres.ini', 'ADDITIONAL1', 'BLANKETS_TEMP'));
+    }
+    // The rear's COMBINED_FACTOR is the combined-slip exponent; the front's is 0, which stands for the friction circle
+    eq(`2007 ${slot} rear COMBINED_FACTOR`, axleTyre(compound, 'rear').model.combinedExponent ?? NaN, mod.num('tyres.ini', `REAR_${i + 1}`, 'COMBINED_FACTOR'));
+    eq(`2007 ${slot} front COMBINED_FACTOR 0: the friction circle`, axleTyre(compound, 'front').model.combinedExponent ?? NaN, mod.num('tyres.ini', `FRONT_${i + 1}`, 'COMBINED_FACTOR') === 0 ? 2 : NaN);
+  });
+  const soft = compoundData(config, config.compoundSlots.soft);
+  eq('2007 VIRTUALKM USE_LOAD', soft.wear?.loadScaled ? 1 : 0, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD'));
+  eq('2007 VIRTUALKM USE_LOAD load per 2000 N', soft.wear?.loadRefN ?? NaN, 2000);
+  // What the config leaves out: the Super Soft (the data's default, FRONT / REAR) and its copy "Slick" (FRONT_6), and the
+  // Intermediate and Wet (FRONT_4, FRONT_5), which carry the Hard's dry grip (the rain tyres are derived instead)
+  eq('2007 COMPOUND_DEFAULT is the Super Soft (left out)', mod.num('tyres.ini', 'COMPOUND_DEFAULT', 'INDEX'), 0);
+  for (const AX of ['FRONT', 'REAR']) {
+    sameCurve(`2007 ${AX}_6 (Slick) is the Super Soft`, mod.lutOf('tyres.ini', `${AX}_6`, 'DY_CURVE'), mod.lutOf('tyres.ini', AX, 'DY_CURVE'), 0);
+    for (const n of [4, 5]) sameCurve(`2007 ${AX}_${n} (${n === 4 ? 'Intermediate' : 'Wet'}) has the Hard's grip`, mod.lutOf('tyres.ini', `${AX}_${n}`, 'DY_CURVE'), mod.lutOf('tyres.ini', `${AX}_3`, 'DY_CURVE'), 0);
+  }
+
+  // Aero: the body as a constant drag, no lift
+  const a0 = (key: string) => mod.num('aero.ini', 'WING_0', key);
+  eq('2007 WING_0 CHORD × SPAN × CD(0°) × CD_GAIN', config.aero.drag, a0('CHORD') * a0('SPAN') * lutAt(mod.lutOf('aero.ini', 'WING_0', 'LUT_AOA_CD'), 0) * a0('CD_GAIN'), 1e-4);
+  eq('2007 WING_0 no lift', config.aero.front_lift + config.aero.rear_lift, a0('CHORD') * a0('SPAN') * lutAt(mod.lutOf('aero.ini', 'WING_0', 'LUT_AOA_CL'), 0) * a0('CL_GAIN'));
+  eq('2007 WING_0 POSITION y', config.aero.dragCentreY ?? NaN, mod.vec('aero.ini', 'WING_0', 'POSITION')[1]);
+  // The other six elements, in the data's order: the wings on their setup positions; the floor's pitch elements, whose
+  // tables move by the static rake (only their values are compared, then the move); its ground-height elements, which
+  // sit level with the pickups their axle reads
+  const a = config.aero;
+  const rake = (Math.asin((a.rear_target_height - a.front_target_height) / config.chassis.wheelbase) * 180) / Math.PI;
+  ['WING_1', 'WING_2', 'WING_3', 'WING_4', 'WING_5', 'WING_6'].forEach((sec, i) => {
+    const wing = a.wings[i];
+    const n = (key: string) => mod.num('aero.ini', sec, key);
+    const pos = mod.vec('aero.ini', sec, 'POSITION');
+    const label = `2007 ${sec} (${mod.text('aero.ini', sec, 'NAME')})`;
+    if (!wing) {
+      eq(`${label} present`, NaN, 1);
+      return;
+    }
+    eq(`${label} CHORD × SPAN`, wing.area, n('CHORD') * n('SPAN'));
+    eq(`${label} POSITION z`, wing.positionZ, pos[2]);
+    eq(`${label} POSITION y`, wing.dragY ?? NaN, pos[1]);
+    eq(`${label} ANGLE`, wing.angleDeg, n('ANGLE'));
+    eq(`${label} reads its own axle's pickup`, wing.heightRef === (pos[2] >= 0 ? 'front' : 'rear') ? 1 : 0, 1);
+    const cl = scale(mod.lutOf('aero.ini', sec, 'LUT_AOA_CL'), n('CL_GAIN'));
+    const cd = scale(mod.lutOf('aero.ini', sec, 'LUT_AOA_CD'), n('CD_GAIN'));
+    if (sec === 'WING_3' || sec === 'WING_5') {
+      eq(`${label} a floor element (reads the pitch)`, wing.name === 'VENTURI_FLOOR' ? 1 : 0, 1);
+      eq(`${label} LUT_AOA_CL points`, wing.lutAOA_CL.length, cl.length);
+      wing.lutAOA_CL.forEach(([x, y], k) => {
+        eq(`${label} LUT_AOA_CL[${k}] × CL_GAIN`, y, cl[k]?.[1] ?? NaN, 1e-4);
+        eq(`${label} LUT_AOA_CL[${k}] moved by the static rake`, x - (cl[k]?.[0] ?? NaN), rake, 1e-4);
+      });
+      if (n('CD_GAIN') === 0) eq(`${label} no drag (CD_GAIN 0)`, Math.max(...wing.lutAOA_CD.map(([, y]) => Math.abs(y))), 0);
+      else wing.lutAOA_CD.forEach(([x, y], k) => {
+        eq(`${label} LUT_AOA_CD[${k}] × CD_GAIN`, y, cd[k]?.[1] ?? NaN, 1e-4);
+        eq(`${label} LUT_AOA_CD[${k}] moved by the static rake`, x - (cd[k]?.[0] ?? NaN), rake, 1e-4);
+      });
+    } else {
+      eq(`${label} a ${i < 2 ? 'wing' : 'floor element'}`, wing.name === (i === 0 ? 'FRONT_WING' : i === 1 ? 'REAR_WING' : 'VENTURI_FLOOR') ? 1 : 0, 1);
+      sameCurve(`${label} LUT_AOA_CL × CL_GAIN`, wing.lutAOA_CL, cl, 1e-3);
+      sameCurve(`${label} LUT_AOA_CD × CD_GAIN`, wing.lutAOA_CD, cd, 1e-3);
+    }
+    // Ground-height tables against the pickup the element's axle reads: moved by the element's height below it (none)
+    const pickup = mod.num('car.ini', 'RIDE', pos[2] >= 0 ? 'PICKUP_FRONT_HEIGHT' : 'PICKUP_REAR_HEIGHT');
+    const drop = i < 2 ? 0 : pickup - pos[1];
+    eq(`${label} level with the pickup`, i < 2 ? 0 : drop, 0);
+    const shift = (lut: Lut): Lut => lut.map(([x, y]) => [x + drop, y]);
+    sameCurve(`${label} LUT_GH_CL`, wing.lutGH_CL_mult, shift(mod.lutOf('aero.ini', sec, 'LUT_GH_CL')), 1e-3);
+    sameCurve(`${label} LUT_GH_CD`, wing.lutGH_CD_mult, shift(mod.lutOf('aero.ini', sec, 'LUT_GH_CD')), 1e-3);
+    // 10° of yaw: CL × (1 + YAW_CL_GAIN × the angle in radians)
+    eq(`${label} YAW_CL_GAIN`, lutAt(wing.lutYaw_CL_mult ?? [], 10), 1 + (n('YAW_CL_GAIN') * 10 * Math.PI) / 180, 1e-3);
+  });
+  eq('2007 seven elements, no more', a.wings.length + 1, mod.sections('aero.ini').filter((s) => /^WING_\d+$/.test(s)).length);
+  // The plank is the body's ground collider [colliders.ini COLLIDER_0]
+  const centre = mod.vec('colliders.ini', 'COLLIDER_0', 'CENTRE');
+  const size = mod.vec('colliders.ini', 'COLLIDER_0', 'SIZE');
+  eq('2007 COLLIDER_0 underside', a.plank?.y ?? NaN, centre[1] - size[1] / 2);
+  eq('2007 COLLIDER_0 front', a.plank?.frontZ ?? NaN, centre[2] + size[2] / 2);
+  eq('2007 COLLIDER_0 rear', a.plank?.rearZ ?? NaN, centre[2] - size[2] / 2);
 });
 
 /** A gear change by the car's own data: the time between gears, the ignition cut, the down-shift's clutch and blip */

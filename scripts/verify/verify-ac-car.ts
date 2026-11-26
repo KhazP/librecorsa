@@ -491,6 +491,7 @@ async function main(): Promise<void> {
       ['pfa_vw_scirocco_53b', 'vw-scirocco-gtx', []],
       ['pfa_porsche_934t_rsr_rr', 'porsche-934-rsr', []],
       ['mt_mtr_496r', 'mtr-496r', []],
+      ['cim_2007_ferrari', 'f1-2007', []],
     ];
     const PATHS = [
       'config.chassis.totalMassKg', 'config.chassis.wheelbase', 'config.chassis.frontWeightFraction', 'config.chassis.trackWidthFront',
