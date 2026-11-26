@@ -3,11 +3,11 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import type { RaceStatus } from "@/types/f1";
-import { Badge } from "@/components/ui/Badge";
-import { currentUnits } from "@/lib/settings/ui-prefs";
+import { rollingSpeedGauge, type RollingSpeedZone } from "@/lib/sim/race-start";
+import { useUnits } from "@/lib/settings/ui-prefs";
 import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
 import { dnfReasonLabel, HUD_GLASS, HUD_RED, raceState } from "./hud-format";
-import { SkinBanner, skinCss, SkinPanel, SkinTag, useHudSkin } from "./styles/third-party-skin";
+import { SkinBanner, skinCss, SkinPanel, useHudSkin } from "./styles/third-party-skin";
 
 const LIGHT_COLUMNS = [0, 1, 2, 3, 4];
 /** Waving chequer strip outline (520 × 60 viewBox) */
@@ -32,21 +32,54 @@ const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ pattern
 /** How long the reaction time stays up once the launch comes (ms) */
 const REACTION_SHOWN_MS = 4500;
 
-/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts with the player's reaction time under it, "Chequered flag" when the player finishes */
+/**
+ * European-style circular speed-limit road sign flanking the rolling-start speed banner.
+ * The red ring is road-signage identity (like the red start lights), not semantic state.
+ */
+const SpeedLimitSign: React.FC<{ speed: number }> = ({ speed }) => (
+  <span
+    aria-hidden="true"
+    className="flex size-14 shrink-0 items-center justify-center rounded-full border-[5px] border-lc-crimson bg-lc-chalk text-lc-void ring-2 ring-lc-chalk/90 shadow-lc-pop sm:size-[76px] sm:border-[6px] short:size-12 short:border-4"
+  >
+    <span
+      className={`font-sans leading-none font-black tracking-[-0.04em] tabular-nums not-italic ${
+        speed >= 100
+          ? "text-[20px] sm:text-[26px] short:text-[17px]"
+          : "text-[24px] sm:text-[32px] short:text-[20px]"
+      }`}
+    >
+      {speed}
+    </span>
+  </span>
+);
+
+/** Semantic fill colour for the rolling-start live speed bar (follows colour-blind palettes via palette.css) */
+const ROLLING_BAR_COLOR: Record<RollingSpeedZone, string> = {
+  hold: "color-mix(in srgb, var(--color-lc-gain) 74%, var(--color-lc-void))",
+  slow: "var(--color-lc-caution)",
+  fast: "var(--color-lc-loss)",
+};
+
+/** Five-light start gantry overlay (the lights are red: identity, not state); fixed rolling-start speed indicator across all HUDs; "Lights out" / "Green flag" when the race starts with the player's reaction time under it, "Chequered flag" when the player finishes */
 export const StartLights: React.FC<{
   race: RaceStatus | undefined;
+  /** The player's current speed (km/h, telemetry.speedKmh) for the rolling-start speed indicator */
+  speedKmh?: number;
   /** The player's reaction to the lights going out (ms, telemetry.startReactionMs) */
   reactionMs?: number;
-}> = ({ race, reactionMs }) => {
+}> = ({ race, speedKmh = 0, reactionMs }) => {
   const skin = useHudSkin();
+  const units = useUnits();
   // The gantry re-renders every frame: its words are resolved once per language
   const tx = useTranslations("hud.startLights");
   const L = useMemo(
     () => ({
       rollingStart: tx("rollingStart"),
-      formation: tx("formation"),
-      limiterActive: tx("limiterActive"),
-      getReady: tx("getReady"),
+      limiterShort: tx("limiterShort"),
+      getReadyForGreen: tx("getReadyForGreen"),
+      holdYourSpeed: tx("holdYourSpeed"),
+      speedUp: tx("speedUp"),
+      slowDown: tx("slowDown"),
       greenFlag: tx("greenFlag"),
       lightsOut: tx("lightsOut"),
       chequeredFlag: tx("chequeredFlag"),
@@ -184,163 +217,105 @@ export const StartLights: React.FC<{
   }
   if (race?.phase === "racing" && race.rollingFormation) {
     const rf = race.rollingFormation;
-    const units = currentUnits();
     const pace = Math.round(speedIn(rf.paceMs * 3.6, units.speed));
+    const liveSpeed = Math.max(0, speedIn(Number.isFinite(speedKmh) ? speedKmh : 0, units.speed));
+    const speedText = liveSpeed.toFixed(1);
     const unit = SPEED_LABEL[units.speed];
+    const gauge = rollingSpeedGauge(speedKmh, rf.paceMs);
     const countdown = rf.stage === "countdown" ? rf.countdown : undefined;
-    const isReady = rf.stage === "ready";
+    const isReadyOrCountdown = rf.stage === "ready" || rf.stage === "countdown";
     const pipsLit = countdown !== undefined ? 4 - countdown : 0;
+    const headline = isReadyOrCountdown ? L.getReadyForGreen : L.rollingStart;
+    const subline =
+      gauge.zone === "fast" ? L.slowDown : gauge.zone === "slow" ? L.speedUp : L.holdYourSpeed;
+    const barColor = ROLLING_BAR_COLOR[gauge.zone];
+    const speedDarkInk = gauge.fillFraction >= 0.44;
+    const limDarkInk = gauge.fillFraction >= 0.9;
 
-    if (skin !== null) {
-      if (countdown !== undefined) {
-        return (
-          <div role="status" aria-label={tx("rollingCountdownLabel", { count: countdown })} className="flex flex-col items-center gap-2">
-            <SkinPanel cut="lg" tone="caution" innerClassName="flex flex-col items-center gap-2 px-8 py-3 sm:px-12 sm:py-4">
-              <div className="flex items-center gap-2">
-                <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
-                  {L.rollingStart}
-                </SkinTag>
-                {rf.limiterActive ? (
-                  <SkinTag tone="info" className="px-2 py-0.5 text-[11px] font-bold uppercase">
-                    {L.limiterActive}
-                  </SkinTag>
-                ) : null}
-              </div>
-              <span key={countdown} className="lc-data text-[56px] leading-none font-bold sm:text-[80px]">
-                {countdown}
-              </span>
-              <div className="flex gap-2" aria-hidden="true">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="block size-3.5 rounded-full"
-                    style={{
-                      backgroundColor: i < pipsLit ? "var(--color-lc-caution)" : "color-mix(in srgb, var(--color-lc-caution) 18%, var(--color-lc-void))",
-                      boxShadow: i < pipsLit ? "0 0 12px var(--color-lc-caution)" : "none",
-                    }}
-                  />
-                ))}
-              </div>
-              <span className="text-[13px] font-bold whitespace-nowrap uppercase opacity-90">
-                {tx.rich("holdPaceSkin", { pace, unit, n: (chunks) => <span className="lc-data">{chunks}</span> })}
-              </span>
-            </SkinPanel>
-          </div>
-        );
-      }
-      if (isReady) {
-        return (
-          <SkinPanel cut="md" tone="caution" role="status" innerClassName="flex flex-col items-center gap-1.5 px-7 py-3 sm:px-10 sm:py-3.5">
-            <div className="flex items-center gap-2">
-              <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
-                {L.rollingStart}
-              </SkinTag>
-              {rf.limiterActive ? (
-                <SkinTag tone="info" className="px-2 py-0.5 text-[11px] font-bold uppercase">
-                  {L.limiterActive}
-                </SkinTag>
-              ) : null}
-            </div>
-            <span className="text-[32px] leading-none font-bold whitespace-nowrap uppercase sm:text-[46px]">{L.getReady}</span>
-            <span className="text-[13px] font-bold whitespace-nowrap uppercase opacity-90">
-              {tx.rich("holdPaceSkin", { pace, unit, n: (chunks) => <span className="lc-data">{chunks}</span> })}
-            </span>
-          </SkinPanel>
-        );
-      }
-      return (
-        <SkinBanner role="status" tone="caution" cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pe-4 ps-2.5">
-          <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
-            {L.formation}
-          </SkinTag>
-          <span className="text-[14px] font-bold whitespace-nowrap uppercase">
-            {tx.rich("holdPaceSkin", { pace, unit, n: (chunks) => <span className="lc-data">{chunks}</span> })}
-          </span>
-          {rf.limiterActive ? (
-            <SkinTag tone="info" className="px-2 py-0.5 text-[11px] font-bold uppercase">
-              {L.limiterActive}
-            </SkinTag>
-          ) : null}
-        </SkinBanner>
-      );
-    }
-
-    if (countdown !== undefined) {
-      return (
-        <div
-          role="status"
-          aria-label={tx("rollingCountdownLabel", { count: countdown })}
-          className={`flex flex-col items-center gap-2 rounded-lc-tile border-2 border-lc-caution/75 px-8 py-3.5 text-lc-chalk shadow-lc-pop sm:px-12 sm:py-4.5 ${HUD_GLASS}`}
-        >
-          <div className="flex items-center gap-2">
-            <Badge tone="warn" variant="solid" size="sm">
-              {L.rollingStart}
-            </Badge>
-            {rf.limiterActive ? (
-              <Badge tone="info" variant="soft" size="sm">
-                {L.limiterActive}
-              </Badge>
-            ) : null}
-          </div>
-          <span key={countdown} className="lc-data text-[60px] leading-none font-bold text-lc-caution sm:text-[84px]">
-            {countdown}
-          </span>
-          <div className="flex gap-2.5" aria-hidden="true">
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                className="block size-3.5 rounded-full"
-                style={{
-                  backgroundColor: i < pipsLit ? "var(--color-lc-caution)" : "color-mix(in srgb, var(--color-lc-caution) 18%, var(--color-lc-void))",
-                  boxShadow: i < pipsLit ? "0 0 14px var(--color-lc-caution)" : "inset 0 1px 3px rgb(0 0 0 / 0.8)",
-                }}
-              />
-            ))}
-          </div>
-          <span className="lc-disp text-[14px] whitespace-nowrap text-lc-chalk/90">
-            {tx.rich("holdPace", { pace, unit, n: (chunks) => <span className="lc-data text-lc-caution">{chunks}</span> })}
-          </span>
-        </div>
-      );
-    }
-    if (isReady) {
-      return (
-        <div
-          role="status"
-          className={`flex flex-col items-center gap-1.5 rounded-lc-tile border-2 border-lc-caution/70 px-7 py-3 text-lc-chalk shadow-lc-pop sm:px-10 sm:py-4 ${HUD_GLASS}`}
-        >
-          <div className="flex items-center gap-2">
-            <Badge tone="warn" variant="solid" size="sm">
-              {L.rollingStart}
-            </Badge>
-            {rf.limiterActive ? (
-              <Badge tone="info" variant="soft" size="sm">
-                {L.limiterActive}
-              </Badge>
-            ) : null}
-          </div>
-          <span className="lc-disp text-[34px] leading-none whitespace-nowrap text-lc-caution sm:text-[48px]">{L.getReady}</span>
-          <span className="lc-disp text-[14px] whitespace-nowrap text-lc-chalk/90">
-            {tx.rich("holdPace", { pace, unit, n: (chunks) => <span className="lc-data text-lc-caution">{chunks}</span> })}
-          </span>
-        </div>
-      );
-    }
     return (
       <div
         role="status"
-        className={`inline-flex min-h-11 items-center gap-2.5 rounded-lc-row py-2 pe-4 ps-2.5 text-lc-chalk inset-ring inset-ring-lc-caution/65 shadow-lc-pop ${HUD_GLASS}`}
+        aria-label={
+          countdown !== undefined
+            ? `${tx("rollingSpeedLabel", { speed: speedText, pace, unit })} · ${tx("rollingCountdownLabel", { count: countdown })}`
+            : tx("rollingSpeedLabel", { speed: speedText, pace, unit })
+        }
+        className="flex flex-col items-center gap-2 font-sans not-italic"
       >
-        <Badge tone="warn" variant="solid" size="sm">
-          {L.formation}
-        </Badge>
-        <span className="lc-disp text-[15px] whitespace-nowrap">
-          {tx.rich("holdPace", { pace, unit, n: (chunks) => <span className="lc-data text-lc-caution">{chunks}</span> })}
-        </span>
-        {rf.limiterActive ? (
-          <Badge tone="info" variant="soft" size="sm">
-            {L.limiterActive}
-          </Badge>
+        <div className="flex items-center gap-2.5 sm:gap-4 short:gap-2">
+          <SpeedLimitSign speed={pace} />
+          <div className="flex w-[224px] flex-col gap-1.5 sm:w-[320px] sm:gap-2 short:w-[208px] short:gap-1">
+            {/* Stacked motorsport headline (yellow) + instruction strip (dark slate), fixed across all HUDs */}
+            <div className="overflow-hidden shadow-lc-pop">
+              <div className="flex items-center justify-center bg-lc-caution px-3 py-1 text-center text-lc-void sm:py-1.5 short:py-0.5">
+                <span className="text-[12px] leading-tight font-extrabold tracking-[0.05em] whitespace-nowrap uppercase sm:text-[15px] short:text-[11px]">
+                  {headline}
+                </span>
+              </div>
+              <div className="flex items-center justify-center bg-lc-titanium/95 px-3 py-1 text-center text-lc-chalk sm:py-1.5 short:py-0.5">
+                <span className="text-[11px] leading-tight font-semibold tracking-[0.07em] whitespace-nowrap uppercase sm:text-[13px] short:text-[10px]">
+                  {subline}
+                </span>
+              </div>
+            </div>
+            {/* Live speed gauge bar: fills cleanly to the target-limit tick and turns green / amber / red by speed window */}
+            <div className="relative flex h-8 w-full items-center overflow-hidden bg-lc-void/78 shadow-lc-pop inset-ring inset-ring-white/15 sm:h-10 short:h-7">
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 origin-left transition-[transform,background-color] duration-75 ease-linear"
+                style={{ transform: `scaleX(${gauge.fillFraction})`, backgroundColor: barColor }}
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 w-0.5 bg-lc-chalk/55"
+                style={{ left: `${(gauge.targetFraction * 100).toFixed(2)}%` }}
+              />
+              <span
+                className={`relative z-10 flex items-baseline gap-1.5 ps-3 sm:ps-3.5 short:ps-2.5 ${
+                  speedDarkInk ? "text-lc-void" : "text-lc-chalk hud-text-shadow"
+                }`}
+              >
+                <span className="lc-data text-[18px] leading-none font-bold sm:text-[22px] short:text-[15px]">{speedText}</span>
+                <span className="text-[10px] leading-none font-bold tracking-[0.06em] uppercase opacity-75 sm:text-[11px] short:text-[9px]">
+                  {unit}
+                </span>
+              </span>
+              {rf.limiterActive ? (
+                <span
+                  className={`relative z-10 ms-auto me-5.5 rounded-xs px-1.5 py-0.5 text-[9px] leading-none font-bold tracking-[0.08em] uppercase sm:me-7 short:me-5 ${
+                    limDarkInk ? "bg-lc-void/18 text-lc-void" : "bg-lc-info/20 text-lc-info"
+                  }`}
+                >
+                  {L.limiterShort}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <SpeedLimitSign speed={pace} />
+        </div>
+        {countdown !== undefined ? (
+          <div className="flex items-center gap-3 border-t-2 border-lc-caution bg-lc-void/86 px-5 py-1.5 shadow-lc-pop sm:px-6 sm:py-2 short:gap-2 short:px-4 short:py-1">
+            <div className="flex gap-1.5" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className={`block size-3 rounded-full sm:size-3.5 short:size-2.5 ${
+                    i < pipsLit ? "" : "inset-ring inset-ring-lc-caution/35"
+                  }`}
+                  style={{
+                    backgroundColor:
+                      i < pipsLit
+                        ? "var(--color-lc-caution)"
+                        : "color-mix(in srgb, var(--color-lc-caution) 16%, var(--color-lc-void))",
+                    boxShadow: i < pipsLit ? "0 0 12px var(--color-lc-caution)" : "inset 0 1px 3px var(--color-lc-void)",
+                  }}
+                />
+              ))}
+            </div>
+            <span key={countdown} className="lc-data text-[28px] leading-none font-bold text-lc-caution sm:text-[36px] short:text-[22px]">
+              {countdown}
+            </span>
+          </div>
         ) : null}
       </div>
     );
