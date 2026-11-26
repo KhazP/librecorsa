@@ -240,7 +240,8 @@ export const LibreCorsaLogo: React.FC<LibreCorsaLogoProps> = ({
   const t = TONES[tone];
 
   return (
-    <div translate="no" className={`inline-flex max-w-full items-center select-none ${s.gap} ${className}`}>
+    // A logo lock-up is not mirrored right to left: the emblem stays before the wordmark
+    <div translate="no" dir="ltr" className={`inline-flex max-w-full items-center select-none ${s.gap} ${className}`}>
       <LibreCorsaMark className={`${s.mark} shrink-0`} title="" tone={tone} />
       <div className="flex min-w-0 flex-col justify-center">
         <div className={s.word}>
