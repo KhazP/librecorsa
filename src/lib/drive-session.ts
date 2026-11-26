@@ -982,16 +982,20 @@ export class DriveSession {
     let ownCompound: TireCompound | null = null;
     /** The time trial applies to this car, outside a race */
     const timeTrialOn = () => timeTrial !== null && timeTrial.vehicle === vehicleNow && raceNow().kind === "practice";
-    /** The time trial's tyre, fuel and road, before the car is placed */
+    /** The time trial's tyre, fuel, fixed setup (when locked) and road, before the car is placed */
     const putTimeTrialOn = () => {
-      if (timeTrial && timeTrialOn()) applyTimeTrial(physics, timeTrial, this.snapshot.chassisSetup, getTrackEnv().trackEvolution, this.setTireCompound);
+      if (!timeTrial || !timeTrialOn()) return;
+      applyTimeTrial(physics, timeTrial, this.snapshot.chassisSetup, getTrackEnv().trackEvolution, this.setTireCompound);
+      if (timeTrial.fixedSetup) physics.setTyreSetup(this.snapshot.defaultTyreSetup);
     };
-    /** The player's own fuel and tyre back on the car, and the road free to evolve (from the next session's reset) */
+    /** The player's own setup, fuel and tyre back on the car, and the road free to evolve (from the next session's reset) */
     const endTimeTrial = () => {
       if (!timeTrial) return;
+      const wasFixed = timeTrial.fixedSetup === true;
       timeTrial = null;
       getTrackEnv().trackEvolution.holdFullGrip(false);
       physics.applyChassisSetup?.(this.snapshot.chassisSetup);
+      if (wasFixed) physics.setTyreSetup(this.snapshot.tyreSetup);
       if (ownCompound && physics.tireCompound !== ownCompound) this.setTireCompound(ownCompound);
       ownCompound = null;
       this.publish({ timeTrial: null });
@@ -2114,14 +2118,15 @@ export class DriveSession {
     };
     this.setTyreSetup = (setup) => {
       if (disposed) return;
-      physics.setTyreSetup(setup);
+      // A fixed-setup time trial keeps factory tyre pressures & camber on the car while preserving the player's saved setup
+      physics.setTyreSetup(timeTrialOn() && timeTrial?.fixedSetup ? this.snapshot.defaultTyreSetup : setup);
       this.publish({ tyreSetup: setup });
     };
     this.setChassisSetup = (setup) => {
       if (disposed) return;
       const safe = clampChassisToCarSheet(vehicleNow, setup);
-      // The garage keeps the player's own setup; the time trial's fuel stays on the car
-      physics.applyChassisSetup?.(timeTrialOn() ? lowestFuelSetup(safe) : safe);
+      // The garage keeps the player's own setup; the time trial's fuel (and baseline when fixedSetup) stays on the car
+      physics.applyChassisSetup?.(timeTrialOn() ? lowestFuelSetup(timeTrial?.fixedSetup ? DEFAULT_CHASSIS_SETUP : safe) : safe);
       this.publish({ chassisSetup: safe });
     };
     this.setTimeTrial = (rules) => {

@@ -14,6 +14,8 @@
  *   creator                                       the game's maker: a name held by the maker's driver key
  *   goat                                          (issue #181) at the top of the Hall of Fame's Most decorated list,
  *                                                 a tie at the top shared (goat.ts holds the rule)
+ *   stig                                          holds P1 on the permanent Middle Gear Lap Board (Suzuki Liana 1.6 at
+ *                                                 Dunsfold Aerodrome, current shipping physics); moves when beaten
  *
  * The types are shared with the Worker, which imports them only as types: nothing here runs on the server.
  */
@@ -29,7 +31,7 @@ import {
   type VehicleClassId,
 } from "@/lib/cars/vehicle-class";
 
-export const BADGE_TYPES = ["creator", "goat", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
+export const BADGE_TYPES = ["creator", "goat", "stig", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
 export type BadgeType = (typeof BADGE_TYPES)[number];
 export const isBadgeType = (v: unknown): v is BadgeType => (BADGE_TYPES as readonly unknown[]).includes(v);
 
@@ -158,8 +160,8 @@ export interface HallOfFameAnswer {
   recordHolders: HallOfFameRecordHolders;
 }
 
-/** The badge order everywhere, as BADGE_TYPES: the Creator (who the driver is) first, the GOAT, then medals, best first */
-const ORDER: Record<BadgeType, number> = { creator: 0, goat: 1, weekly_gold: 2, weekly_silver: 3, weekly_bronze: 4, track_record: 5, og: 6, bulb: 7 };
+/** The badge order everywhere, as BADGE_TYPES: the Creator (who the driver is) first, the GOAT, The Stig, then medals, best first */
+const ORDER: Record<BadgeType, number> = { creator: 0, goat: 1, stig: 2, weekly_gold: 3, weekly_silver: 4, weekly_bronze: 5, track_record: 6, og: 7, bulb: 8 };
 export const sortBadges = (badges: readonly DriverBadge[]): DriverBadge[] => [...badges].sort((a, b) => ORDER[a.type] - ORDER[b.type]);
 
 const BADGE_NAME: Record<BadgeType, string> = {
@@ -171,6 +173,7 @@ const BADGE_NAME: Record<BadgeType, string> = {
   get bulb() { return t("game.badges.bulb"); },
   get creator() { return t("game.badges.creator"); },
   get goat() { return t("game.badges.goat"); },
+  get stig() { return t("game.badges.stig"); },
 };
 
 /** "Weekly Gold", "Idea Contributor" */
@@ -288,6 +291,8 @@ export function badgeDetail(b: DriverBadge): string {
       return t("game.badges.creatorDetail");
     case "goat":
       return t("game.badges.goatDetail");
+    case "stig":
+      return t("game.badges.stigDetail");
   }
 }
 

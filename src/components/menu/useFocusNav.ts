@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { connectedPads } from "@/lib/input/device-input";
+import { connectedPads, hatAxesOf, isLogitechHidppPad, padHatDirections, type PadLike } from "@/lib/input/device-input";
 import { isMenuNavSuspended, padKey } from "./useMenuNav";
 import { notePadInput } from "./input-mode";
 
@@ -548,86 +548,137 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
     };
     window.addEventListener("keydown", onKey);
 
-    // Controller: the first standard-mapping pad, button edges only (a button still held from the
-    // previous screen does not fire), directions auto-repeat while held
-    let raf = 0;
-    let prev: boolean[] | null = null;
-    // Which pad `prev` was read from: when the first pad changes (one of two unplugged), its buttons are a new baseline
-    let prevPad: string | null = null;
-    const repeatAt: number[] = [];
-    const poll = (t: number) => {
-      raf = requestAnimationFrame(poll);
-      const pad = connectedPads().find((p) => p.mapping === "standard");
-      if (!pad) {
-        prev = null;
-        prevPad = null;
-        return;
-      }
-      if (padKey(pad) !== prevPad) {
-        prev = null;
-        prevPad = padKey(pad);
-      }
-      const ax = pad.axes;
+    // Controller & wheels: standard-mapping gamepads plus non-standard wheels with a POV hat switch (e.g. Logitech
+    // G920 / G29 on Chrome macOS & Windows). Button edges only (a button held from the previous screen does not fire),
+    // directions auto-repeat while held. Non-standard wheels never read analog axes so resting pedals cannot scroll.
+    const menuNavState = (pad: PadLike): boolean[] | null => {
       const down = (i: number) => Boolean(pad.buttons[i]?.pressed);
-      // up, down, left, right, A, B, Menu, LB, RB, X, Y, LT, RT; LT/RT held: bigger slider steps, pressed: a paged
-      // list's page (only where one is mounted, so a held trigger still just steps a slider elsewhere)
-      const now = [
-        down(12) || (ax[1] ?? 0) < -STICK_THRESHOLD,
-        down(13) || (ax[1] ?? 0) > STICK_THRESHOLD,
-        down(14) || (ax[0] ?? 0) < -STICK_THRESHOLD,
-        down(15) || (ax[0] ?? 0) > STICK_THRESHOLD,
+      if (pad.mapping === "standard") {
+        const ax = pad.axes;
+        // up, down, left, right, A, B, Menu, LB, RB, X, Y, LT, RT
+        return [
+          down(12) || (ax[1] ?? 0) < -STICK_THRESHOLD,
+          down(13) || (ax[1] ?? 0) > STICK_THRESHOLD,
+          down(14) || (ax[0] ?? 0) < -STICK_THRESHOLD,
+          down(15) || (ax[0] ?? 0) > STICK_THRESHOLD,
+          down(0),
+          down(1),
+          down(9),
+          down(4),
+          down(5),
+          down(2),
+          down(3),
+          down(6),
+          down(7),
+        ];
+      }
+      const hasHat = hatAxesOf(pad).length > 0;
+      const hidpp = isLogitechHidppPad(pad.id) || /\bg920\b/i.test(pad.id);
+      if (!hasHat && !hidpp) return null;
+      const hat = padHatDirections(pad);
+      if (hidpp) {
+        // Logitech G920 / G923 Xbox raw HID layout: A=0, B=1, X=2, Y=3, Right paddle(RB)=4, Left paddle(LB)=5, Menu=6
+        return [
+          hat.has("up"),
+          hat.has("down"),
+          hat.has("left"),
+          hat.has("right"),
+          down(0),
+          down(1),
+          down(6),
+          down(5),
+          down(4),
+          down(2),
+          down(3),
+          false,
+          false,
+        ];
+      }
+      // Generic non-standard wheel with a POV hat switch: D-pad directions + primary buttons 0 (select) and 1 (back)
+      return [
+        hat.has("up"),
+        hat.has("down"),
+        hat.has("left"),
+        hat.has("right"),
         down(0),
         down(1),
-        down(9),
-        down(4),
-        down(5),
-        down(2),
-        down(3),
-        down(6),
-        down(7),
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
       ];
-      // Not the screen on top: keep the baseline current, so a button held as it takes over does not fire
-      if (prev === null || isMenuNavSuspended() || !owns()) {
-        prev = now;
-        return;
-      }
-      if (now.some((d, i) => d && !prev![i])) notePadInput(pad.id);
-      const big = down(6) || down(7);
+    };
+
+    let raf = 0;
+    const prevByPad = new Map<string, boolean[]>();
+    const repeatByPad = new Map<string, number[]>();
+    const poll = (t: number) => {
+      raf = requestAnimationFrame(poll);
+      const pads = connectedPads();
+      const seen = new Set<string>();
       const o = ref.current;
       const dirs: Dir[] = ["up", "down", "left", "right"];
-      const handlers: (() => void)[] = [
-        ...dirs.map((d) => () => {
-          // Past the last control up or down, the stick scrolls on to the text below (or above) it
-          if (!move(d, big) && (d === "up" || d === "down")) scrollPast(document.activeElement ?? root(), d);
-        }),
-        press,
-        () => {
-          // Ⓑ in a text field just leaves the field
-          const a = document.activeElement;
-          if (isTextEntry(a)) {
-            leaveTextField(a as HTMLElement);
-            return;
-          }
-          goBack();
-        },
-        () => o.onStart?.(),
-        () => o.onPrevTab?.(),
-        () => o.onNextTab?.(),
-        () => void (o.rowReset && resetRow()),
-        () => o.onAlt?.(),
-        () => void turnPage(-1),
-        () => void turnPage(1),
-      ];
-      now.forEach((isDown, i) => {
-        if (isDown && !prev![i]) {
-          handlers[i]();
-          repeatAt[i] = t + REPEAT_DELAY_MS;
-        } else if (isDown && i < 4 && t >= (repeatAt[i] ?? Infinity)) {
-          handlers[i]();
-          repeatAt[i] = t + REPEAT_RATE_MS;
+      for (const pad of pads) {
+        const now = menuNavState(pad);
+        if (!now) continue;
+        const key = padKey(pad);
+        seen.add(key);
+        const prev = prevByPad.get(key);
+        // First frame for this device, or not the screen on top: keep the baseline current so held inputs do not fire
+        if (!prev || isMenuNavSuspended() || !owns()) {
+          prevByPad.set(key, now);
+          continue;
         }
-      });
-      prev = now;
+        if (now.some((d, i) => d && !prev[i])) notePadInput(pad.id);
+        const big = now[11] || now[12];
+        const handlers: (() => void)[] = [
+          ...dirs.map((d) => () => {
+            // Past the last control up or down, the stick/D-pad scrolls on to the text below (or above) it
+            if (!move(d, big) && (d === "up" || d === "down")) scrollPast(document.activeElement ?? root(), d);
+          }),
+          press,
+          () => {
+            // Ⓑ in a text field just leaves the field
+            const a = document.activeElement;
+            if (isTextEntry(a)) {
+              leaveTextField(a as HTMLElement);
+              return;
+            }
+            goBack();
+          },
+          () => o.onStart?.(),
+          () => o.onPrevTab?.(),
+          () => o.onNextTab?.(),
+          () => void (o.rowReset && resetRow()),
+          () => o.onAlt?.(),
+          () => void turnPage(-1),
+          () => void turnPage(1),
+        ];
+        let repeatAt = repeatByPad.get(key);
+        if (!repeatAt) {
+          repeatAt = [];
+          repeatByPad.set(key, repeatAt);
+        }
+        now.forEach((isDown, i) => {
+          if (isDown && !prev[i]) {
+            handlers[i]();
+            repeatAt![i] = t + REPEAT_DELAY_MS;
+          } else if (isDown && i < 4 && t >= (repeatAt![i] ?? Infinity)) {
+            handlers[i]();
+            repeatAt![i] = t + REPEAT_RATE_MS;
+          }
+        });
+        prevByPad.set(key, now);
+      }
+      for (const k of prevByPad.keys()) {
+        if (!seen.has(k)) {
+          prevByPad.delete(k);
+          repeatByPad.delete(k);
+        }
+      }
     };
     raf = requestAnimationFrame(poll);
 

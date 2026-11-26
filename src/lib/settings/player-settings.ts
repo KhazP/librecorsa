@@ -28,10 +28,12 @@ import {
 } from "@/lib/input/bindings";
 import {
   DEFAULT_WHEEL_SETTINGS,
+  HAT_DIRECTIONS,
   PAD_SENSITIVITY,
   STEER_LOCK_MIN_DEG,
   type AxisBinding,
   type ButtonBinding,
+  type HatDirection,
   type InputDevice,
   type PadPedalTuning,
   type PadSensitivity,
@@ -697,7 +699,11 @@ function parsePedal(v: unknown): PedalBinding | null {
 }
 
 function parseButton(v: unknown): ButtonBinding | null {
-  if (!isObj(v) || !isStr(v.padId) || !index(v.button)) return null;
+  if (!isObj(v) || !isStr(v.padId)) return null;
+  if (isObj(v.hat) && index(v.hat.axis) && typeof v.hat.dir === "string" && (HAT_DIRECTIONS as readonly string[]).includes(v.hat.dir)) {
+    return { padId: v.padId, button: -1, hat: { axis: v.hat.axis as number, dir: v.hat.dir as HatDirection } };
+  }
+  if (!index(v.button)) return null;
   return { padId: v.padId, button: v.button as number };
 }
 

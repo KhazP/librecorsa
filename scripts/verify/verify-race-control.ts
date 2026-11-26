@@ -484,6 +484,15 @@ console.log("Time trial · fixed conditions");
       Math.abs(first - minKg) < 0.01 && Math.abs(car.telemetry.fuelKg - minKg) < 0.01 && own > minKg + 5 && car.tireCompound === timeTrialRules(vehicle).compound && kept?.frontWingClicks === 3,
       `${own.toFixed(1)} kg own, ${first.toFixed(2)} then ${car.telemetry.fuelKg.toFixed(2)} kg, ${car.tireCompound}`
     );
+    // Fixed-setup trial (e.g. Middle Gear Lap Board): resets chassis setup to factory baseline (+ lowest fuel)
+    applyTimeTrial(car, timeTrialRules(vehicle, { eventId: "middle-gear", fixedSetup: true }), garage, road, (c) => (car.tireCompound = c));
+    car.resetToStartGrid(true);
+    const fixedKept = car.getChassisSetup?.();
+    check(
+      `${name}: fixedSetup time trial locks chassis setup to baseline with lowest fuel`,
+      Math.abs(car.telemetry.fuelKg - minKg) < 0.01 && fixedKept?.frontWingClicks === 0,
+      `frontWingClicks=${fixedKept?.frontWingClicks}, fuel=${car.telemetry.fuelKg.toFixed(2)} kg`
+    );
   }
   const road = new TrackEvolutionState(track.totalLengthM);
   road.reset("green");

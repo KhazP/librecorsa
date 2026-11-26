@@ -42,7 +42,7 @@ import trackIndex from "../../public/tracks/index.json";
 import { CIRCUIT_REVISION_STEP, PHYSICS_VERSIONS, shippingLapPhysicsVersion } from "../../src/lib/sim/lap-types";
 import { isVehicleModelId, type VehicleModelId } from "../../src/types/f1";
 import { VEHICLE_CLASS_IDS, vehicleClassOf, type VehicleClassId } from "../../src/lib/cars/vehicle-class";
-import { challengeAt } from "../../src/lib/net/weekly-challenge";
+import { MIDDLE_GEAR_CHALLENGE, challengeAt } from "../../src/lib/net/weekly-challenge";
 import { compareMedals, goatKeys } from "../../src/lib/net/goat";
 import type {
   BadgeType,
@@ -64,7 +64,7 @@ type Answer = { status: number; body: unknown };
 const fail = (error: string, status = 400): Answer => ({ status, body: { ok: false, error } });
 
 /** The same lists as src/lib/net/awards.ts (imported there as types only, so the Worker carries no client code) */
-export const BADGE_TYPES: readonly BadgeType[] = ["creator", "goat", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
+export const BADGE_TYPES: readonly BadgeType[] = ["creator", "goat", "stig", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
 export const MANUAL_BADGE_TYPES: readonly ManualBadgeType[] = ["bulb", "og", "track_record"];
 export const MAX_BADGE_NAMES = 64;
 /** Minimum distinct drivers on an open board before its P1 earns a Fastest Lap badge / Hall of Fame record */
@@ -489,7 +489,8 @@ export async function badgesOf(
   const out: Record<string, DriverBadge[]> = Object.create(null);
   if (keys.length === 0) return out;
   const marks = keys.map(() => "?").join(", ");
-  const [weeks, records, og, manual, creators] = await Promise.all([
+  const mgPhysics = shippingLapPhysicsVersion(MIDDLE_GEAR_CHALLENGE.vehicle, MIDDLE_GEAR_CHALLENGE.trackId);
+  const [weeks, records, og, manual, creators, stigLeader] = await Promise.all([
     events ? Promise.resolve(events) : hallOfFameEvents(db, nowMs),
     db
       .prepare(
@@ -505,6 +506,10 @@ export async function badgesOf(
       (await db.prepare(`SELECT * FROM driver_awards WHERE awarded_by != 'auto' AND name_key IN (${marks}) ORDER BY awarded_at DESC, id DESC`).bind(...keys).all<AwardRow>()).results,
     ),
     creatorNames(db, keys, creatorKeyHashes),
+    db
+      .prepare("SELECT name_key FROM laps WHERE event = ? AND track_id = ? AND vehicle = ? AND physics = ? ORDER BY lap_time_ms, created_at, id LIMIT 1")
+      .bind(MIDDLE_GEAR_CHALLENGE.id, MIDDLE_GEAR_CHALLENGE.trackId, MIDDLE_GEAR_CHALLENGE.vehicle, mgPhysics)
+      .first<{ name_key: string }>(),
   ]);
 
   const wanted = new Set(keys);
@@ -542,6 +547,7 @@ export async function badgesOf(
   for (const k of goatKeys(tallyMostDecorated(weeks, Infinity))) {
     if (wanted.has(k)) add(k, "goat").count = 1;
   }
+  if (stigLeader && wanted.has(stigLeader.name_key)) add(stigLeader.name_key, "stig").count = 1;
   for (const r of og.results) add(r.name_key, "og").count = 1;
   for (const r of creators.results) add(r.name_key, "creator").count = 1;
   for (const r of manual ?? []) {

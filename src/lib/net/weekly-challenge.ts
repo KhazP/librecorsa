@@ -33,6 +33,51 @@ export interface WeeklyChallenge extends ChallengeRules {
 }
 
 /**
+ * A permanent always-active time trial (e.g. the Middle Gear Lap Board: Suzuki Liana 1.6 at Dunsfold Aerodrome with
+ * fixed baseline setup). Never expires and never awards rotating weekly Hall of Fame medals.
+ */
+export interface PermanentChallenge {
+  /** Stable board id, e.g. "middle-gear" (never an ISO week id) */
+  id: string;
+  permanent: true;
+  /** When true, locks chassis & tyre setup to factory baseline (with lowest fuel) */
+  fixedSetup?: boolean;
+  trackId: string;
+  vehicle: VehicleModelId;
+  car?: string;
+  assists: AssistPreset;
+  realism: SimRealism;
+}
+
+export type TimeTrialEvent = WeeklyChallenge | PermanentChallenge;
+
+export const isPermanentChallenge = (c: TimeTrialEvent): c is PermanentChallenge =>
+  "permanent" in c && c.permanent === true;
+
+/** Permanent Top Gear tribute trial: Suzuki Liana 1.6 around Dunsfold Aerodrome, fixed setup */
+export const MIDDLE_GEAR_CHALLENGE_ID = "middle-gear";
+export const MIDDLE_GEAR_CHALLENGE: PermanentChallenge = {
+  id: MIDDLE_GEAR_CHALLENGE_ID,
+  permanent: true,
+  fixedSetup: true,
+  trackId: "dunsfold",
+  vehicle: "liana",
+  assists: "semi_pro",
+  realism: "standard",
+};
+
+/** Every permanent time trial running alongside the rotating weekly challenge */
+export const PERMANENT_CHALLENGES: readonly PermanentChallenge[] = [MIDDLE_GEAR_CHALLENGE];
+
+export function permanentChallengeById(id: string): PermanentChallenge | null {
+  return PERMANENT_CHALLENGES.find((c) => c.id === id) ?? null;
+}
+
+export function isPermanentChallengeId(id: string): boolean {
+  return PERMANENT_CHALLENGES.some((c) => c.id === id);
+}
+
+/**
  * The circuits, with the 2026 prototype's ideal lap there (s, from the game's speed planner). Only the project's own
  * circuit and circuits used with their author's permission: none converted from a Sketchfab model
  * (`quality: "sketchfab"` in public/tracks/index.json), and no hill climb (a week's races need a lap).
@@ -186,6 +231,16 @@ export function challengeById(id: string): WeeklyChallenge | null {
   return c.id === id ? c : null;
 }
 
+/** Both active time trials right now: this week's rotating challenge, plus every permanent trial */
+export function activeChallenges(nowMs: number): readonly TimeTrialEvent[] {
+  return [challengeAt(nowMs), ...PERMANENT_CHALLENGES];
+}
+
+/** Any time trial by id: a permanent trial or a weekly ISO id */
+export function timeTrialEventById(id: string): TimeTrialEvent | null {
+  return permanentChallengeById(id) ?? challengeById(id);
+}
+
 /**
  * Every challenge that has run up to `nowMs`, this week's first: from the week of 9 November 2026, the first one, so
  * none is made up for a week before the challenge existed. At most `max` of them.
@@ -242,7 +297,10 @@ export function challengeConditionsLabel(vehicle: VehicleModelId): string {
 }
 
 /** True when a lap driven on this circuit and car under these conditions is a lap of the challenge */
-export function fitsChallenge(lap: { trackId: string; vehicle: string; conditions?: LapConditions }, c: ChallengeRules): boolean {
+export function fitsChallenge(
+  lap: { trackId: string; vehicle: string; conditions?: LapConditions },
+  c: Pick<ChallengeRules, "trackId" | "vehicle" | "assists" | "realism">,
+): boolean {
   const k = lap.conditions;
   return (
     lap.trackId === c.trackId &&
@@ -258,6 +316,10 @@ export function fitsChallenge(lap: { trackId: string; vehicle: string; condition
 
 /** Null when `lap` may go on the board of challenge `eventId` at `nowMs`, else why not */
 export function challengeProblem(lap: { trackId: string; vehicle: string; conditions?: LapConditions }, eventId: string, nowMs: number): string | null {
+  const permanent = permanentChallengeById(eventId);
+  if (permanent) {
+    return fitsChallenge(lap, permanent) ? null : "This lap was not driven to this challenge's rules";
+  }
   const now = challengeAt(nowMs);
   if (eventId !== now.id) return "That weekly challenge has ended";
   return fitsChallenge(lap, now) ? null : "This lap was not driven to this week's challenge rules";

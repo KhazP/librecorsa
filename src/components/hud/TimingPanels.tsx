@@ -395,11 +395,22 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
   );
 };
 
-/** The time trial's target while the weekly challenge is driven: the player's best, the week's fastest, the place */
+/** The time trial's target while a weekly or permanent trial is driven: the player's best, P1, and the place */
 export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ target }) => {
   const skin = useHudSkin();
   const tx = useTranslations("hud.timingPanels.challenge");
-  const L = useMemo(() => ({ region: tx("region"), yourBest: tx("yourBest"), weekFastest: tx("weekFastest") }), [tx]);
+  const L = useMemo(
+    () => ({
+      region: tx("region"),
+      regionTrial: tx("regionTrial"),
+      yourBest: tx("yourBest"),
+      weekFastest: tx("weekFastest"),
+      boardFastest: tx("boardFastest"),
+    }),
+    [tx]
+  );
+  const label = target.permanent ? L.regionTrial : L.region;
+  const fastestLabel = target.permanent ? L.boardFastest : L.weekFastest;
   const content = (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -408,7 +419,7 @@ export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ ta
           <div className={`lc-data text-[15px] ${skin ? skinCss.ink : "text-lc-chalk"}`}>{formatLapTime(target.bestMs)}</div>
         </div>
         <div className="text-end">
-          <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>{L.weekFastest}</div>
+          <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>{fastestLabel}</div>
           <div className="lc-data text-[15px]" style={{ color: HUD_BEST }}>
             {formatLapTime(target.leaderMs)}
           </div>
@@ -422,12 +433,12 @@ export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ ta
   if (skin) {
     return (
       <SkinPanel cut="sm" className="w-[256px]" innerClassName="px-3.5 py-3">
-        <section aria-label={L.region}>{content}</section>
+        <section aria-label={label}>{content}</section>
       </SkinPanel>
     );
   }
   return (
-    <section aria-label={L.region} className={`w-[256px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
+    <section aria-label={label} className={`w-[256px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
       {content}
     </section>
   );

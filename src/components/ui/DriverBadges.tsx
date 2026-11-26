@@ -48,6 +48,8 @@ const STYLE: Record<BadgeType, BadgeStyle> = {
   creator: { icon: "creator", tone: { color: "pink" }, variant: "soft" },
   // Filled, so it stands apart from the soft gold and the outlined bronze beside it
   goat: { icon: "goat", tone: { color: "amber" }, variant: "solid" },
+  // Iconic white racing helmet pill for the current Middle Gear Lap Board P1 holder
+  stig: { icon: "helmet", tone: { color: "chalk" }, variant: "solid" },
 };
 
 /** Short tag for compact board rows so every badge is told apart without relying on colour alone (none for the bulb) */
@@ -55,6 +57,8 @@ function shortOf(type: BadgeType): string {
   switch (type) {
     case "goat":
       return t("board.driverBadges.short.goat");
+    case "stig":
+      return t("board.driverBadges.short.stig");
     case "weekly_gold":
       return t("board.driverBadges.short.gold");
     case "weekly_silver":
@@ -620,6 +624,7 @@ const MEANING: Record<Exclude<BadgeType, WeeklyMedalType>, MessageKey> = {
   bulb: "board.driverBadges.legend.bulb",
   creator: "board.driverBadges.legend.creator",
   goat: "board.driverBadges.legend.goat",
+  stig: "board.driverBadges.legend.stig",
 };
 
 function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: string } {

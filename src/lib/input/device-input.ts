@@ -55,9 +55,20 @@ export interface PedalBinding {
   full: number;
 }
 
+export type HatDirection = "up" | "down" | "left" | "right";
+export const HAT_DIRECTIONS: readonly HatDirection[] = ["up", "down", "left", "right"];
+export const HAT_ARROW: Readonly<Record<HatDirection, string>> = { up: "↑", down: "↓", left: "←", right: "→" };
+
+export interface HatBinding {
+  axis: number;
+  dir: HatDirection;
+}
+
 export interface ButtonBinding {
   padId: string;
   button: number;
+  /** Optional 8-way POV hat-switch binding (e.g. Logitech G920 / G29 D-pad on Chrome): reads `pad.axes[hat.axis]` */
+  hat?: HatBinding;
 }
 
 export interface WheelSettings {
@@ -183,7 +194,14 @@ export const WHEEL_TYPE_DEFAULTS: Record<WheelType, Pick<WheelSettings, "steerDe
 export const emptyWheelButtons = (): Record<PadAction, ButtonBinding | null> =>
   Object.fromEntries(PAD_ACTIONS.map((a) => [a.id, null])) as Record<PadAction, ButtonBinding | null>;
 
-/** Binds a wheel button; any other action already using that device and button is unbound so inputs never collide */
+/** True when two wheel button bindings refer to the same physical button or hat-switch direction on the same device */
+export function sameButtonBinding(a: ButtonBinding | null | undefined, b: ButtonBinding | null | undefined): boolean {
+  if (!a || !b || a.padId !== b.padId) return false;
+  if (a.hat || b.hat) return Boolean(a.hat && b.hat && a.hat.axis === b.hat.axis && a.hat.dir === b.hat.dir);
+  return a.button === b.button;
+}
+
+/** Binds a wheel button (or POV hat direction); any other action already using that input is unbound so inputs never collide */
 export function rebindWheelButton(
   buttons: Record<PadAction, ButtonBinding | null>,
   action: PadAction,
@@ -191,8 +209,7 @@ export function rebindWheelButton(
 ): Record<PadAction, ButtonBinding | null> {
   const next = { ...buttons };
   for (const k of Object.keys(next) as PadAction[]) {
-    const cur = next[k];
-    if (cur && cur.padId === binding.padId && cur.button === binding.button) next[k] = null;
+    if (sameButtonBinding(next[k], binding)) next[k] = null;
   }
   next[action] = binding;
   return next;
@@ -370,9 +387,82 @@ function isLogitechClassicPad(id: string): boolean {
 }
 
 /** One of the HID++ Logitech wheels in LOGITECH_HIDPP_WHEELS (G920, G923 for Xbox), by its USB ids */
-function isLogitechHidppPad(id: string): boolean {
+export function isLogitechHidppPad(id: string): boolean {
   const ids = padUsbIds(id);
   return ids !== null && logitechHidppModel(ids.vendorId, ids.productId) !== null;
+}
+
+/**
+ * 8-way POV hat-switch decoding for Chrome / Edge non-standard HID wheels (Logitech G920, G29, G27, Thrustmaster…).
+ * Chromium normalizes a HID Hat Switch (Usage 0x39, logical 0..7, null 8 or 15) onto `2*k/7 - 1` (`-1..+1`) for the
+ * 8 compass positions (0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW) and outside `[-1, 1]` (`+1.2857` or `+3.2857`)
+ * when centred/released.
+ */
+const HAT_DIRECTIONS_BY_STEP: readonly (readonly HatDirection[])[] = [
+  ["up"],
+  ["up", "right"],
+  ["right"],
+  ["down", "right"],
+  ["down"],
+  ["down", "left"],
+  ["left"],
+  ["up", "left"],
+];
+
+/** True when a raw Gamepad axis value is outside `[-1.1, 1.1]` — the released/null sentinel of a Chromium POV hat switch */
+export function isHatRestValue(v: number | undefined): boolean {
+  return typeof v === "number" && Number.isFinite(v) && Math.abs(v) > 1.1;
+}
+
+/** Active cardinal directions (0, 1, or 2 for diagonals) for a POV hat-switch axis value */
+export function decodeHatDirections(v: number | undefined): readonly HatDirection[] {
+  if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > 1.05) return [];
+  const pos = (v + 1) * 3.5;
+  const step = Math.round(pos);
+  if (step < 0 || step > 7 || Math.abs(pos - step) > 0.25) return [];
+  return HAT_DIRECTIONS_BY_STEP[step] ?? [];
+}
+
+/** Single cardinal direction for clean button capture (ignores diagonals so one press binds one direction) */
+export function decodeHatCardinal(v: number | undefined): HatDirection | null {
+  const dirs = decodeHatDirections(v);
+  return dirs.length === 1 ? dirs[0] : null;
+}
+
+/** Hat-switch axes observed resting outside `[-1.1, 1.1]` per `pad.id`, remembered while a direction is held */
+const observedHatAxes = new Map<string, Set<number>>();
+
+/** Clears remembered hat-switch axes (for unit tests) */
+export function resetObservedHatAxesForTests(): void {
+  observedHatAxes.clear();
+}
+
+/**
+ * Returns the POV hat-switch axis indices on a non-standard pad: any axis currently at a hat rest sentinel (`|v| > 1.1`)
+ * or previously observed at one on this device. Standard-mapping controllers expose D-pad as buttons 12..15 instead.
+ */
+export function hatAxesOf(pad: Pick<PadLike, "id" | "mapping" | "axes">): number[] {
+  if (pad.mapping === "standard") return [];
+  let known = observedHatAxes.get(pad.id);
+  for (let i = 0; i < pad.axes.length; i++) {
+    if (isHatRestValue(pad.axes[i])) {
+      if (!known) {
+        known = new Set<number>();
+        observedHatAxes.set(pad.id, known);
+      }
+      known.add(i);
+    }
+  }
+  return known ? [...known].filter((i) => i < pad.axes.length) : [];
+}
+
+/** Active POV hat-switch directions across all detected hat axes on a non-standard pad */
+export function padHatDirections(pad: Pick<PadLike, "id" | "mapping" | "axes">): Set<HatDirection> {
+  const out = new Set<HatDirection>();
+  for (const axis of hatAxesOf(pad)) {
+    for (const dir of decodeHatDirections(pad.axes[axis])) out.add(dir);
+  }
+  return out;
 }
 
 /** One of the known Thrustmaster belt / gear wheels (wheel-support.ts), by its USB ids (e.g. Windows "B67F" for TMX) */
@@ -465,6 +555,16 @@ const buttonDown = (pad: PadLike | undefined, button: number) => {
   const b = pad?.buttons[button];
   return Boolean(b && (b.pressed || b.value > 0.5));
 };
+
+/** True when a wheel button or POV hat-switch direction binding is currently pressed on `pad` */
+export function buttonBindingDown(pad: PadLike | undefined, binding: ButtonBinding): boolean {
+  if (!pad) return false;
+  if (binding.hat) {
+    const v = pad.axes[binding.hat.axis];
+    return !isHatRestValue(v) && decodeHatDirections(v).includes(binding.hat.dir);
+  }
+  return buttonDown(pad, binding.button);
+}
 
 /** Travel at which RT / LT, bound as buttons (stick pedals), go down as an action: a DualSense L2 / R2 shift */
 export const PAD_TRIGGER_PRESS = 0.22;
@@ -578,7 +678,7 @@ export class DeviceInputReader {
 
       for (const { id } of PAD_ACTIONS) {
         const b = wheel.buttons[id];
-        if (b && buttonDown(findPad(pads, b.padId), b.button)) held.add(id);
+        if (b && buttonBindingDown(findPad(pads, b.padId), b)) held.add(id);
       }
     } else {
       const controller = pads.find((p) => p.mapping === "standard");
@@ -675,13 +775,41 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
   // the T500RS or a start-up id): those start on the local bridge. The T150 and TMX start on WebHID (#144)
   const bridgeOnlyLogitech = LOGITECH_ID.test(wheelPad.id) && !isLogitechClassicPad(wheelPad.id) && !isLogitechHidppPad(wheelPad.id);
   const bridgeOnlyThrustmaster = isThrustmasterBridgeOnlyPad(wheelPad.id) || /\bt500(?:rs)?\b/i.test(wheelPad.id);
-  return {
+  const patch: Partial<WheelSettings> = {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
     hidFfb: !bridgeOnlyLogitech && !bridgeOnlyThrustmaster,
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
+  // Pre-bind Logitech G920 / G923 Xbox rim controls (paddles, face buttons, Menu/View, and POV hat D-pad for MFD)
+  // when the player has no wheel buttons bound yet, so the wheel works out of the box without manual binding first.
+  const noButtonsYet = PAD_ACTIONS.every(({ id }) => current.buttons[id] === null);
+  if (noButtonsYet && wheelPad.mapping !== "standard" && (isLogitechHidppPad(wheelPad.id) || /\bg920\b/i.test(wheelPad.id))) {
+    const padId = wheelPad.id;
+    const hatAxis = hatAxesOf(wheelPad)[0];
+    const buttons: Record<PadAction, ButtonBinding | null> = {
+      ...emptyWheelButtons(),
+      boost: { padId, button: 0 }, // A
+      mfdPage: { padId, button: 1 }, // B
+      aero: { padId, button: 2 }, // X
+      camera: { padId, button: 3 }, // Y
+      shiftUp: { padId, button: 4 }, // Right paddle
+      shiftDown: { padId, button: 5 }, // Left paddle
+      pause: { padId, button: 6 }, // Menu
+      restart: { padId, button: 7 }, // View
+      ...(hatAxis !== undefined
+        ? {
+            mfdUp: { padId, button: -1, hat: { axis: hatAxis, dir: "up" } },
+            mfdDown: { padId, button: -1, hat: { axis: hatAxis, dir: "down" } },
+            mfdPrev: { padId, button: -1, hat: { axis: hatAxis, dir: "left" } },
+            mfdNext: { padId, button: -1, hat: { axis: hatAxis, dir: "right" } },
+          }
+        : {}),
+    };
+    patch.buttons = buttons;
+  }
+  return patch;
 }
 
 // ---- Calibration helpers for the setup screens ----
@@ -723,8 +851,11 @@ export function strongestAxisChange(
     const virtual = isVirtualPad(pad.id);
     for (let axis = 0; axis < pad.axes.length; axis++) {
       if (exclude?.(pad.id, axis)) continue;
+      const baseVal = base[axis] ?? 0;
       const value = pad.axes[axis] ?? 0;
-      const cand: AxisChange = { padId: pad.id, axis, base: base[axis] ?? 0, value, delta: value - (base[axis] ?? 0) };
+      // Ignore POV hat-switch axes (resting outside [-1.1, 1.1]) so bumping a wheel D-pad never hijacks axis calibration
+      if (isHatRestValue(baseVal) || isHatRestValue(value)) continue;
+      const cand: AxisChange = { padId: pad.id, axis, base: baseVal, value, delta: value - baseVal };
       if (!bestAny || Math.abs(cand.delta) > Math.abs(bestAny.delta)) bestAny = cand;
       if (!virtual && (!bestPhysical || Math.abs(cand.delta) > Math.abs(bestPhysical.delta))) bestPhysical = cand;
     }
@@ -736,19 +867,54 @@ export function strongestAxisChange(
   return bestAny;
 }
 
-export type ButtonSnapshot = Map<string, boolean[]>;
-
-export function snapshotButtons(pads: readonly PadLike[]): ButtonSnapshot {
-  return new Map(pads.map((p) => [p.id, p.buttons.map((b) => b.pressed || b.value > 0.5)]));
+export interface PadButtonState {
+  buttons: boolean[];
+  /** Active cardinal POV hat-switch directions keyed by `${axis}:${dir}` */
+  hats: Record<string, boolean>;
 }
 
-/** First button that is down now but was up in `prev` */
+export type ButtonSnapshot = Map<string, PadButtonState>;
+
+export function snapshotButtons(pads: readonly PadLike[]): ButtonSnapshot {
+  const snap: ButtonSnapshot = new Map();
+  for (const p of pads) {
+    const hats: Record<string, boolean> = {};
+    for (const axis of hatAxesOf(p)) {
+      for (const dir of decodeHatDirections(p.axes[axis])) {
+        hats[`${axis}:${dir}`] = true;
+      }
+    }
+    snap.set(p.id, {
+      buttons: p.buttons.map((b) => b.pressed || b.value > 0.5),
+      hats,
+    });
+  }
+  return snap;
+}
+
+/** True when any button or POV hat direction is currently pressed across `snap` */
+export function anyButtonOrHatDown(snap: ButtonSnapshot): boolean {
+  for (const state of snap.values()) {
+    if (state.buttons.includes(true) || Object.keys(state.hats).length > 0) return true;
+  }
+  return false;
+}
+
+/** First button or POV hat-switch cardinal direction that is down now but was up in `prev` */
 export function newlyPressedButton(prev: ButtonSnapshot, pads: readonly PadLike[]): ButtonBinding | null {
   for (const pad of pads) {
-    const before = prev.get(pad.id) ?? [];
+    const before = prev.get(pad.id);
+    const prevButtons = before?.buttons ?? [];
     for (let i = 0; i < pad.buttons.length; i++) {
       const b = pad.buttons[i];
-      if ((b.pressed || b.value > 0.5) && !before[i]) return { padId: pad.id, button: i };
+      if ((b.pressed || b.value > 0.5) && !prevButtons[i]) return { padId: pad.id, button: i };
+    }
+    const prevHats = before?.hats ?? {};
+    for (const axis of hatAxesOf(pad)) {
+      const dir = decodeHatCardinal(pad.axes[axis]);
+      if (dir && !prevHats[`${axis}:${dir}`]) {
+        return { padId: pad.id, button: -1, hat: { axis, dir } };
+      }
     }
   }
   return null;

@@ -63,7 +63,13 @@ import {
 import { boardWords } from "@/lib/net/board-words";
 import { challengeOf, flushQueuedLaps, postLap } from "@/lib/net/board-queue";
 import { applyImportedDriverIdentity, exportDriverKeyFile, importDriverKeyFile, resolveImportedDriverName } from "@/lib/net/driver-key";
-import { challengeAt } from "@/lib/net/weekly-challenge";
+import {
+  MIDDLE_GEAR_CHALLENGE,
+  challengeAt,
+  isPermanentChallenge,
+  timeTrialEventById,
+  type TimeTrialEvent,
+} from "@/lib/net/weekly-challenge";
 import { countUsageLap, useUsageCounter } from "@/lib/net/use-usage-counter"; // polish:E
 import { timeTrialRules } from "@/lib/sim/time-trial";
 import { challengeTarget, type ChallengeTarget } from "@/lib/net/challenge-target";
@@ -1031,17 +1037,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.prepareAiField();
   }, [session, phase, assetsReady, loadingVisible]);
 
-  /** The week's challenge rules: its assists and realism, a dry track (its car and circuit are the caller's to set) */
-  const applyWeekRules = useCallback(() => {
-    const week = challengeAt(Date.now());
+  /** A time trial's or scheduled race's rules: assists, realism, and a dry track (car and circuit are the caller's to set) */
+  const applyTrialRules = useCallback((trial: Pick<TimeTrialEvent, "assists" | "realism">) => {
     keepOwnRules(settingsRef.current);
     setSettings((prev) => ({
       ...prev,
-      assistPreset: week.assists,
-      realism: week.realism,
+      assistPreset: trial.assists,
+      realism: trial.realism,
       conditions: { ...prev.conditions, weather: "clear", weatherNodes: undefined },
     }));
   }, []);
+  const applyWeekRules = useCallback(() => applyTrialRules(challengeAt(Date.now())), [applyTrialRules]);
 
   /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
   const startMpRace = useCallback(
@@ -1257,7 +1263,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           // again now, and if it still doesn't answer the lap waits and goes up once it does
           // A lap with mod content is the player's own: nothing goes up, and the card doesn't offer it
           if (!lapGoesOnBoards(recording)) return;
-          const week = challengeOf(recording);
+          const preferredEvent = session?.getSnapshot().timeTrial?.eventId;
+          const week = challengeOf(recording, Date.now(), preferredEvent);
           const weekBest = week ? loadChallengeBest(week) : null;
           const board = boardKeyOf(recording);
           const boardBest = board ? loadBoardBest(board) : null;
@@ -1277,7 +1284,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             return;
           }
           if (shown()) setSubmitState("sending");
-          const upload = postLap(recording, profile, "auto");
+          const upload = postLap(recording, profile, "auto", { event: preferredEvent });
           trackUpload(upload);
           return upload.then((res) => {
             if (res.ok) setBoardVersion((v) => v + 1);
@@ -1313,7 +1320,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       return;
     }
     setSubmitState("sending");
-    const upload = postLap(rec, as, "hand");
+    const upload = postLap(rec, as, "hand", { event: session?.getSnapshot().timeTrial?.eventId });
     trackUpload(upload);
     const res = await upload;
     if (res.ok) setBoardVersion((v) => v + 1);
@@ -1973,88 +1980,107 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     };
   }, [session, trackId, onSelectTrack, takeRaceStart, takeQualifyingStart, endMpRace, changeCar, enforceLobbyCar, restoreOwnConditionsNow]);
 
-  // ---- Weekly challenge
+  // ---- Time trials (Weekly Time Trial + permanent Middle Gear Lap Board)
   // The week is read when the menus open (it only turns on Monday)
   const challengeWeek = challengeAt(Date.now()).id;
   const challenge = useMemo(() => challengeAt(Date.now()), [challengeWeek]);
   const challengeAvailable = TRACKS.some((t) => t.id === challenge.trackId) && CARS.some((c) => c.physics === challenge.vehicle);
+  const middleGearAvailable =
+    TRACKS.some((t) => t.id === MIDDLE_GEAR_CHALLENGE.trackId) && CARS.some((c) => c.physics === MIDDLE_GEAR_CHALLENGE.vehicle);
   // The week's races can be on another circuit and car than its time trial
   const racesAvailable = TRACKS.some((t) => t.id === challenge.race.trackId) && CARS.some((c) => c.physics === challenge.race.vehicle);
   /**
-   * The week's board: the one laps go on now (the time trial's target), or an older one the panel picked, by its base
-   * revision
+   * Any time trial's board: the one laps go on now (the time trial's target), or an older one the panel picked, by its
+   * base revision
    */
-  const loadChallengeBoard = useCallback(
-    (version: number = currentBoardBase(challenge.trackId)) =>
-      fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20, version }).catch(() => null),
-    [challenge]
+  const loadTrialBoard = useCallback(
+    (trial: TimeTrialEvent, version: number = currentBoardBase(trial.trackId)) =>
+      fetchRemoteBoard(trial.trackId, trial.vehicle, { event: trial.id, name: settingsRef.current.profile.name, limit: 20, version }).catch(() => null),
+    []
   );
-  // polish:A — the time trial's target on the HUD: the week's board, read again after each upload. Not without a board
+  const loadWeeklyBoard = useCallback((version?: number) => loadTrialBoard(challenge, version), [loadTrialBoard, challenge]);
+  const loadMiddleGearBoard = useCallback((version?: number) => loadTrialBoard(MIDDLE_GEAR_CHALLENGE, version), [loadTrialBoard]);
+
+  // Which active time trial is currently being driven on track (for the HUD target card and diagnostics)
+  const activeTrial: TimeTrialEvent | null = useMemo(() => {
+    if (!timeTrial) return null;
+    const byId = timeTrial.eventId ? timeTrialEventById(timeTrial.eventId) : null;
+    if (byId && byId.trackId === trackId && byId.vehicle === timeTrial.vehicle) return byId;
+    if (challenge.trackId === trackId && challenge.vehicle === timeTrial.vehicle) return challenge;
+    if (MIDDLE_GEAR_CHALLENGE.trackId === trackId && MIDDLE_GEAR_CHALLENGE.vehicle === timeTrial.vehicle) return MIDDLE_GEAR_CHALLENGE;
+    return null;
+  }, [timeTrial, trackId, challenge]);
+
+  // polish:A — the time trial's target on the HUD: the active trial's board, read again after each upload. Not without a board
   const [challengeTargetNow, setChallengeTargetNow] = useState<ChallengeTarget | null>(null);
-  const targetShown = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId && boardOn;
+  const targetShown = activeTrial !== null && boardOn;
   useEffect(() => {
-    if (!targetShown) return setChallengeTargetNow(null);
+    if (!activeTrial || !boardOn) return setChallengeTargetNow(null);
     let live = true;
-    void loadChallengeBoard().then((board) => {
-      if (live && board) setChallengeTargetNow(challengeTarget(board));
+    void loadTrialBoard(activeTrial).then((board) => {
+      if (live && board) setChallengeTargetNow(challengeTarget(board, { permanent: isPermanentChallenge(activeTrial) }));
     });
     return () => {
       live = false;
     };
-  }, [targetShown, loadChallengeBoard, boardVersion, settings.profile.name]);
+  }, [activeTrial, boardOn, loadTrialBoard, boardVersion, settings.profile.name]);
   /**
-   * Out on track to the week's rules: its car, assists and realism, a dry track. `race`: against the AI in the car
-   * and over the distance of the week's races (when its field is ready for this car; else practice).
+   * Out on track to a time trial's rules: its car, assists and realism, a dry track. `race`: against the AI in the car
+   * and over the distance of the week's races (weekly challenge only; else time trial practice).
    */
   const driveChallenge = useCallback(
-    (race: boolean) => {
-      const week = challengeAt(Date.now());
-      applyWeekRules();
+    (trial: TimeTrialEvent, race: boolean) => {
+      applyTrialRules(trial);
       startSession({ kind: "practice" });
       // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
-      // A week that names its car is driven in it (a no-op when already in it); any other in the car one is in, if it is the week's vehicle
-      const rules = race ? week.race : week;
-      // A mod car is never the week's, whatever its vehicle model
+      const weeklyRace = race && !isPermanentChallenge(trial) ? trial.race : null;
+      const rules = weeklyRace ?? trial;
+      // A mod car is never a challenge car, whatever its vehicle model
       if (vehicleModelRef.current !== rules.vehicle || rules.car !== undefined || carById(carIdRef.current).mod) changeCar(weekCar(rules).id);
-      if (race && session) {
+      if (weeklyRace && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
         // The same rules for everyone: the car class's, with track limits on
         session.setRace({ kind: "ai", field, rules: { rulePreset: "auto", trackLimits: "auto" } });
         // No damage, as in an open race with other drivers (their cars take none)
-        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, startMode: "standing", damage: "off" }, settingsRef.current.profile);
+        startAiRace(field, { ...settingsRef.current.race, laps: weeklyRace.laps, startMode: "standing", damage: "off" }, settingsRef.current.profile);
       } else {
-        // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
-        session?.setTimeTrial(timeTrialRules(week.vehicle));
+        // polish:A — the time trial: its fixed tyre, fuel (and baseline setup when fixedSetup is set) and road, from a flying start
+        session?.setTimeTrial(
+          timeTrialRules(trial.vehicle, {
+            eventId: trial.id,
+            fixedSetup: isPermanentChallenge(trial) && trial.fixedSetup,
+          })
+        );
         session?.restartFlyingLap();
         return;
       }
       setLaunchHint(true);
     },
-    [session, startSession, changeCar, applyWeekRules]
+    [session, startSession, changeCar, applyTrialRules]
   );
   /**
-   * The week's challenge (`race`: its race) from any circuit: on another one the scene loads the right one first,
+   * A time trial (`race`: the week's race) from any circuit: on another one the scene loads the right one first,
    * then goes out
    */
   const goChallenge = useCallback(
-    (race: boolean) => {
-      const week = challengeAt(Date.now());
-      const circuit = race ? week.race.trackId : week.trackId;
+    (trial: TimeTrialEvent, race: boolean) => {
+      const circuit = race && !isPermanentChallenge(trial) ? trial.race.trackId : trial.trackId;
       if (circuit !== trackId) {
         if (!onSelectTrack) return;
-        pendingChallenge = { id: week.id, race };
+        pendingChallenge = { id: trial.id, race };
         void onSelectTrack(circuit);
         return;
       }
-      driveChallenge(race);
+      driveChallenge(trial, race);
     },
     [trackId, onSelectTrack, driveChallenge]
   );
-  const handleDriveChallenge = useCallback(() => goChallenge(false), [goChallenge]);
+  const handleDriveWeekly = useCallback(() => goChallenge(challengeAt(Date.now()), false), [goChallenge]);
+  const handleDriveMiddleGear = useCallback(() => goChallenge(MIDDLE_GEAR_CHALLENGE, false), [goChallenge]);
   /** The scheduled race nobody else entered, as a race against the AI */
   const soloRaceRef = useRef(() => {});
-  soloRaceRef.current = () => goChallenge(true);
+  soloRaceRef.current = () => goChallenge(challengeAt(Date.now()), true);
   const handleJoinRace = useCallback(() => {
     session?.unlockAudio();
     // Auto-switch into this week's scheduled race car (e.g. LC-LMDH) before connecting so hello already carries it
@@ -2063,18 +2089,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     getMultiplayerManager().joinScheduledRace();
   }, [session, enforceLobbyCar]);
   const handleLeaveRace = useCallback(() => getMultiplayerManager().leaveScheduledRace(), []);
-  // The challenge asked for from another circuit, now that this one has loaded
+  // The time trial asked for from another circuit, now that this one has loaded
   useEffect(() => {
     if (!assetsReady || !pendingChallenge) return;
     const asked = pendingChallenge;
     pendingChallenge = null;
-    const week = challengeAt(Date.now());
-    if (week.id !== asked.id || (asked.race ? week.race.trackId : week.trackId) !== trackId) return;
+    const trial = timeTrialEventById(asked.id);
+    if (!trial || (!isPermanentChallenge(trial) && trial.id !== challengeAt(Date.now()).id)) return;
+    const expectedTrack = asked.race && !isPermanentChallenge(trial) ? trial.race.trackId : trial.trackId;
+    if (expectedTrack !== trackId) return;
     if (phaseRef.current === "loading") {
       session?.unlockAudio();
       setLoadingVisible(false);
     }
-    driveChallenge(asked.race);
+    driveChallenge(trial, asked.race);
   }, [assetsReady, trackId, session, driveChallenge]);
 
   // The first circuit is in: the offline copy of the game may download now, without slowing it
@@ -2377,7 +2405,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The bug report's facts, read when it opens; from the pause menu with where the car is (`fromDrive`) */
   const reportFacts = (fromDrive: boolean): ReportFacts => {
     const snap = session?.getSnapshot();
-    const onChallengeNow = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId;
     const mode =
       raceKind === "ai"
         ? "Race against AI"
@@ -2385,8 +2412,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           ? inScheduledRace
             ? "Open race"
             : "Room race"
-          : onChallengeNow
-            ? "Weekly challenge"
+          : activeTrial
+            ? isPermanentChallenge(activeTrial)
+              ? "Middle Gear Lap Board"
+              : "Weekly challenge"
             : "Practice";
     return collectReportFacts({
       settings: settingsRef.current,
@@ -2813,18 +2842,32 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           challengePanel={
             boardOn
               ? {
-                  challenge,
-                  trackName: challengeTrackName(challenge.trackId),
-                  carTitle: weekCar(challenge).title,
-                  available: challengeAvailable,
-                  loadBoard: loadChallengeBoard,
+                  trials: [
+                    {
+                      event: challenge,
+                      title: tr("menu.challenge.weeklyTitle"),
+                      trackName: challengeTrackName(challenge.trackId),
+                      carTitle: weekCar(challenge).title,
+                      available: challengeAvailable,
+                      loadBoard: loadWeeklyBoard,
+                      onDrive: handleDriveWeekly,
+                      hasRaces: races.on && racesAvailable,
+                    },
+                    {
+                      event: MIDDLE_GEAR_CHALLENGE,
+                      title: tr("menu.challenge.middleGearTitle"),
+                      trackName: challengeTrackName(MIDDLE_GEAR_CHALLENGE.trackId),
+                      carTitle: weekCar(MIDDLE_GEAR_CHALLENGE).title,
+                      available: middleGearAvailable,
+                      loadBoard: loadMiddleGearBoard,
+                      onDrive: handleDriveMiddleGear,
+                    },
+                  ],
                   boardVersion,
                   driverName: settings.profile.name,
                   driverNameGenerated: needsDriverNamePrompt(settings.profile),
                   onRenameDriver: renameFromSettings,
                   onConfirmDriverName: confirmDriverName,
-                  onDrive: handleDriveChallenge,
-                  hasRaces: races.on && racesAvailable,
                 }
               : undefined
           }

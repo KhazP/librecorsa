@@ -856,8 +856,10 @@
     },
     "challenge": {
       "region": "This week's challenge",
+      "regionTrial": "Time trial target",
       "yourBest": "Your best",
-      "weekFastest": "This week's fastest"
+      "weekFastest": "This week's fastest",
+      "boardFastest": "Board fastest"
     }
   },
   "raceIncidentFeed": {

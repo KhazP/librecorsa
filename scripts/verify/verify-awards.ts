@@ -1097,6 +1097,62 @@ async function main(): Promise<void> {
     );
   }
 
+  // 13. The Stig badge: live P1 record holder on the permanent Middle Gear Lap Board (Suzuki Liana at Dunsfold)
+  {
+    const stigDb = fakeD1(FULL);
+    const stigEnv = { ONLINE_BOARD: "on", BOARD_DB: stigDb, GHOSTS: fakeR2() } as unknown as Env;
+    const mgPhys = lapPhysicsVersion("liana", "dunsfold");
+    // Open-board lap on Dunsfold/Liana must NOT award The Stig badge
+    await addLap(stigDb, { name: "OpenFast", track: "dunsfold", vehicle: "liana", physics: mgPhys, ms: 99_000, event: "" });
+    // Middle Gear Lap Board laps
+    await addLap(stigDb, { name: "Cousin", track: "dunsfold", vehicle: "liana", physics: mgPhys, ms: 106_000, event: "middle-gear" });
+    await addLap(stigDb, { name: "BenCollins", track: "dunsfold", vehicle: "liana", physics: mgPhys, ms: 104_500, event: "middle-gear" });
+
+    const before = (await (await apiCall(stigEnv, "/api/badges?names=OpenFast,Cousin,BenCollins")).json()) as { badges: Record<string, DriverBadge[]> };
+    check(
+      "stig: P1 on middle-gear board earns The Stig badge (open board and P2 do not)",
+      (before.badges.bencollins ?? []).some((b) => b.type === "stig" && b.count === 1) &&
+        !(before.badges.cousin ?? []).some((b) => b.type === "stig") &&
+        !(before.badges.openfast ?? []).some((b) => b.type === "stig"),
+      JSON.stringify(before.badges),
+    );
+
+    // Beating P1 moves The Stig badge automatically to the new record holder
+    await addLap(stigDb, { name: "NewStig", track: "dunsfold", vehicle: "liana", physics: mgPhys, ms: 103_900, event: "middle-gear" });
+    const after = (await (await apiCall(stigEnv, "/api/badges?names=NewStig,BenCollins")).json()) as { badges: Record<string, DriverBadge[]> };
+    check(
+      "stig: badge moves automatically when another driver beats P1 on middle-gear",
+      (after.badges.newstig ?? []).some((b) => b.type === "stig" && b.count === 1) &&
+        !(after.badges.bencollins ?? []).some((b) => b.type === "stig"),
+      JSON.stringify(after.badges),
+    );
+
+    // Manual grant of stig is rejected
+    const manualStig = checkAwardInput({ name: "Cousin", badge: "stig" });
+    check("stig: cannot be granted by hand (comes from Middle Gear board alone)", !manualStig.ok);
+
+    // Client-side parsing, ordering, nameplate formatting & white helmet pill rendering
+    const stigBadge: DriverBadge = { type: "stig", count: 1 };
+    const stigPill = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [stigBadge] }));
+    const stigCompact = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [stigBadge], compact: true }));
+    const stigLegend = renderToStaticMarkup(React.createElement(BadgeLegend, { badges: [stigBadge] }));
+    check(
+      "stig: parsed, sorted after GOAT, shown on nameplates, and rendered as solid chalk S.T.I.G. pill",
+      parseBadges({ ok: true, badges: { cousin: [{ type: "weekly_gold", count: 1 }, { type: "stig", count: 1 }, { type: "goat", count: 1 }] } })
+        ?.cousin.map((b) => b.type)
+        .join(",") === "goat,stig,weekly_gold" &&
+        badgeLabel(stigBadge) === "S.T.I.G." &&
+        badgeDetail(stigBadge).includes("Middle Gear") &&
+        roomNameBadges([stigBadge]).some((b) => b.type === "stig") &&
+        formatNameplateBadges([{ type: "weekly_gold", count: 1 }, stigBadge]).join(",") === "S.T.I.G.,G" &&
+        stigPill.includes(">S.T.I.G.<") &&
+        stigCompact.includes(">S.T.I.G.<") &&
+        stigCompact.includes("bg-lc-chalk text-lc-void") &&
+        stigLegend.includes("Middle Gear Lap Board P1"),
+      stigCompact.slice(0, 240),
+    );
+  }
+
   if (failures.length > 0) {
     console.error(`\n${failures.length} check(s) failed: ${failures.join(", ")}`);
     process.exit(1);

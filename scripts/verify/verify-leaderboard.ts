@@ -44,7 +44,7 @@ import { VEHICLE_MODEL_IDS } from '../../src/types/f1';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../../cloudflare/api/index';
-import { BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, boardKeyOf, loadBoardBest, MOD_LAP, OLDER_PHYSICS_LAP, parseRemoteBoard, saveBoardBest } from '../../src/lib/net/leaderboard';
+import { BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, boardKeyOf, loadBoardBest, loadChallengeBest, MOD_LAP, OLDER_PHYSICS_LAP, parseRemoteBoard, saveBoardBest, saveChallengeBest } from '../../src/lib/net/leaderboard';
 import { BOARD_SENTENCES, boardWords } from '../../src/lib/net/board-words';
 import { bindText } from '../../src/lib/text';
 import { challengePlaceLabel, challengeTarget } from '../../src/lib/net/challenge-target';
@@ -56,7 +56,8 @@ import type { Env } from '../../cloudflare/api/types';
 import { fakeD1, fakeR2 } from '../lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from '../online/migrate-supabase-board';
 import { carById, type CarId } from '../../src/lib/cars/car-registry';
-import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, challengesSoFar, fitsChallenge, isoWeekId, timeLeftLabel } from '../../src/lib/net/weekly-challenge';
+import { activeChallenges, CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, challengesSoFar, fitsChallenge, isPermanentChallenge, isoWeekId, MIDDLE_GEAR_CHALLENGE, MIDDLE_GEAR_CHALLENGE_ID, permanentChallengeById, timeLeftLabel } from '../../src/lib/net/weekly-challenge';
+import { challengeOf } from '../../src/lib/net/board-queue';
 
 /** The circuit of the real lap */
 const TRACK = 'rwanda_official_short';
@@ -575,6 +576,73 @@ async function main(): Promise<void> {
     check('challenge: a lap sent for a past week counts on the open board only', late.body.ok === true && late.body.eventError === 'That weekly challenge has ended', late.body.eventError);
     const junk = await post(variant(1.03, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: 'nope' });
     check('challenge: nothing to store and a bad event: refused with the reason', junk.status === 409 && junk.body.error === 'Unknown event', junk.body.error);
+
+    // Permanent Middle Gear Lap Board (Suzuki Liana at Dunsfold, always active alongside the weekly challenge)
+    const active = activeChallenges(nowMs);
+    check(
+      'middle-gear: two active trials (weekly + permanent Middle Gear Lap Board on Dunsfold / Liana fixed setup)',
+      active.length === 2 && !isPermanentChallenge(active[0]) && isPermanentChallenge(active[1]) &&
+        active[1].id === MIDDLE_GEAR_CHALLENGE_ID && active[1].trackId === 'dunsfold' && active[1].vehicle === 'liana' &&
+        active[1].fixedSetup === true && permanentChallengeById(MIDDLE_GEAR_CHALLENGE_ID)?.id === MIDDLE_GEAR_CHALLENGE_ID,
+      active.map((a) => a.id).join(', ')
+    );
+    const lianaPhys = lapPhysicsVersion('liana', 'dunsfold');
+    const mgLap: LapRecording = {
+      ...variant(1.01, 'Stig Cousin', { assists: MIDDLE_GEAR_CHALLENGE.assists, realism: MIDDLE_GEAR_CHALLENGE.realism, compound: 'soft', physicsVersion: lianaPhys }),
+      trackId: 'dunsfold',
+      vehicle: 'liana',
+    };
+    check(
+      'middle-gear: qualifying Dunsfold Liana lap matches Middle Gear at any date and posts to its permanent board',
+      fitsChallenge(mgLap, MIDDLE_GEAR_CHALLENGE) &&
+        challengeProblem(mgLap, MIDDLE_GEAR_CHALLENGE_ID, Date.UTC(2030, 5, 1)) === null &&
+        challengeOf(mgLap, nowMs) === MIDDLE_GEAR_CHALLENGE_ID &&
+        challengeOf(mgLap, Date.UTC(2026, 10, 11, 12), MIDDLE_GEAR_CHALLENGE_ID) === MIDDLE_GEAR_CHALLENGE_ID,
+    );
+    const mgDeps: BoardDeps = { db: fakeD1(schema), ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    const mgPostReq = async (rec: LapRecording, driverKey: string, event: string) => {
+      const res = await submitLap(
+        mgDeps,
+        new Request('https://librecorsa.test/api/laps', {
+          method: 'POST',
+          body: JSON.stringify({ rec, driverKey, event }),
+          headers: { 'CF-Connecting-IP': `10.8.0.${ipCounter++ % 250}` },
+        })
+      );
+      return { status: res.status, body: res.body as PostAnswer };
+    };
+    const mgPost = await mgPostReq(mgLap, 'e'.repeat(43), MIDDLE_GEAR_CHALLENGE_ID);
+    const mgBoard = await listLaps(mgDeps, new URL(`https://librecorsa.test/api/laps?track=dunsfold&vehicle=liana&physics=${lianaPhys}&event=${MIDDLE_GEAR_CHALLENGE_ID}&name=Stig%20Cousin`));
+    const mgBody = mgBoard.body as ListAnswer;
+    check(
+      'middle-gear: board API accepts and lists permanent event laps cleanly',
+      mgPost.status === 200 && mgPost.body.ok && mgPost.body.eventRank === 1 && mgBody.total === 1 && mgBody.laps[0]?.name === 'Stig Cousin',
+      mgPost.body.error ?? mgPost.body.eventError ?? `total=${mgBody.total}`
+    );
+    const mgWrongCar = await mgPostReq(variant(1.012, 'Wrong Car', { assists: 'semi_pro', realism: 'standard', compound: 'soft' }), 'f'.repeat(43), MIDDLE_GEAR_CHALLENGE_ID);
+    check(
+      'middle-gear: a lap in another car counts on open board only with eventError',
+      mgWrongCar.body.ok === true && mgWrongCar.body.eventRank === undefined && mgWrongCar.body.eventError === "This lap was not driven to this challenge's rules",
+      mgWrongCar.body.eventError
+    );
+    // Multi-trial localStorage challenge bests (both weekly and middle-gear kept independently)
+    {
+      const g = globalThis as { localStorage?: unknown };
+      const store = new Map<string, string>();
+      g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+      saveChallengeBest(week.id, 91_000);
+      saveChallengeBest(MIDDLE_GEAR_CHALLENGE_ID, 104_500);
+      saveChallengeBest(MIDDLE_GEAR_CHALLENGE_ID, 106_000); // slower ignored
+      const wBest = loadChallengeBest(week.id);
+      const mBest = loadChallengeBest(MIDDLE_GEAR_CHALLENGE_ID);
+      delete g.localStorage;
+      check('middle-gear: challenge bests remember both active trials independently', wBest === 91_000 && mBest === 104_500, `${wBest} / ${mBest}`);
+    }
+    // Permanent trial P1 HUD place label
+    check(
+      'time trial: permanent P1 label reads fastest on the board',
+      challengePlaceLabel({ bestMs: 100_000, leaderMs: 100_000, rank: 1, gapAboveMs: null, permanent: true }) === 'P1 · fastest on the board',
+    );
   }
   {
     // A lap of an older physics version (a tab left open from before the update) is refused: those boards are read only
