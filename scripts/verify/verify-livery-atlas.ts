@@ -50,8 +50,7 @@ import {
   CLAMP_EDGE_STRIP_PX,
   LIVERY_TEMPLATE_TARGETS,
   loadPaintGeometry,
-  markClampedTriangleEdges,
-  rasterizeTriangle,
+  rasterizeTemplateMasks,
 } from "../cars/build-livery-templates";
 import type { LiveryConfig } from "../../src/types/f1";
 
@@ -988,72 +987,35 @@ async function main(): Promise<void> {
         target.kind === "f1"
           ? F1_PROJECTION.panels[pid as F1PanelId]
           : PORTED_PROJECTION.panels[pid as PortedPanelId];
-      const fillMask = new Uint8Array(SIZE * SIZE);
-      const clampedEdgeHatch = new Uint8Array(SIZE * SIZE);
-
-      for (const tri of triangles) {
-        const cx = (tri.v0[0] + tri.v1[0] + tri.v2[0]) / 3;
-        const cy = (tri.v0[1] + tri.v1[1] + tri.v2[1]) / 3;
-        const cz = (tri.v0[2] + tri.v1[2] + tri.v2[2]) / 3;
-        const cnx = tri.n0[0] + tri.n1[0] + tri.n2[0];
-        const cny = tri.n0[1] + tri.n1[1] + tri.n2[1];
-        const cnz = tri.n0[2] + tri.n1[2] + tri.n2[2];
-        const p0 = target.kind === "f1" ? projectF1Point(tri.v0, tri.n0) : projectPortedPoint(tri.v0, tri.n0, target.profile);
-        const p1 = target.kind === "f1" ? projectF1Point(tri.v1, tri.n1) : projectPortedPoint(tri.v1, tri.n1, target.profile);
-        const p2 = target.kind === "f1" ? projectF1Point(tri.v2, tri.n2) : projectPortedPoint(tri.v2, tri.n2, target.profile);
-        const pc = target.kind === "f1"
-          ? projectF1Point([cx, cy, cz], [cnx, cny, cnz])
-          : projectPortedPoint([cx, cy, cz], [cnx, cny, cnz], target.profile);
-        for (const pid of panelIds) {
-          const wMax = Math.max(
-            (p0.panelWeights as Partial<Record<string, number>>)[pid] ?? 0,
-            (p1.panelWeights as Partial<Record<string, number>>)[pid] ?? 0,
-            (p2.panelWeights as Partial<Record<string, number>>)[pid] ?? 0,
-            (pc.panelWeights as Partial<Record<string, number>>)[pid] ?? 0
-          );
-          if (wMax < 0.18 && pc.dominantPanel !== pid) continue;
-          const s0 = target.kind === "f1"
-            ? f1ProjectToPanel(pid as F1PanelId, tri.v0[0], tri.v0[1], tri.v0[2])
-            : portedProjectToPanel(pid as PortedPanelId, tri.v0[0], tri.v0[1], tri.v0[2], target.profile);
-          const s1 = target.kind === "f1"
-            ? f1ProjectToPanel(pid as F1PanelId, tri.v1[0], tri.v1[1], tri.v1[2])
-            : portedProjectToPanel(pid as PortedPanelId, tri.v1[0], tri.v1[1], tri.v1[2], target.profile);
-          const s2 = target.kind === "f1"
-            ? f1ProjectToPanel(pid as F1PanelId, tri.v2[0], tri.v2[1], tri.v2[2])
-            : portedProjectToPanel(pid as PortedPanelId, tri.v2[0], tri.v2[1], tri.v2[2], target.profile);
-          const rect = panelRectOf(pid);
-          rasterizeTriangle(fillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
-          markClampedTriangleEdges(clampedEdgeHatch, rect, [s0.rawU, s0.rawV], [s1.rawU, s1.rawV], [s2.rawU, s2.rawV]);
-        }
-      }
+      const { clampedEdgeHatch, labelBlockedMask, stampSurface, clampedEdgePixels, carbonHatchPixels } =
+        rasterizeTemplateMasks(target, triangles, splitterVerts);
 
       // Clamped-edge hatching must stay strictly within the narrow edge strip of every panel (zero interior pixels)
       const panelRects = panelIds.map((pid) => [pid, panelRectOf(pid)] as const);
-      let clampedEdgePx = 0;
       for (const [pid, r] of panelRects) {
         for (let y = r.y; y < r.y + r.h; y++) {
           const row = y * SIZE;
           const nearV = y - r.y < CLAMP_EDGE_STRIP_PX || r.y + r.h - 1 - y < CLAMP_EDGE_STRIP_PX;
           for (let x = r.x; x < r.x + r.w; x++) {
             if (!clampedEdgeHatch[row + x]) continue;
-            clampedEdgePx++;
             const nearH = x - r.x < CLAMP_EDGE_STRIP_PX || r.x + r.w - 1 - x < CLAMP_EDGE_STRIP_PX;
             assert.ok(nearH || nearV, `${target.id} ${pid}: clamped hatch pixel at (${x},${y}) sits in panel interior`);
           }
         }
       }
 
-      const labelBlockedMask = new Uint8Array(SIZE * SIZE);
-      for (let i = 0; i < labelBlockedMask.length; i++) {
-        if (fillMask[i] || clampedEdgeHatch[i]) labelBlockedMask[i] = 1;
-      }
-
       for (const overlayOnly of [false, true]) {
         const layers =
           target.kind === "f1"
-            ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, overlayOnly, clampedEdgePx > 0)
-            : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, splitterVerts > 0, labelBlockedMask, overlayOnly);
+            ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, overlayOnly, clampedEdgePixels > 0, stampSurface)
+            : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, labelBlockedMask, overlayOnly, stampSurface);
         assert.ok(!JARGON_RE.test(layers.labelsSvg), `${target.id} (${overlayOnly ? "overlay" : "template"}) labels must not contain engine jargon`);
+        if (!overlayOnly) {
+          assert.ok(layers.placedStamps.length > 0, `${target.id}: expected at least one placed in-body stamp`);
+          for (const st of layers.placedStamps) {
+            assert.ok(st.coverage >= 0.88, `${target.id} ${st.pid} stamp "${st.text}" has low flat coverage ${st.coverage.toFixed(2)}`);
+          }
+        }
         await assertLabelsOffPaintedGeometry(
           target.id,
           overlayOnly ? "overlay" : "template",

@@ -162,6 +162,23 @@ function dot3(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+function panelNormalDir(pid: AnyPanelId): Vec3 {
+  switch (pid) {
+    case "top":
+      return [0, 1, 0];
+    case "left":
+    case "fwEndplateLeft":
+      return [1, 0, 0];
+    case "right":
+    case "fwEndplateRight":
+      return [-1, 0, 0];
+    case "rear":
+      return [0, 0, -1];
+    case "front":
+      return [0, 0, 1];
+  }
+}
+
 function isSplitterPoint(p: Vec3, profile: PortedProjectionProfile): boolean {
   return profile.splitterMaxY > 0 && p[1] < profile.splitterMaxY && p[2] > profile.splitterMinZ;
 }
@@ -1000,21 +1017,183 @@ function createLabelEmitter(labelParts: string[], placer: PanelLabelPlacer, pane
   return { placePill, placeArrow, placeRefText, placeAxleLabel };
 }
 
-function pushBodyStamp(
-  parts: string[],
-  x: number,
-  y: number,
-  text: string,
-  fontSize = 36,
-  reserve?: { placer: PanelLabelPlacer; pid: AnyPanelId }
-): void {
-  parts.push(
-    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" fill="#0f172a" stroke="#ffffff" stroke-width="6" paint-order="stroke" class="stamp">${escXml(text)}</text>`
-  );
-  if (reserve) {
-    const w = estimateTextWidth(text, fontSize) + 16;
-    const h = Math.round(fontSize * 1.25) + 12;
-    reserve.placer.reserve(reserve.pid, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h });
+interface StampSurfaceData {
+  /** Per-pixel flat, panel-facing painted bodywork mask (excludes forced carbon and clamped edges) */
+  readonly flatMask: Uint8Array;
+  /** Per-pixel crease, material-split, silhouette, and hatch seam mask */
+  readonly seamMask: Uint8Array;
+  /** Per-pixel painted rear-wing rear-facing mask in the REAR panel */
+  readonly rearWingRearMask: Uint8Array;
+  /** Per-pixel painted rear-wing top-facing mask in the TOP panel excluding overlapping non-wing bodywork */
+  readonly rearWingTopOnlyMask: Uint8Array;
+  /** Per-pixel painted rear-wing top-facing mask in the TOP panel (including any overlap) */
+  readonly rearWingTopMask: Uint8Array;
+}
+
+interface PlacedStampRecord {
+  readonly pid: AnyPanelId;
+  readonly text: string;
+  readonly x: number;
+  readonly y: number;
+  readonly fontSize: number;
+  readonly coverage: number;
+}
+
+class BodyStampPlacer {
+  private readonly panels = new Map<
+    AnyPanelId,
+    {
+      rect: AtlasPanelRect;
+      flatSum: Int32Array;
+      seamSum: Int32Array;
+      rearWingRearSum: Int32Array | null;
+      rearWingTopOnlySum: Int32Array | null;
+      rearWingTopSum: Int32Array | null;
+      placed: RectBox[];
+    }
+  >();
+  readonly placedRecords: PlacedStampRecord[] = [];
+
+  constructor(
+    surface: StampSurfaceData,
+    panelRects: ReadonlyArray<readonly [AnyPanelId, AtlasPanelRect]>
+  ) {
+    for (const [pid, rect] of panelRects) {
+      this.panels.set(pid, {
+        rect,
+        flatSum: buildPrefixSum(surface.flatMask, rect),
+        seamSum: buildPrefixSum(surface.seamMask, rect),
+        rearWingRearSum: pid === "rear" ? buildPrefixSum(surface.rearWingRearMask, rect) : null,
+        rearWingTopOnlySum: pid === "top" ? buildPrefixSum(surface.rearWingTopOnlyMask, rect) : null,
+        rearWingTopSum: pid === "top" ? buildPrefixSum(surface.rearWingTopMask, rect) : null,
+        placed: [],
+      });
+    }
+  }
+
+  /**
+   * Finds the best flat, unobstructed position for an in-body stamp within the given search window.
+   * Returns null if no flat area meets `minCoverage`, allowing the caller to drop the stamp cleanly.
+   */
+  findStamp(
+    pid: AnyPanelId,
+    text: string,
+    target: readonly [number, number],
+    opts: {
+      startFontSize: number;
+      minFontSize: number;
+      searchRadiusX: number;
+      searchRadiusY: number;
+      mask?: "flat" | "rearWingRear" | "rearWingTop";
+      minCoverage?: number;
+      maxSeamRatio?: number;
+      xRange?: readonly [number, number];
+      yRange?: readonly [number, number];
+    }
+  ): { x: number; y: number; fontSize: number; coverage: number } | null {
+    const idx = this.panels.get(pid);
+    if (!idx) return null;
+    const r = idx.rect;
+    const minCoverage = opts.minCoverage ?? 0.92;
+    const maxSeamRatio = opts.maxSeamRatio ?? 0.24;
+
+    const candidateSums: Int32Array[] = [];
+    if (opts.mask === "rearWingRear") {
+      if (idx.rearWingRearSum) candidateSums.push(idx.rearWingRearSum);
+    } else if (opts.mask === "rearWingTop") {
+      if (idx.rearWingTopOnlySum) candidateSums.push(idx.rearWingTopOnlySum);
+      if (idx.rearWingTopSum) candidateSums.push(idx.rearWingTopSum);
+    } else {
+      candidateSums.push(idx.flatSum);
+    }
+
+    for (const goodSum of candidateSums) {
+      for (let fs = opts.startFontSize; fs >= opts.minFontSize; fs -= 2) {
+        const tw = estimateTextWidth(text, fs);
+        const th = Math.max(10, Math.round(fs * 0.84));
+        const area = tw * th;
+        const halfW = tw / 2;
+        const halfH = th / 2;
+        const border = 4;
+
+        const minCx = Math.max(
+          r.x + border + halfW,
+          opts.xRange ? opts.xRange[0] + halfW : target[0] - opts.searchRadiusX
+        );
+        const maxCx = Math.min(
+          r.x + r.w - border - halfW,
+          opts.xRange ? opts.xRange[1] - halfW : target[0] + opts.searchRadiusX
+        );
+        const minCy = Math.max(
+          r.y + border + halfH,
+          opts.yRange ? opts.yRange[0] + halfH : target[1] - opts.searchRadiusY
+        );
+        const maxCy = Math.min(
+          r.y + r.h - border - halfH,
+          opts.yRange ? opts.yRange[1] - halfH : target[1] + opts.searchRadiusY
+        );
+        if (minCx > maxCx || minCy > maxCy) continue;
+
+        const step = fs <= 22 ? 1 : 2;
+        let best: { x: number; y: number; coverage: number; score: number } | null = null;
+        for (let cy = Math.round(minCy); cy <= Math.round(maxCy); cy += step) {
+          const y0 = Math.round(cy - halfH);
+          for (let cx = Math.round(minCx); cx <= Math.round(maxCx); cx += step) {
+            const x0 = Math.round(cx - halfW);
+            const goodPx = queryPrefixSum(goodSum, r, x0, y0, tw, th);
+            const coverage = goodPx / area;
+            if (coverage < minCoverage) continue;
+            const seamPx = queryPrefixSum(idx.seamSum, r, x0, y0, tw, th);
+            const seamRatio = seamPx / area;
+            if (seamRatio > maxSeamRatio) continue;
+
+            const candBox: RectBox = { x: x0 - 6, y: y0 - 6, w: tw + 12, h: th + 12 };
+            let overlaps = false;
+            for (const prev of idx.placed) {
+              if (boxesOverlap(candBox, prev, 4)) {
+                overlaps = true;
+                break;
+              }
+            }
+            if (overlaps) continue;
+
+            const dist = Math.hypot(cx - target[0], cy - target[1]);
+            // Strongly prefer clean flat interior with fewer seams and higher coverage
+            const score = dist + seamRatio * 360 + (1 - coverage) * 500;
+            if (!best || score < best.score) {
+              best = { x: cx, y: cy, coverage, score };
+            }
+          }
+        }
+        if (best) {
+          return { x: best.x, y: best.y, fontSize: fs, coverage: best.coverage };
+        }
+      }
+    }
+    return null;
+  }
+
+  emitStamp(
+    parts: string[],
+    labelPlacer: PanelLabelPlacer,
+    pid: AnyPanelId,
+    text: string,
+    target: readonly [number, number],
+    opts: Parameters<BodyStampPlacer["findStamp"]>[3]
+  ): boolean {
+    const found = this.findStamp(pid, text, target, opts);
+    if (!found) return false;
+    const strokeW = found.fontSize <= 20 ? 4 : 6;
+    parts.push(
+      `<text x="${found.x.toFixed(1)}" y="${found.y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${found.fontSize}" fill="#0f172a" stroke="#ffffff" stroke-width="${strokeW}" paint-order="stroke" class="stamp">${escXml(text)}</text>`
+    );
+    const w = estimateTextWidth(text, found.fontSize) + 16;
+    const h = Math.round(found.fontSize * 1.25) + 12;
+    const box: RectBox = { x: Math.round(found.x - w / 2), y: Math.round(found.y - h / 2), w, h };
+    labelPlacer.reserve(pid, box);
+    this.panels.get(pid)?.placed.push(box);
+    this.placedRecords.push({ pid, text, x: found.x, y: found.y, fontSize: found.fontSize, coverage: found.coverage });
+    return true;
   }
 }
 
@@ -1022,6 +1201,7 @@ interface VectorLayers {
   readonly chromeSvg: string;
   readonly stampsSvg: string | null;
   readonly labelsSvg: string;
+  readonly placedStamps: readonly PlacedStampRecord[];
 }
 
 function buildF1VectorLayers(
@@ -1031,7 +1211,8 @@ function buildF1VectorLayers(
   clamping: ClampingStats<AnyPanelId>,
   fillMask: Uint8Array,
   overlayOnly: boolean,
-  hasClampedEdges = clamping.dominantClampedTotal > 0
+  hasClampedEdges = clamping.dominantClampedTotal > 0,
+  stampSurface?: StampSurfaceData
 ): VectorLayers {
   const p = F1_PROJECTION.panels;
   const pt = (panel: F1PanelId, x: number, y: number, z: number): [number, number] => {
@@ -1043,10 +1224,9 @@ function buildF1VectorLayers(
   const stampParts = overlayOnly ? null : svgHeader();
   const labelParts = svgHeader();
 
-  const placer = new PanelLabelPlacer(
-    fillMask,
-    F1_PANEL_IDS.map((pid) => [pid, p[pid]] as const)
-  );
+  const panelRects = F1_PANEL_IDS.map((pid) => [pid, p[pid]] as const);
+  const placer = new PanelLabelPlacer(fillMask, panelRects);
+  const stampPlacer = !overlayOnly && stampSurface ? new BodyStampPlacer(stampSurface, panelRects) : null;
   const { placePill, placeArrow, placeRefText, placeAxleLabel } = createLabelEmitter(
     labelParts,
     placer,
@@ -1097,25 +1277,62 @@ function buildF1VectorLayers(
     placeRefText("fwEndplateLeft", "FW ENDPLATE L (←)", [[p.fwEndplateLeft.x + 10, p.fwEndplateLeft.y + 10]], { startFontSize: 18, minFontSize: 14, cls: "hdr" });
     placeRefText("fwEndplateRight", "FW ENDPLATE R (→)", [[p.fwEndplateRight.x + p.fwEndplateRight.w - 210, p.fwEndplateRight.y + 10]], { startFontSize: 18, minFontSize: 14, cls: "hdr" });
   } else {
-    // 0. Emit & reserve in-body orientation stamps first so pills never touch stamp text either
-    const [topSideLX, topSideLY] = pt("top", 0.48, 0.5, -0.3);
-    const [topSideRX, topSideRY] = pt("top", -0.48, 0.5, -0.3);
-    const [topNoseX, topNoseY] = pt("top", 0, 0.4, 1.45);
-    pushBodyStamp(stampParts!, topSideLX, topSideLY, "TOP L  →", 32, { placer, pid: "top" });
-    pushBodyStamp(stampParts!, topSideRX, topSideRY, "TOP R  →", 32, { placer, pid: "top" });
-    pushBodyStamp(stampParts!, topNoseX, topNoseY, "TOP →", 32, { placer, pid: "top" });
+    // 0. Emit & reserve in-body orientation stamps on verified flat, view-facing surfaces (drop any that lack a flat spot)
+    if (stampPlacer) {
+      stampPlacer.emitStamp(stampParts!, placer, "top", "TOP L  →", pt("top", 0.48, 0.5, -0.3), {
+        startFontSize: 32,
+        minFontSize: 22,
+        searchRadiusX: 90,
+        searchRadiusY: 45,
+        yRange: [p.top.y + 12, topCentreY - 24],
+      });
+      stampPlacer.emitStamp(stampParts!, placer, "top", "TOP R  →", pt("top", -0.48, 0.5, -0.3), {
+        startFontSize: 32,
+        minFontSize: 22,
+        searchRadiusX: 90,
+        searchRadiusY: 45,
+        yRange: [topCentreY + 24, p.top.y + p.top.h - 12],
+      });
+      stampPlacer.emitStamp(stampParts!, placer, "top", "TOP →", pt("top", 0, 0.4, 1.45), {
+        startFontSize: 30,
+        minFontSize: 20,
+        searchRadiusX: 120,
+        searchRadiusY: 20,
+      });
 
-    const [leftPodX, leftPodY] = pt("left", 0.5, 0.44, -0.3);
-    pushBodyStamp(stampParts!, leftPodX, leftPodY, "← FRONT · LEFT SIDE", 42, { placer, pid: "left" });
+      stampPlacer.emitStamp(stampParts!, placer, "left", "← FRONT · LEFT SIDE", pt("left", 0.5, 0.48, -0.35), {
+        startFontSize: 40,
+        minFontSize: 26,
+        searchRadiusX: 140,
+        searchRadiusY: 70,
+        minCoverage: 0.9,
+      });
+      stampPlacer.emitStamp(stampParts!, placer, "right", "RIGHT SIDE · FRONT →", pt("right", -0.5, 0.48, -0.35), {
+        startFontSize: 40,
+        minFontSize: 26,
+        searchRadiusX: 140,
+        searchRadiusY: 70,
+        minCoverage: 0.9,
+      });
 
-    const [rightPodX, rightPodY] = pt("right", -0.5, 0.44, -0.3);
-    pushBodyStamp(stampParts!, rightPodX, rightPodY, "RIGHT SIDE · FRONT →", 42, { placer, pid: "right" });
+      stampPlacer.emitStamp(stampParts!, placer, "rear", "REAR WING", pt("rear", 0, 0.88, -2.35), {
+        startFontSize: 36,
+        minFontSize: 22,
+        searchRadiusX: 80,
+        searchRadiusY: 90,
+        mask: "rearWingRear",
+        minCoverage: 0.95,
+        maxSeamRatio: 0.3,
+      });
 
-    const [rearWingX, rearWingY] = pt("rear", 0, 0.81, -2.35);
-    pushBodyStamp(stampParts!, rearWingX, rearWingY, "REAR WING", 48, { placer, pid: "rear" });
-
-    const [frontNoseX, frontNoseY] = pt("front", 0, 0.3, 2.5);
-    pushBodyStamp(stampParts!, frontNoseX, frontNoseY, "FRONT", 34, { placer, pid: "front" });
+      stampPlacer.emitStamp(stampParts!, placer, "front", "FRONT", pt("front", 0, 0.3, 2.5), {
+        startFontSize: 30,
+        minFontSize: 18,
+        searchRadiusX: 40,
+        searchRadiusY: 50,
+        minCoverage: 0.88,
+      });
+    }
 
     // 1. Place primary panel pills and legends in unpainted space so reference labels yield cleanly to them
     placePill("top", [`${target.id.toUpperCase()} · TOP VIEW`], ["tl", "bl", "tr", "br"], 30, 18);
@@ -1184,6 +1401,7 @@ function buildF1VectorLayers(
     chromeSvg: chromeParts.join("\n"),
     stampsSvg: stampParts ? stampParts.join("\n") : null,
     labelsSvg: labelParts.join("\n"),
+    placedStamps: stampPlacer?.placedRecords ?? [],
   };
 }
 
@@ -1193,7 +1411,8 @@ function buildPortedVectorLayers(
   rearAxleZ: number,
   hasCarbonHatch: boolean,
   fillMask: Uint8Array,
-  overlayOnly: boolean
+  overlayOnly: boolean,
+  stampSurface?: StampSurfaceData
 ): VectorLayers {
   const p = PORTED_PROJECTION.panels;
   const prof = target.profile;
@@ -1206,10 +1425,9 @@ function buildPortedVectorLayers(
   const stampParts = overlayOnly ? null : svgHeader();
   const labelParts = svgHeader();
 
-  const placer = new PanelLabelPlacer(
-    fillMask,
-    PORTED_PANEL_IDS.map((pid) => [pid, p[pid]] as const)
-  );
+  const panelRects = PORTED_PANEL_IDS.map((pid) => [pid, p[pid]] as const);
+  const placer = new PanelLabelPlacer(fillMask, panelRects);
+  const stampPlacer = !overlayOnly && stampSurface ? new BodyStampPlacer(stampSurface, panelRects) : null;
   const { placePill, placeArrow, placeRefText, placeAxleLabel } = createLabelEmitter(
     labelParts,
     placer,
@@ -1258,60 +1476,161 @@ function buildPortedVectorLayers(
     placeRefText("rear", "REAR", [[p.rear.x + 440, p.rear.y + 40], [p.rear.x + 12, p.rear.y + 10]], { startFontSize: 22, cls: "hdr" });
     placeRefText("front", "FRONT", [[p.front.x + 440, p.front.y + 40], [p.front.x + 12, p.front.y + 10]], { startFontSize: 22, cls: "hdr" });
   } else {
-    // 0. Emit & reserve in-body orientation stamps first so pills never touch stamp text
-    if (target.id === "lc-lmdh") {
-      const [noseX, noseY] = pt("top", 0, 0.55, 1.80);
-      const [roofX, roofY] = pt("top", 0, 1.05, 0.10);
-      const [sideLX, sideLY] = pt("top", 0.65, 0.72, -0.55);
-      const [sideRX, sideRY] = pt("top", -0.65, 0.72, -0.55);
-      pushBodyStamp(stampParts!, noseX, noseY, "NOSE · TOP →", 36, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, roofX, roofY, "ROOF →", 34, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, sideLX, sideLY, "TOP L →", 32, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, sideRX, sideRY, "TOP R →", 32, { placer, pid: "top" });
+    // 0. Emit & reserve in-body orientation stamps on verified flat, view-facing surfaces (drop any that lack a flat spot)
+    if (stampPlacer) {
+      if (target.id === "lc-lmdh") {
+        const noseMinX = pt("top", 0, 0.62, 1.96)[0];
+        stampPlacer.emitStamp(stampParts!, placer, "top", "NOSE · TOP →", pt("top", 0, 0.58, 2.22), {
+          startFontSize: 32,
+          minFontSize: 22,
+          searchRadiusX: 110,
+          searchRadiusY: 20,
+          xRange: [noseMinX, p.top.x + p.top.w - 16],
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "ROOF →", pt("top", 0, 1.05, 0.02), {
+          startFontSize: 32,
+          minFontSize: 22,
+          searchRadiusX: 80,
+          searchRadiusY: 20,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "TOP L →", pt("top", 0.65, 0.72, -0.55), {
+          startFontSize: 32,
+          minFontSize: 22,
+          searchRadiusX: 80,
+          searchRadiusY: 45,
+          yRange: [p.top.y + 12, topCentreY - 30],
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "TOP R →", pt("top", -0.65, 0.72, -0.55), {
+          startFontSize: 32,
+          minFontSize: 22,
+          searchRadiusX: 80,
+          searchRadiusY: 45,
+          yRange: [topCentreY + 30, p.top.y + p.top.h - 12],
+        });
 
-      const [leftFlankX, leftFlankY] = pt("left", 0.9, 0.54, -0.10);
-      const [rightFlankX, rightFlankY] = pt("right", -0.9, 0.54, -0.10);
-      pushBodyStamp(stampParts!, leftFlankX, leftFlankY, "← FRONT · LEFT SIDE", 44, { placer, pid: "left" });
-      pushBodyStamp(stampParts!, rightFlankX, rightFlankY, "RIGHT SIDE · FRONT →", 44, { placer, pid: "right" });
+        stampPlacer.emitStamp(stampParts!, placer, "left", "← FRONT · LEFT SIDE", pt("left", 0.9, 0.54, -0.1), {
+          startFontSize: 42,
+          minFontSize: 28,
+          searchRadiusX: 140,
+          searchRadiusY: 55,
+          minCoverage: 0.9,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "right", "RIGHT SIDE · FRONT →", pt("right", -0.9, 0.54, -0.1), {
+          startFontSize: 42,
+          minFontSize: 28,
+          searchRadiusX: 140,
+          searchRadiusY: 55,
+          minCoverage: 0.9,
+        });
 
-      const [rearDeckX, rearDeckY] = pt("rear", 0, 0.72, -2.35);
-      const [rearWingX, rearWingY] = pt("rear", 0, 1.02, -2.30);
-      pushBodyStamp(stampParts!, rearDeckX, rearDeckY, "REAR", 38, { placer, pid: "rear" });
-      pushBodyStamp(stampParts!, rearWingX, rearWingY, "REAR WING", 34, { placer, pid: "rear" });
+        // LC-LMDH rear-wing rear face is bare carbon (never painted), so no REAR WING stamp;
+        // only emit REAR / FRONT if a genuinely flat rear/front painted area exists.
+        stampPlacer.emitStamp(stampParts!, placer, "rear", "REAR", pt("rear", 0, 0.55, -2.35), {
+          startFontSize: 34,
+          minFontSize: 20,
+          searchRadiusX: 80,
+          searchRadiusY: 60,
+          minCoverage: 0.92,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "front", "FRONT", pt("front", 0, 0.44, 2.65), {
+          startFontSize: 36,
+          minFontSize: 20,
+          searchRadiusX: 80,
+          searchRadiusY: 45,
+          minCoverage: 0.9,
+        });
+      } else {
+        // GT3 coupes (`amg-gt3`, `bmw-m4-gt3`)
+        const hoodZ = target.id === "amg-gt3" ? 1.15 : 1.5;
+        const roofZ = target.id === "amg-gt3" ? -0.3 : -0.25;
+        const wingZ = target.id === "amg-gt3" ? -2.04 : -2.36;
+        // Place TOP L / TOP R on flat unobstructed areas: AMG hood shoulders (clear of quarter vents) and BMW roof deck (clear of curved rear fenders)
+        const sideX = target.id === "amg-gt3" ? 0.54 : 0.35;
+        const sideZ = target.id === "amg-gt3" ? 1.34 : 0.02;
+        const sideY = target.id === "amg-gt3" ? 0.78 : 1.27;
 
-      const [frontNoseX, frontNoseY] = pt("front", 0, 0.44, 2.65);
-      pushBodyStamp(stampParts!, frontNoseX, frontNoseY, "FRONT", 42, { placer, pid: "front" });
-    } else {
-      // GT3 coupes (`amg-gt3`, `bmw-m4-gt3`)
-      const hoodZ = target.id === "amg-gt3" ? 1.15 : 1.50;
-      const roofZ = target.id === "amg-gt3" ? -0.30 : -0.25;
-      const wingZ = target.id === "amg-gt3" ? -2.14 : prof.wingRearZ - 0.15;
-      const sideX = target.id === "amg-gt3" ? 0.76 : 0.78;
-      const sideZ = target.id === "amg-gt3" ? -1.52 : -1.48;
-      const [hoodX, hoodY] = pt("top", 0, 0.85, hoodZ);
-      const [roofX, roofY] = pt("top", 0, 1.20, roofZ);
-      const [rearWingTopX, rearWingTopY] = pt("top", 0, 1.15, wingZ);
-      const [topSideLX, topSideLY] = pt("top", sideX, 0.90, sideZ);
-      const [topSideRX, topSideRY] = pt("top", -sideX, 0.90, sideZ);
-      pushBodyStamp(stampParts!, hoodX, hoodY, "HOOD · TOP →", 38, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, roofX, roofY, "ROOF · TOP →", 38, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, topSideLX, topSideLY, "TOP L →", 30, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, topSideRX, topSideRY, "TOP R →", 30, { placer, pid: "top" });
-      pushBodyStamp(stampParts!, rearWingTopX, rearWingTopY, "WING", 30, { placer, pid: "top" });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "HOOD · TOP →", pt("top", 0, 0.85, hoodZ), {
+          startFontSize: 36,
+          minFontSize: 24,
+          searchRadiusX: 100,
+          searchRadiusY: 25,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "ROOF · TOP →", pt("top", 0, 1.2, roofZ), {
+          startFontSize: 36,
+          minFontSize: 24,
+          searchRadiusX: 90,
+          searchRadiusY: 25,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "TOP L →", pt("top", sideX, sideY, sideZ), {
+          startFontSize: 28,
+          minFontSize: 20,
+          searchRadiusX: 70,
+          searchRadiusY: 35,
+          yRange: [p.top.y + 12, topCentreY - 36],
+          minCoverage: 0.96,
+          maxSeamRatio: 0.14,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "TOP R →", pt("top", -sideX, sideY, sideZ), {
+          startFontSize: 28,
+          minFontSize: 20,
+          searchRadiusX: 70,
+          searchRadiusY: 35,
+          yRange: [topCentreY + 36, p.top.y + p.top.h - 12],
+          minCoverage: 0.96,
+          maxSeamRatio: 0.14,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "top", "WING", pt("top", 0, 1.2, wingZ), {
+          startFontSize: 28,
+          minFontSize: 18,
+          searchRadiusX: 80,
+          searchRadiusY: 40,
+          mask: "rearWingTop",
+          minCoverage: 0.94,
+          maxSeamRatio: 0.26,
+        });
 
-      const doorY = target.id === "amg-gt3" ? 0.58 : 0.62;
-      const [leftDoorX, leftDoorY] = pt("left", 0.95, doorY, 0.05);
-      const [rightDoorX, rightDoorY] = pt("right", -0.95, doorY, 0.05);
-      pushBodyStamp(stampParts!, leftDoorX, leftDoorY, "← FRONT · LEFT SIDE", 44, { placer, pid: "left" });
-      pushBodyStamp(stampParts!, rightDoorX, rightDoorY, "RIGHT SIDE · FRONT →", 44, { placer, pid: "right" });
+        const doorY = target.id === "amg-gt3" ? 0.58 : 0.62;
+        stampPlacer.emitStamp(stampParts!, placer, "left", "← FRONT · LEFT SIDE", pt("left", 0.95, doorY, 0.05), {
+          startFontSize: 42,
+          minFontSize: 28,
+          searchRadiusX: 120,
+          searchRadiusY: 50,
+          minCoverage: 0.92,
+        });
+        stampPlacer.emitStamp(stampParts!, placer, "right", "RIGHT SIDE · FRONT →", pt("right", -0.95, doorY, 0.05), {
+          startFontSize: 42,
+          minFontSize: 28,
+          searchRadiusX: 120,
+          searchRadiusY: 50,
+          minCoverage: 0.92,
+        });
 
-      const [rearBumperX, rearBumperY] = pt("rear", 0, 0.66, prof.min[2]);
-      const [rearWingX, rearWingY] = pt("rear", 0, 1.12, prof.min[2]);
-      pushBodyStamp(stampParts!, rearBumperX, rearBumperY, "REAR", 42, { placer, pid: "rear" });
-      pushBodyStamp(stampParts!, rearWingX, rearWingY, "REAR WING", 34, { placer, pid: "rear" });
+        stampPlacer.emitStamp(stampParts!, placer, "rear", "REAR", pt("rear", 0, 0.66, prof.min[2]), {
+          startFontSize: 40,
+          minFontSize: 24,
+          searchRadiusX: 80,
+          searchRadiusY: 50,
+          minCoverage: 0.92,
+        });
+        // REAR WING strictly inside the actual painted rear-wing rear face (drops automatically if too thin, e.g. bmw-m4-gt3)
+        stampPlacer.emitStamp(stampParts!, placer, "rear", "REAR WING", pt("rear", 0, 1.19, prof.min[2]), {
+          startFontSize: 20,
+          minFontSize: 14,
+          searchRadiusX: 80,
+          searchRadiusY: 40,
+          mask: "rearWingRear",
+          minCoverage: 0.94,
+          maxSeamRatio: 0.35,
+        });
 
-      const [frontBumperX, frontBumperY] = pt("front", 0, 0.48, prof.max[2]);
-      pushBodyStamp(stampParts!, frontBumperX, frontBumperY, "FRONT", 44, { placer, pid: "front" });
+        stampPlacer.emitStamp(stampParts!, placer, "front", "FRONT", pt("front", 0, 0.48, prof.max[2]), {
+          startFontSize: 38,
+          minFontSize: 20,
+          searchRadiusX: 80,
+          searchRadiusY: 50,
+          minCoverage: 0.9,
+        });
+      }
     }
 
     // 1. Primary panel header pills & FRONT arrows (strictly in unpainted space)
@@ -1375,6 +1694,7 @@ function buildPortedVectorLayers(
     chromeSvg: chromeParts.join("\n"),
     stampsSvg: stampParts ? stampParts.join("\n") : null,
     labelsSvg: labelParts.join("\n"),
+    placedStamps: stampPlacer?.placedRecords ?? [],
   };
 }
 
@@ -1418,39 +1738,30 @@ async function assertLabelsOffPaintedGeometry(
   }
 }
 
-async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: string): Promise<void> {
-  const glbPath = join(modelsDir, target.glbRelPath);
-  if (!existsSync(glbPath)) {
-    throw new Error(`${target.id}: GLB not found at ${glbPath} (pass --models <dir> if models live elsewhere)`);
-  }
+interface RasterizedTemplateMasks {
+  readonly fillMask: Uint8Array;
+  readonly meshEdges: Uint8Array;
+  readonly featureEdges: Uint8Array;
+  readonly silhouette: Uint8Array;
+  readonly clampedEdgeHatch: Uint8Array;
+  readonly hatchBand: Uint8Array;
+  readonly labelBlockedMask: Uint8Array;
+  readonly stampSurface: StampSurfaceData;
+  readonly clampedEdgePixels: number;
+  readonly carbonHatchPixels: number;
+}
 
-  const {
-    triangles,
-    frontAxleZ,
-    rearAxleZ,
-    clamping,
-    bounds,
-    splitterVerts,
-    excludedNodes,
-    flippedMirroredTris,
-  } = await loadPaintGeometry(target, glbPath);
+/** Rasterises paint coverage, edges, clamped edge strips, carbon hatch, and flat stamp masks for a car */
+function rasterizeTemplateMasks(
+  target: CarTemplateTarget,
+  triangles: readonly PaintTri[],
+  splitterVerts: number
+): RasterizedTemplateMasks {
   const panelIds: readonly AnyPanelId[] = target.kind === "f1" ? F1_PANEL_IDS : PORTED_PANEL_IDS;
   const panelRectOf = (pid: AnyPanelId): AtlasPanelRect =>
     target.kind === "f1"
       ? F1_PROJECTION.panels[pid as F1PanelId]
       : PORTED_PROJECTION.panels[pid as PortedPanelId];
-  const panelRects = panelIds.map((pid) => [pid, panelRectOf(pid)] as const);
-
-  // Fail loudly if a car that shouldn't clamp main bounds has any clamped vertices on top/side/fwEndplate
-  if (target.kind === "f1" && !target.allowMainBoundsClamping) {
-    const unexpected: string[] = [];
-    for (const pid of F1_MAIN_BOUND_PANELS) {
-      if (clamping.byPanel[pid].count > 0) unexpected.push(`${pid}=${clamping.byPanel[pid].count}`);
-    }
-    if (unexpected.length > 0) {
-      throw new Error(`${target.id}: unexpected clamped vertices on main panels: ${unexpected.join(", ")}`);
-    }
-  }
 
   const fillMask = new Uint8Array(SIZE * SIZE);
   const paintableFillMask = new Uint8Array(SIZE * SIZE); // non-splitter painted triangles (for exact splitter-only hatching)
@@ -1458,6 +1769,10 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
   const clampedEdgeHatch = new Uint8Array(SIZE * SIZE); // narrow strip strictly along panel edges where geometry clamps
   const meshEdges = new Uint8Array(SIZE * SIZE);
   const featureEdges = new Uint8Array(SIZE * SIZE);
+  const flatMask = new Uint8Array(SIZE * SIZE);
+  const rearWingRearMask = new Uint8Array(SIZE * SIZE);
+  const rearWingTopMask = new Uint8Array(SIZE * SIZE);
+  const nonWingTopMask = new Uint8Array(SIZE * SIZE);
 
   interface EdgeRef {
     tri: PaintTri;
@@ -1507,8 +1822,21 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
       isSplitterPoint(tri.v1, target.profile) &&
       isSplitterPoint(tri.v2, target.profile);
 
+    const isRearWingTri =
+      target.kind === "f1"
+        ? cz < F1_PROJECTION.weights.rearWingZMax &&
+          cy > F1_PROJECTION.weights.rearWingYMin &&
+          Math.abs(cx) < F1_PROJECTION.weights.rearWingAbsXMax
+        : cz < target.profile.wingRearZ &&
+          cy > target.profile.wingMinY &&
+          Math.abs(cx) < 0.86;
+
     for (const pid of panelIds) {
-      const wMax = Math.max(wOf(p0, pid), wOf(p1, pid), wOf(p2, pid), wOf(pc, pid));
+      const w0 = wOf(p0, pid);
+      const w1 = wOf(p1, pid);
+      const w2 = wOf(p2, pid);
+      const wc = wOf(pc, pid);
+      const wMax = Math.max(w0, w1, w2, wc);
       if (wMax < WEIGHT_MIN && pc.dominantPanel !== pid) continue;
 
       const s0 = target.kind === "f1"
@@ -1529,6 +1857,26 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
         rasterizeTriangle(carbonHatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
       } else {
         rasterizeTriangle(paintableFillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+
+        const dir = panelNormalDir(pid);
+        const faceCos = dot3(tri.faceNrm, dir);
+        const wMin = Math.min(w0, w1, w2, wc);
+        const isFlat =
+          (wMin >= 0.65 && faceCos >= 0.8) ||
+          (pid === "rear" && isRearWingTri && wc >= 0.8 && faceCos >= 0.45);
+        if (isFlat) {
+          rasterizeTriangle(flatMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+        }
+        if (pid === "rear" && isRearWingTri && wc >= 0.75 && faceCos >= 0.45) {
+          rasterizeTriangle(rearWingRearMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+        }
+        if (pid === "top") {
+          if (isRearWingTri && wc >= 0.75 && faceCos >= 0.7) {
+            rasterizeTriangle(rearWingTopMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+          } else if (!isRearWingTri) {
+            rasterizeTriangle(nonWingTopMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+          }
+        }
       }
 
       // Mark only a narrow strip inside each panel edge where geometry crosses out of [0, 1] bounds
@@ -1617,6 +1965,80 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     }
   }
 
+  const labelBlockedMask = new Uint8Array(SIZE * SIZE);
+  const seamMask = new Uint8Array(SIZE * SIZE);
+  const rearWingTopOnlyMask = new Uint8Array(SIZE * SIZE);
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    if (fillMask[i] || clampedEdgeHatch[i]) labelBlockedMask[i] = 1;
+    if (featureEdges[i] || silhouette[i] || hatchBand[i]) seamMask[i] = 1;
+    if (hatchBand[i]) {
+      flatMask[i] = 0;
+      rearWingRearMask[i] = 0;
+      rearWingTopMask[i] = 0;
+    }
+    if (rearWingTopMask[i] && !nonWingTopMask[i]) rearWingTopOnlyMask[i] = 1;
+  }
+
+  return {
+    fillMask,
+    meshEdges,
+    featureEdges,
+    silhouette,
+    clampedEdgeHatch,
+    hatchBand,
+    labelBlockedMask,
+    stampSurface: { flatMask, seamMask, rearWingRearMask, rearWingTopOnlyMask, rearWingTopMask },
+    clampedEdgePixels,
+    carbonHatchPixels,
+  };
+}
+
+async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: string): Promise<void> {
+  const glbPath = join(modelsDir, target.glbRelPath);
+  if (!existsSync(glbPath)) {
+    throw new Error(`${target.id}: GLB not found at ${glbPath} (pass --models <dir> if models live elsewhere)`);
+  }
+
+  const {
+    triangles,
+    frontAxleZ,
+    rearAxleZ,
+    clamping,
+    bounds,
+    splitterVerts,
+    excludedNodes,
+    flippedMirroredTris,
+  } = await loadPaintGeometry(target, glbPath);
+  const panelIds: readonly AnyPanelId[] = target.kind === "f1" ? F1_PANEL_IDS : PORTED_PANEL_IDS;
+  const panelRectOf = (pid: AnyPanelId): AtlasPanelRect =>
+    target.kind === "f1"
+      ? F1_PROJECTION.panels[pid as F1PanelId]
+      : PORTED_PROJECTION.panels[pid as PortedPanelId];
+  const panelRects = panelIds.map((pid) => [pid, panelRectOf(pid)] as const);
+
+  // Fail loudly if a car that shouldn't clamp main bounds has any clamped vertices on top/side/fwEndplate
+  if (target.kind === "f1" && !target.allowMainBoundsClamping) {
+    const unexpected: string[] = [];
+    for (const pid of F1_MAIN_BOUND_PANELS) {
+      if (clamping.byPanel[pid].count > 0) unexpected.push(`${pid}=${clamping.byPanel[pid].count}`);
+    }
+    if (unexpected.length > 0) {
+      throw new Error(`${target.id}: unexpected clamped vertices on main panels: ${unexpected.join(", ")}`);
+    }
+  }
+
+  const {
+    fillMask,
+    meshEdges,
+    featureEdges,
+    silhouette,
+    hatchBand,
+    labelBlockedMask,
+    stampSurface,
+    clampedEdgePixels,
+    carbonHatchPixels,
+  } = rasterizeTemplateMasks(target, triangles, splitterVerts);
+
   const templateRgba = Buffer.alloc(SIZE * SIZE * 4);
   const overlayRgba = Buffer.alloc(SIZE * SIZE * 4);
 
@@ -1678,15 +2100,10 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
     }
   }
 
-  const labelBlockedMask = new Uint8Array(SIZE * SIZE);
-  for (let i = 0; i < labelBlockedMask.length; i++) {
-    if (fillMask[i] || clampedEdgeHatch[i]) labelBlockedMask[i] = 1;
-  }
-
   const templateLayers =
     target.kind === "f1"
-      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, false, clampedEdgePixels > 0)
-      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, labelBlockedMask, false);
+      ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, false, clampedEdgePixels > 0, stampSurface)
+      : buildPortedVectorLayers(target, frontAxleZ, rearAxleZ, carbonHatchPixels > 0, labelBlockedMask, false, stampSurface);
   const overlayLayers =
     target.kind === "f1"
       ? buildF1VectorLayers(target, frontAxleZ, rearAxleZ, clamping, labelBlockedMask, true, clampedEdgePixels > 0)
@@ -1752,6 +2169,7 @@ async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: stri
   }
   if (clampedEdgePixels > 0) console.log(`  clamped-edge hatch px (<= ${CLAMP_EDGE_STRIP_PX}px strip): ${clampedEdgePixels}`);
   if (splitterVerts > 0) console.log(`  forced-carbon front splitter verts: ${splitterVerts}, exclusive carbon hatch px: ${carbonHatchPixels}`);
+  console.log(`  placed stamps (${templateLayers.placedStamps.length}): ${templateLayers.placedStamps.map((s) => `${s.pid}:${s.text}@(${s.x},${s.y},fs${s.fontSize},${Math.round(s.coverage * 100)}%)`).join(", ")}`);
   console.log(`  label overlap check: 0 px overlapping painted bodywork (template + overlay)`);
   console.log(`  wrote ${templatePath} — ${fmtKb(templatePath)}`);
   console.log(`  wrote ${overlayPath} — ${fmtKb(overlayPath)}`);
@@ -1812,6 +2230,7 @@ export {
   CLAMP_EDGE_STRIP_PX,
   loadPaintGeometry,
   markClampedTriangleEdges,
+  rasterizeTemplateMasks,
   rasterizeTriangle,
   TARGETS as LIVERY_TEMPLATE_TARGETS,
 };
