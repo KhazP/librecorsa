@@ -12,6 +12,7 @@ import { carById, carClass, carSkinSwatchBackground } from "@/lib/cars/car-regis
 import { carSkinFor } from "@/lib/cars/car-skins";
 import { vehicleModelSpec, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { isVehicleRestricted } from "@/lib/sim/multiplayer-sync";
+import type { VehicleRule } from "@/lib/net/wire";
 import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { formatLapTime } from "@/components/hud/hud-format";
 import { EngineersGarage } from "./EngineersGarage";
@@ -128,6 +129,11 @@ export interface TitleMenuProps extends PauseMenuProps {
   onCloseSupportNote?: () => void;
   /** A maker's donate button was pressed in the note */
   onSupportThanked?: (maker: string) => void;
+  /**
+   * The car rule of the room or scheduled race the player is in. A scheduled race's lobby is not passed as `lobby`
+   * (it shows on the Races card, not as a room), so the car browser takes its rule from here
+   */
+  carRule?: VehicleRule | null;
 }
 
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
@@ -691,9 +697,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const vehicle = carById(props.carId);
   // The car is fixed for an online race (the shell refuses the swap too)
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
-  // When in a class-locked or spec-locked lobby, restrict the car browser to eligible vehicles
+  // When in a class-locked or spec-locked lobby (a room or a scheduled race), restrict the car browser to eligible vehicles
+  const lobbyCarRule = props.carRule ?? props.lobby?.settings;
   const lobbyCarRestriction = useMemo(() => {
-    const s = props.lobby?.settings;
+    const s = lobbyCarRule;
     if (!s || !isVehicleRestricted(s)) return null;
     const allowedVehicles: VehicleModelId[] = s.vehicle ? [s.vehicle] : vehicleModelsFor(s.carClass);
     const label = s.vehicle
@@ -702,7 +709,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         ? ""
         : carClass(s.carClass).title;
     return { label, allowedVehicles };
-  }, [props.lobby?.settings, props.vehicleLabel]);
+  }, [lobbyCarRule, props.vehicleLabel]);
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
   // This car's personal best on this circuit, for the Lap times entry and the Up next sheet alike: this car's own laps

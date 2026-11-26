@@ -2694,6 +2694,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onSupportThanked={supportThanked}
           onCycleCamera={cycleCamera}
           initialRoomCode={inviteRoom ?? ""}
+          // The scheduled race's car rule: its lobby is not passed as a room's, but its car browser refuses the same cars
+          carRule={inScheduledRace ? (lobby?.settings ?? null) : null}
           // Back where the player was when a race entry or a room moved the game to another circuit (the scene reloads)
           initialPanel={titleInitialPanel ?? (inScheduledRace || inviteRoom || (roomLobby && !isMpHost) ? "multiplayer" : null)}
           firstRun={!onboarded}
