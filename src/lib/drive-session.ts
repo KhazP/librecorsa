@@ -4805,6 +4805,11 @@ export class DriveSession {
           }),
         );
       }
+      // Paused, in a replay, the menus, the pre-race show or the podium shot (its cars are posed, not racing): the call
+      // in progress is cut and the spotter starts from clear, so the time away never counts as time alongside (a
+      // "still there" the moment the drive resumed)
+      const spotterLive = driving && !podium.playing;
+      if (!spotterLive) spotter.reset();
       if (driving) {
         // The spotter speaks through the car audio's output: the master volume, mute and pause apply to it
         spotter.update(
@@ -4814,7 +4819,7 @@ export class DriveSession {
           physics.vxMs,
           drawnPeers,
           {
-            enabled: settingsNow.audio.spotter,
+            enabled: spotterLive && settingsNow.audio.spotter,
             volume: settingsNow.audio.spotterVolume,
             voice: settingsNow.audio.spotterVoice,
             radioFilter: settingsNow.audio.spotterRadio,

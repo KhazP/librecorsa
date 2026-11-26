@@ -39,6 +39,8 @@ const MIN_CALLOUT_GAP_MS = 1600;
 const STILL_THERE_MS = 2800;
 /** Below this speed (m/s) nothing is called: the grid, the pit lane at a crawl, a spin */
 const MIN_SPEED_MS = 5;
+/** A gap this long between two updates is time away (a hidden tab stops the frames): the spotter starts from clear */
+const MAX_UPDATE_GAP_MS = 500;
 
 function clipPath(voice: SpotterVoiceId, key: SpotterClipKey): string {
   // Jim, the default voice, sits at the top of the folder
@@ -50,6 +52,7 @@ export class SpotterEngine {
   private lastCalloutMs = 0;
   private alongsideSinceMs = 0;
   private saidStillThere = false;
+  private lastUpdateMs = -Infinity;
   private readonly rel = new THREE.Vector3();
   private readonly invQ = new THREE.Quaternion();
 
@@ -69,6 +72,9 @@ export class SpotterEngine {
     config: SpotterConfig,
     out: SpotterOutput,
   ): SpotterSideState {
+    // Back from time away: what was alongside then is not known to be alongside now, nor for how long
+    if (nowMs - this.lastUpdateMs > MAX_UPDATE_GAP_MS) this.reset();
+    this.lastUpdateMs = nowMs;
     if (!config.enabled || Math.abs(playerSpeedMs) < MIN_SPEED_MS) {
       this.state = "clear";
       return this.state;
