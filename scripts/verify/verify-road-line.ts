@@ -73,8 +73,14 @@ const ownOn = (v: VehicleModelId, line: RacingLineId, s: number) => ownSpeedAt(o
 const sAt = [0.12, 0.31, 0.47, 0.66, 0.83].map((f) => f * track.totalLengthM);
 check('a Liana\'s own pace online is its road line\'s', racingLineOfVehicle('liana') === 'road' && sAt.every((s) => vehicleOwnSpeedMs(track, 'liana', s) === ownOn('liana', 'road', s)));
 check('a Scirocco whose road-line check failed is judged on the GT3\'s line', racingLineOfVehicle('vw-scirocco-gtx') === 'gt3' && sAt.every((s) => vehicleOwnSpeedMs(track, 'vw-scirocco-gtx', s) === ownOn('vw-scirocco-gtx', 'gt3', s)));
-// The table own-pace.ts keeps is each car's own profile line: every model built here drives the line it names
-const lineTableOk = (Object.keys(makers) as VehicleModelId[]).filter((v) => makers[v](track).racingLineId !== racingLineOfVehicle(v));
+// The table own-pace.ts keeps is each car's own profile line: with every model's road-line check passing (so a road
+// line in the table shows), every model built here drives the line it names
+const models = Object.keys(makers) as VehicleModelId[];
+const allRoad = structuredClone(withRoad);
+allRoad.metadata.aiPlansByLine = { road: Object.fromEntries(models.map((v) => [v, pass(170)])) };
+activate(allRoad);
+track = getActiveTrackData(1200);
+const lineTableOk = models.filter((v) => makers[v](track).racingLineId !== racingLineOfVehicle(v));
 check('every model\'s own-pace line is the line its car drives', lineTableOk.length === 0);
 if (lineTableOk.length) console.log(`  differ: ${lineTableOk.join(', ')}`);
 
