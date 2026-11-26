@@ -87,6 +87,12 @@ export interface SimulatorCar {
   /** Fixed-step models: simulated time not yet stepped this frame (s); the pose is drawn carried forward by it */
   readonly renderLeadS?: number;
   /**
+   * Time into the lap (s) at the instant the car is drawn: the lap clock carried forward as the pose is, for drawing
+   * the lap ghost beside it. The telemetry's lap time moves in whole physics steps (and, from the worker, arrives with
+   * every other state): a ghost placed by it jumped back and forth against the car. Absent: the telemetry's lap time
+   */
+  readonly drawLapTimeS?: number;
+  /**
    * The pose at the moment `telemetry` is from, for the lap recording (its samples are stamped with the telemetry's lap
    * time). A car simulated in the worker draws `worldPosition` carried to the frame's time, up to 50 ms either way, and
    * sends its telemetry with every other state only: recorded from the drawn pose, a lap at speed seemed to jump

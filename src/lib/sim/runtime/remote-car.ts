@@ -130,6 +130,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   createAiPeerCar: "localCall",
 
   renderLeadS: "own",
+  drawLapTimeS: "own",
   steeringAssist: "own",
   step: "own",
   attachTrackRoot: "own",
@@ -323,6 +324,8 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
           if (key === "step") return step;
           if (key === "steeringAssist") return steeringAssist;
           if (key === "attachTrackRoot") return attachTrackRoot;
+          // The lap clock of the worker's latest state, carried forward as its pose is
+          if (key === "drawLapTimeS") return live() ? view.lapTimeMs / 1000 + view.carriedS : twin.drawLapTimeS;
           // The worker's pose is already carried forward to the frame (`step`)
           return live() ? 0 : twin.renderLeadS;
         default: {

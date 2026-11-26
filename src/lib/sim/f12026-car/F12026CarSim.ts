@@ -1244,6 +1244,10 @@ export class F12026CarSim implements SimulatorCar {
   public get renderLeadS(): number {
     return this.controlAccumulatorS + this.vehicle.unsteppedS;
   }
+  /** The lap clock at the time the car is drawn: the telemetry's, carried forward with the pose */
+  public get drawLapTimeS(): number {
+    return this.telemetry.currentLapTimeMs / 1000 + this.renderLeadS;
+  }
   /** Simulated time since the car was built (s): whole control ticks, whatever frames it was stepped in */
   public get simTimeS(): number {
     return this.steppedTicks * CONTROL_DT_S;

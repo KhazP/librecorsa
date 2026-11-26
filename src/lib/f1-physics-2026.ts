@@ -874,6 +874,11 @@ export class F1Physics2026 {
     return this.timeAccumulator;
   }
 
+  /** The lap clock at the time the car is drawn: the telemetry's, carried forward with the pose */
+  get drawLapTimeS(): number {
+    return this.telemetry.currentLapTimeMs / 1000 + this.timeAccumulator;
+  }
+
   get assistPreset(): DriverAssistPreset {
     return this._assistPreset;
   }

@@ -29,6 +29,8 @@ export interface CarState {
   q: [number, number, number, number];
   v: [number, number, number] | null;
   sMeters: number;
+  /** The lap clock at this state (ms), with every state: the telemetry, which has it too, comes with every other one */
+  lapTimeMs: number;
   lateralOffsetM: number;
   vxMs: number;
   vyMs: number;
@@ -54,6 +56,7 @@ export function blankCarState(): CarState {
     q: [0, 0, 0, 1],
     v: null,
     sMeters: 0,
+    lapTimeMs: 0,
     lateralOffsetM: 0,
     vxMs: 0,
     vyMs: 0,
@@ -107,6 +110,7 @@ export function captureCarState(car: SimulatorCar, out: CarState): CarState {
     out.v[2] = v.z;
   } else out.v = null;
   out.sMeters = car.sMeters;
+  out.lapTimeMs = car.telemetry.currentLapTimeMs;
   out.lateralOffsetM = car.lateralOffsetM;
   out.vxMs = car.vxMs;
   out.vyMs = car.vyMs;
@@ -159,6 +163,9 @@ export class CarStateView {
   tyreVisuals: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState] | undefined = undefined;
   private readonly tyres: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState] = [blankTyre(), blankTyre(), blankTyre(), blankTyre()];
   sMeters = 0;
+  /** The last state's lap clock (ms), and how far its pose has been carried forward since (s) */
+  lapTimeMs = 0;
+  carriedS = 0;
   lateralOffsetM = 0;
   vxMs = 0;
   vyMs = 0;
@@ -189,6 +196,8 @@ export class CarStateView {
     this.stateQuaternion.copy(this.worldQuaternion);
     this.worldVelocity = state.v ? this.velocity.set(state.v[0], state.v[1], state.v[2]) : undefined;
     this.sMeters = state.sMeters;
+    this.lapTimeMs = state.lapTimeMs;
+    this.carriedS = 0;
     this.lateralOffsetM = state.lateralOffsetM;
     this.vxMs = state.vxMs;
     this.vyMs = state.vyMs;
@@ -231,6 +240,7 @@ export class CarStateView {
   carryForward(leadS: number): void {
     const v = this.worldVelocity;
     if (!v || !Number.isFinite(leadS)) return;
+    this.carriedS = leadS;
     this.worldPosition.copy(this.statePosition).addScaledVector(v, leadS);
     // Yaw rate is + to the right, a turn about the car's own up axis the other way
     this.worldQuaternion.copy(this.stateQuaternion).multiply(_turn.setFromAxisAngle(_up, -this.yawRateRadS * leadS));

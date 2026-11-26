@@ -4412,7 +4412,8 @@ export class DriveSession {
       // Personal-best (or chosen) ghost, in practice only, timed against the lap in progress
       const ghost = ghostPlayer;
       if (ghost && settingsNow.ghost && !aiField && !mpRace && !replaying && !inMenu) {
-        const g = ghost.sampleAt(physics.telemetry.currentLapTimeMs / 1000);
+        // At the lap time of the instant the car is drawn, so the two move together
+        const g = ghost.sampleAt(physics.drawLapTimeS ?? physics.telemetry.currentLapTimeMs / 1000);
         if (g) {
           const wheelRpm = wheelRpmAtSpeed(g.speedKmh);
           renderPeers = [
