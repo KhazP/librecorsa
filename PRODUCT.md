@@ -17,7 +17,7 @@ Settings serve both through a Simple / Advanced switch: Simple shows the short l
 
 ## Product Purpose
 
-LibreCorsa is an open-source racing simulator that runs entirely in the browser, with nothing to install. It has 500 Hz vehicle dynamics, a thermal tyre model, open-wheelers, GT3 cars, a prototype and a road car, circuits and hill climbs, AI races, ghosts and replays, and peer-to-peer multiplayer.
+LibreCorsa is an open-source racing simulator that runs entirely in the browser, with nothing to install (plus optional native desktop and Android apps). It has 500 Hz vehicle dynamics, a thermal tyre model, 14 cars across five classes (2026 and 2025 open-wheelers, GT3 cars, prototypes, classic racing cars and road cars), 20 circuits (35 layouts) and two hill climbs, career mode, time trials, AI races with pit stops, ghosts, lap telemetry and replays, peer-to-peer multiplayer, and 12 languages.
 
 ## Positioning
 
@@ -27,15 +27,15 @@ A real simulator (500 Hz physics, force feedback, car setup) that starts from a 
 
 - Played with a keyboard, gamepad, touch screen or force-feedback wheel. Every screen works with all of them and shows the prompts of the input last used.
 - The UI sits over a live 3D scene: title menu, pause menu and HUD float on it.
-- Window sizes run from a landscape phone to a 32:9 monitor.
-- Surfaces: home page, the game (`/play`: loading, title menu, first-run setup, HUD, pause menu, results), press page, privacy page, admin stats.
+- Window sizes run from a landscape phone to a 32:9 monitor, triple-monitor setups and WebXR headsets.
+- Surfaces: home page, the game (`/play`: loading, title menu, first-run setup, HUD, pause menu, results), `/about`, `/download`, `/stats` (public stats), `/account`, press page (`/press`), privacy page (`/privacy`), docs (`docs.librecorsa.org`), admin stats.
 
 ## Capabilities and Constraints
 
 - Next.js 16, React 19, Tailwind 4, three.js. No component library.
 - The game must stay controllable by pad and keyboard alone; Esc is the pause key in a session.
 - Settings (decided 13 Nov 2026): one Settings screen shared by the title menu and pause, with six categories (Driving, Controls, Force feedback, Display, Audio, Profile and data) and tabs inside them. Race rules stay under Race, weather under Conditions, car setup under Garage (one name on both sides).
-- To be built with it: master volume and saved mute, units, UI scale, a colour-blind palette, reset all settings, clear saved data, run first-time setup again, and a visible per-car force feedback gain.
+- Built with it: master volume and saved mute, units, UI scale, colour-blind palettes, reset all settings, clear saved data, run first-time setup again, and a visible per-car force feedback gain.
 
 ## Brand Commitments
 
@@ -61,5 +61,5 @@ A real simulator (500 Hz physics, force feedback, car setup) that starts from a 
 ## Accessibility & Inclusion
 
 - Colour never carries meaning alone.
-- A colour-blind palette is documented in `docs/DESIGN.md` but not built; building it is in scope.
+- Colour-blind palettes (documented in `docs/DESIGN.md`) are built into Settings > Display > Interface and swap semantic HUD and UI tokens live.
 - Touch targets of at least 44 px on phones; HUD text of at least 9 px, menu labels of at least 11 px.

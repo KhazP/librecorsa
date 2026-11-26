@@ -13,6 +13,7 @@ common questions.
 - **Questions, setups, lap times, ideas**: [Discussions](https://github.com/librecorsa/librecorsa/discussions).
 - **Guides** (porting cars, circuits and wheels, how the physics and the AI work): [docs.librecorsa.org](https://docs.librecorsa.org/).
   The pages are the Markdown in `docs/`, so a fix to a guide is a pull request on that file.
+- **Mods** (packing custom cars, circuits and liveries for the desktop app): see [Making mods](docs/modding.md) and [Importing mods](docs/importing-mods.md).
 - **Translations**: see [Translating](docs/TRANSLATING.md). A new language, or a fix to one, is a pull request on its files in
   `src/i18n/messages/`.
 - **Security problems**: report them privately, as described in [SECURITY.md](SECURITY.md).
