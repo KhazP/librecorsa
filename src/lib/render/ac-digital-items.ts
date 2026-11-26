@@ -61,14 +61,17 @@ interface FontMetrics {
   advance: number;
   /** Horizontal scale of the sans glyphs (a narrow font) */
   narrow: number;
+  /** How far inside its POSITION a right-aligned text ends, in text heights: the spacing a text font sets after each
+   * character (the Ferrari's lap count "1/" sat on its cell's right edge without it) */
+  inset: number;
 }
 
 /** AC's fonts by name: 'digital_*' its seven-segment, f2004 and audi_vln narrow, any other (arial_big) a plain sans */
 export function fontMetrics(font: string): FontMetrics {
   const name = font.toLowerCase();
-  if (name.startsWith("digital")) return { segments: true, digitH: 0.54, lift: 0.39, advance: 0.55, narrow: 1 };
+  if (name.startsWith("digital")) return { segments: true, digitH: 0.54, lift: 0.39, advance: 0.55, narrow: 1, inset: 0 };
   const narrow = /^(f2004|audi_vln)/.test(name) ? 0.78 : 1;
-  return { segments: false, digitH: 0.68, lift: 0.22, advance: SANS_DIGIT_EM * narrow * 1.05, narrow };
+  return { segments: false, digitH: 0.68, lift: 0.22, advance: SANS_DIGIT_EM * narrow * 1.05, narrow, inset: 0.12 };
 }
 /** How far in front of its LCD window a text floats (m), clear of z-fighting */
 const LIFT_M = 0.0006;
@@ -264,7 +267,9 @@ export class AcDigitalItems {
     // Facing the driver (-Z), its +X along the node's -X, the way AC writes
     mesh.rotation.y = Math.PI;
     const [px, py, pz] = item.position;
-    const cx = item.align === "LEFT" ? px - widthM / 2 + MARGIN_X * item.size : item.align === "RIGHT" ? px + widthM / 2 - MARGIN_X * item.size : px;
+    const inset = fontMetrics(item.font).inset * item.size;
+    const cx =
+      item.align === "LEFT" ? px - widthM / 2 + MARGIN_X * item.size : item.align === "RIGHT" ? px + widthM / 2 - MARGIN_X * item.size + inset : px;
     // On its screen's surface (the porter's `depth`), not floating in front of it at the node's plane
     mesh.position.set(cx, py - MARGIN_Y * item.size + heightM / 2, pz + (item.depth ?? 0) - LIFT_M);
     mesh.renderOrder = 2;
