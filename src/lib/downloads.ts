@@ -187,6 +187,25 @@ export function artifactHref(artifact: DownloadArtifact, release: AppRelease): s
   return `${REPO_URL}/releases/download/${release.tag}/${artifact.file}`;
 }
 
+/**
+ * One button per file that downloads directly, and a single one for the files that aren't out yet: those all go to the
+ * same releases page, so a Mac before the release gets one "GitHub Releases" button rather than two the same.
+ * `details` names what the button stands for, for its screen-reader name.
+ */
+export function buttonArtifacts(
+  artifacts: readonly DownloadArtifact[],
+  release: AppRelease,
+): { artifact: DownloadArtifact; details: string }[] {
+  const out: { artifact: DownloadArtifact; details: string }[] = [];
+  let pending: { artifact: DownloadArtifact; details: string } | null = null;
+  for (const artifact of artifacts) {
+    if (isDirectDownload(artifact, release)) out.push({ artifact, details: artifact.detail });
+    else if (pending) pending.details += `, ${artifact.detail}`;
+    else out.push((pending = { artifact, details: artifact.detail }));
+  }
+  return out;
+}
+
 /** Human-readable decimal megabytes (121_681_020 → "122 MB", 1_430_000 → "1.4 MB") */
 export function formatDownloadSize(bytes: number | null): string | null {
   if (bytes === null || !Number.isFinite(bytes) || bytes <= 0) return null;

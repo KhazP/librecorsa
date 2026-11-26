@@ -11,6 +11,7 @@ import {
   PLATFORM_DOWNLOADS,
   RELEASE_LINKS,
   artifactHref,
+  buttonArtifacts,
   detectVisitorPlatform,
   formatDownloadSize,
   isDirectDownload,
@@ -133,7 +134,7 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
 
                 <footer className="mt-auto flex flex-col gap-3 pt-1">
                   <div className="flex flex-wrap items-center gap-2.5">
-                    {artifacts.map((artifact, artifactIdx) => {
+                    {buttonArtifacts(artifacts, platform.release).map(({ artifact, details }, artifactIdx) => {
                       const href = artifactHref(artifact, platform.release);
                       const size = formatDownloadSize(artifact.sizeBytes);
                       const isDirect = isDirectDownload(artifact, platform.release);
@@ -142,7 +143,7 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
                       const ariaLabel =
                         isDirect && size
                           ? tx("artifactSized", { label: buttonLabel, platform: platform.name, detail: artifact.detail, size })
-                          : tx("artifact", { label: buttonLabel, platform: platform.name, detail: artifact.detail });
+                          : tx("artifact", { label: buttonLabel, platform: platform.name, detail: details });
 
                       return (
                         <Button
