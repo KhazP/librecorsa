@@ -1002,9 +1002,30 @@ export interface TyresThermalPatchData {
   hysteresis: number;
   /** Surface → core conductance (W/K) */
   surfaceToCore: number;
-  /** Convective cooling: G = g0 + g1·v (W/K) for surface and core */
-  surfaceCooling: [number, number];
+  /**
+   * Convective cooling: G = g0 + g1·v (W/K) for surface and core. The surface's may add a third term, g2·v² (W/K per
+   * (m/s)²), for a tread whose air cooling grows with the square of its speed
+   */
+  surfaceCooling: [number, number] | [number, number, number];
   coreCooling: [number, number];
+  /**
+   * The sliding heat taken from the grip the tyre could give rather than the force it gives: its peak force at this
+   * load (μ × load, every grip factor in) × its sliding speed, so a tyre sliding below its peak heats as one at it.
+   * Absent: the force it gives × its sliding speed
+   */
+  slipHeatAtPeak?: boolean;
+  /**
+   * Rolling heat made in the tread surface (W per N per m/s, × the same pressure factor as `hysteresis`), on top of
+   * `hysteresis`'s in the bulk and liner. Absent: none
+   */
+  surfaceHysteresis?: number;
+  /** The tread surface's conductance to the road under it (W/K at the front tyre's size). Absent: the shared 30 */
+  roadConductance?: number;
+  /**
+   * Shift of the contact pressure onto the inner strip per radian of camber leaning toward the car, which moves the
+   * heat and the grip temperature across the strips. Absent: the shared 6.5
+   */
+  stripCamberShift?: number;
   /** Vertical-rate change per °C of core temperature away from the reference */
   thermalVerticalK: number;
   thermalVerticalRefC: number;
@@ -1041,9 +1062,9 @@ export interface TyresThermalPatchData {
   rollingHeatToSubsurface?: number;
   /**
    * The wheel rim and the inflation gas (`RimGasCavityThermalData`): the gas warmed by the carcass liner and by the rim
-   * the brake disc heats. Absent: typical 18" racing-wheel values
+   * the brake disc heats. Absent (or any value absent): typical 18" racing-wheel values
    */
-  rimGas?: RimGasCavityThermalData;
+  rimGas?: Partial<RimGasCavityThermalData>;
 }
 
 /**
@@ -1156,6 +1177,8 @@ export interface TyresCompoundData {
     modelData?: Partial<TyresModelData>;
     camberData?: Partial<TyresCamberData>;
     pressureData?: Partial<TyresPressureData>;
+    /** The rear's own heat values (at the front tyre's size: the rear's capacities and conductances scale with it) */
+    thermalData?: Partial<TyresThermalPatchData>;
   };
 }
 
@@ -1302,20 +1325,28 @@ export function deriveRainCompound(
   const camberData = design
     ? { ...base.camberData, camberGain: base.camberData.camberGain * design.camberGainScale }
     : base.camberData;
+  // The design's heat ratios on whichever heat values a part gives (the compound's, or its rear's own): the tread-to-bulk
+  // and bulk-to-liner conductances where they are stated, else `surfaceToCore`, which sets them
+  const heat = (t: Partial<TyresThermalPatchData>): Partial<TyresThermalPatchData> => {
+    if (!design) return {};
+    const out: Partial<TyresThermalPatchData> = {};
+    if (t.slipHeatShare !== undefined) out.slipHeatShare = Math.min(0.85, t.slipHeatShare * design.slipHeatScale);
+    if (t.hysteresis !== undefined) out.hysteresis = t.hysteresis * design.hysteresisScale;
+    if (t.surfaceHysteresis !== undefined) out.surfaceHysteresis = t.surfaceHysteresis * design.hysteresisScale;
+    if (t.surfaceToCore !== undefined) out.surfaceToCore = t.surfaceToCore * design.surfaceToCoreScale;
+    if (t.surfaceToSubsurfaceTransfer !== undefined) out.surfaceToSubsurfaceTransfer = t.surfaceToSubsurfaceTransfer * design.surfaceToCoreScale;
+    if (t.subsurfaceToCoreTransfer !== undefined) out.subsurfaceToCoreTransfer = t.subsurfaceToCoreTransfer * design.surfaceToCoreScale;
+    if (t.surfaceCooling) out.surfaceCooling = t.surfaceCooling.map((g) => g * design.surfaceCoolingScale) as TyresThermalPatchData['surfaceCooling'];
+    if (t.coreCooling) out.coreCooling = [t.coreCooling[0] * design.coreCoolingScale, t.coreCooling[1] * design.coreCoolingScale];
+    return out;
+  };
   const thermalData: TyresThermalPatchData = {
     ...th,
     thermalPerformanceCurve,
     optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
-    ...(design
-      ? {
-          slipHeatShare: Math.min(0.85, th.slipHeatShare * design.slipHeatScale),
-          hysteresis: th.hysteresis * design.hysteresisScale,
-          surfaceToCore: th.surfaceToCore * design.surfaceToCoreScale,
-          surfaceCooling: [th.surfaceCooling[0] * design.surfaceCoolingScale, th.surfaceCooling[1] * design.surfaceCoolingScale],
-          coreCooling: [th.coreCooling[0] * design.coreCoolingScale, th.coreCooling[1] * design.coreCoolingScale],
-        }
-      : {}),
+    ...heat(th),
   };
+  const rearThermal = base.rearOverride?.thermalData;
   return {
     ...base,
     name,
@@ -1335,6 +1366,7 @@ export function deriveRainCompound(
               ? { ...base.rearOverride.camberData, camberGain: base.rearOverride.camberData.camberGain * design.camberGainScale }
               : base.rearOverride.camberData,
           pressureData: base.rearOverride.pressureData && unblanketed ? { ...base.rearOverride.pressureData, setPsi: undefined } : base.rearOverride.pressureData,
+          ...(rearThermal ? { thermalData: { ...rearThermal, ...heat(rearThermal) } } : {}),
         }
       : undefined,
   };
