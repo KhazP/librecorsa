@@ -13,11 +13,14 @@
  *   with no coat and its weave tiled as many times as AC tiles it. Other cars' materials keep the game's name rules.
  * - The Ferrari's early-season liveries wear the early body their skins swap in (ext_config.ini MODEL_REPLACEMENT), as
  *   a part variant, and none of the late body's files.
+ * - The Ferrari's wheel LCD: each reading at its widest stays in its own cell (none overlaps another), its digits
+ *   0.68 of SIZE tall on a line 0.22 of SIZE above its POSITION, f2004 narrow.
  */
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
 import * as THREE from 'three';
 import { cleanPortedCarMaterial, hasAcFinish } from '../../src/lib/render/ported-car-materials';
+import { fontMetrics, type AcDigitalItem } from '../../src/lib/render/ac-digital-items';
 import { F1_2007_SKINS, f12007BodyUrl } from '../../src/lib/cars/f1-2007-skins';
 import { hasFile, noteSkip } from '../lib/hosted-files';
 
@@ -152,6 +155,34 @@ async function main(): Promise<void> {
     // Räikkönen's early paint is the one the early body comes in (his #6); Massa's early files are his own
     const massa = F1_2007_SKINS.find((s) => s.id === 'ferrari-massa-early');
     check("Massa's early livery paints the early body in his files", ['wcextra5.jpg', 'wcextra6.jpg', 'wcextra7.jpg'].every((f) => massa?.files?.includes(f)));
+  }
+
+  console.log('\n== The Ferrari\'s wheel LCD');
+  {
+    const ferrari = glbs.get('ferrari')!.json as GltfJson & { nodes?: { extras?: Record<string, unknown> }[] };
+    const items = ((ferrari.nodes?.find((n) => n.extras?.wheelCentres)?.extras?.digitalItems ?? []) as AcDigitalItem[]).filter(
+      (i) => JSON.stringify(i.frame) === JSON.stringify(((ferrari.nodes?.find((n) => n.extras?.wheelCentres)?.extras?.digitalItems ?? []) as AcDigitalItem[]).find((j) => j.type === 'GEAR')?.frame),
+    );
+    const widest: Record<string, string> = { GEAR: '8', RPM: '18888', SPEED: '388', TC_LEVEL: '8', CURRENT_LAP: '88/', PERF: '-8.88', WATER_TEMP: '188' };
+    const boxes = items.map((i) => {
+      const m = fontMetrics(i.font);
+      const text = i.type === 'PLACE_HOLDER' ? (i.text ?? '') : `${i.prefix ?? ''}${widest[i.type] ?? '888'}${i.postfix ?? ''}`;
+      const w = text.length * m.advance * i.size;
+      // The driver's view: x to the right is the node's -X
+      const x = -i.position[0];
+      const left = i.align === 'LEFT' ? x : i.align === 'RIGHT' ? x - w : x - w / 2;
+      const bottom = i.position[1] + m.lift * i.size;
+      return { type: `${i.type}${i.text ? ` ${i.text}` : ''}`, left, right: left + w, bottom, top: bottom + m.digitH * i.size };
+    });
+    const clash: string[] = [];
+    for (let a = 0; a < boxes.length; a++)
+      for (let b = a + 1; b < boxes.length; b++) {
+        const p = boxes[a], q = boxes[b];
+        if (p.left < q.right && q.left < p.right && p.bottom < q.top && q.bottom < p.top) clash.push(`${p.type} x ${q.type}`);
+      }
+    check('every reading in a cell of its own', boxes.length >= 8 && clash.length === 0, `${boxes.length} readings${clash.length ? `; ${clash.join(', ')}` : ''}`);
+    const f2004 = fontMetrics('f2004');
+    check("AC's f2004 narrow, its digits 0.68 tall 0.22 above the line", f2004.narrow < 1 && f2004.digitH === 0.68 && f2004.lift === 0.22 && fontMetrics('digital_big').segments);
   }
 
   // The game keeps a porter-made finish as made, and still finishes other cars' paint by its name
