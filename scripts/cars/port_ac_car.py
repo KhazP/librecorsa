@@ -2572,12 +2572,12 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         elif spec.get('color') is not None:
             colour = srgb_to_linear(spec['color']).tolist()
         scale = float(spec.get('scale', 1.0))
-        if (acf and cls in FINISH_CLASSES and cls != 'paint' and spec.get('dim') is not None
+        if (acf and cls in FINISH_CLASSES and cls != 'paint' and spec.get('dim') is not None and not spec.get('metal')
                 and not skinnable(src['maps'].get('txDetail') if spec.get('detail') else spec.get('tex'))):
             # A part finished from its AC values: AC lights in gamma space, so its dimming of the gamma-space colour is
             # the ratio's 2.2th power on the linear one (a wheel at ksDiffuse 0.2 is a dark grey, not a light one). The
-            # rest keep the plain ratio they were matched with: a livery's parts (as its paint), tyres, glass, lights,
-            # screens and the driver
+            # rest keep the plain ratio they were matched with: a livery's parts (as its paint), metals (whose colour
+            # is their reflection, which ksDiffuse does not dim), tyres, glass, lights, screens and the driver
             scale = round(spec['dim'] ** 2.2, 2)
         colour = [c * scale for c in colour]
         if tex:
