@@ -760,7 +760,9 @@ class TexturePool:
         key = f'normal:{name}'
         if key in self.cache:
             return self.cache[key]
-        return self._add(key, decode(self.src[name]).convert('RGB'), self.normal_tex, False, normal=True)
+        # A merged tyre normal map holds a band per map (`merge_tyre_textures`): twice the cap keeps each one's size
+        cap = self.normal_tex * (2 if name.startswith('merged:') else 1)
+        return self._add(key, decode(self.src[name]).convert('RGB'), cap, False, normal=True)
 
     def mean_colour(self, name):
         return np.asarray(decode(self.src[name]), np.float64)[..., :3].reshape(-1, 3).mean(0)
@@ -939,7 +941,8 @@ def read_rev_leds(data, nodes):
     leds, blink = [], None
 
     def colour(sec):
-        rgb = vec3(sec.get('EMISSIVE', '1,0,0'))
+        # A value may end in a `//` comment (`EMISSIVE=125,0,0  //133,255,128`)
+        rgb = vec3(sec.get('EMISSIVE', '1,0,0').split('//')[0])
         top = max(rgb) or 1.0
         return [round(c / top, 3) for c in rgb]
 
@@ -1261,6 +1264,188 @@ def add_extension_parts(car_dir, preset, textures, materials, nodes):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# The tyres as a mod's extension config draws them (an automatic preset's car). Its extension/ext_config.ini may give
+# each set of compounds tyre meshes of their own ([TYRES_FX_CUSTOM_MESHES_...]: a grooved dry tyre and a slick, both in
+# the kn5 at once) and textures of their own ([TYRES_FX_CUSTOMTEXTURE_<compound>]: from a zip under the game's
+# extension/textures). The car is drawn as that config draws it on the data's default compound: that compound's meshes, the
+# others hidden, in its textures. A tyre whose tread and sidewall are kn5 materials with textures of their own then
+# becomes one material over a texture of both, since the rig draws a tyre as one primitive.
+# ---------------------------------------------------------------------------------------------------------------------
+
+def ext_config_sections(car_dir):
+    """The mod's extension/ext_config.ini as [(section, {KEY: value})], in order and with repeated sections kept (the
+    game numbers `..._...` sections itself); [] without one"""
+    path = os.path.join(car_dir, 'extension', 'ext_config.ini')
+    if not os.path.isfile(path):
+        return []
+    out = []
+    for line in open(path, 'rb').read().decode('latin1').splitlines():
+        line = line.split(';', 1)[0].strip()
+        if line.startswith('[') and line.endswith(']'):
+            out.append((line[1:-1].strip(), {}))
+        elif out and '=' in line:
+            k, v = line.split('=', 1)
+            out[-1][1][k.strip().upper()] = v.strip()
+    return out
+
+
+def default_compound(data):
+    """The short name of the data's default tyre compound (tyres.ini COMPOUND_DEFAULT), or None"""
+    cp = ini(data.get('tyres.ini', ''))
+    idx = int(float(cp['COMPOUND_DEFAULT'].get('INDEX', '0'))) if cp.has_section('COMPOUND_DEFAULT') else 0
+    sec = 'FRONT' if idx == 0 else f'FRONT_{idx}'
+    if not cp.has_section(sec):
+        return None
+    return cp[sec].get('SHORT_NAME', '').strip() or None
+
+
+def extension_texture(car_dir, ref):
+    """The bytes of an extension texture reference (`cars\\pack.zip::file.dds` under the game's extension/textures, or a loose
+    file there), or None"""
+    import zipfile
+    root = os.path.normpath(os.path.join(car_dir, '..', '..', '..', 'extension', 'textures'))
+    path, _, member = ref.replace('\\', '/').partition('::')
+    full = os.path.join(root, path)
+    if not os.path.isfile(full):
+        return None
+    if not member:
+        return open(full, 'rb').read()
+    with zipfile.ZipFile(full) as z:
+        name = next((n for n in z.namelist() if n.lower() == member.lower()), None)
+        return z.read(name) if name else None
+
+
+def apply_extension_tyres(car_dir, data, textures, materials, nodes):
+    """Hide the tyre meshes the extension config shows only for compounds other than the default one, and give the default compound's
+    tyre materials the config's textures for it. Returns what it did, for the report"""
+    sections = ext_config_sections(car_dir)
+    short = default_compound(data)
+    done = {'compound': short, 'hidden': [], 'textures': {}}
+    if not sections or not short:
+        return done
+    sets = []
+    for name, kv in sections:
+        if not name.upper().startswith('TYRES_FX_CUSTOM_MESHES'):
+            continue
+        for k, v in kv.items():
+            m = re.fullmatch(r'TYRES_(\d+)', k)
+            if m and f'TYRES_{m[1]}_MESHES' in kv:
+                sets.append(({c.strip() for c in v.split(',')}, {s.strip() for s in kv[f'TYRES_{m[1]}_MESHES'].split(',')}))
+    keep = next((meshes for comps, meshes in sets if short in comps), None)
+    if keep is not None:
+        # Names matched loosely, as a mod may misspell them (F1 2007's config lists SSide_RF for SSideRF)
+        loose = lambda name: name.replace('_', '').lower()  # noqa: E731
+        hide = {loose(m) for m in set().union(*(meshes for _, meshes in sets)) - keep} - {loose(m) for m in keep}
+        for i, n in enumerate(nodes):
+            if n['mesh'] is not None and hide.intersection(map(loose, [n['name'], *ancestors(nodes, i)])):
+                n['mesh']['visible'] = False
+                done['hidden'].append(n['name'])
+    by_name = {m['name']: m for m in materials}
+    pattern = re.compile(rf'TYRES_FX_CUSTOMTEXTURE_{re.escape(short)}(_\d+)?', re.I)
+    for name, kv in sections:
+        if not pattern.fullmatch(name) or kv.get('MATERIAL') not in by_name:
+            continue
+        mat = by_name[kv['MATERIAL']]
+        for key, slot in (('TXDIFFUSE', 'txDiffuse'), ('TXNORMAL', 'txNormal')):
+            raw = extension_texture(car_dir, kv[key]) if kv.get(key) else None
+            if raw is None:
+                continue
+            tex_name = 'ext:' + kv[key].replace('\\', '/').rsplit(':', 1)[-1]
+            textures[tex_name] = raw
+            mat['maps'] = {**mat['maps'], slot: tex_name}
+            done['textures'][f"{kv['MATERIAL']}.{slot}"] = tex_name
+    return done
+
+
+def merge_tyre_textures(textures, materials, nodes):
+    """A tyre drawn in several kn5 materials with textures of their own (a tread and a sidewall) as one material over
+    one texture of them all: each material's maps in a band of its own, top to bottom, and its meshes' UVs moved into
+    that band. Only where every such mesh's UVs stay within one tile, which a band can hold. Returns the merged
+    material's name, or None"""
+    tyre = detect_tyres(nodes, materials)
+    mats = list(dict.fromkeys(nodes[i]['mesh']['mat'] for i in tyre['nodes']))
+    diffuse = [materials[m]['maps'].get('txDiffuse') for m in mats]
+    if len(mats) < 2 or len(set(diffuse)) < 2 or not all(d in textures for d in diffuse):
+        return None
+    tiles = {}
+    for i in tyre['nodes']:
+        uv = nodes[i]['mesh']['uv']
+        u0, u1, v0, v1 = uv[:, 0].min(), uv[:, 0].max(), uv[:, 1].min(), uv[:, 1].max()
+        tile = math.floor(v0 + 1e-3)
+        if u0 < -1e-3 or u1 > 1 + 1e-3 or v1 > tile + 1 + 1e-3:
+            return None
+        tiles[i] = tile
+    k = len(mats)
+    side = 1024
+
+    def band_image(slot, fill):
+        img = Image.new('RGBA', (side, side * k), fill)
+        for b, m in enumerate(mats):
+            name = materials[m]['maps'].get(slot)
+            if name in textures:
+                im = Image.open(io.BytesIO(textures[name])).convert('RGBA').resize((side, side), Image.LANCZOS)
+                img.paste(im, (0, b * side))
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        return buf.getvalue()
+
+    textures['merged:tyre.png'] = band_image('txDiffuse', (0, 0, 0, 255))
+    maps = {'txDiffuse': 'merged:tyre.png'}
+    if any(materials[m]['maps'].get('txNormal') in textures for m in mats):
+        textures['merged:tyre_nm.png'] = band_image('txNormal', (128, 128, 255, 255))
+        maps['txNormal'] = 'merged:tyre_nm.png'
+    first = materials[mats[0]]
+    materials.append({**first, 'name': 'tyre_merged', 'maps': maps})
+    merged = len(materials) - 1
+    for i in tyre['nodes']:
+        me = nodes[i]['mesh']
+        b = mats.index(me['mat'])
+        uv = me['uv'].astype(np.float32).copy()
+        # v runs down the image from the tile's top; the band holds it at 1/k of the height, half a texel in
+        uv[:, 1] = tiles[i] + (b + np.clip(uv[:, 1] - tiles[i], 0.5 / side, 1 - 0.5 / side)) / k
+        nodes[i]['mesh'] = {**me, 'uv': uv, 'mat': merged}
+    return 'tyre_merged'
+
+
+def read_digital_items(data, nodes, frames):
+    """The texts digital_instruments.ini draws ([ITEM_n]: a gear, speed, rpm, fuel, lap time ... on a node's plane), as
+    the rig's `digitalItems` extras: each with its parent node's frame in the node the rig puts it on (`frames`: kn5
+    node name -> (rig node, 4x4 in that node's axes)), its place, size, colour and format. AC draws each from its
+    POSITION along the node's -X (the driver's right), its baseline there, SIZE high"""
+    if 'digital_instruments.ini' not in data:
+        return []
+    cp = ini(data['digital_instruments.ini'])
+    items = []
+    for name in sorted((s for s in cp.sections() if s.startswith('ITEM_')), key=lambda s: int(s[5:]) if s[5:].isdigit() else 0):
+        # Values without their `//` comments
+        sec = {k.upper(): v.split('//')[0].strip() for k, v in cp[name].items()}
+        parent = sec.get('PARENT', '').strip()
+        if parent not in frames or not sec.get('TYPE'):
+            continue
+        attach, frame = frames[parent]
+        rgba = [float(x) for x in sec.get('COLOR', '255,255,255,255').split(',')[:4] if x.strip()]
+        rgba = (rgba + [255.0] * 4)[:4]
+        item = {
+            'attach': attach,
+            'frame': [round(float(v), 6) for v in np.asarray(frame).T.reshape(-1)],
+            'type': sec['TYPE'].strip().upper(),
+            'position': [round(float(v), 5) for v in vec3(sec.get('POSITION', '0,0,0'))],
+            'size': float(sec.get('SIZE', '0.01')),
+            'color': [round(c / 255, 4) for c in rgba],
+            'intensity': float(sec.get('INTENSITY', '1')),
+            'font': sec.get('FONT', '').strip(),
+            'align': sec.get('ALIGN', 'LEFT').strip().upper(),
+        }
+        for key, field in (('TEXT', 'text'), ('PREFIX', 'prefix'), ('POSTFIX', 'postfix'), ('UNITS', 'units')):
+            if sec.get(key, '').strip():
+                item[field] = sec[key].strip()
+        if sec.get('DECIMALS', '').strip():
+            item['decimals'] = int(float(sec['DECIMALS']))
+        items.append(item)
+    return items
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Automatic presets: a car with no preset of its own. AC cars keep a few conventions the rig relies on (the WHEEL_xx
 # hubs, STEER_HR, car.ini's DRIVEREYES); the rest of a preset is found in the model. The tyres are the meshes under each
 # WHEEL_xx that AC's tyre shader draws or that are named as tyres, else the outermost ring round the hub; the paint is
@@ -1544,6 +1729,8 @@ def auto_preset(car_dir, loaded, data, kn5_name, title=None, overrides=None, n_s
     windscreen = detect_windscreen(nodes, materials, eyes) if eyes is not None else None
     names = {n['name'] for n in nodes}
     spinning = ('DISC_',) if all(f'DISC_{c}' in names for c in CORNERS) else ()
+    # The wheel's shift lights (digital_instruments.ini) as nodes of their own, so the game can light each
+    leds = tuple(sorted({led['node'] for led in (read_rev_leds(data, names) or {}).get('leds', [])}))
     skip_materials = {m['name'] for m in materials if _BROKEN_GLASS.search(m['name']) or _BLUR.search(m['name'])}
     by_lower = {t.lower(): t for t in textures}
     skin_textures = tuple(sorted(by_lower.get(t, t) for t in overrides))
@@ -1557,7 +1744,9 @@ def auto_preset(car_dir, loaded, data, kn5_name, title=None, overrides=None, n_s
         skip_node_prefixes=('RIM_BLUR_',),
         skip_nodes=AUTO_SKIP_NODES,
         default_skin=skins[0] if skins else None,
-        steer_nodes=(),
+        steer_nodes=leds,
+        # The same lights where they are on the body (a dash's), each a BODY node of its own
+        led_nodes=leds,
         tyre_nodes=tyres['nodes'],
         tyre_materials=tyres['materials'],
         tyre_class=set(tyres['materials']),
@@ -1794,7 +1983,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
                 uv_remap[kn5_name] = (tile, box, (W, H))
                 ti = pool.image(f'{tex[5:]}#{kn5_name}', crop, alpha=True)
             else:
-                big = tex.startswith(('bake:body', 'bakemean:')) or skinnable(tex)
+                # A merged tyre texture holds a band per texture: the paint's cap keeps each band at the others' size
+                big = tex.startswith(('bake:body', 'bakemean:', 'merged:')) or skinnable(tex)
                 ti = pool.colour(tex, alpha=(mode != 'OPAQUE'), cap=max_tex if big else None)
             pbr['baseColorTexture'] = {'index': ti}
         pbr['baseColorFactor'] = [round(float(v), 4) if auto else float(v) for v in colour] + [alpha]
@@ -1931,8 +2121,15 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     body_parts = [p for p in parts if p[0] == 'body']
     order = {m['name']: i for i, m in enumerate(materials)}
     body_parts.sort(key=lambda p: order[p[2]])
+    led_nodes = set(preset.get('led_nodes', ()))
     body_kids = [writer.add_mesh_node(f'BODY_{node_label(mi)}', [pi])
-                 for mi, pi in prims([p for p in body_parts if p[8] is None], order=lambda k: order[k])]
+                 for mi, pi in prims([p for p in body_parts if p[8] is None and p[7] not in led_nodes],
+                                     order=lambda k: order[k])]
+    # Shift lights on the body (digital_instruments.ini's, on a dash rather than the wheel): nodes of their own
+    body_leds = sorted({p[7] for p in body_parts if p[8] is None and p[7] in led_nodes})
+    for name in body_leds:
+        out = prims([p for p in body_parts if p[7] == name], order=lambda k: order[k])
+        body_kids.append(writer.add_mesh_node(name, [pi for _, pi in out]))
     # A livery's parts (`parts`, `extra_kn5`): PART_<name>, one mesh per material, shown for its variants' liveries
     variant_nodes = {}
     for part in sorted({p[8] for p in body_parts if p[8] is not None}):
@@ -2011,7 +2208,20 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         'farChase': {'pos': [0.0, 2.6, -7.3], 'pitchDeg': -10, 'fov': 60},
     }
 
-    rev_leds = read_rev_leds(data, set(own_steer))
+    rev_leds = read_rev_leds(data, set(own_steer) | set(body_leds))
+    # digital_instruments.ini's texts, on the nodes they are drawn on: the wheel's (STEER) or the body's
+    item_parents = set()
+    if 'digital_instruments.ini' in data:
+        dcp = ini(data['digital_instruments.ini'])
+        item_parents = {dcp[s].get('PARENT', '').strip() for s in dcp.sections() if s.startswith('ITEM_')}
+    to_model = np.eye(4)
+    to_model[:3, 3] = shift
+    item_frames = {}
+    for i, n in enumerate(nodes):
+        if n['name'] in item_parents and n['name'] not in item_frames:
+            world = to_model @ n['world']
+            item_frames[n['name']] = ('STEER', to_steer @ world) if 'STEER_HR' in ancestors(nodes, i) else ('BODY', world)
+    digital_items = read_digital_items(data, nodes, item_frames)
 
     lf, rf, lr, rr = (wheel_centres[f'WHEEL_{c}'] for c in ('LF', 'RF', 'LR', 'RR'))
     extras = {
@@ -2023,6 +2233,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         'steer': {'pivot': r3(pivot), 'columnAxis': [round(float(v), 5) for v in column]},
         'cameras': cameras,
         **({'revLeds': rev_leds} if rev_leds else {}),
+        **({'digitalItems': digital_items} if digital_items else {}),
         **({'skinMaps': {MATERIALS[m]['name']: f for m, (f, _) in preset['skin_maps'].items()}}
            if preset.get('skin_maps') else {}),
         **({'skinMaps': {name: f for name, (f, _) in sorted(skin_files.items())}} if skin_files else {}),
@@ -2117,6 +2328,12 @@ def main():
         data = read_car_data(a.car_dir)
         kn5_name = a.kn5 or find_kn5(a.car_dir, data)
         loaded = read_kn5(os.path.join(a.car_dir, kn5_name))
+        # The tyres as the mod's extension config draws them on the default compound, in one material
+        ext = apply_extension_tyres(a.car_dir, data, *loaded)
+        merged = merge_tyre_textures(*loaded)
+        if ext['hidden'] or ext['textures'] or merged:
+            print(f"  extension tyres ({ext['compound']}): {len(ext['hidden'])} meshes hidden, textures {ext['textures']}, "
+                  f"merged {merged}")
         ui = read_loose_json(os.path.join(a.car_dir, 'ui', 'ui_car.json'))
         title = str(ui.get('name') or '').strip() or None
         preset = auto_preset(a.car_dir, loaded, data, kn5_name, title=title)
