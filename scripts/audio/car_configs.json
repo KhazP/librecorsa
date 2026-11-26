@@ -757,5 +757,68 @@
     },
     "lift": { "popMinRpm": 8000, "crackleMinRpm": 8800, "downshiftPopChance": 0.55 },
     "limiterRetriggerS": 0.8
+  },
+  "f1-2007": {
+    "outDir": "public/cars/f1-2007/audio",
+    "limiterRpm": 19000,
+    "sourceDescription": "Cimmerian Iter's F1 2007 mod for Assetto Corsa, Ferrari F2007 sound (content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank), used with permission",
+    "intBank": "librecorsa-src/f1_2007_cimmerian/assettocorsa/content/cars/cim_2007_ferrari/sfx/cim_2007_ferrari.bank",
+    "rawPcm16": true,
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 4000, "rootRpm": 4840, "sample": "idle_on#22" },
+          { "rpm": 7000, "rootRpm": 8380, "sample": "low_on#57" },
+          { "rpm": 11500, "rootRpm": 12020, "sample": "med_on#29" },
+          { "rpm": 14500, "rootRpm": 17100, "sample": "hi_on#48" },
+          { "rpm": 16800, "rootRpm": 16820, "sample": "hi_max_on#15" },
+          { "rpm": 19000, "rootRpm": 18120, "sample": "max_on#4" }
+        ],
+        "off": [
+          { "rpm": 4000, "rootRpm": 3740, "sample": "idle_off#12" },
+          { "rpm": 7000, "rootRpm": 8020, "sample": "low_off#13" },
+          { "rpm": 12000, "rootRpm": 11900, "sample": "med_off#46" },
+          { "rpm": 19000, "rootRpm": 13940, "sample": "hi_off#6" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 4000, "rootRpm": 3980, "sample": "idle_rear#27" },
+          { "rpm": 7000, "rootRpm": 8820, "sample": "low_on_rear#30" },
+          { "rpm": 11500, "rootRpm": 11285, "sample": "hi_on_rear2#11" },
+          { "rpm": 19000, "rootRpm": 14051, "sample": "hi_on_rear3#54" }
+        ],
+        "off": [
+          { "rpm": 4000, "rootRpm": 3980, "sample": "idle_rear#27" },
+          { "rpm": 7000, "rootRpm": 9120, "sample": "low_off_rear#53" },
+          { "rpm": 11500, "rootRpm": 10560, "sample": "med_off_rear#8" },
+          { "rpm": 19000, "rootRpm": 15160, "sample": "hi_off_rear#25" }
+        ]
+      }
+    },
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 70, "sample": "transmission#9", "rms": 0.042 },
+      { "layer": "off", "drivetrainSpeed": 70, "sample": "transmission#9", "rms": 0.028 }
+    ],
+    "skid": { "int": "Skid#14", "ext": "skid_ext_mono#7" },
+    "tractionControl": "traction_control#40",
+    "oneshots": {
+      "gear_up": ["gearup#21", "gearupEXT#56"],
+      "gear_down": ["gearup#21", "geardnEXT#45"],
+      "backfire_int": ["500_backfire3#10", "500_backfire4#49", "500_backfire5#26", "500_backfire6#37", "500_backfire7#18"],
+      "backfire_ext": ["backfireEXT_1#31", "backfireEXT_2#52", "backfireEXT_3#34", "backfireEXT_4#43", "backfireEXT_5#33", "backfireEXT_6#42", "backfireEXT_7#32", "backfireEXT_8#20", "backfireEXT_9#24"]
+    },
+    "shiftFallbackSample": "500_backfire5#26",
+    "limiterFallbackSample": "max_on#4",
+    "limiterRootRpm": 18120,
+    "manifestExtras": {
+      "shift": { "style": "sequential", "cutS": 0.025 }
+    },
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.2], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.1, 0.08], [0.2, 0.2], [0.3, 0.45], [0.4, 0.73], [0.52, 0.91], [0.7, 0.98], [0.9, 1.0], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 11500, "crackleMinRpm": 12800, "downshiftPopChance": 0.55 },
+    "limiterRetriggerS": 0.8
   }
 }
