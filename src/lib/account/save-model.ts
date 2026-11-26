@@ -285,7 +285,7 @@ const fieldHash = (field: string, value: unknown) => hashValue(accountShare(fiel
  * suite checks every member against the fields as they were then, and these defaults against the settings' own.
  */
 export const LATER_ACCOUNT_MEMBERS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
-  audio: { spotter: true, spotterVoice: "jim", spotterRadio: true },
+  audio: { spotter: false, spotterVoice: "jim", spotterRadio: true },
   race: { pitStops: 0 },
 };
 
