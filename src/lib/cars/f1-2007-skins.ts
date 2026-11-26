@@ -6,7 +6,9 @@ import { f12007Sound } from "@/lib/sim/f1-2007/f12007-sounds";
  * --skins-out writes each team's skins.json, which this list copies). Each team's car is a body of its own: a livery
  * names the team's GLB (`modelUrl`) and engine sound (`sound`), and picking it puts that car on the entry's one physics. The Ferrari's Räikkönen
  * is the paint the car's own GLB is in; every other team's first driver is the paint of that team's GLB
- * (`useModelPaint`), and the others list the livery files they change.
+ * (`useModelPaint`), and the others list the livery files they change. The Ferrari's early-season liveries wear the
+ * mod's early body (its skins' model swap, the GLB's `early` part variant): Räikkönen's in the paint that body comes
+ * in, Massa's in his own files for it.
  */
 
 /** A team's car (`public/cars/f1-2007/model/f1-2007-<team>.glb`) */
@@ -34,14 +36,16 @@ export const F1_2007_SKINS: readonly CarSkin[] = [
     name: "#5 Felipe Massa · Ferrari, early season",
     swatch: ["#c8102e", "#f2f2f2"],
     sound: f12007Sound("ferrari"),
-    files: ["t_cam1.jpg", "wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
+    variant: "early",
+    files: ["t_cam1.jpg", "wcextra5.jpg", "wcextra6.jpg", "wcextra7.jpg", "driver_helmet.jpg", "driver_helmet2.jpg"],
   },
   {
     id: "ferrari-raikkonen-early",
     name: "#6 Kimi Räikkönen · Ferrari, early season",
     swatch: ["#c8102e", "#f2f2f2"],
     sound: f12007Sound("ferrari"),
-    files: ["wccarbody.jpg", "wcextra0.jpg", "wcextra1.jpg"],
+    variant: "early",
+    files: [],
   },
   // McLaren MP4-22
   {

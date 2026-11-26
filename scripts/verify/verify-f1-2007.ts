@@ -69,7 +69,7 @@ console.log('== The entry and its liveries');
     F1_2007_SKINS.every((s) => bodyOf(s) === f12007BodyUrl(teamOf(s.id)!)),
   );
   // Each team's body is painted in one of its drivers: that livery changes no file, every other one lists its own
-  const paintOnly = TEAMS.map((t) => F1_2007_SKINS.filter((s) => teamOf(s.id) === t && (s.files ?? []).length === 0));
+  const paintOnly = TEAMS.map((t) => F1_2007_SKINS.filter((s) => teamOf(s.id) === t && (s.files ?? []).length === 0 && !s.variant));
   check(
     "each team has exactly one livery in its body's own paint",
     paintOnly.every((list, i) => list.length === 1 && (TEAMS[i] === 'ferrari' || list[0].useModelPaint === true)),
