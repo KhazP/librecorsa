@@ -128,6 +128,9 @@
     "realismFull": "Tối đa",
     "surfaceDry": "Khô",
     "surfaceWet": "Ướt",
+    "physics": "Vật lý {version}",
+    "physicsNew": "Vật lý {version} (mới)",
+    "physicsOlderLaps": "Vật lý {version} · Vòng cũ hơn",
     "renameUnreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến. Hãy thử lại sau giây lát",
     "renameFailed": "Không thể đổi tên (HTTP {status})",
     "errors": {

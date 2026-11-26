@@ -128,6 +128,9 @@
     "realismFull": "Tam",
     "surfaceDry": "Kuru",
     "surfaceWet": "Islak",
+    "physics": "Fizik {version}",
+    "physicsNew": "Fizik {version} (yeni)",
+    "physicsOlderLaps": "Fizik {version} · Eski turlar",
     "renameUnreachable": "Çevrimiçi tabloya ulaşılamadı. Birazdan tekrar dene",
     "renameFailed": "İsim değiştirilemedi (HTTP {status})",
     "errors": {

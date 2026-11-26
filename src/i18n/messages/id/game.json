@@ -128,6 +128,9 @@
     "realismFull": "Penuh",
     "surfaceDry": "Kering",
     "surfaceWet": "Basah",
+    "physics": "Fisika {version}",
+    "physicsNew": "Fisika {version} (baru)",
+    "physicsOlderLaps": "Fisika {version} · Lap lama",
     "renameUnreachable": "Tidak dapat menghubungi papan waktu daring. Coba lagi nanti",
     "renameFailed": "Nama tidak dapat diubah (HTTP {status})",
     "errors": {
