@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "乾地賽道 · {tyres} · 低油量",
+    "tyresSuperSoft": "超軟胎",
     "tyresSoft": "軟胎",
     "tyresStreet": "街道胎",
     "tyresVintageSlicks": "復古光頭胎",
@@ -720,6 +721,7 @@
     "aeroLow": "低風阻",
     "aeroBalanced": "平衡空力",
     "aeroHigh": "高下壓力",
+    "supersoft": "超軟胎",
     "soft": "軟胎",
     "medium": "中性胎",
     "hard": "硬胎",

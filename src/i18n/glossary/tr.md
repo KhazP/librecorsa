@@ -99,6 +99,7 @@
 | tyre temperatures | lastik sıcaklıkları | |
 | tyre pressure | lastik basıncı | |
 | tyre compound: soft, medium, hard, intermediate, wet | lastik hamuru: yumuşak, orta, sert, geçiş, yağmur | Standart Türkçe F1 hamur adları |
+| super soft | süper yumuşak | Hamur; yumuşaktan da yumuşak kuru lastik |
 | tyre blankets | lastik battaniyeleri | |
 | setup (car setup) | araç ayarı | İlk çalıştırma kurulumu için `kurulum`, Ayarlar ekranı için `Ayarlar` |
 | apply setup | ayarı uygula | |

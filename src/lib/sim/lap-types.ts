@@ -2,7 +2,7 @@
  * Shared shapes for lap recording, ghosts, the lap summary, replays and leaderboards.
  * Plain JSON-friendly data so recordings can be stored (IndexedDB), exported as files and uploaded.
  */
-import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
+import { TIRE_COMPOUNDS, type AssistPreset, type TireCompound, type VehicleModelId } from "@/types/f1";
 import type { SharedCarSetup } from "./setup-share";
 import { lc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
@@ -299,7 +299,8 @@ export function lapConditionsNow(c: {
 
 /** Assist presets from the least to the most aided */
 export const ASSIST_PRESETS: readonly AssistPreset[] = ["pro", "semi_pro", "assisted"];
-export const TYRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
+/** The compounds a lap may be driven on (the super soft only on a car that has one) */
+export const TYRE_COMPOUNDS: readonly TireCompound[] = TIRE_COMPOUNDS;
 
 /**
  * Board a lap is ranked on (with its circuit and car): physics revision, assists, realism and surface, e.g.

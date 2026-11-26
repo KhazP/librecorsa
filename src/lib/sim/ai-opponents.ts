@@ -3670,7 +3670,8 @@ export class AiOpponentField implements AiRace {
 
   /**
    * The tyres for a stop: the kind the weather calls for when it calls for another (pit/ai-weather-tyres.ts); else rain
-   * tyres stay on, a slick goes to the next harder one with most of the race left, else softer
+   * tyres stay on, a slick goes to the next harder one with most of the race left, else softer (a super soft, which
+   * only some cars have, goes to the medium or the soft as the hard does)
    */
   private stopCompound(car: FieldCar): TireCompound {
     const now = car.sim.tireCompound;

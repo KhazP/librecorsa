@@ -128,6 +128,8 @@ function sessionLabel(t: CarTelemetry, w: GrandPrixWords): string {
 
 function compoundMeta(compound: TireCompound | undefined): { letter: string; color: string } {
   switch (compound) {
+    case "supersoft":
+      return { letter: "SS", color: "#a855f7" };
     case "soft":
       return { letter: "S", color: "#ef4444" };
     case "medium":

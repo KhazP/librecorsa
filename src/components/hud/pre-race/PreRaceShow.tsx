@@ -38,8 +38,10 @@ export const PreRaceShow: React.FC<{
   onStart: () => void;
   weather: WeatherHudState | null | undefined;
   compound: TireCompound;
+  /** The car's compounds, softest first; absent: the usual five */
+  compounds?: readonly TireCompound[];
   trackInfo: TrackInfo;
-}> = ({ ui, timeS, onNext, onSkip, onStart, weather, compound, trackInfo }) => {
+}> = ({ ui, timeS, onNext, onSkip, onStart, weather, compound, compounds, trackInfo }) => {
   const tx = useTranslations("hud.preRace");
   const input = useInputMode();
   const pad = input.mode === "pad" ? input.family : null;
@@ -72,7 +74,7 @@ export const PreRaceShow: React.FC<{
         {scene.id === "title" ? <TitleCard ctx={ctx} trackInfo={trackInfo} /> : null}
         {scene.id === "circuit" ? <CircuitFacts ctx={ctx} trackInfo={trackInfo} /> : null}
         {scene.id === "aerial" ? <AerialCards ctx={ctx} trackInfo={trackInfo} weather={weather} scene={scene} /> : null}
-        {scene.id === "tyres" ? <TyreCards compound={compound} scene={scene} still={still} /> : null}
+        {scene.id === "tyres" ? <TyreCards compound={compound} compounds={compounds} scene={scene} still={still} /> : null}
         {scene.id === "gridIntro" ? <GridIntro ctx={ctx} trackInfo={trackInfo} /> : null}
         {scene.id === "gridPair" ? <GridPair ctx={ctx} grid={ui.grid} pair={ui.pair ?? 0} /> : null}
         {scene.id === "field" ? <FieldCard ctx={ctx} /> : null}
@@ -465,8 +467,11 @@ const fullName = (d: ShowDriver) => [d.first, d.last].filter(Boolean).join(" ");
 
 const DRY: readonly Compound[] = ["soft", "medium", "hard"];
 const WET: readonly Compound[] = ["intermediate", "wet"];
+/** The dry cards: the car's own slicks where it has a fourth (a super soft), else the usual three */
+const dryOf = (compounds: readonly Compound[] | undefined): readonly Compound[] => (compounds ? compounds.filter((c) => !WET.includes(c)) : DRY);
 
 const COMPOUND_BAR: Record<Compound, string> = {
+  supersoft: "bg-lc-purple",
   soft: "bg-lc-crimson",
   medium: "bg-lc-amber",
   hard: "bg-lc-chalk",
@@ -475,7 +480,13 @@ const COMPOUND_BAR: Record<Compound, string> = {
 };
 
 /** Scene 4: F1 Tyre Allocation Broadcast Dock + wheel-hub dive blackout */
-const TyreCards: React.FC<{ compound: TireCompound; scene: ShowScene; still: boolean }> = ({ compound, scene, still }) => {
+const TyreCards: React.FC<{ compound: TireCompound; compounds?: readonly TireCompound[]; scene: ShowScene; still: boolean }> = ({
+  compound,
+  compounds,
+  scene,
+  still,
+}) => {
+  const dry = dryOf(compounds);
   const tx = useTranslations("hud.preRace");
   const diveAtMs = Math.max(0, scene.endS - scene.startS - WHEEL_DIVE_S) * 1000;
   const fadeCardsAtMs = Math.max(0, diveAtMs - 140);
@@ -529,9 +540,9 @@ const TyreCards: React.FC<{ compound: TireCompound; scene: ShowScene; still: boo
           </div>
 
           <div className="flex flex-col divide-y divide-lc-line/80 sm:flex-row sm:items-stretch sm:divide-x sm:divide-y-0 short:flex-row short:items-stretch short:divide-x short:divide-y-0">
-            <div className="grid grid-cols-3 divide-x divide-lc-line/70">{DRY.map((c, i) => tile(c, i, false))}</div>
+            <div className={`grid ${dry.length === 4 ? "grid-cols-4" : "grid-cols-3"} divide-x divide-lc-line/70`}>{dry.map((c, i) => tile(c, i, false))}</div>
             <div className="flex flex-col bg-lc-carbon/60">
-              <div className="grid flex-1 grid-cols-2 divide-x divide-lc-line/70">{WET.map((c, i) => tile(c, i + 3, true))}</div>
+              <div className="grid flex-1 grid-cols-2 divide-x divide-lc-line/70">{WET.map((c, i) => tile(c, i + dry.length, true))}</div>
               <span className="lc-mono border-t border-lc-line/70 px-3 py-1 text-center text-[11px] font-bold text-lc-fog sm:hidden">
                 {tx("alsoAvailable")}
               </span>

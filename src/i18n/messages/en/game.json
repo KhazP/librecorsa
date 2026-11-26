@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Dry track · {tyres} · Low fuel",
+    "tyresSuperSoft": "Super Soft tyres",
     "tyresSoft": "Soft tyres",
     "tyresStreet": "Street tyres",
     "tyresVintageSlicks": "Vintage slicks",
@@ -720,6 +721,7 @@
     "aeroLow": "Low drag",
     "aeroBalanced": "Balanced aero",
     "aeroHigh": "High downforce",
+    "supersoft": "Super Soft",
     "soft": "Soft",
     "medium": "Medium",
     "hard": "Hard",

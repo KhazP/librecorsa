@@ -21,6 +21,7 @@ export const PIRELLI_SIDEWALL_URL = "/cars/shared/tyres/pirelli-2026-sidewall-cx
 
 /** Pirelli's compound colours (sRGB) */
 export const PIRELLI_COMPOUND_COLORS: Readonly<Record<TireCompound, number>> = {
+  supersoft: 0x8f2bd9, // purple, Pirelli's softer-than-soft
   soft: 0xe10600, // red
   medium: 0xffd700, // yellow
   hard: 0xf8fafc, // white

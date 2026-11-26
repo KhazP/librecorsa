@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Pista asciutta · {tyres} · Poco carburante",
+    "tyresSuperSoft": "Gomme supermorbide",
     "tyresSoft": "Gomme morbide",
     "tyresStreet": "Gomme stradali",
     "tyresVintageSlicks": "Slick d’epoca",
@@ -720,6 +721,7 @@
     "aeroLow": "Bassa resistenza",
     "aeroBalanced": "Aero bilanciata",
     "aeroHigh": "Alta deportanza",
+    "supersoft": "Supermorbida",
     "soft": "Morbida",
     "medium": "Media",
     "hard": "Dura",

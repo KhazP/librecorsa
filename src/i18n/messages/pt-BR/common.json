@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Supermacio",
       "soft": "Macio",
       "medium": "Médio",
       "hard": "Duro",
@@ -80,6 +81,7 @@
       "wet": "Chuva"
     },
     "short": {
+      "supersoft": "S.Macio",
       "soft": "Macio",
       "medium": "Méd",
       "hard": "Duro",
@@ -87,6 +89,7 @@
       "wet": "Chuva"
     },
     "long": {
+      "supersoft": "Pneus supermacios",
       "soft": "Pneus macios",
       "medium": "Pneus médios",
       "hard": "Pneus duros",
@@ -94,6 +97,7 @@
       "wet": "Pneus de chuva (água acumulada)"
     },
     "tyres": {
+      "supersoft": "Pneus supermacios",
       "soft": "Pneus macios",
       "medium": "Pneus médios",
       "hard": "Pneus duros",

@@ -30,7 +30,7 @@ import {
   type HeadlightBeam,
   type HeadlightMode,
 } from "@/lib/render/car-headlights";
-import { createVehicleSim, vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { carTyreCompounds, createVehicleSim, switchedCarCompound, vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
@@ -1260,7 +1260,7 @@ export class DriveSession {
       car.autoClutch = prefs.autoClutch;
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
-        car.tireCompound = prev.tireCompound;
+        car.tireCompound = switchedCarCompound(prev.tireCompound, prev.tyreCompounds, car.tyreCompounds);
       } else {
         car.tireCompound = autoCompoundFor(getTrackEnv().weather.lineWaterMm, car.tireCompound);
       }
@@ -1686,7 +1686,8 @@ export class DriveSession {
     const racingLineShown = (on: boolean) => on && (appPhaseNow === "driving" || appPhaseNow === "loading");
     builtCircuit.racingLineMesh.visible = racingLineShown(settings.racingLine);
     /** The player's pit stops (pit/pit-stop.ts); a circuit without a pit lane has none */
-    const pitStop = new PitStopManager(track.pitLane ?? null, physics.tireCompound);
+    // The crew has the compounds of whichever car the player drives now
+    const pitStop = new PitStopManager(track.pitLane ?? null, physics.tireCompound, () => carTyreCompounds(vehicleNow));
     /** The race's required stops were not made: called once per run, at the player's flag */
     let pitMissCalled = false;
     /** The player's box painted in the lane; it follows the box the race gives the player */

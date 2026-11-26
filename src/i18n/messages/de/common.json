@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Supersoft",
       "soft": "Soft",
       "medium": "Medium",
       "hard": "Hart",
@@ -80,6 +81,7 @@
       "wet": "Regen"
     },
     "short": {
+      "supersoft": "S-Soft",
       "soft": "Soft",
       "medium": "Med",
       "hard": "Hart",
@@ -87,6 +89,7 @@
       "wet": "Regen"
     },
     "long": {
+      "supersoft": "Supersoft-Reifen",
       "soft": "Soft-Reifen",
       "medium": "Medium-Reifen",
       "hard": "Harte Reifen",
@@ -94,6 +97,7 @@
       "wet": "Regenreifen (stehendes Wasser)"
     },
     "tyres": {
+      "supersoft": "Supersoft-Reifen",
       "soft": "Soft-Reifen",
       "medium": "Medium-Reifen",
       "hard": "Harte Reifen",

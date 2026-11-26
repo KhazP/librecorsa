@@ -71,7 +71,7 @@ export const MfdPitPage: React.FC<{
       <div className={`flex flex-col gap-1 ${row("tyres")}`}>
         <span className={HUD_LBL}>{L.tyres}</span>
         <div className="flex gap-1" role="radiogroup" aria-label={L.tyres}>
-          {PIT_COMPOUNDS.map((c) => (
+          {(pit.compounds ?? PIT_COMPOUNDS).map((c) => (
             <button
               key={c}
               type="button"

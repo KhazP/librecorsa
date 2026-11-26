@@ -99,6 +99,7 @@
 | tyre temperatures | حرارة الإطارات | |
 | tyre pressure | ضغط الإطارات | |
 | tyre compound: soft, medium, hard, intermediate, wet | مركّب الإطارات: ناعم، متوسط، صلب، وسيط، مبلل | Intermediate = وسيط (مطر خفيف) |
+| super soft | فائق النعومة | Compound; إطارات فائقة النعومة (أنعم من الناعم) |
 | tyre blankets | بطانيات الإطارات | بطانيات تسخين الإطارات when expanded |
 | setup | إعداد السيارة | Short: الإعداد (distinct from الإعدادات = Settings) |
 | apply setup | تطبيق الإعداد | |

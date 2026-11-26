@@ -5,7 +5,7 @@
  *
  * No three.js and no DOM: the Worker imports this file.
  */
-import { foldVehicleModelId, isVehicleModelId, type CustomLiveryColors, type TireCompound, type VehicleModelId } from '../../types/f1';
+import { foldVehicleModelId, isVehicleModelId, TIRE_COMPOUNDS, type CustomLiveryColors, type TireCompound, type VehicleModelId } from '../../types/f1';
 import {
   sanitizeWeatherSync,
   TIME_OF_DAY_PRESETS,
@@ -25,7 +25,11 @@ export { decodeState, encodeState, MAX_STATE_BYTES, PROTOCOL_VERSION, stateInfoJ
 /** Minimum plausible qualifying lap time (ms): shared by RoomServer, wire sanitizers, host and client */
 export const MIN_QUALIFYING_LAP_MS = 10_000;
 
-const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
+/**
+ * The compounds a peer's report may name. A client from before the super soft reads one as no compound (its `cmp`
+ * check), and keeps the rest of the report
+ */
+const PEER_COMPOUNDS: readonly TireCompound[] = TIRE_COMPOUNDS;
 /** Network input is untrusted: only a known model id is kept */
 const asPeerVehicle = (raw: unknown): VehicleModelId | undefined => {
   const v = foldVehicleModelId(raw);
@@ -107,7 +111,7 @@ export interface PeerRaceProgress {
   last?: number | null;
   /** Time penalties served at the flag (s) */
   pen?: number;
-  /** Tyre compound: soft / medium / hard / intermediate / wet */
+  /** Tyre compound: super soft (on a car that has one) / soft / medium / hard / intermediate / wet */
   cmp?: TireCompound;
 }
 

@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Pista seca · {tyres} · Poco combustible",
+    "tyresSuperSoft": "Neumáticos superblandos",
     "tyresSoft": "Neumáticos blandos",
     "tyresStreet": "Neumáticos de calle",
     "tyresVintageSlicks": "Slicks vintage",
@@ -720,6 +721,7 @@
     "aeroLow": "Baja resistencia",
     "aeroBalanced": "Aero equilibrada",
     "aeroHigh": "Alta carga aerodinámica",
+    "supersoft": "Superblando",
     "soft": "Blando",
     "medium": "Medio",
     "hard": "Duro",

@@ -98,6 +98,7 @@
 | tyre temperatures | nhiệt độ lốp | |
 | tyre pressure | áp suất lốp | |
 | tyre compound: soft, medium, hard, intermediate, wet | loại lốp: Mềm, Trung bình, Cứng, Trung gian, Mưa | Chuẩn F1 & sim racing tiếng Việt |
+| super soft | Siêu mềm | Loại lốp; mềm hơn lốp Mềm |
 | tyre blankets | chăn ủ lốp | |
 | setup | thiết lập xe | Ngắn: *Thiết lập* |
 | apply setup | áp dụng thiết lập | |

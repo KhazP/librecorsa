@@ -305,6 +305,8 @@ function deriveLc26RainTyre(base: Lc26TyreSpec, kind: 'intermediate' | 'wet'): L
 
 export const LC26_TYRES: Record<TireCompound, { front: Lc26TyreSpec; rear: Lc26TyreSpec }> = {
   ...LC26_SLICKS,
+  // It has no super soft: a super soft fits its soft, as on every car without one
+  supersoft: LC26_SLICKS.soft,
   intermediate: {
     front: deriveLc26RainTyre(LC26_SLICKS.medium.front, 'intermediate'),
     rear: deriveLc26RainTyre(LC26_SLICKS.medium.rear, 'intermediate'),

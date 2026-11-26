@@ -48,6 +48,7 @@ const SETTING_NAMES: Record<string, string> = {
   casual: "Casual",
   standard: "Standard",
   full: "Full",
+  supersoft: "Super Soft",
   soft: "Soft",
   medium: "Medium",
   hard: "Hard",

@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "مسار جاف · {tyres} · وقود منخفض",
+    "tyresSuperSoft": "إطارات فائقة النعومة",
     "tyresSoft": "إطارات ناعمة",
     "tyresStreet": "إطارات طرقية",
     "tyresVintageSlicks": "إطارات ملساء كلاسيكية",
@@ -720,6 +721,7 @@
     "aeroLow": "سحب هوائي منخفض",
     "aeroBalanced": "انسيابية متوازنة",
     "aeroHigh": "قوة سفلية عالية",
+    "supersoft": "فائق النعومة",
     "soft": "ناعم",
     "medium": "متوسط",
     "hard": "صلب",

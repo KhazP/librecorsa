@@ -106,6 +106,7 @@
 | tyre temperatures | temperatura de neumáticos | |
 | tyre pressure | presión de neumáticos | |
 | soft | blando | |
+| super soft | superblando | Compound; one word: neumáticos superblandos |
 | medium | medio | |
 | hard | duro | |
 | intermediate | intermedio | |

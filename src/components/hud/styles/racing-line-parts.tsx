@@ -161,6 +161,7 @@ export function useRacingLineWords() {
         order: tx("pages.order"),
       } satisfies Record<PageId, string>,
       compounds: {
+        supersoft: txCompound("supersoft"),
         soft: txCompound("soft"),
         medium: txCompound("medium"),
         hard: txCompound("hard"),

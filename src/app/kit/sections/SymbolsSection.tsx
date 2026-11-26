@@ -272,7 +272,7 @@ export function SymbolsSection() {
 
       <Group
         title="Tyre compounds"
-        caption="One drawing for a compound: a dark tyre, the compound's stripe and its letter, which is always shown. Soft crimson, medium amber, hard chalk, intermediate green, wet cyan."
+        caption="One drawing for a compound: a dark tyre, the compound's stripe and its letter, which is always shown. Super soft purple (only on a car whose data has one), soft crimson, medium amber, hard chalk, intermediate green, wet cyan."
       >
         <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3">
           {COMPOUND_KINDS.map((c) => (

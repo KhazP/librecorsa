@@ -28,7 +28,7 @@
 import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
 import { KeyboardPedalAssist } from '../../src/lib/input/keyboard-pedals';
 import { DEFAULT_PLAYER_SETTINGS, type KeyboardTuning, type PadTuning } from '../../src/lib/settings/player-settings';
-import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { compoundData, compoundForSlot, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../../src/lib/sim/f12026-car/F12026CarConfig';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
@@ -103,7 +103,7 @@ interface CaseSpeeds {
 const RACE_SPEEDS: CaseSpeeds = { held: [70, 110, 150, 190], trail: [120, 180], tap: 200, release: 150, flick: 180 };
 
 const rigidBodyPeak = (config: CarPhysicsConfig) => (c: SimulatorCar) =>
-  compoundData(config, config.compoundSlots[c.tireCompound]).modelData.friction_limit_angle || 7;
+  compoundData(config, compoundForSlot(config.compoundSlots, c.tireCompound)).modelData.friction_limit_angle || 7;
 /** The front peak slip of a rigid-body car's own config (a profile's, not a fixed one) */
 const ownPeak = (c: SimulatorCar) => rigidBodyPeak((c as F12026CarSim).profile.config)(c);
 

@@ -31,6 +31,7 @@ export type SuspensionTypeEnum =
 
 /** `PhysicsTyreCompound`: F1, GT3 and prototype slicks, their treaded rain tyres, and a road car's street tyre */
 export type PhysicsTyreCompound =
+  | 'PhysicsTyreCompound_F1_SuperSoft'
   | 'PhysicsTyreCompound_F1_Soft'
   | 'PhysicsTyreCompound_F1_Medium'
   | 'PhysicsTyreCompound_F1_Hard'
@@ -48,8 +49,27 @@ export type PhysicsTyreCompound =
   | 'PhysicsTyreCompound_Proto_Wet'
   | 'PhysicsTyreCompound_Road_Street';
 
-/** The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet */
-export type CompoundSlot = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet';
+/**
+ * The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet, and a super soft slick for a
+ * car whose data has one (`CarPhysicsConfig.compoundSlots.supersoft`)
+ */
+export type CompoundSlot = 'supersoft' | 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet';
+
+/** The compounds every car has a slot for */
+export type BaseCompoundSlot = Exclude<CompoundSlot, 'supersoft'>;
+
+/** Every compound slot, softest first: the order the garage, the pit wall and the HUD list them in */
+export const COMPOUND_SLOT_ORDER: readonly CompoundSlot[] = ['supersoft', 'soft', 'medium', 'hard', 'intermediate', 'wet'];
+
+/** The compounds a car's data fills, softest first (a super soft only where the car has one) */
+export function carCompoundSlots(slots: CarPhysicsConfig['compoundSlots']): CompoundSlot[] {
+  return COMPOUND_SLOT_ORDER.filter((c) => slots[c] !== undefined);
+}
+
+/** The physics compound a slot asks for on a car: a slot the car lacks (a super soft) takes its soft */
+export function compoundForSlot(slots: CarPhysicsConfig['compoundSlots'], slot: CompoundSlot): PhysicsTyreCompound {
+  return slots[slot] ?? slots.soft;
+}
 
 /** `PerformanceModeData.performance_mode_name` */
 export type PerformanceModeName = 'PSH' | 'RAC' | 'BAL' | 'LIC' | 'CHR';
@@ -1147,7 +1167,7 @@ export interface TyresCamberData {
 
 export interface TyresCompoundData {
   name: string;
-  shortName: 'S' | 'M' | 'H' | 'I' | 'W';
+  shortName: 'SS' | 'S' | 'M' | 'H' | 'I' | 'W';
   tyre_compound: PhysicsTyreCompound;
   /** Behaviour on a wet road (`wet-tyres.ts`); absent = a slick */
   wetTraits?: WetTyreTraits;
@@ -1202,9 +1222,12 @@ export interface CarPhysicsConfig {
   brakes: BrakesData;
   suspensions: SuspensionsData;
   aero: AeroData;
-  /** The car's compounds; `compoundSlots` picks one for each of the simulator's soft / medium / hard */
+  /**
+   * The car's compounds; `compoundSlots` picks one for each of the simulator's soft / medium / hard / intermediate / wet,
+   * and for its super soft where the car's data has a fourth dry compound
+   */
   tyreCompounds: Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
-  compoundSlots: Record<CompoundSlot, PhysicsTyreCompound>;
+  compoundSlots: Record<BaseCompoundSlot, PhysicsTyreCompound> & { supersoft?: PhysicsTyreCompound };
   /** A prototype's own hybrid controls in place of the performance modes (`EnduranceHybridDialsData`) */
   hybridDials?: EnduranceHybridDialsData;
   /**

@@ -73,6 +73,7 @@
   },
   "compounds": {
     "name": {
+      "supersoft": "Super Soft",
       "soft": "Soft",
       "medium": "Medium",
       "hard": "Hard",
@@ -80,6 +81,7 @@
       "wet": "Wet"
     },
     "short": {
+      "supersoft": "S.Soft",
       "soft": "Soft",
       "medium": "Med",
       "hard": "Hard",
@@ -87,6 +89,7 @@
       "wet": "Wet"
     },
     "long": {
+      "supersoft": "Super Soft tyres",
       "soft": "Soft tyres",
       "medium": "Medium tyres",
       "hard": "Hard tyres",
@@ -94,6 +97,7 @@
       "wet": "Full wet tyres (standing water)"
     },
     "tyres": {
+      "supersoft": "Super Soft tyres",
       "soft": "Soft tyres",
       "medium": "Medium tyres",
       "hard": "Hard tyres",

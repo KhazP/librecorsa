@@ -105,6 +105,7 @@
 | tyre temperatures | temperature gomme | |
 | tyre pressure | pressione gomme | |
 | soft | morbida | Compound |
+| super soft | supermorbida | Compound; one word: gomme supermorbide |
 | medium | media | |
 | hard | dura | |
 | intermediate | intermedia | |

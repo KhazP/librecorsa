@@ -10,7 +10,7 @@ import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
 import type { OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
-import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
+import { carTyreCompounds, isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { CARS, carById, carClass, carForVehicle, carsForClassRule, listedVehiclesForClassRule, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
@@ -2588,6 +2588,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       {phase === "driving" || hudEditing ? (
         <F1TelemetryHud
           {...menuProps}
+          tyreCompounds={carTyreCompounds(menuProps.vehicleModel)}
           telemetrySource={telemetrySource}
           hudEditor={hudEditing ? { onClose: () => setHudEditing(false) } : null}
           seatPanel={seatPanel}

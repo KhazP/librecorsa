@@ -134,6 +134,7 @@ export function useBladeWords() {
       corners: [tx("corners.fl"), tx("corners.fr"), tx("corners.rl"), tx("corners.rr")] as const,
       punctured: tx("punctured"),
       compound: {
+        supersoft: txCompound("supersoft"),
         soft: txCompound("soft"),
         medium: txCompound("medium"),
         hard: txCompound("hard"),

@@ -105,6 +105,7 @@
   },
   "challenge": {
     "conditions": "Piste sèche · {tyres} · Peu de carburant",
+    "tyresSuperSoft": "Pneus supertendres",
     "tyresSoft": "Pneus tendres",
     "tyresStreet": "Pneus de route",
     "tyresVintageSlicks": "Slicks vintage",
@@ -720,6 +721,7 @@
     "aeroLow": "Faible traînée",
     "aeroBalanced": "Aéro équilibrée",
     "aeroHigh": "Appui élevé",
+    "supersoft": "Supertendre",
     "soft": "Tendre",
     "medium": "Medium",
     "hard": "Dur",

@@ -86,7 +86,9 @@ import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide,
 import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
 import {
   type CarPhysicsConfig,
+  carCompoundSlots,
   compoundData,
+  compoundForSlot,
   type DamperSettingsUnits,
   DEFAULT_FRICTION_LIMIT_ANGLE_DEG,
   F12026_CAR_CONFIG,
@@ -1536,6 +1538,8 @@ export class F12026CarSim implements SimulatorCar {
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
       : circuitBrakingGuide(track.samples, this.line);
     this.config = structuredClone(profile.config);
+    // On its softest dry compound until told otherwise: the soft, or the data's own super soft where it has one
+    this.compound = carCompoundSlots(this.config.compoundSlots)[0];
     this.aidControl = { ...DEFAULT_AID_CONTROL, ...(profile.electronics ?? F12026_ELECTRONICS).control };
     this.rimLockDeg = this.config.chassis.maxRoadWheelDeg * (profile.steerRatio ?? DEFAULT_STEER_RATIO);
     // Unloaded radii, used until the first step
@@ -1572,7 +1576,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle = new VehiclePhysics({
       ground: new TrackSampleGroundQuery(track),
       config: this.config,
-      compound: this.config.compoundSlots[this.compound],
+      compound: compoundForSlot(this.config.compoundSlots, this.compound),
       airDensity: airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M),
       ambientC: AMBIENT_C,
       drsZones: profile.hasDrs ? RWANDA_DRS_ZONES : [],
@@ -1964,8 +1968,9 @@ export class F12026CarSim implements SimulatorCar {
     const prevDefault = this.defaultColdPsiForCompound();
     const deltas = { ...this.coldPsi };
     for (const k of ["fl", "fr", "rl", "rr"] as const) deltas[k] -= prevDefault;
-    this.compound = compound;
-    this.vehicle.setCompound(this.config.compoundSlots[compound]);
+    // A compound the car has no slot for (another car's super soft) is its soft
+    this.compound = this.config.compoundSlots[compound] ? compound : 'soft';
+    this.vehicle.setCompound(compoundForSlot(this.config.compoundSlots, this.compound));
     this.refreshBrakingGuide(this.lastGuideWaterMm, true);
     const nextDefault = this.defaultColdPsiForCompound();
     const pr = this.profile;
@@ -2092,7 +2097,12 @@ export class F12026CarSim implements SimulatorCar {
 
   /** The selected compound's data */
   private get compoundData(): TyresCompoundData {
-    return compoundData(this.config, this.config.compoundSlots[this.compound]);
+    return compoundData(this.config, compoundForSlot(this.config.compoundSlots, this.compound));
+  }
+
+  /** The compounds this car's data fills, softest first (`carCompoundSlots`) */
+  get tyreCompounds(): TireCompound[] {
+    return carCompoundSlots(this.config.compoundSlots);
   }
 
   /** A cold pressure at the tyres' own reference temperature as the setup sheet states it, and back */

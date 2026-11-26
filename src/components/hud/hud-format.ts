@@ -313,6 +313,7 @@ export const TYRE_CONDITION_SHOW = 0.12;
 
 /** Tyre compound colours (the kit's one compound table, `COMPOUNDS`), for the parts that are not a `CompoundGlyph` */
 export const COMPOUND_COLORS: Record<TireCompound, string> = {
+  supersoft: `var(--color-lc-${COMPOUNDS.supersoft.color})`,
   soft: `var(--color-lc-${COMPOUNDS.soft.color})`,
   medium: `var(--color-lc-${COMPOUNDS.medium.color})`,
   hard: `var(--color-lc-${COMPOUNDS.hard.color})`,
