@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { CHOSEN_PILL, CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL } from "./styles";
+import { edgeFadeStyle, NO_EDGES, sameEdges, stripEdges, type StripEdges } from "./edge-fade";
 
 export interface TabItem<T extends string> {
   id: T;
@@ -57,13 +58,6 @@ export function adjacentTab<T extends string>(tabs: readonly { id: T }[], value:
   return tabs[(i + dir + tabs.length) % tabs.length].id;
 }
 
-/** How far the faded ends of a scrolling strip reach */
-const EDGE_FADE = "1.75rem";
-
-/** A mask that fades whichever ends of the strip have tabs scrolled past them */
-const edgeMask = (start: boolean, end: boolean) =>
-  `linear-gradient(to right, transparent, black ${start ? EDGE_FADE : "0px"}, black calc(100% - ${end ? EDGE_FADE : "0px"}), transparent)`;
-
 /**
  * The tab strip: a pill track, the current tab chosen (white), the cursor volt. A tab is chosen as the cursor lands on
  * it (keys, D-pad), or by a click; the screen's shoulder buttons switch tabs through `adjacentTab`. Hovering does not
@@ -102,7 +96,7 @@ export function Tabs<T extends string>({
     setIconsOff(false);
   }
   const iconsNeed = useRef(0);
-  const [edges, setEdges] = useState({ start: false, end: false });
+  const [edges, setEdges] = useState<StripEdges>(NO_EDGES);
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -119,11 +113,8 @@ export function Tabs<T extends string>({
         return;
       }
       // The ends that have tabs past them fade (a strip that wraps never scrolls)
-      // Right to left, scrollLeft runs from 0 down to negative: its size is the distance from the start either way
-      const scrolled = Math.abs(list.scrollLeft);
-      const start = !wrap && over && scrolled > 1;
-      const end = !wrap && over && scrolled < list.scrollWidth - list.clientWidth - 1;
-      setEdges((e) => (e.start === start && e.end === end ? e : { start, end }));
+      const next = wrap ? NO_EDGES : stripEdges(list);
+      setEdges((e) => (sameEdges(e, next) ? e : next));
     };
     check();
     const ro = new ResizeObserver(check);
@@ -203,7 +194,7 @@ export function Tabs<T extends string>({
           wrap ? "flex-wrap rounded-lc-card" : "overflow-x-auto rounded-full [scrollbar-width:none]",
           shared ? "w-full" : undefined,
         )}
-        style={edges.start || edges.end ? { maskImage: edgeMask(edges.start, edges.end), WebkitMaskImage: edgeMask(edges.start, edges.end) } : undefined}
+        style={edgeFadeStyle(edges)}
       >
         {tabs.map((t) => {
           const chosen = t.id === value;

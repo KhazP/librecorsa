@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { focusZone, useMoveHandler } from "@/components/menu/useFocusNav";
+import { edgeFadeStyle, NO_EDGES, sameEdges, stripEdges, type StripEdges } from "./edge-fade";
 import { CHOSEN_PILL, CURSOR_PILL, cx, GROUP_CURSOR_INK, HOVER_PILL, MOTION, PRESSED_PILL } from "./styles";
 
 export interface NavListItem<T extends string> {
@@ -58,6 +59,31 @@ export function NavList<T extends string>({
 }: NavListProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   const pointing = useRef(false);
+
+  // On a phone the list is one sideways row: the ends with categories scrolled past them fade, so a cut-off label
+  // reads as more to scroll rather than a clipped word (a column never scrolls sideways, so it never fades)
+  const [edges, setEdges] = useState<StripEdges>(NO_EDGES);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const check = () => {
+      const next = stripEdges(list);
+      setEdges((e) => (sameEdges(e, next) ? e : next));
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(list);
+    list.addEventListener("scroll", check, { passive: true });
+    let live = true;
+    document.fonts?.ready.then(() => {
+      if (live) check();
+    });
+    return () => {
+      live = false;
+      ro.disconnect();
+      list.removeEventListener("scroll", check);
+    };
+  }, [items.length]);
 
   const inList = () => {
     const a = document.activeElement;
@@ -132,6 +158,7 @@ export function NavList<T extends string>({
         "phone:flex-row phone:overflow-x-auto phone:[scrollbar-width:none]",
         className,
       )}
+      style={edgeFadeStyle(edges)}
     >
       {items.map((it) => {
         const chosen = it.id === value;
