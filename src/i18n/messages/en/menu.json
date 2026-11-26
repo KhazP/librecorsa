@@ -384,6 +384,7 @@
     "device": "Input device",
     "assists": "Driving assists",
     "hud": "HUD layout",
+    "driver": "Driver profile",
     "car": "Select car",
     "steps": "Setup steps",
     "stepDone": "Done",

@@ -594,5 +594,6 @@
   "modConvert.openFailed": "{error} is the reason, in English (the system's own words).",
   "mods.launcherFolderNote": "Shown in the offline launcher (the desktop app), beside an 'Open folder' button. The mods folder is a folder on the player's computer (Documents/LibreCorsa/mods); a package is a folder of files.",
   "mods.openFolder": "A button that opens the mods folder in the computer's file manager (Finder, Explorer).",
-  "mods.openFailed": "The reason follows on the next line, in English (the system's own words)."
+  "mods.openFailed": "The reason follows on the next line, in English (the system's own words).",
+  "wizard.driver": "First-run setup step heading: set driver name, three-letter timing code, colour and starting view."
 }

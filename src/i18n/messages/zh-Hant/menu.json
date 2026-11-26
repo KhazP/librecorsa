@@ -384,6 +384,7 @@
     "device": "輸入裝置",
     "assists": "駕駛輔助",
     "hud": "HUD 配置",
+    "driver": "車手檔案",
     "car": "選擇車輛",
     "steps": "設定步驟",
     "stepDone": "完成",

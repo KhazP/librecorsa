@@ -384,6 +384,7 @@
     "device": "Eingabegerät",
     "assists": "Fahrhilfen",
     "hud": "HUD-Layout",
+    "driver": "Fahrerprofil",
     "car": "Auto wählen",
     "steps": "Setup-Schritte",
     "stepDone": "Erledigt",
