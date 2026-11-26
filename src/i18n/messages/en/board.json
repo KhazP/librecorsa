@@ -102,7 +102,7 @@
       "bronze": "B",
       "og": "OG",
       "goat": "GOAT",
-      "stig": "STIG"
+      "stig": "S.T.I.G."
     },
     "flCompact": "{count, plural, =1 {FL} other {FL×#}}",
     "flClassCompact": "{count, plural, =1 {FL·{class}} other {FL·{class}×#}}",
@@ -134,7 +134,7 @@
       "bulb": "Game idea",
       "creator": "Made the game",
       "goat": "Most decorated driver",
-      "stig": "Middle Gear Lap Board record holder"
+      "stig": "Middle Gear Lap Board P1"
     }
   },
   "profile": {

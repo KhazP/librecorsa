@@ -1137,18 +1137,18 @@ async function main(): Promise<void> {
     const stigCompact = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [stigBadge], compact: true }));
     const stigLegend = renderToStaticMarkup(React.createElement(BadgeLegend, { badges: [stigBadge] }));
     check(
-      "stig: parsed, sorted after GOAT, shown on nameplates, and rendered as solid chalk STIG pill",
+      "stig: parsed, sorted after GOAT, shown on nameplates, and rendered as solid chalk S.T.I.G. pill",
       parseBadges({ ok: true, badges: { cousin: [{ type: "weekly_gold", count: 1 }, { type: "stig", count: 1 }, { type: "goat", count: 1 }] } })
         ?.cousin.map((b) => b.type)
         .join(",") === "goat,stig,weekly_gold" &&
-        badgeLabel(stigBadge) === "The Stig" &&
+        badgeLabel(stigBadge) === "S.T.I.G." &&
         badgeDetail(stigBadge).includes("Middle Gear") &&
         roomNameBadges([stigBadge]).some((b) => b.type === "stig") &&
-        formatNameplateBadges([{ type: "weekly_gold", count: 1 }, stigBadge]).join(",") === "STIG,G" &&
-        stigPill.includes(">The Stig<") &&
-        stigCompact.includes(">STIG<") &&
+        formatNameplateBadges([{ type: "weekly_gold", count: 1 }, stigBadge]).join(",") === "S.T.I.G.,G" &&
+        stigPill.includes(">S.T.I.G.<") &&
+        stigCompact.includes(">S.T.I.G.<") &&
         stigCompact.includes("bg-lc-chalk text-lc-void") &&
-        stigLegend.includes("Middle Gear Lap Board record holder"),
+        stigLegend.includes("Middle Gear Lap Board P1"),
       stigCompact.slice(0, 240),
     );
   }

@@ -21,7 +21,7 @@ const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
   og: "OG",
   bulb: "IDEA",
   goat: "GOAT",
-  stig: "STIG",
+  stig: "S.T.I.G.",
   // Never shown: a room's names are unchecked, so the cache below drops the Creator (awards.ts roomNameBadges)
   creator: "DEV",
 };

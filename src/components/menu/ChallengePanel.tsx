@@ -226,9 +226,12 @@ const TrialColumn: React.FC<{
             )}
           </div>
           {permanent ? (
-            <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet">
-              {tx("stigBadge")}
-            </Badge>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-lc-fog" title={tx("stigBadgeTitle")}>
+              <span>{tx("stigEarn")}</span>
+              <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet">
+                {tx("stigBadge")}
+              </Badge>
+            </span>
           ) : (
             <span className="lc-mono text-[11px] tracking-wider text-lc-slate uppercase">{event.id}</span>
           )}
