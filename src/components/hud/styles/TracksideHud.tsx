@@ -702,11 +702,14 @@ const Dial: React.FC<{ t: CarTelemetry; revRange: [number, number]; w: Words }> 
       </svg>
 
       {hasErs ? (
-        <div className="absolute inset-x-0 top-[58px] flex flex-col items-center gap-1.5 text-center leading-none">
+        // A soft scrim of its own: the dial has no plate, and the battery and deploy words sat on bright run-off
+        <div className="absolute inset-x-0 top-[58px] flex justify-center">
+          <div className={`flex flex-col items-center gap-1.5 rounded-full bg-[radial-gradient(closest-side,rgb(0_0_0/0.6),transparent)] px-6 py-1.5 text-center leading-none ${SH}`}>
           <span className="lc-data text-[14px] leading-none" style={{ color: socColor }}>
             {w.battery(Math.round(soc))}
           </span>
           {line ? <span className={`lc-data text-[11px] leading-none tracking-[0.16em] uppercase ${line.tone}`}>{line.text}</span> : null}
+          </div>
         </div>
       ) : null}
 
