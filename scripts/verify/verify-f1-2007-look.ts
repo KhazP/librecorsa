@@ -30,6 +30,8 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failures.push(name);
 };
 
+const fmt = (v: number, d = 3) => (Number.isFinite(v) ? v.toFixed(d) : String(v));
+
 const TEAMS = ['ferrari', 'mclaren', 'renault', 'honda', 'bmw-sauber', 'toyota', 'red-bull', 'williams', 'toro-rosso', 'spyker', 'super-aguri'];
 
 interface TextureInfo {
@@ -39,7 +41,7 @@ interface TextureInfo {
 interface GltfMaterial {
   name: string;
   extras?: { kn5?: string[]; acFinish?: Record<string, number> };
-  pbrMetallicRoughness?: { baseColorFactor?: number[]; metallicRoughnessTexture?: TextureInfo };
+  pbrMetallicRoughness?: { baseColorFactor?: number[]; metallicFactor?: number; metallicRoughnessTexture?: TextureInfo };
   extensions?: {
     KHR_materials_clearcoat?: { clearcoatFactor?: number; clearcoatTexture?: TextureInfo };
     KHR_materials_specular?: { specularFactor?: number; specularColorFactor?: number[]; specularTexture?: TextureInfo };
@@ -106,13 +108,20 @@ async function main(): Promise<void> {
 
   console.log('\n== Finishes from the AC values');
   const byKn5 = (glb: { json: GltfJson }, kn5: string) => (glb.json.materials ?? []).find((m) => m.extras?.kn5?.includes(kn5));
+  // Red Bull's and Toro Rosso's paint is the metallic one their extension config gives them (its coat reflecting in
+  // the paint's own colour: a metal share instead of a white coat)
+  const METALLIC = ['red-bull', 'toro-rosso'];
   for (const [team, glb] of glbs) {
     const paint = byKn5(glb, 'WCCARBODY');
     const coat = paint?.extensions?.KHR_materials_clearcoat;
+    const metal = paint?.pbrMetallicRoughness?.metallicFactor ?? 0;
     check(
-      `${team}: the paint's own finish, a polished coat masked per pixel`,
-      !!paint?.extras?.acFinish && (coat?.clearcoatFactor ?? 0) > 0 && coat?.clearcoatTexture !== undefined && !!paint.extensions?.KHR_materials_specular,
-      paint ? `${paint.name} coat ${coat?.clearcoatFactor}` : 'no WCCARBODY material',
+      METALLIC.includes(team) ? `${team}: the paint's own finish, its config's metallic paint` : `${team}: the paint's own finish, a polished coat masked per pixel`,
+      !!paint?.extras?.acFinish && !!paint.extensions?.KHR_materials_specular &&
+        (METALLIC.includes(team)
+          ? coat === undefined && Math.abs(metal - 0.4) < 1e-3
+          : (coat?.clearcoatFactor ?? 0) > 0 && coat?.clearcoatTexture !== undefined),
+      paint ? `${paint.name} coat ${coat?.clearcoatFactor}, metal ${metal}` : 'no WCCARBODY material',
     );
     const used = glb.json.extensionsUsed ?? [];
     check(`${team}: the extensions it uses are declared`, ['KHR_materials_specular', 'KHR_materials_clearcoat'].every((e) => used.includes(e)), used.join(', '));
@@ -134,6 +143,51 @@ async function main(): Promise<void> {
   check("Ferrari's red under its skin's ksDiffuse 0.3", Math.abs(factor('ferrari') - 0.75) < 1e-3, String(factor('ferrari')));
   check('a team at AC\'s usual 0.4 keeps its paint as baked', Math.abs(factor('williams') - 1) < 1e-3, String(factor('williams')));
 
+  console.log('\n== The McLaren\'s chrome');
+  {
+    // Its skins' txMaps alpha marks the chrome (about 0.27 on the silver, 0.95 on the red and black): those pixels are
+    // metal in the finish map's B, the rest are not
+    const glb = glbs.get('mclaren')!;
+    for (const kn5 of ['WCCARBODY', 'WCEXTRA0', 'WCEXTRA1']) {
+      const m = byKn5(glb, kn5);
+      const ti = m?.pbrMetallicRoughness?.metallicRoughnessTexture?.index;
+      const im = ti === undefined ? -1 : glb.json.textures![ti].source;
+      let stats = { lo: NaN, hi: NaN };
+      if (im >= 0) {
+        const view = glb.json.bufferViews[glb.json.images![im].bufferView];
+        const { data, info } = await sharp(glb.bin.subarray(view.byteOffset ?? 0, (view.byteOffset ?? 0) + view.byteLength)).raw().toBuffer({ resolveWithObject: true });
+        const blue: number[] = [];
+        for (let i = 2; i < data.length; i += info.channels) blue.push(data[i] / 255);
+        blue.sort((a, b) => a - b);
+        stats = { lo: blue[Math.floor(blue.length * 0.25)], hi: blue[Math.floor(blue.length * 0.95)] };
+      }
+      check(`${kn5}: metal where the skin marks chrome, not elsewhere`, stats.hi > 0.6 && stats.lo < 0.15, `B p25 ${fmt(stats.lo)} p95 ${fmt(stats.hi)}`);
+    }
+    const ferrari = byKn5(glbs.get('ferrari')!, 'WCCARBODY');
+    check('a paint whose txMaps marks nothing is no metal', (ferrari?.pbrMetallicRoughness?.metallicFactor ?? 1) === 1 && ferrari?.pbrMetallicRoughness?.metallicRoughnessTexture !== undefined);
+  }
+
+  console.log('\n== Suspension and wheels from their AC values');
+  {
+    // The carbon wishbones' reflection masked by their detail's alpha (Red Bull's 0.17, Williams' 0.03), and every
+    // part finished from its AC values dimmed by ksDiffuse's 2.2th power (AC lights in gamma space)
+    const spec = (team: string, kn5: string) => byKn5(glbs.get(team)!, kn5)?.extensions?.KHR_materials_specular?.specularFactor ?? NaN;
+    const base = (team: string, kn5: string) => byKn5(glbs.get(team)!, kn5)?.pbrMetallicRoughness?.baseColorFactor?.[0] ?? NaN;
+    check("Red Bull's and Williams' wishbones barely reflect", spec('red-bull', 'RBR3_SUSPENSION') < 0.03 && spec('williams', 'FW29_SUSPENSION') < 0.01, `${spec('red-bull', 'RBR3_SUSPENSION')} / ${spec('williams', 'FW29_SUSPENSION')}`);
+    check('a ksAmbient 0.3 / ksDiffuse 0.2 rim at 0.53, a 0.2 one at 0.22', Math.abs(base('honda', 'RA107_RIMS') - 0.53) < 1e-3 && Math.abs(base('ferrari', 'F2007_RIMS_FRONT') - 0.22) < 1e-3, `${base('honda', 'RA107_RIMS')} / ${base('ferrari', 'F2007_RIMS_FRONT')}`);
+    check("a livery's own parts keep the paint's plain dimming (the Ferrari's sidepods 0.8, not 0.53)", Math.abs(base('ferrari', 'WCEXTRA0') - 0.8) < 0.06, String(base('ferrari', 'WCEXTRA0')));
+  }
+
+  console.log('\n== The T-cam over each airbox');
+  for (const [team, glb] of glbs) {
+    const root = (glb.json as GltfJson & { nodes?: { extras?: Record<string, unknown> }[] }).nodes?.find((n) => n.extras?.wheelCentres);
+    const cams = root?.extras?.cameras as Record<string, { pos: number[] }> | undefined;
+    const t = cams?.tcam?.pos ?? [NaN, NaN, NaN];
+    const eye = cams?.cockpit?.pos ?? [NaN, NaN, NaN];
+    // The pods sit 1.05-1.08 m up, 0.3-0.45 m behind the driver's eyes: the camera 5 cm over them
+    check(`${team}: T-cam over the airbox, behind the driver's head`, t[1] > 1.09 && t[1] < 1.16 && eye[2] - t[2] > 0.2 && eye[2] - t[2] < 0.5, `y ${fmt(t[1])}, ${fmt(eye[2] - t[2])} m behind the eyes`);
+  }
+
   console.log('\n== The Ferrari\'s early-season body');
   {
     const ferrari = glbs.get('ferrari')!.json as GltfJson & { nodes?: { name?: string; extras?: Record<string, unknown> }[] };
@@ -150,6 +204,13 @@ async function main(): Promise<void> {
       "the late car's live mirror shown only for the liveries that keep its body",
       JSON.stringify(parts.MIRROR_0) === '["base"]' && ferrari.nodes!.some((n) => n.name === 'MIRROR_0'),
       JSON.stringify(parts.MIRROR_0),
+    );
+    // ... and the early body's own glass (mirrors.ini's mesh name, in its model) a live mirror of its own
+    const earlyMirror = ferrari.nodes?.find((n) => n.name === 'MIRROR_0_early_model');
+    check(
+      "the early body's mirror live too, shown only for the early liveries",
+      JSON.stringify(parts.MIRROR_0_early_model) === '["early"]' && !!earlyMirror?.extras?.mirror,
+      JSON.stringify(parts.MIRROR_0_early_model),
     );
     const early = F1_2007_SKINS.filter((s) => s.id.startsWith('ferrari-') && s.id.endsWith('-early'));
     check('both early liveries wear it', early.length === 2 && early.every((s) => s.variant === 'early'), early.map((s) => `${s.id}:${s.variant}`).join(' '));
@@ -177,7 +238,7 @@ async function main(): Promise<void> {
       const w = text.length * m.advance * i.size;
       // The driver's view: x to the right is the node's -X
       const x = -i.position[0];
-      const left = i.align === 'LEFT' ? x : i.align === 'RIGHT' ? x - w : x - w / 2;
+      const left = i.align === 'LEFT' ? x : i.align === 'RIGHT' ? x - w - m.inset * i.size : x - w / 2;
       const bottom = i.position[1] + m.lift * i.size;
       return { type: `${i.type}${i.text ? ` ${i.text}` : ''}`, left, right: left + w, bottom, top: bottom + m.digitH * i.size };
     });
@@ -190,12 +251,23 @@ async function main(): Promise<void> {
     check('every reading in a cell of its own', boxes.length >= 8 && clash.length === 0, `${boxes.length} readings${clash.length ? `; ${clash.join(', ')}` : ''}`);
     const f2004 = fontMetrics('f2004');
     check("AC's f2004 narrow, its digits 0.68 tall 0.22 above the line", f2004.narrow < 1 && f2004.digitH === 0.68 && f2004.lift === 0.22);
+    // A right-aligned text ends a character's spacing inside POSITION (the lap count "1/" sat on its cell's edge)
+    const lap = items.find((i) => i.type === 'CURRENT_LAP');
+    check("the lap count ends inside its cell's right edge", !!lap && f2004.inset > 0 && fontMetrics('digital_big').inset === 0, String(f2004.inset));
     // The BMW's seven-segment gear: its window (BMW_GEARSBK) spans 5.5 mm under its node to 5.7 mm over it, the item
     // 12 mm under it and 17 mm high
     const seg = fontMetrics('digital_big');
     const gearBottom = -0.012 + seg.lift * 0.017;
     const gearTop = gearBottom + seg.digitH * 0.017;
     check("the BMW's seven-segment gear inside its window", seg.segments && gearBottom >= -0.0055 && gearTop <= 0.0057, `${(gearBottom * 1000).toFixed(1)}..${(gearTop * 1000).toFixed(1)} mm`);
+    // Its 0.9 mm rpm, which AC draws as a speck, is left out
+    const bmw = glbs.get('bmw-sauber')!.json as GltfJson & { nodes?: { extras?: Record<string, unknown> }[] };
+    const bmwItems = (bmw.nodes?.find((n) => n.extras?.wheelCentres)?.extras?.digitalItems ?? []) as AcDigitalItem[];
+    check("the BMW's shrunk-away rpm left out, its other four kept", bmwItems.length === 4 && bmwItems.every((i) => i.size >= 0.002), bmwItems.map((i) => i.type).join(' '));
+    // Its fuel and speed sink only to the plate 0.2-0.35 mm deep under their boxes, not to the screen 0.9-1.05 mm
+    // behind their POSITIONs (behind that plate, they were lost from the cockpit view)
+    const sunk = bmwItems.filter((i) => i.type === 'FUEL' || i.type === 'SPEED').map((i) => i.depth ?? NaN);
+    check("the BMW's fuel and speed in front of the plate under them", sunk.length === 2 && sunk.every((d) => d < 0.0005), sunk.map((d) => fmt(d * 1000, 2)).join(' / ') + ' mm');
   }
 
   // The game keeps a porter-made finish as made, and still finishes other cars' paint by its name

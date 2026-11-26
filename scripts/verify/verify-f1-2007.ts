@@ -107,16 +107,23 @@ function checkMirrors(team: string, glb: string): void {
   const extras = (car?.userData ?? {}) as { mirrors?: { node: string }[]; cameras?: { cockpit?: { pos: [number, number, number] } } };
   const meshes = portedMirrorMeshes(model);
   const listed = (extras.mirrors ?? []).map((m) => m.node);
+  // mirrors.ini's MIRROR_0, and a livery's own body's (the early Ferrari's) as MIRROR_0_<its part>, shown with that body
   check(
     `${team}: mirrors.ini's mirror, MIRROR_0 under BODY, listed in CAR's extras`,
-    JSON.stringify(listed) === '["MIRROR_0"]' && meshes.length === 1 && meshes[0].name === 'MIRROR_0' && meshes[0].parent?.name === 'BODY',
+    listed[0] === 'MIRROR_0' && listed.every((n) => /^MIRROR_\d+(_\w+)?$/.test(n)) && meshes.length === listed.length &&
+      meshes.every((m) => listed.includes(m.name) && m.parent?.name === 'BODY'),
     `${JSON.stringify(listed)}, ${meshes.map((m) => `${m.parent?.name}/${m.name}`).join(' ')}`,
   );
   const eyeAt = extras.cameras?.cockpit?.pos;
-  if (!car || !eyeAt || meshes.length !== 1) return;
+  if (!car || !eyeAt) return;
   const eye = new THREE.Vector3(...eyeAt);
-  const toModel = car.matrixWorld.clone().invert().multiply(meshes[0].matrixWorld);
-  const built = reflectingGeometry(meshes[0], toModel, eye);
+  for (const mesh of meshes) checkGlass(mesh.name === 'MIRROR_0' ? team : `${team} ${mesh.name}`, car, mesh, eye);
+}
+
+/** One mirror's glass, as the game aims and draws it from the driver's eye */
+function checkGlass(team: string, car: THREE.Object3D, mesh: THREE.Mesh, eye: THREE.Vector3): void {
+  const toModel = car.matrixWorld.clone().invert().multiply(mesh.matrixWorld);
+  const built = reflectingGeometry(mesh, toModel, eye);
   const islands = (built?.islands ?? []).filter((i) => i.normal).sort((a, b) => b.centre.x - a.centre.x);
   const [left, right] = islands;
   const pair =
