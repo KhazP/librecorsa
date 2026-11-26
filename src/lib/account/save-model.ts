@@ -153,6 +153,8 @@ export const SETTINGS_SPLIT = {
   hud: "device",
   graphics: "device",
   touch: "device",
+  // Screen sizes, distances and angles are this rig's
+  screens: "device",
   // Driving
   assistPreset: "account",
   racingLine: "account",
