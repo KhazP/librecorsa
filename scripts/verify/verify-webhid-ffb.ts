@@ -20,6 +20,8 @@ import {
   ordinalUsage,
   parsePidLayout,
   PID,
+  RESTART_LIMIT,
+  RESTART_WINDOW_MS,
   selectorValue,
   SETUP_ATTEMPTS,
   SETUP_RETRY_MS,
@@ -2134,6 +2136,54 @@ async function main() {
     // After dispose a wheel coming back is left alone
     await ffb.dispose();
     assert.equal(connectListeners.length, 0);
+  });
+  await check(`#234: a wheel that restarts within a minute of its setup ${RESTART_LIMIT} times in a row is not set up again until Connect`, async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const { api, listeners, connectListeners } = fakeHid([dev], [dev]);
+    const ffb = new WebHidFfb(api, clock.deps);
+    let setups = 0;
+    ffb.subscribe(() => {
+      if (ffb.status.state === "ready") setups++;
+    });
+    /** The base drops off `after` ms into its session, comes back, and is re-opened if the driver still wants it */
+    const restart = async (after: number) => {
+      clock.advance(after);
+      for (const l of [...listeners]) l({ device: dev });
+      dev.opened = false;
+      for (const l of [...connectListeners]) l({ device: dev });
+      clock.advance(HOTPLUG_DELAY_MS);
+      await settle();
+    };
+    assert.equal(await ffb.reconnect(), "Fake DD Base");
+    assert.equal(setups, 1);
+    await restart(5000);
+    assert.equal(ffb.status.state, "ready", "one restart: set up again");
+    assert.equal(setups, 2);
+    await restart(5000);
+    assert.equal(ffb.status.state, "error");
+    assert.match(ffb.status.message ?? "", /restarted 2 times in a row within a minute of its force-feedback setup/);
+    // The app switches Browser connection off on a fatal status, and that toggle is what calls connect() again
+    assert.match(ffb.status.message ?? "", /turn Browser connection back on/);
+    assert.ok(isFatalHidStatus(ffb.status), "fatal, so the app hands the force back to the bridge");
+    assert.equal(setups, 2, "not set up a third time");
+    assert.equal(connectListeners.length, 0, "a later connect event is not listened to");
+    assert.equal(clock.timers.length, 0);
+    assert.ok((await ffb.diagnose()).includes("disconnect event: Fake DD Base, 5.0 s after its setup"));
+
+    // A Connect click clears the count: one quick restart after it is set up again
+    assert.equal(await ffb.connect(), "Fake DD Base");
+    assert.equal(setups, 3);
+    await restart(5000);
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(setups, 4);
+    // A session that lasts the window is not a restart: the count starts again
+    await restart(RESTART_WINDOW_MS);
+    assert.equal(ffb.status.state, "ready");
+    await restart(5000);
+    assert.equal(ffb.status.state, "ready", "one quick restart since the long session");
+    assert.equal(setups, 6);
+    await ffb.dispose();
   });
   await check("a connect event re-opens only what the driver can drive: a listed Logitech wheel yes, a DualSense or the DFP never", async () => {
     const g29 = logitech(0xc24f, "G29");

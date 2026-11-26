@@ -1891,6 +1891,14 @@ export const HOTPLUG_DELAY_MS = 1500;
 export const SETUP_ATTEMPTS = 5;
 /** Wait between those attempts (ms) */
 export const SETUP_RETRY_MS = 2000;
+/** A wheel that drops off this soon after its setup (ms) counts as one that restarted because of it */
+export const RESTART_WINDOW_MS = 60_000;
+/**
+ * Restarts like that in a row after which the driver stops re-opening the wheel by itself. Each re-open sets the wheel
+ * up again, so a setup that makes the base restart (and run its calibration) would otherwise repeat for as long as
+ * the page stays open (#234)
+ */
+export const RESTART_LIMIT = 2;
 
 /** A device this driver can drive, and how (the PID layout is parsed once, here) */
 type FfbPick =
@@ -1984,6 +1992,10 @@ export class WebHidFfb {
   private wanted = false;
   /** dispose() calls so far: a picker that resolves after one does not arm `wanted` again */
   private disposals = 0;
+  /** When the running wheel's setup finished (deps.now()) */
+  private setupAt = 0;
+  /** Drops in a row that came within {@link RESTART_WINDOW_MS} of the setup before them; Connect and dispose() clear it */
+  private quickDrops = 0;
   /**
    * A session let go of outside any operation (a fatal write failure) while its teardown still runs: every later
    * release waits for that teardown first, so no setup reaches the device under it
@@ -2030,6 +2042,8 @@ export class WebHidFfb {
   connect(): Promise<string | null> {
     const hid = this.hidApi();
     if (!hid) return Promise.resolve(this.fail("unsupported", null, UNSUPPORTED_BROWSER));
+    // A Connect click starts the restart count again
+    this.quickDrops = 0;
     // A dispose() while the picker is open wins: the wheel picked afterwards is set up, then let go, never re-armed
     const disposals = this.disposals;
     let picking: Promise<{ devices: HidDeviceLike[] } | { error: string }>;
@@ -2297,6 +2311,7 @@ export class WebHidFfb {
    */
   async dispose(): Promise<void> {
     this.unwant();
+    this.quickDrops = 0;
     await this.guard(async () => {
       await this.release();
       if (!isFatalHidStatus(this.status)) this.setStatus("idle", null, null);
@@ -2414,6 +2429,7 @@ export class WebHidFfb {
     }
     this.trace.note(`setup ok: ${describeSession(result.session)}`);
     this.session = result.session;
+    this.setupAt = this.deps.now();
     if (result.session.kind === "pid") this.watchPidState(device);
     else this.unwatchPidState();
     const l = result.session.kind === "pid" ? result.session.layout : null;
@@ -2519,11 +2535,25 @@ export class WebHidFfb {
     if (!d) return;
     const same = e.device === d || (e.device.vendorId === d.vendorId && e.device.productId === d.productId);
     if (!same) return;
-    this.trace.note(`disconnect event: ${deviceName(e.device)}`);
+    const sinceSetup = this.deps.now() - this.setupAt;
+    this.trace.note(`disconnect event: ${deviceName(e.device)}, ${(sinceSetup / 1000).toFixed(1)} s after its setup`);
     this.session?.writer.kill();
     this.session = null;
     this.device = null;
     this.clearIdle();
+    this.quickDrops = sinceSetup < RESTART_WINDOW_MS ? this.quickDrops + 1 : 0;
+    if (this.quickDrops >= RESTART_LIMIT) {
+      // Re-opening would set it up again and restart it again: the wheel is left alone until the next connect(). The
+      // fatal status makes the app switch Browser connection off; switching it back on is what calls connect()
+      this.unwant();
+      this.setStatus(
+        "error",
+        deviceName(d),
+        `The wheel restarted ${this.quickDrops} times in a row within a minute of its force-feedback setup, so the ` +
+          "browser stopped setting it up; turn Browser connection back on to try again, or use the native FFB bridge for this wheel"
+      );
+      return;
+    }
     this.setStatus("idle", null, "Wheel disconnected");
   };
 
