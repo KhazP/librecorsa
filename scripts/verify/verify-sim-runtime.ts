@@ -199,7 +199,6 @@ console.log('\n== Set-up, placement and hand-over (f12026-car)');
   frame(r, { throttle: 0.3 });
   check('a teleport is seen at once, never the old position', Math.abs(atOnce - 1000) < 1 && Math.abs(before - 1000) > 50, `${before.toFixed(0)} m → ${atOnce.toFixed(0)} m`);
   check('and the simulation carries on from there', Math.abs(r.car.sMeters - 1001) < 3 && Math.abs(sim.sMeters - r.car.sMeters) < 1, `${r.car.sMeters.toFixed(1)} m`);
-
   // A paddle: one frame's press is one gear, however many ticks the frame spans
   for (let f = 0; f < 30; f++) frame(r, { throttle: 0.4 });
   const gear = sim.telemetry.gear;
@@ -433,6 +432,25 @@ console.log("\n== The cars drawn at the frame's time, when the frame's code runs
   peers.apply(packed);
   const shownZ = (leadS: number) => peers.shownAt(leadS)[0].position.z;
   check('the AI cars: carried back as well as forward to the frame\'s time', Math.abs(shownZ(0.004) - 200.28) < 1e-9 && Math.abs(shownZ(-0.006) - 199.58) < 1e-9, `${shownZ(0.004).toFixed(2)} m, ${shownZ(-0.006).toFixed(2)} m`);
+}
+
+console.log('\n== A pit stop on the same compound (f12026-car)');
+{
+  // The crew fits a new set of the compound already on (`fitNewTyres`): the simulation's car gets new tyres too. A new
+  // set comes without the run's heat
+  const r = rig('f12026-car');
+  r.host.endFrame(true);
+  const sim = r.loop.runtime.simulatedCar!;
+  const heat = (c: SimulatorCar) => c.telemetry.tireTempsC.reduce((a, t) => a + t, 0) / 4;
+  for (let f = 0; f < 600; f++) frame(r, { throttle: 0.7 });
+  const run = heat(sim);
+  const fresh = new F12026CarSim(track);
+  fresh.tireCompound = r.car.tireCompound;
+  const cold = heat(fresh);
+  r.car.fitNewTyres?.();
+  frame(r, { throttle: 0 });
+  const after = heat(sim);
+  check('a new set of the same compound reaches the simulation', Math.abs(run - cold) > 2 && Math.abs(after - cold) < Math.abs(run - cold) / 4, `${run.toFixed(1)} °C → ${after.toFixed(1)} °C (a new set ${cold.toFixed(1)} °C)`);
 }
 
 if (failures.length) {

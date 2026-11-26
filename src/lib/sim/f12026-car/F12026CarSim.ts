@@ -1950,6 +1950,11 @@ export class F12026CarSim implements SimulatorCar {
     return this.compound;
   }
 
+  /** A new set of the compound already on: the compound setter fits one */
+  public fitNewTyres(): void {
+    this.tireCompound = this.compound;
+  }
+
   private defaultColdPsiForCompound(): number {
     return defaultColdPressurePsi(this.compoundData);
   }

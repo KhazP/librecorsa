@@ -108,9 +108,10 @@ export const MfdPitPage: React.FC<{
         </span>
         {toggle("box", s.boxRequested, s.boxRequested ? L.boxCalled : L.callBox, () => onChange?.({ boxRequested: !s.boxRequested }))}
       </div>
-      <div className="mt-auto flex items-center justify-between gap-2 px-1.5">
+      {/* The stop count stays whole: where the line is too short for it beside the hint (de, fr, pt-BR), it moves under it */}
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1.5">
         {onChange ? <DialHint pick={L.pick} change={L.change} /> : <span />}
-        <span className="flex items-center gap-2">
+        <span className="ms-auto flex items-center gap-2 whitespace-nowrap">
           <span className={HUD_LBL}>{tx("stops")}</span>
           <span className={`lc-data text-[12px] ${pit.stopsRequired > pit.stopsMade ? "text-lc-caution" : "text-lc-chalk"}`}>
             {pit.stopsRequired > 0 ? tx("stopsOf", { made: pit.stopsMade, required: pit.stopsRequired }) : pit.stopsMade}

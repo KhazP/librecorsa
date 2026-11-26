@@ -56,6 +56,7 @@ export const CAR_CALLABLE = [
   "teleportToTurn",
   "restorePose",
   "setTyreSetup",
+  "fitNewTyres",
   "applyChassisSetup",
   "setLiveTuner",
   "setOvertakingRules",

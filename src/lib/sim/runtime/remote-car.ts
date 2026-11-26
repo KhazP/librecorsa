@@ -99,6 +99,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   aiSkill: "local",
 
   setTyreSetup: "call",
+  fitNewTyres: "call",
   applyChassisSetup: "call",
   setLiveTuner: "call",
   setOvertakingRules: "call",
