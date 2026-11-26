@@ -343,11 +343,12 @@ export const ObjectiveRow: React.FC<{
             : undefined,
       )}
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className={cx("min-w-0 text-[14px] leading-snug font-medium", prog.done ? "text-lc-chalk" : "text-lc-fog")}>
+      {/* The badge keeps its words on one line and goes under a title it would squeeze below 10 rem */}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <span className={cx("min-w-0 flex-[1_1_10rem] text-[14px] leading-snug font-medium", prog.done ? "text-lc-chalk" : "text-lc-fog")}>
           {title}
         </span>
-        {statusBadge}
+        <span className="inline-flex shrink-0 whitespace-nowrap">{statusBadge}</span>
       </div>
       {ratio !== null ? (
         <Meter
@@ -464,18 +465,18 @@ export const StandingsTable: React.FC<{
 
               {hasMove ? (
                 <div className="flex items-center justify-center gap-0.5">
-                  <Trend
-                    direction={delta > 0 ? "up" : delta < 0 ? "down" : "level"}
-                    colored={!driver.isPlayer}
-                    label={
-                      delta > 0
-                        ? tx("placesGainedAria", { count: delta })
-                        : delta < 0
-                          ? tx("placesLostAria", { count: Math.abs(delta) })
-                          : tx("placesSameAria")
-                    }
-                  />
+                  {/* No move is the 0 alone: the level glyph beside it read as a dash ("— 0") */}
+                  {delta !== 0 ? (
+                    <Trend
+                      direction={delta > 0 ? "up" : "down"}
+                      colored={!driver.isPlayer}
+                      label={delta > 0 ? tx("placesGainedAria", { count: delta }) : tx("placesLostAria", { count: Math.abs(delta) })}
+                    />
+                  ) : (
+                    <span className="sr-only">{tx("placesSameAria")}</span>
+                  )}
                   <span
+                    aria-hidden={delta === 0 ? true : undefined}
                     className={cx(
                       "lc-mono text-[12px] font-bold",
                       driver.isPlayer

@@ -18,7 +18,7 @@ import {
 } from "@/lib/career/career-state";
 import type { CareerDisciplineId } from "@/lib/career/ladder";
 import type { CareerScreenProps } from "./career-screen-types";
-import { adjacentTab, Button, IconButton, Tabs } from "@/components/ui";
+import { adjacentTab, Button, cx, IconButton, Tabs } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
@@ -75,6 +75,7 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
     () => (selectedId ? save.runs.find((r) => r.id === selectedId) ?? null : null),
     [save.runs, selectedId],
   );
+  const heading = activeRun ? tx(`discipline.${activeRun.discipline}`) : tx("title");
 
   // Keep selectedId valid if the active career was removed externally
   useEffect(() => {
@@ -269,7 +270,8 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
       className="lc-menu-screen lc-ui-zoom pointer-events-auto fixed inset-0 z-(--z-lc-menu) flex flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges] bg-lc-void/90 pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-md sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.5rem,env(safe-area-inset-top))] short:pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-5 short:gap-2">
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-lc-line pb-4 short:flex-nowrap short:gap-2 short:pb-2">
+        {/* One row on a wide screen in every language: a long discipline name takes a smaller size or a second line */}
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-lc-line pb-4 lg:flex-nowrap short:flex-nowrap short:gap-2 short:pb-2">
           <div className="flex min-w-0 items-center gap-3 short:gap-2">
             {activeRun ? (
               <>
@@ -294,8 +296,13 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
                 </span>
               </>
             ) : null}
-            <h1 className="lc-h1 m-0 min-w-0 truncate short:text-[20px] short:leading-none">
-              {activeRun ? tx(`discipline.${activeRun.discipline}`) : tx("title")}
+            <h1
+              className={cx(
+                "lc-h1 m-0 min-w-0 break-words short:truncate short:text-[20px] short:leading-none",
+                heading.length > 16 ? "text-[34px] lg:line-clamp-2" : "truncate",
+              )}
+            >
+              {heading}
             </h1>
             {activeRun ? (
               <Badge tone="info" size="md" className="short:h-5 short:px-2">
