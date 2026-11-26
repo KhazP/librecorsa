@@ -409,7 +409,7 @@
     "saving": "Wird gespeichert…",
     "saveName": "Namen speichern",
     "chart": {
-      "title": "Langsamste Geschwindigkeit pro Kurve",
+      "title": "Minimaltempo je Kurve",
       "turn": "K{turn}",
       "empty": "Keine Kurvendaten für diese Runde.",
       "bar": "K{turn} {name}: {speed} {unit}, {state, select, none {noch keine Referenz} same {{delta}, wie die Bestzeit} faster {{delta}, schneller als die Bestzeit} other {{delta}, langsamer als die Bestzeit}}",
