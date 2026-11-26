@@ -302,3 +302,36 @@ export function rollingFormationStep(
   }
   return { stageOrder, stage: stageOrder === 1 ? 'ready' : 'formation' };
 }
+
+/** Speed-band status for the fixed rolling-start speed gauge across all HUDs */
+export type RollingSpeedZone = 'slow' | 'hold' | 'fast';
+
+/** Visual state of the rolling-start live speed gauge bar */
+export interface RollingSpeedGauge {
+  /** Whether the car is below, inside, or above the rolling-start target speed window */
+  zone: RollingSpeedZone;
+  /** Bar fill fraction in 0..1 where `targetFraction` corresponds to exact formation pace */
+  fillFraction: number;
+  /** Position along the bar (0..1) marking the exact target formation pace */
+  targetFraction: number;
+}
+
+/** Headroom above target formation pace represented by the full right edge of the rolling-start speed bar */
+export const ROLLING_GAUGE_HEADROOM = 1.06;
+
+/**
+ * Evaluates the player's current speed against the rolling-start formation pace for the fixed speed bar shown across
+ * all HUDs. The green "hold" band comfortably covers the formation speed limiter's steady-state range across every car
+ * class (road cars through F1) while highlighting clear underspeed ("speed up") or downhill overspeed ("slow down").
+ */
+export function rollingSpeedGauge(speedKmh: number, paceMs: number): RollingSpeedGauge {
+  const paceKmh = Math.max(1, Number.isFinite(paceMs) && paceMs > 0 ? paceMs * 3.6 : 65);
+  const v = Math.max(0, Number.isFinite(speedKmh) ? speedKmh : 0);
+  const diffKmh = v - paceKmh;
+  const lowTolKmh = Math.max(4.5, paceKmh * 0.1);
+  const highTolKmh = 3.0;
+  const zone: RollingSpeedZone = diffKmh > highTolKmh ? 'fast' : diffKmh < -lowTolKmh ? 'slow' : 'hold';
+  const targetFraction = 1 / ROLLING_GAUGE_HEADROOM;
+  const fillFraction = Math.max(0, Math.min(1, v / (paceKmh * ROLLING_GAUGE_HEADROOM)));
+  return { zone, fillFraction, targetFraction };
+}
