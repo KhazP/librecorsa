@@ -361,6 +361,16 @@ export interface RacecraftParams {
    * driver (braking at 85 %) has. Without the last two, 1 car in 40 races at RISE short hit a weaving player, own driver 0
    */
   planPlayerMarginM: number;
+  /**
+   * The same cars' defensive move stays within this much of their line (m), held against the line where they are all
+   * the way to the corner. 0: as far as the defence takes them. A defence holds one spot across the road to the turn-in
+   * (the inside door, up to ~10 m off the line on a 15 m road), while the plan's line swings out for the corner: on its
+   * plan a Liana at Grobnik's back straight ended 10 m off its path, braked ~7 m/s early (its plan's speeds, less
+   * `planOffLinePace`), had the attacker come round the outside on the plan's later braking point, and was still on the
+   * inside, its bias coming back at the rate `planBiasShare` allows, when the attacker's line cut across to the apex. On
+   * their own driver the same cars make the same move, but the attacker follows them in and both brake at one point
+   */
+  planDefendReachM: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -407,6 +417,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   planCornerShare: 0.5,
   planUrgentShare: 0.5,
   planPlayerMarginM: 1,
+  planDefendReachM: 2,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -2568,6 +2579,10 @@ export class AiOpponentField implements AiRace {
           craft.defendTargetLatM = clamp(me.lateralOffsetM, -half, half);
         }
         targetLat = clamp(craft.defendTargetLatM, -half, half);
+        // (`planDefendReachM`: against the line here, all the way in, as the line swings across for the turn-in)
+        if (this.rc.planDefendReachM > 0 && !onStartLane && me.aiPlan && tracksOwnPlanChecks(me.vehicleId ?? '')) {
+          targetLat = clamp(targetLat, line - this.rc.planDefendReachM, line + this.rc.planDefendReachM);
+        }
         biasRate = Math.max(biasRate, 3.2 * wetBiasScale);
       }
       // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
