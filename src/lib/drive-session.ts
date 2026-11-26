@@ -34,6 +34,7 @@ import { createVehicleSim, vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
+import { isModContentId } from "@/lib/mods/mod-manifest";
 import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
 import type { GuardBody } from "@/lib/sim/contact-guard";
@@ -956,7 +957,7 @@ export class DriveSession {
     this.allowRestart = () => !raceOverride?.onRestart || raceOverride.onRestart();
     let keyLookup = buildKeyLookup(settings.keys);
     let assistSettings = steeringAssistSettings(settings.padTuning, settings.keyboardTuning);
-    let livery = resolveLivery(settings.liveryId, settings.customLivery);
+    let livery = resolveLivery(settings.liveryId, settings.customLivery, carIdNow);
     const raceNow = (): SessionRace => this.currentRace;
     /**
      * Bumped whenever the run on track starts over (see resetRun) and written into the telemetry every frame, so
@@ -1866,6 +1867,7 @@ export class DriveSession {
       carRig.dispose();
       // Free the old car's GPU memory: switching cars otherwise stacks every model's textures on the GPU
       disposeTree(carRig.root);
+      livery = resolveLivery(settings.liveryId, settings.customLivery, car);
       carRig = createCarRig(car);
       carRigCar = car;
       carHeadlights = new CarHeadlights(car, { spotCount: desiredHeadlightSpots() });
@@ -2045,7 +2047,7 @@ export class DriveSession {
         next.customLivery.secondary !== prev.customLivery.secondary ||
         next.customLivery.accent !== prev.customLivery.accent;
       if (next.liveryId !== prev.liveryId || (next.liveryId === "custom" && customChanged)) {
-        livery = resolveLivery(next.liveryId, next.customLivery);
+        livery = resolveLivery(next.liveryId, next.customLivery, carRigCar);
         carRig.setLivery(livery);
       }
       const g = next.graphics;
@@ -4209,7 +4211,7 @@ export class DriveSession {
         gpuLost ? null : {
           driverCode: settingsNow.profile.code,
           teamColorHex: settingsNow.profile.color,
-          liveryId: settingsNow.liveryId,
+          liveryId: isModContentId(settingsNow.liveryId) ? null : settingsNow.liveryId,
           ...(settingsNow.liveryId === "custom" ? { customLivery: settingsNow.customLivery } : {}),
           name: settingsNow.profile.name,
           race: mpRace

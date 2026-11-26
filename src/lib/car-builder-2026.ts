@@ -1,12 +1,12 @@
 import * as THREE from "three";
-import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
+import type { CarTelemetry, LiveryConfig, LiveryFinish, TireCompound } from "@/types/f1";
 import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import {
   applyLiveryFinishToMaterial,
   installF1LiveryPaint,
   resolveLiveryVisual,
 } from "@/lib/render/livery-repaint";
-import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance, type Lc26RigChassis } from "@/lib/lc26-car-model";
+import { LC25_MODEL_URL, LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance, type Lc26RigChassis } from "@/lib/lc26-car-model";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -26,6 +26,10 @@ export interface PortedSkin {
   variant?: string;
   /** Procedural livery id painted onto the car's body paint material (`gt3-livery-painter.ts`) */
   procedural?: string;
+  /** Painted 2048x2048 5-panel atlas image URL projected onto the car's body paint material (`ported-procedural-livery.ts`) */
+  atlas?: string;
+  /** Paint finish profile for an atlas livery (absent: "gloss") */
+  finish?: LiveryFinish;
 }
 
 export interface SimCarRig {
@@ -925,6 +929,9 @@ export function createF1Car2026(
   /** LC26 mod model; replaces the procedural car once loaded (see the end of this function) */
   let lc26: Lc26ModelInstance | null = null;
 
+  const modelCarId = modelUrl === LC25_MODEL_URL ? "lc25" as const : "lc26" as const;
+  const attachOpts = { ...options, carId: modelCarId };
+
   // Opponent F1 rigs in the browser attach directly to the cached LC26 GLB template instead of synchronously building
   // the 1,800-line procedural car and its 25 canvas textures only to discard them on the next microtask.
   if (options.opponent && typeof window !== "undefined" && Boolean(modelUrl)) {
@@ -944,7 +951,7 @@ export function createF1Car2026(
     void loadLc26Template(modelUrl).then((template) => {
       if (rigDisposed) return;
       if (template) {
-        lc26 = attachLc26Model(template, root, chassisGroup, options);
+        lc26 = attachLc26Model(template, root, chassisGroup, attachOpts);
         lc26.setTireCompound(currentCompound);
         lc26.setLivery(currentLivery);
       } else {
@@ -2888,7 +2895,7 @@ export function createF1Car2026(
   let rigDisposed = false;
   void loadLc26Template(modelUrl).then((template) => {
     if (!template || rigDisposed) return;
-    lc26 = attachLc26Model(template, root, chassisGroup, options);
+    lc26 = attachLc26Model(template, root, chassisGroup, attachOpts);
     lc26.setTireCompound(currentCompound);
     lc26.setLivery(currentLivery);
     // Never shown again, so freed rather than hidden: this runs for the player's car and every F1 opponent and ghost

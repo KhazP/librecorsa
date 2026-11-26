@@ -965,6 +965,7 @@ export const LIVERY_CATEGORY_LABELS: Readonly<Record<Exclude<LiveryCategory, "cu
   house: "LibreCorsa",
   get grid2026() { return tx("game.livery.grid2026"); },
   get retro() { return tx("game.livery.retro"); },
+  get mod() { return tx("game.carQuality.mod"); },
 };
 
 export const DEFAULT_CUSTOM_LIVERY: Readonly<CustomLiveryColors> = {
@@ -1051,11 +1052,50 @@ const LEGACY_LIVERY_ALIASES: Readonly<Record<string, LiveryId>> = {
   retro_powder_69: "retro_hornet_99",
 };
 
-/** Resolves a saved livery id (including "custom") into a paintable LiveryConfig */
-export function resolveLivery(id: string | null | undefined, custom?: CustomLiveryColors | null): LiveryConfig {
+/** Mod package liveries for the F1 cars (local only; kept separate from built-in `LIVERIES`) */
+const MOD_F1_LIVERIES: LiveryConfig[] = [];
+
+/** Replaces the registered mod F1 liveries (called by `registerModContent`) */
+export function registerModF1Liveries(liveries: readonly LiveryConfig[]): void {
+  MOD_F1_LIVERIES.length = 0;
+  MOD_F1_LIVERIES.push(...liveries);
+}
+
+/** Local mod F1 liveries currently loaded */
+export function modF1Liveries(): readonly LiveryConfig[] {
+  return MOD_F1_LIVERIES;
+}
+
+/**
+ * Whether `livery` can be shown and worn on `carId`.
+ * An image-atlas livery only appears for a car it has an atlas image for, unless it also carries a procedural `visual`
+ * fallback.
+ */
+export function liveryAppliesToCar(livery: LiveryConfig, carId?: string | null): boolean {
+  if (!livery.atlas) return true;
+  if ((carId === "lc26" || carId === "lc25") && livery.atlas[carId]) return true;
+  return Boolean(livery.visual);
+}
+
+/** Every F1 livery available for `carId` (built-in plus local mod atlas liveries fitted to that body) */
+export function liveriesForCar(carId?: string | null): LiveryConfig[] {
+  return [...LIVERIES, ...MOD_F1_LIVERIES].filter((l) => liveryAppliesToCar(l, carId));
+}
+
+/** Resolves a saved livery id (including "custom" and local mod F1 liveries) into a paintable LiveryConfig */
+export function resolveLivery(
+  id: string | null | undefined,
+  custom?: CustomLiveryColors | null,
+  carId?: string | null
+): LiveryConfig {
   if (id === "custom") return buildCustomLivery(custom ?? DEFAULT_CUSTOM_LIVERY);
+  if (id) {
+    const modHit = MOD_F1_LIVERIES.find((l) => l.id === id && liveryAppliesToCar(l, carId));
+    if (modHit) return modHit;
+  }
   const canonical = id ? (LEGACY_LIVERY_ALIASES[id] ?? id) : undefined;
-  return LIVERIES.find((l) => l.id === canonical) ?? LIVERIES[0];
+  const builtIn = LIVERIES.find((l) => l.id === canonical && liveryAppliesToCar(l, carId));
+  return builtIn ?? LIVERIES[0];
 }
 
 /**

@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import type { LiveryConfig, VehicleModelId } from "@/types/f1";
-import { LIVERIES } from "@/lib/track-data";
+import { liveriesForCar, resolveLivery } from "@/lib/track-data";
 import {
   CAR_QUALITY_META,
   CARS,
@@ -87,9 +87,13 @@ export const CarThumb: React.FC<{
   const storedSkinId = useCarSkinId(car.id);
   const effectiveSkinId = skinId ?? storedSkinId;
   const fallbackSrc = withBasePath(carThumbUrl(car.id));
+  const resolvedLivery =
+    liveryId && liveryId !== "custom" && carTakesLivery(car.id) ? resolveLivery(liveryId, undefined, car.id) : null;
   const variantUrl =
     liveryId && liveryId !== "custom" && carTakesLivery(car.id)
-      ? carLiveryThumbUrl(car.id, liveryId)
+      ? resolvedLivery?.id === liveryId && resolvedLivery.thumbUrl
+        ? resolvedLivery.thumbUrl
+        : carLiveryThumbUrl(car.id, liveryId)
       : effectiveSkinId && car.skins?.length
         ? carSkinThumbUrl(car.id, effectiveSkinId)
         : null;
@@ -296,7 +300,7 @@ export const CarBrowser: React.FC<{
             {carTakesPhysicsSwitch(c.id) ? <CarPhysicsSwitch /> : null}
             {carTakesLivery(c.id) ? (
               <LiveryPicker
-                liveries={LIVERIES}
+                liveries={liveriesForCar(c.id)}
                 value={selectedLivery}
                 onChange={onChangeLivery}
                 onHover={(livery) =>

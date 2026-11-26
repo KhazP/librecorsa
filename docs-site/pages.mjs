@@ -11,6 +11,7 @@ export const PAGES = [
   { source: "docs/SCREENS.md", slug: "playing/screens", group: "Playing" },
   { source: "docs/DOWNLOADS.md", slug: "playing/downloads", group: "Playing" },
   { source: "docs/modding.md", slug: "modding", group: "Modding" },
+  { source: "docs/LIVERIES.md", slug: "modding/liveries", group: "Modding" },
   { source: "docs/importing-mods.md", slug: "modding/importing", group: "Modding" },
   { source: "docs/PORTING-CARS.md", slug: "porting/cars", group: "Porting" },
   { source: "docs/PORTING-TRACKS.md", slug: "porting/circuits", group: "Porting" },
