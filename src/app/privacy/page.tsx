@@ -38,7 +38,8 @@ export default function PrivacyPage() {
           Your settings, controls, car setups, saved laps, race history, careers and driver name are kept in your browser’s
           own storage on your device. So is a driver key: a random code that proves a name on the lap boards is yours.
           None of it leaves your device except as described below, and clearing this site’s data in your browser
-          removes all of it.
+          removes all of it. Telemetry out, if you switch it on, goes only to the bridge program running on your own
+          computer, which passes it to that computer or to a device on your own network.
         </p>
       </SiteSection>
 
