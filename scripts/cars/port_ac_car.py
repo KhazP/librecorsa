@@ -1770,11 +1770,44 @@ def merge_tyre_textures(textures, materials, nodes):
     return 'tyre_merged'
 
 
-def read_digital_items(data, nodes, frames):
+def item_surface_depth(nodes, materials, world, position, reach=0.015):
+    """How far behind an item's POSITION (along its node's +Z, away from the driver) the screen it is drawn on lies:
+    the nearest opaque, drawn mesh surface within `reach` m, or None. A screen often sits a few millimetres behind
+    its node's plane, and a text drawn on the plane would float in front of it, sliding off its cell seen from above"""
+    origin = (world @ np.r_[np.asarray(position, float), 1.0])[:3]
+    axis = world[:3, 2] / np.linalg.norm(world[:3, 2])
+    best = None
+    for i in visible_meshes(nodes):
+        m = materials[nodes[i]['mesh']['mat']]
+        if m['blend'] == 1:
+            continue
+        pos, _, _, tris = world_mesh(nodes[i])
+        if not len(tris) or np.linalg.norm(pos - origin, axis=1).min() > 0.08:
+            continue
+        v0, v1, v2 = pos[tris[:, 0]], pos[tris[:, 1]], pos[tris[:, 2]]
+        e1, e2 = v1 - v0, v2 - v0
+        pv = np.cross(axis, e2)
+        det = (e1 * pv).sum(1)
+        ok = np.abs(det) > 1e-12
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        tv = origin - v0
+        u = (tv * pv).sum(1) * inv
+        qv = np.cross(tv, e1)
+        v = (qv @ axis) * inv
+        t = (e2 * qv).sum(1) * inv
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > -0.002) & (t < reach)
+        if hit.any():
+            d = float(t[hit].min())
+            best = d if best is None else min(best, d)
+    return best
+
+
+def read_digital_items(data, nodes, frames, materials=None):
     """The texts digital_instruments.ini draws ([ITEM_n]: a gear, speed, rpm, fuel, lap time ... on a node's plane), as
     the rig's `digitalItems` extras: each with its parent node's frame in the node the rig puts it on (`frames`: kn5
     node name -> (rig node, 4x4 in that node's axes)), its place, size, colour and format. AC draws each from its
-    POSITION along the node's -X (the driver's right), its baseline there, SIZE high"""
+    POSITION along the node's -X (the driver's right), its baseline there, SIZE high. With `materials`, each also gets
+    `depth`: how far behind its POSITION its screen's surface lies (`item_surface_depth`)"""
     if 'digital_instruments.ini' not in data:
         return []
     cp = ini(data['digital_instruments.ini'])
@@ -1804,6 +1837,11 @@ def read_digital_items(data, nodes, frames):
                 item[field] = sec[key].strip()
         if sec.get('DECIMALS', '').strip():
             item['decimals'] = int(float(sec['DECIMALS']))
+        pnode = next((n for n in nodes if n['name'] == parent and n['kind'] == 1), None)
+        if materials is not None and pnode is not None:
+            depth = item_surface_depth(nodes, materials, pnode['world'], item['position'])
+            if depth is not None:
+                item['depth'] = round(depth, 5)
         items.append(item)
     return items
 
@@ -2666,7 +2704,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         if n['name'] in item_parents and n['name'] not in item_frames:
             world = to_model @ n['world']
             item_frames[n['name']] = ('STEER', to_steer @ world) if 'STEER_HR' in ancestors(nodes, i) else ('BODY', world)
-    digital_items = read_digital_items(data, nodes, item_frames)
+    digital_items = read_digital_items(data, nodes, item_frames, materials)
 
     lf, rf, lr, rr = (wheel_centres[f'WHEEL_{c}'] for c in ('LF', 'RF', 'LR', 'RR'))
     extras = {
