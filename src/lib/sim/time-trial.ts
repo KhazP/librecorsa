@@ -7,7 +7,7 @@
  */
 import type { TireCompound, VehicleModelId } from "@/types/f1";
 import { challengeCompound } from "@/lib/net/weekly-challenge";
-import { CHASSIS_LIMITS, type ChassisSetup } from "./car-setup";
+import { CHASSIS_LIMITS, DEFAULT_CHASSIS_SETUP, type ChassisSetup } from "./car-setup";
 import type { SimRealismFlags } from "./sim-realism";
 import type { SimulatorCar } from "./simulator-car";
 import type { TrackEvolutionState } from "./track-evolution";
@@ -16,11 +16,20 @@ export interface TimeTrialRules {
   /** The car the challenge is driven in: on any other the conditions are not put on */
   vehicle: VehicleModelId;
   compound: TireCompound;
+  /** Active event id (ISO week or permanent id like "middle-gear"), for HUD targets and lap submission */
+  eventId?: string;
+  /** Lock chassis & tyre setup to factory baseline (with lowest fuel) instead of the player's garage setup */
+  fixedSetup?: boolean;
 }
 
-/** The time trial of a week's challenge */
-export function timeTrialRules(vehicle: VehicleModelId): TimeTrialRules {
-  return { vehicle, compound: challengeCompound(vehicle) };
+/** The time trial rules for a weekly or permanent challenge */
+export function timeTrialRules(vehicle: VehicleModelId, opts: { eventId?: string; fixedSetup?: boolean } = {}): TimeTrialRules {
+  return {
+    vehicle,
+    compound: challengeCompound(vehicle),
+    ...(opts.eventId ? { eventId: opts.eventId } : {}),
+    ...(opts.fixedSetup ? { fixedSetup: true } : {}),
+  };
 }
 
 /**
@@ -37,9 +46,10 @@ export function lowestFuelSetup(setup: ChassisSetup): ChassisSetup {
 }
 
 /**
- * Puts the time trial's tyre and fuel on the car (`setup`: the player's garage setup, kept but for its fuel) and
- * holds the road at full grip. Call before the car is placed: the placement fits a fresh set of the tyre and fills the
- * tank from the setup. `setCompound` puts the tyre on the car and its model.
+ * Puts the time trial's tyre and fuel on the car (`setup`: the player's garage setup, kept but for its fuel unless
+ * `rules.fixedSetup` locks the car to its factory baseline) and holds the road at full grip. Call before the car is
+ * placed: the placement fits a fresh set of the tyre and fills the tank from the setup. `setCompound` puts the tyre
+ * on the car and its model.
  */
 export function applyTimeTrial(
   car: SimulatorCar,
@@ -49,6 +59,6 @@ export function applyTimeTrial(
   setCompound: (compound: TireCompound) => void
 ): void {
   if (car.tireCompound !== rules.compound) setCompound(rules.compound);
-  car.applyChassisSetup?.(lowestFuelSetup(setup));
+  car.applyChassisSetup?.(lowestFuelSetup(rules.fixedSetup ? DEFAULT_CHASSIS_SETUP : setup));
   if (!road.fullGrip) road.holdFullGrip(true);
 }

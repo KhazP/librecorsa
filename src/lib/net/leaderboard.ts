@@ -73,22 +73,47 @@ export interface RenameResult {
 }
 
 const CHALLENGE_BEST_KEY = "lc.challengeBest";
+const MAX_CHALLENGE_BESTS = 16;
 
-/** This browser's best lap (ms) on the board of weekly challenge `id`, as last confirmed by the server; null without one */
-export function loadChallengeBest(id: string): number | null {
+function readChallengeBests(): Record<string, number> {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(CHALLENGE_BEST_KEY) ?? "null");
-    if (!isRecord(saved) || saved.id !== id) return null;
-    return finiteNumber(saved.lapTimeMs);
+    if (!isRecord(saved)) return {};
+    // Backwards compatibility with single-challenge saves: { id, lapTimeMs }
+    if (typeof saved.id === "string") {
+      const ms = finiteNumber(saved.lapTimeMs);
+      return ms !== null ? { [saved.id]: ms } : {};
+    }
+    if (isRecord(saved.byId)) {
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(saved.byId)) {
+        const ms = finiteNumber(v);
+        if (ms !== null) out[k] = ms;
+      }
+      return out;
+    }
+    return {};
   } catch {
-    return null;
+    return {};
   }
 }
 
-/** Remembers the lap that went on a weekly challenge's board (only the current week's is kept) */
+/** This browser's best lap (ms) on the board of challenge `id` (weekly or permanent), as last confirmed by the server; null without one */
+export function loadChallengeBest(id: string): number | null {
+  return readChallengeBests()[id] ?? null;
+}
+
+/** Remembers the lap that went on a challenge's board (supports multiple active trials simultaneously) */
 export function saveChallengeBest(id: string, lapTimeMs: number): void {
   try {
-    localStorage.setItem(CHALLENGE_BEST_KEY, JSON.stringify({ id, lapTimeMs }));
+    const bests = readChallengeBests();
+    const known = bests[id];
+    if (known !== undefined && known <= lapTimeMs) return;
+    delete bests[id];
+    bests[id] = lapTimeMs;
+    const keys = Object.keys(bests);
+    for (const old of keys.slice(0, Math.max(0, keys.length - MAX_CHALLENGE_BESTS))) delete bests[old];
+    localStorage.setItem(CHALLENGE_BEST_KEY, JSON.stringify({ byId: bests }));
   } catch {
     // Storage blocked: the next challenge lap is simply sent again
   }

@@ -114,6 +114,7 @@
     "timeLeftMinutes": "{minutes} min",
     "placeNoTime": "No time yet",
     "placeFirst": "P1 · fastest this week",
+    "placeFirstPermanent": "P1 · fastest on the board",
     "place": "P{place}",
     "placeGap": "P{place} · {gap} to P{above}"
   },
@@ -145,6 +146,7 @@
       "pickName": "Pick another name",
       "challengeEnded": "That weekly challenge has ended",
       "challengeRules": "This lap was not driven to this week's challenge rules",
+      "permanentChallengeRules": "This lap was not driven to this challenge's rules",
       "tooFewSamples": "Recording has too few samples",
       "lapNotClosed": "The lap does not end where it started",
       "standingStartRun": "A point-to-point run must begin from a standing start",

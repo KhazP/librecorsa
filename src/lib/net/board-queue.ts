@@ -11,7 +11,7 @@
  */
 import type { VehicleModelId } from "@/types/f1";
 import { lapGoesOnBoards, type LapRecording } from "@/lib/sim/lap-types";
-import { challengeAt, fitsChallenge } from "./weekly-challenge";
+import { activeChallenges, fitsChallenge } from "./weekly-challenge";
 import {
   BOARD_UNREACHABLE_GAVE_UP,
   boardKeyOf,
@@ -49,23 +49,35 @@ const held = new Map<string, LapRecording>();
 /** Sends of each waiting lap from the queue this session, by `${board}|${recordedAt}` */
 const tries = new Map<string, number>();
 
-/** The weekly challenge a lap was driven to (its id), if it fits this week's */
-export function challengeOf(rec: LapRecording, nowMs = Date.now()): string | undefined {
-  const week = challengeAt(nowMs);
-  return fitsChallenge(rec, week) ? week.id : undefined;
+/**
+ * The active challenge (this week's rotating challenge or a permanent trial such as Middle Gear) that a lap fits.
+ * When `preferredEventId` is given and fits, it wins (for weeks whose rotating circuit matches a permanent trial).
+ */
+export function challengeOf(rec: LapRecording, nowMs = Date.now(), preferredEventId?: string): string | undefined {
+  const active = activeChallenges(nowMs);
+  if (preferredEventId) {
+    const preferred = active.find((c) => c.id === preferredEventId);
+    if (preferred && fitsChallenge(rec, preferred)) return preferred.id;
+  }
+  return active.find((c) => fitsChallenge(rec, c))?.id;
 }
 
 /**
- * Uploads a lap under the driver's name now, to this week's challenge board too when it fits; remembers the lap each
- * board took (or refused for a faster one of the driver's), so only a faster one is sent next time. A lap that
+ * Uploads a lap under the driver's name now, to a matching active challenge board too when it fits; remembers the lap
+ * each board took (or refused for a faster one of the driver's), so only a faster one is sent next time. A lap that
  * couldn't reach the board is kept to send again; one turned down is remembered with the reason (Your best laps).
  */
-export async function postLap(rec: LapRecording, driver: { name: string; code: string }, by: PostedBy): Promise<SubmitResult> {
+export async function postLap(
+  rec: LapRecording,
+  driver: { name: string; code: string },
+  by: PostedBy,
+  opts: { event?: string } = {},
+): Promise<SubmitResult> {
   // A lap with mod content never goes up, and isn't kept as a miss either: a mod car's would sit on its model's board
   if (!lapGoesOnBoards(rec)) return { ok: false, error: MOD_LAP };
   // Under the name the driver has now: a lap recorded before a rename must not claim the old name back
   const named: LapRecording = { ...rec, driverName: driver.name, driverCode: driver.code };
-  const event = challengeOf(named);
+  const event = challengeOf(named, Date.now(), opts.event);
   const res = await submitLap(named, { event }).catch((): SubmitResult => ({ ok: false }));
   if (res.ok && event && res.eventRank !== undefined) saveChallengeBest(event, rec.lapTimeMs);
   const board = boardKeyOf(named);

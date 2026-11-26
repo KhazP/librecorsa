@@ -26,6 +26,7 @@ export const BOARD_SENTENCES: Readonly<Record<string, MessageKey>> = {
   "Pick another name": "game.board.errors.pickName",
   "That weekly challenge has ended": "game.board.errors.challengeEnded",
   "This lap was not driven to this week's challenge rules": "game.board.errors.challengeRules",
+  "This lap was not driven to this challenge's rules": "game.board.errors.permanentChallengeRules",
   // A recording whose samples don't agree with each other (lap-plausibility.ts): the game says so before uploading, and
   // the Worker's lap check refuses it too (cloudflare/api/lap-check.ts)
   "Recording has too few samples": "game.board.errors.tooFewSamples",

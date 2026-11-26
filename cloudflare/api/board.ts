@@ -37,6 +37,7 @@ import { ASSIST_PRESETS, boardChoices, currentBoardBase, isCurrentLapPhysics, MA
 import { SIM_REALISM_LEVELS } from "../../src/lib/sim/sim-realism";
 import { isVehicleModelId, VEHICLE_MODEL_IDS, type VehicleModelId } from "../../src/types/f1";
 import { nameProblem } from "../../src/lib/net/name-filter";
+import { isPermanentChallengeId } from "../../src/lib/net/weekly-challenge";
 import { checkLap, TRACK_ID_RE, type CheckedLap } from "./lap-check";
 import { invalidateAutoWeeklyAwards, invalidateAutoWeeklyAwardsForDriver, moveDriverAwards } from "./awards";
 import { accountOfKey, KEY_USE_REFRESH_MS, keyProvesName, type KeyAccount, type NameOwner } from "./name-proof";
@@ -51,6 +52,8 @@ const CLAIM_LAPSES_MS = 183 * 24 * 3600 * 1000;
 const DRIVER_KEY_RE = /^[A-Za-z0-9_-]{32,128}$/;
 const LAP_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const EVENT_ID_RE = /^\d{4}-W\d{2}$/;
+/** Any event id that may hold a board: a weekly ISO id, or a permanent trial (e.g. "middle-gear") */
+export const isBoardEventId = (event: string): boolean => EVENT_ID_RE.test(event) || isPermanentChallengeId(event);
 /** `vehicle` for the board of every car on a circuit */
 export const ALL_CARS = "all";
 
@@ -364,7 +367,7 @@ async function takeLap(deps: BoardDeps, request: Request, seen: LapSeen): Promis
   let event = "";
   let eventError: string | null = null;
   if (body.event !== undefined && body.event !== "") {
-    if (typeof body.event !== "string" || !EVENT_ID_RE.test(body.event)) eventError = "Unknown event";
+    if (typeof body.event !== "string" || !isBoardEventId(body.event)) eventError = "Unknown event";
     else eventError = deps.eventRule(rec, body.event, nowMs);
     if (eventError === null) event = body.event as string;
   }
@@ -448,7 +451,7 @@ export async function listLaps(deps: BoardDeps, url: URL): Promise<Answer> {
   if (!TRACK_ID_RE.test(track) || (!allCars && (!isVehicleModelId(vehicle) || !Number.isInteger(physics) || physics < 1 || physics > MAX_LAP_REVISION))) {
     return fail("track, vehicle and physics are required");
   }
-  if (event !== "" && !EVENT_ID_RE.test(event)) return fail("Unknown event");
+  if (event !== "" && !isBoardEventId(event)) return fail("Unknown event");
   const version = allCars ? askedBoardBase(q, track) : currentBoardBase(track);
   if (version === null) return fail("Unknown physics version");
   const limitRaw = Number(q.get("limit"));
