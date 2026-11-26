@@ -154,6 +154,7 @@
   "challenge.namePrompt.saving": "Button label while the renamed driver name is being claimed on the online board.",
   "challenge.namePrompt.cancel": "Button: close the rename dialog without changing the name.",
   "conditions.hostSet": "Badge: in multiplayer, the room's host chooses these settings.",
+  "conditions.roundSet": "Badge: during a career round, the round sets its own weather, time of day and grip, so these settings are read-only. Same style and length as conditions.hostSet.",
   "conditions.weatherGroup": "Screen-reader name of the weather choices.",
   "conditions.rainChance": "{chance}: chance of rain in percent.",
   "conditions.now": "Card heading: the live weather readings of the session running now.",

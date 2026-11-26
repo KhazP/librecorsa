@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Set by the host",
+    "roundSet": "Set by the round",
     "weather": "Weather",
     "weatherGroup": "Weather",
     "forecastShow": "Forecast through the session",

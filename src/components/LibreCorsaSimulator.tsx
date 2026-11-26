@@ -2429,6 +2429,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onChangeConditions: handleChangeConditions,
       onChangeRealism: handleChangeRealism,
       hostControlled: roomLobby !== null && !isMpHost,
+      // A career round's weather, time of day and grip are the round's own (its seed), not changed mid-round
+      roundControlled: career.racing,
       readout: weatherHud,
     },
     library,

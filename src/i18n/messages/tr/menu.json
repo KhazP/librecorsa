@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Oda kurucusu belirler",
+    "roundSet": "Ayak belirler",
     "weather": "Hava durumu",
     "weatherGroup": "Hava durumu",
     "forecastShow": "Seans boyunca hava tahmini",

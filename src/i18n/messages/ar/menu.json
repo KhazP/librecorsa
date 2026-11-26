@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "يضبطها المضيف",
+    "roundSet": "تضبطها الجولة",
     "weather": "الطقس",
     "weatherGroup": "الطقس",
     "forecastShow": "توقعات الطقس خلال الجلسة",

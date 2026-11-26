@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "Défini par l’hôte",
+    "roundSet": "Défini par la manche",
     "weather": "Météo",
     "weatherGroup": "Météo",
     "forecastShow": "Prévisions pour la session",

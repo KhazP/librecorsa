@@ -257,6 +257,7 @@
   },
   "conditions": {
     "hostSet": "由房主設定",
+    "roundSet": "由本站設定",
     "weather": "天氣",
     "weatherGroup": "天氣",
     "forecastShow": "賽程天氣預報",
