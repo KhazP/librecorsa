@@ -368,7 +368,10 @@ export interface RacecraftParams {
    * plan a Liana at Grobnik's back straight ended 10 m off its path, braked ~7 m/s early (its plan's speeds, less
    * `planOffLinePace`), had the attacker come round the outside on the plan's later braking point, and was still on the
    * inside, its bias coming back at the rate `planBiasShare` allows, when the attacker's line cut across to the apex. On
-   * their own driver the same cars make the same move, but the attacker follows them in and both brake at one point
+   * their own driver the same cars make the same move, but the attacker follows them in and both brake at one point.
+   * 24 career-grid races of 4 laps (Liana at Grobnik, Sachsenring and VIR North, R32 at Grobnik, R33 at Sachsenring,
+   * LMDh at RISE), the same seeds: AI v AI contacts 194 -> 65 at 2 m (own driver 57), passes 203 -> 68 (68), spins,
+   * offs and wall hits 30 -> 3 (3), the leader's lap still the quickest (116.7 -> 115.1 s; own driver 119.8)
    */
   planDefendReachM: number;
 }
