@@ -462,5 +462,19 @@
   "blade.bias": "Label of the front brake balance in percent. Capitals, about 4 characters.",
   "blade.engineMap": "Label of the engine map number. Capitals, about 3 characters.",
   "blade.off": "Shown in place of a level when traction control or ABS is switched off or the car has none. Capitals, 3 characters.",
-  "blade.cutting": "Tooltip while a driver aid is intervening. {aid}: TC or ABS."
+  "blade.cutting": "Tooltip while a driver aid is intervening. {aid}: TC or ABS.",
+  "phone.raceLaps": "Phone HUD, top right, on the grid before the start: how long the race is. {laps} is the number of laps. Short, as Blade's order window says it.",
+  "irDashies.lapShort": "irDashies standings header: the race lap with no lap count. One letter (or the shortest form) for lap, then {lap}; the same as the Endurance layout's short lap.",
+  "irDashies.lapShortOfTotal": "irDashies standings header: the race lap of the race's laps, {lap} of {total}. Same short lap as irDashies.lapShort.",
+  "raceVision.lapShort": "RaceVision relative header: the race lap with no lap count. Same short lap as the Endurance layout's.",
+  "raceVision.lapShortOfTotal": "RaceVision relative header: the race lap of the race's laps, {lap} of {total}, no spaces.",
+  "retro.corners.fl": "Retro tyre panel: front left tyre, two or three letters, as the Pit wall layout's corner names.",
+  "retro.corners.fr": "Retro tyre panel: front right tyre, two or three letters.",
+  "retro.corners.rl": "Retro tyre panel: rear left tyre, two or three letters.",
+  "retro.corners.rr": "Retro tyre panel: rear right tyre, two or three letters.",
+  "pitWall.car.ersModes.CHR": "Pit wall, Car page and footer: the ERS mode's name beside 'ERS mode'. Charge mode (the battery recharges). One short word, as Blade's ERS mode names.",
+  "pitWall.car.ersModes.LIC": "Pit wall: the ERS mode for low-speed circuits. One short word.",
+  "pitWall.car.ersModes.BAL": "Pit wall: the balanced ERS mode. One short word.",
+  "pitWall.car.ersModes.RAC": "Pit wall: the race ERS mode. One short word.",
+  "pitWall.car.ersModes.PSH": "Pit wall: the attack (push) ERS mode. One short word."
 }

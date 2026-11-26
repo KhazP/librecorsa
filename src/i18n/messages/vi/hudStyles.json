@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {Lượt {lap}} other {Vòng {lap}}}",
     "raceLap": "Vòng {lap}",
     "raceLapOfTotal": "Vòng {lap}/{total}",
+    "raceLaps": "{laps} vòng",
     "best": "Tốt nhất"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "Phiên này",
     "lastLap": "Vòng trước",
     "historyLap": "Vòng {lap}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "Đèn chuyển số: {lit} trên {total} đèn sáng",
     "aidOff": "Tắt",
     "fuel": "Nhiên liệu",
@@ -100,6 +103,8 @@
     "fuelLaps": "Vòng ~{laps}",
     "raceLaps": "Vòng {lap}",
     "raceLapsOfTotal": "Vòng {lap}/{total}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} đang hoạt động",
     "inputs": "Thao tác",
     "shiftLights": "Đèn chuyển số: {lit} trên {total} đèn sáng",
@@ -226,6 +231,12 @@
     "aidOff": "Tắt",
     "fuel": "Xăng",
     "aero": "Aero",
+    "corners": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
     "open": "Mở",
     "armed": "Sẵn",
     "shut": "Đóng",
@@ -679,6 +690,13 @@
       "engineMap": "Bản đồ động cơ",
       "ers": "ERS",
       "ersMode": "Chế độ ERS",
+      "ersModes": {
+        "CHR": "Sạc",
+        "LIC": "Tốc thấp",
+        "BAL": "Cân bằng",
+        "RAC": "Đua",
+        "PSH": "Tấn công"
+      },
       "boost": "Tăng lực",
       "overtake": "Vượt",
       "motor": "Mô-tơ",
