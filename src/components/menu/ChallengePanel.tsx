@@ -158,7 +158,7 @@ const TrialColumn: React.FC<{
   const ahead = me && me.rank >= 2 ? (board?.entries[me.rank - 2] ?? null) : null;
   const aboveMs = me && me.rank >= 2 ? (me.aboveMs ?? ahead?.lapTimeMs ?? null) : null;
 
-  const trackLength = `${distanceIn(trackInfo.lengthM / 1000, units.speed).toFixed(2)}\u00a0${DISTANCE_LABEL[units.speed]}`;
+  const trackLength = `\u2066${distanceIn(trackInfo.lengthM / 1000, units.speed).toFixed(2)}\u00a0${DISTANCE_LABEL[units.speed]}\u2069`;
 
   return (
     <section

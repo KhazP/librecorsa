@@ -40,7 +40,7 @@ import { LayoutChoice } from "@/components/LayoutChoice";
 import { SourceChip } from "@/components/SourceChip";
 import { trackModelSource } from "@/lib/model-source";
 
-const lengthOf = (t: TrackInfo, units: UnitSettings) => `${distanceIn(t.lengthM / 1000, units.speed).toFixed(2)} ${DISTANCE_LABEL[units.speed]}`;
+const lengthOf = (t: TrackInfo, units: UnitSettings) => `\u2066${distanceIn(t.lengthM / 1000, units.speed).toFixed(2)} ${DISTANCE_LABEL[units.speed]}\u2069`;
 /** The registry's direction as a word: anticlockwise, clockwise, or its own text */
 const dirKind = (d: string) => (/counter|anti/i.test(d) ? "anticlockwise" : /clock/i.test(d) ? "clockwise" : null);
 const hasQuality = (v: CircuitVenue, q: CircuitQuality) => v.layouts.some((l) => l.quality === q);
