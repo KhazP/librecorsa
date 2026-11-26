@@ -29,7 +29,7 @@ import {
   type PortedProjectionProfile,
 } from "../../src/lib/render/livery-projection";
 import { atlasCacheKey, LIVERY_FINISH_PROFILES } from "../../src/lib/render/f1-livery-painter";
-import { PROCEDURAL_BODY_PROFILES } from "../../src/lib/render/ported-procedural-livery";
+import { isProceduralPaintMesh, PROCEDURAL_BODY_PROFILES } from "../../src/lib/render/ported-procedural-livery";
 import { carById, carSkinThumbUrl, portedSkinFor } from "../../src/lib/cars/car-registry";
 import {
   LIVERIES,
@@ -841,6 +841,18 @@ async function main(): Promise<void> {
     const rightRear = portedProjectToPanel("right", -0.9, 0.6, -1.8, prof);
     assert.ok(leftFront.px < leftRear.px, "ported left side front (+Z) must map left of rear (-Z)");
     assert.ok(rightFront.px > rightRear.px, "ported right side front (+Z) must map right of rear (-Z)");
+
+    // BMW M4 GT3 roll cage & interior tub nodes stay out of procedural/atlas paint (both raw glTF and Three.js sanitized names)
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMW:D_Body_14_BMW:MAT_GT3_EVO_car_paint1_0"), false);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMWD_Body_10_BMWMAT_GT3_EVO_car_paint1_0"), false);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMW:SM_Interior_0000_001_BMW:MAT_GT3_EVO_car_paint1_0"), false);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMWSM_Interior_0000_001"), false);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMWSM_Root_M4_GT3_EVO_001"), false);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMW:SM_RearKit_0000_001"), true);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMWSM_FrontKit_0000_001"), true);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMW:SM_Hood_0000_001"), true);
+    assert.equal(isProceduralPaintMesh("bmw-m4-gt3", "BMWANC_Door_L_09"), true);
+    assert.equal(isProceduralPaintMesh("amg-gt3", "BMW:D_Body_14"), true);
   });
 
   await check("CarSkin.atlas resolves through portedSkinFor and mod manifest accepts/registers GT3 and LMDh atlas skins", () => {

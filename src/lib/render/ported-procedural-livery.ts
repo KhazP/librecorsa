@@ -101,6 +101,19 @@ export const PROCEDURAL_PROFILE_BY_MATERIAL: Readonly<Record<string, ProceduralB
   liana_body_paint: PROCEDURAL_BODY_PROFILES.liana,
 };
 
+/**
+ * BMW M4 GT3 interior chassis tub, roll cage (`D_Body_*`), interior shell (`SM_Interior_*`), and origin cube
+ * (`SM_Root_*`) share `BMWMAT_GT3_EVO_car_paint1` with the exterior panels. Match both raw glTF (`BMW:...`) and
+ * Three.js-sanitized (`BMW...`) node/mesh names so runtime and template generator exclude the exact same geometry.
+ */
+const BMW_INTERIOR_PAINT_MESH_RE = /^BMW:?(?:D_Body_|SM_Interior_|SM_Root_)/;
+
+/** Returns whether a mesh carrying a ported car's paint material belongs to exterior bodywork (not an interior/roll cage) */
+export function isProceduralPaintMesh(car: ProceduralPortedCar, meshName: string): boolean {
+  if (car === "bmw-m4-gt3" && BMW_INTERIOR_PAINT_MESH_RE.test(meshName)) return false;
+  return true;
+}
+
 interface ResolvedProceduralAtlas {
   atlas: THREE.CanvasTexture;
   finish: LiveryFinish;

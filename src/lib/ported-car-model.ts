@@ -24,6 +24,7 @@ import { createOpponentLodController, type OpponentLodController } from "@/lib/r
 import {
   clearAllProceduralLiveryCaches,
   installPortedProceduralLivery,
+  isProceduralPaintMesh,
   PROCEDURAL_PROFILE_BY_MATERIAL,
   type ProceduralBodyProfile,
   type ProceduralLiveryController,
@@ -248,6 +249,58 @@ export function parkLcLmdhWiper(body: THREE.Object3D): number {
   return moved;
 }
 
+/**
+ * Separates interior/roll-cage meshes that share a car's exterior paint material (e.g. BMW M4 GT3's `D_Body_*` /
+ * `SM_Interior_*` sharing `BMWMAT_GT3_EVO_car_paint1`) onto a dedicated unpainted dark-steel clone before
+ * `mergeStaticMeshesByMaterial`, so projected liveries only paint exterior bodywork.
+ */
+function detachUnpaintedInteriorMeshes(body: THREE.Object3D): void {
+  const cageClones = new Map<THREE.MeshStandardMaterial, THREE.MeshStandardMaterial>();
+  const cageCloneFor = (src: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial => {
+    let copy = cageClones.get(src);
+    if (!copy) {
+      copy = src.clone();
+      copy.name = `${src.name}_unpainted_interior`;
+      copy.map = null;
+      copy.color.setHex(0x343942);
+      copy.roughness = 0.52;
+      copy.metalness = 0.35;
+      const phys = copy as THREE.MeshPhysicalMaterial;
+      if (phys.isMeshPhysicalMaterial) {
+        phys.clearcoat = 0.08;
+        phys.clearcoatRoughness = 0.45;
+      }
+      copy.needsUpdate = true;
+      cageClones.set(src, copy);
+    }
+    return copy;
+  };
+  const isExcluded = (car: ProceduralBodyProfile["car"], mesh: THREE.Mesh): boolean =>
+    !isProceduralPaintMesh(car, mesh.name) ||
+    Boolean(mesh.parent && !isProceduralPaintMesh(car, mesh.parent.name));
+
+  body.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (Array.isArray(mesh.material)) {
+      let changed = false;
+      const next = mesh.material.map((m) => {
+        const src = m as THREE.MeshStandardMaterial;
+        const prof = src.isMeshStandardMaterial ? PROCEDURAL_PROFILE_BY_MATERIAL[src.name] : undefined;
+        if (!prof || !isExcluded(prof.car, mesh)) return m;
+        changed = true;
+        return cageCloneFor(src);
+      });
+      if (changed) mesh.material = next;
+      return;
+    }
+    const src = mesh.material as THREE.MeshStandardMaterial;
+    const prof = src.isMeshStandardMaterial ? PROCEDURAL_PROFILE_BY_MATERIAL[src.name] : undefined;
+    if (!prof || !isExcluded(prof.car, mesh)) return;
+    mesh.material = cageCloneFor(src);
+  });
+}
+
 /** Loads (once) and caches a ported car GLB; the rigs clone it. Exported to pre-warm opponents before a race */
 export function loadTemplate(url: string): Promise<THREE.Group | null> {
   let template = templates.get(url);
@@ -281,6 +334,7 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
         const body = scene.getObjectByName("BODY");
         if (body) {
           if (url.includes("lc-lmdh")) parkLcLmdhWiper(body);
+          detachUnpaintedInteriorMeshes(body);
           const variantNodes = new Set(Object.keys(extras.partVariants ?? {}));
           mergeStaticMeshesByMaterial(body, {
             namePrefix: "PORTED_BODY_Merged",
