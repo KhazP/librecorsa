@@ -90,6 +90,8 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) it failed the race gate on its endurance
   // layouts without a plan (the AI to blame for 5 → 7 contacts with the player's stand-in), laps 1.7 % quicker
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // The closed-wheel line
   racingLine: 'gt3',
   // The fuel the engine's work takes [963]: 37 % brake thermal efficiency on a 43.5 MJ/kg renewable fuel, ≈ 0.033 kg/s

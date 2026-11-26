@@ -78,6 +78,8 @@ export const NISSAN_R32_SIM_PROFILE: CarSimProfile = {
   speedProfile: NISSAN_R32_PROFILE_CAR,
   // The road cars' line where a circuit has one for it, else the GT3's: a touring car's grip and power
   racingLine: 'road',
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // Fuel flow with the engine's speed: 0.004 l/s per 1000 rpm flat out, ≈ 0.03 l/s (0.022 kg/s) at 7500 rpm
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.004,

@@ -97,6 +97,8 @@ export const NISSAN_R33_SIM_PROFILE: CarSimProfile = {
   // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) it failed the race gate on its 8 Classic GT
   // layouts (more contacts with the player's stand-in, wall touches in Watkins Glen's esses), laps 1 % quicker
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // The GT3's line: closed-wheel grip and downforce
   racingLine: 'gt3',
   // Fuel flow with the engine's speed: 0.00574 l/s per 1000 rpm flat out, ≈ 0.038 l/s (0.028 kg/s) at 6700 rpm

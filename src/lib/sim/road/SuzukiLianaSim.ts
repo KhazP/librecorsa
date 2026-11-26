@@ -72,6 +72,8 @@ export const SUZUKI_LIANA_SIM_PROFILE: CarSimProfile = {
   // race gate on its 18 Club Cup layouts by one lap-1 off or one more contact with the player's stand-in, laps 1.2-1.4 %
   // quicker
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // The road cars' line where a circuit has one for it, else the GT3's: lower grip and power than an F1 car's or a
   // GT3's move the apexes and braking points
   racingLine: 'road',

@@ -88,6 +88,8 @@ export const PORSCHE_934_RSR_SIM_PROFILE: CarSimProfile = {
   // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) its Group 4 fields left the road more on
   // lap 1 (68 → 75 offs in 105 races), and solo it ran past the kerbs at Spielberg, Spielberg South, Grobnik and VIR
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // The road cars' line where a circuit has one for it, else the GT3's: grip well short of a GT3's
   racingLine: 'road',
   // Fuel flow with the engine's speed: 0.0042 l/s per 1000 rpm flat out, ≈ 0.03 l/s at 7200 rpm [spec car.ini FUEL

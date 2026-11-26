@@ -129,6 +129,8 @@ export const CHAPARRAL_2D_SIM_PROFILE: CarSimProfile = {
   // (the '66: 3 → 5 contacts the AI was to blame for; the '67: lap-1 offs 412 → 545 in 90 races), and solo they ran past
   // the kerbs at Chang, Oschersleben and Bridgehampton
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // Fuel flow with the engine's speed: 0.00555 l/s per 1000 rpm flat out [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.005553,
 };
@@ -149,6 +151,8 @@ export const CHAPARRAL_2D_67_SIM_PROFILE: CarSimProfile = {
   // (the '66: 3 → 5 contacts the AI was to blame for; the '67: lap-1 offs 412 → 545 in 90 races), and solo they ran past
   // the kerbs at Chang, Oschersleben and Bridgehampton
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // [spec car.ini FUEL CONSUMPTION]
   fuelLPerS1000Rpm: 0.00619,
 };

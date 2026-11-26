@@ -74,6 +74,8 @@ export const VW_SCIROCCO_SIM_PROFILE: CarSimProfile = {
   // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) its fields left the road more on lap 1 at
   // Bridgehampton (Club Cup gate: lap-1 offs 3 → 7 at the whole room, 5 → 10 at half of it)
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // The road cars' line where a circuit has one for it, else the GT3's: lower grip and power than an F1 car's or a
   // GT3's move the apexes and braking points
   racingLine: 'road',
