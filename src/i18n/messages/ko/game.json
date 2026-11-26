@@ -144,7 +144,13 @@
       "nameTaken": "이미 사용 중인 이름입니다. 이 이름을 가진 계정에 로그인하거나, 랩 타임에서 드라이버 키를 가져오거나, 다른 이름으로 레이스해 주십시오",
       "pickName": "다른 이름을 선택해 주십시오",
       "challengeEnded": "해당 주간 챌린지가 종료되었습니다",
-      "challengeRules": "이번 주 챌린지 규칙에 맞게 주행한 랩이 아닙니다"
+      "challengeRules": "이번 주 챌린지 규칙에 맞게 주행한 랩이 아닙니다",
+      "tooFewSamples": "기록된 샘플이 너무 적습니다",
+      "lapNotClosed": "랩이 시작한 지점에서 끝나지 않습니다",
+      "standingStartRun": "구간 주행 타임 런은 스탠딩 스타트로 시작해야 합니다",
+      "speedsVsDistance": "기록된 속도가 주행 거리와 맞지 않습니다",
+      "distanceVsLength": "주행 거리가 랩 길이와 맞지 않습니다",
+      "impliedSpeed": "기록된 위치로 보면 속도가 420km/h를 넘습니다"
     }
   },
   "badges": {

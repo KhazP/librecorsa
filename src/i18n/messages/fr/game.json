@@ -144,7 +144,13 @@
       "nameTaken": "Ce nom est déjà pris. Connectez-vous au compte qui le détient, importez votre clé de pilote dans Temps au tour, ou courez sous un autre nom",
       "pickName": "Choisissez un autre nom",
       "challengeEnded": "Ce défi hebdomadaire est terminé",
-      "challengeRules": "Ce tour n’a pas été effectué selon les règles du défi de cette semaine"
+      "challengeRules": "Ce tour n’a pas été effectué selon les règles du défi de cette semaine",
+      "tooFewSamples": "L’enregistrement compte trop peu d’échantillons",
+      "lapNotClosed": "Le tour ne se termine pas là où il a commencé",
+      "standingStartRun": "Un contre-la-montre point à point doit commencer par un départ arrêté",
+      "speedsVsDistance": "Les vitesses enregistrées ne correspondent pas à la distance parcourue",
+      "distanceVsLength": "La distance parcourue ne correspond pas à la longueur du tour",
+      "impliedSpeed": "Les positions indiquent une vitesse supérieure à 420 km/h"
     }
   },
   "badges": {

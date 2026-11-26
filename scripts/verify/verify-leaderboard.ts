@@ -941,7 +941,18 @@ async function main(): Promise<void> {
     const sent = [BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, OLDER_PHYSICS_LAP, MOD_LAP, OLDER_PHYSICS, unknown.ok ? '' : unknown.error, marked.ok ? '' : marked.error];
     const missing = sent.filter((s) => !Object.hasOwn(BOARD_SENTENCES, s));
     check('board words: the game\'s and the Worker\'s lap answers each have a message', missing.length === 0, missing.join(' | '));
-    const sources = ['src/lib/net/leaderboard.ts', 'cloudflare/api/board.ts', 'cloudflare/api/lap-check.ts', 'src/lib/net/name-filter.ts', 'src/lib/net/weekly-challenge.ts']
+    // A recording whose samples don't agree: every reason the game gives before uploading (lap-plausibility.ts, read from
+    // its source so a new one needs a message too), and the Worker's refusal of positions too far apart
+    const plausibilitySource = readFileSync(join(process.cwd(), 'src/lib/sim/lap-plausibility.ts'), 'utf8');
+    const plausibility = [...plausibilitySource.matchAll(/return "([^"]+)"/g)].map((m) => m[1]);
+    const recorded = [...plausibility, 'Positions imply a speed above 420 km/h'];
+    const untranslated = recorded.filter((s) => !Object.hasOwn(BOARD_SENTENCES, s));
+    check(
+      'board words: a recording\'s refusals (the game\'s own check and the Worker\'s) each have a message',
+      plausibility.length >= 5 && untranslated.length === 0,
+      `${plausibility.length} reasons; ${untranslated.join(' | ')}`,
+    );
+    const sources = ['src/lib/net/leaderboard.ts', 'cloudflare/api/board.ts', 'cloudflare/api/lap-check.ts', 'src/lib/net/name-filter.ts', 'src/lib/net/weekly-challenge.ts', 'src/lib/sim/lap-plausibility.ts']
       .map((f) => readFileSync(join(process.cwd(), f), 'utf8'))
       .join('\n');
     const stale = Object.keys(BOARD_SENTENCES).filter((s) => !sources.includes(s));

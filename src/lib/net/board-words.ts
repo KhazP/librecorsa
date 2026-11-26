@@ -26,6 +26,14 @@ export const BOARD_SENTENCES: Readonly<Record<string, MessageKey>> = {
   "Pick another name": "game.board.errors.pickName",
   "That weekly challenge has ended": "game.board.errors.challengeEnded",
   "This lap was not driven to this week's challenge rules": "game.board.errors.challengeRules",
+  // A recording whose samples don't agree with each other (lap-plausibility.ts): the game says so before uploading, and
+  // the Worker's lap check refuses it too (cloudflare/api/lap-check.ts)
+  "Recording has too few samples": "game.board.errors.tooFewSamples",
+  "The lap does not end where it started": "game.board.errors.lapNotClosed",
+  "A point-to-point run must begin from a standing start": "game.board.errors.standingStartRun",
+  "Recorded speeds do not match the distance driven": "game.board.errors.speedsVsDistance",
+  "Distance driven does not match the lap length": "game.board.errors.distanceVsLength",
+  "Positions imply a speed above 420 km/h": "game.board.errors.impliedSpeed",
 };
 
 /** `sentence` in the current language when it is one the boards send, else as it came */

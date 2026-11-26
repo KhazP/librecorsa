@@ -144,7 +144,13 @@
       "nameTaken": "此名稱已被使用。請登入擁有此名稱的帳號、在圈速紀錄中匯入你的車手金鑰，或改用其他名稱參賽",
       "pickName": "請選擇其他名稱",
       "challengeEnded": "該每週挑戰已結束",
-      "challengeRules": "這一圈未依照本週挑戰的規則駕駛"
+      "challengeRules": "這一圈未依照本週挑戰的規則駕駛",
+      "tooFewSamples": "紀錄的取樣點太少",
+      "lapNotClosed": "這一圈的終點與起點不在同一處",
+      "standingStartRun": "點對點單趟計時必須以靜態起跑開始",
+      "speedsVsDistance": "紀錄的速度與行駛距離不符",
+      "distanceVsLength": "行駛距離與單圈長度不符",
+      "impliedSpeed": "位置紀錄顯示速度超過 420 km/h"
     }
   },
   "badges": {

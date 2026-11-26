@@ -144,7 +144,13 @@
       "nameTaken": "Nama ini sudah dipakai. Masuk ke akun pemiliknya, impor kunci pembalapmu di Waktu Lap, atau balapan dengan nama lain",
       "pickName": "Pilih nama lain",
       "challengeEnded": "Tantangan mingguan itu sudah berakhir",
-      "challengeRules": "Lap ini tidak ditempuh sesuai aturan tantangan minggu ini"
+      "challengeRules": "Lap ini tidak ditempuh sesuai aturan tantangan minggu ini",
+      "tooFewSamples": "Rekaman memiliki terlalu sedikit sampel",
+      "lapNotClosed": "Lap tidak berakhir di tempat awalnya",
+      "standingStartRun": "Run berwaktu titik-ke-titik harus dimulai dengan start diam",
+      "speedsVsDistance": "Kecepatan yang direkam tidak sesuai dengan jarak yang ditempuh",
+      "distanceVsLength": "Jarak yang ditempuh tidak sesuai dengan panjang lap",
+      "impliedSpeed": "Posisi yang direkam menunjukkan kecepatan di atas 420 km/h"
     }
   },
   "badges": {

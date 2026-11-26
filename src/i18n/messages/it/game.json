@@ -144,7 +144,13 @@
       "nameTaken": "Questo nome è già in uso. Accedi all’account che lo possiede, importa la tua chiave del pilota in Tempi sul giro o corri con un altro nome",
       "pickName": "Scegli un altro nome",
       "challengeEnded": "Quella sfida settimanale è finita",
-      "challengeRules": "Questo giro non è stato percorso secondo le regole della sfida di questa settimana"
+      "challengeRules": "Questo giro non è stato percorso secondo le regole della sfida di questa settimana",
+      "tooFewSamples": "La registrazione ha troppo pochi campioni",
+      "lapNotClosed": "Il giro non finisce dove è iniziato",
+      "standingStartRun": "Una salita a tempo punto a punto deve iniziare con una partenza da fermo",
+      "speedsVsDistance": "Le velocità registrate non corrispondono alla distanza percorsa",
+      "distanceVsLength": "La distanza percorsa non corrisponde alla lunghezza del giro",
+      "impliedSpeed": "Le posizioni indicano una velocità superiore a 420 km/h"
     }
   },
   "badges": {
