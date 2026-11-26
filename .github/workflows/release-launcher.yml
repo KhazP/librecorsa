@@ -283,13 +283,14 @@ jobs:
       - name: Write and sign the update manifest
         env:
           LAUNCHER_UPDATE_KEY: ${{ secrets.LAUNCHER_UPDATE_KEY }}
+        # The archives' paths are absolute: the shell expands them here, and the tool runs in launcher/ (go -C)
         run: |
           shopt -s nullglob
           go -C launcher run ./tools/release manifest \
             --version "$VERSION" \
             --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/launcher-v$VERSION" \
-            --out ../artifacts \
-            ../artifacts/*.zip ../artifacts/*.tar.gz
+            --out "$PWD/artifacts" \
+            "$PWD"/artifacts/*.zip "$PWD"/artifacts/*.tar.gz
           ls -l artifacts
           cat artifacts/launcher-latest.json
 
