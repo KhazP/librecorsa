@@ -86,6 +86,14 @@ export interface SimulatorCar {
   readonly worldVelocity?: THREE.Vector3;
   /** Fixed-step models: simulated time not yet stepped this frame (s); the pose is drawn carried forward by it */
   readonly renderLeadS?: number;
+  /**
+   * The pose at the moment `telemetry` is from, for the lap recording (its samples are stamped with the telemetry's lap
+   * time). A car simulated in the worker draws `worldPosition` carried to the frame's time, up to 50 ms either way, and
+   * sends its telemetry with every other state only: recorded from the drawn pose, a lap at speed seemed to jump
+   * metres between samples and the online board refused it ("Positions imply a speed above 420 km/h"). Absent:
+   * `worldPosition` / `worldQuaternion` are that pose (a car stepped on the page)
+   */
+  readonly telemetryPose?: { readonly position: THREE.Vector3; readonly quaternion: THREE.Quaternion };
   readonly wheels: readonly [SimulatorWheel, SimulatorWheel, SimulatorWheel, SimulatorWheel];
   /** Optional visual tyre state per corner (FR, FL, RR, RL) for the GPU tyre deformation */
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];

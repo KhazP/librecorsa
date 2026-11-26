@@ -4021,10 +4021,12 @@ export class DriveSession {
 
       // Laps: summary card, personal best (saved, and raced as the ghost) — practice only
       if (driving && !aiField && !mpRace && !quali) {
+        // The pose the telemetry's lap time is from, not the one drawn this frame (`telemetryPose`)
+        const lapPose = physics.telemetryPose;
         const done = lapRecorder.update({
           telemetry: physics.telemetry,
-          position: physics.worldPosition,
-          quaternion: physics.worldQuaternion,
+          position: lapPose?.position ?? physics.worldPosition,
+          quaternion: lapPose?.quaternion ?? physics.worldQuaternion,
           // Laps are ranked only against laps driven with the same assists, realism, surface and physics revision;
           // an autopilot lap never ranks
           conditions: {
