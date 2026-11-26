@@ -48,14 +48,14 @@ The road surface is tracked across 64 sectors around the lap:
 - **Starting rubber presets:** `Green` (`8%` rubber), `Light` (`30%`), `Medium` (`50%`), `Natural` (`65%`, default), `Heavy` (`80%`), and `Saturated` (`95%`), with progression rates of `0×` (static), `0.5×`, `1×`, `2×`, and `5×`. Time trials and the weekly challenge lock the track to fully rubbered-in dry grip with no marbles or wash-off.
 - **Rubber buildup and marbles:** Cars driving on-line lay rubber into the racing groove, increasing dry grip, while shedding rubber marbles off-line that reduce off-line grip and temporarily coat tyres if you run wide.
 - **Rain wash-off and drying line:** Heavy rain gradually rinses rubber back down toward `35%`. When rain eases, cars squeeze water out of the racing line first, creating a visibly darker, higher-grip dry ribbon before the rest of the asphalt drains.
-- **Wet groove inversion ("the wet line"):** Once track wetness exceeds `0.18`, polished rubber laid along the dry racing line seals the asphalt pores and becomes *slicker* than unrubbered tarmac beside it—rewarding wider wet-line entries and exits in the rain.
+- **Wet groove inversion ("the wet line"):** Once track wetness exceeds `0.18`, polished rubber laid along the dry racing line seals the asphalt pores and becomes *slicker* than unrubbered tarmac beside it, rewarding wider wet-line entries and exits in the rain.
 
 ## 2026 F1 active aero and hybrid rules
 
 Open-wheel cars follow era-appropriate overtaking rules based on their model year:
 
 - **2026 onward (`straight-mode-2026`):** Active aero **Straight Mode** plus **Overtake Mode** hybrid deployment.
-- **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only—free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
+- **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only: free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
 - **Pre-2011 (`none`):** Fixed wings; flaps stay closed.
 
 ### Active aero: Z-Mode and X-Mode (Straight Mode)
@@ -77,7 +77,7 @@ The 2026 power unit pairs a 1.6 L V6 turbo with a `350 kW` MGU-K and a `4 MJ` us
 
 ## Garage and car setups
 
-Open the **Garage** from the menu or pause screen to tune your car, save named setups, or exchange setups via `LC1-` share codes and `.json` files (see [Sharing car setups](ONLINE.md#sharing-car-setups)). Every car uses one of two class setup sheets anchored to that car's real physical baseline:
+Open the **Garage** from the menu or pause screen to tune your car, save named setups, or exchange setups via `LC1-` share codes and `.json` files (see [Sharing a car setup](ONLINE.md#sharing-a-car-setup)). Every car uses one of two class setup sheets anchored to that car's real physical baseline:
 
 ### F1 setup sheet (`lc26`, `f12026-car`, and F1 mods)
 
@@ -107,4 +107,4 @@ Closed-wheel cars share a unified sheet that automatically exposes only the hard
 | **Aero** | Aero package & rear wing clicks (`0`–`10`, winged cars only), front & rear ride height (mm), front & rear brake ducts (`0`–`6`), radiator opening (`1`–`7`, where fitted) |
 | **Fuel** | Starting fuel ballast (litres and kg) |
 
-You can also adjust live in-car dials—such as brake bias and differential settings (`entry`, `mid`, `exit`)—on track through the **MFD** (`O` to toggle, `I` or `Insert` to cycle pages).
+You can also adjust live in-car dials on track, such as brake bias and the differential's `entry`, `mid` and `exit` settings, through the **MFD** (`O` to toggle, `I` or `Insert` to cycle pages).

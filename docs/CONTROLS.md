@@ -33,6 +33,7 @@ Default bindings are mapped by physical key position, so an AZERTY keyboard auto
 | Racing line, autopilot, mouse steering | `R`, `P`, `V` |
 | Restart, restart lap (flying start), instant replay | `Backspace`, `L`, `T` |
 | Headlights on / off, flash headlights (hold) | `U`, `Y` |
+| Pit speed limiter | `\` |
 | Show / hide HUD, open / close lap board | `H`, `J` |
 | Open / close MFD, next MFD page | `O`, `Insert` or `I` |
 | MFD: pick a setting, change it (Electronics and Pit pages) | `,` `.`, `-` `=` |
@@ -98,7 +99,7 @@ In Chrome and Edge, LibreCorsa can communicate directly with PlayStation control
 
 ## Wheels and pedals
 
-Steering axes, pedals, and wheel buttons are read via the browser's Gamepad API, meaning virtually any wheel recognized as a game controller by your OS can drive. When LibreCorsa detects a known wheel base by name, it automatically binds steering, selects the wheel type, and enables force feedback—though you should still run calibration.
+Steering axes, pedals, and wheel buttons are read via the browser's Gamepad API, meaning virtually any wheel recognized as a game controller by your OS can drive. When LibreCorsa detects a known wheel base by name, it automatically binds steering, selects the wheel type, and enables force feedback, though you should still run calibration.
 
 All wheel settings live under **Controls > Wheel**:
 
@@ -108,7 +109,7 @@ All wheel settings live under **Controls > Wheel**:
 - **Rotation:** Set to `360°`, `540°`, `900°`, `1080°`, or **Custom** (`180°`–`2520°`) to match your wheel driver's configured lock. The in-game steering wheel then tracks your physical rim 1:1 up to the real car's steering lock (`360°` for Formula cars, `640°` for GT3, `1080°` for the Suzuki Liana). With force feedback enabled, a soft lock pushes back past the car's physical limit.
 - **Brake curve (Advanced):** Use `1.0` for load-cell pedals, or `1.3`–`1.6` for potentiometer pedals to give finer modulation near the top of pedal travel.
 - **Steering filters (Advanced):** Override steering lock per car class if you prefer a quicker rack than the real car, and tune **Centre dead zone** and **Input filter**.
-- **Wheel buttons:** Unbound by default. Select a slot and press a button on your rim. At minimum, bind gear paddles and a pause button—pulling both paddles together selects neutral.
+- **Wheel buttons:** Unbound by default. Select a slot and press a button on your rim. At minimum, bind gear paddles and a pause button; pulling both paddles together selects neutral.
 
 > If you load onto the track with an uncalibrated throttle or brake axis on a wheel, a **Calibrate pedals** shortcut appears on the HUD outside of races and jumps directly to this tab.
 
@@ -148,7 +149,7 @@ Open **Settings > Force feedback** and follow these steps:
 - **Effects (Advanced):** Configure **Damping**, **Kerb vibration**, **ABS vibration**, **Slip vibration**, and **Shift warning**. Slip vibration and shift warning are only available over the direct browser WebHID connection.
 - **Fine tuning (Advanced):** Adjust **Force curve**, **Minimum force**, **Smoothing**, **Downforce compensation**, and **Collision protection**. Hardware **Friction** and **Inertia** sliders appear automatically if your wheel base supports running them on-device.
 - **Per-car strength:** HUD layouts that include a Force feedback meter show **In range** or **Clipping** as you drive, and offer a one-click gain adjustment if a car consistently clips or feels too light. Saved per-car multipliers are listed in the **Forces** card, where **Clear** removes individual overrides.
-- **Connection (Advanced):** Toggle **Browser connection** and configure **Rev lights** (supported on Logitech G27 and G29). Turning off **Browser connection**—or using a wheel the browser cannot drive—automatically falls back to the local Windows bridge.
+- **Connection (Advanced):** Toggle **Browser connection** and configure **Rev lights** (supported on Logitech G27 and G29). Turning off **Browser connection**, or using a wheel the browser cannot drive, automatically falls back to the local Windows bridge.
 
 ## Supported wheels
 
@@ -176,13 +177,13 @@ For protocol details and how to add support for a new base, see [Porting wheels]
 
 ## Troubleshooting
 
-Switch **Settings** to **Advanced** mode first—once a wheel is connected, the **Connection** card, bridge status, and **Damping** controls are only visible there.
+Switch **Settings** to **Advanced** mode first: once a wheel is connected, the **Connection** card, bridge status, and **Damping** controls are only visible there.
 
 - **Wheel or controller isn't listed:** Press any button on the hardware to wake it, then re-open **Controls > Device**.
 - **No steering or inverted/wrong pedal range:** Run **Calibrate all** under **Controls > Wheel**, making sure to depress each pedal completely to its stop.
 - **No "Connect wheel" button:** Your browser doesn't support WebHID. In Advanced mode, **Browser connection** explains `"WebHID needs Chrome or Edge on https or localhost"`. Switch to Chrome or Edge, or use the Windows bridge.
 - **Logitech G920 or G923 (Xbox) doesn't appear in the picker:** Switch the wheel into PC mode via Logitech G HUB first; the browser cannot see it in Xbox mode.
 - **Thrustmaster wheel is rejected:** Thrustmaster bases boot in a start-up mode that requires a system driver (such as Thrustmaster's Windows driver) to switch them over before the browser can access them.
-- **Wheel connects, but produces no force:** Verify that the centring spring is disabled in your wheel software, then click **Test**. Next, set **Damping** to `100%` and turn the rim by hand. If the wheel feels heavier, it is accepting condition effects and the issue is isolated to constant force—please file a report.
+- **Wheel connects, but produces no force:** Verify that the centring spring is disabled in your wheel software, then click **Test**. Next, set **Damping** to `100%` and turn the rim by hand. If the wheel feels heavier, it is accepting condition effects and the issue is isolated to constant force, please file a report.
 - **"Taken over" status on the bridge:** Another browser tab claimed the wheel. Close the other tab, or toggle **Force feedback** off and back on.
 - **Submitting a wheel report:** Click **Copy diagnostics** in the **Connection** card and paste the output into a [wheel report issue](https://github.com/librecorsa/librecorsa/issues/new?template=wheel-report.yml). Confirmed reports help move wheels into the tested table.
