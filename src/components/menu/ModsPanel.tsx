@@ -280,8 +280,10 @@ export const ModsPanel: React.FC = () => {
             <li key={p.id} className="flex flex-col gap-1.5 border-t border-lc-line py-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-semibold text-lc-chalk">
-                    {p.name} {p.version ? <span className="font-normal text-lc-slate">{p.version}</span> : null}
+                  {/* A long name is cut short, never its version */}
+                  <span className="flex min-w-0 items-baseline gap-1.5 font-semibold text-lc-chalk">
+                    <span className="truncate">{p.name}</span>
+                    {p.version ? <span className="max-w-[45%] shrink-0 truncate font-normal text-lc-slate">{p.version}</span> : null}
                   </span>
                   <span className="lc-hint truncate">
                     {[p.manifest?.credit.author, p.id, counts(p), formatSize(p.bytes)].filter(Boolean).join(" · ")}
