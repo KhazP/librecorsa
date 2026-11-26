@@ -232,8 +232,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   const mpRace = telemetry.race?.multiplayer === true || props.raceRunning === true;
   const guest = (mpRace || Boolean(props.lobby)) && props.isHost !== true;
   const career = props.careerRound;
-  const canRestart = !guest && (!career || career.restartNote !== null);
-  const canFly = !mpRace && !guest && !career;
+  // A career round's qualifying is practice against the clock: its restart is a flying lap at the car's own pace, free,
+  // as the restart key's is (a mulligan is the race's restart, and the grid start has no place in qualifying)
+  const careerQualifying = Boolean(career && props.onEndQualifying);
+  const canRestart = !guest && !careerQualifying && (!career || career.restartNote !== null);
+  const canFly = !mpRace && !guest && (!career || careerQualifying);
   const [chosenPanel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { mode, family } = useInputMode();
