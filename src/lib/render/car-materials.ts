@@ -291,9 +291,9 @@ const CARBON_FRAGMENT_PATCHES: readonly Patch[] = [
 	[
 		"#include <roughnessmap_fragment>",
 		/* glsl */ `
-vec3 lc26N = normalize( vLc26ObjNrm );
+vec3 lc26N = dot( vLc26ObjNrm, vLc26ObjNrm ) > 1e-8 ? normalize( vLc26ObjNrm ) : vec3( 0.0, 1.0, 0.0 );
 vec3 lc26W = pow( abs( lc26N ), vec3( 4.0 ) );
-lc26W /= ( lc26W.x + lc26W.y + lc26W.z );
+lc26W /= max( lc26W.x + lc26W.y + lc26W.z, 1e-6 );
 float lc26Inv = ${(1 / CARBON_TOW_PITCH).toFixed(1)};
 vec2 lc26Hx = lc26Twill( vLc26ObjPos.zy * lc26Inv );
 vec2 lc26Hy = lc26Twill( vLc26ObjPos.xz * lc26Inv );

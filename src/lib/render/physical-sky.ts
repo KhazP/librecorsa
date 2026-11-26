@@ -226,7 +226,8 @@ export const CLOUDS_COMPOSITE_PATCHES: readonly ShaderPatch[] = [
   ],
   [
     "outputColor.rgb = inputColor.rgb * (1.0 - clouds.a) + clouds.rgb;",
-    /* glsl */ `vec3 cloudsColor = clouds.rgb * cloudsRadianceScale;
+    /* glsl */ `if (any(isnan(clouds)) || any(isinf(clouds))) clouds = vec4(0.0);
+  vec3 cloudsColor = clouds.rgb * cloudsRadianceScale;
   cloudsColor = mix(cloudsColor, vec3(dot(cloudsColor, vec3(0.2126, 0.7152, 0.0722))) * cloudsGreyTint, cloudsGrey);
   // At night the clouds' undersides take the glow of the ground (towns, the haze), instead of going black
   cloudsColor += cloudsNightGlow * clouds.a;
