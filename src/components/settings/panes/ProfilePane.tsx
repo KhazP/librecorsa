@@ -7,7 +7,7 @@ import { CHOSEN_TILE, cx, MOTION } from "@/components/ui/styles";
 import { Icon } from "@/components/ui/icons";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { CLAIMED_TELEMETRY_PORTS, DEFAULT_TELEMETRY_PORT } from "@/lib/input/device-input";
-import { sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
+import { codeFromName, sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
 import { CARS } from "@/lib/cars/car-registry";
 import { averageFinish, loadDriverStats, mostDriven, type DriverStats } from "@/lib/sim/driver-stats";
 import { TRACKS } from "@/lib/track-registry";
@@ -115,8 +115,16 @@ function DriverStatsCard() {
   );
 }
 
-/** Settings > Profile and data > Driver: who other players see, and the driver's own totals */
-export function DriverTab() {
+/** Driver identity card (name, 3-letter timing code, colour, auto-upload): shared by Settings > Profile and first-run setup */
+export function DriverProfileCard({
+  showPreview = false,
+  onCommitted,
+}: {
+  /** Shows a live timing-tower preview pill beside the name/code fields (used in first-run setup) */
+  showPreview?: boolean;
+  /** Called after Enter commits a valid name or code (lets the wizard move focus onto Next / Lights out) */
+  onCommitted?: () => void;
+} = {}) {
   const env = useSettingsEnv();
   const tx = useTranslations("settings.profile.driver");
   const { profile } = env.settings;
@@ -137,8 +145,11 @@ export function DriverTab() {
   }, []);
 
   /** `retry`: Enter, which may send a name again after the board said no (it may have been out of reach) */
-  const commitName = (retry = false) => {
-    if (nameDraft === null) return;
+  const commitName = (retry = false, notify = false) => {
+    if (nameDraft === null) {
+      if (notify) onCommitted?.();
+      return;
+    }
     if (env.onRenameDriver) {
       // The board has the last word: the field keeps the typed name until it has taken, or says why it did not
       const typed = nameDraft;
@@ -160,7 +171,10 @@ export function DriverTab() {
         (error) => {
           if (alive.current) {
             setNameError(error);
-            if (error === null) setNameDraft((d) => (d === typed ? null : d));
+            if (error === null) {
+              setNameDraft((d) => (d === typed ? null : d));
+              if (notify) onCommitted?.();
+            }
           }
           settle();
         },
@@ -173,13 +187,21 @@ export function DriverTab() {
       return;
     }
     const name = sanitizeDriverName(nameDraft);
-    if (name !== profile.name) env.update((s) => ({ ...s, profile: { ...s.profile, name, generated: false } }));
+    const code = profile.generated ? codeFromName(name) : profile.code;
+    if (name !== profile.name || profile.generated) {
+      env.update((s) => ({ ...s, profile: { ...s.profile, name, code, generated: false } }));
+    }
     setNameDraft(null);
+    if (notify) onCommitted?.();
   };
-  const commitCode = () => {
-    if (codeDraft === null) return;
-    env.update((s) => ({ ...s, profile: { ...s.profile, code: sanitizeDriverCode(codeDraft) } }));
+  const commitCode = (notify = false) => {
+    if (codeDraft === null) {
+      if (notify) onCommitted?.();
+      return;
+    }
+    env.update((s) => ({ ...s, profile: { ...s.profile, code: sanitizeDriverCode(codeDraft), generated: false } }));
     setCodeDraft(null);
+    if (notify) onCommitted?.();
   };
   // An edit is saved on Enter, on leaving the field, and when the screen goes away mid-edit
   const commits = useRef({ commitName, commitCode });
@@ -192,48 +214,84 @@ export function DriverTab() {
     [],
   );
   const onEnter = (commit: () => void) => (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") commit();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
   };
 
+  const liveName = nameDraft !== null ? sanitizeDriverName(nameDraft) : profile.name;
+  const liveCode =
+    codeDraft !== null
+      ? sanitizeDriverCode(codeDraft)
+      : nameDraft !== null && profile.generated
+        ? codeFromName(liveName)
+        : profile.code;
+
+  return (
+    <SettingsCard
+      title={tx("title")}
+      rows={[autoUpload]}
+      before={
+        <>
+          <div className={cx("grid gap-3 pb-2", showPreview ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" : "")}>
+            <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+              <TextField
+                label={tx("name")}
+                maxLength={16}
+                autoComplete="off"
+                spellCheck={false}
+                value={nameDraft ?? profile.name}
+                onChange={(v) => {
+                  sentName.current = null;
+                  setNameDraft(v);
+                  setNameError(null);
+                }}
+                onKeyDown={onEnter(() => commitName(true, true))}
+                onBlur={() => commitName()}
+                error={nameError ?? undefined}
+                data-nav-default=""
+              />
+              <TextField
+                label={tx("code")}
+                maxLength={3}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                value={codeDraft ?? (nameDraft !== null && profile.generated ? liveCode : profile.code)}
+                onChange={(v) => setCodeDraft(v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3))}
+                onKeyDown={onEnter(() => commitCode(true))}
+                onBlur={() => commitCode()}
+                className="[&_input]:lc-mono [&_input]:text-center [&_input]:tracking-[0.14em]"
+              />
+            </div>
+            {showPreview ? (
+              <Well className="flex h-11 items-center gap-3 px-4">
+                <span className="lc-data text-[12px] text-lc-volt">P1</span>
+                <span
+                  aria-hidden
+                  className="h-4.5 w-1 shrink-0 rounded-full"
+                  // ui-allow: hex-in-style driver colour is player data
+                  style={{ backgroundColor: profile.color }}
+                />
+                <span className="lc-mono text-[14px] font-extrabold tracking-[0.12em] text-lc-chalk">{liveCode}</span>
+                <span className="max-w-[14rem] truncate text-[14px] font-semibold text-lc-fog">{liveName}</span>
+              </Well>
+            ) : null}
+          </div>
+          <ColourRow />
+        </>
+      }
+    />
+  );
+}
+
+/** Settings > Profile and data > Driver: who other players see, and the driver's own totals */
+export function DriverTab() {
   return (
     <>
-    <SettingsCard title={tx("title")} rows={[autoUpload]} before={
-      <>
-      <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3 pb-2">
-        <TextField
-          label={tx("name")}
-          maxLength={16}
-          autoComplete="off"
-          spellCheck={false}
-          value={nameDraft ?? profile.name}
-          onChange={(v) => {
-            sentName.current = null;
-            setNameDraft(v);
-            setNameError(null);
-          }}
-          onKeyDown={onEnter(() => commitName(true))}
-          onBlur={() => commitName()}
-          error={nameError ?? undefined}
-          data-nav-default=""
-        />
-        <TextField
-          label={tx("code")}
-          maxLength={3}
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          value={codeDraft ?? profile.code}
-          onChange={(v) => setCodeDraft(v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3))}
-          onKeyDown={onEnter(commitCode)}
-          onBlur={commitCode}
-          className="[&_input]:lc-mono [&_input]:text-center [&_input]:tracking-[0.14em]"
-        />
-      </div>
-      <ColourRow />
-      </>
-    }>
-    </SettingsCard>
-    <DriverStatsCard />
+      <DriverProfileCard />
+      <DriverStatsCard />
     </>
   );
 }

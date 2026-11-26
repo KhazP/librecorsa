@@ -401,6 +401,7 @@
     "device": "Dispositivo de entrada",
     "assists": "Assistências de pilotagem",
     "hud": "Layout do HUD",
+    "driver": "Perfil de piloto",
     "car": "Escolher carro",
     "steps": "Etapas da configuração",
     "stepDone": "Concluído",

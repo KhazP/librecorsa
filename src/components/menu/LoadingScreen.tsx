@@ -9,6 +9,7 @@ import { connectedPads } from "@/lib/input/device-input";
 import { keyLabel } from "@/lib/input/bindings";
 import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { enterFullscreenOnTouch } from "@/lib/install-app";
+import { notePadInput } from "./input-mode";
 import { padPressTracker } from "./useMenuNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { Meter } from "@/components/ui";
@@ -251,8 +252,21 @@ export const LoadingScreen: React.FC<{
   useEffect(() => {
     if (!ready) return;
     const onKey = (e: KeyboardEvent) => {
-      // Only the key that starts is used up: during the fade the menu underneath already takes keys
-      if (e.repeat || leavingRef.current) return;
+      // Only the key that starts is used up: during the fade the menu underneath already takes keys.
+      // Ignore pure modifier keys and browser shortcuts (Cmd+Tab, Cmd+R, Alt+Tab).
+      if (
+        e.repeat ||
+        leavingRef.current ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.key === "Shift" ||
+        e.key === "Control" ||
+        e.key === "Alt" ||
+        e.key === "Meta" ||
+        e.key === "CapsLock"
+      )
+        return;
       e.preventDefault();
       start();
     };
@@ -268,7 +282,12 @@ export const LoadingScreen: React.FC<{
     const pressed = padPressTracker();
     const poll = () => {
       raf = requestAnimationFrame(poll);
-      if (pressed(connectedPads())) start();
+      const pads = connectedPads();
+      if (pressed(pads)) {
+        const standard = pads.find((p) => p.mapping === "standard");
+        if (standard) notePadInput(standard.id);
+        start();
+      }
     };
     raf = requestAnimationFrame(poll);
     return () => {

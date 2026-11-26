@@ -401,6 +401,7 @@
     "device": "입력 장치",
     "assists": "주행 보조",
     "hud": "HUD 레이아웃",
+    "driver": "드라이버 프로필",
     "car": "차량 선택",
     "steps": "설정 단계",
     "stepDone": "완료",

@@ -401,6 +401,7 @@
     "device": "Périphérique de commande",
     "assists": "Aides à la conduite",
     "hud": "Disposition du HUD",
+    "driver": "Profil de pilote",
     "car": "Choisir la voiture",
     "steps": "Étapes de configuration",
     "stepDone": "Terminé",

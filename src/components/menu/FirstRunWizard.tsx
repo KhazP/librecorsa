@@ -10,7 +10,7 @@ import { KeyboardStep } from "./steps/KeyboardStep";
 import { ControllerStep } from "./steps/ControllerStep";
 import { WheelStep } from "./steps/WheelStep";
 import { AssistsStep } from "./steps/AssistsStep";
-import { CarStep } from "./steps/CarStep";
+import { DriverStep } from "./steps/DriverStep";
 import { HudStep } from "./steps/HudStep";
 import { usePhoneLayout } from "@/components/hud/styles/PhoneHud";
 import type { SetupStepProps } from "./steps/types";
@@ -22,20 +22,23 @@ import { KeyCap, PadGlyph, PromptBar } from "@/components/ui/prompts";
 import { cx } from "@/components/ui/styles";
 import { SettingsEnvProvider, type SettingsEnv } from "@/components/settings/env";
 
-export type WizardStepId = "device" | "setup" | "assists" | "hud" | "car";
+export type WizardStepId = "device" | "setup" | "assists" | "hud" | "driver";
 /** The first visit, or the same setup run again from Settings > Controls > Device */
 export type WizardMode = "first-run" | "again";
 
 /**
- * How the player drives, then what they see on the screen, then the car and the grid. The HUD step comes after the
- * assists (both shape the drive) and before the car, whose step ends on Lights out with the car on the turntable.
+ * How the player drives, then what they see on the screen, then their driver profile and starting view before Lights out.
  */
-const STEPS: readonly WizardStepId[] = ["device", "setup", "assists", "hud", "car"];
+const STEPS: readonly WizardStepId[] = ["device", "setup", "assists", "hud", "driver"];
 
 export interface FirstRunWizardProps extends SetupStepProps {
   mode: WizardMode;
   /** The current car's steering lock (road-wheel degrees), for the countersteer sliders */
   steerLockDeg?: number;
+  /** Claims a new driver name on the online board: null once taken, else why not */
+  onRenameDriver?: (name: string) => Promise<string | null>;
+  /** Marks the current generated driver name as confirmed when the player finishes the Driver step */
+  onConfirmDriverName?: () => void;
   /** Finished (first run: start driving; again: return) */
   onFinish: () => void;
   /** Left via Back on the first step */
@@ -46,11 +49,25 @@ export interface FirstRunWizardProps extends SetupStepProps {
 }
 
 /**
- * First-run setup (device, its setup, assists, HUD, car), also run again from Settings. Docked left so the car stays
- * visible on the right. Its rows are the Settings screen's own, shown at the Simple level.
+ * First-run setup (device, its setup, assists, HUD, car), also run again from Settings. Full-height, centred shell
+ * matching Settings and Career so the step rail, step body and footer stay aligned across every step.
  */
+const isInteractiveControl = (el: Element | null): boolean =>
+  el instanceof HTMLButtonElement ||
+  el instanceof HTMLAnchorElement ||
+  el instanceof HTMLInputElement ||
+  el instanceof HTMLTextAreaElement ||
+  el instanceof HTMLSelectElement;
+
+/** An already-selected radio option (outside class tabs) where pressing Enter confirms the choice and continues */
+const isConfirmRadio = (el: Element | null): boolean =>
+  el instanceof HTMLButtonElement &&
+  el.getAttribute("role") === "radio" &&
+  el.getAttribute("aria-checked") === "true" &&
+  !el.closest("[data-wizard-stay]");
+
 export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
-  const { mode, onFinish, onExit, onSkip, onStepChange } = props;
+  const { mode, onFinish, onExit, onSkip, onStepChange, onRenameDriver, onConfirmDriverName } = props;
   // A touch screen offers its own controls first; driving by touch has no key setup to go through
   const [touchFirst] = useState(isTouchDevice);
   const [touchPicked, setTouchPicked] = useState(touchFirst);
@@ -64,6 +81,8 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const last = stepIndex === steps.length - 1;
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const nextBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [enterAdvances, setEnterAdvances] = useState(true);
   /** The player chose a device on the first step: auto-detect must not override it when they come back to it */
   const devicePickedRef = useRef(mode === "again");
   const { mode: inputMode, family } = useInputMode();
@@ -79,56 +98,67 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
       steerLockDeg: props.steerLockDeg,
       carId: props.carId,
       vehicleModel: props.vehicleModel,
+      onRenameDriver,
     }),
-    [props.settings, props.onChangeSettings, props.gamepadRumble, props.onToggleGamepadRumble, props.steerLockDeg, props.carId, props.vehicleModel],
+    [props.settings, props.onChangeSettings, props.gamepadRumble, props.onToggleGamepadRumble, props.steerLockDeg, props.carId, props.vehicleModel, onRenameDriver],
   );
+
+  const syncEnterHint = () => {
+    const el = document.activeElement;
+    setEnterAdvances(el === nextBtnRef.current || isConfirmRadio(el) || !isInteractiveControl(el));
+  };
 
   useEffect(() => {
     onStepChange?.(step);
-    const stepBody = bodyRef.current;
-    stepBody?.scrollTo({ top: 0 });
-    // On roomy screens Next follows a short step's content, so the next step's controls can come up under the pointer:
-    // a quick second click must not unbind a key or move a slider there. Keys and pads are not affected.
-    if (stepBody) stepBody.style.pointerEvents = "none";
-    const settle = window.setTimeout(() => {
-      if (stepBody) stepBody.style.pointerEvents = "";
-    }, 400);
-    // A new step starts on its marked first row (or its first control), never on a reset
-    requestAnimationFrame(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+    // Start on the step's marked default option; where a step has none (Keyboard, so Enter never traps the player in
+    // key-rebinding), land on Next so Enter continues straight through and Up moves into the bindings.
+    const raf = requestAnimationFrame(() => {
       const body = bodyRef.current;
-      if (!body) return;
-      const el =
-        body.querySelector<HTMLElement>("[data-nav-default]") ??
-        body.querySelector<HTMLElement>("button:not([disabled]):not([data-card-reset]):not([data-nav-skip]), input:not([disabled])");
+      const el = body?.querySelector<HTMLElement>("[data-nav-default]") ?? nextBtnRef.current;
       el?.focus({ preventScroll: true });
+      syncEnterHint();
     });
-    return () => {
-      window.clearTimeout(settle);
-      if (stepBody) stepBody.style.pointerEvents = "";
-    };
+    return () => cancelAnimationFrame(raf);
   }, [step, onStepChange]);
 
-  const next = () => (last ? onFinish() : setStepIndex(stepIndex + 1));
-  const back = () => (stepIndex === 0 ? onExit() : setStepIndex(stepIndex - 1));
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onChange = () => requestAnimationFrame(syncEnterHint);
+    root.addEventListener("focusin", onChange);
+    root.addEventListener("focusout", onChange);
+    root.addEventListener("click", onChange);
+    return () => {
+      root.removeEventListener("focusin", onChange);
+      root.removeEventListener("focusout", onChange);
+      root.removeEventListener("click", onChange);
+    };
+  }, []);
 
-  // B / Esc back, Menu next, LB / RB (Q / E) step back / next; Enter continues unless a control has focus
-  useFocusNav(rootRef, { onBack: back, onStart: next, onPrevTab: back, onNextTab: next, autoFocus: false });
+  const finish = () => {
+    if (step === "driver") onConfirmDriverName?.();
+    onFinish();
+  };
+  const next = () => (last ? finish() : setStepIndex(stepIndex + 1));
+  const back = () => (stepIndex === 0 ? onExit() : setStepIndex(stepIndex - 1));
+  // Q / E and LB / RB move strictly between steps without accidentally exiting on step 1 or launching on the last step
+  const prevStep = () => setStepIndex((i) => Math.max(0, i - 1));
+  const nextStep = () => setStepIndex((i) => Math.min(steps.length - 1, i + 1));
+
+  // B / Esc back, Menu next, LB / RB (Q / E) step back / next; Enter advances on confirmed choices or Next
+  useFocusNav(rootRef, { onBack: back, onStart: next, onPrevTab: prevStep, onNextTab: nextStep, autoFocus: false });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // useFocusNav runs first and marks the keys it handled; like it, this stays out of a capture or calibration
-      if (e.defaultPrevented || isMenuNavSuspended() || (e.code !== "Enter" && e.code !== "NumpadEnter")) return;
-      // Controls that take Enter themselves (buttons, links, fields), as useFocusNav leaves them
+      if (e.defaultPrevented || e.repeat || isMenuNavSuspended() || (e.code !== "Enter" && e.code !== "NumpadEnter")) return;
       const el = document.activeElement;
-      if (
-        el instanceof HTMLButtonElement ||
-        el instanceof HTMLAnchorElement ||
-        el instanceof HTMLInputElement ||
-        el instanceof HTMLTextAreaElement ||
-        el instanceof HTMLSelectElement
-      )
-        return;
-      e.preventDefault();
-      next();
+      // Next handles its own click via the native button
+      if (el === nextBtnRef.current) return;
+      if (isConfirmRadio(el) || !isInteractiveControl(el)) {
+        e.preventDefault();
+        next();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -140,40 +170,23 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
     device: tx("device"),
     assists: tx("assists"),
     hud: tx("hud"),
-    car: tx("car"),
+    driver: tx("driver"),
   };
   const stepTitle = (s: WizardStepId) => (s === "setup" ? setupTitles[device] : stepTitles[s]);
   const title = stepTitle(step);
-  // The step's width: the wheel's two columns get the most room, the car the least (it turns on the right). The
-  // frame around the rail, the step and its actions is as wide as they are (rail 208 + gap 40 on roomy screens), so
-  // Next ends where the step does, not in the far corner, and the scene keeps the rest of the screen. Its least is
-  // 800 px, about what the actions row needs on one line (where it doesn't fit, Next wraps under Back, still right).
-  const { main: mainWidth, frame: frameWidth } =
-    step === "setup" && device === "wheel"
-      ? { main: "max-w-[1240px]", frame: "max-w-[1240px] not-compact:max-w-[1488px]" }
-      : step === "setup" && device === "keyboard"
-        ? // Room for the key table's two columns with their labels on one line
-          { main: "max-w-[880px]", frame: "max-w-[880px] not-compact:max-w-[1128px]" }
-        : step === "hud"
-          ? { main: "max-w-[1040px]", frame: "max-w-[1040px] not-compact:max-w-[1288px]" }
-          : step === "car"
-            ? { main: "max-w-[640px]", frame: "max-w-[800px] not-compact:max-w-[888px]" }
-            : { main: "max-w-[800px]", frame: "max-w-[800px] not-compact:max-w-[1048px]" };
 
   return (
     <div
       ref={rootRef}
-      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex bg-linear-to-r from-lc-void/96 via-lc-void/88 to-lc-void/20"
+      className="lc-menu-screen lc-ui-zoom pointer-events-auto fixed inset-0 z-(--z-lc-menu) flex bg-lc-void/88 backdrop-blur-md"
     >
       <SettingsEnvProvider value={env}>
         <SettingsDetailProvider value="simple">
           <div className="flex h-full w-full flex-col pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))] short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            {/* One frame: the rail, the step and its actions. On roomy screens the step is as tall as its content and the
-                actions follow it, so a short step reads as one block over the scene; a long one scrolls in its body
-                with the actions kept on screen. Compact screens keep the actions at the foot, under the thumb. */}
-            <div className={cx("flex min-h-0 w-full flex-1 flex-col", frameWidth)}>
-              <div className="flex min-h-0 flex-1 gap-10 not-compact:flex-initial">
-                {/* Step rail (roomy screens): motorsport step index */}
+            {/* One full-height centred frame across every step so the step rail, content and bottom bar never jump */}
+            <div className="mx-auto flex min-h-0 w-full max-w-[1360px] flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 gap-8 lg:gap-10">
+                {/* Step rail (roomy screens): clickable motorsport step index */}
                 <aside className="hidden w-52 shrink-0 flex-col gap-8 not-compact:flex">
                   <LibreCorsaLogo variant="compact" size="sm" />
                   <nav aria-label={tx("steps")} className="flex flex-col gap-1">
@@ -181,12 +194,19 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                       const done = i < stepIndex;
                       const current = i === stepIndex;
                       return (
-                        <div
+                        <button
                           key={s}
+                          type="button"
+                          data-nav-skip=""
                           aria-current={current ? "step" : undefined}
+                          onClick={() => setStepIndex(i)}
                           className={cx(
-                            "flex min-h-10 items-center gap-3 rounded-lc-row border-s-2 px-3",
-                            current ? "border-lc-volt bg-lc-volt/8" : done ? "border-lc-fog/50" : "border-lc-line",
+                            "flex min-h-10 w-full cursor-pointer items-center gap-3 rounded-lc-row border-0 border-s-2 px-3 text-start transition-colors",
+                            current
+                              ? "border-lc-volt bg-lc-volt/8"
+                              : done
+                                ? "border-lc-fog/50 bg-transparent hover:bg-white/4"
+                                : "border-lc-line bg-transparent hover:bg-white/4",
                           )}
                         >
                           <span
@@ -200,13 +220,13 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                           <span className={cx("lc-title text-[14px] leading-tight", current ? "text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
                             {stepTitle(s)}
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </nav>
                 </aside>
 
-                <div className={cx("flex min-h-0 min-w-0 flex-1 flex-col", mainWidth)}>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <span className="not-compact:hidden">
                     <LibreCorsaLogo variant="compact" size="sm" className="hidden sm:inline-flex" />
                   </span>
@@ -227,7 +247,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
 
                   <div
                     ref={bodyRef}
-                    className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 not-compact:flex-auto short:mt-2"
+                    className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2"
                   >
                     {step === "device" ? (
                       <DeviceStep pickedRef={devicePickedRef} touch={touchFirst ? { picked: touchPicked, onPick: setTouchPicked } : null} />
@@ -237,7 +257,14 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                     {step === "setup" && device === "wheel" ? <WheelStep /> : null}
                     {step === "assists" ? <AssistsStep /> : null}
                     {step === "hud" ? <HudStep /> : null}
-                    {step === "car" ? <CarStep {...props} /> : null}
+                    {step === "driver" ? (
+                      <DriverStep
+                        onNameCommitted={() => {
+                          nextBtnRef.current?.focus({ preventScroll: true });
+                          syncEnterHint();
+                        }}
+                      />
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -264,7 +291,12 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                       { action: "tabs", label: tx("promptStep") },
                     ]}
                   />
-                  <Button variant="primary" onClick={next} prompt={pad ? <PadGlyph button="menu" family={family} /> : <KeyCap tone="ink">Enter</KeyCap>}>
+                  <Button
+                    ref={nextBtnRef}
+                    variant="primary"
+                    onClick={next}
+                    prompt={pad ? <PadGlyph button="menu" family={family} /> : enterAdvances ? <KeyCap tone="ink">Enter</KeyCap> : undefined}
+                  >
                     {last ? (mode === "first-run" ? tx("lightsOut") : tx("done")) : tx("next")}
                   </Button>
                 </div>

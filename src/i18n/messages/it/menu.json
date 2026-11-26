@@ -401,6 +401,7 @@
     "device": "Dispositivo di input",
     "assists": "Aiuti alla guida",
     "hud": "Layout HUD",
+    "driver": "Profilo pilota",
     "car": "Scegli l’auto",
     "steps": "Passaggi della configurazione",
     "stepDone": "Fatto",
