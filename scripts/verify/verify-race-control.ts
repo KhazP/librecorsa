@@ -7,12 +7,17 @@
 import {
   COURSE_CUT_MARGIN_S,
   COURSE_CUT_MIN_PENALTY_S,
+  FINAL_CORNER_ENTRY_LEAD_M,
+  FINAL_CORNER_FALLBACK_M,
+  finalCornerZoneStartS,
   TrackLimitsMonitor,
   weightedCutPoints,
   type CutInput,
   type TrackLimitsEvent,
   type TrackLimitsFrame,
 } from "../../src/lib/sim/track-limits";
+import { DEFAULT_SURFACE_TABLE } from "../../src/lib/sim/track-surfaces";
+import type { GroundHit, GroundQuery } from "../../src/lib/sim/f12026-car/TrackColliderQuery";
 import { resolveRaceRules } from "../../src/lib/sim/race-rules";
 import { YellowPassJudge, type YellowPassEvent } from "../../src/lib/sim/yellow-passes";
 import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagEvent } from "../../src/lib/sim/blue-flags";
@@ -294,6 +299,42 @@ console.log("Track limits · strict outside a race");
   drive(p, 0.2, { lapCount: 2, sector: 3, offTrack: true, lateralM: 6 });
   drive(p, 0.2, { lapCount: 3, sector: 1, active: false });
   check("practice: a lap the autopilot starts takes the next lap's deletion with it", !p.nextLapForfeit && drive(p, 0.2, { lapCount: 4, sector: 1 }).length === 0);
+
+  // Final-corner-only next-lap invalidation: early Sector 3 deletes only the current lap, final corner deletes next too
+  check(
+    "finalCornerZoneStartS: Le Mans-like lap narrows Sector 3 from 4.5 km down to final corner + entry lead",
+    finalCornerZoneStartS(13_646, [{ sApprox: 13_526 }]) === 13_526 - FINAL_CORNER_ENTRY_LEAD_M
+  );
+  check(
+    "finalCornerZoneStartS: covers flying-start run-up when it sits earlier than the final turn lead",
+    finalCornerZoneStartS(5_000, [{ sApprox: 4_900 }], { flyingStartS: 4_550 }) === 4_550
+  );
+  check(
+    "finalCornerZoneStartS: falls back to last 450 m when no turns are listed, clamped to Sector 3",
+    finalCornerZoneStartS(5_000, []) === 5_000 - FINAL_CORNER_FALLBACK_M &&
+      finalCornerZoneStartS(900, []) === 600
+  );
+  check("finalCornerZoneStartS: point-to-point tracks never forfeit a next run", finalCornerZoneStartS(4_914, [{ sApprox: 1_700 }], { pointToPoint: true }) === Infinity);
+
+  p.reset("practice");
+  drive(p, 0.2, { lapCount: 1, sector: 3, finalCornerZone: false });
+  const earlyS3 = drive(p, 0.3, { lapCount: 1, sector: 3, finalCornerZone: false, offTrack: true, lateralM: 6 });
+  check(
+    "practice: off-track in early Sector 3 deletes current lap only (leaves next lap clean)",
+    earlyS3.length === 1 && earlyS3[0].kind === "lap_invalid" && !p.nextLapForfeit && p.snapshot(clock * 1000).message?.detail === "Off the track",
+    JSON.stringify({ earlyS3, forfeit: p.nextLapForfeit, msg: p.snapshot(clock * 1000).message })
+  );
+  check("practice: next lap starts clean after early Sector 3 off-track", drive(p, 0.2, { lapCount: 2, sector: 1, finalCornerZone: false }).length === 0);
+
+  drive(p, 0.2, { lapCount: 2, sector: 3, finalCornerZone: true });
+  const inFinal = drive(p, 0.3, { lapCount: 2, sector: 3, finalCornerZone: true, offTrack: true, lateralM: 6 });
+  check(
+    "practice: off-track in final corner deletes current lap and arms next-lap forfeit",
+    inFinal.length === 1 && p.nextLapForfeit && p.snapshot(clock * 1000).message?.detail === "Next lap too",
+    JSON.stringify({ inFinal, forfeit: p.nextLapForfeit })
+  );
+  const nextAfterFinal = drive(p, 0.2, { lapCount: 3, sector: 1, finalCornerZone: false });
+  check("practice: next lap is deleted after final-corner off-track", nextAfterFinal.length === 1 && nextAfterFinal[0].lap === 3 && !p.nextLapForfeit);
 }
 
 console.log("Track limits · barrier contact");
@@ -1256,6 +1297,66 @@ console.log("Virtual Safety Car · deployment, delta enforcement and ending");
     rng: () => 0.5,
   });
   check("active VSC clears silently when racing becomes false", postFinish.length === 0 && !vsc.active && vsc.status() === undefined);
+}
+
+console.log("Track limits · kerb hop with ungrounded inside wheels");
+{
+  const flatTrack = createFlatTestTrack();
+  const sim = createLc26Sim(flatTrack);
+  sim.trackLimitsMode = "strict";
+  sim.resetToStartGrid(false);
+
+  // Split-surface ground: left wheels (x <= 0) hover over a kerb with a seam/hop that misses the normal +0.6 m probe
+  // (leaving w.grounded = false), while right wheels (x > 0) sit grounded on runoff. A taller probe (+2.0 m) sees the
+  // kerb underneath the left wheels, so the car must NOT be flagged as all four wheels off.
+  const kerbHopGround: GroundQuery = {
+    smooth: true,
+    query(x: number, _z: number, probeY: number, out: GroundHit): boolean {
+      const onKerb = x <= 0;
+      if (onKerb && probeY < 1.2) return false;
+      out.height = 0;
+      out.nx = 0;
+      out.ny = 1;
+      out.nz = 0;
+      out.surface = onKerb ? "kerb" : "runoff";
+      out.props = onKerb ? DEFAULT_SURFACE_TABLE.kerb : DEFAULT_SURFACE_TABLE.runoff;
+      out.grip = out.props.friction;
+      out.source = onKerb ? "Track_Surface_Kerb" : "Track_Surface_Runoff";
+      return true;
+    },
+  };
+  sim.vehicle.setGround(kerbHopGround);
+  sim.step(1 / 60, { throttle: 0, brake: 0 });
+  const groundedStates = sim.vehicle.wheels.map((w) => w.grounded);
+  check(
+    "kerb hop: ungrounded inside wheels over kerb keep the lap valid when outside wheels touch runoff",
+    groundedStates.some((g) => !g) && groundedStates.some((g) => g) && !sim.telemetry.offTrack && !sim.telemetry.lapInvalid,
+    JSON.stringify({ groundedStates, offTrack: sim.telemetry.offTrack, lapInvalid: sim.telemetry.lapInvalid })
+  );
+
+  // When every wheel (grounded AND ungrounded) sits over runoff, offTrack must still trigger
+  const allRunoffGround: GroundQuery = {
+    smooth: true,
+    query(x: number, _z: number, probeY: number, out: GroundHit): boolean {
+      if (x <= 0 && probeY < 1.2) return false;
+      out.height = 0;
+      out.nx = 0;
+      out.ny = 1;
+      out.nz = 0;
+      out.surface = "runoff";
+      out.props = DEFAULT_SURFACE_TABLE.runoff;
+      out.grip = out.props.friction;
+      out.source = "Track_Surface_Runoff";
+      return true;
+    },
+  };
+  sim.vehicle.setGround(allRunoffGround);
+  sim.step(1 / 60, { throttle: 0, brake: 0 });
+  check(
+    "kerb hop: all four wheels genuinely over runoff still triggers offTrack and invalidates strict lap",
+    sim.telemetry.offTrack && sim.telemetry.lapInvalid === true,
+    JSON.stringify({ offTrack: sim.telemetry.offTrack, lapInvalid: sim.telemetry.lapInvalid })
+  );
 }
 
 console.log(`\n${passed} checks passed`);
