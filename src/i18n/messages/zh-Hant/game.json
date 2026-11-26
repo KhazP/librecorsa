@@ -128,7 +128,24 @@
     "surfaceDry": "乾地",
     "surfaceWet": "濕地",
     "renameUnreachable": "無法連線至線上圈速榜，請稍後再試",
-    "renameFailed": "無法變更名稱（HTTP {status}）"
+    "renameFailed": "無法變更名稱（HTTP {status}）",
+    "errors": {
+      "unreachable": "無法連線至線上圈速榜，我會繼續嘗試",
+      "unreachableGaveUp": "無法連線至線上圈速榜",
+      "olderPhysics": "這一圈來自舊版的物理或賽道，該排行榜僅供檢視",
+      "olderPhysicsReload": "這一圈來自舊版的物理或賽道。請重新載入遊戲，在新版本上駕駛",
+      "modLap": "使用模組車輛或在模組賽道上的單圈不會列入線上圈速榜",
+      "unknownCircuit": "在非遊戲內建賽道上的單圈不會列入線上圈速榜",
+      "boardOff": "線上圈速榜目前無法使用",
+      "invalidRecording": "單圈紀錄資料無效",
+      "olderGame": "這一圈是由舊版遊戲記錄的",
+      "tooManyUploads": "上傳次數過多，請稍後再試",
+      "tooManyChanges": "變更次數過多，請稍後再試",
+      "nameTaken": "此名稱已被使用。請登入擁有此名稱的帳號、在圈速紀錄中匯入你的車手金鑰，或改用其他名稱參賽",
+      "pickName": "請選擇其他名稱",
+      "challengeEnded": "該每週挑戰已結束",
+      "challengeRules": "這一圈未依照本週挑戰的規則駕駛"
+    }
   },
   "badges": {
     "weeklyGold": "每週金牌",

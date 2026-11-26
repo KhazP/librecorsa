@@ -128,7 +128,24 @@
     "surfaceDry": "Khô",
     "surfaceWet": "Ướt",
     "renameUnreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến. Hãy thử lại sau giây lát",
-    "renameFailed": "Không thể đổi tên (HTTP {status})"
+    "renameFailed": "Không thể đổi tên (HTTP {status})",
+    "errors": {
+      "unreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến, mình sẽ tiếp tục thử",
+      "unreachableGaveUp": "Không thể kết nối tới bảng xếp hạng trực tuyến",
+      "olderPhysics": "Vòng này thuộc phiên bản vật lý hoặc đường đua cũ hơn, và bảng đó chỉ để xem",
+      "olderPhysicsReload": "Vòng này thuộc phiên bản vật lý hoặc đường đua cũ hơn. Hãy tải lại game để lái trên phiên bản mới",
+      "modLap": "Các vòng chạy bằng xe mod hoặc trên đường đua mod không được đưa lên bảng xếp hạng trực tuyến",
+      "unknownCircuit": "Các vòng trên đường đua không đi kèm game không được đưa lên bảng xếp hạng trực tuyến",
+      "boardOff": "Bảng xếp hạng trực tuyến hiện không khả dụng",
+      "invalidRecording": "Bản ghi vòng chạy không hợp lệ",
+      "olderGame": "Vòng này được ghi bởi một phiên bản game cũ hơn",
+      "tooManyUploads": "Tải lên quá nhiều lần, hãy thử lại sau",
+      "tooManyChanges": "Thay đổi quá nhiều lần, hãy thử lại sau",
+      "nameTaken": "Tên này đã có người dùng. Hãy đăng nhập vào tài khoản đang giữ tên, nhập khóa tay đua của bạn trong Thành tích vòng, hoặc đua với tên khác",
+      "pickName": "Hãy chọn tên khác",
+      "challengeEnded": "Thử thách tuần đó đã kết thúc",
+      "challengeRules": "Vòng này không được chạy theo luật thử thách của tuần này"
+    }
   },
   "badges": {
     "weeklyGold": "Vàng tuần",

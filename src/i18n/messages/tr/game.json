@@ -128,7 +128,24 @@
     "surfaceDry": "Kuru",
     "surfaceWet": "Islak",
     "renameUnreachable": "Çevrimiçi tabloya ulaşılamadı. Birazdan tekrar dene",
-    "renameFailed": "İsim değiştirilemedi (HTTP {status})"
+    "renameFailed": "İsim değiştirilemedi (HTTP {status})",
+    "errors": {
+      "unreachable": "Çevrimiçi tabloya ulaşılamadı, denemeye devam edeceğim",
+      "unreachableGaveUp": "Çevrimiçi tabloya ulaşılamadı",
+      "olderPhysics": "Bu tur fiziğin ya da pistin eski bir sürümünden ve o tablo salt okunur",
+      "olderPhysicsReload": "Bu tur fiziğin ya da pistin eski bir sürümünden. Yenisinde sürmek için oyunu yenile",
+      "modLap": "Mod araçlarla ya da mod pistlerde atılan turlar çevrimiçi tablolara girmez",
+      "unknownCircuit": "Oyunla gelmeyen pistlerdeki turlar çevrimiçi tablolara girmez",
+      "boardOff": "Çevrimiçi tablo şu anda kullanılamıyor",
+      "invalidRecording": "Tur kaydı geçersiz",
+      "olderGame": "Bu tur oyunun eski bir sürümüyle kaydedildi",
+      "tooManyUploads": "Çok fazla yükleme, daha sonra tekrar dene",
+      "tooManyChanges": "Çok fazla değişiklik, daha sonra tekrar dene",
+      "nameTaken": "Bu isim alınmış. İsmin bağlı olduğu hesaba giriş yap, pilot anahtarını Tur zamanları bölümünden içe aktar ya da başka bir isimle yarış",
+      "pickName": "Başka bir isim seç",
+      "challengeEnded": "O haftalık mücadele sona erdi",
+      "challengeRules": "Bu tur bu haftaki mücadelenin kurallarına göre sürülmedi"
+    }
   },
   "badges": {
     "weeklyGold": "Haftalık Altın",

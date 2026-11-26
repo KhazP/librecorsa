@@ -128,7 +128,24 @@
     "surfaceDry": "Dry",
     "surfaceWet": "Wet",
     "renameUnreachable": "Couldn't reach the online board. Try again in a moment",
-    "renameFailed": "The name could not be changed (HTTP {status})"
+    "renameFailed": "The name could not be changed (HTTP {status})",
+    "errors": {
+      "unreachable": "Couldn't reach the online board, I'll keep trying",
+      "unreachableGaveUp": "Couldn't reach the online board",
+      "olderPhysics": "This lap is from an older version of the physics or the circuit, and that board is read only",
+      "olderPhysicsReload": "This lap is from an older version of the physics or the circuit. Reload the game to drive on the new one",
+      "modLap": "Laps with mod cars or mod circuits stay off the online boards",
+      "unknownCircuit": "Laps on circuits the game doesn't ship stay off the online boards",
+      "boardOff": "The online board is not available right now",
+      "invalidRecording": "The lap recording is invalid",
+      "olderGame": "This lap was recorded by an older version of the game",
+      "tooManyUploads": "Too many uploads, try again later",
+      "tooManyChanges": "Too many changes, try again later",
+      "nameTaken": "This name is taken. Sign in to the account that holds it, import your driver key under Lap times, or race under another name",
+      "pickName": "Pick another name",
+      "challengeEnded": "That weekly challenge has ended",
+      "challengeRules": "This lap was not driven to this week's challenge rules"
+    }
   },
   "badges": {
     "weeklyGold": "Weekly Gold",

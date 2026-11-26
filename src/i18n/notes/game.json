@@ -463,5 +463,20 @@
   "pit.speeding": "Race control's call shown in the race feed and penalties: the driver went over the pit lane speed limit. {limit} is the limit in km/h.",
   "pit.stopMissed": "Race control's penalty at the flag: the race required pit stops and the driver made fewer.",
   "simulator.backToCareer": "Button on the race results card in a career round: leave the car for the career screen.",
-  "simulator.restartMulligan": "Pause menu, under Restart race in a career round: restarting costs one of the season's mulligans; {count} is how many are left before this one is used."
+  "simulator.restartMulligan": "Pause menu, under Restart race in a career round: restarting costs one of the season's mulligans; {count} is how many are left before this one is used.",
+  "board.errors.unreachable": "On the lap card when a lap could not be sent to the online lap board: no answer from the server. The game sends it again by itself later. The game's maker speaks here, so first person singular (\"I\").",
+  "board.errors.unreachableGaveUp": "On the lap card: the lap could not be sent to the online lap board, and the game has stopped trying by itself (the player can retry).",
+  "board.errors.olderPhysics": "On the lap card: the lap was driven on an older physics version or an older version of the circuit, whose online board takes no new laps.",
+  "board.errors.olderPhysicsReload": "The server's answer when a lap from an older physics or circuit version is sent: the player should reload the page to get the new version.",
+  "board.errors.modLap": "On the lap card: laps driven in a car or on a circuit from a mod package the player installed never go on the online lap boards.",
+  "board.errors.unknownCircuit": "The server's answer for a lap on a circuit the game doesn't include (a mod circuit or an unknown one): it never goes on the online lap boards.",
+  "board.errors.boardOff": "On the lap card: the online lap boards are switched off or not set up, so the lap can't be sent.",
+  "board.errors.invalidRecording": "On the lap card: the saved recording of the lap is damaged or incomplete, so it can't be sent.",
+  "board.errors.olderGame": "On the lap card: the lap was recorded by an older version of the game that didn't save the lap's conditions, so it can't be sent.",
+  "board.errors.tooManyUploads": "The server's answer when one player sends too many laps in a short time.",
+  "board.errors.tooManyChanges": "The server's answer when one player changes their driver name too often in a short time.",
+  "board.errors.nameTaken": "The server's answer when the driver name belongs to someone else. \"Lap times\" is the screen where the driver key is exported and imported: use that screen's title. The driver key is the file that proves who owns a name.",
+  "board.errors.pickName": "The server's answer when the driver name is not allowed (an offensive word).",
+  "board.errors.challengeEnded": "The server's answer when a lap for a weekly challenge arrives after that week's challenge is over.",
+  "board.errors.challengeRules": "The server's answer when a lap sent to the weekly challenge was not driven with the week's car, circuit, tyres or other rules."
 }

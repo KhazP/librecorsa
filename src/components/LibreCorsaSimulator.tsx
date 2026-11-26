@@ -58,6 +58,7 @@ import {
   saveBoardMiss,
   type SubmitResult,
 } from "@/lib/net/leaderboard";
+import { boardWords } from "@/lib/net/board-words";
 import { challengeOf, flushQueuedLaps, postLap } from "@/lib/net/board-queue";
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { challengeAt } from "@/lib/net/weekly-challenge";
@@ -1399,7 +1400,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [confirmDriverName, flushQueued, tx]);
   const renameFromSettings = useCallback(async (raw: string) => {
     const res = await renameDriver(raw);
-    return "error" in res ? res.error : null;
+    return "error" in res ? boardWords(res.error) : null;
   }, [renameDriver]);
 
   const closeLapSummary = useCallback(() => {
@@ -2602,13 +2603,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                       : undefined,
                   submitState,
                   submitRank,
-                  submitError,
+                  // The boards answer in English: shown in the player's language
+                  submitError: boardWords(submitError),
                   driverName: settings.profile.name,
                   // A name changed from the card: the lap the card couldn't post goes up again under it
                   onRename: boardOn
                     ? async (raw: string) => {
                         const res = await renameDriver(raw);
-                        if ("error" in res) return res.error;
+                        if ("error" in res) return boardWords(res.error);
                         if (submitState === "error") void handleSubmitLap(res);
                         return null;
                       }
