@@ -311,6 +311,20 @@ const Credits: React.FC = () => {
               CC BY 4.0
             </a>
             <br />
+            LC25 Prototype: &ldquo;F1 2025 McLaren MCL39&rdquo; (
+            <a
+              href="https://sketchfab.com/3d-models/f1-2025-mclaren-mcl39-c6194270002b401bb25be7e35ab56e34"
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              sketchfab.com
+            </a>
+            ) by shunqi, steering wheel from DeX&apos;s AM26 ·{" "}
+            <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
+              CC BY 4.0
+            </a>
+            <br />
             Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
             <a
               href="https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07"
@@ -352,7 +366,9 @@ const Credits: React.FC = () => {
             <a href="https://www.patreon.com/cw/PurpleSector" target="_blank" rel="noreferrer" className={linkClass}>
               patreon.com/cw/PurpleSector
             </a>
-            ) · the 2026 car&apos;s tyres · used with permission
+            ) · the F1 cars&apos; tyres · used with permission
+            <br />
+            Full-wet tread and the LC25&apos;s rain-tyre ratios by Nuzzi · used with permission
             <br />
             &ldquo;2026 Pirelli Tire Pack&rdquo; (
             <a
