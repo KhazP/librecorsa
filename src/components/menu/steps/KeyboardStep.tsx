@@ -247,13 +247,14 @@ export function FixedKeysCard() {
 
 /**
  * Settings > Controls > Keyboard (every key), and the keyboard step of first-run setup (`essentials`: the driving keys
- * first, the rest on request)
+ * first, the rest on request). `autoFocusFirst` stays off in the wizard so pressing Enter advances instead of starting
+ * a key rebind on Throttle.
  */
-export function KeyboardSetup({ essentials }: { essentials?: boolean }) {
+export function KeyboardSetup({ essentials, autoFocusFirst = true }: { essentials?: boolean; autoFocusFirst?: boolean }) {
   const tx = useTranslations("setup.keyboard");
   return (
     <>
-      <KeyBindingsCard first essentials={essentials} />
+      <KeyBindingsCard first={autoFocusFirst} essentials={essentials} />
       <SettingsCard title={tx("mouse")} rows={[mouseSteer]} />
       <SettingsCard title={tx("feel")} rows={keyboardFeel} />
       <FixedKeysCard />
@@ -263,6 +264,6 @@ export function KeyboardSetup({ essentials }: { essentials?: boolean }) {
 
 export const KeyboardStep: React.FC = () => (
   <div className="flex flex-col gap-3">
-    <KeyboardSetup essentials />
+    <KeyboardSetup essentials autoFocusFirst={false} />
   </div>
 );

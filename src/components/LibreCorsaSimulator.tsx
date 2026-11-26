@@ -76,7 +76,7 @@ import { roomTrackStatus } from "@/lib/mods/room-content";
 import { requestShellSync } from "@/lib/service-worker";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
-import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
+import { CAMERA_MODES, DEFAULT_DRIVING_CAMERA, nextCameraMode } from "@/lib/render/camera-modes";
 import { clampTyreSetup, saveTyreSetup } from "@/lib/sim/tyre-setup";
 import { garageTunerFrom, resolveSetupForCar, summarizeSharedSetup } from "@/lib/sim/setup-share";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
@@ -341,7 +341,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => resolveLivery(settings.liveryId, settings.customLivery),
     [settings.liveryId, settings.customLivery]
   );
-  const cameraMode: CameraMode = settings.camera ?? "chase";
+  const cameraMode: CameraMode = settings.camera ?? DEFAULT_DRIVING_CAMERA;
   const activeCameraMode: CameraMode = cameraOverride ?? cameraMode;
   const setPreference = useCallback(<K extends keyof PlayerSettings>(key: K, value: PlayerSettings[K]) => {
     setSettings((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
@@ -473,15 +473,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const snap = sessionRef.current?.getSnapshot();
     if (snap?.replay.active) {
       // Replay camera cycling is transient and never overwrites the player's saved driving camera
-      const cur = snap.cameraOverride ?? settingsRef.current.camera ?? "chase";
-      sessionRef.current?.setCameraOverride(cur === "free" ? (settingsRef.current.camera ?? "chase") : nextCameraMode(cur));
+      const cur = snap.cameraOverride ?? settingsRef.current.camera ?? DEFAULT_DRIVING_CAMERA;
+      sessionRef.current?.setCameraOverride(cur === "free" ? (settingsRef.current.camera ?? DEFAULT_DRIVING_CAMERA) : nextCameraMode(cur));
       return;
     }
     if (snap && snap.cameraOverride !== null) {
       sessionRef.current?.setCameraOverride(null);
       return;
     }
-    setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") }));
+    setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? DEFAULT_DRIVING_CAMERA) }));
   }, []);
 
   // ---- Session and run: the one place that starts, restarts and leaves what is on track (the session resets the run)
@@ -2871,6 +2871,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onSetMouseSteer={setMouseSteer}
           cameraMode={cameraMode}
           onChangeCameraMode={setCameraMode}
+          onRenameDriver={renameFromSettings}
+          onConfirmDriverName={confirmDriverName}
           onFinish={finishWizard}
           onExit={leaveWizard}
           onSkip={wizardMode === "first-run" ? finishWizard : undefined}

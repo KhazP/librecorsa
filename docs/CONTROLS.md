@@ -9,7 +9,7 @@ You can open **Settings** from the title menu or the pause menu (`Esc`, or `Menu
 - **Controls tabs:** Settings are grouped under **Controls** across five tabs: **Device**, **Keyboard**, **Controller**, **Wheel**, and **Touch**. Force feedback has its own top-level category (**Force feedback**), and driving assists live under **Driving**.
 - **Active device:** Choose what you drive with under **Controls > Device**. Browsing another input tab won't switch your active device automatically.
 - **Connected devices:** Lists every controller and wheel currently visible to the browser. If your hardware doesn't show up, press a button on it to wake it.
-- **Run setup:** Found under **Controls > Device**; replays the first-launch wizard (device selection, calibration, assists, HUD layout, and starter car).
+- **Run setup:** Found under **Controls > Device**; replays the first-launch wizard (device selection, calibration, assists, HUD layout, and driver profile).
 - **Simple vs. Advanced mode:** Toggle this switch at the top of Settings (`Y` on keyboard, `Y` / `△` on controller). Finer tuning controls marked **(Advanced)** below are hidden in Simple mode.
 - **Resetting values:** Every settings card has a **Reset** button (with confirmation). To reset a single highlighted row, press `Delete` on keyboard or `X` / `□` on a controller.
 
