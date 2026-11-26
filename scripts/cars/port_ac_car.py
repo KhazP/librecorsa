@@ -1514,8 +1514,8 @@ def add_extension_parts(car_dir, preset, textures, materials, nodes):
 # ([MODEL_REPLACEMENT_n] on the main kn5: HIDE these nodes, INSERT this kn5 from the skin's folder under INSERT_IN, at
 # OFFSET). The skins that swap alike share a variant (named by the word their folder names end in, as `_early`); the
 # hidden nodes become a part shown for the other liveries and the inserted model one shown for that variant's
-# (`parts`, CarSkin.variant). A mirror mirrors.ini names stays the main model's for every livery, the game's live
-# mirror being one node.
+# (`parts`, CarSkin.variant). A mirror mirrors.ini names stays the main model's live mirror (MIRROR_n), shown for the
+# liveries that keep its body; an inserted model's own mirror glass is part of that model.
 # ---------------------------------------------------------------------------------------------------------------------
 
 def skin_model_replacements(car_dir, kn5_name):
@@ -1550,8 +1550,8 @@ def skin_model_replacements(car_dir, kn5_name):
 
 def add_model_replacements(car_dir, kn5_name, textures, materials, nodes, mirror_names=()):
     """Appends each variant's inserted model to `nodes` (its materials and textures to the car's, a clashing name
-    as `<name>~<variant>`) and returns {part_nodes: {node index: part}, part_variants, skin_variants} for the preset,
-    or {} when no skin swaps anything"""
+    as `<name>~<variant>`) and returns {part_nodes: {node index: part}, part_variants, skin_variants, mirror_variants:
+    {mirrors.ini mesh name: the variants that keep it}} for the preset, or {} when no skin swaps anything"""
     swaps = skin_model_replacements(car_dir, kn5_name)
     if not swaps:
         return {}
@@ -1603,27 +1603,28 @@ def add_model_replacements(car_dir, kn5_name, textures, materials, nodes, mirror
             nd['parent'] = parent if nd['parent'] is None else nd['parent'] + first
             if nd['mesh'] is not None:
                 nd['mesh'] = {**nd['mesh'], 'mat': remap[nd['mesh']['mat']]}
-                # The live mirror stays the main model's
-                if nd['name'] in mirror_names:
-                    nd['mesh'] = {**nd['mesh'], 'visible': False}
-                else:
-                    part_nodes[len(nodes)] = part
+                part_nodes[len(nodes)] = part
             nodes.append(nd)
-    # The main model's hidden nodes: a part for the liveries that keep them
+    # The main model's hidden nodes: a part for the liveries that keep them; a hidden mirror stays the live mirror,
+    # shown for those liveries alone (`mirror_variants`)
     variants = sorted(set(skin_variants.values()))
+    mirror_variants = {}
     for i, nd in enumerate(nodes):
         if nd['mesh'] is None or i in part_nodes:
             continue
         names = [nd['name'], *ancestors(nodes, i)]
-        if nd['name'] in mirror_names or (len(names) > 1 and names[1] in mirror_names):
-            continue
         h = next((h for h in names if h in hidden_by), None)
         if h is None:
             continue
+        keep = ('base', *[v for v in variants if v not in hidden_by[h]])
+        if nd['name'] in mirror_names or (len(names) > 1 and names[1] in mirror_names):
+            mirror_variants[nd['name'] if nd['name'] in mirror_names else names[1]] = keep
+            continue
         part = f'{h.lower()}_main'
         part_nodes[i] = part
-        part_variants[part] = ('base', *[v for v in variants if v not in hidden_by[h]])
-    return {'part_nodes': part_nodes, 'part_variants': part_variants, 'skin_variants': skin_variants}
+        part_variants[part] = keep
+    return {'part_nodes': part_nodes, 'part_variants': part_variants, 'skin_variants': skin_variants,
+            'mirror_variants': mirror_variants}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -2602,6 +2603,11 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         kids = [writer.add_mesh_node(f'PART_{part}_{node_label(mi)}', [pi]) for mi, pi in out]
         body_kids.append(writer.add_node(f'PART_{part}', children=kids))
         variant_nodes[f'PART_{part}'] = list(part_variants.get(part, ('base',)))
+    # A live mirror a livery's own body replaces (`add_model_replacements`): shown for the liveries that keep it
+    for entry in mirrors:
+        keep = sorted({v for k in entry['kn5'] for v in preset.get('mirror_variants', {}).get(k, ())})
+        if keep:
+            variant_nodes[entry['node']] = keep
     body_node = writer.add_node('BODY', children=body_kids)
     if variant_nodes and skin_files:
         # The livery files each variant's liveries show (a file only a hidden part wears is no livery's)
