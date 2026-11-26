@@ -34,12 +34,41 @@ interface TurboEntry extends LoopEntry {
 }
 interface TransmissionEntry extends LoopEntry {
   drivetrainSpeed: number;
+  /**
+   * The loop's gain over road speed (km/h; a bank ported from its FMOD events): the one recording, pitched by speed, at
+   * its event's level, with `Lc26AudioManifest.transmissionMix` for the throttle and the view
+   */
+  gain?: [number, number][];
 }
 /** A raw bank sample looped as is (tyre skid, traction control) */
 interface RawLoopEntry {
   file: string;
   channels: number;
   rms: number;
+}
+/** A skid loop with its event's own level and pitch (a bank ported from its FMOD events) */
+interface SkidLoopEntry extends RawLoopEntry {
+  /** Level at a full skid (`Lc26AudioInputs.skidAmount` 1) */
+  gain?: number;
+  /** Playback rate (the instrument's pitch), times `skidRate` */
+  rate?: number;
+}
+/** The traction control's cut with its events' level and pitch per view, and their release after the cut */
+interface TractionLoopEntry extends RawLoopEntry {
+  gain?: Partial<Record<Lc26View, number>>;
+  rate?: Partial<Record<Lc26View, number>>;
+  /** Gain over the time since the cut ended (s), from its event's `decay` curve */
+  release?: [number, number][];
+}
+/**
+ * An ambient loop (wind, tyres rolling, bodywork). With `gain`, its event's own curves: the gain and playback rate over
+ * `param` (road speed in km/h, or the bodywork input 0..1) and the level per view
+ */
+interface AmbientLoopEntry extends RawLoopEntry {
+  param?: 'speedKmh' | 'bodywork';
+  gain?: [number, number][];
+  rate?: [number, number][];
+  view?: Record<Lc26View, number>;
 }
 interface OneshotEntry {
   file: string;
@@ -48,6 +77,33 @@ interface OneshotEntry {
   channels: number;
   seconds: number;
   peak: number;
+  /** Level and playback rate it plays at (a bank ported from its FMOD events: its event's, against the engine) */
+  gain?: number;
+  rate?: number;
+}
+
+/**
+ * The backfire as the source's sounds.ini and events have it: one per lift, when the pedal has been at `triggerGas` or
+ * more and comes down to `maxGas` or less between `minRpm` and `maxRpm`, from the view's `backfire_<view>` one-shots,
+ * played with the chance its instrument has, a random pitch of up to `pitchJitterSt` semitones either way, and its
+ * event's throttle curve on its level while it plays. In place of the lift-off pops and crackle
+ */
+export interface BackfireSpec {
+  triggerGas: number;
+  maxGas: number;
+  minRpm: number;
+  maxRpm: number;
+  throttleGain: Record<Lc26View, [number, number][]>;
+  chance?: Partial<Record<Lc26View, number>>;
+  pitchJitterSt?: Partial<Record<Lc26View, number>>;
+}
+
+/** The control unit's down-shift blip: the throttle up to `level` by `riseS`, held to `holdS`, back to none by `endS` */
+export interface ShiftBlipSpec {
+  level: number;
+  riseS: number;
+  holdS: number;
+  endS: number;
 }
 
 export interface Lc26AudioManifest {
@@ -56,7 +112,24 @@ export interface Lc26AudioManifest {
   engine: { ext: EngineEntry[]; int: EngineEntry[] };
   turbo: TurboEntry[];
   transmission: TransmissionEntry[];
+  /**
+   * With transmission loops that carry a `gain` table: the throttle's gain on them and their level per view (the view's
+   * engine scale), and the highest road speed the event's parameter reaches (km/h)
+   */
+  transmissionMix?: { throttleGain: [number, number][]; view: Record<Lc26View, number>; maxSpeed?: number };
   oneshots: OneshotEntry[];
+  /** The source's backfire (see `BackfireSpec`); a bank with one has no `lift` pops */
+  backfire?: BackfireSpec;
+  /** The source's events this bank leaves silent (its limiter, a turbo the car has not got): nothing plays for them */
+  silentEvents?: string[];
+  /**
+   * The outside from ahead of the car (a bank ported from its FMOD events): the front microphones' loops (on the
+   * outside scale, played as `engine.ext` is) with their throttle gains, and `cone`: each set's gain over the cone
+   * angle (0: the listener behind the car, where `engine.ext` is heard alone) and the event's low-pass (Hz) over it
+   */
+  engineFront?: EngineEntry[];
+  throttleGainFront?: { on: [number, number][]; off: [number, number][] };
+  cone?: { rear: [number, number][]; front: [number, number][]; lowpassHz?: [number, number][] };
   throttleCurve: { ext: [number, number][]; int: [number, number][] };
   /**
    * The throttle's gain on each layer, [throttle, gain], where the source sets the on-load and the overrun levels apart
@@ -72,24 +145,27 @@ export interface Lc26AudioManifest {
    */
   lift?: { popMinRpm: number; crackleMinRpm: number; downshiftPopChance?: number };
   /** Tyre skid loops per view, played by `Lc26AudioInputs.skid` (banks without them leave the squeal to CarAudio) */
-  skid?: { int?: RawLoopEntry; ext?: RawLoopEntry };
+  skid?: { int?: SkidLoopEntry; ext?: SkidLoopEntry };
   /** Traction-control cut loop, played while `Lc26AudioInputs.tcActive` */
-  tractionControl?: RawLoopEntry;
+  tractionControl?: TractionLoopEntry;
   /**
    * Ambient loops in place of CarAudio's procedural layers: the wind (by road speed), the tyres rolling (by road speed)
    * and the bodywork's rattle (by `Lc26AudioInputs.bodywork`, heard in the cockpit only)
    */
-  wind?: RawLoopEntry;
-  tyreRolling?: RawLoopEntry;
-  bodywork?: RawLoopEntry;
+  wind?: AmbientLoopEntry;
+  tyreRolling?: AmbientLoopEntry;
+  bodywork?: AmbientLoopEntry;
   /** Rev-limiter one-shot retrigger interval while held on the limiter (default 0.9 s) */
   limiterRetriggerS?: number;
   /**
    * How the car changes gear. "sequential" (default): a race box, an ignition-cut bark and a 60 ms dip with the revs
    * snapping to the next gear. "manual": a road car's clutch, the throttle off for `clutchS` while the revs fall with
-   * the physics, and no shift one-shots or ignition-cut bark
+   * the physics, and no shift one-shots or ignition-cut bark.
+   * `throttleCut`: the engine hears the gearbox as the source's own engine event does, through its throttle alone: shut
+   * for `cutS` on an up-shift and lifted by the control unit's `blip` on a down-shift, the pedal as it is (no smoothing),
+   * no dip or bark of the player's own; the gear sound is the view's `gear_up_<view>` / `gear_down_<view>` one-shot
    */
-  shift?: { style: 'sequential' | 'manual'; clutchS?: number; cutS?: number };
+  shift?: { style: 'sequential' | 'manual'; clutchS?: number; cutS?: number; throttleCut?: boolean; blip?: ShiftBlipSpec };
   /**
    * The transmission loops follow the driveshafts instead of the road speed and the pedal, where the physics gives
    * `Lc26AudioInputs.driveshaftRadS`: pitch from the shaft speed (so wheelspin and a locked axle are heard), level
@@ -233,6 +309,14 @@ export function mguMix(
   };
 }
 
+/** The down-shift blip's throttle `t` s into it (none before it starts or after it ends, or without a blip) */
+export function shiftBlipLevel(blip: ShiftBlipSpec | undefined, t: number): number {
+  if (!blip || t < 0 || t >= blip.endS) return 0;
+  if (t < blip.riseS) return (blip.level * t) / Math.max(1e-6, blip.riseS);
+  if (t < blip.holdS) return blip.level;
+  return blip.level * (1 - (t - blip.holdS) / Math.max(1e-6, blip.endS - blip.holdS));
+}
+
 /** Cutoff of a load-driven engine low-pass: a constant ratio per step of load, so it opens evenly to the ear */
 export function loadFilterHz(spec: LoadFilterSpec, load: number): number {
   return spec.coastHz * Math.pow(spec.loadHz / spec.coastHz, clamp01(load));
@@ -253,6 +337,8 @@ export interface Lc26AudioInputs {
   /** Tyre skid level 0..1 and playback rate (banks with skid loops) */
   skid?: number;
   skidRate?: number;
+  /** How far into a skid the tyres are, 0..1: what a skid loop with its own `gain` is played by */
+  skidAmount?: number;
   /** Traction control is cutting the engine */
   tcActive?: boolean;
   /** How hard the suspension is working, 0..1 (its travel speed): drives a bank's bodywork loop */
@@ -474,6 +560,17 @@ export class Lc26SoundBank {
   private rollingVoice: LoopVoice | null = null;
   private bodyworkVoice: LoopVoice | null = null;
   private tcLevel = 0;
+  /** Time since the traction control's cut ended (s), for a bank with its release curve */
+  private tcOffS = Infinity;
+  /** Each event one-shot's own level and playback rate (`OneshotEntry.gain`, `rate`), by its decoded buffer */
+  private readonly oneshotLevels = new Map<AudioBuffer, { gain: number; rate: number }>();
+  /** A bank's backfire (`BackfireSpec`): armed by the pedal at its trigger, and the ones still playing */
+  private backfireArmed = false;
+  private readonly backfiresPlaying: { gain: GainNode; level: number; view: Lc26View; endsAt: number }[] = [];
+  /** Time into a `shift.blip` down-shift blip (s); < 0: none under way */
+  private blipT = -1;
+  /** Time since a `throttleCut` up-shift (s): the throttle is shut on every frame within `shift.cutS` of it */
+  private cutT = Infinity;
   private mguVoice: LoopVoice | null = null;
   private readonly toneNodes: AudioNode[] = [];
 
@@ -563,10 +660,12 @@ export class Lc26SoundBank {
     }
     this.turboOn = new LoopGrid(ctx, this.bus, manifest.turbo.filter((e) => e.layer === 'on').map((e) => e.boost));
     this.turboOff = new LoopGrid(ctx, this.bus, manifest.turbo.filter((e) => e.layer === 'off').map((e) => e.boost));
+    const transOn = manifest.transmission.filter((e) => e.layer === 'on');
     this.transOn = new LoopGrid(
       ctx,
       this.bus,
-      manifest.transmission.filter((e) => e.layer === 'on').map((e) => e.drivetrainSpeed)
+      transOn.map((e) => e.drivetrainSpeed),
+      transOn.map((e) => e.gain)
     );
     this.transOff = new LoopGrid(
       ctx,
@@ -660,6 +759,7 @@ export class Lc26SoundBank {
           const list = this.oneshots.get(e.role) ?? [];
           list.push(b);
           this.oneshots.set(e.role, list);
+          if (e.gain !== undefined) this.oneshotLevels.set(b, { gain: e.gain, rate: e.rate ?? 1 });
         },
       })),
       ...engineJobs(initialView === 'ext' ? 'int' : 'ext'),
@@ -717,21 +817,23 @@ export class Lc26SoundBank {
     return !!this.rollingVoice?.buffer;
   }
 
-  private playOneshot(role: string, gain: number, when = 0, rate = 1): void {
+  private playOneshot(role: string, gain: number, when = 0, rate = 1): GainNode | null {
     // A bank without separate exterior pops (the GT3's) uses its exterior backfires
     const list = this.oneshots.get(role) ?? (role === 'pop_ext' ? this.oneshots.get('backfire_ext') : undefined);
-    if (!list || list.length === 0) return;
+    if (!list || list.length === 0) return null;
     let idx = Math.floor(this.rng() * list.length);
     if (list.length > 1 && idx === this.lastOneshotIdx.get(role)) {
       idx = (idx + 1 + Math.floor(this.rng() * (list.length - 1))) % list.length;
     }
     this.lastOneshotIdx.set(role, idx);
     const buf = list[idx];
+    // An event one-shot at its own level and pitch (`OneshotEntry.gain`, `rate`), times the ones asked for
+    const own = this.oneshotLevels.get(buf);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = rate;
+    src.playbackRate.value = rate * (own?.rate ?? 1);
     const g = this.ctx.createGain();
-    g.gain.value = gain;
+    g.gain.value = gain * (own?.gain ?? 1);
     src.connect(g);
     g.connect(this.bus);
     src.start(this.ctx.currentTime + when);
@@ -739,6 +841,12 @@ export class Lc26SoundBank {
       src.disconnect();
       g.disconnect();
     };
+    return g;
+  }
+
+  /** The view's share of a level given per view, as the engine's views cross over */
+  private perView(levels: Partial<Record<Lc26View, number>>): number {
+    return (levels.ext ?? 0) * Math.cos(this.viewMix * Math.PI * 0.5) + (levels.int ?? 0) * Math.sin(this.viewMix * Math.PI * 0.5);
   }
 
   /** Plays an exhaust pop/crackle with subtle gain and pitch randomization */
@@ -760,10 +868,14 @@ export class Lc26SoundBank {
     this.viewBus.ext.gain.setTargetAtTime(Math.cos(this.viewMix * Math.PI * 0.5), now, 0.02);
     this.viewBus.int.gain.setTargetAtTime(Math.sin(this.viewMix * Math.PI * 0.5), now, 0.02);
 
-    // Pedal smoothing (fast attack, slightly slower release; one short time constant with a load filter)
+    // Pedal smoothing (fast attack, slightly slower release; one short time constant with a load filter). A bank whose
+    // engine hears the throttle as its source's event does (`shift.throttleCut`) takes it as it is: that event's
+    // throttle parameter has no seek speed
     const thr = Math.min(1, Math.max(0, inp.throttle));
+    const direct = m.shift?.throttleCut === true && m.shift.style !== 'manual';
     const k = m.loadFilter ? 1 / Math.max(0.005, m.loadFilter.tauS ?? 0.025) : thr > this.smoothThrottle ? 18 : 10;
-    this.smoothThrottle += (thr - this.smoothThrottle) * Math.min(1, dt * k);
+    if (direct) this.smoothThrottle = thr;
+    else this.smoothThrottle += (thr - this.smoothThrottle) * Math.min(1, dt * k);
 
     // First frame, or the first after a gap (pause, mute, restart): the gear and pedal as they are now
     const foot = Math.min(1, Math.max(0, inp.pedal ?? thr));
@@ -777,7 +889,27 @@ export class Lc26SoundBank {
     // car: a lift and a clutch, see `Lc26AudioManifest.shift`). Between forward gears only: into or out of neutral (0)
     // or reverse (-1) is no shift to hear
     const manual = m.shift?.style === 'manual';
-    if (inp.gear !== this.prevGear) {
+    if (inp.gear !== this.prevGear && direct) {
+      // As the source's events hear it: the view's gear sound, and the throttle shut through the up-shift's cut or
+      // lifted by the down-shift's blip (below)
+      if (this.prevGear > 0 && inp.gear > 0) {
+        const up = inp.gear > this.prevGear;
+        this.playOneshot(`gear_${up ? 'up' : 'down'}_${inp.view}`, 1);
+        if (up) {
+          this.upshiftLen = m.shift?.cutS ?? UPSHIFT_S;
+          this.upshiftTimer = this.upshiftLen;
+          this.cutT = 0;
+          this.downshiftTimer = 0;
+          this.blipT = -1;
+        } else {
+          this.upshiftTimer = 0;
+          this.cutT = Infinity;
+          this.blipT = 0;
+          this.downshiftTimer = m.shift?.blip?.endS ?? 0;
+        }
+      }
+      this.prevGear = inp.gear;
+    } else if (inp.gear !== this.prevGear) {
       if (this.prevGear > 0 && inp.gear > 0) {
         const up = inp.gear > this.prevGear;
         if (up) {
@@ -819,7 +951,8 @@ export class Lc26SoundBank {
     const rpmTop = Math.max(this.rpmRange[1], inp.limiterRpm * 1.05);
     const targetRpm = Math.min(rpmTop, Math.max(this.rpmRange[0], inp.rpm));
     const shifting = this.upshiftTimer > 0 || this.downshiftTimer > 0;
-    if (this.audioRpm === 0) {
+    if (this.audioRpm === 0 || direct) {
+      // A `throttleCut` bank hears the revs as its source's event does: each frame's as they are
       this.audioRpm = targetRpm;
     } else if (shifting && !manual) {
       const span = Math.max(4000, rpmTop - this.rpmRange[0]);
@@ -830,14 +963,16 @@ export class Lc26SoundBank {
       this.audioRpm += (targetRpm - this.audioRpm) * Math.min(1, dt / 0.025);
     }
     const rpm = this.audioRpm;
-    const pitchTau = shifting ? 0.006 : 0.02;
+    const pitchTau = shifting || direct ? 0.006 : 0.02;
 
     // Upshift cut & engagement envelope + downshift ECU auto-blip
     let shiftOnScale = 1.0;
     let shiftOffScale = 1.0;
     // The load the engine is heard under: all of the throttle, except through a manual upshift
     let clutchLoad = 1.0;
-    if (this.upshiftTimer > 0 && manual) {
+    if (direct) {
+      // Nothing of the player's own: the throttle carries the shift (effThrottle below)
+    } else if (this.upshiftTimer > 0 && manual) {
       // Foot off and clutch in: the engine is heard on its overrun note while the revs fall, then the throttle comes
       // back in over the last third as the clutch bites. The on-load voice hands over to the overrun one (a pedal
       // still flat on the floor holds the overrun voice down, so cutting only the on-load one left a hole)
@@ -856,9 +991,17 @@ export class Lc26SoundBank {
         shiftOffScale = 0.75 + 0.25 * reg;
       }
     }
-    const blipThrottle =
-      this.downshiftTimer > 0 ? Math.sin((1 - this.downshiftTimer / 0.085) * Math.PI) * 0.78 : 0;
-    const effThrottle = Math.max(this.smoothThrottle, blipThrottle) * clutchLoad;
+    const blipThrottle = direct
+      ? shiftBlipLevel(m.shift?.blip, this.blipT < 0 ? -1 : this.blipT + dt / 2)
+      : this.downshiftTimer > 0
+        ? Math.sin((1 - this.downshiftTimer / 0.085) * Math.PI) * 0.78
+        : 0;
+    if (this.blipT >= 0) this.blipT = this.blipT + dt > (m.shift?.blip?.endS ?? 0) ? -1 : this.blipT + dt;
+    // Through a `throttleCut` up-shift the throttle is shut, pedal or not, on each frame within the cut (as the
+    // source's game samples its physics once a frame)
+    const cutOn = direct && this.cutT < (m.shift?.cutS ?? UPSHIFT_S);
+    if (direct) this.cutT += dt;
+    const effThrottle = cutOn ? 0 : Math.max(this.smoothThrottle, blipThrottle) * clutchLoad;
 
     // Dynamic exhaust filter: opens up progressively with RPM and load so high revs scream cleanly
     const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, rpmTop - this.rpmRange[0])));
@@ -872,7 +1015,9 @@ export class Lc26SoundBank {
     this.engineShelf.gain.setTargetAtTime(shelfDb, now, 0.018);
 
     const engineAlive = inp.stalled ? 0 : 1;
-    const engineTau = this.upshiftTimer > 0 || this.downshiftTimer > 0 ? 0.012 : tau;
+    // A `throttleCut` bank's loops follow their gains within a mix block, as the source's FMOD event does (it ramps a
+    // volume change over its ~11 ms block): a recording the revs bring in is there at once, not faded in over 30 ms
+    const engineTau = direct ? 0.006 : this.upshiftTimer > 0 || this.downshiftTimer > 0 ? 0.012 : tau;
     for (const view of ['ext', 'int'] as Lc26View[]) {
       const onness = lerpTable(m.throttleCurve[view], effThrottle);
       const tg = m.throttleGain?.[view];
@@ -908,8 +1053,16 @@ export class Lc26SoundBank {
         drive.level *
         ((m.driveline?.gain?.ext ?? 1) * (1 - this.viewMix) + (m.driveline?.gain?.int ?? 1) * this.viewMix)
       : dsFade;
-    this.transOn?.update(dsAxis, transLevel * Math.sin(transOnness * Math.PI * 0.5), true, now, dt, tau);
-    this.transOff?.update(dsAxis, transLevel * Math.cos(transOnness * Math.PI * 0.5), true, now, dt, tau);
+    const transMix = m.transmissionMix;
+    if (transMix && m.transmission.some((e) => e.gain)) {
+      // The source's one transmission recording: its gain table over road speed, its event's throttle curve and its
+      // level against the view's engine; pitched by speed up to the event parameter's top
+      const speed = Math.min(transMix.maxSpeed ?? 350, Math.max(0, inp.speedKmh));
+      this.transOn?.update(speed, lerpTable(transMix.throttleGain, effThrottle) * this.perView(transMix.view), true, now, dt, tau);
+    } else {
+      this.transOn?.update(dsAxis, transLevel * Math.sin(transOnness * Math.PI * 0.5), true, now, dt, tau);
+      this.transOff?.update(dsAxis, transLevel * Math.cos(transOnness * Math.PI * 0.5), true, now, dt, tau);
+    }
 
     // Electric machine whine: silent unless the physics reports its power
     if (this.mguVoice && m.mgu) {
@@ -917,10 +1070,34 @@ export class Lc26SoundBank {
       this.mguVoice.set(mgu.gain, mgu.rate, now, dt, 0.04, 0.03);
     }
 
+    // The source's own backfire (`BackfireSpec`): one per lift, from the pedal at its trigger down to its maximum
+    const bf = m.backfire;
+    if (bf) {
+      if (foot >= bf.triggerGas) this.backfireArmed = true;
+      else if (this.backfireArmed && foot <= bf.maxGas) {
+        this.backfireArmed = false;
+        if (rpm >= bf.minRpm && rpm <= bf.maxRpm && this.rng() < (bf.chance?.[inp.view] ?? 1)) {
+          const jitter = bf.pitchJitterSt?.[inp.view] ?? 0;
+          const rate = jitter > 0 ? Math.pow(2, ((2 * this.rng() - 1) * jitter) / 12) : 1;
+          const level = lerpTable(bf.throttleGain[inp.view], foot);
+          const g = this.playOneshot(`backfire_${inp.view}`, level, 0, rate);
+          if (g) this.backfiresPlaying.push({ gain: g, level: g.gain.value / Math.max(1e-6, level), view: inp.view, endsAt: now + 2 });
+        }
+      }
+      // Its event's throttle curve stays on its level while it plays
+      for (let i = this.backfiresPlaying.length - 1; i >= 0; i--) {
+        const p = this.backfiresPlaying[i];
+        if (now > p.endsAt) this.backfiresPlaying.splice(i, 1);
+        else p.gain.gain.setTargetAtTime(p.level * lerpTable(bf.throttleGain[p.view], foot), now, 0.01);
+      }
+    }
+
     // Lift-off: blow-off valve + overrun backfires / pops
     this.popCooldown = Math.max(0, this.popCooldown - dt);
     const lifted = this.prevThrottle > 0.55 && foot < 0.15;
-    if (lifted) {
+    if (lifted && bf) {
+      if (boost > 0.8) this.playOneshot('blowoff', 0.35 * Math.min(1, boost / 2));
+    } else if (lifted) {
       this.liftTimer = 0.9;
       if (boost > 0.8) this.playOneshot('blowoff', 0.35 * Math.min(1, boost / 2));
       // Not on top of a downshift's pop this frame or a moment ago
@@ -938,7 +1115,7 @@ export class Lc26SoundBank {
     }
     this.liftTimer = Math.max(0, this.liftTimer - dt);
     const crackleMinRpm = m.lift?.crackleMinRpm ?? 9000;
-    if (this.liftTimer > 0 && foot < 0.1 && rpm > crackleMinRpm && this.popCooldown === 0 && this.rng() < dt * this.popTuning.crackleRatePerS) {
+    if (!bf && this.liftTimer > 0 && foot < 0.1 && rpm > crackleMinRpm && this.popCooldown === 0 && this.rng() < dt * this.popTuning.crackleRatePerS) {
       this.playExhaustPop(inp.view === 'int' ? 'backfire_int' : 'pop_ext', this.popTuning.crackleGain);
       this.popCooldown = sampleRange(this.popTuning.cooldownRangeS, this.rng);
     }
@@ -947,25 +1124,50 @@ export class Lc26SoundBank {
     // Tyre skid (the bank's own recordings, per view) and the traction-control cut
     for (const view of ['ext', 'int'] as Lc26View[]) {
       const viewLevel = view === 'int' ? this.viewMix : 1 - this.viewMix;
-      this.skidVoices[view]?.set(viewLevel > 0.002 ? (inp.skid ?? 0) : 0, inp.skidRate ?? 1, now, dt, 0.05);
+      const own = m.skid?.[view];
+      // A skid loop with its event's own level and pitch is played by how far into the skid the tyres are
+      const level = own?.gain !== undefined ? (inp.skidAmount ?? 0) * own.gain : (inp.skid ?? 0);
+      this.skidVoices[view]?.set(viewLevel > 0.002 ? level : 0, (inp.skidRate ?? 1) * (own?.rate ?? 1), now, dt, 0.05);
     }
-    this.tcLevel += ((inp.tcActive ? 1 : 0) - this.tcLevel) * Math.min(1, dt / (inp.tcActive ? 0.03 : 0.12));
-    this.tcVoice?.set(this.tcLevel * 0.35, 1, now, dt, 0.03);
+    const tcBank = m.tractionControl;
+    if (tcBank?.gain && tcBank.release) {
+      // The events' level and pitch per view, and their release after the cut (their `decay` curve)
+      this.tcOffS = inp.tcActive ? 0 : this.tcOffS + dt;
+      this.tcLevel = inp.tcActive ? this.tcLevel + (1 - this.tcLevel) * Math.min(1, dt / 0.03) : Math.min(this.tcLevel, lerpTable(tcBank.release, this.tcOffS));
+      this.tcVoice?.set(this.tcLevel * this.perView(tcBank.gain), this.perView(tcBank.rate ?? { ext: 1, int: 1 }), now, dt, 0.01);
+    } else {
+      this.tcLevel += ((inp.tcActive ? 1 : 0) - this.tcLevel) * Math.min(1, dt / (inp.tcActive ? 0.03 : 0.12));
+      this.tcVoice?.set(this.tcLevel * 0.35, 1, now, dt, 0.03);
+    }
 
     // Ambient loops: the wind grows with the square of the speed and rises a little in pitch, louder in the open cockpit;
     // the tyres' rolling noise comes in with speed and pitches with the wheels; the bodywork rattles in the cockpit as
     // the suspension works
     const speedShare = clamp01(inp.speedKmh / 300);
-    this.windVoice?.set(0.45 * speedShare * speedShare * (0.6 + 0.4 * this.viewMix), 0.8 + 0.35 * speedShare, now, dt, 0.08);
     const rollShare = clamp01(inp.speedKmh / 200);
-    this.rollingVoice?.set(
-      0.3 * Math.pow(rollShare, 0.8) * (1 - 0.3 * this.viewMix),
-      Math.min(1.5, Math.max(0.5, 0.55 + 0.75 * (inp.speedKmh / 250))),
-      now,
-      dt,
-      0.08
-    );
-    this.bodyworkVoice?.set(0.5 * clamp01(inp.bodywork ?? 0) * this.viewMix, 1, now, dt, 0.05);
+    // A loop with its event's own curves (`AmbientLoopEntry.gain`): its gain and pitch over its parameter, its level per
+    // view
+    const ambient = (entry: AmbientLoopEntry, voice: LoopVoice | null, tau: number): boolean => {
+      if (!entry.gain || !voice) return false;
+      const x = entry.param === 'bodywork' ? clamp01(inp.bodywork ?? 0) : Math.max(0, inp.speedKmh);
+      voice.set(lerpTable(entry.gain, x) * this.perView(entry.view ?? { ext: 1, int: 1 }), entry.rate ? lerpTable(entry.rate, x) : 1, now, dt, tau);
+      return true;
+    };
+    if (!(m.wind && ambient(m.wind, this.windVoice, 0.08))) {
+      this.windVoice?.set(0.45 * speedShare * speedShare * (0.6 + 0.4 * this.viewMix), 0.8 + 0.35 * speedShare, now, dt, 0.08);
+    }
+    if (!(m.tyreRolling && ambient(m.tyreRolling, this.rollingVoice, 0.08))) {
+      this.rollingVoice?.set(
+        0.3 * Math.pow(rollShare, 0.8) * (1 - 0.3 * this.viewMix),
+        Math.min(1.5, Math.max(0.5, 0.55 + 0.75 * (inp.speedKmh / 250))),
+        now,
+        dt,
+        0.08
+      );
+    }
+    if (!(m.bodywork && ambient(m.bodywork, this.bodyworkVoice, 0.05))) {
+      this.bodyworkVoice?.set(0.5 * clamp01(inp.bodywork ?? 0) * this.viewMix, 1, now, dt, 0.05);
+    }
 
     // Rev limiter bounce (interior limiter recording), retriggered while held on the limiter
     this.limiterCooldown = Math.max(0, this.limiterCooldown - dt);
@@ -984,6 +1186,9 @@ export class Lc26SoundBank {
     this.upshiftTimer = 0;
     this.downshiftTimer = 0;
     this.liftTimer = 0;
+    this.blipT = -1;
+    this.cutT = Infinity;
+    this.backfireArmed = false;
   }
 
   public setLevel(level: number): void {

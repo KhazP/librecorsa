@@ -26,7 +26,7 @@ import { withBasePath } from '@/lib/base-path';
 import type { InterpolatedPeerState } from './multiplayer-sync';
 import { type CarSoundSource } from './CarAudio';
 import { CAMERA_MODES } from '@/lib/render/camera-modes';
-import { LoopGrid, LoopVoice, lerpTable, type Lc26AudioManifest } from './lc26-audio';
+import { LoopGrid, LoopVoice, lerpTable, shiftBlipLevel, type BackfireSpec, type Lc26AudioManifest } from './lc26-audio';
 
 /** Voices in the pool: the nearest cars get one, the rest are not heard */
 export const OPPONENT_VOICES = 8;
@@ -67,6 +67,31 @@ interface SharedBank {
   throttleGain: { on: [number, number][]; off: [number, number][] } | null;
   rpmMin: number;
   rpmMax: number;
+  /**
+   * A bank whose engine hears its gearbox through the throttle (`Lc26AudioManifest.shift.throttleCut`): the cut, the
+   * blip, and its outside gear sounds and backfire, as its source plays them for every car
+   */
+  shift: Lc26AudioManifest['shift'] | null;
+  gearUp: BankOneshot[];
+  gearDown: BankOneshot[];
+  backfire: { spec: BackfireSpec; shots: BankOneshot[] } | null;
+  /**
+   * The outside heard from ahead of the car as well (`Lc26AudioManifest.engineFront`, `cone`): the front set's loops
+   * and throttle gains, and each set's gain and the low-pass over the cone angle (0: listener behind the car)
+   */
+  front: {
+    on: { keys: number[]; buffers: AudioBuffer[]; gains: ([number, number][] | undefined)[] };
+    off: { keys: number[]; buffers: AudioBuffer[]; gains: ([number, number][] | undefined)[] };
+    throttleGain: { on: [number, number][]; off: [number, number][] };
+    cone: NonNullable<Lc26AudioManifest['cone']>;
+  } | null;
+}
+
+/** An outside one-shot of a bank at its own level and playback rate */
+interface BankOneshot {
+  buffer: AudioBuffer;
+  gain: number;
+  rate: number;
 }
 
 async function loadSharedBank(ctx: AudioContext, assetDir: string, bank: SharedBank): Promise<void> {
@@ -83,11 +108,42 @@ async function loadSharedBank(ctx: AudioContext, assetDir: string, bank: SharedB
     };
     const on = ext.filter((e) => e.layer === 'on').sort((a, b) => a.rpm - b.rpm);
     const off = ext.filter((e) => e.layer === 'off').sort((a, b) => a.rpm - b.rpm);
-    const [onBuffers, offBuffers, skid] = await Promise.all([
+    // The outside gear sounds and backfire of a `throttleCut` bank, at their own levels (a missing one is left out)
+    const direct = m.shift?.throttleCut === true;
+    const shots = (role: string) =>
+      Promise.all(
+        (direct ? (m.oneshots ?? []).filter((o) => o.role === role) : []).map((o) =>
+          decode(o.file).then(
+            (buffer): BankOneshot => ({ buffer, gain: o.gain ?? 1, rate: o.rate ?? 1 }),
+            () => null
+          )
+        )
+      ).then((l) => l.filter((x): x is BankOneshot => x !== null));
+    const [onBuffers, offBuffers, skid, gearUp, gearDown, backfires] = await Promise.all([
       Promise.all(on.map((e) => decode(e.file))),
       Promise.all(off.map((e) => decode(e.file))),
       m.skid?.ext ? decode(m.skid.ext.file).catch(() => null) : Promise.resolve(null),
+      shots('gear_up_ext'),
+      shots('gear_down_ext'),
+      m.backfire ? shots('backfire_ext') : Promise.resolve([]),
     ]);
+    // The front set, where the bank has one
+    const fr = m.engineFront ?? [];
+    if (fr.length > 0 && m.cone && m.throttleGainFront) {
+      const fOn = fr.filter((e) => e.layer === 'on').sort((a, b) => a.rpm - b.rpm);
+      const fOff = fr.filter((e) => e.layer === 'off').sort((a, b) => a.rpm - b.rpm);
+      const [onB, offB] = await Promise.all([Promise.all(fOn.map((e) => decode(e.file))), Promise.all(fOff.map((e) => decode(e.file)))]);
+      bank.front = {
+        on: { keys: fOn.map((e) => e.rpm), buffers: onB, gains: fOn.map((e) => e.gain) },
+        off: { keys: fOff.map((e) => e.rpm), buffers: offB, gains: fOff.map((e) => e.gain) },
+        throttleGain: m.throttleGainFront,
+        cone: m.cone,
+      };
+    }
+    bank.shift = direct ? (m.shift ?? null) : null;
+    bank.gearUp = gearUp;
+    bank.gearDown = gearDown;
+    bank.backfire = direct && m.backfire && backfires.length > 0 ? { spec: m.backfire, shots: backfires } : null;
     const rpms = ext.map((e) => e.rpm);
     bank.onKeys = on.map((e) => e.rpm);
     bank.onBuffers = onBuffers;
@@ -134,6 +190,9 @@ class OpponentVoice {
   private boundReady = false;
   private onGrid: LoopGrid | null = null;
   private offGrid: LoopGrid | null = null;
+  /** The front set's grids, for a bank that has one */
+  private frontOnGrid: LoopGrid | null = null;
+  private frontOffGrid: LoopGrid | null = null;
   private readonly input: GainNode;
   private readonly engineGain: GainNode;
   private readonly skidFilter: BiquadFilterNode;
@@ -148,6 +207,10 @@ class OpponentVoice {
   private estGear = 1;
   private prevGear = 0;
   private shiftTimer = 0;
+  /** A `throttleCut` bank's up-shift cut and down-shift blip (s since each; Infinity / < 0 for none) */
+  private cutT = Infinity;
+  private blipT = -1;
+  private backfireArmed = false;
   private doppler = 1;
   private skid = 0;
   private prevContact = false;
@@ -197,6 +260,9 @@ class OpponentVoice {
     this.estGear = 1;
     this.prevGear = 0;
     this.shiftTimer = 0;
+    this.cutT = Infinity;
+    this.blipT = -1;
+    this.backfireArmed = false;
     this.doppler = 1;
     this.skid = 0;
     this.prevContact = false;
@@ -214,7 +280,23 @@ class OpponentVoice {
     this.boundReady = ready;
     this.onGrid?.dispose();
     this.offGrid?.dispose();
+    this.frontOnGrid?.dispose();
+    this.frontOffGrid?.dispose();
+    this.frontOnGrid = null;
+    this.frontOffGrid = null;
     this.skidVoice?.dispose();
+    if (bank.front) {
+      const grid = (set: { keys: number[]; buffers: AudioBuffer[]; gains: ([number, number][] | undefined)[] }) => {
+        const g = new LoopGrid(this.ctx, this.engineGain, set.keys, set.gains);
+        set.keys.forEach((k, i) => {
+          const v = g.voiceFor(k);
+          if (v) v.buffer = set.buffers[i];
+        });
+        return g;
+      };
+      this.frontOnGrid = grid(bank.front.on);
+      this.frontOffGrid = grid(bank.front.off);
+    }
     this.onGrid = new LoopGrid(this.ctx, this.engineGain, bank.onKeys, bank.onGains);
     this.offGrid = new LoopGrid(this.ctx, this.engineGain, bank.offKeys, bank.offGains);
     bank.onKeys.forEach((k, i) => {
@@ -257,7 +339,8 @@ class OpponentVoice {
     doppler: number,
     cut: boolean,
     now: number,
-    dt: number
+    dt: number,
+    coneDeg = 0
   ): void {
     const bank = this.bank;
     const sound = this.sound;
@@ -281,8 +364,9 @@ class OpponentVoice {
     } else {
       pn.setPosition(rel.x, rel.y, rel.z);
     }
-    // Air absorption: the far car loses its top end first
-    this.air.frequency.setTargetAtTime(Math.max(1400, 18000 / (1 + dist / 70)), now, 0.05);
+    // Air absorption: the far car loses its top end first; a bank with a front set also has its event's cone low-pass
+    const coneHz = bank.front?.cone.lowpassHz ? lerpTable(bank.front.cone.lowpassHz, coneDeg) : Infinity;
+    this.air.frequency.setTargetAtTime(Math.min(coneHz, Math.max(1400, 18000 / (1 + dist / 70))), now, 0.05);
 
     this.doppler = cut || !this.placed ? doppler : this.doppler + (doppler - this.doppler) * Math.min(1, dt / 0.06);
     this.placed = true;
@@ -305,7 +389,17 @@ class OpponentVoice {
       targetRpm = this.estimateRpm(Math.max(v, rearWheelMs), sound.limiterRpm);
       gear = this.estGear;
     }
-    if (gear !== this.prevGear) {
+    const shift = bank.shift;
+    if (gear !== this.prevGear && shift?.throttleCut) {
+      // As the source plays every car: the outside gear sound, and the throttle shut or blipped (below)
+      if (this.prevGear > 0 && gear > 0) {
+        const up = gear > this.prevGear;
+        this.playShot(up ? bank.gearUp : bank.gearDown, 1, now);
+        if (up) this.cutT = 0;
+        else this.blipT = 0;
+      }
+      this.prevGear = gear;
+    } else if (gear !== this.prevGear) {
       if (this.prevGear > 0 && gear > this.prevGear) this.shiftTimer = 0.06;
       this.prevGear = gear;
     }
@@ -313,18 +407,52 @@ class OpponentVoice {
     targetRpm = THREE.MathUtils.clamp(targetRpm, bank.rpmMin, bank.rpmMax);
     this.rpm = this.rpm === 0 ? targetRpm : this.rpm + (targetRpm - this.rpm) * Math.min(1, dt / 0.03);
 
-    const onness = bank.throttleCurve.length ? lerpTable(bank.throttleCurve, this.throttle) : this.throttle;
-    const cut01 = this.shiftTimer > 0 ? 0.55 : 1;
+    // A `throttleCut` bank: the throttle as the car gives it, shut through the cut and lifted by the blip, the loops
+    // following within a mix block; no dip of the player's own
+    const direct = shift?.throttleCut === true;
+    let thrHeard = this.throttle;
+    if (direct) {
+      const blip = shiftBlipLevel(shift?.blip, this.blipT < 0 ? -1 : this.blipT + dt / 2);
+      thrHeard = this.cutT < (shift?.cutS ?? 0) ? 0 : Math.max(thr, blip);
+      this.cutT += dt;
+      if (this.blipT >= 0) this.blipT = this.blipT + dt > (shift?.blip?.endS ?? 0) ? -1 : this.blipT + dt;
+    }
+    const onness = bank.throttleCurve.length ? lerpTable(bank.throttleCurve, thrHeard) : thrHeard;
+    const cut01 = !direct && this.shiftTimer > 0 ? 0.55 : 1;
     const full = this.rank < HRTF_VOICES;
     const tg = bank.throttleGain;
-    const gOn = tg ? lerpTable(tg.on, this.throttle) : Math.sin(onness * Math.PI * 0.5);
-    const gOff = tg ? lerpTable(tg.off, this.throttle) : Math.cos(onness * Math.PI * 0.5);
+    const gOn = tg ? lerpTable(tg.on, thrHeard) : Math.sin(onness * Math.PI * 0.5);
+    const gOff = tg ? lerpTable(tg.off, thrHeard) : Math.cos(onness * Math.PI * 0.5);
     // A far voice plays the on-load grid only, held up a little off throttle so a lift does not drop it out
     const wOn = (full ? gOn : Math.max(0.6, gOn)) * cut01;
-    const wOff = full ? gOff * (this.shiftTimer > 0 ? 0.75 : 1) : 0;
+    const wOff = full ? gOff * (!direct && this.shiftTimer > 0 ? 0.75 : 1) : 0;
     // (Cars past CULL_DISTANCE_M never get a voice: they are dropped when the candidates are gathered)
-    this.onGrid.update(this.rpm, wOn, true, now, dt, 0.03, 0.02, this.doppler);
-    this.offGrid.update(this.rpm, wOff, true, now, dt, 0.03, 0.02, this.doppler);
+    const engineTau = direct ? 0.006 : 0.03;
+    // A bank with a front set: the rear set and the front one each at their cone gain, the front at its own throttle
+    const front = bank.front;
+    const rear = front ? lerpTable(front.cone.rear, coneDeg) : 1;
+    this.onGrid.update(this.rpm, wOn * rear, true, now, dt, engineTau, 0.02, this.doppler);
+    this.offGrid.update(this.rpm, wOff * rear, true, now, dt, engineTau, 0.02, this.doppler);
+    if (front && this.frontOnGrid && this.frontOffGrid) {
+      const ahead = lerpTable(front.cone.front, coneDeg);
+      const fOn = lerpTable(front.throttleGain.on, thrHeard);
+      const fOff = lerpTable(front.throttleGain.off, thrHeard);
+      this.frontOnGrid.update(this.rpm, (full ? fOn : Math.max(0.6, fOn)) * ahead, true, now, dt, engineTau, 0.02, this.doppler);
+      this.frontOffGrid.update(this.rpm, full ? fOff * ahead : 0, true, now, dt, engineTau, 0.02, this.doppler);
+    }
+
+    // Its backfire on a lift, as the bank's (`BackfireSpec`), near voices only
+    const bf = bank.backfire;
+    if (bf && full) {
+      if (thr >= bf.spec.triggerGas) this.backfireArmed = true;
+      else if (this.backfireArmed && thr <= bf.spec.maxGas) {
+        this.backfireArmed = false;
+        if (this.rpm >= bf.spec.minRpm && this.rpm <= bf.spec.maxRpm && Math.random() < (bf.spec.chance?.ext ?? 1)) {
+          const jitter = bf.spec.pitchJitterSt?.ext ?? 0;
+          this.playShot(bf.shots, lerpTable(bf.spec.throttleGain.ext, thr), now, jitter > 0 ? Math.pow(2, ((2 * Math.random() - 1) * jitter) / 12) : 1);
+        }
+      }
+    }
 
     // Tyres: slip angle between heading and travel, and the wheels against the road (wheelspin, lock-ups)
     let skidTarget = 0;
@@ -358,10 +486,30 @@ class OpponentVoice {
     this.prevContact = contact;
   }
 
+  /** One of a bank's outside one-shots, at its level times `gain`, into this car's voice (its distance and panning) */
+  private playShot(list: BankOneshot[], gain: number, now: number, rate = 1): void {
+    if (list.length === 0) return;
+    const shot = list[Math.floor(Math.random() * list.length)];
+    const src = this.ctx.createBufferSource();
+    src.buffer = shot.buffer;
+    src.playbackRate.value = shot.rate * rate * this.doppler;
+    const g = this.ctx.createGain();
+    g.gain.value = shot.gain * gain;
+    src.connect(g);
+    g.connect(this.engineGain);
+    src.start(now);
+    src.onended = () => {
+      src.disconnect();
+      g.disconnect();
+    };
+  }
+
   /** Lets the loops fade and stop (free voice, car out of range, sound off) */
   public silence(now: number, dt: number): void {
     this.onGrid?.update(this.rpm || 1, 0, true, now, dt, 0.05, 0.02, this.doppler);
     this.offGrid?.update(this.rpm || 1, 0, true, now, dt, 0.05, 0.02, this.doppler);
+    this.frontOnGrid?.update(this.rpm || 1, 0, true, now, dt, 0.05, 0.02, this.doppler);
+    this.frontOffGrid?.update(this.rpm || 1, 0, true, now, dt, 0.05, 0.02, this.doppler);
     this.skidVoice?.set(0, 1, now, dt, 0.05);
   }
 
@@ -596,8 +744,15 @@ export class OpponentAudio {
           1.7
         );
       }
+      // The cone angle the car's outside sound is heard from: 0 with the listener straight behind it (its rear
+      // recordings), 180 ahead (+Z is the car's forward)
+      const q = p.quaternion;
+      const fx = 2 * (q.x * q.z + q.w * q.y);
+      const fy = 2 * (q.y * q.z - q.w * q.x);
+      const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
+      const coneDeg = dist > 0.01 ? (Math.acos(THREE.MathUtils.clamp((fx * this.rel.x + fy * this.rel.y + fz * this.rel.z) / dist, -1, 1)) * 180) / Math.PI : 0;
       this.rel.applyQuaternion(this.invQ);
-      v.drive(p, this.rel, dist, doppler, cut, now, dt);
+      v.drive(p, this.rel, dist, doppler, cut, now, dt, coneDeg);
       if (this.debug) {
         this.stats.push({
           peerId: p.peerId,
@@ -647,6 +802,11 @@ export class OpponentAudio {
         throttleGain: null,
         rpmMin: 3000,
         rpmMax: 16000,
+        shift: null,
+        gearUp: [],
+        gearDown: [],
+        backfire: null,
+        front: null,
       };
       this.banks.set(assetDir, bank);
       if (this.ctx) void loadSharedBank(this.ctx, assetDir, bank);

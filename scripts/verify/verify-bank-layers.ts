@@ -11,7 +11,8 @@
  * 4. A pitched grid's loops waking: mid-sweep they start where the others' pitch glide has got to; after a silence
  *    (an opponent's voice handed to another car) they start at the target.
  * 5. Loops in their source bank's own mix (`EngineEntry.gain`, `throttleGain`, `flatEngine`): every loop of a layer at
- *    its own gain, none crossfaded, on a grid and in a ported bank (F1 2007's, hosted only).
+ *    its own gain, none crossfaded, on a grid and in a ported bank (F1 2007's, hosted only); its gear changes through
+ *    the throttle alone (`shift.throttleCut`), its own gear sounds and its transmission recording.
  *
  * Run with: npx tsx scripts/verify/verify-bank-layers.ts
  */
@@ -381,6 +382,59 @@ async function bankOwnMix(): Promise<void> {
     check(`every ${layer} loop at its gain table's value at 9300 rpm`, off.length === 0, off.map(({ e, got, want }) => `${e.rpm}: ${got} / ${want}`).join(", "));
   }
   check("no rpm/load filter on the bank's own mix (flatEngine)", inside.engineFilter.frequency.value >= 24000, `${inside.engineFilter.frequency.value} Hz`);
+
+  // The gearbox through the throttle alone (`shift.throttleCut`), at 60 frames a second as the source's game updates
+  // its sound: an up-shift shuts the throttle on the frames within the 25 ms cut, a down-shift blips it to 0.75; each
+  // plays the view's gear sound, at its own level and pitch; the transmission is its one recording at its own curves
+  const played: string[] = [];
+  const play = (Lc26SoundBank.prototype as unknown as { playOneshot: (role: string, ...a: unknown[]) => unknown }).playOneshot;
+  (Lc26SoundBank.prototype as unknown as { playOneshot: unknown }).playOneshot = function (this: unknown, role: string, ...rest: unknown[]) {
+    played.push(role);
+    return play.call(this, role, ...rest);
+  };
+  const dt = 1 / 60;
+  const flat: Lc26AudioInputs = { ...base, rpm: 17000, throttle: 1, pedal: 1, gear: 4, speedKmh: 230, boostBarGauge: 0, limiterRpm: 19000 };
+  settle(bank, inside, flat, 0.5);
+  played.length = 0;
+  const onLevels: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    ctx.currentTime += dt;
+    bank.update({ ...flat, gear: 5 }, dt);
+    onLevels.push(sent.get(inside.engine.int.on)?.level ?? NaN);
+  }
+  const full = lerp(tg.on, 1);
+  check(
+    "an up-shift shuts the throttle on the two frames inside its 25 ms cut, then it is open again",
+    onLevels[0] === 0 && onLevels[1] === 0 && near(onLevels[2], full, 1e-6) && near(sent.get(inside.engine.int.off)?.level ?? NaN, lerp(tg.off, 1), 1e-6),
+    onLevels.map((v) => v.toFixed(3)).join(" ")
+  );
+  check("the up-shift plays the cockpit's own gear sound, nothing of the player's", played.join() === "gear_up_int", played.join());
+  played.length = 0;
+  const coast: Lc26AudioInputs = { ...flat, gear: 5, throttle: 0, pedal: 0 };
+  settle(bank, inside, coast, 0.5);
+  played.length = 0;
+  ctx.currentTime += dt;
+  bank.update({ ...coast, gear: 4 }, dt);
+  const blipOn = sent.get(inside.engine.int.on)?.level ?? NaN;
+  for (let i = 0; i < 3; i++) {
+    ctx.currentTime += dt;
+    bank.update({ ...coast, gear: 4 }, dt);
+  }
+  check(
+    "a down-shift blips the throttle to 0.75 (drivetrain.ini AUTOBLIP) and lets it close by 40 ms",
+    near(blipOn, lerp(tg.on, 0.75), 1e-6) && (sent.get(inside.engine.int.on)?.level ?? NaN) === lerp(tg.on, 0),
+    `${blipOn.toFixed(3)} at the blip`
+  );
+  check("the down-shift plays the cockpit's own down-shift sound, and no backfire pop of the player's", played.join() === "gear_down_int", played.join());
+  const tr = settle(bank, inside, { ...flat, speedKmh: 200 }, 0.5);
+  const mix = m.transmissionMix!;
+  check(
+    "the transmission: its one recording at road speed, at its event's throttle curve and the view's level",
+    !!inside.transOn && tr.transX === 200 && near(tr.transOn, lerp(mix.throttleGain, 1) * mix.view.int, 1e-6) &&
+      inside.transOn.voices.length === 1 && near(voiceState(inside.transOn, inside.transOn.voices[0].key).gain, lerp(m.transmission[0].gain!, 200) * tr.transOn, 1e-4),
+    `${tr.transOn.toFixed(3)} x ${lerp(m.transmission[0].gain!, 200).toFixed(3)} at 200 km/h`
+  );
+  (Lc26SoundBank.prototype as unknown as { playOneshot: unknown }).playOneshot = play;
 }
 
 async function main() {
