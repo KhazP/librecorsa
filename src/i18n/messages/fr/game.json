@@ -144,7 +144,7 @@
       "nameTaken": "Ce nom est déjà pris. Connectez-vous au compte qui le détient, importez votre clé de pilote dans Temps au tour, ou courez sous un autre nom",
       "pickName": "Choisissez un autre nom",
       "challengeEnded": "Ce défi hebdomadaire est terminé",
-      "challengeRules": "Ce tour n’a pas été roulé selon les règles du défi de cette semaine"
+      "challengeRules": "Ce tour n’a pas été effectué selon les règles du défi de cette semaine"
     }
   },
   "badges": {

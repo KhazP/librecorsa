@@ -132,7 +132,7 @@
     "errors": {
       "unreachable": "無法連線至線上圈速榜，我會繼續嘗試",
       "unreachableGaveUp": "無法連線至線上圈速榜",
-      "olderPhysics": "這一圈來自舊版的物理或賽道，該排行榜僅供檢視",
+      "olderPhysics": "這一圈來自舊版的物理或賽道，該圈速榜僅供檢視",
       "olderPhysicsReload": "這一圈來自舊版的物理或賽道。請重新載入遊戲，在新版本上駕駛",
       "modLap": "使用模組車輛或在模組賽道上的單圈不會列入線上圈速榜",
       "unknownCircuit": "在非遊戲內建賽道上的單圈不會列入線上圈速榜",

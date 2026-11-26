@@ -130,7 +130,7 @@
     "renameUnreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến. Hãy thử lại sau giây lát",
     "renameFailed": "Không thể đổi tên (HTTP {status})",
     "errors": {
-      "unreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến, mình sẽ tiếp tục thử",
+      "unreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến, tôi sẽ tiếp tục thử",
       "unreachableGaveUp": "Không thể kết nối tới bảng xếp hạng trực tuyến",
       "olderPhysics": "Vòng này thuộc phiên bản vật lý hoặc đường đua cũ hơn, và bảng đó chỉ để xem",
       "olderPhysicsReload": "Vòng này thuộc phiên bản vật lý hoặc đường đua cũ hơn. Hãy tải lại game để lái trên phiên bản mới",
