@@ -17,6 +17,8 @@ blurred rims (`RIM_BLUR_*`) are left out.
 Output node layout (read by src/lib/ported-car-model.ts):
     CAR (extras: wheelCentres, tyreRadius, tyreHalfWidth, wheelbaseM, trackWidthM, steer, cameras, source)
       BODY              body, cabin, glass and lights, one mesh per material
+        MIRROR_n        a mirror mirrors.ini names ([MIRROR_n] NAME=<kn5 mesh>), its glass in a material of its own
+                        (extras: mirror {node, kn5}); CAR's extras list them as `mirrors`
       STEER             steering wheel pivot (AC's STEER_HR: local +Z down the column into the dash); a preset's
                         `steer_nodes` (a screen, shift lights) are child nodes of their own, named as in the kn5
       WHEEL_RF          hub pivot at the tyre's centre
@@ -1721,6 +1723,39 @@ def driver_eyes(nodes, data):
     return steer['world'][:3, 3] + [0, 0.27, -0.47] if steer is not None else None
 
 
+# The glass of a mirror mirrors.ini names: reflective while the game's live mirror is off (an opponent, a far view)
+MIRROR_GLASS = dict(name='mirror_face', color=(235, 235, 235), metal=1.0, rough=0.02)
+
+
+def read_mirrors(data):
+    """mirrors.ini's [MIRROR_n] sections, in order: [(section, NAME)], the NAME a kn5 node's; [] without the file"""
+    text = next((v for k, v in data.items() if k.lower() == 'mirrors.ini'), None)
+    if not text:
+        return []
+    cp = ini(text)
+    found = []
+    for s in cp.sections():
+        m = re.fullmatch(r'MIRROR_(\d+)', s.strip(), re.I)
+        name = cp[s].get('NAME', '').strip()
+        if m and name:
+            found.append((int(m.group(1)), f'MIRROR_{m.group(1)}', name))
+    return [(section, name) for _, section, name in sorted(found)]
+
+
+def mirror_meshes(nodes, mirrors):
+    """{index of a mesh node: its mirrors.ini section}: the mesh named exactly as the section's NAME (the kn5 has a
+    transform and a mesh of that name), else the meshes under a node of that name. Exact names only: a bare
+    `hon_body_a` must not take in the rest of `hon_body_a.*`"""
+    out = {}
+    for section, name in mirrors:
+        own = [i for i, n in enumerate(nodes) if n['mesh'] is not None and n['name'] == name]
+        if not own:
+            own = [i for i, n in enumerate(nodes) if n['mesh'] is not None and name in ancestors(nodes, i)]
+        for i in own:
+            out.setdefault(i, section)
+    return out
+
+
 def auto_preset(car_dir, loaded, data, kn5_name, title=None, overrides=None, n_skins=None):
     """A preset for a car with none (see above), with `detected`: what was found and how. `overrides` and `n_skins`
     (the skins' replaced textures) default to the car folder's skins"""
@@ -1837,12 +1872,18 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     data = read_car_data(car_dir)
     stats = TexStats({**textures, **skin_tex})
     specs = {}
+    # The meshes mirrors.ini names (`mirror_meshes`): MIRROR_n nodes of their own in a material of their own
+    mirror_at = mirror_meshes(nodes, read_mirrors(data))
+    mirror_section = {}  # id(part) -> its mirrors.ini section
 
     def spec_of(key):
         """The material spec of kn5 material `key` ('material@node' for a node's own entry)"""
         if key not in specs:
             base = key.split('@')[0]
-            if key in MATERIALS:
+            if '@' in key and key.split('@', 1)[1] in mirror_section.values():
+                # A mirror's glass ('material@MIRROR_n'): its own material, shared with nothing else
+                specs[key] = (MIRROR_GLASS, None)
+            elif key in MATERIALS:
                 specs[key] = (MATERIALS[key], None)
             elif auto:
                 specs[key] = auto_spec(by_name[base], stats, preset, by_name)
@@ -1881,6 +1922,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             continue
         part = part_of.get(i) if kind == 'body' else None
         parts.append([kind, corner, mat, *world_mesh(n), n['name'], part])
+        if kind == 'body' and part is None and i in mirror_at:
+            mirror_section[id(parts[-1])] = mirror_at[i]
 
     # Shift: lowest tyre point to y = 0, X centred on the four tyres
     tyres = [p for p in parts if p[0] == 'tyre']
@@ -1936,7 +1979,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
 
     writer = GlbWriter(use_quantization=False)
     writer.j['asset']['generator'] = 'scripts/cars/port_ac_car.py'
-    used = {p[2] for p in parts}
+    # A mirror's kn5 material is drawn only as the mirror's own (`spec_of`)
+    used = {p[2] for p in parts if id(p) not in mirror_section}
     alpha_keys = {s['tex'] for s in MATERIALS.values() if s.get('mode', 'OPAQUE') != 'OPAQUE' and s.get('tex')}
     alpha_keys |= {spec_of(k)['tex'] for k in used if spec_of(k).get('tex') and spec_of(k).get('mode', 'OPAQUE') != 'OPAQUE'}
     pool = TexturePool(writer, textures, skin_tex, materials, max_tex, small_tex, normal_tex, jpeg_quality, alpha_keys)
@@ -2133,14 +2177,26 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     order = {m['name']: i for i, m in enumerate(materials)}
     body_parts.sort(key=lambda p: order[p[2]])
     led_nodes = set(preset.get('led_nodes', ()))
+    is_mirror = lambda p: id(p) in mirror_section  # noqa: E731
     body_kids = [writer.add_mesh_node(f'BODY_{node_label(mi)}', [pi])
-                 for mi, pi in prims([p for p in body_parts if p[8] is None and p[7] not in led_nodes],
+                 for mi, pi in prims([p for p in body_parts if p[8] is None and p[7] not in led_nodes and not is_mirror(p)],
                                      order=lambda k: order[k])]
     # Shift lights on the body (digital_instruments.ini's, on a dash rather than the wheel): nodes of their own
-    body_leds = sorted({p[7] for p in body_parts if p[8] is None and p[7] in led_nodes})
+    body_leds = sorted({p[7] for p in body_parts if p[8] is None and p[7] in led_nodes and not is_mirror(p)})
     for name in body_leds:
-        out = prims([p for p in body_parts if p[7] == name], order=lambda k: order[k])
+        out = prims([p for p in body_parts if p[7] == name and not is_mirror(p)], order=lambda k: order[k])
         body_kids.append(writer.add_mesh_node(name, [pi for _, pi in out]))
+    # The mirrors (mirrors.ini): MIRROR_n, the glass of every mesh its NAME gives in one material of its own, the
+    # section in the node's extras, for the game's live mirrors to find
+    mirrors = []
+    for section in sorted(set(mirror_section.values()), key=lambda s: int(s.split('_')[1])):
+        group = [p for p in body_parts if mirror_section.get(id(p)) == section]
+        out = prims(group, key=lambda p, section=section: f'{p[2]}@{section}')
+        node = writer.add_mesh_node(section, [pi for _, pi in out])
+        entry = {'node': section, 'kn5': sorted({p[7] for p in group})}
+        writer.j['nodes'][node]['extras'] = {'mirror': entry}
+        body_kids.append(node)
+        mirrors.append(entry)
     # A livery's parts (`parts`, `extra_kn5`): PART_<name>, one mesh per material, shown for its variants' liveries
     variant_nodes = {}
     for part in sorted({p[8] for p in body_parts if p[8] is not None}):
@@ -2245,6 +2301,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         'cameras': cameras,
         **({'revLeds': rev_leds} if rev_leds else {}),
         **({'digitalItems': digital_items} if digital_items else {}),
+        **({'mirrors': mirrors} if mirrors else {}),
         **({'skinMaps': {MATERIALS[m]['name']: f for m, (f, _) in preset['skin_maps'].items()}}
            if preset.get('skin_maps') else {}),
         **({'skinMaps': {name: f for name, (f, _) in sorted(skin_files.items())}} if skin_files else {}),
@@ -2268,6 +2325,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     ntris = sum(len(p[6]) for p in parts)
     print(f'wrote {out_path} ({os.path.getsize(out_path) / 1e6:.2f} MB)')
     print(f'  rev LEDs: {json.dumps(rev_leds)}')
+    print(f'  mirrors: {json.dumps(mirrors)}')
     print(f'  {len(parts)} kn5 meshes -> {len(body_kids)} body meshes, {len(steer_kids)} steer, 4 wheels; '
           f'{nverts} vertices, {ntris} triangles; {len(writer.j["materials"])} materials')
     print(f'  dropped meshes by material: {dropped}')
