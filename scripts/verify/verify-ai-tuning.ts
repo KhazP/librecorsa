@@ -91,8 +91,10 @@ const shipped = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'lc26', trackId
 check('shipped F1 class values are the identity defaults', JSON.stringify(shipped.params) === JSON.stringify(AI_TUNING_DEFAULTS));
 
 console.log('Skill');
-const pro = aiSkillModifiers(AI_SKILL_DEFAULT);
+const PRO_SKILL = AI_SKILL_LEVELS.find((l) => l.id === 'pro')!.value;
+const pro = aiSkillModifiers(PRO_SKILL);
 check('Pro is the identity', pro.paceMult === 1 && pro.brakeMarginAdd === 0 && pro.apexMult === 1 && pro.mistakesPerLap === 0 && pro.cautionAdd === 0);
+check('default AI skill is almost Alien (95)', AI_SKILL_DEFAULT === 95);
 const mods = AI_SKILL_LEVELS.map((l) => aiSkillModifiers(l.value));
 check(
   'pace and corner speed rise with skill, margins, errors and mistakes fall',
@@ -112,7 +114,7 @@ check('out-of-range skill clamps', aiSkillModifiers(-50).paceMult === mods[0].pa
 
 const playerVf = new F1Physics2026(track);
 const paceAt = (skill: number) => new AiOpponentField(track, playerVf, AI_DRIVERS, undefined, { skill, seed: 3 }).report().cars.filter((c) => !c.isPlayer).map((c) => c.pace);
-const pacePro = paceAt(AI_SKILL_DEFAULT);
+const pacePro = paceAt(PRO_SKILL);
 check('at Pro every driver keeps his written pace', pacePro.every((p, i) => near(p, AI_DRIVERS[i].pace, 1e-12)), pacePro.join(' '));
 const paces = AI_SKILL_LEVELS.map((l) => paceAt(l.value));
 check('the field keeps its spread at every level', paces.every((ps) => ps.every((p, i) => i === 0 || p < ps[i - 1])));
