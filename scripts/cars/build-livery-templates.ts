@@ -1,55 +1,107 @@
 /**
  * Generates 2048x2048 livery painting templates, transparent line overlays, and 640px doc previews
- * for the F1 cars (`lc26`, `lc25`) using the exact shared projection math from `src/lib/render/livery-projection.ts`.
+ * for atlas-projected cars (`lc26`, `lc25`, `amg-gt3`, `bmw-m4-gt3`, `lc-lmdh`) using the exact
+ * shared projection math from `src/lib/render/livery-projection.ts`.
  *
  * Usage:
  *   npx tsx scripts/cars/build-livery-templates.ts
- *   npx tsx scripts/cars/build-livery-templates.ts lc26
+ *   npx tsx scripts/cars/build-livery-templates.ts lc26 lc25
+ *   npx tsx scripts/cars/build-livery-templates.ts --models /path/to/public/cars amg-gt3 bmw-m4-gt3 lc-lmdh
  */
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { MeshoptDecoder } from "meshoptimizer";
 import sharp from "sharp";
+import * as THREE from "three";
 import {
   F1_PANEL_IDS,
   F1_PROJECTION,
+  PORTED_PANEL_IDS,
+  PORTED_PROJECTION,
   f1ProjectToPanel,
+  portedProjectToPanel,
   projectF1Point,
+  projectPortedPoint,
   type AtlasPanelRect,
   type F1PanelId,
+  type PortedPanelId,
+  type PortedProjectionProfile,
 } from "../../src/lib/render/livery-projection";
+import {
+  PROCEDURAL_BODY_PROFILES,
+  PROCEDURAL_PROFILE_BY_MATERIAL,
+} from "../../src/lib/render/ported-procedural-livery";
 
 const ROOT = process.cwd();
 const OUT_ROOT = join(ROOT, "docs/livery-templates");
 const SIZE = F1_PROJECTION.atlasSize;
-const PAINT_ZONE_MATERIALS = new Set(["EXT_PAINT_PRIMARY", "EXT_PAINT_SECONDARY", "EXT_PAINT_ACCENT"]);
+const F1_PAINT_MATERIALS = new Set(["EXT_PAINT_PRIMARY", "EXT_PAINT_SECONDARY", "EXT_PAINT_ACCENT"]);
 
-interface CarTemplateTarget {
-  readonly id: "lc26" | "lc25";
+type TemplateCarId = "lc26" | "lc25" | "amg-gt3" | "bmw-m4-gt3" | "lc-lmdh";
+type AnyPanelId = F1PanelId | PortedPanelId;
+
+interface BaseTarget {
+  readonly id: TemplateCarId;
   readonly title: string;
-  readonly glbPath: string;
+  readonly glbRelPath: string;
+}
+
+interface F1TemplateTarget extends BaseTarget {
+  readonly kind: "f1";
+  readonly id: "lc26" | "lc25";
   /** Whether geometry outside the main F1 projection bounds (top/side/fwEndplate) is expected and hatched */
   readonly allowMainBoundsClamping: boolean;
 }
 
+interface PortedTemplateTarget extends BaseTarget {
+  readonly kind: "ported";
+  readonly id: "amg-gt3" | "bmw-m4-gt3" | "lc-lmdh";
+  readonly profile: PortedProjectionProfile;
+}
+
+type CarTemplateTarget = F1TemplateTarget | PortedTemplateTarget;
+
 const TARGETS: readonly CarTemplateTarget[] = [
   {
+    kind: "f1",
     id: "lc26",
     title: "LC26 Prototype",
-    glbPath: join(ROOT, "public/cars/f12026/model/f12026.glb"),
+    glbRelPath: "f12026/model/f12026.glb",
     allowMainBoundsClamping: false,
   },
   {
+    kind: "f1",
     id: "lc25",
     title: "LC25 Prototype",
-    glbPath: join(ROOT, "public/cars/lc25/model/lc25.glb"),
+    glbRelPath: "lc25/model/lc25.glb",
     allowMainBoundsClamping: true,
+  },
+  {
+    kind: "ported",
+    id: "amg-gt3",
+    title: "Mercedes-AMG GT3 Evo",
+    glbRelPath: "amg-gt3-evo/model/amg-gt3-evo.glb",
+    profile: PROCEDURAL_BODY_PROFILES["amg-gt3"],
+  },
+  {
+    kind: "ported",
+    id: "bmw-m4-gt3",
+    title: "BMW M4 GT3 Evo",
+    glbRelPath: "bmw-m4-gt3/model/bmw-m4-gt3.glb",
+    profile: PROCEDURAL_BODY_PROFILES["bmw-m4-gt3"],
+  },
+  {
+    kind: "ported",
+    id: "lc-lmdh",
+    title: "LC-LMDH Hypercar",
+    glbRelPath: "lc-lmdh/model/lc-lmdh.glb",
+    profile: PROCEDURAL_BODY_PROFILES["lc-lmdh"],
   },
 ];
 
-const MAIN_BOUND_PANELS = new Set<F1PanelId>(["top", "left", "right", "fwEndplateLeft", "fwEndplateRight"]);
+const F1_MAIN_BOUND_PANELS = new Set<F1PanelId>(["top", "left", "right", "fwEndplateLeft", "fwEndplateRight"]);
 
 type Vec3 = [number, number, number];
 
@@ -64,15 +116,15 @@ interface PaintTri {
   readonly material: string;
 }
 
-interface ClampingStats {
+interface ClampingStats<P extends string> {
   totalVerts: number;
   dominantClampedTotal: number;
-  byPanel: Record<F1PanelId, { count: number; uLo: number; uHi: number; vLo: number; vHi: number }>;
+  byPanel: Record<P, { count: number; uLo: number; uHi: number; vLo: number; vHi: number }>;
 }
 
-function emptyClampingStats(): ClampingStats {
-  const byPanel = {} as ClampingStats["byPanel"];
-  for (const p of F1_PANEL_IDS) byPanel[p] = { count: 0, uLo: 0, uHi: 0, vLo: 0, vHi: 0 };
+function emptyClampingStats<P extends string>(panelIds: readonly P[]): ClampingStats<P> {
+  const byPanel = {} as ClampingStats<P>["byPanel"];
+  for (const p of panelIds) byPanel[p] = { count: 0, uLo: 0, uHi: 0, vLo: 0, vHi: 0 };
   return { totalVerts: 0, dominantClampedTotal: 0, byPanel };
 }
 
@@ -106,13 +158,21 @@ function dot3(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-/** Loads all paint-zone triangles and axle positions from a car GLB (flaps placed by their `aeroClosed` frame) */
-async function loadPaintGeometry(glbPath: string): Promise<{
+function isSplitterPoint(p: Vec3, profile: PortedProjectionProfile): boolean {
+  return profile.splitterMaxY > 0 && p[1] < profile.splitterMaxY && p[2] > profile.splitterMinZ;
+}
+
+/** Loads all paint-zone triangles and axle positions from an F1 or ported car GLB */
+async function loadPaintGeometry(
+  target: CarTemplateTarget,
+  glbPath: string
+): Promise<{
   triangles: PaintTri[];
   frontAxleZ: number;
   rearAxleZ: number;
-  clamping: ClampingStats;
+  clamping: ClampingStats<AnyPanelId>;
   bounds: { min: Vec3; max: Vec3 };
+  splitterVerts: number;
 }> {
   await MeshoptDecoder.ready;
   const io = new NodeIO()
@@ -120,12 +180,22 @@ async function loadPaintGeometry(glbPath: string): Promise<{
     .registerDependencies({ "meshopt.decoder": MeshoptDecoder });
   const doc = await io.read(glbPath);
 
+  const panelIds: readonly AnyPanelId[] = target.kind === "f1" ? F1_PANEL_IDS : PORTED_PANEL_IDS;
   let frontAxleZ = 1.5045;
   let rearAxleZ = -1.8955;
   const triangles: PaintTri[] = [];
-  const clamping = emptyClampingStats();
+  const clamping = emptyClampingStats(panelIds);
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  let splitterVerts = 0;
+
+  // For ported cars, ported-car-model.ts transforms every mesh under BODY by relativeMatrix(mesh, body)
+  const bodyNode = target.kind === "ported"
+    ? doc.getRoot().listNodes().find((n) => n.getName() === "BODY") ?? null
+    : null;
+  const bodyInv = new THREE.Matrix4();
+  if (bodyNode) bodyInv.fromArray(bodyNode.getWorldMatrix()).invert();
+  const tmpMat = new THREE.Matrix4();
 
   for (const node of doc.getRoot().listNodes()) {
     const extras = node.getExtras() as {
@@ -142,20 +212,42 @@ async function loadPaintGeometry(glbPath: string): Promise<{
     const mesh = node.getMesh();
     if (!mesh) continue;
 
-    // Match lc26-car-model.ts `flapNodeFor`: walk up for `aeroClosed`, otherwise use world matrix (BODY is identity)
-    let aeroMatrix: number[] | null = null;
-    for (let cur = node as typeof node | null; cur; cur = cur.getParentNode()) {
-      const ex = cur.getExtras() as { aeroClosed?: number[] } | undefined;
-      if (Array.isArray(ex?.aeroClosed) && ex.aeroClosed.length === 16) {
-        aeroMatrix = ex.aeroClosed;
-        break;
+    let frameMatrix: readonly number[];
+    if (target.kind === "f1") {
+      // Match lc26-car-model.ts `flapNodeFor`: walk up for `aeroClosed`, otherwise use world matrix (BODY is identity)
+      let aeroMatrix: number[] | null = null;
+      for (let cur = node as typeof node | null; cur; cur = cur.getParentNode()) {
+        const ex = cur.getExtras() as { aeroClosed?: number[] } | undefined;
+        if (Array.isArray(ex?.aeroClosed) && ex.aeroClosed.length === 16) {
+          aeroMatrix = ex.aeroClosed;
+          break;
+        }
       }
+      frameMatrix = aeroMatrix ?? node.getWorldMatrix();
+    } else {
+      // Match ported-car-model.ts: traverse BODY and compute relativeMatrix(mesh, body)
+      if (bodyNode) {
+        let underBody = false;
+        for (let cur = node as typeof node | null; cur; cur = cur.getParentNode()) {
+          if (cur === bodyNode) {
+            underBody = true;
+            break;
+          }
+        }
+        if (!underBody) continue;
+      }
+      tmpMat.fromArray(node.getWorldMatrix());
+      frameMatrix = bodyInv.clone().multiply(tmpMat).elements.slice();
     }
-    const frameMatrix = aeroMatrix ?? node.getWorldMatrix();
 
     for (const prim of mesh.listPrimitives()) {
       const matName = prim.getMaterial()?.getName() ?? "";
-      if (!PAINT_ZONE_MATERIALS.has(matName)) continue;
+      if (target.kind === "f1") {
+        if (!F1_PAINT_MATERIALS.has(matName)) continue;
+      } else {
+        const matProf = PROCEDURAL_PROFILE_BY_MATERIAL[matName];
+        if (!matProf || matProf.car !== target.id) continue;
+      }
 
       const posAcc = prim.getAttribute("POSITION");
       if (!posAcc) continue;
@@ -184,10 +276,22 @@ async function loadPaintGeometry(glbPath: string): Promise<{
 
         // Validate every painted vertex against the shared projection math
         clamping.totalVerts++;
-        const proj = projectF1Point(p, norms[i]);
-        const dom = proj.dominantPanel;
-        const sample = f1ProjectToPanel(dom, p[0], p[1], p[2]);
-        const rect = F1_PROJECTION.panels[dom];
+        let dom: AnyPanelId;
+        let sample: ReturnType<typeof f1ProjectToPanel>;
+        let rect: AtlasPanelRect;
+        if (target.kind === "f1") {
+          const proj = projectF1Point(p, norms[i]);
+          dom = proj.dominantPanel;
+          sample = f1ProjectToPanel(dom, p[0], p[1], p[2]);
+          rect = F1_PROJECTION.panels[dom];
+        } else {
+          if (isSplitterPoint(p, target.profile)) splitterVerts++;
+          const proj = projectPortedPoint(p, norms[i], target.profile);
+          dom = proj.dominantPanel;
+          sample = portedProjectToPanel(dom, p[0], p[1], p[2], target.profile);
+          rect = PORTED_PROJECTION.panels[dom];
+        }
+
         if (
           !Number.isFinite(sample.px) ||
           !Number.isFinite(sample.py) ||
@@ -232,7 +336,7 @@ async function loadPaintGeometry(glbPath: string): Promise<{
     }
   }
 
-  return { triangles, frontAxleZ, rearAxleZ, clamping, bounds: { min, max } };
+  return { triangles, frontAxleZ, rearAxleZ, clamping, bounds: { min, max }, splitterVerts };
 }
 
 // ---------------------------------------------------------------------------
@@ -337,39 +441,99 @@ function edgeKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-/** Projects a car-space point into a panel's exact SVG/pixel coordinate (clamped) */
-function pt(panel: F1PanelId, x: number, y: number, z: number): [number, number] {
-  const s = f1ProjectToPanel(panel, x, y, z);
-  return [s.px, s.py];
-}
-
 function escXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** Builds the crisp 2048x2048 SVG vector overlay (frames, centre/axle lines, arrows, accessible labels) */
-function buildVectorSvg(
-  target: CarTemplateTarget,
+// ---------------------------------------------------------------------------
+// SVG vector overlays (F1 7-panel & Ported 5-panel)
+// ---------------------------------------------------------------------------
+
+function pushSvgHelpers(parts: string[]): {
+  pill: (x: number, y: number, text: string, fontSize?: number, align?: "start" | "end" | "middle") => void;
+  arrow: (x1: number, y: number, x2: number, label: string) => void;
+  bodyStamp: (x: number, y: number, text: string, fontSize?: number) => void;
+  tag: (x: number, y: number, text: string) => void;
+} {
+  const pill = (x: number, y: number, text: string, fontSize = 30, align: "start" | "end" | "middle" = "start") => {
+    const padX = 14;
+    const h = Math.round(fontSize * 1.42);
+    const estW = Math.round(text.length * fontSize * 0.62) + padX * 2;
+    const bx = align === "start" ? x : align === "end" ? x - estW : x - estW / 2;
+    const tx = bx + estW / 2;
+    const ty = y + Math.round(h * 0.72);
+    parts.push(
+      `<rect x="${bx}" y="${y}" width="${estW}" height="${h}" rx="6" fill="#0f172a" stroke="#ffffff" stroke-width="2" />`
+    );
+    parts.push(
+      `<text x="${tx}" y="${ty}" text-anchor="middle" font-size="${fontSize}" fill="#ffffff" class="hdr">${escXml(text)}</text>`
+    );
+  };
+
+  const arrow = (x1: number, y: number, x2: number, label: string) => {
+    const dir = x2 > x1 ? 1 : -1;
+    const head = 18;
+    const tipX = x2;
+    const lineEnd = x2 - dir * 12;
+    const midX = (x1 + x2) / 2;
+    parts.push(
+      `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#ffffff" stroke-width="9" stroke-linecap="round" />`
+    );
+    parts.push(
+      `<polygon points="${tipX},${y} ${tipX - dir * head},${y - 11} ${tipX - dir * head},${y + 11}" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />`
+    );
+    parts.push(
+      `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#0f172a" stroke-width="5" stroke-linecap="round" />`
+    );
+    parts.push(
+      `<polygon points="${tipX},${y} ${tipX - dir * head},${y - 10} ${tipX - dir * head},${y + 10}" fill="#0f172a" />`
+    );
+    parts.push(
+      `<text x="${midX}" y="${y - 14}" text-anchor="middle" font-size="28" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="hdr">${escXml(label)}</text>`
+    );
+  };
+
+  const bodyStamp = (x: number, y: number, text: string, fontSize = 36) => {
+    parts.push(
+      `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" fill="#0f172a" stroke="#ffffff" stroke-width="6" paint-order="stroke" class="stamp">${escXml(text)}</text>`
+    );
+  };
+
+  const tag = (x: number, y: number, text: string) => {
+    parts.push(
+      `<text x="${x}" y="${y}" font-size="28" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="hdr">${escXml(text)}</text>`
+    );
+  };
+
+  return { pill, arrow, bodyStamp, tag };
+}
+
+function buildF1VectorSvg(
+  target: F1TemplateTarget,
   frontAxleZ: number,
   rearAxleZ: number,
-  clamping: ClampingStats,
+  clamping: ClampingStats<AnyPanelId>,
   overlayOnly: boolean
 ): string {
   const p = F1_PROJECTION.panels;
-  const parts: string[] = [];
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`);
-  parts.push(`<defs>`);
-  parts.push(`  <style>`);
-  parts.push(`    .hdr { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 0.5px; }`);
-  parts.push(`    .stamp { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 1px; }`);
-  parts.push(`    .ref { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }`);
-  parts.push(`  </style>`);
-  parts.push(`</defs>`);
+  const pt = (panel: F1PanelId, x: number, y: number, z: number): [number, number] => {
+    const s = f1ProjectToPanel(panel, x, y, z);
+    return [s.px, s.py];
+  };
+
+  const parts: string[] = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`,
+    `<defs><style>`,
+    `  .hdr { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 0.5px; }`,
+    `  .stamp { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 1px; }`,
+    `  .ref { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }`,
+    `</style></defs>`,
+  ];
+  const { pill, arrow, bodyStamp, tag } = pushSvgHelpers(parts);
 
   const dashColor = overlayOnly ? "#0f172a" : "#334155";
   const dashOpacity = overlayOnly ? "0.75" : "0.7";
 
-  // 1) Centre line (X = 0) on TOP, REAR, FRONT
   const topCentreY = pt("top", 0, 0, 0)[1];
   const rearCentreX = pt("rear", 0, 0.7, -2.3)[0];
   const frontCentreX = pt("front", 0, 0.3, 2.3)[0];
@@ -383,9 +547,7 @@ function buildVectorSvg(
     `<line x1="${frontCentreX.toFixed(1)}" y1="${p.front.y + 2}" x2="${frontCentreX.toFixed(1)}" y2="${p.front.y + p.front.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
   );
 
-  // 2) Front and rear axle lines on TOP, LEFT SIDE, RIGHT SIDE
-  const axlePanels: readonly F1PanelId[] = ["top", "left", "right"];
-  for (const pid of axlePanels) {
+  for (const pid of ["top", "left", "right"] as const) {
     const r = p[pid];
     const fx = pt(pid, 0, 0.5, frontAxleZ)[0];
     const rx = pt(pid, 0, 0.5, rearAxleZ)[0];
@@ -410,68 +572,18 @@ function buildVectorSvg(
     }
   }
 
-  // Centre line label on TOP panel
   if (!overlayOnly) {
     parts.push(
       `<text x="${p.top.x + 18}" y="${(topCentreY - 12).toFixed(1)}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="ref">CENTRE LINE (X = 0)</text>`
     );
   }
 
-  // 3) Panel frames (solid 3px outer border + faint 2px clamp-pad border)
   for (const pid of F1_PANEL_IDS) {
     const r = p[pid];
-    parts.push(
-      `<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`
-    );
+    parts.push(`<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`);
   }
 
-  // Helper to draw a high-contrast pill badge (>= 28px text, dark bg, white text, crisp white halo)
-  const pill = (x: number, y: number, text: string, fontSize = 30, align: "start" | "end" | "middle" = "start") => {
-    const padX = 14;
-    const h = Math.round(fontSize * 1.42);
-    const estW = Math.round(text.length * fontSize * 0.62) + padX * 2;
-    const bx = align === "start" ? x : align === "end" ? x - estW : x - estW / 2;
-    const tx = bx + estW / 2;
-    const ty = y + Math.round(h * 0.72);
-    parts.push(
-      `<rect x="${bx}" y="${y}" width="${estW}" height="${h}" rx="6" fill="#0f172a" stroke="#ffffff" stroke-width="2" />`
-    );
-    parts.push(
-      `<text x="${tx}" y="${ty}" text-anchor="middle" font-size="${fontSize}" fill="#ffffff" class="hdr">${escXml(text)}</text>`
-    );
-  };
-
-  // Helper to draw a crisp bold directional arrow (colour-blind safe: high contrast black with white stroke)
-  const arrow = (x1: number, y: number, x2: number, label: string) => {
-    const dir = x2 > x1 ? 1 : -1;
-    const head = 18;
-    const tipX = x2;
-    const lineEnd = x2 - dir * 12;
-    const midX = (x1 + x2) / 2;
-    parts.push(
-      `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#ffffff" stroke-width="9" stroke-linecap="round" />`
-    );
-    parts.push(
-      `<polygon points="${tipX},${y} ${tipX - dir * head},${y - 11} ${tipX - dir * head},${y + 11}" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" />`
-    );
-    parts.push(
-      `<line x1="${x1}" y1="${y}" x2="${lineEnd}" y2="${y}" stroke="#0f172a" stroke-width="5" stroke-linecap="round" />`
-    );
-    parts.push(
-      `<polygon points="${tipX},${y} ${tipX - dir * head},${y - 10} ${tipX - dir * head},${y + 10}" fill="#0f172a" />`
-    );
-    parts.push(
-      `<text x="${midX}" y="${y - 14}" text-anchor="middle" font-size="28" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="hdr">${escXml(label)}</text>`
-    );
-  };
-
   if (overlayOnly) {
-    // Minimal unobtrusive corner tags in the transparent overlay
-    const tag = (x: number, y: number, text: string) => {
-      parts.push(
-        `<text x="${x}" y="${y}" font-size="28" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="hdr">${escXml(text)}</text>`
-      );
-    };
     tag(p.top.x + 14, p.top.y + 34, `${target.id.toUpperCase()} — TOP (FRONT →)`);
     tag(p.left.x + 14, p.left.y + 34, `LEFT SIDE (← FRONT)`);
     tag(p.right.x + 14, p.right.y + 34, `RIGHT SIDE (FRONT →)`);
@@ -480,7 +592,6 @@ function buildVectorSvg(
     tag(p.fwEndplateLeft.x + 12, p.fwEndplateLeft.y + 30, `FW ENDPLATE L (←)`);
     tag(p.fwEndplateRight.x + 12, p.fwEndplateRight.y + 30, `FW ENDPLATE R (→)`);
   } else {
-    // Full high-contrast panel headers + front-direction arrows + in-body alignment stamps
     pill(p.top.x + 16, p.top.y + 14, `${target.id.toUpperCase()} · TOP VIEW`, 32, "start");
     arrow(p.top.x + 1260, p.top.y + 52, p.top.x + 1520, "FRONT");
 
@@ -499,14 +610,6 @@ function buildVectorSvg(
     pill(p.fwEndplateLeft.x + 12, p.fwEndplateLeft.y + 20, "FW ENDPLATE L  ← FRONT", 28, "start");
     pill(p.fwEndplateRight.x + 12, p.fwEndplateRight.y + 20, "FW ENDPLATE R  FRONT →", 28, "start");
 
-    // In-body orientation stamps so the 3D render proves alignment & non-mirroring directly on the bodywork
-    const bodyStamp = (x: number, y: number, text: string, fontSize = 36) => {
-      parts.push(
-        `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" fill="#0f172a" stroke="#ffffff" stroke-width="6" paint-order="stroke" class="stamp">${escXml(text)}</text>`
-      );
-    };
-
-    // TOP: nose / cockpit forward & rear engine cover
     const [topSideLX, topSideLY] = pt("top", 0.48, 0.5, -0.3);
     const [topSideRX, topSideRY] = pt("top", -0.48, 0.5, -0.3);
     const [topNoseX, topNoseY] = pt("top", 0, 0.4, 1.45);
@@ -514,23 +617,18 @@ function buildVectorSvg(
     bodyStamp(topSideRX, topSideRY, "TOP R  →", 32);
     bodyStamp(topNoseX, topNoseY, "TOP →", 32);
 
-    // LEFT SIDE: main sidepod flank (z = -0.30, y = 0.44) — reads upright left-to-right on the car's left side!
     const [leftPodX, leftPodY] = pt("left", 0.5, 0.44, -0.3);
     bodyStamp(leftPodX, leftPodY, "← FRONT · LEFT SIDE", 42);
 
-    // RIGHT SIDE: main sidepod flank (z = -0.30, y = 0.44) — reads upright left-to-right on the car's right side!
     const [rightPodX, rightPodY] = pt("right", -0.5, 0.44, -0.3);
     bodyStamp(rightPodX, rightPodY, "RIGHT SIDE · FRONT →", 42);
 
-    // REAR: rear wing mainplane banner (x = 0, y = 0.81)
     const [rearWingX, rearWingY] = pt("rear", 0, 0.81, -2.35);
     bodyStamp(rearWingX, rearWingY, "REAR WING", 48);
 
-    // FRONT: nose front face (x = 0, y = 0.30)
     const [frontNoseX, frontNoseY] = pt("front", 0, 0.3, 2.5);
     bodyStamp(frontNoseX, frontNoseY, "FRONT", 34);
 
-    // Clamped edge callouts when the car has geometry exceeding the shared F1 projection bounds (lc25)
     if (target.allowMainBoundsClamping && clamping.byPanel.top.count > 0) {
       pill(p.top.x + 16, p.top.y + p.top.h - 56, "HATCHED = CLAMPED EDGE (|X| > 0.95m)", 28, "start");
     }
@@ -540,13 +638,180 @@ function buildVectorSvg(
   return parts.join("\n");
 }
 
-async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> {
-  const { triangles, frontAxleZ, rearAxleZ, clamping, bounds } = await loadPaintGeometry(target.glbPath);
+function buildPortedVectorSvg(
+  target: PortedTemplateTarget,
+  frontAxleZ: number,
+  rearAxleZ: number,
+  splitterVerts: number,
+  overlayOnly: boolean
+): string {
+  const p = PORTED_PROJECTION.panels;
+  const prof = target.profile;
+  const pt = (panel: PortedPanelId, x: number, y: number, z: number): [number, number] => {
+    const s = portedProjectToPanel(panel, x, y, z, prof);
+    return [s.px, s.py];
+  };
+
+  const parts: string[] = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`,
+    `<defs><style>`,
+    `  .hdr { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 0.5px; }`,
+    `  .stamp { font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: 1px; }`,
+    `  .ref { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }`,
+    `</style></defs>`,
+  ];
+  const { pill, arrow, bodyStamp, tag } = pushSvgHelpers(parts);
+
+  const dashColor = overlayOnly ? "#0f172a" : "#334155";
+  const dashOpacity = overlayOnly ? "0.75" : "0.7";
+
+  const topCentreY = pt("top", 0, 0.6, 0)[1];
+  const rearCentreX = pt("rear", 0, 0.7, prof.min[2])[0];
+  const frontCentreX = pt("front", 0, 0.5, prof.max[2])[0];
+  parts.push(
+    `<line x1="${p.top.x + 2}" y1="${topCentreY.toFixed(1)}" x2="${p.top.x + p.top.w - 2}" y2="${topCentreY.toFixed(1)}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="14 10" />`
+  );
+  parts.push(
+    `<line x1="${rearCentreX.toFixed(1)}" y1="${p.rear.y + 2}" x2="${rearCentreX.toFixed(1)}" y2="${p.rear.y + p.rear.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
+  );
+  parts.push(
+    `<line x1="${frontCentreX.toFixed(1)}" y1="${p.front.y + 2}" x2="${frontCentreX.toFixed(1)}" y2="${p.front.y + p.front.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="10 8" />`
+  );
+
+  for (const pid of ["top", "left", "right"] as const) {
+    const r = p[pid];
+    const fx = pt(pid, 0, 0.6, frontAxleZ)[0];
+    const rx = pt(pid, 0, 0.6, rearAxleZ)[0];
+    parts.push(
+      `<line x1="${fx.toFixed(1)}" y1="${r.y + 2}" x2="${fx.toFixed(1)}" y2="${r.y + r.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="8 8" />`
+    );
+    parts.push(
+      `<line x1="${rx.toFixed(1)}" y1="${r.y + 2}" x2="${rx.toFixed(1)}" y2="${r.y + r.h - 2}" stroke="${dashColor}" stroke-opacity="${dashOpacity}" stroke-width="2" stroke-dasharray="8 8" />`
+    );
+    if (!overlayOnly) {
+      const labelY = r.y + r.h - 14;
+      const fxAnchor = pid === "left" ? "start" : "end";
+      const fxDx = fxAnchor === "end" ? -10 : 10;
+      const rxAnchor = pid === "left" ? "end" : "start";
+      const rxDx = rxAnchor === "start" ? 10 : -10;
+      parts.push(
+        `<text x="${(fx + fxDx).toFixed(1)}" y="${labelY}" text-anchor="${fxAnchor}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="ref">FRONT AXLE</text>`
+      );
+      parts.push(
+        `<text x="${(rx + rxDx).toFixed(1)}" y="${labelY}" text-anchor="${rxAnchor}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="4" paint-order="stroke" class="ref">REAR AXLE</text>`
+      );
+    }
+  }
+
+  if (!overlayOnly) {
+    const centreLabelX = target.id === "lc-lmdh" ? p.top.x + 18 : p.top.x + 265;
+    parts.push(
+      `<text x="${centreLabelX}" y="${(topCentreY - 12).toFixed(1)}" font-size="22" fill="#0f172a" stroke="#ffffff" stroke-width="5" paint-order="stroke" class="ref">CENTRE LINE (X = 0)</text>`
+    );
+  }
+
+  for (const pid of PORTED_PANEL_IDS) {
+    const r = p[pid];
+    parts.push(`<rect x="${r.x + 1}" y="${r.y + 1}" width="${r.w - 2}" height="${r.h - 2}" fill="none" stroke="#0f172a" stroke-width="3" />`);
+  }
+
+  if (overlayOnly) {
+    tag(p.top.x + 14, p.top.y + 34, `${target.id.toUpperCase()} — TOP (FRONT →)`);
+    tag(p.left.x + 14, p.left.y + 34, `LEFT SIDE (← FRONT)`);
+    tag(p.right.x + 14, p.right.y + 34, `RIGHT SIDE (FRONT →)`);
+    tag(p.rear.x + 14, p.rear.y + 34, `REAR`);
+    tag(p.front.x + 14, p.front.y + 34, `FRONT`);
+  } else {
+    pill(p.top.x + 16, p.top.y + 14, `${target.id.toUpperCase()} · TOP VIEW`, 32, "start");
+    arrow(p.top.x + 1500, p.top.y + 52, p.top.x + 1780, "FRONT");
+
+    pill(p.left.x + 16, p.left.y + 14, "LEFT SIDE (+X)", 30, "start");
+    arrow(p.left.x + 580, p.left.y + 50, p.left.x + 330, "FRONT");
+
+    pill(p.right.x + 16, p.right.y + 14, "RIGHT SIDE (-X)", 30, "start");
+    arrow(p.right.x + p.right.w - 280, p.right.y + 50, p.right.x + p.right.w - 30, "FRONT");
+
+    pill(p.rear.x + 16, p.rear.y + 12, "REAR (-Z)", 28, "start");
+    pill(p.rear.x + p.rear.w - 16, p.rear.y + 12, "L ←  |  → R", 28, "end");
+
+    pill(p.front.x + 16, p.front.y + 12, "FRONT (+Z)", 28, "start");
+    pill(p.front.x + p.front.w - 16, p.front.y + 12, "R ←  |  → L", 28, "end");
+
+    // In-body orientation stamps on clean bodywork zones (prove alignment & non-mirroring in 3D renders)
+    if (target.id === "lc-lmdh") {
+      const [noseX, noseY] = pt("top", 0, 0.55, 1.80);
+      const [roofX, roofY] = pt("top", 0, 1.05, 0.10);
+      const [sideLX, sideLY] = pt("top", 0.65, 0.72, -0.55);
+      const [sideRX, sideRY] = pt("top", -0.65, 0.72, -0.55);
+      bodyStamp(noseX, noseY, "NOSE · TOP →", 36);
+      bodyStamp(roofX, roofY, "ROOF →", 34);
+      bodyStamp(sideLX, sideLY, "TOP L →", 32);
+      bodyStamp(sideRX, sideRY, "TOP R →", 32);
+
+      const [leftFlankX, leftFlankY] = pt("left", 0.9, 0.54, -0.10);
+      const [rightFlankX, rightFlankY] = pt("right", -0.9, 0.54, -0.10);
+      bodyStamp(leftFlankX, leftFlankY, "← FRONT · LEFT SIDE", 44);
+      bodyStamp(rightFlankX, rightFlankY, "RIGHT SIDE · FRONT →", 44);
+
+      const [rearDeckX, rearDeckY] = pt("rear", 0, 0.72, -2.35);
+      const [rearWingX, rearWingY] = pt("rear", 0, 1.02, -2.30);
+      bodyStamp(rearDeckX, rearDeckY, "REAR", 38);
+      bodyStamp(rearWingX, rearWingY, "REAR WING", 34);
+
+      const [frontNoseX, frontNoseY] = pt("front", 0, 0.44, 2.65);
+      bodyStamp(frontNoseX, frontNoseY, "FRONT", 42);
+    } else {
+      // GT3 coupes (`amg-gt3`, `bmw-m4-gt3`)
+      const hoodZ = target.id === "amg-gt3" ? 1.45 : 1.50;
+      const roofZ = target.id === "amg-gt3" ? -0.30 : -0.25;
+      const [hoodX, hoodY] = pt("top", 0, 0.85, hoodZ);
+      const [roofX, roofY] = pt("top", 0, 1.20, roofZ);
+      const [rearWingTopX, rearWingTopY] = pt("top", 0, 1.15, prof.wingRearZ - 0.15);
+      bodyStamp(hoodX, hoodY, "HOOD · TOP →", 40);
+      bodyStamp(roofX, roofY, "ROOF · TOP →", 38);
+      bodyStamp(rearWingTopX, rearWingTopY, "WING", 30);
+
+      const doorY = target.id === "amg-gt3" ? 0.58 : 0.62;
+      const [leftDoorX, leftDoorY] = pt("left", 0.95, doorY, 0.05);
+      const [rightDoorX, rightDoorY] = pt("right", -0.95, doorY, 0.05);
+      bodyStamp(leftDoorX, leftDoorY, "← FRONT · LEFT SIDE", 44);
+      bodyStamp(rightDoorX, rightDoorY, "RIGHT SIDE · FRONT →", 44);
+
+      const [rearBumperX, rearBumperY] = pt("rear", 0, 0.66, prof.min[2]);
+      const [rearWingX, rearWingY] = pt("rear", 0, 1.12, prof.min[2]);
+      bodyStamp(rearBumperX, rearBumperY, "REAR", 42);
+      bodyStamp(rearWingX, rearWingY, "REAR WING", 34);
+
+      const [frontBumperX, frontBumperY] = pt("front", 0, 0.48, prof.max[2]);
+      bodyStamp(frontBumperX, frontBumperY, "FRONT", 44);
+    }
+
+    if (splitterVerts > 0) {
+      pill(p.front.x + 16, p.front.y + p.front.h - 54, "HATCHED = CARBON SPLITTER (UNPAINTABLE)", 26, "start");
+    }
+  }
+
+  parts.push(`</svg>`);
+  return parts.join("\n");
+}
+
+async function generateTemplateForCar(target: CarTemplateTarget, modelsDir: string): Promise<void> {
+  const glbPath = join(modelsDir, target.glbRelPath);
+  if (!existsSync(glbPath)) {
+    throw new Error(`${target.id}: GLB not found at ${glbPath} (pass --models <dir> if models live elsewhere)`);
+  }
+
+  const { triangles, frontAxleZ, rearAxleZ, clamping, bounds, splitterVerts } = await loadPaintGeometry(target, glbPath);
+  const panelIds: readonly AnyPanelId[] = target.kind === "f1" ? F1_PANEL_IDS : PORTED_PANEL_IDS;
+  const panelRectOf = (pid: AnyPanelId): AtlasPanelRect =>
+    target.kind === "f1"
+      ? F1_PROJECTION.panels[pid as F1PanelId]
+      : PORTED_PROJECTION.panels[pid as PortedPanelId];
 
   // Fail loudly if a car that shouldn't clamp main bounds has any clamped vertices on top/side/fwEndplate
-  if (!target.allowMainBoundsClamping) {
+  if (target.kind === "f1" && !target.allowMainBoundsClamping) {
     const unexpected: string[] = [];
-    for (const pid of MAIN_BOUND_PANELS) {
+    for (const pid of F1_MAIN_BOUND_PANELS) {
       if (clamping.byPanel[pid].count > 0) unexpected.push(`${pid}=${clamping.byPanel[pid].count}`);
     }
     if (unexpected.length > 0) {
@@ -554,22 +819,19 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
     }
   }
 
-  // Per-panel occupancy mask, clamped-region mask, and edge buffers
-  const fillMask = new Uint8Array(SIZE * SIZE); // 0 = empty, 1 = subtle blend, 2 = strong coverage
-  const clampedRaw = new Uint8Array(SIZE * SIZE); // 1 where a clamped triangle touches a panel edge
-  const meshEdges = new Uint8Array(SIZE * SIZE); // faint wireframe
-  const featureEdges = new Uint8Array(SIZE * SIZE); // crisp creases, paint-zone splits & open boundaries
+  const fillMask = new Uint8Array(SIZE * SIZE);
+  const hatchRaw = new Uint8Array(SIZE * SIZE); // clamped edge (lc25) or unpaintable carbon splitter (amg-gt3)
+  const meshEdges = new Uint8Array(SIZE * SIZE);
+  const featureEdges = new Uint8Array(SIZE * SIZE);
 
-  // Collect per-panel triangles and adjacency for crease / boundary detection
   interface EdgeRef {
     tri: PaintTri;
     a2d: [number, number];
     b2d: [number, number];
-    clamped: boolean;
   }
 
-  const panelEdges = new Map<F1PanelId, Map<string, EdgeRef[]>>();
-  for (const pid of F1_PANEL_IDS) panelEdges.set(pid, new Map());
+  const panelEdges = new Map<AnyPanelId, Map<string, EdgeRef[]>>();
+  for (const pid of panelIds) panelEdges.set(pid, new Map());
 
   const WEIGHT_MIN = 0.18;
   const WEIGHT_STRONG = 0.45;
@@ -583,72 +845,94 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
     const cny = tri.n0[1] + tri.n1[1] + tri.n2[1];
     const cnz = tri.n0[2] + tri.n1[2] + tri.n2[2];
 
-    const p0 = projectF1Point(tri.v0, tri.n0);
-    const p1 = projectF1Point(tri.v1, tri.n1);
-    const p2 = projectF1Point(tri.v2, tri.n2);
-    const pc = projectF1Point([cx, cy, cz], [cnx, cny, cnz]);
+    const p0 = target.kind === "f1"
+      ? projectF1Point(tri.v0, tri.n0)
+      : projectPortedPoint(tri.v0, tri.n0, target.profile);
+    const p1 = target.kind === "f1"
+      ? projectF1Point(tri.v1, tri.n1)
+      : projectPortedPoint(tri.v1, tri.n1, target.profile);
+    const p2 = target.kind === "f1"
+      ? projectF1Point(tri.v2, tri.n2)
+      : projectPortedPoint(tri.v2, tri.n2, target.profile);
+    const pc = target.kind === "f1"
+      ? projectF1Point([cx, cy, cz], [cnx, cny, cnz])
+      : projectPortedPoint([cx, cy, cz], [cnx, cny, cnz], target.profile);
 
     const k0 = quantKey(tri.v0);
     const k1 = quantKey(tri.v1);
     const k2 = quantKey(tri.v2);
 
-    for (const pid of F1_PANEL_IDS) {
-      const wMax = Math.max(
-        p0.panelWeights[pid] ?? 0,
-        p1.panelWeights[pid] ?? 0,
-        p2.panelWeights[pid] ?? 0,
-        pc.panelWeights[pid] ?? 0
-      );
+    const wOf = (proj: typeof p0, pid: AnyPanelId): number =>
+      (proj.panelWeights as Partial<Record<AnyPanelId, number>>)[pid] ?? 0;
+
+    for (const pid of panelIds) {
+      const wMax = Math.max(wOf(p0, pid), wOf(p1, pid), wOf(p2, pid), wOf(pc, pid));
       if (wMax < WEIGHT_MIN && pc.dominantPanel !== pid) continue;
 
-      const s0 = f1ProjectToPanel(pid, tri.v0[0], tri.v0[1], tri.v0[2]);
-      const s1 = f1ProjectToPanel(pid, tri.v1[0], tri.v1[1], tri.v1[2]);
-      const s2 = f1ProjectToPanel(pid, tri.v2[0], tri.v2[1], tri.v2[2]);
-      const rect = F1_PROJECTION.panels[pid];
+      const s0 = target.kind === "f1"
+        ? f1ProjectToPanel(pid as F1PanelId, tri.v0[0], tri.v0[1], tri.v0[2])
+        : portedProjectToPanel(pid as PortedPanelId, tri.v0[0], tri.v0[1], tri.v0[2], target.profile);
+      const s1 = target.kind === "f1"
+        ? f1ProjectToPanel(pid as F1PanelId, tri.v1[0], tri.v1[1], tri.v1[2])
+        : portedProjectToPanel(pid as PortedPanelId, tri.v1[0], tri.v1[1], tri.v1[2], target.profile);
+      const s2 = target.kind === "f1"
+        ? f1ProjectToPanel(pid as F1PanelId, tri.v2[0], tri.v2[1], tri.v2[2])
+        : portedProjectToPanel(pid as PortedPanelId, tri.v2[0], tri.v2[1], tri.v2[2], target.profile);
+      const rect = panelRectOf(pid);
 
       const fillVal = wMax >= WEIGHT_STRONG ? 2 : 1;
       rasterizeTriangle(fillMask, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, fillVal);
 
-      // Mark clamped geometry on main panels (or outer X clamping on front/rear) so the hatch pattern highlights it
-      if (target.allowMainBoundsClamping) {
+      // Hatch clamped edges on lc25
+      if (target.kind === "f1" && target.allowMainBoundsClamping) {
+        const isMain = F1_MAIN_BOUND_PANELS.has(pid as F1PanelId);
         const markClamped = (s: typeof s0) => {
-          if (!s.clamped) return;
-          // On rear/front panels, lower-Y/upper-Y clamping is intentional on both cars; only hatch X/main clamping
-          const relevant = MAIN_BOUND_PANELS.has(pid) || s.clampedU;
-          if (!relevant) return;
+          if (!s.clamped || (!isMain && !s.clampedU)) return;
           const ix = Math.max(rect.x, Math.min(rect.x + rect.w - 1, Math.round(s.px)));
           const iy = Math.max(rect.y, Math.min(rect.y + rect.h - 1, Math.round(s.py)));
-          clampedRaw[iy * SIZE + ix] = 1;
+          hatchRaw[iy * SIZE + ix] = 1;
         };
         markClamped(s0);
         markClamped(s1);
         markClamped(s2);
-        if ((s0.clamped && (MAIN_BOUND_PANELS.has(pid) || s0.clampedU)) ||
-            (s1.clamped && (MAIN_BOUND_PANELS.has(pid) || s1.clampedU)) ||
-            (s2.clamped && (MAIN_BOUND_PANELS.has(pid) || s2.clampedU))) {
-          rasterizeTriangle(clampedRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+        if (
+          (s0.clamped && (isMain || s0.clampedU)) ||
+          (s1.clamped && (isMain || s1.clampedU)) ||
+          (s2.clamped && (isMain || s2.clampedU))
+        ) {
+          rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
+        }
+      }
+
+      // Hatch forced-carbon front splitter tray on AMG GT3 Evo
+      if (target.kind === "ported" && target.profile.splitterMaxY > 0) {
+        if (
+          isSplitterPoint(tri.v0, target.profile) &&
+          isSplitterPoint(tri.v1, target.profile) &&
+          isSplitterPoint(tri.v2, target.profile)
+        ) {
+          rasterizeTriangle(hatchRaw, rect, s0.px, s0.py, s1.px, s1.py, s2.px, s2.py, 1);
         }
       }
 
       const edges = panelEdges.get(pid)!;
-      const addEdge = (ka: string, kb: string, a2d: [number, number], b2d: [number, number], clamped: boolean) => {
+      const addEdge = (ka: string, kb: string, a2d: [number, number], b2d: [number, number]) => {
         const key = edgeKey(ka, kb);
         let list = edges.get(key);
         if (!list) {
           list = [];
           edges.set(key, list);
         }
-        list.push({ tri, a2d, b2d, clamped });
+        list.push({ tri, a2d, b2d });
       };
-      addEdge(k0, k1, [s0.px, s0.py], [s1.px, s1.py], s0.clamped || s1.clamped);
-      addEdge(k1, k2, [s1.px, s1.py], [s2.px, s2.py], s1.clamped || s2.clamped);
-      addEdge(k2, k0, [s2.px, s2.py], [s0.px, s0.py], s2.clamped || s0.clamped);
+      addEdge(k0, k1, [s0.px, s0.py], [s1.px, s1.py]);
+      addEdge(k1, k2, [s1.px, s1.py], [s2.px, s2.py]);
+      addEdge(k2, k0, [s2.px, s2.py], [s0.px, s0.py]);
     }
   }
 
-  // Draw crease edges, paint-zone boundaries, open boundaries, and faint wireframe per panel
-  for (const pid of F1_PANEL_IDS) {
-    const rect = F1_PROJECTION.panels[pid];
+  for (const pid of panelIds) {
+    const rect = panelRectOf(pid);
     const edges = panelEdges.get(pid)!;
     for (const refs of edges.values()) {
       const r0 = refs[0];
@@ -667,25 +951,26 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
     }
   }
 
-  // Expand clamped regions by 14 px inward inside each panel so clamped strips are unmistakably hatched
-  const clampedBand = new Uint8Array(SIZE * SIZE);
-  if (target.allowMainBoundsClamping) {
-    for (const pid of F1_PANEL_IDS) {
-      const rect = F1_PROJECTION.panels[pid];
-      const dilated = dilateMaskInPanel(clampedRaw, rect, 14);
+  // Expand clamped edge markers inward on lc25; keep exact splitter footprint on amg-gt3
+  const hatchBand = new Uint8Array(SIZE * SIZE);
+  if (target.kind === "f1" && target.allowMainBoundsClamping) {
+    for (const pid of panelIds) {
+      const rect = panelRectOf(pid);
+      const dilated = dilateMaskInPanel(hatchRaw, rect, 14);
       for (let y = rect.y; y < rect.y + rect.h; y++) {
         const row = y * SIZE;
         for (let x = rect.x; x < rect.x + rect.w; x++) {
-          if (dilated[row + x]) clampedBand[row + x] = 1;
+          if (dilated[row + x]) hatchBand[row + x] = 1;
         }
       }
     }
+  } else if (splitterVerts > 0) {
+    hatchBand.set(hatchRaw);
   }
 
-  // Outer silhouette contour (2px dark outline around each panel's filled region)
   const silhouette = new Uint8Array(SIZE * SIZE);
-  for (const pid of F1_PANEL_IDS) {
-    const r = F1_PROJECTION.panels[pid];
+  for (const pid of panelIds) {
+    const r = panelRectOf(pid);
     for (let y = r.y; y < r.y + r.h; y++) {
       const row = y * SIZE;
       for (let x = r.x; x < r.x + r.w; x++) {
@@ -710,7 +995,6 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
     }
   }
 
-  // Compose opaque template RGBA and transparent overlay RGBA buffers
   const templateRgba = Buffer.alloc(SIZE * SIZE * 4);
   const overlayRgba = Buffer.alloc(SIZE * SIZE * 4);
 
@@ -720,42 +1004,39 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
       const idx = row + x;
       const o = idx * 4;
       const fill = fillMask[idx];
-      const clamped = clampedBand[idx];
+      const hatched = hatchBand[idx];
       const feat = featureEdges[idx];
       const sil = silhouette[idx];
       const mesh = meshEdges[idx];
 
-      // Opaque template pixel
-      let r = 203, g = 213, b = 225; // neutral #cbd5e1 outside car
+      let r = 203, g = 213, b = 225;
       if (fill === 1) {
-        r = 226; g = 232; b = 240; // soft transition zone #e2e8f0
+        r = 226; g = 232; b = 240;
       } else if (fill === 2) {
-        r = 244; g = 247; b = 251; // primary paintable car surface #f4f7fb
+        r = 244; g = 247; b = 251;
       }
 
-      // Clamped-edge diagonal hatch pattern (high-contrast 45° dark/light stripes, colour-blind safe)
-      if (clamped) {
+      if (hatched) {
         const stripe = ((x + y) % 14) < 6;
         if (stripe) {
-          r = 30; g = 41; b = 59; // #1e293b
+          r = 30; g = 41; b = 59;
         } else {
-          r = 245; g = 208; b = 88; // warm light amber #f5d058 (high contrast in both colour & grayscale)
+          r = 245; g = 208; b = 88;
         }
       }
 
-      if (mesh && !clamped) {
-        // Subtle 18% blend for topology wireframe
+      if (mesh && !hatched) {
         r = Math.round(r * 0.84 + 100 * 0.16);
         g = Math.round(g * 0.84 + 116 * 0.16);
         b = Math.round(b * 0.84 + 139 * 0.16);
       }
       if (feat === 1) {
-        r = 51; g = 65; b = 85; // #334155 crease
+        r = 51; g = 65; b = 85;
       } else if (feat === 2) {
-        r = 15; g = 23; b = 42; // #0f172a paint-zone / boundary
+        r = 15; g = 23; b = 42;
       }
       if (sil) {
-        r = 15; g = 23; b = 42; // #0f172a silhouette contour
+        r = 15; g = 23; b = 42;
       }
 
       templateRgba[o] = r;
@@ -763,33 +1044,28 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
       templateRgba[o + 2] = b;
       templateRgba[o + 3] = 255;
 
-      // Transparent overlay pixel: outlines & clamped edge hatch only
       if (sil || feat === 2) {
-        overlayRgba[o] = 15;
-        overlayRgba[o + 1] = 23;
-        overlayRgba[o + 2] = 42;
-        overlayRgba[o + 3] = 230;
+        overlayRgba[o] = 15; overlayRgba[o + 1] = 23; overlayRgba[o + 2] = 42; overlayRgba[o + 3] = 230;
       } else if (feat === 1) {
-        overlayRgba[o] = 30;
-        overlayRgba[o + 1] = 41;
-        overlayRgba[o + 2] = 59;
-        overlayRgba[o + 3] = 150;
-      } else if (clamped && ((x + y) % 14) < 5) {
-        overlayRgba[o] = 15;
-        overlayRgba[o + 1] = 23;
-        overlayRgba[o + 2] = 42;
-        overlayRgba[o + 3] = 180;
+        overlayRgba[o] = 30; overlayRgba[o + 1] = 41; overlayRgba[o + 2] = 59; overlayRgba[o + 3] = 150;
+      } else if (hatched && ((x + y) % 14) < 5) {
+        overlayRgba[o] = 15; overlayRgba[o + 1] = 23; overlayRgba[o + 2] = 42; overlayRgba[o + 3] = 180;
       } else if (mesh) {
-        overlayRgba[o] = 71;
-        overlayRgba[o + 1] = 85;
-        overlayRgba[o + 2] = 105;
-        overlayRgba[o + 3] = 55;
+        overlayRgba[o] = 71; overlayRgba[o + 1] = 85; overlayRgba[o + 2] = 105; overlayRgba[o + 3] = 55;
       }
     }
   }
 
-  const templateSvg = Buffer.from(buildVectorSvg(target, frontAxleZ, rearAxleZ, clamping, false));
-  const overlaySvg = Buffer.from(buildVectorSvg(target, frontAxleZ, rearAxleZ, clamping, true));
+  const templateSvg = Buffer.from(
+    target.kind === "f1"
+      ? buildF1VectorSvg(target, frontAxleZ, rearAxleZ, clamping, false)
+      : buildPortedVectorSvg(target, frontAxleZ, rearAxleZ, splitterVerts, false)
+  );
+  const overlaySvg = Buffer.from(
+    target.kind === "f1"
+      ? buildF1VectorSvg(target, frontAxleZ, rearAxleZ, clamping, true)
+      : buildPortedVectorSvg(target, frontAxleZ, rearAxleZ, splitterVerts, true)
+  );
 
   const outDir = join(OUT_ROOT, target.id);
   mkdirSync(outDir, { recursive: true });
@@ -819,7 +1095,6 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
     .toBuffer();
   writeFileSync(overlayPath, overlayPng);
 
-  // Report bounds, clamping counts, and file sizes
   const fmtKb = (p: string) => `${(statSync(p).size / 1024).toFixed(1)} KB (${statSync(p).size} B)`;
   console.log(`\n=== ${target.id} (${target.title}) ===`);
   console.log(
@@ -827,26 +1102,62 @@ async function generateTemplateForCar(target: CarTemplateTarget): Promise<void> 
   );
   console.log(`  axles: front z=${frontAxleZ.toFixed(4)} m, rear z=${rearAxleZ.toFixed(4)} m`);
   console.log(`  dominant-panel clamped verts: ${clamping.dominantClampedTotal}`);
-  for (const pid of F1_PANEL_IDS) {
+  for (const pid of panelIds) {
     const c = clamping.byPanel[pid];
     if (c.count > 0) {
       console.log(`    ${pid}: ${c.count} (u<0:${c.uLo}, u>1:${c.uHi}, v<0:${c.vLo}, v>1:${c.vHi})`);
     }
   }
+  if (splitterVerts > 0) console.log(`  forced-carbon front splitter verts: ${splitterVerts}`);
   console.log(`  wrote ${templatePath} — ${fmtKb(templatePath)}`);
   console.log(`  wrote ${overlayPath} — ${fmtKb(overlayPath)}`);
   console.log(`  wrote ${previewPath} — ${fmtKb(previewPath)}`);
 }
 
+function parseCliArgs(argv: readonly string[]): { modelsDir: string; only: string[] } {
+  let modelsDir = join(ROOT, "public/cars");
+  const only: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--models") {
+      const next = argv[++i];
+      if (!next) throw new Error("--models requires a directory path");
+      modelsDir = resolve(next);
+    } else if (a.startsWith("--models=")) {
+      modelsDir = resolve(a.slice("--models=".length));
+    } else if (!a.startsWith("-")) {
+      only.push(a);
+    }
+  }
+  return { modelsDir, only };
+}
+
 async function main(): Promise<void> {
-  const only = process.argv.slice(2).filter((a) => !a.startsWith("-"));
-  const selected = only.length ? TARGETS.filter((t) => only.includes(t.id)) : TARGETS;
+  const { modelsDir, only } = parseCliArgs(process.argv.slice(2));
+  const selected = only.length
+    ? TARGETS.filter((t) => only.includes(t.id))
+    : TARGETS.filter((t) => existsSync(join(modelsDir, t.glbRelPath)));
+
+  if (only.length > 0 && selected.length !== only.length) {
+    const known = new Set(TARGETS.map((t) => t.id));
+    const unknown = only.filter((id) => !known.has(id as TemplateCarId));
+    if (unknown.length > 0) {
+      console.error(`Unknown car target(s): ${unknown.join(", ")}. Available: ${TARGETS.map((t) => t.id).join(", ")}`);
+      process.exit(1);
+    }
+  }
   if (selected.length === 0) {
-    console.error(`Unknown car target(s): ${only.join(", ")}. Available: ${TARGETS.map((t) => t.id).join(", ")}`);
+    console.error(`No car GLBs found under ${modelsDir}`);
     process.exit(1);
   }
+  if (only.length === 0) {
+    const skipped = TARGETS.filter((t) => !selected.includes(t));
+    if (skipped.length > 0) {
+      console.log(`Skipping cars without local GLB in ${modelsDir}: ${skipped.map((t) => t.id).join(", ")} (pass --models <dir> to include them)`);
+    }
+  }
   for (const target of selected) {
-    await generateTemplateForCar(target);
+    await generateTemplateForCar(target, modelsDir);
   }
 }
 
