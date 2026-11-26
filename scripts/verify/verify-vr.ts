@@ -134,6 +134,11 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   pc.read(null, (u += 16), true, [xbox([])]);
   check("a pad's B leaves VR", pc.read(null, (u += 16), true, [xbox([1])]).leave);
   pc.read(null, (u += 16), true, [xbox([])]);
+  // A finger resting on the trigger: the browser calls it pressed at a light touch, the press point is further
+  const resting = xbox([]);
+  resting.buttons[7] = { value: 0.08, pressed: true };
+  check("a pad's trigger under a resting finger does not drive on", !pc.read(null, (u += 16), true, [resting]).resume);
+  pc.read(null, (u += 16), true, [xbox([])]);
   const wheel = { ...xbox([0]), mapping: "" };
   check("a pad without the standard mapping (a wheel) is not read", !pc.read(null, (u += 16), true, [wheel]).resume);
 }

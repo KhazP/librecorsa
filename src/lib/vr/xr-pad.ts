@@ -1,4 +1,4 @@
-import type { PadLike } from "@/lib/input/device-input";
+import { padTriggerDown, type PadLike } from "@/lib/input/device-input";
 
 /**
  * A headset's two hand controllers (Meta Quest Touch and alike) as one standard-mapping pad, so they drive through the
@@ -160,7 +160,10 @@ export class HeadsetButtons {
   read(pad: PadLike | null, nowMs: number, paused: boolean, others: readonly PadLike[] = []): VrPauseInput {
     const out: VrPauseInput = { pause: false, resume: false, recenter: false, leave: false };
     const down = (i: number) => Boolean(pad?.buttons[i]?.pressed);
-    const anyDown = (i: number) => down(i) || others.some((o) => o.mapping === "standard" && Boolean(o.buttons[i]?.pressed));
+    // A pad's trigger counts from its press point, not the browser's pressed bit, which a finger resting on it sets
+    const padDown = (o: PadLike, i: number) =>
+      i === PAD_RT ? padTriggerDown(o.buttons[i], Boolean(this.prev[i])) : Boolean(o.buttons[i]?.pressed);
+    const anyDown = (i: number) => down(i) || others.some((o) => o.mapping === "standard" && padDown(o, i));
     const edge = (i: number) => anyDown(i) && !this.prev[i];
     if (!this.primed) {
       this.primed = true;
