@@ -6,6 +6,7 @@
  * radio filter (band-pass, presence peak and a squelch click).
  */
 import * as THREE from "three";
+import { withBasePath } from "@/lib/base-path";
 import type { InterpolatedPeerState } from "./multiplayer-sync";
 
 export type SpotterSideState = "clear" | "left" | "right" | "both";
@@ -44,7 +45,7 @@ const MAX_UPDATE_GAP_MS = 500;
 
 function clipPath(voice: SpotterVoiceId, key: SpotterClipKey): string {
   // George, the default voice (id "jim", kept from the first voice set), sits at the top of the folder
-  return voice === "jim" ? `/audio/spotter/${key}.wav` : `/audio/spotter/${voice}/${key}.wav`;
+  return withBasePath(voice === "jim" ? `/audio/spotter/${key}.wav` : `/audio/spotter/${voice}/${key}.wav`);
 }
 
 export class SpotterEngine {
