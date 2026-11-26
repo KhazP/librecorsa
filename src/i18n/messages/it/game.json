@@ -128,7 +128,24 @@
     "surfaceDry": "Asciutta",
     "surfaceWet": "Bagnata",
     "renameUnreachable": "Impossibile raggiungere la classifica online. Riprova tra un momento",
-    "renameFailed": "Impossibile cambiare il nome (HTTP {status})"
+    "renameFailed": "Impossibile cambiare il nome (HTTP {status})",
+    "errors": {
+      "unreachable": "Impossibile raggiungere la classifica online, continuo a provare",
+      "unreachableGaveUp": "Impossibile raggiungere la classifica online",
+      "olderPhysics": "Questo giro è di una versione precedente della fisica o del circuito, e quella classifica è di sola lettura",
+      "olderPhysicsReload": "Questo giro è di una versione precedente della fisica o del circuito. Ricarica il gioco per guidare sulla nuova",
+      "modLap": "I giri con auto o circuiti mod restano fuori dalle classifiche online",
+      "unknownCircuit": "I giri su circuiti che non fanno parte del gioco restano fuori dalle classifiche online",
+      "boardOff": "La classifica online non è disponibile al momento",
+      "invalidRecording": "La registrazione del giro non è valida",
+      "olderGame": "Questo giro è stato registrato da una versione precedente del gioco",
+      "tooManyUploads": "Troppi caricamenti, riprova più tardi",
+      "tooManyChanges": "Troppe modifiche, riprova più tardi",
+      "nameTaken": "Questo nome è già in uso. Accedi all’account che lo possiede, importa la tua chiave del pilota in Tempi sul giro o corri con un altro nome",
+      "pickName": "Scegli un altro nome",
+      "challengeEnded": "Quella sfida settimanale è finita",
+      "challengeRules": "Questo giro non è stato guidato secondo le regole della sfida di questa settimana"
+    }
   },
   "badges": {
     "weeklyGold": "Oro settimanale",

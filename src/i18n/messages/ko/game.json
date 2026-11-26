@@ -128,7 +128,24 @@
     "surfaceDry": "건조",
     "surfaceWet": "젖음",
     "renameUnreachable": "온라인 보드에 연결할 수 없습니다. 잠시 후 다시 시도해 주십시오.",
-    "renameFailed": "이름을 변경할 수 없습니다(HTTP {status})."
+    "renameFailed": "이름을 변경할 수 없습니다(HTTP {status}).",
+    "errors": {
+      "unreachable": "온라인 보드에 연결할 수 없습니다. 계속 다시 시도하겠습니다",
+      "unreachableGaveUp": "온라인 보드에 연결할 수 없습니다",
+      "olderPhysics": "이전 버전의 물리 또는 서킷에서 달린 랩이며, 해당 보드는 읽기 전용입니다",
+      "olderPhysicsReload": "이전 버전의 물리 또는 서킷에서 달린 랩입니다. 게임을 새로고침하여 새 버전에서 주행해 주십시오",
+      "modLap": "모드 차량이나 모드 서킷의 랩은 온라인 보드에 등록되지 않습니다",
+      "unknownCircuit": "게임에 포함되지 않은 서킷의 랩은 온라인 보드에 등록되지 않습니다",
+      "boardOff": "지금은 온라인 보드를 사용할 수 없습니다",
+      "invalidRecording": "랩 기록 데이터가 올바르지 않습니다",
+      "olderGame": "이전 버전의 게임에서 기록된 랩입니다",
+      "tooManyUploads": "업로드가 너무 많습니다. 나중에 다시 시도해 주십시오",
+      "tooManyChanges": "변경이 너무 많습니다. 나중에 다시 시도해 주십시오",
+      "nameTaken": "이미 사용 중인 이름입니다. 이 이름을 가진 계정에 로그인하거나, 랩 타임에서 드라이버 키를 가져오거나, 다른 이름으로 레이스해 주십시오",
+      "pickName": "다른 이름을 선택해 주십시오",
+      "challengeEnded": "해당 주간 챌린지가 종료되었습니다",
+      "challengeRules": "이번 주 챌린지 규칙에 맞게 주행한 랩이 아닙니다"
+    }
   },
   "badges": {
     "weeklyGold": "주간 골드",

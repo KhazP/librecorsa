@@ -128,7 +128,24 @@
     "surfaceDry": "Seca",
     "surfaceWet": "Mojada",
     "renameUnreachable": "No se pudo conectar con la clasificación en línea. Inténtalo de nuevo en un momento",
-    "renameFailed": "No se pudo cambiar el nombre (HTTP {status})"
+    "renameFailed": "No se pudo cambiar el nombre (HTTP {status})",
+    "errors": {
+      "unreachable": "No se pudo conectar con la clasificación en línea, seguiré intentándolo",
+      "unreachableGaveUp": "No se pudo conectar con la clasificación en línea",
+      "olderPhysics": "Esta vuelta es de una versión anterior de la física o del circuito, y esa clasificación es de solo lectura",
+      "olderPhysicsReload": "Esta vuelta es de una versión anterior de la física o del circuito. Recarga el juego para conducir en la nueva",
+      "modLap": "Las vueltas con coches o circuitos de mods no entran en las clasificaciones en línea",
+      "unknownCircuit": "Las vueltas en circuitos que no vienen con el juego no entran en las clasificaciones en línea",
+      "boardOff": "La clasificación en línea no está disponible ahora mismo",
+      "invalidRecording": "La grabación de la vuelta no es válida",
+      "olderGame": "Esta vuelta se grabó con una versión anterior del juego",
+      "tooManyUploads": "Demasiadas subidas, inténtalo más tarde",
+      "tooManyChanges": "Demasiados cambios, inténtalo más tarde",
+      "nameTaken": "Este nombre ya está en uso. Inicia sesión en la cuenta que lo tiene, importa tu clave de piloto en Tiempos de vuelta o corre con otro nombre",
+      "pickName": "Elige otro nombre",
+      "challengeEnded": "Ese desafío semanal ha terminado",
+      "challengeRules": "Esta vuelta no se condujo con las reglas del desafío de esta semana"
+    }
   },
   "badges": {
     "weeklyGold": "Oro semanal",

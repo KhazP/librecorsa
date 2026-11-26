@@ -128,7 +128,24 @@
     "surfaceDry": "Kering",
     "surfaceWet": "Basah",
     "renameUnreachable": "Tidak dapat menghubungi papan waktu daring. Coba lagi nanti",
-    "renameFailed": "Nama tidak dapat diubah (HTTP {status})"
+    "renameFailed": "Nama tidak dapat diubah (HTTP {status})",
+    "errors": {
+      "unreachable": "Tidak dapat menghubungi papan waktu daring, aku akan terus mencoba",
+      "unreachableGaveUp": "Tidak dapat menghubungi papan waktu daring",
+      "olderPhysics": "Lap ini dari versi fisika atau sirkuit yang lebih lama, dan papan itu hanya bisa dibaca",
+      "olderPhysicsReload": "Lap ini dari versi fisika atau sirkuit yang lebih lama. Muat ulang game untuk mengemudi di versi baru",
+      "modLap": "Lap dengan mobil mod atau di sirkuit mod tidak masuk ke papan waktu daring",
+      "unknownCircuit": "Lap di sirkuit yang tidak disertakan dalam game tidak masuk ke papan waktu daring",
+      "boardOff": "Papan waktu daring sedang tidak tersedia",
+      "invalidRecording": "Rekaman lap tidak valid",
+      "olderGame": "Lap ini direkam oleh versi game yang lebih lama",
+      "tooManyUploads": "Terlalu banyak unggahan, coba lagi nanti",
+      "tooManyChanges": "Terlalu banyak perubahan, coba lagi nanti",
+      "nameTaken": "Nama ini sudah dipakai. Masuk ke akun pemiliknya, impor kunci pembalapmu di Waktu Lap, atau balapan dengan nama lain",
+      "pickName": "Pilih nama lain",
+      "challengeEnded": "Tantangan mingguan itu sudah berakhir",
+      "challengeRules": "Lap ini tidak dikemudikan sesuai aturan tantangan minggu ini"
+    }
   },
   "badges": {
     "weeklyGold": "Emas Mingguan",

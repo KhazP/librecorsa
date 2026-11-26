@@ -128,7 +128,24 @@
     "surfaceDry": "Trocken",
     "surfaceWet": "Nass",
     "renameUnreachable": "Die Online-Bestenliste ist nicht erreichbar. Versuche es gleich noch einmal",
-    "renameFailed": "Der Name konnte nicht geändert werden (HTTP {status})"
+    "renameFailed": "Der Name konnte nicht geändert werden (HTTP {status})",
+    "errors": {
+      "unreachable": "Die Online-Bestenliste ist nicht erreichbar, ich versuche es weiter",
+      "unreachableGaveUp": "Die Online-Bestenliste ist nicht erreichbar",
+      "olderPhysics": "Diese Runde stammt aus einer älteren Version der Physik oder der Strecke, und diese Bestenliste ist schreibgeschützt",
+      "olderPhysicsReload": "Diese Runde stammt aus einer älteren Version der Physik oder der Strecke. Lade das Spiel neu, um auf der neuen zu fahren",
+      "modLap": "Runden mit Mod-Autos oder auf Mod-Strecken bleiben außerhalb der Online-Bestenlisten",
+      "unknownCircuit": "Runden auf Strecken, die nicht zum Spiel gehören, bleiben außerhalb der Online-Bestenlisten",
+      "boardOff": "Die Online-Bestenliste ist gerade nicht verfügbar",
+      "invalidRecording": "Die Rundenaufzeichnung ist ungültig",
+      "olderGame": "Diese Runde wurde mit einer älteren Version des Spiels aufgezeichnet",
+      "tooManyUploads": "Zu viele Uploads, versuch es später noch einmal",
+      "tooManyChanges": "Zu viele Änderungen, versuch es später noch einmal",
+      "nameTaken": "Dieser Name ist vergeben. Melde dich bei dem Konto an, zu dem er gehört, importiere deinen Fahrerschlüssel unter Rundenzeiten oder fahre unter einem anderen Namen",
+      "pickName": "Wähle einen anderen Namen",
+      "challengeEnded": "Diese Wochenchallenge ist vorbei",
+      "challengeRules": "Diese Runde wurde nicht nach den Regeln der Wochenchallenge gefahren"
+    }
   },
   "badges": {
     "weeklyGold": "Wochen-Gold",
