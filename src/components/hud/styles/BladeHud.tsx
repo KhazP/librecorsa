@@ -89,7 +89,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: 
           ) : t.outLap && !t.race ? (
             <span className={TIME_LBL}>{w.outLap}</span>
           ) : deltaS !== null && deltaS < 0 && !t.outLap ? (
-            <span className={`${TIME_TYPE} inline-flex items-center gap-1 text-lc-gain`}>
+            <span dir="auto" className={`${TIME_TYPE} inline-flex items-center gap-1 text-lc-gain`}>
               <Trend direction="up" size={9} />
               {w.onPb}
             </span>

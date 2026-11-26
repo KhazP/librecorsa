@@ -50,7 +50,7 @@ function flagState(t: CarTelemetry, w: Words): FlagState | null {
   return { flag: "green", word: w.flags.green, fill: "bg-lc-green" };
 }
 
-const ROW_GRID = "grid grid-cols-[30px_5px_minmax(0,1fr)_22px_78px_88px] items-center";
+const ROW_GRID = "grid grid-cols-[30px_5px_minmax(0,1fr)_22px_78px_94px] items-center";
 
 const OrderHeader: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t, w, lapInvalid }) => {
   const race = t.race;
@@ -70,7 +70,8 @@ const OrderHeader: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> 
         <span className="lc-disp text-[17px] leading-none tracking-[0.01em] whitespace-nowrap">{race ? w.race : sessionWord(t)}</span>
       </div>
       <div className="lc-mono flex min-w-0 flex-1 items-center gap-[7px] px-3.5 text-[16px] leading-none font-bold whitespace-nowrap uppercase">
-        {counter}
+        {/* On the grid the race's length is one phrase, read in its language's direction ("5 لفات") */}
+        {race?.phase === "lights" ? <span dir="auto">{counter}</span> : counter}
         {race && race.phase !== "lights" && race.totalLaps ? <span className="text-[12px] font-semibold text-lc-slate">/ {race.totalLaps}</span> : null}
       </div>
       {flag ? (
