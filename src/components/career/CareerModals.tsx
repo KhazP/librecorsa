@@ -276,7 +276,7 @@ export const RaceSummaryModal: React.FC<{
                     <span className="min-w-0 truncate text-[13px] font-semibold">{d.name}</span>
                   </div>
                   <span className={cx("lc-mono shrink-0 text-[12px] font-bold", d.isPlayer ? "text-lc-void" : "text-lc-fog")}>
-                    +{line.points}
+                    <bdi>+{line.points}</bdi>
                   </span>
                 </div>
               );
@@ -299,7 +299,9 @@ export const RaceSummaryModal: React.FC<{
                   )}
                   <span className="min-w-0 truncate text-[13px] font-semibold">{playerName}</span>
                 </div>
-                <span className="lc-mono shrink-0 text-[12px] font-bold">+{playerOutsidePodium.points}</span>
+                <span className="lc-mono shrink-0 text-[12px] font-bold">
+                  <bdi>+{playerOutsidePodium.points}</bdi>
+                </span>
               </div>
             ) : null}
           </div>
@@ -336,7 +338,9 @@ export const RaceSummaryModal: React.FC<{
               <div className="flex items-center justify-between gap-2 text-[14px]">
                 <span className="text-lc-slate">{tx("scoreSubtotal", { mult: parts.mult })}</span>
                 <span className="lc-data text-lc-fog">
-                  {format.number(parts.total)} × {parts.mult}
+                  <bdi>
+                    {format.number(parts.total)} × {parts.mult}
+                  </bdi>
                 </span>
               </div>
               {multParts && seasonCtx ? (
@@ -635,7 +639,7 @@ const SeasonDebriefModal: React.FC<{
                     )}
                   </div>
                   <span className="lc-data text-end text-[13px] text-lc-fog">
-                    {r ? `+${r.points}` : tx("unranked")}
+                    {r ? <bdi>+{r.points}</bdi> : tx("unranked")}
                   </span>
                   <span className="lc-data text-end text-[13px] text-lc-chalk">
                     {r ? format.number(r.score) : tx("unranked")}
@@ -672,7 +676,9 @@ const SeasonDebriefModal: React.FC<{
             ) : (
               <div className="flex flex-col gap-2">
                 <span className="lc-row-label">
-                  {record.objectivesDone} / {record.objectivesTotal}
+                  <bdi>
+                    {record.objectivesDone} / {record.objectivesTotal}
+                  </bdi>
                 </span>
                 <p className="lc-hint m-0">{tx("seasonArchiveUnavailable")}</p>
               </div>
@@ -719,7 +725,9 @@ const SeasonDebriefModal: React.FC<{
                 <div className="my-1 border-t border-lc-line" />
                 <div className="flex items-center justify-between gap-2 text-[14px]">
                   <span className="text-lc-slate">{tx("seasonScoreMult")}</span>
-                  <span className="lc-data text-lc-fog">× {parts.mult}</span>
+                  <span className="lc-data text-lc-fog">
+                    <bdi>× {parts.mult}</bdi>
+                  </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-1">
                   <span className="lc-row-label">{tx("seasonScoreTotal")}</span>
@@ -1218,7 +1226,7 @@ export const CircuitPickerModal: React.FC<{
                 ) : null}
               </div>
               <div className="mt-auto flex items-center justify-between gap-2">
-                <span className="lc-mono text-[12px] text-lc-slate">{(info.lengthM / 1000).toFixed(2)} km</span>
+                <span className="lc-mono text-[12px] text-lc-slate"><bdi>{(info.lengthM / 1000).toFixed(2)} km</bdi></span>
                 <CareerCircuitOutline trackId={trackId} className="h-9 w-16 shrink-0" strokeClassName={chosen ? "stroke-lc-chalk" : "stroke-lc-slate"} />
               </div>
             </button>
@@ -1490,7 +1498,7 @@ export const SeriesDetailContent: React.FC<{
                     <span className="lc-mono me-2 text-lc-slate">{idx + 1}.</span>
                     {info.full}
                   </span>
-                  <span className="lc-mono shrink-0 text-[12px] text-lc-slate">{(info.lengthM / 1000).toFixed(2)} km</span>
+                  <span className="lc-mono shrink-0 text-[12px] text-lc-slate"><bdi>{(info.lengthM / 1000).toFixed(2)} km</bdi></span>
                 </div>
               );
             })}

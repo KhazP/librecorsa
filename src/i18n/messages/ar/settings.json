@@ -651,6 +651,7 @@
       "retirements": "الانسحابات",
       "mostDrivenCar": "السيارة الأكثر قيادة",
       "mostDrivenCircuit": "الحلبة الأكثر قيادة",
+      "none": "لا شيء بعد",
       "hoursMinutes": "{hours} س {minutes} د",
       "minutes": "{minutes} د",
       "km": "{km} km"
@@ -685,7 +686,7 @@
     "label": "تخطيط HUD",
     "thirdParty": "من أطراف خارجية",
     "thirdPartyNote": "أُعيد إنشاؤها من مشاريع HUD مفتوحة المصدر أخرى، مع حفظ حقوق مؤلفيها.",
-    "touchNote": "تستخدم الهواتف دائمًا تخطيط Touch HUD.",
+    "touchNote": "تستخدم الهواتف دائمًا تخطيط HUD اللمسي.",
     "description": "{detail}. من إعداد {author}",
     "descriptionSite": "{detail}. من إعداد {author} · {site}",
     "sourceLink": "شيفرة {layout} المصدرية، من إعداد {author} (يفتح في علامة تبويب جديدة)",

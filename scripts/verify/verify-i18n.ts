@@ -118,6 +118,17 @@ for (const locale of ['ar'].filter((l) => translatedLocales().includes(l))) {
   const bad = [...flatten(readLocale(locale))].filter(([, m]) => { try { return signature(isolateMessage(m)) !== signature(m); } catch { return true; } }).map(([k]) => k);
   check(`${locale}: isolating the filled-in values keeps every message whole`, bad.length === 0, bad.slice(0, 5).join(', '));
 }
+{
+  // A sign, a "P" or a unit written against a value reads with it: unisolated, "P{place}" shows as "3P" and "+{n}" as "18+"
+  const iso = (m: string) => isolateMessage(m).replace(/\u2068/g, '[').replace(/\u2069/g, ']');
+  check('right to left, "P{place}" is isolated with its P', iso('المركز P{place}') === 'المركز [P{place}]');
+  check('right to left, a sign and a glued suffix stay with their value', iso('+{points} نقطة · {x}%') === '[+{points}] نقطة · [{x}%]');
+  check('right to left, a Latin unit one space after a value stays with it', iso('{km} km') === '[{km} km]');
+  check('right to left, "{done} / {total}" is one isolate', iso('{done} / {total}') === '[{done} / {total}]');
+  check('right to left, signs between two values bind them', iso('FL·{class}×{n}') === '[FL·{class}×{n}]');
+  check('right to left, a file type keeps its dot in front', iso('استيراد .zip أو LibreCorsa.exe') === 'استيراد [.zip] أو LibreCorsa.exe');
+  check('right to left, Arabic text glued to a value stays outside', iso('و{x}') === 'و[{x}]');
+}
 check('numbers are formatted with Latin digits in every language', new Intl.NumberFormat(formatLocale('ar')).format(1234) === '1,234');
 
 if (failures.length) {

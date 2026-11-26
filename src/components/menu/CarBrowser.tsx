@@ -23,6 +23,7 @@ import {
 import { useCarSkinId } from "@/lib/cars/car-skins";
 import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS } from "@/lib/cars/f1-mod-physics";
 import { Skeleton } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
 import { StateBadge } from "@/components/ui/badges/StateBadge";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
@@ -113,7 +114,13 @@ export const CarThumb: React.FC<{
 
   return (
     <>
-      {!shownSrc ? <Skeleton className={`absolute inset-3 ${targetFailed ? "[animation:none]" : ""}`} /> : null}
+      {/* Loading: the skeleton; no picture to load (a car whose files are not here): the car icon, not a grey box */}
+      {!shownSrc && !targetFailed ? <Skeleton className="absolute inset-3" /> : null}
+      {!shownSrc && targetFailed ? (
+        <span aria-hidden className="absolute inset-3 flex items-center justify-center rounded-lc-tile bg-lc-titanium/40 text-lc-dim">
+          <Icon name="car" size="lg" />
+        </span>
+      ) : null}
       {shownSrc && !ready ? (
         <img
           src={shownSrc}

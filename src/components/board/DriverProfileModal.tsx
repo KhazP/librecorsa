@@ -151,7 +151,7 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
           title={tx("ratingTitle")}
         >
           <span className="lc-data text-[28px] leading-none text-lc-chalk phone:text-[22px]">
-            {profile.rating !== null ? profile.rating.toFixed(1) : "—"}
+            {profile.rating !== null ? profile.rating.toFixed(1) : "–"}
             {profile.rating !== null ? <span className="sr-only"> {tx("outOf100")}</span> : null}
           </span>
           <span className="lc-hint truncate">{tx("rating")}</span>
@@ -191,7 +191,7 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
               </Well>
               <Well className="flex min-w-0 flex-col gap-1 px-3.5 py-2.5 phone:px-3">
                 <span className="lc-data text-[20px] leading-none text-lc-chalk">
-                  {record.bestFinish !== null ? `P${formatCount(record.bestFinish)}` : "—"}
+                  {record.bestFinish !== null ? `P${formatCount(record.bestFinish)}` : "–"}
                 </span>
                 <span className="lc-hint truncate">{tx("bestFinish")}</span>
               </Well>

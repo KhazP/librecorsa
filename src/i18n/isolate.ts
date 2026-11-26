@@ -13,14 +13,53 @@ const PDI = "⁩";
 
 const VALUE = new Set<TYPE>([TYPE.argument, TYPE.number, TYPE.date, TYPE.time, TYPE.pound]);
 
+/** Latin letters and signs written against a value with no space ("P{place}", "+{points}", "×{n}", "FL·{n}"): part of it */
+const PREFIX = /[A-Za-z+\-−±×#~·$€£]+$/;
+/** The same after a value ("{n}%", "{n}°", "{n}×", "{n}s"), and a Latin unit one space after it ("{km} km") */
+const SUFFIX = /^(?:[A-Za-z%°×+′″]+|[  ](?:km\/h|km|mph|kph|kW|bhp|hp|Nm|rpm|ms|m|s|kg|L|cm|mm|psi|bar|kPa|MB|GB)(?![A-Za-z]))/;
+/**
+ * Between two values, a slash makes one fraction ("{done} / {total}"), and signs or letters with no space bind them
+ * ("FL·{class}×{n}"): isolated whole, or the fraction reads "3 / 2"
+ */
+const JOIN = /^(?: ?\/ ?|[A-Za-z%\u00b0\u00d7+\u00b7:.\-\u2212]+)$/;
+
+/** A file type written in the text (".zip", ".tar.gz"): right to left, its dot would land at the far end ("zip.") */
+const FILE_TYPE = /(?<![\p{L}\p{N}._-])\.[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*(?![\p{L}\p{N}])/gu;
+
+const literal = (value: string): MessageFormatElement => ({ type: TYPE.literal, value });
+
 function isolate(elements: MessageFormatElement[]): MessageFormatElement[] {
   const out: MessageFormatElement[] = [];
-  for (const el of elements) {
+  const queue = [...elements];
+  while (queue.length) {
+    const el = queue.shift()!;
     if (VALUE.has(el.type)) {
-      out.push({ type: TYPE.literal, value: FSI }, el, { type: TYPE.literal, value: PDI });
+      const run: MessageFormatElement[] = [];
+      // The glued sign or letters before it, taken off the text before
+      const before = out[out.length - 1];
+      const glued = before?.type === TYPE.literal ? PREFIX.exec(before.value) : null;
+      if (before?.type === TYPE.literal && glued) {
+        before.value = before.value.slice(0, glued.index);
+        if (!before.value) out.pop();
+        run.push(literal(glued[0]));
+      }
+      run.push(el);
+      while (queue[0]?.type === TYPE.literal && JOIN.test(queue[0].value) && queue[1] && VALUE.has(queue[1].type)) {
+        run.push(queue.shift()!, queue.shift()!);
+      }
+      const after = queue[0];
+      const tail = after?.type === TYPE.literal ? SUFFIX.exec(after.value) : null;
+      if (after?.type === TYPE.literal && tail) {
+        after.value = after.value.slice(tail[0].length);
+        if (!after.value) queue.shift();
+        run.push(literal(tail[0]));
+      }
+      out.push(literal(FSI), ...run, literal(PDI));
       continue;
     }
-    if (el.type === TYPE.plural || el.type === TYPE.select) {
+    if (el.type === TYPE.literal) {
+      el.value = el.value.replace(FILE_TYPE, (m) => FSI + m + PDI);
+    } else if (el.type === TYPE.plural || el.type === TYPE.select) {
       for (const option of Object.values(el.options)) option.value = isolate(option.value);
     } else if (el.type === TYPE.tag) {
       el.children = isolate(el.children);

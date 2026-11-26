@@ -193,7 +193,8 @@ export const StatTile: React.FC<{
   <Well className={cx("flex min-w-0 flex-col gap-1 px-3 py-2.5 short:gap-0.5 short:px-2.5 short:py-1.5", className)}>
     <span className="lc-lbl truncate">{label}</span>
     <span className="lc-data truncate text-[18px] leading-tight text-lc-chalk phone:text-[15px] short:text-[15px]">
-      {value}
+      {/* Isolated by its own first letter: "+8,096", "23×" and "P3" read left to right in Arabic too, a word in its own way */}
+      <bdi>{value}</bdi>
     </span>
     {sub ? <span className="lc-hint truncate">{sub}</span> : null}
   </Well>
@@ -342,11 +343,12 @@ export const ObjectiveRow: React.FC<{
             : undefined,
       )}
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className={cx("min-w-0 text-[14px] leading-snug font-medium", prog.done ? "text-lc-chalk" : "text-lc-fog")}>
+      {/* The badge keeps its words on one line and goes under a title it would squeeze below 10 rem */}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <span className={cx("min-w-0 flex-[1_1_10rem] text-[14px] leading-snug font-medium", prog.done ? "text-lc-chalk" : "text-lc-fog")}>
           {title}
         </span>
-        {statusBadge}
+        <span className="inline-flex shrink-0 whitespace-nowrap">{statusBadge}</span>
       </div>
       {ratio !== null ? (
         <Meter
@@ -463,18 +465,18 @@ export const StandingsTable: React.FC<{
 
               {hasMove ? (
                 <div className="flex items-center justify-center gap-0.5">
-                  <Trend
-                    direction={delta > 0 ? "up" : delta < 0 ? "down" : "level"}
-                    colored={!driver.isPlayer}
-                    label={
-                      delta > 0
-                        ? tx("placesGainedAria", { count: delta })
-                        : delta < 0
-                          ? tx("placesLostAria", { count: Math.abs(delta) })
-                          : tx("placesSameAria")
-                    }
-                  />
+                  {/* No move is the 0 alone: the level glyph beside it read as a dash ("— 0") */}
+                  {delta !== 0 ? (
+                    <Trend
+                      direction={delta > 0 ? "up" : "down"}
+                      colored={!driver.isPlayer}
+                      label={delta > 0 ? tx("placesGainedAria", { count: delta }) : tx("placesLostAria", { count: Math.abs(delta) })}
+                    />
+                  ) : (
+                    <span className="sr-only">{tx("placesSameAria")}</span>
+                  )}
                   <span
+                    aria-hidden={delta === 0 ? true : undefined}
                     className={cx(
                       "lc-mono text-[12px] font-bold",
                       driver.isPlayer
@@ -552,7 +554,7 @@ export const StandingsTable: React.FC<{
                         : "text-lc-slate",
                   )}
                 >
-                  {roundPts && roundPts > 0 ? `+${roundPts}` : tx("unranked")}
+                  {roundPts && roundPts > 0 ? <bdi>+{roundPts}</bdi> : tx("unranked")}
                 </span>
               ) : null}
 
