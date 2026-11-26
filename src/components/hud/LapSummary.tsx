@@ -1031,7 +1031,7 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
               {cornerName(cur.name)}
             </span>
             <span className={`shrink-0 ${skin !== null ? skinCss.inkSoft : "text-lc-fog"}`}>
-              {speed(cur.minSpeedKmh, units)} {unit}
+              <bdi dir="ltr">{speed(cur.minSpeedKmh, units)} {unit}</bdi>
             </span>
             <span className="shrink-0" style={{ color: curDelta.color }}>
               {curDelta.text}
