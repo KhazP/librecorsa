@@ -20,6 +20,7 @@ import {
 } from '../../src/lib/settings/hud-layouts';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../../src/lib/settings/player-settings';
 import { HUD_PART_IDS, hudPartOfOrigin, hudPartsKey, layoutMoved, parseHudParts, withLayoutParts } from '../../src/lib/settings/hud-parts';
+import { CORNER_BESIDE_START, cornerBeside } from '../../src/components/hud/styles/corner-beside';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -120,6 +121,17 @@ console.log(`\n${HUD_LAYOUTS.length} layouts (${THIRD_PARTY_HUD_LAYOUTS.length} 
   check('advanced suspension/aero telemetry widget is hidden by default', DEFAULT_PLAYER_SETTINGS.hud.engineeringTelemetry === false);
   check('a save without engineeringTelemetry defaults it to false', parsePlayerSettings({}).hud.engineeringTelemetry === false);
   check('enabling engineeringTelemetry survives a save and reload', parsePlayerSettings({ hud: { engineeringTelemetry: true } }).hud.engineeringTelemetry === true);
+}
+
+// ---- Blade's bottom corners: beside the bar or above it, whatever widths the panel had on the way
+{
+  // At 1080p the MFD's status pill leaves 344 px less its width (en 334 px, de 348 px); before the fonts load it is wider
+  const settle = (widths: number[]) => widths.reduce((was, w) => cornerBeside(was, w, 344 - w), CORNER_BESIDE_START);
+  check('the pill goes beside the bar once the fonts load (en)', settle([369, 334]).on);
+  check('a pill that overlaps the bar by 4 px goes beside it, whatever came first (de)', settle([369, 348]).on && settle([348]).on);
+  check('a pill far wider than the room goes above the bar', !settle([334, 420]).on);
+  check('a few pixels of breathing never bring it back down (above stays above)', !settle([360, 349]).on);
+  check('a few pixels of breathing never lift it (beside stays beside)', settle([345, 351]).on);
 }
 
 if (failures.length) {

@@ -36,6 +36,7 @@ import { revLights, useFuelPerLap } from "./third-party-parts";
 import { useErsState, type ErsState } from "./game-style-parts";
 import { anchor, gearLabel, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
 import { BLADE_W, CORNER_EDGE, DEEP, EDGE, HARD, LBL, LBL_TYPE, NONE, PLATE, scaleOf, useBladeFit, useBladeWords, useOwnWidth, type Words } from "./BladeParts";
+import { CORNER_BESIDE_START, cornerBeside } from "./corner-beside";
 import { BladeMap, BladeOrder } from "./BladeOrder";
 
 /**
@@ -526,12 +527,11 @@ export const BladeHud: React.FC<HudDesignProps> = ({
   // A panel in a bottom corner sits beside the blade where there is the room for it at the sizes the player has set
   // (the blade's end slants away from a low panel, so touching widths still leave a gap), else above the blade's bar
   const bladeK = scaleOf(centre);
-  const beside = useRef({ left: true, right: true });
+  const beside = useRef({ left: CORNER_BESIDE_START, right: CORNER_BESIDE_START });
   const cornerBottom = (side: "left" | "right", width: number, style: React.CSSProperties) => {
-    // 8 px either way of the limit keeps a panel whose width breathes (the MFD's status line) from hopping up and down
     const spare = half - (BLADE_W / 2) * bladeK - width * scaleOf(style);
-    beside.current[side] = spare >= (beside.current[side] ? -8 : 8);
-    return beside.current[side] ? EDGE : `calc(${EDGE} + ${Math.round(108 * bladeK)}px)`;
+    beside.current[side] = cornerBeside(beside.current[side], width, spare);
+    return beside.current[side].on ? EDGE : `calc(${EDGE} + ${Math.round(108 * bladeK)}px)`;
   };
 
   return (
