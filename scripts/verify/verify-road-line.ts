@@ -11,6 +11,9 @@ import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
 import { createSuzukiLianaSim } from '../../src/lib/sim/road/SuzukiLianaSim';
 import { createNissanR33Sim } from '../../src/lib/sim/classic/NissanR33Sim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { ownPaceFor, ownSpeedAt, racingLineOfVehicle, vehicleOwnSpeedMs } from '../../src/lib/sim/own-pace';
+import type { RacingLineId, VehicleModelId } from '../../src/types/f1';
+import { makers } from '../lib/setup-cars';
 
 let failed = 0;
 const check = (name: string, cond: boolean) => {
@@ -64,6 +67,16 @@ check('a Liana built here drives the road line', liana.racingLineId === 'road');
 check('...and its braking guide (the drawn line) is the road line\'s', liana.brakingGuide.line === 'road');
 check('the R33 stays on the GT3\'s line', createNissanR33Sim(track, null).racingLineId === 'gt3');
 check('the AMG stays on the GT3\'s line', createAmgGt3Sim(track, null).racingLineId === 'gt3');
+
+// A car's own pace for the online flags (own-pace.ts) is judged on the line that car drives here, not the GT3's
+const ownOn = (v: VehicleModelId, line: RacingLineId, s: number) => ownSpeedAt(ownPaceFor(track, v, line)!, s, true);
+const sAt = [0.12, 0.31, 0.47, 0.66, 0.83].map((f) => f * track.totalLengthM);
+check('a Liana\'s own pace online is its road line\'s', racingLineOfVehicle('liana') === 'road' && sAt.every((s) => vehicleOwnSpeedMs(track, 'liana', s) === ownOn('liana', 'road', s)));
+check('a Scirocco whose road-line check failed is judged on the GT3\'s line', racingLineOfVehicle('vw-scirocco-gtx') === 'gt3' && sAt.every((s) => vehicleOwnSpeedMs(track, 'vw-scirocco-gtx', s) === ownOn('vw-scirocco-gtx', 'gt3', s)));
+// The table own-pace.ts keeps is each car's own profile line: every model built here drives the line it names
+const lineTableOk = (Object.keys(makers) as VehicleModelId[]).filter((v) => makers[v](track).racingLineId !== racingLineOfVehicle(v));
+check('every model\'s own-pace line is the line its car drives', lineTableOk.length === 0);
+if (lineTableOk.length) console.log(`  differ: ${lineTableOk.join(', ')}`);
 
 if (failed) {
   console.error(`${failed} check(s) failed`);
