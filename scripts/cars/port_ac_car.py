@@ -16,7 +16,7 @@ blurred rims (`RIM_BLUR_*`) are left out.
 
 Output node layout (read by src/lib/ported-car-model.ts):
     CAR (extras: wheelCentres, tyreRadius, tyreHalfWidth, wheelbaseM, trackWidthM, steer, cameras, source)
-      BODY              body, cabin, glass, lights and brake callipers, one mesh per material
+      BODY              body, cabin, glass and lights, one mesh per material
       STEER             steering wheel pivot (AC's STEER_HR: local +Z down the column into the dash); a preset's
                         `steer_nodes` (a screen, shift lights) are child nodes of their own, named as in the kn5
       WHEEL_RF          hub pivot at the tyre's centre
@@ -24,6 +24,8 @@ Output node layout (read by src/lib/ported-car-model.ts):
                         wheel (`DISC_RF`, the preset's `spinning`) has them here too
         WHEEL_RF_TYRE   tyre, one primitive (the tyre deformation shader)
       WHEEL_LF / WHEEL_RR / WHEEL_LR
+      HUB_RF            what hangs off the corner's SUSP_RF (upright, calliper, a fixed hub fairing), at the tyre's
+                        centre: steered and sprung with the wheel, not spinning (only where the kn5 has any)
 
 Axes: AC's kn5 frame is already the rig's (+X left, +Y up, +Z forward, metres, right-handed, counter-clockwise
 faces), so the only change is a shift: lowest tyre point to y = 0, X centred on the wheels.
@@ -1142,7 +1144,9 @@ def uv_region(uv):
 
 
 def classify(nodes, i, preset, mat):
-    """('skip'|'body'|'steer'|'tyre'|'rim', corner) of node `i`, whose mesh has kn5 material `mat`"""
+    """('skip'|'body'|'steer'|'tyre'|'rim'|'hub', corner) of node `i`, whose mesh has kn5 material `mat`. A hub part
+    hangs off a corner's SUSP_xx (an upright, a calliper, a fixed hub fairing): it steers and rides with the wheel but
+    doesn't spin"""
     n = nodes[i]
     anc = ancestors(nodes, i)
     if (any(a.startswith('RIM_BLUR_') for a in anc) or n['name'].startswith(preset['skip_node_prefixes'])
@@ -1159,6 +1163,8 @@ def classify(nodes, i, preset, mat):
         for prefix in preset['spinning']:
             if a.startswith(prefix) and a[len(prefix):] in CORNERS:
                 return 'rim', a[len(prefix):]
+        if a.startswith('SUSP_') and a[5:] in CORNERS:
+            return 'hub', a[5:]
         if a.startswith('STEER_HR'):
             return 'steer', None
     return 'body', None
@@ -2090,6 +2096,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     # Wheels: hub pivots at the (mirrored) tyre centres; rim parts one primitive per material. A tyre in several kn5
     # materials (`tyre_materials`: tread and sidewall) is one primitive in the first's
     wheel_nodes = []
+    hub_nodes = []
     for c in CORNERS:
         centre = np.array(wheel_centres[f'WHEEL_{c}'])
         corner_tyres = [p for p in tyres if p[1] == c]
@@ -2104,6 +2111,10 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         rim_prims = [pi for _, pi in prims([p for p in parts if p[0] == 'rim' and p[1] == c], origin=centre)]
         rim_node = writer.add_mesh_node(f'WHEEL_{c}_RIM', rim_prims)
         wheel_nodes.append(writer.add_node(f'WHEEL_{c}', children=[rim_node, tyre_node], translation=centre))
+        # The corner's hub parts (under SUSP_xx): steered and sprung with the wheel, not spinning
+        hub_prims = [pi for _, pi in prims([p for p in parts if p[0] == 'hub' and p[1] == c], origin=centre)]
+        if hub_prims:
+            hub_nodes.append(writer.add_mesh_node(f'HUB_{c}', hub_prims, translation=centre))
 
     # Steering wheel, in the STEER frame
     to_steer = np.linalg.inv(M_steer)
@@ -2117,7 +2128,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         out = prims([p for p in steer_parts if p[7] == name], to_local=to_steer, key=node_key)
         steer_kids.append(writer.add_mesh_node(name, [pi for _, pi in out]))
 
-    # Body: one mesh per material (front callipers included: the rig has no steer-only part of a wheel)
+    # Body: one mesh per material (a wheel's callipers and uprights are its HUB_xx)
     body_parts = [p for p in parts if p[0] == 'body']
     order = {m['name']: i for i, m in enumerate(materials)}
     body_parts.sort(key=lambda p: order[p[2]])
@@ -2246,7 +2257,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             'converted': 'scripts/cars/port_ac_car.py',
         },
     }
-    car_root = writer.add_node('CAR', children=[body_node, steer_out, *wheel_nodes], extras=extras)
+    car_root = writer.add_node('CAR', children=[body_node, steer_out, *wheel_nodes, *hub_nodes], extras=extras)
     # Not 'CAR' (GlbWriter's default): three's GLTFLoader names the scene first, so the root node would load as
     # CAR_1 and the rig's getObjectByName('CAR') would find the scene, without the extras
     writer.j['scenes'][0] = {'name': 'Scene', 'nodes': [car_root]}
