@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { DETAIL_LAYER } from "./layers";
 import type { HeadlightBeam } from "./car-headlights";
 
@@ -98,7 +98,7 @@ export class HeadlightCones {
   private quality: ConeQuality = "high";
 
   constructor(options: { touch?: boolean } = {}) {
-    this.touch = options.touch ?? isTouchDevice();
+    this.touch = options.touch ?? mobileClassGpu();
     // An open cone from its apex at the origin along +Z to a unit circle at z = 1
     const geometry = new THREE.CylinderGeometry(1, 0, 1, 20, 6, true);
     geometry.rotateX(Math.PI / 2);
