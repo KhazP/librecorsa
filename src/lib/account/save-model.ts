@@ -68,6 +68,7 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "librecorsa.install-hint": "device",
   "librecorsa.update-reload": "device",
   "librecorsa.dualsense-prompt": "device",
+  "librecorsa.triple-prompt": "device",
   "librecorsa.supportPrompt": "device",
   "librecorsa.whatsNewSeen": "device",
   "librecorsa.signInHintShown": "device",

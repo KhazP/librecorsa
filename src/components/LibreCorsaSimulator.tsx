@@ -106,6 +106,7 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
+import { TripleScreenPrompt } from "@/components/hud/TripleScreenPrompt";
 import { centreFrame, setUiFrame, type UiFrame } from "@/lib/display/ui-frame";
 import { physicalVerticalFovDeg, screenRig } from "@/lib/display/screen-layout";
 import { accountActions, useAccountState } from "@/lib/account/account-store";
@@ -2843,6 +2844,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           Settings, which offers it itself), never mid-lap */}
       <FfbPairPrompt wanted={hidFfbWanted && settings.wheel.steer !== null && !settingsOpen && (phase === "title" || (phase === "driving" && paused))} />
       <DualSensePairPrompt wanted={phase === "title" && !settingsOpen && !(hidFfbWanted && settings.wheel.steer !== null)} />
+      <TripleScreenPrompt
+        wanted={phase === "title" && !settingsOpen && settings.screens.mode === "single" && vrState !== "on"}
+        onSetUp={() => openSettings("title", "display", "screens")}
+      />
 
       {loadingVisible ? (
         // Under the GPU notice it takes no press: the notice's own buttons would start it too
