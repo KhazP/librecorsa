@@ -61,6 +61,10 @@ export function PlayerNumbers() {
         {totals
           ? `Hours, laps and countries are counted since ${day(totals.since)} from anonymous daily totals; drivers are every name with a lap on the boards. Updated hourly. `
           : "Reading the totals… "}
+        <Link href="/stats" className={TEXT_LINK}>
+          Full stats
+        </Link>
+        {" · "}
         <Link href="/privacy#online" className={TEXT_LINK}>
           How they’re counted
         </Link>

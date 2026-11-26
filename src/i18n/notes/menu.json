@@ -17,6 +17,7 @@
   "title.lapTimesBest": "{time}: a lap time such as 1:23.456.",
   "title.feedback": "Main menu entry: send a bug report, a request or an idea.",
   "title.press": "Main menu link to the press page.",
+  "title.stats": "Short link to the public stats page.",
   "title.support": "Link to the developer's tip page (Buy Me a Coffee). Translate the meaning ('support the developer') if the phrase doesn't work in your language.",
   "title.mainMenu": "Screen-reader name of the menu.",
   "prompts.move": "Button prompt at the bottom of the screen: the stick or arrow keys move the cursor.",

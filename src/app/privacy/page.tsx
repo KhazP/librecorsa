@@ -75,10 +75,14 @@ export default function PrivacyPage() {
             whether the track was wet, which assists were on and which version of the game you had. Each of these is
             counted on its own, never combined with another or with the circuit or country. The report carries no
             name, key or id, and it can’t be tied to you or to your other sessions. Besides each circuit’s laps, the
-            site shows two things made from these totals: the hours and laps driven and the number of countries, all
-            added together, on the press page; and the circuits and cars driven most over the last 30 days, as an order
-            with no numbers, in the menus. A circuit or car takes a place in that order only after at least 50
-            sessions.
+            site shows three things made from these totals: the hours and laps driven and the number of countries, all
+            added together, on the press page; the circuits and cars driven most over the last 30 days, as an order
+            with no numbers, in the menus (a circuit or car takes a place in that order only after at least 50
+            sessions); and anonymous 30-day totals and shares on the{" "}
+            <Link href="/stats" className={TEXT_LINK}>
+              stats page
+            </Link>{" "}
+            (each category on its own, with at least 10 sessions before a circuit, car or country is listed).
           </li>
           <li>
             <span className={B}>Live count.</span> While the game is open and its tab is in view, your browser sends an

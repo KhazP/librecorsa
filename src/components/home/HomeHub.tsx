@@ -1019,6 +1019,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                     {[
                       [tx("about.links.download"), withBasePath("/download")],
                       [tx("about.links.press"), withBasePath("/press")],
+                      [tx("about.links.stats"), withBasePath("/stats")],
                       [tx("about.links.docs"), DOCS_URL],
                       [tx("about.links.privacy"), withBasePath("/privacy")],
                       ["GitHub", data.repoUrl],
@@ -1050,6 +1051,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
               [
                 ["GitHub", data.repoUrl, true],
                 [td("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl, true],
+                [tm("stats"), withBasePath("/stats"), false],
                 [tm("privacy"), withBasePath("/privacy"), false],
                 [tm("press"), withBasePath("/press"), false],
               ] as const

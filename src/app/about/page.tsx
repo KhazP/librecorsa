@@ -71,6 +71,14 @@ export default function AboutPage() {
           .
         </p>
         <p className={READ}>
+          <Link href="/stats" className={TEXT_LINK}>
+            Public stats
+          </Link>
+          {" · "}
+          <Link href="/press" className={TEXT_LINK}>
+            Press &amp; media
+          </Link>
+          {" · "}
           <Link href="/privacy" className={TEXT_LINK}>
             Privacy policy
           </Link>

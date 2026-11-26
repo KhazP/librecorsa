@@ -7,6 +7,8 @@
   &nbsp;·&nbsp;
   <a href="https://librecorsa.org/download">Download</a>
   &nbsp;·&nbsp;
+  <a href="https://librecorsa.org/stats">Stats</a>
+  &nbsp;·&nbsp;
   <a href="https://docs.librecorsa.org/">Docs</a>
   &nbsp;·&nbsp;
   <a href="https://docs.librecorsa.org/faq/">FAQ</a>

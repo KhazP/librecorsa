@@ -88,6 +88,7 @@
   "hub.prompts.back": "Button prompt: back to the Home section.",
   "hub.tabs.about": "Home page section: what the game is, the modders and the press.",
   "hub.about.links.docs": "Link to the game's documentation site.",
+  "hub.about.links.stats": "Link to the public driving and leaderboard stats page.",
   "hub.about.links.privacy": "Link to the privacy page.",
   "downloads.platforms": "Heading of the list of operating systems the apps are made for.",
   "hub.facts.physics.label": "Label in the list of game facts: the physics simulation.",
