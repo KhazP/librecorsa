@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {런 {lap}} other {랩 {lap}}}",
     "raceLap": "랩 {lap}",
     "raceLapOfTotal": "랩 {lap}/{total}",
+    "raceLaps": "{laps}랩",
     "best": "최고"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "세션",
     "lastLap": "이전 랩",
     "historyLap": "랩 {lap}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "시프트 라이트: {total}개 중 {lit}개 점등",
     "aidOff": "꺼짐",
     "fuel": "연료",
@@ -100,6 +103,8 @@
     "fuelLaps": "랩 ~{laps}",
     "raceLaps": "랩 {lap}",
     "raceLapsOfTotal": "랩 {lap}/{total}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} 작동 중",
     "inputs": "입력",
     "shiftLights": "시프트 라이트: {total}개 중 {lit}개",
@@ -226,6 +231,12 @@
     "aidOff": "꺼짐",
     "fuel": "연료",
     "aero": "에어로",
+    "corners": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
     "open": "열림",
     "armed": "대기",
     "shut": "닫힘",
@@ -679,6 +690,13 @@
       "engineMap": "엔진 맵",
       "ers": "ERS",
       "ersMode": "ERS 모드",
+      "ersModes": {
+        "CHR": "충전",
+        "LIC": "저속",
+        "BAL": "밸런스",
+        "RAC": "레이스",
+        "PSH": "어택"
+      },
       "boost": "부스트",
       "overtake": "오버테이크",
       "motor": "모터",

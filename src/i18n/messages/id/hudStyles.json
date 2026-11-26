@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {Run {lap}} other {Lap {lap}}}",
     "raceLap": "Lap {lap}",
     "raceLapOfTotal": "Lap {lap}/{total}",
+    "raceLaps": "{laps} lap",
     "best": "Terbaik"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "Sesi",
     "lastLap": "Lap lalu",
     "historyLap": "Lap {lap}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "Lampu gigi: {lit} dari {total} menyala",
     "aidOff": "Mati",
     "fuel": "BBM",
@@ -100,6 +103,8 @@
     "fuelLaps": "Lap ~{laps}",
     "raceLaps": "Lap {lap}",
     "raceLapsOfTotal": "Lap {lap}/{total}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} bekerja",
     "inputs": "Input",
     "shiftLights": "Lampu gigi: {lit} dari {total}",
@@ -226,6 +231,12 @@
     "aidOff": "Mati",
     "fuel": "BBM",
     "aero": "Aero",
+    "corners": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
     "open": "Buka",
     "armed": "Siap",
     "shut": "Tutup",
@@ -679,6 +690,13 @@
       "engineMap": "Peta mesin",
       "ers": "ERS",
       "ersMode": "Mode ERS",
+      "ersModes": {
+        "CHR": "Isi",
+        "LIC": "Lambat",
+        "BAL": "Seimbang",
+        "RAC": "Balap",
+        "PSH": "Serang"
+      },
       "boost": "Boost",
       "overtake": "Overtake",
       "motor": "Motor",

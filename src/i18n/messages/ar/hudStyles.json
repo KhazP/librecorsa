@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {المحاولة {lap}} other {اللفة {lap}}}",
     "raceLap": "اللفة {lap}",
     "raceLapOfTotal": "اللفة {lap}/{total}",
+    "raceLaps": "{laps} لفات",
     "best": "الأفضل"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "الجلسة",
     "lastLap": "الأخيرة",
     "historyLap": "لفة {lap}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "أضواء تبديل التروس: {lit} من {total} مضاءة",
     "aidOff": "معطّل",
     "fuel": "الوقود",
@@ -100,6 +103,8 @@
     "fuelLaps": "لفات ~{laps}",
     "raceLaps": "اللفة {lap}",
     "raceLapsOfTotal": "اللفة {lap}/{total}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} يعمل",
     "inputs": "المدخلات",
     "shiftLights": "أضواء تبديل التروس: {lit} من {total}",
@@ -226,6 +231,12 @@
     "aidOff": "OFF",
     "fuel": "وقود",
     "aero": "AERO",
+    "corners": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
     "open": "مفتوح",
     "armed": "جاهز",
     "shut": "مغلق",
@@ -679,6 +690,13 @@
       "engineMap": "خريطة المحرك",
       "ers": "ERS",
       "ersMode": "وضع ERS",
+      "ersModes": {
+        "CHR": "شحن",
+        "LIC": "منخفضة",
+        "BAL": "متوازن",
+        "RAC": "سباق",
+        "PSH": "هجوم"
+      },
       "boost": "تعزيز",
       "overtake": "تجاوز",
       "motor": "المحرك الكهربائي",

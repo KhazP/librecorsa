@@ -80,6 +80,7 @@ function useRetroWords() {
       aidOff: tx("aidOff"),
       fuel: tx("fuel"),
       aero: tx("aero"),
+      corners: { fl: tx("corners.fl"), fr: tx("corners.fr"), rl: tx("corners.rl"), rr: tx("corners.rr") },
       open: tx("open"),
       armed: tx("armed"),
       shut: tx("shut"),
@@ -373,17 +374,19 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
           <span className="text-(--tp-amber)">
             S{String(t.currentSector).padStart(2, "0")} / 03
           </span>
+          {/* Each time kept apart from its label (bdi), so a right-to-left label never pulls the time to its far side:
+              label then time in every language, as the row's other cells */}
           <span>
             <span className="text-(--tp-primary)">{w.current}</span>{" "}
-            <span style={{ color: lapInvalid ? HUD_LOSS : undefined }}>{formatLapClock(t)}</span>
+            <bdi style={{ color: lapInvalid ? HUD_LOSS : undefined }}>{formatLapClock(t)}</bdi>
           </span>
           <span style={{ color: HUD_LOSS }}>{lapInvalid ? w.invalid : ""}</span>
           <span className="text-(--tp-cyan)">{w.lapNumber(String(lap).padStart(2, "0"))}</span>
           <span>
-            <span className="text-(--tp-cyan)">{w.personalBest}</span> <span className="text-(--tp-cyan)">{formatLapTime(t.bestLapTimeMs)}</span>
+            <span className="text-(--tp-cyan)">{w.personalBest}</span> <bdi className="text-(--tp-cyan)">{formatLapTime(t.bestLapTimeMs)}</bdi>
           </span>
           <span>
-            <span className="text-(--tp-green)">{w.sessionBestShort}</span> <span style={{ color: sessionBest ? HUD_BEST : undefined }}>{formatLapTime(sessionBest)}</span>
+            <span className="text-(--tp-green)">{w.sessionBestShort}</span> <bdi style={{ color: sessionBest ? HUD_BEST : undefined }}>{formatLapTime(sessionBest)}</bdi>
           </span>
         </Frame>
       </div>
@@ -546,13 +549,14 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
 
 /* ---------------------------------------------------------------- Car condition */
 
-const CORNER_NAMES = ["FL", "FR", "RL", "RR"] as const;
+const CORNER_KEYS = ["fl", "fr", "rl", "rr"] as const;
 
 /** One tyre: its life as a bar coloured by the tread's heat, the life in %, the temperature under it */
 const TyreLife: React.FC<{ t: CarTelemetry; i: number; mirror: boolean }> = ({ t, i, mirror }) => {
   const units = useUnits();
   const life = Math.max(0, Math.min(100, 100 - (t.tireWearPct[i] ?? 0)));
   const heat = tyreHeatColor(t.tireTempsC[i] ?? 0, t.tireOptimalTempC);
+  const w = useRetroWords();
   return (
     <div className={cx("flex items-end gap-2", mirror && "flex-row-reverse")}>
       {/* Fixed width, so the bars line up whatever the number */}
@@ -564,7 +568,7 @@ const TyreLife: React.FC<{ t: CarTelemetry; i: number; mirror: boolean }> = ({ t
         <span className="text-[10px] leading-none text-(--tp-secondary)">{formatTemp(t.tireTempsC[i] ?? 0, units)}</span>
       </div>
       <div className="flex flex-col items-center gap-1">
-        <span className="text-[10px] leading-none">{CORNER_NAMES[i]}</span>
+        <span className="text-[10px] leading-none">{w.corners[CORNER_KEYS[i]]}</span>
         <Frame edge="soft" face="void" size="small" className="h-11 w-3.5" faceClassName="relative">
           <span aria-hidden className="absolute inset-x-0.5 bottom-0.5" style={{ height: `calc(${life}% - 4px)`, backgroundColor: heat }} />
         </Frame>

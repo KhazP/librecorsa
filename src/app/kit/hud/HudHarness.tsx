@@ -163,7 +163,7 @@ function Harness({ query, onChange }: { query: HarnessQuery; onChange: (q: Parti
   const frameRef = useRef<HTMLDivElement>(null);
   const [parts, setParts] = useState<HudLayoutParts>(query.parts);
   // As F1TelemetryHud does: the layout's corner groups read the parts while they render (`anchor`)
-  setActiveHudParts(parts);
+  setActiveHudParts(parts, query.edit);
   // A phone-sized screen draws the Phone HUD whatever the layout, as the in-race HUD does
   const phone = usePhoneLayout() || query.style === "phone";
   const style = phone ? STYLES.phone : STYLES[query.style];

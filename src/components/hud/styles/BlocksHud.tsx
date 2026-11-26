@@ -210,7 +210,7 @@ const Leaderboard: React.FC<{ t: CarTelemetry; gaps: "interval" | "leader" }> = 
     <section aria-label={w.leaderboard} className={`${BLOCK} text-[13px] leading-none font-bold`}>
       <div className={`flex h-5 items-center ${HEAD} pr-2 pl-2.5`}>
         <span className="w-6.5 shrink-0">{w.headPos}</span>
-        <span className="w-[66px] shrink-0 pl-2.5">{w.headName}</span>
+        <span className="w-[104px] shrink-0 pl-2.5">{w.headName}</span>
         <span className="w-7 shrink-0 text-right">{w.headLap}</span>
         <span className="hidden w-[76px] shrink-0 text-right xl:block">{w.headLast}</span>
         <span className="hidden w-[76px] shrink-0 text-right xl:block">{w.headBest}</span>
@@ -223,7 +223,7 @@ const Leaderboard: React.FC<{ t: CarTelemetry; gaps: "interval" | "leader" }> = 
           <div key={e.driverCode + (e.name ?? "") + pos} className={`relative flex h-5 items-center pr-2 pl-2.5 ${i >= 9 ? "compact:hidden" : ""}`}>
             {e.isPlayer ? <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-(--blk-player)" /> : null}
             <span className="w-6.5 shrink-0">{pos}</span>
-            <span className="flex w-[66px] shrink-0 items-center gap-1.5">
+            <span className="flex w-[104px] shrink-0 items-center gap-1.5">
               {/* The team colour stands in for the source's car number */}
               <span aria-hidden className="h-3 w-1 shrink-0" style={{ backgroundColor: e.teamColorHex }} />
               <span className="truncate">{driverLabel(e, w.you)}</span>
@@ -529,7 +529,9 @@ const Inputs: React.FC<{ t: CarTelemetry; ffb: boolean }> = ({ t, ffb }) => {
   const aids = aidsActive(t);
   const tuner = t.liveTuner;
   const w = useBlocksWords();
-  const level = (n: number | undefined) => (n === undefined ? "--" : n === 0 ? w.aidOff : `${n}/12`);
+  // The dial's setting and the bias to a tenth, as the other layouts and the MFD's status line give them (whose "TC 5/6"
+  // is the TC level and its cut: a "5/12" here read as a second, different TC)
+  const level = (n: number | undefined) => (n === undefined ? "--" : n === 0 ? w.aidOff : String(n));
   const hasErs = t.f12026?.hasErs ?? tuner?.hasErs ?? false;
   // A hybrid's battery where the source shows the turbo's boost (gauge, over the atmosphere's 1 bar: 0.00 without a turbo)
   const fourth: [string, string] = hasErs
@@ -537,7 +539,7 @@ const Inputs: React.FC<{ t: CarTelemetry; ffb: boolean }> = ({ t, ffb }) => {
     : [w.turbo, Math.max(0, t.turboBoostBar - 1).toFixed(2)];
   const cells: [string, string, boolean][] = [
     ["ABS", level(tuner?.absLevel), aids.abs],
-    [w.brakeBias, tuner ? `${Math.round(tuner.brakeBiasPct)}%` : "--", false],
+    [w.brakeBias, tuner ? `${tuner.brakeBiasPct.toFixed(1)}%` : "--", false],
     ["TC", level(tuner?.tcLevel), aids.tc],
     [fourth[0], fourth[1], false],
   ];
@@ -636,9 +638,13 @@ const Tyres: React.FC<{ t: CarTelemetry }> = ({ t }) => {
           [0, 1],
           [2, 3],
         ].map(([a, b]) => (
-          <div key={a} className="grid grid-cols-6 text-center">
-            {[...temps(a), ...temps(b)].map((v, k) => (
-              <span key={k}>{v}</span>
+          <div key={a} className="grid grid-cols-2 gap-2 px-1">
+            {[a, b].map((i) => (
+              <span key={i} className="grid grid-cols-3 text-center">
+                {temps(i).map((v, k) => (
+                  <span key={k}>{v}</span>
+                ))}
+              </span>
             ))}
           </div>
         ))}
@@ -657,7 +663,7 @@ const WeatherBlocks: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const lights = headlightState(weather);
   const w = useBlocksWords();
   return (
-    <section aria-label={w.weather} className="w-[196px] text-[12px] leading-none font-bold">
+    <section aria-label={w.weather} className="min-w-[196px] self-stretch text-[12px] leading-none font-bold">
       <div className={`flex h-5 items-center justify-between px-2 ${HEAD} uppercase`}>
         <span>{w.weather}</span>
         <span>{weather.rain > 0.05 ? w.rain(Math.round(weather.rain * 100)) : weather.timeMoving ? dayClock(weather.clockH) : SURFACE_WORD[surface]}</span>

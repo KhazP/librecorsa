@@ -262,15 +262,16 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                       : "border-lc-chalk/40 bg-lc-void/10 hover:border-lc-volt hover:bg-lc-volt/10"
               }`}
             >
+              {/* The name tab and its buttons sit outside the frame, so nothing covers the panel's own readouts */}
               <div
-                className={`pointer-events-none absolute start-0 flex items-center gap-1.5 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-lc-chalk ${tabBelow ? "top-full mt-1" : "-top-6"}`}
+                className={`pointer-events-none absolute start-0 flex items-center gap-1 whitespace-nowrap ${tabBelow ? "top-full mt-1" : "bottom-full mb-1"}`}
               >
-                <Icon name="move" size="xs" className="text-lc-volt" />
-                <span>{tx(`parts.${id}`)}</span>
-                {part.scale !== 1 ? <span className="lc-data text-lc-fog">{Math.round(part.scale * 100)}%</span> : null}
-                {isHidden ? <span className="text-lc-caution">{tx("hidden")}</span> : null}
-              </div>
-              <div className="pointer-events-auto absolute end-1 top-1 flex items-center gap-1">
+                <div className="flex h-5 items-center gap-1.5 rounded-lc-nub bg-lc-void/90 px-2 text-[11px] font-semibold text-lc-chalk">
+                  <Icon name="move" size="xs" className="text-lc-volt" />
+                  <span>{tx(`parts.${id}`)}</span>
+                  {part.scale !== 1 ? <span className="lc-data text-lc-fog">{Math.round(part.scale * 100)}%</span> : null}
+                  {isHidden ? <span className="text-lc-caution">{tx("hidden")}</span> : null}
+                </div>
                 <button
                   type="button"
                   title={tx(isHidden ? "showPart" : "hidePart", { part: tx(`parts.${id}`) })}
@@ -280,7 +281,7 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                     e.stopPropagation();
                     setPart(id, { ...part, hidden: !isHidden });
                   }}
-                  className={`flex size-5 items-center justify-center rounded-lc-nub bg-lc-void/90 transition-colors ${
+                  className={`pointer-events-auto flex size-5 items-center justify-center rounded-lc-nub bg-lc-void/90 transition-colors ${
                     isHidden ? "text-lc-caution hover:text-lc-chalk" : "text-lc-fog hover:text-lc-volt"
                   }`}
                 >
@@ -294,7 +295,7 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                       e.stopPropagation();
                       setPart(id, NO_HUD_PART);
                     }}
-                    className="rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk"
+                    className="pointer-events-auto flex h-5 items-center rounded-lc-nub bg-lc-void/90 px-2 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk"
                   >
                     {tx("resetPart")}
                   </button>
@@ -304,8 +305,8 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                 title={tx("resize")}
                 onPointerDown={(e) => startDrag(e, id, "scale")}
                 className={`absolute flex size-5 items-center justify-center rounded-lc-nub border border-lc-void bg-lc-volt text-lc-void ${
-                  h.x > 0 ? "-end-2" : "-start-2"
-                } ${h.y > 0 ? "-bottom-2" : "-top-2"} ${h.x === h.y ? "cursor-nwse-resize" : "cursor-nesw-resize"}`}
+                  h.x > 0 ? "-end-6" : "-start-6"
+                } ${h.y > 0 ? "-bottom-0.5" : "-top-0.5"} ${h.x === h.y ? "cursor-nwse-resize" : "cursor-nesw-resize"}`}
               >
                 {/* Grip lines in the corner it pulls */}
                 <svg viewBox="0 0 10 10" className={`size-3 ${h.x < 0 ? "-scale-x-100" : ""} ${h.y < 0 ? "-scale-y-100" : ""}`} aria-hidden>
@@ -329,10 +330,12 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
           <h2 className="lc-title text-[15px] text-lc-chalk">{tx("title")}</h2>
           <p className="mt-1 text-[12px] leading-snug text-lc-fog short:hidden">{tx("hint")}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:ms-auto">
-          <Button size="sm" variant="ghost" disabled={!moved} onClick={() => onChange({})}>
-            {tx("resetAll")}
-          </Button>
+        <div className="flex shrink-0 grow flex-wrap items-center justify-end gap-2">
+          <span className="me-auto">
+            <Button size="sm" variant="ghost" disabled={!moved} onClick={() => onChange({})}>
+              {tx("resetAll")}
+            </Button>
+          </span>
           <Button size="sm" variant="secondary" onClick={onCancel}>
             {tx("cancel")}
           </Button>

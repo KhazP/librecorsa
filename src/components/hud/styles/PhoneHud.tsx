@@ -42,6 +42,8 @@ function usePhoneWords() {
       raceLap: formatOnce((lap: number, total: number) =>
         total ? tx("raceLapOfTotal", { lap: String(lap), total: String(total) }) : tx("raceLap", { lap: String(lap) }),
       ),
+      /** The race's length, on the grid */
+      raceLaps: formatOnce((laps: number) => tx("raceLaps", { laps: String(laps) })),
     }),
     [tx],
   );
@@ -144,7 +146,15 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
               </span>
             )}
             {race ? (
-              <span className={HUD_LBL}>{w.raceLap(race.lap, race.totalLaps ?? 0)}</span>
+              // On the grid the race's length, as Blade gives it, read in its language's direction ("5 لفات"); then the
+              // lap of the race, left to right so 4/5 never turns into 5/4
+              race.phase === "lights" && race.totalLaps ? (
+                <span className={HUD_LBL} dir="auto">
+                  {w.raceLaps(race.totalLaps)}
+                </span>
+              ) : (
+                <span className={HUD_LBL}>{w.raceLap(race.lap, race.totalLaps ?? 0)}</span>
+              )
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
