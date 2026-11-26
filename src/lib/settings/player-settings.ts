@@ -528,7 +528,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   raceMusicOn: false,
   musicOff: [],
   musicMuted: false,
-  spotter: true,
+  spotter: false,
   spotterVolume: 1,
   spotterVoice: "jim",
   spotterRadio: true,

@@ -980,16 +980,16 @@ async function main2(): Promise<void> {
     const cloudWith = (audio: Record<string, unknown>) => doc({ settings: { audio: { value: { ...oldShare, ...audio }, t: 2_000 } } });
     const audioOf = (out: SaveDoc) => out.settings.audio?.value as Record<string, unknown>;
 
-    const chose = combineSaves(updated(), cloudWith({ spotter: false, spotterVoice: "clare", spotterRadio: false }), "combine", { base: before().account?.base });
+    const chose = combineSaves(updated(), cloudWith({ spotter: true, spotterVoice: "clare", spotterRadio: false }), "combine", { base: before().account?.base });
     check(
       "another device's spotter choice survives a device that only took the defaults on its update",
-      audioOf(chose).spotter === false && audioOf(chose).spotterVoice === "clare" && audioOf(chose).spotterRadio === false,
+      audioOf(chose).spotter === true && audioOf(chose).spotterVoice === "clare" && audioOf(chose).spotterRadio === false,
       JSON.stringify(audioOf(chose)),
     );
-    const mine = combineSaves(updated({ spotter: false }), cloudWith({}), "combine", { base: before().account?.base });
-    check("this device's own spotter choice still wins over a save that never had one", audioOf(mine).spotter === false, JSON.stringify(audioOf(mine)));
+    const mine = combineSaves(updated({ spotter: true }), cloudWith({}), "combine", { base: before().account?.base });
+    check("this device's own spotter choice still wins over a save that never had one", audioOf(mine).spotter === true, JSON.stringify(audioOf(mine)));
     const fresh = combineSaves(updated(), cloudWith({}), "combine", { base: before().account?.base });
-    check("against a save from before the spotter, this device's defaults go up", audioOf(fresh).spotter === true && audioOf(fresh).spotterVoice === "jim");
+    check("against a save from before the spotter, this device's defaults go up", audioOf(fresh).spotter === false && audioOf(fresh).spotterVoice === "jim");
 
     // The whole way through the engine: B last synced on the build before; A, updated, changes the spotter and the
     // laps; B updates (its first save stores the new defaults) and syncs
@@ -1011,7 +1011,7 @@ async function main2(): Promise<void> {
     await a.sync({ accountId: "acc1", apply: true });
     clock.t = 3_000;
     const aSettings = JSON.parse(aStore.getItem(SETTINGS_KEY) as string);
-    aStore.setItem(SETTINGS_KEY, JSON.stringify({ ...aSettings, audio: { ...aSettings.audio, spotter: false, spotterVoice: "clare" }, race: { ...aSettings.race, laps: 12 } }));
+    aStore.setItem(SETTINGS_KEY, JSON.stringify({ ...aSettings, audio: { ...aSettings.audio, spotter: true, spotterVoice: "clare" }, race: { ...aSettings.race, laps: 12 } }));
     await a.sync({ accountId: "acc1", apply: true });
 
     clock.t = 4_000;
@@ -1023,7 +1023,7 @@ async function main2(): Promise<void> {
     const bNow = JSON.parse(bStore.getItem(SETTINGS_KEY) as string);
     check(
       "through the engine, A's spotter and laps survive B's update, and B takes them",
-      cloudAudio?.spotter === false && cloudAudio?.spotterVoice === "clare" && cloudRace?.laps === 12 && bNow.audio.spotter === false && bNow.race.laps === 12,
+      cloudAudio?.spotter === true && cloudAudio?.spotterVoice === "clare" && cloudRace?.laps === 12 && bNow.audio.spotter === true && bNow.race.laps === 12,
       JSON.stringify({ cloudAudio, laps: cloudRace?.laps, b: [bNow.audio.spotter, bNow.race.laps] }),
     );
     clock.t = 5_000;
@@ -1032,7 +1032,7 @@ async function main2(): Promise<void> {
     const aNow = JSON.parse(aStore.getItem(SETTINGS_KEY) as string);
     check(
       "then neither device pushes again, and A keeps its choice",
-      bIdle.kind === "synced" && !bIdle.pushed && aAgain.kind === "synced" && !aAgain.pushed && aNow.audio.spotter === false && aNow.race.laps === 12,
+      bIdle.kind === "synced" && !bIdle.pushed && aAgain.kind === "synced" && !aAgain.pushed && aNow.audio.spotter === true && aNow.race.laps === 12,
       JSON.stringify({ bIdle, aAgain }),
     );
   }
