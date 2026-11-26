@@ -11,17 +11,18 @@ Everything here is maintained alongside the source code and published at [docs.l
 ## Playing
 
 - **[Controls, controllers, and wheels](CONTROLS.md)**: Keyboard bindings, gamepads, DualSense features, touch controls, wheel calibration, and force feedback.
-- **[Driving, setups, weather, and 2026 rules](DRIVING.md)**: Realism levels, tyre thermodynamics and wet grip, track evolution, 2026 active aero and MGU-K rules, and Garage setup sheets.
-- **[Racing online and lap boards](ONLINE.md)**: Private multiplayer rooms, scheduled open races, leaderboards, ghosts, setup sharing, and the weekly challenge.
+- **[Driving, setups, weather, and 2026 rules](DRIVING.md)**: Realism levels, tyre thermodynamics and wet grip, track evolution, 2026 active aero and MGU-K rules, Garage setup sheets, race starts and pit stops, and Career mode.
+- **[Racing online and lap boards](ONLINE.md)**: Private multiplayer rooms, scheduled open races, leaderboards, ghosts, setup sharing, Time Trials, the weekly challenge, and the public `/stats` page and API.
 - **[UDP telemetry and the local bridge](TELEMETRY.md)**: Streaming 60 Hz JSON telemetry to dashboards, SimHub, bass shakers, and motion rigs, plus bridge CLI flags.
 - **[Performance and troubleshooting](PERFORMANCE.md)**: System requirements, graphics presets, automatic quality scaling, offline caching, URL parameters, and fixing common issues.
 - **[Triple screens](SCREENS.md)**: Three monitors with a view of their own each: measurements, the true field of view, and performance.
-- **[Verifying downloads](DOWNLOADS.md)**: The desktop and Android apps: official release sources, app IDs, SHA-256 checksums, how the desktop app updates itself, and Android signing certificate verification.
+- **[VR headsets](VR.md)**: WebXR on standalone headsets and PCVR: entering VR, head tracking and seat adjustment, cockpit HUD, performance defaults, and known limits.
+- **[Desktop and Android apps](DOWNLOADS.md)**: Installing and running the desktop and Android apps, user data and mod folders, offline play, signed auto-updates, official release sources, SHA-256 checksums, and Android signing certificate verification.
 
 ## Modding
 
-- **[Making mods](modding.md)**: Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, and custom physics patches.
-- **[Painting liveries](LIVERIES.md)**: templates for the F1 cars, GT3s and LMDh, how to paint on them, and how to try a livery in the game or send it in.
+- **[Making mods](modding.md)**: Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, custom sound banks, physics patches, and sharing through catalogues.
+- **[Painting liveries](LIVERIES.md)**: Templates for 5 projected-atlas cars (F1, GT3, and LMDh) and 8 classic UV-mapped cars, how to paint and package them, and how to send a livery in.
 - **[Importing mods from other games](importing-mods.md)**: Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
 
 ## Porting
