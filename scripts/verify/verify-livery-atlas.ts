@@ -13,12 +13,24 @@ import {
   F1_LIVERY_SHADERS,
   F1_PANEL_IDS,
   F1_PROJECTION,
+  GT3_LIVERY_SHADERS,
+  PORTED_LIVERY_SHADERS,
+  PORTED_PANEL_IDS,
+  PORTED_PROJECTION,
   buildF1LiveryShaders,
+  buildGt3LiveryShaders,
+  buildPortedLiveryShaders,
   f1ProjectToPanel,
+  portedProjectToPanel,
   projectF1Point,
+  projectPortedPoint,
   type F1PanelId,
+  type PortedPanelId,
+  type PortedProjectionProfile,
 } from "../../src/lib/render/livery-projection";
 import { atlasCacheKey, LIVERY_FINISH_PROFILES } from "../../src/lib/render/f1-livery-painter";
+import { PROCEDURAL_BODY_PROFILES } from "../../src/lib/render/ported-procedural-livery";
+import { carById, carSkinThumbUrl, portedSkinFor } from "../../src/lib/cars/car-registry";
 import {
   LIVERIES,
   liveriesForCar,
@@ -143,6 +155,290 @@ if ( f1CarbonMask > 0.01 ) {
 \tdiffuseColor.rgb *= 1.0 + 0.14 * twill;
 }`,
 } as const;
+
+// Exact pre-refactor snapshot of the 5 ported procedural GLSL shader strings from src/lib/render/ported-procedural-livery.ts
+const SNAPSHOT_PORTED_SHADERS = {
+  vertexPatch: `#include <common>
+uniform mat4 uProcFrame;
+varying vec3 vProcPos;
+varying vec3 vProcNrm;`,
+  vertexBody: `#include <begin_vertex>
+vProcPos = ( uProcFrame * vec4( position, 1.0 ) ).xyz;
+vProcNrm = normalize( mat3( uProcFrame ) * normal );`,
+  fragmentPatch: `#include <common>
+uniform sampler2D uProcAtlas;
+uniform float uProcEnabled;
+uniform float uProcCarbonStrength;
+uniform vec3 uProcMin;
+uniform vec3 uProcMax;
+uniform float uProcWingRearZ;
+uniform float uProcWingMinY;
+uniform float uProcHoodStartZ;
+uniform float uProcHoodMinY;
+uniform float uProcSplitterMaxY;
+uniform float uProcSplitterMinZ;
+varying vec3 vProcPos;
+varying vec3 vProcNrm;
+
+vec2 procAtlasClamp( vec2 uv, vec2 rectOrigin, vec2 rectSize ) {
+\tvec2 pad = vec2( 2.0 / 2048.0 );
+\tvec2 clamped = clamp( uv, vec2( 0.0 ), vec2( 1.0 ) );
+\treturn rectOrigin + pad + clamped * max( rectSize - pad * 2.0, vec2( 0.0001 ) );
+}
+
+float procCarbonTwill( vec2 p ) {
+\tvec2 c = floor( p );
+\tfloat warp = step( mod( c.x + c.y, 4.0 ), 1.5 );
+\treturn 2.0 * warp - 1.0;
+}`,
+  fragmentMap: `#include <map_fragment>
+float procCarbonMask = 0.0;
+if ( uProcEnabled > 0.5 ) {
+\tvec3 lp = vProcPos;
+\tvec3 ln = normalize( vProcNrm );
+\tvec3 span = max( uProcMax - uProcMin, vec3( 0.001 ) );
+
+\t// 1) TOP panel: rect (0, 0, 1.0, 832/2048 = 0.40625)
+\tvec2 uvTop = vec2( ( lp.z - uProcMin.z ) / span.z, ( uProcMax.x - lp.x ) / span.x );
+\tvec3 colTop = texture2D( uProcAtlas, procAtlasClamp( uvTop, vec2( 0.0, 0.0 ), vec2( 1.0, 0.40625 ) ) ).rgb;
+
+\t// 2) LEFT (+X) and RIGHT (-X) SIDE panels
+\tvec3 colSide;
+\tfloat sideV = ( uProcMax.y - lp.y ) / span.y;
+\tif ( ln.x >= 0.0 ) {
+\t\tfloat leftU = ( uProcMax.z - lp.z ) / span.z;
+\t\tcolSide = texture2D( uProcAtlas, procAtlasClamp( vec2( leftU, sideV ), vec2( 0.0, 0.40625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
+\t} else {
+\t\tfloat rightU = ( lp.z - uProcMin.z ) / span.z;
+\t\tcolSide = texture2D( uProcAtlas, procAtlasClamp( vec2( rightU, sideV ), vec2( 0.0, 0.625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
+\t}
+
+\t// 3) REAR (-Z) and FRONT (+Z) panels
+\tvec3 colEnd;
+\tif ( ln.z < 0.0 ) {
+\t\tvec2 uvRear = vec2( ( uProcMax.x - lp.x ) / span.x, sideV );
+\t\tcolEnd = texture2D( uProcAtlas, procAtlasClamp( uvRear, vec2( 0.0, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
+\t} else {
+\t\tvec2 uvFront = vec2( ( lp.x - uProcMin.x ) / span.x, sideV );
+\t\tcolEnd = texture2D( uProcAtlas, procAtlasClamp( uvFront, vec2( 0.5, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
+\t}
+
+\tfloat wx = pow( abs( ln.x ), 4.0 );
+\tfloat wy = pow( max( ln.y, 0.0 ) + 0.30 * max( -ln.y, 0.0 ), 4.0 );
+\tfloat wz = pow( abs( ln.z ), 5.0 );
+
+\t// Keep sloped hoods / prototype noses sharp on the TOP projection
+\tif ( lp.z > uProcHoodStartZ && lp.y > uProcHoodMinY && ln.y > 0.42 ) {
+\t\twy *= 2.6;
+\t}
+\t// Rear wing mainplane top/rear crispness & wing endplate side crispness
+\tif ( lp.z < uProcWingRearZ && lp.y > uProcWingMinY ) {
+\t\tif ( abs( lp.x ) < 0.86 ) {
+\t\t\tif ( ln.z < -0.35 ) wz = max( wz, 3.5 );
+\t\t\telse wy = max( wy, 3.5 );
+\t\t} else {
+\t\t\twx = max( wx, 4.0 );
+\t\t}
+\t}
+
+\tvec3 livCol = ( colTop * wy + colSide * wx + colEnd * wz ) / max( wx + wy + wz, 1e-4 );
+
+\t// Keep the protruding AMG GT3 Evo front aero splitter tray exposed dark carbon fiber
+\tif ( uProcSplitterMaxY > 0.0 && lp.y < uProcSplitterMaxY && lp.z > uProcSplitterMinZ ) {
+\t\tlivCol = vec3( 0.011, 0.012, 0.015 );
+\t}
+
+\tdiffuseColor.rgb = livCol;
+
+\tfloat maxC = max( livCol.r, max( livCol.g, livCol.b ) );
+\tprocCarbonMask = ( 1.0 - smoothstep( 0.014, 0.028, maxC ) ) * uProcCarbonStrength;
+}`,
+  fragmentRoughness: `#include <roughnessmap_fragment>
+if ( procCarbonMask > 0.01 ) {
+\tvec3 cn = abs( normalize( vProcNrm ) );
+\tvec2 cp = cn.y > 0.6 ? vProcPos.xz : ( cn.x > 0.6 ? vProcPos.zy : vProcPos.xy );
+\tfloat invPitch = 190.0;
+\tvec3 dP = fwidth( vProcPos );
+\tfloat towsPerPx = max( dP.x, max( dP.y, dP.z ) ) * invPitch;
+\tfloat fade = ( 1.0 - smoothstep( 0.15, 0.32, towsPerPx ) ) * ( 1.0 - smoothstep( 8.0, 24.0, length( vViewPosition ) ) );
+\tfloat twill = procCarbonTwill( cp * invPitch ) * fade * procCarbonMask;
+\troughnessFactor = mix( roughnessFactor, 0.36, procCarbonMask * 0.72 ) + 0.055 * twill;
+\tdiffuseColor.rgb *= 1.0 + 0.14 * twill;
+}`,
+} as const;
+
+// Exact pre-refactor snapshot of the 5 GT3 GLSL shader strings from src/lib/render/gt3-livery-painter.ts
+const SNAPSHOT_GT3_SHADERS = {
+  vertexPatch: `#include <common>
+uniform mat4 uGt3Frame;
+varying vec3 vGt3Pos;
+varying vec3 vGt3Nrm;`,
+  vertexBody: `#include <begin_vertex>
+vGt3Pos = ( uGt3Frame * vec4( position, 1.0 ) ).xyz;
+vGt3Nrm = normalize( mat3( uGt3Frame ) * normal );`,
+  fragmentPatch: `#include <common>
+uniform sampler2D uGt3Atlas;
+uniform float uGt3Enabled;
+uniform float uGt3CarbonStrength;
+uniform vec3 uGt3Min;
+uniform vec3 uGt3Max;
+uniform float uGt3WingRearZ;
+uniform float uGt3HoodStartZ;
+uniform float uGt3SplitterMaxY;
+uniform float uGt3SplitterMinZ;
+varying vec3 vGt3Pos;
+varying vec3 vGt3Nrm;
+
+vec2 gt3AtlasClamp( vec2 uv, vec2 rectOrigin, vec2 rectSize ) {
+\tvec2 pad = vec2( 2.0 / 2048.0 );
+\tvec2 clamped = clamp( uv, vec2( 0.0 ), vec2( 1.0 ) );
+\treturn rectOrigin + pad + clamped * max( rectSize - pad * 2.0, vec2( 0.0001 ) );
+}
+
+float gt3CarbonTwill( vec2 p ) {
+\tvec2 c = floor( p );
+\tfloat warp = step( mod( c.x + c.y, 4.0 ), 1.5 );
+\treturn 2.0 * warp - 1.0;
+}`,
+  fragmentMap: `#include <map_fragment>
+float gt3CarbonMask = 0.0;
+if ( uGt3Enabled > 0.5 ) {
+\tvec3 lp = vGt3Pos;
+\tvec3 ln = normalize( vGt3Nrm );
+\tvec3 span = max( uGt3Max - uGt3Min, vec3( 0.001 ) );
+
+\t// 1) TOP panel: rect (0, 0, 1.0, 832/2048 = 0.40625)
+\tvec2 uvTop = vec2( ( lp.z - uGt3Min.z ) / span.z, ( uGt3Max.x - lp.x ) / span.x );
+\tvec3 colTop = texture2D( uGt3Atlas, gt3AtlasClamp( uvTop, vec2( 0.0, 0.0 ), vec2( 1.0, 0.40625 ) ) ).rgb;
+
+\t// 2) LEFT (+X) and RIGHT (-X) SIDE panels: rects (0, 0.40625, 1.0, 0.21875) and (0, 0.625, 1.0, 0.21875)
+\tvec3 colSide;
+\tfloat sideV = ( uGt3Max.y - lp.y ) / span.y;
+\tif ( ln.x >= 0.0 ) {
+\t\tfloat leftU = ( uGt3Max.z - lp.z ) / span.z;
+\t\tcolSide = texture2D( uGt3Atlas, gt3AtlasClamp( vec2( leftU, sideV ), vec2( 0.0, 0.40625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
+\t} else {
+\t\tfloat rightU = ( lp.z - uGt3Min.z ) / span.z;
+\t\tcolSide = texture2D( uGt3Atlas, gt3AtlasClamp( vec2( rightU, sideV ), vec2( 0.0, 0.625 ), vec2( 1.0, 0.21875 ) ) ).rgb;
+\t}
+
+\t// 3) REAR (-Z) and FRONT (+Z) panels: rects (0, 0.84375, 0.5, 0.15625) and (0.5, 0.84375, 0.5, 0.15625)
+\tvec3 colEnd;
+\tif ( ln.z < 0.0 ) {
+\t\tvec2 uvRear = vec2( ( uGt3Max.x - lp.x ) / span.x, sideV );
+\t\tcolEnd = texture2D( uGt3Atlas, gt3AtlasClamp( uvRear, vec2( 0.0, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
+\t} else {
+\t\tvec2 uvFront = vec2( ( lp.x - uGt3Min.x ) / span.x, sideV );
+\t\tcolEnd = texture2D( uGt3Atlas, gt3AtlasClamp( uvFront, vec2( 0.5, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
+\t}
+
+\t// Sharp tri-orthographic weights so hood/door/rear graphics stay crisp with zero ghosting
+\tfloat wx = pow( abs( ln.x ), 4.0 );
+\tfloat wy = pow( max( ln.y, 0.0 ) + 0.30 * max( -ln.y, 0.0 ), 4.0 );
+\tfloat wz = pow( abs( ln.z ), 5.0 );
+
+\t// Keep gently sloped GT3 hoods sharp on the TOP projection
+\tif ( lp.z > uGt3HoodStartZ && lp.y > 0.50 && ln.y > 0.42 ) {
+\t\twy *= 2.4;
+\t}
+\t// Rear wing mainplane top/rear crispness & wing endplate side crispness
+\tif ( lp.z < uGt3WingRearZ && lp.y > 1.00 ) {
+\t\tif ( abs( lp.x ) < 0.86 ) {
+\t\t\tif ( ln.z < -0.35 ) wz = max( wz, 3.5 );
+\t\t\telse wy = max( wy, 3.5 );
+\t\t} else {
+\t\t\twx = max( wx, 4.0 );
+\t\t}
+\t}
+
+\tvec3 livCol = ( colTop * wy + colSide * wx + colEnd * wz ) / max( wx + wy + wz, 1e-4 );
+
+\t// Keep the protruding AMG GT3 Evo front aero splitter tray exposed dark carbon fiber
+\tif ( uGt3SplitterMaxY > 0.0 && lp.y < uGt3SplitterMaxY && lp.z > uGt3SplitterMinZ ) {
+\t\tlivCol = vec3( 0.011, 0.012, 0.015 );
+\t}
+
+\tdiffuseColor.rgb = livCol;
+
+\t// Detect exposed dark carbon regions (linear max channel < 0.025) for 2x2 twill weave roughness sheen
+\tfloat maxC = max( livCol.r, max( livCol.g, livCol.b ) );
+\tgt3CarbonMask = ( 1.0 - smoothstep( 0.014, 0.028, maxC ) ) * uGt3CarbonStrength;
+}`,
+  fragmentRoughness: `#include <roughnessmap_fragment>
+if ( gt3CarbonMask > 0.01 ) {
+\tvec3 cn = abs( normalize( vGt3Nrm ) );
+\tvec2 cp = cn.y > 0.6 ? vGt3Pos.xz : ( cn.x > 0.6 ? vGt3Pos.zy : vGt3Pos.xy );
+\tfloat invPitch = 190.0;
+\tvec3 dP = fwidth( vGt3Pos );
+\tfloat towsPerPx = max( dP.x, max( dP.y, dP.z ) ) * invPitch;
+\tfloat fade = ( 1.0 - smoothstep( 0.15, 0.32, towsPerPx ) ) * ( 1.0 - smoothstep( 8.0, 24.0, length( vViewPosition ) ) );
+\tfloat twill = gt3CarbonTwill( cp * invPitch ) * fade * gt3CarbonMask;
+\troughnessFactor = mix( roughnessFactor, 0.36, gt3CarbonMask * 0.72 ) + 0.055 * twill;
+\tdiffuseColor.rgb *= 1.0 + 0.14 * twill;
+}`,
+} as const;
+
+/** Independent literal port of the ported procedural GLSL shader math to cross-check `projectPortedPoint` */
+function evalGlslPorted(
+  lp: readonly [number, number, number],
+  rawNrm: readonly [number, number, number],
+  profile: PortedProjectionProfile,
+  sampleAtlas: (u: number, v: number) => [number, number, number]
+): { rgb: [number, number, number]; forcedCarbon: boolean } {
+  const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+  const procAtlasClamp = (u: number, v: number, ox: number, oy: number, sx: number, sy: number): [number, number] => {
+    const pad = 2.0 / 2048.0;
+    const cu = clamp(u, 0, 1);
+    const cv = clamp(v, 0, 1);
+    return [ox + pad + cu * Math.max(sx - pad * 2, 0.0001), oy + pad + cv * Math.max(sy - pad * 2, 0.0001)];
+  };
+  const len = Math.hypot(rawNrm[0], rawNrm[1], rawNrm[2]);
+  const ln: [number, number, number] = [rawNrm[0] / len, rawNrm[1] / len, rawNrm[2] / len];
+  const spanX = Math.max(profile.max[0] - profile.min[0], 0.001);
+  const spanY = Math.max(profile.max[1] - profile.min[1], 0.001);
+  const spanZ = Math.max(profile.max[2] - profile.min[2], 0.001);
+
+  const uvTop = procAtlasClamp((lp[2] - profile.min[2]) / spanZ, (profile.max[0] - lp[0]) / spanX, 0.0, 0.0, 1.0, 0.40625);
+  const colTop = sampleAtlas(uvTop[0], uvTop[1]);
+
+  const sideV = (profile.max[1] - lp[1]) / spanY;
+  const colSide =
+    ln[0] >= 0
+      ? sampleAtlas(...procAtlasClamp((profile.max[2] - lp[2]) / spanZ, sideV, 0.0, 0.40625, 1.0, 0.21875))
+      : sampleAtlas(...procAtlasClamp((lp[2] - profile.min[2]) / spanZ, sideV, 0.0, 0.625, 1.0, 0.21875));
+
+  const colEnd =
+    ln[2] < 0
+      ? sampleAtlas(...procAtlasClamp((profile.max[0] - lp[0]) / spanX, sideV, 0.0, 0.84375, 0.5, 0.15625))
+      : sampleAtlas(...procAtlasClamp((lp[0] - profile.min[0]) / spanX, sideV, 0.5, 0.84375, 0.5, 0.15625));
+
+  let wx = Math.pow(Math.abs(ln[0]), 4.0);
+  let wy = Math.pow(Math.max(ln[1], 0) + 0.3 * Math.max(-ln[1], 0), 4.0);
+  let wz = Math.pow(Math.abs(ln[2]), 5.0);
+
+  if (lp[2] > profile.hoodStartZ && lp[1] > profile.hoodMinY && ln[1] > 0.42) wy *= 2.6;
+  if (lp[2] < profile.wingRearZ && lp[1] > profile.wingMinY) {
+    if (Math.abs(lp[0]) < 0.86) {
+      if (ln[2] < -0.35) wz = Math.max(wz, 3.5);
+      else wy = Math.max(wy, 3.5);
+    } else {
+      wx = Math.max(wx, 4.0);
+    }
+  }
+
+  const denom = Math.max(wx + wy + wz, 1e-4);
+  const forcedCarbon = profile.splitterMaxY > 0 && lp[1] < profile.splitterMaxY && lp[2] > profile.splitterMinZ;
+  return {
+    rgb: forcedCarbon
+      ? [0.011, 0.012, 0.015]
+      : [
+          (colTop[0] * wy + colSide[0] * wx + colEnd[0] * wz) / denom,
+          (colTop[1] * wy + colSide[1] * wx + colEnd[1] * wz) / denom,
+          (colTop[2] * wy + colSide[2] * wx + colEnd[2] * wz) / denom,
+        ],
+    forcedCarbon,
+  };
+}
 
 /** Independent literal port of the GLSL shader math to cross-check `projectF1Point` */
 function evalGlslF1(
@@ -457,9 +753,162 @@ async function main(): Promise<void> {
     }
   });
 
-  await check("generated F1 livery templates, overlays, and doc previews exist with exact dimensions", async () => {
+  await check("generated ported & GT3 GLSL shader strings are character-for-character identical to pre-refactor snapshots", () => {
+    const ported = buildPortedLiveryShaders();
+    assert.equal(ported.vertexPatch, SNAPSHOT_PORTED_SHADERS.vertexPatch, "ported vertexPatch mismatch");
+    assert.equal(ported.vertexBody, SNAPSHOT_PORTED_SHADERS.vertexBody, "ported vertexBody mismatch");
+    assert.equal(ported.fragmentPatch, SNAPSHOT_PORTED_SHADERS.fragmentPatch, "ported fragmentPatch mismatch");
+    assert.equal(ported.fragmentMap, SNAPSHOT_PORTED_SHADERS.fragmentMap, "ported fragmentMap mismatch");
+    assert.equal(ported.fragmentRoughness, SNAPSHOT_PORTED_SHADERS.fragmentRoughness, "ported fragmentRoughness mismatch");
+    assert.deepEqual(PORTED_LIVERY_SHADERS, SNAPSHOT_PORTED_SHADERS);
+
+    const gt3 = buildGt3LiveryShaders();
+    assert.equal(gt3.vertexPatch, SNAPSHOT_GT3_SHADERS.vertexPatch, "gt3 vertexPatch mismatch");
+    assert.equal(gt3.vertexBody, SNAPSHOT_GT3_SHADERS.vertexBody, "gt3 vertexBody mismatch");
+    assert.equal(gt3.fragmentPatch, SNAPSHOT_GT3_SHADERS.fragmentPatch, "gt3 fragmentPatch mismatch");
+    assert.equal(gt3.fragmentMap, SNAPSHOT_GT3_SHADERS.fragmentMap, "gt3 fragmentMap mismatch");
+    assert.equal(gt3.fragmentRoughness, SNAPSHOT_GT3_SHADERS.fragmentRoughness, "gt3 fragmentRoughness mismatch");
+    assert.deepEqual(GT3_LIVERY_SHADERS, SNAPSHOT_GT3_SHADERS);
+  });
+
+  await check("TS ported projection math matches literal GLSL shader evaluation across amg-gt3, bmw-m4-gt3, lc-lmdh", () => {
+    const syntheticAtlas = (u: number, v: number): [number, number, number] => [u, v, u * 0.6 + v * 0.4];
+    const samples: {
+      name: string;
+      car: "amg-gt3" | "bmw-m4-gt3" | "lc-lmdh";
+      pos: [number, number, number];
+      nrm: [number, number, number];
+      expectDominant: PortedPanelId;
+      expectCarbon?: boolean;
+    }[] = [
+      { name: "amg hood boost", car: "amg-gt3", pos: [0.0, 0.72, 1.55], nrm: [0.0, 0.65, 0.76], expectDominant: "top" },
+      { name: "amg left door", car: "amg-gt3", pos: [0.95, 0.58, 0.05], nrm: [0.97, 0.24, 0.0], expectDominant: "left" },
+      { name: "amg right door", car: "amg-gt3", pos: [-0.95, 0.58, 0.05], nrm: [-0.97, 0.24, 0.0], expectDominant: "right" },
+      { name: "amg rear wing chase face", car: "amg-gt3", pos: [0.0, 1.15, -2.05], nrm: [0.0, 0.6, -0.8], expectDominant: "rear" },
+      { name: "amg rear wing top face", car: "amg-gt3", pos: [0.0, 1.15, -2.05], nrm: [0.0, 0.96, -0.28], expectDominant: "top" },
+      { name: "amg rear wing endplate", car: "amg-gt3", pos: [0.92, 1.12, -2.05], nrm: [0.85, 0.5, 0.15], expectDominant: "left" },
+      { name: "amg forced-carbon front splitter", car: "amg-gt3", pos: [0.0, 0.10, 2.20], nrm: [0.0, 1.0, 0.0], expectDominant: "top", expectCarbon: true },
+      { name: "bmw front bumper", car: "bmw-m4-gt3", pos: [0.0, 0.48, 2.40], nrm: [0.0, 0.15, 0.98], expectDominant: "front" },
+      { name: "lmdh nose top boost", car: "lc-lmdh", pos: [0.0, 0.55, 1.90], nrm: [0.0, 0.65, 0.76], expectDominant: "top" },
+      { name: "lmdh rear wing chase face", car: "lc-lmdh", pos: [0.0, 1.00, -2.25], nrm: [0.0, 0.5, -0.86], expectDominant: "rear" },
+    ];
+
+    for (const s of samples) {
+      const prof = PROCEDURAL_BODY_PROFILES[s.car];
+      const ts = projectPortedPoint(s.pos, s.nrm, prof);
+      assert.equal(ts.dominantPanel, s.expectDominant, `${s.name}: expected ${s.expectDominant}, got ${ts.dominantPanel}`);
+      assert.equal(ts.splitterCarbonOverride, Boolean(s.expectCarbon), `${s.name}: splitterCarbonOverride mismatch`);
+
+      const glsl = evalGlslPorted(s.pos, s.nrm, prof, syntheticAtlas);
+      assert.equal(glsl.forcedCarbon, ts.splitterCarbonOverride, `${s.name}: GLSL forcedCarbon mismatch`);
+
+      if (!s.expectCarbon) {
+        const tsRgb: [number, number, number] = [0, 0, 0];
+        let wTotal = 0;
+        for (const pid of PORTED_PANEL_IDS) {
+          const w = ts.panelWeights[pid] ?? 0;
+          if (w <= 0) continue;
+          wTotal += w;
+          const sample = portedProjectToPanel(pid, s.pos[0], s.pos[1], s.pos[2], prof);
+          const c = syntheticAtlas(sample.u, sample.v);
+          tsRgb[0] += c[0] * w;
+          tsRgb[1] += c[1] * w;
+          tsRgb[2] += c[2] * w;
+        }
+        assert.ok(Math.abs(wTotal - 1) < 1e-6, `${s.name}: panelWeights sum ${wTotal} != 1`);
+        for (let c = 0; c < 3; c++) {
+          assert.ok(Math.abs(tsRgb[c] - glsl.rgb[c]) < 1e-6, `${s.name} channel ${c}: TS=${tsRgb[c]} vs GLSL=${glsl.rgb[c]}`);
+        }
+      }
+    }
+
+    // Verify left side runs Z reversed relative to right side on ported cars too
+    const prof = PROCEDURAL_BODY_PROFILES["amg-gt3"];
+    const leftFront = portedProjectToPanel("left", 0.9, 0.6, 1.8, prof);
+    const leftRear = portedProjectToPanel("left", 0.9, 0.6, -1.8, prof);
+    const rightFront = portedProjectToPanel("right", -0.9, 0.6, 1.8, prof);
+    const rightRear = portedProjectToPanel("right", -0.9, 0.6, -1.8, prof);
+    assert.ok(leftFront.px < leftRear.px, "ported left side front (+Z) must map left of rear (-Z)");
+    assert.ok(rightFront.px > rightRear.px, "ported right side front (+Z) must map right of rear (-Z)");
+  });
+
+  await check("CarSkin.atlas resolves through portedSkinFor and mod manifest accepts/registers GT3 and LMDh atlas skins", () => {
+    const known = modDefinitions();
+    for (const id of ["lc26", "lc25", "amg-gt3", "bmw-m4-gt3", "lc-lmdh"] as const) {
+      assert.ok(known.atlasCars.has(id), `atlasCars must include ${id}`);
+    }
+    assert.ok(!known.atlasCars.has("liana"), "liana must not be in atlasCars");
+
+    const res = validateModManifest(
+      {
+        format: 1,
+        id: "jdoe.gt-pack",
+        name: "GT & Proto Painted Pack",
+        version: "1.0.0",
+        credit: { author: "J. Doe", license: "CC BY 4.0" },
+        skins: [
+          { car: "amg-gt3", id: "amg-works", name: "AMG Works", swatch: ["#111827", "#00d4aa", "#ffffff"], atlas: "atlas.png", finish: "satin" },
+          { car: "bmw-m4-gt3", id: "m4-art", name: "M4 Art Car", swatch: ["#1d4ed8", "#ef4444"], atlas: "m4.webp" },
+          { car: "lc-lmdh", id: "lmdh-night", name: "LMDh Night", swatch: ["#090d16", "#f59e0b"], dir: "liveries/night", atlas: "body.jpg", finish: "metallic" },
+          // Existing file-based skin entries on amg-gt3 stay accepted for backwards compatibility
+          { car: "amg-gt3", id: "legacy-file", name: "Legacy File", swatch: ["#222222", "#cccccc"], files: ["paint.png"] },
+        ],
+      },
+      known
+    );
+    assert.equal(res.ok, true, res.ok ? "" : res.errors.join("; "));
+    if (res.ok) {
+      const files = manifestFiles(res.manifest);
+      assert.ok(files.includes("skins/amg-works/atlas.png"));
+      assert.ok(files.includes("skins/m4-art/m4.webp"));
+      assert.ok(files.includes("liveries/night/body.jpg"));
+
+      const origin = { packageId: res.manifest.id, packageName: res.manifest.name, version: res.manifest.version };
+      registerModContent([{ manifest: res.manifest, origin }]);
+      try {
+        const amgSkin = carById("amg-gt3").skins?.find((s) => s.id === "mod:jdoe.gt-pack/amg-works");
+        assert.ok(amgSkin, "amg-gt3 mod atlas skin must register on carById");
+        assert.equal(amgSkin.atlas, "/mods/jdoe.gt-pack/skins/amg-works/atlas.png");
+        assert.equal(amgSkin.finish, "satin");
+        assert.equal(carSkinThumbUrl("amg-gt3", amgSkin.id), "/mods/jdoe.gt-pack/skins/amg-works/thumb.webp");
+        const resolvedAmg = portedSkinFor("amg-gt3", amgSkin);
+        assert.deepEqual(resolvedAmg, {
+          baseUrl: "",
+          atlas: "/mods/jdoe.gt-pack/skins/amg-works/atlas.png",
+          finish: "satin",
+          variant: undefined,
+        });
+
+        const bmwSkin = carById("bmw-m4-gt3").skins?.find((s) => s.id === "mod:jdoe.gt-pack/m4-art");
+        assert.ok(bmwSkin && bmwSkin.finish === "gloss", "default finish for ported atlas skin must be gloss");
+        assert.equal(portedSkinFor("bmw-m4-gt3", bmwSkin)?.atlas, "/mods/jdoe.gt-pack/skins/m4-art/m4.webp");
+
+        const lmdhSkin = carById("lc-lmdh").skins?.find((s) => s.id === "mod:jdoe.gt-pack/lmdh-night");
+        assert.ok(lmdhSkin && lmdhSkin.finish === "metallic");
+        assert.equal(carSkinThumbUrl("lc-lmdh", lmdhSkin.id), "/mods/jdoe.gt-pack/liveries/night/thumb.webp");
+      } finally {
+        registerModContent([]);
+      }
+    }
+
+    // Liana must refuse atlas skins
+    const lianaAtlas = validateModManifest(
+      {
+        format: 1,
+        id: "jdoe.bad-liana",
+        name: "Bad Liana",
+        version: "1.0.0",
+        credit: { author: "J. Doe", license: "CC BY 4.0" },
+        skins: [{ car: "liana", id: "x", name: "X", swatch: ["#111111", "#ffffff"], atlas: "atlas.png" }],
+      },
+      known
+    );
+    assert.equal(lianaAtlas.ok, false, "liana must not accept atlas skins");
+  });
+
+  await check("generated livery templates, overlays, and doc previews exist with exact dimensions for all 5 cars", async () => {
     const root = process.cwd();
-    for (const carId of ["lc26", "lc25"] as const) {
+    for (const carId of ["lc26", "lc25", "amg-gt3", "bmw-m4-gt3", "lc-lmdh"] as const) {
       const dir = join(root, "docs/livery-templates", carId);
       const templatePath = join(dir, `${carId}-template.png`);
       const overlayPath = join(dir, `${carId}-overlay.png`);
@@ -469,15 +918,16 @@ async function main(): Promise<void> {
         assert.ok(existsSync(p), `missing generated template file: ${p}`);
       }
 
+      const expectedSize = carId === "lc26" || carId === "lc25" ? F1_PROJECTION.atlasSize : PORTED_PROJECTION.atlasSize;
       const tmplMeta = await sharp(readFileSync(templatePath)).metadata();
       assert.equal(tmplMeta.format, "png");
-      assert.equal(tmplMeta.width, F1_PROJECTION.atlasSize);
-      assert.equal(tmplMeta.height, F1_PROJECTION.atlasSize);
+      assert.equal(tmplMeta.width, expectedSize);
+      assert.equal(tmplMeta.height, expectedSize);
 
       const ovMeta = await sharp(readFileSync(overlayPath)).metadata();
       assert.equal(ovMeta.format, "png");
-      assert.equal(ovMeta.width, F1_PROJECTION.atlasSize);
-      assert.equal(ovMeta.height, F1_PROJECTION.atlasSize);
+      assert.equal(ovMeta.width, expectedSize);
+      assert.equal(ovMeta.height, expectedSize);
       assert.equal(ovMeta.hasAlpha, true, `${carId}-overlay.png must have an alpha channel`);
 
       const prevMeta = await sharp(readFileSync(previewPath)).metadata();
