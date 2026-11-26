@@ -1020,6 +1020,7 @@ async function main(): Promise<void> {
           for (const st of layers.placedStamps) {
             assert.ok(st.coverage >= 0.88, `${target.id} ${st.pid} stamp "${st.text}" has low flat coverage ${st.coverage.toFixed(2)}`);
           }
+          assert.ok(/SEEN FROM/.test(layers.labelsSvg) && /THE FRONT/.test(layers.labelsSvg), `${target.id}: front panel pill must include full FRONT (SEEN FROM THE FRONT) wording`);
         }
         await assertLabelsOffPaintedGeometry(
           target.id,

@@ -851,11 +851,16 @@ function createLabelEmitter(labelParts: string[], placer: PanelLabelPlacer, pane
     linesOrVariants: readonly (string | readonly string[])[],
     preferredCorners: readonly ("tl" | "tr" | "bl" | "br" | "tc" | "bc")[],
     startFontSize = 28,
-    minFontSize = 15
+    minFontSize = 15,
+    opts?: {
+      xRange?: readonly [number, number];
+      yRange?: readonly [number, number];
+      customTargets?: readonly [number, number][];
+    }
   ): boolean => {
     const r = panelRectOf(pid);
-    const toTargets = (w: number, h: number): [number, number][] =>
-      preferredCorners.map((c) => {
+    const toTargets = (w: number, h: number): [number, number][] => {
+      const cornerTargets: [number, number][] = preferredCorners.map((c) => {
         switch (c) {
           case "tl": return [r.x + 12, r.y + 10];
           case "tr": return [r.x + r.w - w - 12, r.y + 10];
@@ -865,6 +870,8 @@ function createLabelEmitter(labelParts: string[], placer: PanelLabelPlacer, pane
           case "bc": return [r.x + Math.round((r.w - w) / 2), r.y + r.h - h - 10];
         }
       });
+      return opts?.customTargets ? [...opts.customTargets, ...cornerTargets] : cornerTargets;
+    };
 
     const variants: (readonly string[])[] = linesOrVariants.map((v) => (typeof v === "string" ? [v] : v));
 
@@ -872,13 +879,17 @@ function createLabelEmitter(labelParts: string[], placer: PanelLabelPlacer, pane
     for (const strictMargin of [true, false]) {
       for (const lines of variants) {
         for (let fs = startFontSize; fs >= minFontSize; fs -= 2) {
-          const padX = Math.max(10, Math.round(fs * 0.45));
-          const padY = Math.max(5, Math.round(fs * 0.24));
+          const padX = Math.max(6, Math.round(fs * 0.42));
+          const padY = Math.max(4, Math.round(fs * 0.22));
           const lineH = Math.round(fs * 1.18);
           const textW = Math.max(...lines.map((l) => estimateTextWidth(l, fs)));
           const w = textW + padX * 2 + 4;
           const h = lines.length * lineH + padY * 2 + 2;
-          const box = placer.findBox(pid, w, h, toTargets(w, h), { strictMargin });
+          const box = placer.findBox(pid, w, h, toTargets(w, h), {
+            strictMargin,
+            xRange: opts?.xRange,
+            yRange: opts?.yRange,
+          });
           if (!box) continue;
           placer.reserve(pid, box);
           const cx = box.x + box.w / 2;
@@ -1383,7 +1394,20 @@ function buildF1VectorLayers(
     placePill("rear", ["REAR (SEEN FROM BEHIND)", "REAR"], ["bl", "tl", "br", "tr"], 24, 16);
     placePill("rear", ["L ←  |  → R", "L ← | → R"], ["br", "tr", "bl", "tl"], 24, 16);
 
-    placePill("front", ["FRONT (SEEN FROM THE FRONT)", ["FRONT", "(SEEN FROM FRONT)"], "FRONT"], ["tl", "tr", "bl", "br"], 22, 14);
+    const placedFrontPill = placePill(
+      "front",
+      [
+        "FRONT (SEEN FROM THE FRONT)",
+        ["FRONT", "(SEEN FROM THE FRONT)"],
+        ["FRONT", "(SEEN FROM", "THE FRONT)"],
+      ],
+      ["tl", "tr", "bl", "br"],
+      22,
+      11
+    );
+    if (!placedFrontPill) {
+      throw new Error(`${target.id}: failed to place FRONT (SEEN FROM THE FRONT) pill`);
+    }
     placePill("front", ["R ← | → L"], ["tr", "tl", "br", "bl"], 20, 14);
 
     // Front wing endplates: left panel is empty on the left half; right panel is empty on the right half
@@ -1716,10 +1740,32 @@ function buildPortedVectorLayers(
     placePill("front", ["R ←  |  → L", "R ← | → L"], ["bc", "tr", "br", "tc"], 22, 15);
 
     if (hasCarbonHatch) {
-      // Place AMG bare-carbon legend on a panel with generous unpainted space (front windshield or side sky)
+      // Place AMG bare-carbon legend in the FRONT panel and also in TOP VIEW near the hatched front splitter
       const placedOnFront = placePill("front", ["HATCHED = ALWAYS BARE CARBON"], ["tc", "bc", "bl", "tl"], 20, 15);
       if (!placedOnFront) {
         placePill("left", ["HATCHED = ALWAYS BARE CARBON"], ["tr", "tl", "bl"], 22, 16);
+      }
+      const placedOnTop = placePill(
+        "top",
+        [
+          ["HATCHED =", "ALWAYS BARE", "CARBON"],
+          ["HATCHED = ALWAYS", "BARE CARBON"],
+          "HATCHED = ALWAYS BARE CARBON",
+        ],
+        ["tr", "br"],
+        18,
+        11,
+        {
+          xRange: [p.top.x + 1000, p.top.x + p.top.w - 8],
+          customTargets: [
+            [p.top.x + 1715, p.top.y + 370],
+            [p.top.x + 1040, p.top.y + 520],
+            [p.top.x + 1040, p.top.y + 200],
+          ],
+        }
+      );
+      if (!placedOnTop) {
+        throw new Error(`${target.id}: failed to place bare-carbon legend in TOP VIEW`);
       }
     }
 
