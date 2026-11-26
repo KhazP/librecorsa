@@ -10,6 +10,11 @@
  * (the Super Soft in the fourth slot only this car has, and its default), and the tyres' warm-up round RISE on the
  * autopilot from cold and from blankets (when this copy has the circuit). The data's own values, the warm-up's rates
  * among them, are checked by verify-mod-parity.ts.
+ *
+ * Each body's mirrors (mirrors.ini's mesh, MIRROR_0): two flat glasses, a mirrored pair ahead of the driver facing back
+ * at him, each showing a mirror image (its outboard edge farther out than its inboard one), and the rear view's lookup
+ * (`mirror-reflection.ts`) landing where its camera sees what the glass reflects, at least as sharp as the planar
+ * mirrors' 256 px over 35 degrees.
  */
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
@@ -27,6 +32,7 @@ import { carListed } from '../../src/lib/hosted-content';
 import { carTakesPhysicsSwitch } from '../../src/lib/cars/f1-mod-physics';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { hasFile, noteSkip } from '../lib/hosted-files';
+import { fitMirrorView, mirrorLookup, mirrorProjection, MIRROR_FOCUS_M, MIRROR_PIXEL_BUDGET, portedMirrorMeshes, reflectingGeometry } from '../../src/lib/render/mirror-reflection';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -86,6 +92,104 @@ console.log('== The entry and its liveries');
   check('Massa: his files on the car\'s own Ferrari', massa !== null && massa.modelUrl === undefined && massa.baseUrl === '/cars/f1-2007/skins/ferrari-massa');
 }
 
+/** A body's mirrors, as the game finds and draws them */
+function checkMirrors(team: string, glb: string): void {
+  const model = loadGlbGeometry(glb);
+  model.updateMatrixWorld(true);
+  let car: THREE.Object3D | undefined;
+  model.traverse((o) => {
+    if (!car && (o.userData as { wheelCentres?: unknown }).wheelCentres) car = o;
+  });
+  const extras = (car?.userData ?? {}) as { mirrors?: { node: string }[]; cameras?: { cockpit?: { pos: [number, number, number] } } };
+  const meshes = portedMirrorMeshes(model);
+  const listed = (extras.mirrors ?? []).map((m) => m.node);
+  check(
+    `${team}: mirrors.ini's mirror, MIRROR_0 under BODY, listed in CAR's extras`,
+    JSON.stringify(listed) === '["MIRROR_0"]' && meshes.length === 1 && meshes[0].name === 'MIRROR_0' && meshes[0].parent?.name === 'BODY',
+    `${JSON.stringify(listed)}, ${meshes.map((m) => `${m.parent?.name}/${m.name}`).join(' ')}`,
+  );
+  const eyeAt = extras.cameras?.cockpit?.pos;
+  if (!car || !eyeAt || meshes.length !== 1) return;
+  const eye = new THREE.Vector3(...eyeAt);
+  const toModel = car.matrixWorld.clone().invert().multiply(meshes[0].matrixWorld);
+  const built = reflectingGeometry(meshes[0], toModel, eye);
+  const islands = (built?.islands ?? []).filter((i) => i.normal).sort((a, b) => b.centre.x - a.centre.x);
+  const [left, right] = islands;
+  const pair =
+    islands.length === 2 &&
+    left.centre.x > 0.2 &&
+    Math.abs(left.centre.x + right.centre.x) < 0.01 &&
+    Math.abs(left.centre.y - right.centre.y) < 0.01 &&
+    Math.abs(left.centre.z - right.centre.z) < 0.01 &&
+    left.centre.z > eye.z;
+  check(
+    `${team}: two glasses, a mirrored pair ahead of the driver's eye`,
+    pair,
+    islands.map((i) => `(${i.centre.toArray().map((v) => fmt(v)).join(', ')})`).join(' ') || `${built?.islands.length ?? 0} islands`,
+  );
+  if (!pair) return;
+  // Each faces back and in toward the driver; the two show mirror-image views (where each looks, in degrees off
+  // straight back, the car's left +), and each a mirror's image: across its glass, the outboard edge looks farther out
+  const view = fitMirrorView([built!], eye)!;
+  const t = new THREE.Vector2();
+  const looks = islands.map((i) => (mirrorLookup(i.centre, i.normal!, eye, view.camera, t) ? THREE.MathUtils.radToDeg(Math.atan(t.x)) : NaN));
+  const unflipped = islands.every((isl) => {
+    let lo = { x: Infinity, t: NaN };
+    let hi = { x: -Infinity, t: NaN };
+    for (const tri of isl.tris) {
+      for (let k = 0; k < 3; k++) {
+        const v = new THREE.Vector3().fromArray(built!.model, tri * 9 + k * 3);
+        if (!mirrorLookup(v, isl.normal!, eye, view.camera, t)) return false;
+        if (v.x < lo.x) lo = { x: v.x, t: t.x };
+        if (v.x > hi.x) hi = { x: v.x, t: t.x };
+      }
+    }
+    return hi.t > lo.t;
+  });
+  check(
+    `${team}: each glass faces back at the driver, the pair's views mirror images, neither flipped`,
+    islands.every((i) => i.normal!.z < -0.5 && Math.sign(i.normal!.x) === -Math.sign(i.centre.x)) && Math.abs(looks[0] + looks[1]) < 0.5 && unflipped,
+    `n (${islands[0].normal!.toArray().map((v) => fmt(v)).join(', ')}), looking ${looks.map((a) => fmt(a, 1)).join(' / ')}°`,
+  );
+  // The lookup at every glass vertex lands where the rear view's camera sees the point the glass reflects
+  const cam = new THREE.PerspectiveCamera();
+  cam.position.copy(view.camera);
+  cam.updateMatrixWorld(true);
+  mirrorProjection(view, 0.3, 250, cam.projectionMatrix);
+  cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  let worst = 0;
+  let outside = 0;
+  const p = new THREE.Vector3();
+  const d = new THREE.Vector3();
+  for (const isl of islands) {
+    for (const tri of isl.tris) {
+      for (let k = 0; k < 3; k++) {
+        p.fromArray(built!.model, tri * 9 + k * 3);
+        if (!mirrorLookup(p, isl.normal!, eye, view.camera, t)) {
+          outside++;
+          continue;
+        }
+        const u = (t.x - view.left) / (view.right - view.left);
+        const v = (t.y - view.bottom) / (view.top - view.bottom);
+        if (u < 0 || u > 1 || v < 0 || v > 1) outside++;
+        d.subVectors(p, eye).normalize();
+        d.addScaledVector(isl.normal!, -2 * d.dot(isl.normal!));
+        const seen = p.clone().addScaledVector(d, MIRROR_FOCUS_M).project(cam);
+        worst = Math.max(worst, Math.abs((seen.x + 1) / 2 - u), Math.abs((seen.y + 1) / 2 - v));
+      }
+    }
+  }
+  const hDeg = THREE.MathUtils.radToDeg(Math.atan(view.right) - Math.atan(view.left));
+  // Pixels per unit of tangent across and up the window, against the planar mirrors' 256 over 2 tan 17.5°
+  const planar = 256 / (2 * Math.tan(THREE.MathUtils.degToRad(17.5)));
+  const sharp = Math.min(view.width / (view.right - view.left), view.height / (view.top - view.bottom));
+  check(
+    `${team}: the lookup lands where the rear view sees the reflection, all glass inside it, as sharp as before`,
+    worst < 1e-4 && outside === 0 && view.width * view.height <= MIRROR_PIXEL_BUDGET * 1.05 && sharp >= planar * 0.98,
+    `off by ${worst.toExponential(1)}, ${fmt(hDeg, 1)}° wide, ${view.width}×${view.height}, ${fmt(sharp / planar)}× the planar's pixels`,
+  );
+}
+
 console.log('\n== Bodies and livery files');
 {
   const ferrari = `public${f12007BodyUrl('ferrari')}`;
@@ -113,6 +217,7 @@ console.log('\n== Bodies and livery files');
         rig && wb > 2.9 && wb < 3.2 && Math.abs((extras?.tyreRadius?.LR ?? 0) - F12007_CONFIG.tyreCompounds[F12007_CONFIG.compoundSlots.soft].rear.radius) < 0.02,
         `${fmt(wb, 3)} m, rear tyre ${fmt(extras?.tyreRadius?.LR ?? NaN, 3)} m`,
       );
+      checkMirrors(team, glb);
     }
     const missing = F1_2007_SKINS.flatMap((s) => (s.files ?? []).map((f) => `public/cars/f1-2007/skins/${s.id}/${f}`)).filter((f) => !hasFile(f));
     check(
