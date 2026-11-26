@@ -148,9 +148,10 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
           </div>
         )}
         <div className="lc-mono flex min-w-0 flex-1 flex-col justify-center gap-1.5 px-3.5 text-[17px] leading-none font-bold whitespace-nowrap">
-          {/* Each line in its own language's direction ("من 8" reads right to left), kept to the left edge */}
+          {/* "of 8" in its own language's direction ("من 8" reads right to left), kept to the left edge; the lap line
+              stays left to right, so 4 / 5 never turns into 5 / 4 */}
           {race ? <span dir="auto" className="self-start">{w.ofField(race.fieldSize)}</span> : null}
-          <span dir="auto" className="self-start uppercase">
+          <span className="uppercase">
             {race?.totalLaps ? w.lapOf(lapNo, race.totalLaps) : !race && getActivePointToPoint() ? w.run(lapNo) : w.lap(lapNo)}
           </span>
         </div>
@@ -198,7 +199,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
         </div>
       ) : (
         <>
-          <div className={`grid h-[22px] grid-cols-[44px_1fr_78px_minmax(58px,auto)] items-center gap-x-2 px-3 ${COLS} ${HAIR}`}>
+          <div className={`grid h-[22px] grid-cols-[44px_1fr_78px_76px] items-center gap-x-2 px-3 ${COLS} ${HAIR}`}>
             <span className={LBL}>{w.sector}</span>
             <span />
             <span className={`${LBL} text-right`}>{w.time}</span>
@@ -207,7 +208,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
           {sectors.map((s, i) => {
             const tone = s.mark ? MARK_TEXT[s.mark] : "";
             return (
-              <div key={i} className={`grid h-[25px] grid-cols-[44px_1fr_78px_minmax(58px,auto)] items-center gap-x-2 px-3 ${HAIR}`}>
+              <div key={i} className={`grid h-[25px] grid-cols-[44px_1fr_78px_76px] items-center gap-x-2 px-3 ${HAIR}`}>
                 <span className={s.state === "todo" ? LBL : lbl("text-lc-chalk")}>{w.sectorShort[i]}</span>
                 <span className={`lc-mono text-right text-[10px] leading-none font-extrabold tracking-[0.12em] uppercase ${tone}`}>
                   {s.mark === "best" ? w.markBest : s.mark === "pb" ? w.markPb : ""}
