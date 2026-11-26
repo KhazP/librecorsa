@@ -276,6 +276,37 @@ export function hashText(s: string): string {
 const hashValue = (v: unknown) => hashText(stableStringify(v));
 /** A settings field's value as this build compares it: its account share (a split field's known members only) */
 const fieldHash = (field: string, value: unknown) => hashValue(accountShare(field, value));
+
+/**
+ * Members an account settings field gained after player accounts went live, with their defaults (Nov 2026: the
+ * spotter's, and the AI races' pit stops). A device whose last sync came before one of them agreed on the field
+ * without it, and the first save of the newer build stores the default: that is no choice of the player's, so it must
+ * not outweigh what another device chose for the field. A new member of an account field goes here too: the verify
+ * suite checks every member against the fields as they were then, and these defaults against the settings' own.
+ */
+export const LATER_ACCOUNT_MEMBERS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  audio: { spotter: true, spotterVoice: "jim", spotterRadio: true },
+  race: { pitStops: 0 },
+};
+
+/**
+ * The field's hash as a build from before its later members took it, those still at their default left out; null
+ * when the field has none of them at their default (so the hash would be `fieldHash`'s)
+ */
+function priorFieldHash(field: string, value: unknown): string | null {
+  const later = LATER_ACCOUNT_MEMBERS[field];
+  const share = accountShare(field, value);
+  if (!later || !isObj(share)) return null;
+  const out: Obj = { ...share };
+  let left = false;
+  for (const [member, def] of Object.entries(later)) {
+    if (Object.hasOwn(out, member) && stableStringify(out[member]) === stableStringify(def)) {
+      delete out[member];
+      left = true;
+    }
+  }
+  return left ? hashValue(out) : null;
+}
 /** What a removed key hashes to in the sync base */
 const REMOVED_HASH = "-";
 
@@ -780,6 +811,9 @@ function combineValues(local: SaveDoc, cloud: SaveDoc, base: SyncBase | null, ou
       if (lh === ch) res = { value: c.value, t: Math.max(l.t, c.t) };
       else if (b !== undefined && lh === b) res = c;
       else if (b !== undefined && ch === b) res = l;
+      // A side that differs from the base only by later members at their default didn't change (LATER_ACCOUNT_MEMBERS)
+      else if (b !== undefined && priorFieldHash(field, l.value) === b) res = c;
+      else if (b !== undefined && priorFieldHash(field, c.value) === b) res = l;
       else res = pickSide(l.t, c.t) === "local" ? l : c;
     }
     if (res) out.settings[field] = { value: res.value, t: res.t };

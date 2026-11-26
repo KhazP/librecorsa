@@ -228,6 +228,7 @@
   "profile.stats.retirements": "Label under a figure: number of races the player did not finish.",
   "profile.stats.mostDrivenCar": "Label under a car's name: the car the player has spent the most time driving.",
   "profile.stats.mostDrivenCircuit": "Label under a circuit's name: the circuit the player has spent the most time driving on.",
+  "profile.stats.none": "In place of a figure in that card when there is none yet: no finished race for the average finish, no car or circuit driven yet. Keep it short.",
   "profile.stats.hoursMinutes": "Total time driven, one hour or more. {hours} and {minutes}: numbers. Abbreviate the units to keep it short.",
   "profile.stats.minutes": "Total time driven, under an hour. {minutes}: a number. Abbreviate the unit.",
   "profile.stats.km": "A distance in kilometres. {km}: the number, already formatted for the language (e.g. '342.5').",

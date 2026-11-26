@@ -436,10 +436,10 @@ const TyreWearCard: React.FC<{
             </g>
           );
         })}
-        <text x="34" y="51" fill="#94a3b8" fontSize="6" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
+        <text x="34" y="52" fill="#94a3b8" fontSize="8" fontWeight="800" textAnchor="middle" letterSpacing="0.3">
           {w.tyreWear}
         </text>
-        <text x="162" y="51" fill="#94a3b8" fontSize="6" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
+        <text x="162" y="52" fill="#94a3b8" fontSize="8" fontWeight="800" textAnchor="middle" letterSpacing="0.3">
           {w.tyreWear}
         </text>
       </svg>
@@ -661,8 +661,9 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
 
         {/* Top-right: Larger track layout (always top-right) + weather/extra if present */}
         <div className="absolute flex flex-col items-end gap-2" style={{ top: EDGE, right: EDGE, ...anchor(scale, "top right") }}>
-          <div className="h-[156px] w-[206px]">
-            <MiniMap map={map} t={t} sectors stroke={24} className="size-full drop-shadow-[0_4px_14px_rgba(0,0,0,0.85)]" />
+          {/* On the layout's plate, so the line reads over a bright sky or grandstand */}
+          <div className={`${palette.plate} h-[156px] w-[206px] rounded-[4px] p-2`}>
+            <MiniMap map={map} t={t} sectors stroke={24} className="size-full" />
           </div>
           {rightExtra}
         </div>
@@ -767,8 +768,9 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
         className="absolute flex flex-col items-end gap-2"
         style={{ top: EDGE, right: EDGE, ...anchor(scale, "top right") }}
       >
-        <div className="h-[156px] w-[206px]">
-          <MiniMap map={map} t={t} sectors stroke={24} className="size-full drop-shadow-[0_4px_14px_rgba(0,0,0,0.85)]" />
+        {/* On the layout's plate, so the line reads over a bright sky or grandstand */}
+        <div className={`${palette.plate} h-[156px] w-[206px] rounded-[4px] p-2`}>
+          <MiniMap map={map} t={t} sectors stroke={24} className="size-full" />
         </div>
         {rightExtra}
       </div>
@@ -854,7 +856,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
             <div className={`${palette.plate} ${palette.stdAidCard}`}>
               <div className={palette.stdAidRow}>
                 <span className="text-slate-400">{w.brakeBias}</span>
-                <span className={palette.mono}>{(t.liveTuner?.brakeBiasPct ?? 56).toFixed(0)}%</span>
+                <span className={palette.mono}>{(t.liveTuner?.brakeBiasPct ?? 56).toFixed(1)}%</span>
               </div>
               <div className={palette.stdAidRow}>
                 <span className="text-slate-400">TC / ABS</span>

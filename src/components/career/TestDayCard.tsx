@@ -55,7 +55,7 @@ export const TestDayCard: React.FC<{
       }
       bodyClassName="flex flex-col gap-3"
     >
-      <div className={compact ? "flex flex-col gap-3" : "grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)] short:gap-2"}>
+      <div className={compact ? "flex flex-col gap-3" : "grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)] short:grid-cols-1 short:gap-2"}>
         {compact ? null : (
           <Well className="relative flex aspect-video items-center justify-center overflow-hidden p-3 short:hidden">
             <CareerCircuitOutline trackId={at.trackId} className="max-h-full max-w-full" strokeClassName="stroke-lc-chalk" label={track.name} />

@@ -12,6 +12,7 @@ import {
   PLATFORM_DOWNLOADS,
   RELEASE_LINKS,
   artifactHref,
+  buttonArtifacts,
   detectVisitorPlatform,
   formatDownloadSize,
   isDirectDownload,
@@ -142,6 +143,31 @@ check(
   "Unknown visitor keeps default catalog order",
   JSON.stringify(unknownOrder) === '["windows","macos","linux","android"]',
   JSON.stringify(unknownOrder),
+);
+
+// --- Buttons: one per direct file, one for every file not out yet (they all go to the same releases page) ---
+const macos = PLATFORM_DOWNLOADS.find((p) => p.id === "macos")!;
+const macUnpublished: AppRelease = { ...macos.release, published: false, date: null };
+const pendingButtons = buttonArtifacts(macos.artifacts, macUnpublished);
+check(
+  "An unpublished release gets one releases button, naming every file it stands for",
+  pendingButtons.length === 1 && macos.artifacts.every((a) => pendingButtons[0].details.includes(a.detail)),
+  JSON.stringify(pendingButtons.map((b) => b.details)),
+);
+const macPublished: AppRelease = { ...macos.release, published: true, date: "2026-12-01" };
+const withFiles = macos.artifacts.map((a, i) => ({ ...a, file: a.file ?? `file-${i}` }));
+const directButtons = buttonArtifacts(withFiles, macPublished);
+check(
+  "A published release gets a button per file, each to its own file",
+  directButtons.length === withFiles.length &&
+    new Set(directButtons.map((b) => artifactHref(b.artifact, macPublished))).size === withFiles.length,
+  String(directButtons.length),
+);
+const oneMissing = buttonArtifacts([{ ...withFiles[0], file: null }, ...withFiles.slice(1)], macPublished);
+check(
+  "A published release missing a file: that file's button goes to the release page, the others download",
+  oneMissing.length === withFiles.length && artifactHref(oneMissing[0].artifact, macPublished) === releasePageUrl(macPublished),
+  String(oneMissing.length),
 );
 
 if (failed > 0) {

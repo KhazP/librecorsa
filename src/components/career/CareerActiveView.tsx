@@ -584,7 +584,7 @@ const ActiveSeasonView: React.FC<{
                   label={nextTrack.name}
                 />
                 <span className="lc-mono absolute bottom-2 end-2.5 text-[11px] font-bold text-lc-slate short:bottom-1 short:end-2">
-                  {(nextTrack.lengthM / 1000).toFixed(2)} km
+                  <bdi>{(nextTrack.lengthM / 1000).toFixed(2)} km</bdi>
                 </span>
               </Well>
               <Well className="relative aspect-video overflow-hidden p-3 short:aspect-auto short:h-16 short:p-1.5">

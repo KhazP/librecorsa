@@ -42,6 +42,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   worldPosition: "moving",
   worldQuaternion: "moving",
   worldVelocity: "moving",
+  telemetryPose: "moving",
   wheels: "moving",
   tyreVisuals: "moving",
   vyMs: "moving",
@@ -123,6 +124,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   getChassisSetup: "localCall",
   getLiveTunerState: "localCall",
   aiPlanGrip: "localCall",
+  aiTyreGrip: "localCall",
   aiBaseSpeedProfile: "localCall",
   createAiPeerCar: "localCall",
 

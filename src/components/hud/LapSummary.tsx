@@ -61,6 +61,8 @@ interface LapSummaryProps {
   submitRank?: { rank: number; total: number | null; challengeRank?: number | null } | null;
   /** Why the board refused the last upload (e.g. the name is taken), or that it couldn't be reached, shown under the buttons */
   submitError?: string | null;
+  /** Why this lap never goes on the online boards for a reason the lap itself doesn't carry (a mod car or circuit) */
+  offBoards?: string;
   /** The name the driver's laps go up under, shown once one went up (or was turned down) */
   driverName?: string;
   /** Changes the driver's name on the board (their laps move with it): null once it has taken, else why not */
@@ -494,6 +496,7 @@ const LapCard: React.FC<
   submitState = "idle",
   submitRank = null,
   submitError = null,
+  offBoards,
   driverName,
   onRename,
   onSignIn,
@@ -665,6 +668,7 @@ const LapCard: React.FC<
             {submitState === "sent" ? sentLabel : submitState === "sending" ? words.posting : submitState === "waiting" ? (submitError ?? "") : ""}
           </span>
           {onSubmit && notRanked && submitState !== "sent" ? <span className={`me-auto text-[12px] ${skinCss.inkDim}`}>{notRanked}</span> : null}
+          {!onSubmit && offBoards ? <span className={`me-auto text-[12px] ${skinCss.inkDim}`}>{offBoards}</span> : null}
           {onAnalyze ? (
             <SkinButton onClick={onAnalyze} className="h-8 px-3 text-[12px] font-semibold">
               {words.analyzeLap}
@@ -779,6 +783,7 @@ const LapCard: React.FC<
         </span>
         {/* Why the lap cannot go online, in words beside the greyed button */}
         {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint me-auto">{notRanked}</span> : null}
+        {!onSubmit && offBoards ? <span className="lc-hint me-auto">{offBoards}</span> : null}
         {onAnalyze ? (
           <Button size="sm" variant="secondary" onClick={onAnalyze}>
             {words.analyzeLap}

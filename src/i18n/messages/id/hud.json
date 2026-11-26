@@ -131,10 +131,10 @@
       "protected": "Terlindung"
     },
     "collisionHint": {
-      "on": "Kontak penuh",
+      "on": "Kontak penuh (mode ghost saat muncul, di pit lane, AFK, atau lag berat)",
       "ghostLap1": "Tanpa kontak pada lap pembuka",
       "off": "Mobil saling menembus",
-      "protected": "Ghost di lap 1, lalu mobil yang berbahaya tidak bisa menyentuh mobil lain"
+      "protected": "Kontak aktif setelah start; bahaya, pit lane, dan tabrakan sengaja saling menembus"
     },
     "anyCar": "Mobil apa saja",
     "startType": {
@@ -718,7 +718,7 @@
     "foldTuner": "Lipat tuner"
   },
   "f12026ChannelsPanel": {
-    "region": "Saluran rekayasa",
+    "region": "Telemetri suspensi dan aero",
     "title": "Suspensi & aero",
     "suspensionGrip": "Suspensi & cengkeraman",
     "wheelLegend": "Slip · Bumpstop",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}: rasio slip, jarak ke bump rubber, cengkeraman terpakai",
     "slipRatio": "%SR",
     "aeroHeightTitle": "Tinggi suspensi aero",
-    "aeroHeight": "Tgi aero",
+    "aeroHeight": "Tinggi",
     "aeroBalanceTitle": "Keseimbangan aero (porsi downforce depan)",
     "aeroBalance": "Bal aero",
     "lsdTitle": "Torsi penguncian diferensial",
@@ -805,7 +805,7 @@
     "nextCarTitle": "Mobil berikutnya ({key})",
     "cameraAngle": "Sudut kamera tayangan ulang",
     "cycleCamera": "Ganti kamera tayangan ulang",
-    "flashbackTitle": "Flashback — lanjutkan mengemudi dari momen ini ({key}, membatalkan lap saat ini)",
+    "flashbackTitle": "Flashback: lanjutkan mengemudi dari momen ini ({key}, membatalkan lap saat ini)",
     "flashback": "Flashback",
     "exit": "Keluar",
     "hints": {
@@ -1254,11 +1254,11 @@
       "retired": "Gagal finis"
     },
     "lap": "Lap {lap}",
-    "stationary": "{seconds} dtk",
+    "stationary": "{seconds} s",
     "battleFor": "Duel untuk P{position}",
     "attacking": "Menyerang",
-    "closing": "Memangkas {rate} dtk/lap",
-    "closingCatch": "Memangkas {rate} dtk/lap · menyusul dalam {laps, plural, other {# lap}}",
+    "closing": "Memangkas {rate} s/lap",
+    "closingCatch": "Memangkas {rate} s/lap · menyusul dalam {laps, plural, other {# lap}}",
     "pullingAway": "Menjauh",
     "stable": "Gap stabil"
   },

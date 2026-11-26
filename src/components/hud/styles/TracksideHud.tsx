@@ -94,6 +94,8 @@ const SCRIM = "isolate before:pointer-events-none before:absolute before:-z-10 b
 const SCRIM_TL = `${SCRIM} before:-top-[340px] before:-left-[800px] before:h-[600px] before:w-[1520px] before:bg-[radial-gradient(ellipse_closest-side,color-mix(in_srgb,var(--color-lc-void)_58%,transparent),transparent_70%)]`;
 const SCRIM_TR = `${SCRIM} before:-top-[260px] before:-right-[660px] before:h-[440px] before:w-[1240px] before:bg-[radial-gradient(ellipse_closest-side,color-mix(in_srgb,var(--color-lc-void)_58%,transparent),transparent_70%)]`;
 const SCRIM_BL = `${SCRIM} before:-bottom-[420px] before:-left-[740px] before:h-[760px] before:w-[1400px] before:bg-[radial-gradient(ellipse_closest-side,color-mix(in_srgb,var(--color-lc-void)_58%,transparent),transparent_70%)]`;
+/** Behind the tyres and the fuel, which sit away from the corner: a scrim of their own, centred on them */
+const SCRIM_MID = `${SCRIM} before:-inset-x-[110px] before:-inset-y-[80px] before:bg-[radial-gradient(ellipse_closest-side,color-mix(in_srgb,var(--color-lc-void)_60%,transparent),color-mix(in_srgb,var(--color-lc-void)_44%,transparent)_62%,transparent)]`;
 const SCRIM_BR = `${SCRIM} before:-right-[940px] before:-bottom-[500px] before:h-[920px] before:w-[1800px] before:bg-[radial-gradient(ellipse_closest-side,color-mix(in_srgb,var(--color-lc-void)_58%,transparent),transparent_70%)]`;
 
 /** The dials of the live tuner (TunerMfdPanel) stop here on every car: TC and ABS at 12, the engine map at 5 */
@@ -708,7 +710,8 @@ const Dial: React.FC<{ t: CarTelemetry; revRange: [number, number]; w: Words }> 
         </div>
       ) : null}
 
-      <div className={`absolute top-[106px] left-[62px] grid h-[122px] w-[104px] -skew-x-12 place-items-center text-lc-void ${NO_SH} ${shift ? "bg-lc-cyan" : "bg-lc-volt"}`}>
+      {/* The tile keeps inside the battery arc: its slanted lower corner clear of the arc, its top clear of the speed */}
+      <div className={`absolute top-[106px] left-[70px] grid h-[110px] w-[96px] -skew-x-12 place-items-center text-lc-void ${NO_SH} ${shift ? "bg-lc-cyan" : "bg-lc-volt"}`}>
         <b className="lc-disp -mt-[3px] skew-x-12 text-[108px] leading-none">{gearLabel(t.gear)}</b>
       </div>
 
@@ -838,7 +841,7 @@ export const TracksideHud: React.FC<HudDesignProps> = ({
 
       {/* Bottom right: tyres and fuel beside the dial (stacked where the window is narrower), the electronics under it */}
       <div className={`absolute flex items-end ${wide ? "gap-7" : "gap-4"} ${SH} ${SCRIM_BR}`} style={{ bottom: EDGE, right: EDGE, ...anchor(s, "bottom right") }}>
-        <div className={`hidden items-end lg:flex ${wide ? "flex-row gap-6" : "flex-col gap-5"}`}>
+        <div className={`relative hidden items-end lg:flex ${wide ? "flex-row gap-6" : "flex-col gap-5"} ${SCRIM_MID}`}>
           <Tyres t={t} compound={compound as TireCompound} w={w} />
           <Fuel t={t} w={w} />
         </div>

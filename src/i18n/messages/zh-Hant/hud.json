@@ -131,10 +131,10 @@
       "protected": "保護模式"
     },
     "collisionHint": {
-      "on": "完整碰撞",
+      "on": "完整碰撞（重生、維修區、暫離或嚴重延遲時會自動幽靈化）",
       "ghostLap1": "起跑第一圈無碰撞",
       "off": "車輛可互相穿透",
-      "protected": "第 1 圈幽靈化，其後危險駕駛車輛無法碰撞他人"
+      "protected": "起跑後開啟碰撞；危險車輛、維修區與蓄意衝撞車輛會直接穿透"
     },
     "anyCar": "不限車款",
     "startType": {
@@ -187,7 +187,7 @@
       "ghostModeOn": "開啟（無碰撞）",
       "ghostModeOff": "關閉（開啟碰撞）",
       "ghostModeOnHint": "車輛之間會互相穿透",
-      "ghostModeOffHint": "完整碰撞（重生、維修區、掛機或嚴重延遲時會自動幽靈化）",
+      "ghostModeOffHint": "完整碰撞（重生、維修區、暫離或嚴重延遲時會自動幽靈化）",
       "collisions": "碰撞",
       "lockedQualifying": "排位賽進行中已鎖定",
       "lockedRace": "正賽進行中已鎖定"
@@ -718,7 +718,7 @@
     "foldTuner": "收合電控微調"
   },
   "f12026ChannelsPanel": {
-    "region": "工程遙測頻道",
+    "region": "懸吊與空力遙測",
     "title": "懸吊與空力",
     "suspensionGrip": "懸吊與抓地力",
     "wheelLegend": "滑移 · 緩衝塊",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}：滑移率、距緩衝塊剩餘行程、抓地力使用率",
     "slipRatio": "%SR",
     "aeroHeightTitle": "空力車身高度",
-    "aeroHeight": "空力車高",
+    "aeroHeight": "車身高度",
     "aeroBalanceTitle": "空力平衡（前軸下壓力佔比）",
     "aeroBalance": "空力平衡",
     "lsdTitle": "差速器鎖定扭力",
@@ -805,7 +805,7 @@
     "nextCarTitle": "下一輛車（{key}）",
     "cameraAngle": "重播視角",
     "cycleCamera": "循環切換重播視角",
-    "flashbackTitle": "回溯——從此刻繼續駕駛（{key}，本圈成績將無效）",
+    "flashbackTitle": "回溯：從此刻繼續駕駛（{key}，本圈成績將無效）",
     "flashback": "回溯",
     "exit": "離開",
     "hints": {

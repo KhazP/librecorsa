@@ -44,7 +44,9 @@ import { VEHICLE_MODEL_IDS } from '../../src/types/f1';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../../cloudflare/api/index';
-import { boardKeyOf, loadBoardBest, parseRemoteBoard, saveBoardBest } from '../../src/lib/net/leaderboard';
+import { BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, boardKeyOf, loadBoardBest, MOD_LAP, OLDER_PHYSICS_LAP, parseRemoteBoard, saveBoardBest } from '../../src/lib/net/leaderboard';
+import { BOARD_SENTENCES, boardWords } from '../../src/lib/net/board-words';
+import { bindText } from '../../src/lib/text';
 import { challengePlaceLabel, challengeTarget } from '../../src/lib/net/challenge-target';
 import { boardDeps, driverNameKey, listLaps, OLDER_PHYSICS, renameDriver, submitLap, type BoardDeps } from '../../cloudflare/api/board';
 import { nameProblem } from '../../src/lib/net/name-filter';
@@ -928,6 +930,41 @@ async function main(): Promise<void> {
     const marked = checkLap({ ...rec, mod: true });
     check('mods: and a lap marked mod', !marked.ok && /mod/.test(marked.error), marked.ok ? 'accepted' : marked.error);
     check('mods: a lap on a shipped circuit still passes the server check', checkLap(rec).ok);
+  }
+
+  {
+    // The lap card shows the boards' answers in the player's language (board-words.ts): every sentence the game and the
+    // Worker send there has a message, word for word as the code says it
+    const rec = lap as LapRecording;
+    const unknown = checkLap({ ...rec, trackId: 'made_up_circuit' });
+    const marked = checkLap({ ...rec, mod: true });
+    const sent = [BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, OLDER_PHYSICS_LAP, MOD_LAP, OLDER_PHYSICS, unknown.ok ? '' : unknown.error, marked.ok ? '' : marked.error];
+    const missing = sent.filter((s) => !Object.hasOwn(BOARD_SENTENCES, s));
+    check('board words: the game\'s and the Worker\'s lap answers each have a message', missing.length === 0, missing.join(' | '));
+    // A recording whose samples don't agree: every reason the game gives before uploading (lap-plausibility.ts, read from
+    // its source so a new one needs a message too), and the Worker's refusal of positions too far apart
+    const plausibilitySource = readFileSync(join(process.cwd(), 'src/lib/sim/lap-plausibility.ts'), 'utf8');
+    const plausibility = [...plausibilitySource.matchAll(/return "([^"]+)"/g)].map((m) => m[1]);
+    const recorded = [...plausibility, 'Positions imply a speed above 420 km/h'];
+    const untranslated = recorded.filter((s) => !Object.hasOwn(BOARD_SENTENCES, s));
+    check(
+      'board words: a recording\'s refusals (the game\'s own check and the Worker\'s) each have a message',
+      plausibility.length >= 5 && untranslated.length === 0,
+      `${plausibility.length} reasons; ${untranslated.join(' | ')}`,
+    );
+    const sources = ['src/lib/net/leaderboard.ts', 'cloudflare/api/board.ts', 'cloudflare/api/lap-check.ts', 'src/lib/net/name-filter.ts', 'src/lib/net/weekly-challenge.ts', 'src/lib/sim/lap-plausibility.ts']
+      .map((f) => readFileSync(join(process.cwd(), f), 'utf8'))
+      .join('\n');
+    const stale = Object.keys(BOARD_SENTENCES).filter((s) => !sources.includes(s));
+    check('board words: each sentence is one the code still sends', stale.length === 0, stale.join(' | '));
+    bindText((key) => `[${key}]`, () => 'xx');
+    check(
+      'board words: a board sentence comes back as its message, an account one through the account words, anything else as it came',
+      Object.entries(BOARD_SENTENCES).every(([s, key]) => boardWords(s) === `[${key}]`) &&
+        boardWords('Missing driver key. Reload the game and try again') === '[game.account.server.missingKey]' &&
+        boardWords('Body is not valid JSON') === 'Body is not valid JSON' &&
+        boardWords(null) === null,
+    );
   }
 
   if (failures.length > 0) {

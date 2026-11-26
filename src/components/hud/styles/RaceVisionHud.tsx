@@ -97,6 +97,8 @@ function useRaceVisionWords() {
       raceLaps: formatOnce((lap: number, total: number) =>
         total ? tx("raceLapsOfTotal", { lap: String(lap), total: String(total) }) : tx("raceLaps", { lap: String(lap) }),
       ),
+      lapShort: formatOnce((lap: number) => tx("lapShort", { lap: String(lap) })),
+      lapShortOfTotal: formatOnce((lap: number, total: number) => tx("lapShortOfTotal", { lap: String(lap), total: String(total) })),
       aidWorking: formatOnce((aid: string) => tx("aidWorking", { aid })),
       inputs: tx("inputs"),
       shiftLights: formatOnce((lit: number, total: number) => tx("shiftLights", { lit: String(lit), total: String(total) })),
@@ -288,10 +290,7 @@ const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }
   return (
     <section aria-label={w.relative} className={`${PANEL} flex w-[340px] flex-col gap-1.5 py-2`}>
       <div className="flex items-center justify-between px-2.5 font-black">
-        <span>
-          L{race.lap}
-          {race.totalLaps ? `/${race.totalLaps}` : ""}
-        </span>
+        <span>{race.totalLaps ? w.lapShortOfTotal(race.lap, race.totalLaps) : w.lapShort(race.lap)}</span>
         <span>
           P{race.position}/{race.standings.length}
         </span>

@@ -13,7 +13,7 @@ import { aiTrackFor, sampleGrid } from '@/lib/sim/ai/ai-track';
 import { driveLineOf, makeDrivePlan } from '@/lib/sim/ai/drive-plan';
 import { carLimitsFor, GGV_TABLES } from '@/lib/sim/ai/ggv';
 import { aiLineOffsetM } from '@/lib/sim/speed-profile';
-import type { BuiltTrackData } from '@/lib/track-data';
+import { racingLineFor, type BuiltTrackData } from '@/lib/track-data';
 import type { RacingLineId, VehicleModelId } from '@/types/f1';
 
 /** The AI field's plan grip at pace 1 (`PLAN_GRIP`, ai-opponents.ts) */
@@ -51,8 +51,33 @@ export function ownPaceFor(track: BuiltTrackData, vehicle: VehicleModelId | unde
 /** `pace`'s speed at lap distance `s` (m/s); `hazard`: the eased one */
 export const ownSpeedAt = (pace: OwnPace, s: number, hazard = false): number => sampleGrid(hazard ? pace.hazard : pace.expected, s, pace.ds);
 
-/** The racing line a model drives (`CarSimProfile.racingLine`): the F1 class its own, every other class the GT3 line */
-export const racingLineOfVehicle = (vehicle: VehicleModelId): RacingLineId => (VEHICLE_CLASS_OF[vehicle] === 'f1' ? 'f1' : 'gt3');
+/**
+ * The line each model's profile asks for (`CarSimProfile.racingLine`, in each car's sim file): the road cars and most
+ * classics the road cars' line. scripts/verify/verify-road-line.ts holds it to the profiles
+ */
+export const PROFILE_RACING_LINE: Readonly<Record<VehicleModelId, RacingLineId>> = {
+  lc26: 'f1',
+  lc25: 'f1',
+  'f12026-car': 'f1',
+  'amg-gt3': 'gt3',
+  liana: 'road',
+  'mtr-496r': 'gt3',
+  'lc-lmdh': 'gt3',
+  'nissan-r33-jgtc': 'gt3',
+  'nissan-r32-jtcc': 'road',
+  'bmw-m1-procar': 'road',
+  'vw-scirocco-gtx': 'road',
+  'chaparral-2d': 'road',
+  'chaparral-2d-67': 'road',
+  'porsche-934-rsr': 'road',
+};
+
+/**
+ * The racing line a model drives on the active circuit (`racingLineFor`, as its car does): its profile's, a road car's
+ * the GT3's where its plan check on the road line didn't pass
+ */
+export const racingLineOfVehicle = (vehicle: VehicleModelId): RacingLineId =>
+  racingLineFor(PROFILE_RACING_LINE[vehicle] ?? (VEHICLE_CLASS_OF[vehicle] === 'f1' ? 'f1' : 'gt3'), vehicle);
 
 /**
  * The eased own speed (m/s) at lap distance `s` of a car of model `vehicle` (an online car: the model its packets

@@ -132,7 +132,7 @@ export interface RainTyreDesign {
 }
 
 /**
- * Rain-tyre physics ratios from Nuzzi's "All F1 Tyres for VRC Formula Alpha 2023 (Wet Physics Included)" (OverTake,
+ * Rain-tyre physics ratios from Nuzzi's F1 tyre pack with wet physics (OverTake,
  * used with permission; see CREDITS.md). Only the rain-tyre deltas relative to the pack's own slicks and CSP wet
  * tread geometry (`TREAD_COVER` × `TREAD_DEPTH`) are used, applied on top of LC25's slick carcass and Cxjovich's
  * temperature / wear curves (`F1_RAIN_TYRE_PACK`):
@@ -186,8 +186,14 @@ export const GROOVE_WET_TRANSITION_FACTOR = 0.18;
  * practice, where the wet track and Low Grip were declared together; Normal Grip again once the line is back under damp.
  * The water depths are the game's (mm), the call is the rules' (one for the whole track)
  */
-export const LOW_GRIP_DECLARED_MM = 0.14;
+export const LOW_GRIP_DECLARED_MM = 0.2;
 export const LOW_GRIP_CLEARED_MM = DAMP_MM;
+/**
+ * The racing line's water (mm) past which full wets are the tyre (`recommendedCompound`, the AI's calls): just past
+ * where intermediates fall behind them at 216 km/h (1.08 mm), as 1.1 mm sat past the 1.04 mm of the wet grip before
+ * ec048874
+ */
+export const FULL_WETS_MM = 1.15;
 
 /** Low Grip Conditions with `lineWaterMm` on the racing line, given whether they are declared now */
 export function lowGripCall(lineWaterMm: number, declared: boolean): boolean {
@@ -441,7 +447,7 @@ export function isRainCompound(c: TireCompound): boolean {
 
 /** The compound to fit for a water film of `waterMm` on the racing line (AI tyre choice) */
 export function recommendedCompound(waterMm: number, dryChoice: TireCompound = 'medium'): TireCompound {
-  if (waterMm > 1.1) return 'wet';
+  if (waterMm > FULL_WETS_MM) return 'wet';
   if (waterMm > LOW_GRIP_DECLARED_MM) return 'intermediate';
   return dryChoice;
 }

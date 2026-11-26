@@ -36,6 +36,7 @@ import { revLights, useFuelPerLap } from "./third-party-parts";
 import { useErsState, type ErsState } from "./game-style-parts";
 import { anchor, gearLabel, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
 import { BLADE_W, CORNER_EDGE, DEEP, EDGE, HARD, LBL, LBL_TYPE, NONE, PLATE, scaleOf, useBladeFit, useBladeWords, useOwnWidth, type Words } from "./BladeParts";
+import { cornerBeside } from "./corner-beside";
 import { BladeMap, BladeOrder } from "./BladeOrder";
 
 /**
@@ -88,7 +89,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: 
           ) : t.outLap && !t.race ? (
             <span className={TIME_LBL}>{w.outLap}</span>
           ) : deltaS !== null && deltaS < 0 && !t.outLap ? (
-            <span className={`${TIME_TYPE} inline-flex items-center gap-1 text-lc-gain`}>
+            <span dir="auto" className={`${TIME_TYPE} inline-flex items-center gap-1 text-lc-gain`}>
               <Trend direction="up" size={9} />
               {w.onPb}
             </span>
@@ -528,10 +529,12 @@ export const BladeHud: React.FC<HudDesignProps> = ({
   const bladeK = scaleOf(centre);
   const beside = useRef({ left: true, right: true });
   const cornerBottom = (side: "left" | "right", width: number, style: React.CSSProperties) => {
-    // 8 px either way of the limit keeps a panel whose width breathes (the MFD's status line) from hopping up and down
     const spare = half - (BLADE_W / 2) * bladeK - width * scaleOf(style);
-    beside.current[side] = spare >= (beside.current[side] ? -8 : 8);
-    return beside.current[side] ? EDGE : `calc(${EDGE} + ${Math.round(108 * bladeK)}px)`;
+    // The panel's width changes when the fonts arrive, which re-renders this with them loaded
+    const fontsLoaded = typeof document === "undefined" || document.fonts?.status !== "loading";
+    const { beside: on, keep } = cornerBeside(beside.current[side], spare, fontsLoaded);
+    beside.current[side] = keep;
+    return on ? EDGE : `calc(${EDGE} + ${Math.round(108 * bladeK)}px)`;
   };
 
   return (

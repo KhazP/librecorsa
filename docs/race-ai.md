@@ -19,9 +19,9 @@ LibreCorsa's AI field drives the same 500 Hz rigid-body vehicle physics as the p
 - **Safe following:** A car caps its closing speed behind traffic ahead so it can always brake cleanly into corners: `v ≤ v_ahead + √(2·6·(gap − 2.5))`. This prevents pack pile-ups in heavy braking zones.
 - **Overtaking:** Attacking cars stay in the slipstream until nose-to-tail distance drops to `3 + (0.9 + t)·closing` metres (where `t` is the lateral lane-change time, plus an extra `6 m` when approaching a corner), then pull out to pass. Once initiated, the move is held even after leaving the tow. The car commits to a side approaching the braking zone and pushes slightly harder once alongside. Moves are gated by `passFeasible`, which cancels speculative lunges that cannot get alongside before turn-in plus part of the braking zone.
 - **Corner ownership:** An inside car with its nose at least level with the outside car's midpoint owns the corner. The outside car yields only if it does not hold ownership.
-- **Defending:** Limited to one defensive move per straight while on throttle—never against a car already alongside, never against a lapping car, and never under yellow flags.
+- **Defending:** Limited to one defensive move per straight while on throttle: never against a car already alongside, never against a lapping car, and never under yellow flags.
 - **Blue flags:** Cars about to be lapped concede the inside line at the upcoming corner.
-- **Hazards and local yellows:** Spinning, stopped, crawling, or retired cars are treated as obstacles rather than cars to draft—AI steers to whichever side offers clear space and slows when gaps are tight. Each hazard projects a yellow-flag zone from `350 m` before to `40 m` after the incident, within which AI drivers lift and hold position.
+- **Hazards and local yellows:** Spinning, stopped, crawling, or retired cars are treated as obstacles rather than cars to draft: AI steers to whichever side offers clear space and slows when gaps are tight. Each hazard projects a yellow-flag zone from `350 m` before to `40 m` after the incident, within which AI drivers lift and hold position.
 - **Side-by-side clearance:** Cars leave roughly `0.9 m` of daylight between bodies (`2.9 m` centre-to-centre).
 
 ## Contact and driver reaction

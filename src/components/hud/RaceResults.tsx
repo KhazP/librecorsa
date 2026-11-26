@@ -302,7 +302,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
                                   <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
                                 </span>
                               ) : null}
-                              <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
+                              <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}><bdi>{timeOrGap(r, final)}</bdi></span>
                             </span>
                             {rowReason ? (
                               <span className="text-[11px] leading-tight text-lc-fog" title={rowReason}>

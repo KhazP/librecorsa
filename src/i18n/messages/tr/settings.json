@@ -708,6 +708,7 @@
       "retirements": "Yarış dışı kalma",
       "mostDrivenCar": "En çok sürülen araç",
       "mostDrivenCircuit": "En çok sürülen pist",
+      "none": "Henüz yok",
       "hoursMinutes": "{hours} sa {minutes} dk",
       "minutes": "{minutes} dk",
       "km": "{km} km"

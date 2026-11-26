@@ -131,10 +131,10 @@
       "protected": "Protegida"
     },
     "collisionHint": {
-      "on": "Contato total",
+      "on": "Contato total (ghost ao entrar na pista, no pit lane, AFK ou com muito lag)",
       "ghostLap1": "Sem contato na volta de abertura",
       "off": "Os carros se atravessam",
-      "protected": "Ghost na volta 1, depois um carro perigoso não toca nos outros"
+      "protected": "Contato ativo após a largada; perigos, pit lane e abalroamentos passam direto"
     },
     "anyCar": "Qualquer carro",
     "startType": {
@@ -718,7 +718,7 @@
     "foldTuner": "Recolher os ajustes"
   },
   "f12026ChannelsPanel": {
-    "region": "Canais de engenharia",
+    "region": "Telemetria de suspensão e aero",
     "title": "Suspensão e aero",
     "suspensionGrip": "Suspensão e aderência",
     "wheelLegend": "Desliz. · Batente",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}: razão de deslizamento, curso restante até o batente, aderência usada",
     "slipRatio": "%RD",
     "aeroHeightTitle": "Altura aerodinâmica",
-    "aeroHeight": "Alt aero",
+    "aeroHeight": "Altura",
     "aeroBalanceTitle": "Balanço aerodinâmico (parte dianteira do downforce)",
     "aeroBalance": "Bal aero",
     "lsdTitle": "Torque de travamento do diferencial",

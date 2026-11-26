@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {Subida {lap}} other {Volta {lap}}}",
     "raceLap": "Volta {lap}",
     "raceLapOfTotal": "Volta {lap}/{total}",
+    "raceLaps": "{laps} vlt",
     "best": "Melhor"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "Sessão",
     "lastLap": "Última volta",
     "historyLap": "VOLTA {lap}",
+    "lapShort": "V{lap}",
+    "lapShortOfTotal": "V{lap} / {total}",
     "shiftLights": "Luzes de troca: {lit} de {total} acesas",
     "aidOff": "OFF",
     "fuel": "Comb.",
@@ -100,6 +103,8 @@
     "fuelLaps": "Voltas ~{laps}",
     "raceLaps": "Volta {lap}",
     "raceLapsOfTotal": "Volta {lap}/{total}",
+    "lapShort": "V{lap}",
+    "lapShortOfTotal": "V{lap}/{total}",
     "aidWorking": "{aid} atuando",
     "inputs": "Entradas",
     "shiftLights": "Luzes de troca: {lit} de {total}",
@@ -226,6 +231,12 @@
     "aidOff": "OFF",
     "fuel": "COMB",
     "aero": "AERO",
+    "corners": {
+      "fl": "DE",
+      "fr": "DD",
+      "rl": "TE",
+      "rr": "TD"
+    },
     "open": "ABR",
     "armed": "PRO",
     "shut": "FEC",
@@ -679,6 +690,13 @@
       "engineMap": "Mapa do motor",
       "ers": "ERS",
       "ersMode": "Modo ERS",
+      "ersModes": {
+        "CHR": "Carga",
+        "LIC": "Baixa vel",
+        "BAL": "Equilib.",
+        "RAC": "Corrida",
+        "PSH": "Ataque"
+      },
       "boost": "Boost",
       "overtake": "Overtake",
       "motor": "Motor",
@@ -994,7 +1012,7 @@
     "tc": "TC",
     "abs": "ABS",
     "bias": "Bal.",
-    "engineMap": "Map",
+    "engineMap": "Mapa",
     "off": "Off",
     "cutting": "{aid} atuando"
   }

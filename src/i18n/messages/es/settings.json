@@ -398,7 +398,7 @@
     },
     "raceEventCards": {
       "label": "Tarjetas de eventos de carrera",
-      "hint": "En carreras con IA: una tarjeta del piloto cuando un coche gana, toma el liderato, marca la vuelta más rápida, para en boxes o abandona, y una franja sobre una lucha cerrada con su pronóstico."
+      "hint": "En carreras con IA: una tarjeta del piloto cuando un auto gana, toma el liderato, marca la vuelta más rápida, para en boxes o abandona, y una franja sobre una lucha cerrada con su pronóstico."
     },
     "boardWidget": {
       "label": "Clasificación de vueltas",
@@ -708,6 +708,7 @@
       "retirements": "Abandonos",
       "mostDrivenCar": "Auto más conducido",
       "mostDrivenCircuit": "Circuito más recorrido",
+      "none": "Aún nada",
       "hoursMinutes": "{hours} h {minutes} min",
       "minutes": "{minutes} min",
       "km": "{km} km"

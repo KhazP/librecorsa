@@ -12,6 +12,7 @@ import { carById, carClass, carSkinSwatchBackground } from "@/lib/cars/car-regis
 import { carSkinFor } from "@/lib/cars/car-skins";
 import { vehicleModelSpec, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { isVehicleRestricted } from "@/lib/sim/multiplayer-sync";
+import type { VehicleRule } from "@/lib/net/wire";
 import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { formatLapTime } from "@/components/hud/hud-format";
 import { EngineersGarage } from "./EngineersGarage";
@@ -128,6 +129,11 @@ export interface TitleMenuProps extends PauseMenuProps {
   onCloseSupportNote?: () => void;
   /** A maker's donate button was pressed in the note */
   onSupportThanked?: (maker: string) => void;
+  /**
+   * The car rule of the room or scheduled race the player is in. A scheduled race's lobby is not passed as `lobby`
+   * (it shows on the Races card, not as a room), so the car browser takes its rule from here
+   */
+  carRule?: VehicleRule | null;
 }
 
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
@@ -137,7 +143,8 @@ const licenceClass = cx(linkClass, "whitespace-nowrap");
 const creditKey = (t: TrackInfo): string => t.credit?.url || `${t.credit?.title}\u0000${t.credit?.author}`;
 
 /** A circuit's length in the player's units ("5.34 km") */
-const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)} ${DISTANCE_LABEL[unit]}`;
+// A no-break space: the number and its unit stay on one line
+const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)}\u00a0${DISTANCE_LABEL[unit]}`;
 
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="flex flex-col gap-1.5 border-t border-lc-line py-4">
@@ -311,6 +318,20 @@ const Credits: React.FC = () => {
               CC BY 4.0
             </a>
             <br />
+            LC25 Prototype: &ldquo;F1 2025 McLaren MCL39&rdquo; (
+            <a
+              href="https://sketchfab.com/3d-models/f1-2025-mclaren-mcl39-c6194270002b401bb25be7e35ab56e34"
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              sketchfab.com
+            </a>
+            ) by shunqi, steering wheel from DeX&apos;s AM26 ·{" "}
+            <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
+              CC BY 4.0
+            </a>
+            <br />
             Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
             <a
               href="https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07"
@@ -352,7 +373,9 @@ const Credits: React.FC = () => {
             <a href="https://www.patreon.com/cw/PurpleSector" target="_blank" rel="noreferrer" className={linkClass}>
               patreon.com/cw/PurpleSector
             </a>
-            ) · the 2026 car&apos;s tyres · used with permission
+            ) · the F1 cars&apos; tyres · used with permission
+            <br />
+            Full-wet tread and the LC25&apos;s rain-tyre ratios by Nuzzi · used with permission
             <br />
             &ldquo;2026 Pirelli Tire Pack&rdquo; (
             <a
@@ -675,9 +698,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const vehicle = carById(props.carId);
   // The car is fixed for an online race (the shell refuses the swap too)
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
-  // When in a class-locked or spec-locked lobby, restrict the car browser to eligible vehicles
+  // When in a class-locked or spec-locked lobby (a room or a scheduled race), restrict the car browser to eligible vehicles
+  const lobbyCarRule = props.carRule ?? props.lobby?.settings;
   const lobbyCarRestriction = useMemo(() => {
-    const s = props.lobby?.settings;
+    const s = lobbyCarRule;
     if (!s || !isVehicleRestricted(s)) return null;
     const allowedVehicles: VehicleModelId[] = s.vehicle ? [s.vehicle] : vehicleModelsFor(s.carClass);
     const label = s.vehicle
@@ -686,7 +710,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         ? ""
         : carClass(s.carClass).title;
     return { label, allowedVehicles };
-  }, [props.lobby?.settings, props.vehicleLabel]);
+  }, [lobbyCarRule, props.vehicleLabel]);
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
   // This car's personal best on this circuit, for the Lap times entry and the Up next sheet alike: this car's own laps

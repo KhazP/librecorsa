@@ -1,5 +1,5 @@
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
-import type { BuiltTrackData } from "@/lib/track-data";
+import { TURN_METADATA, type BuiltTrackData } from "@/lib/track-data";
 import type { CarTelemetry, F12026Channels, PitTelemetry, RaceStandingEntry, TireCompound } from "@/types/f1";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 
@@ -90,7 +90,9 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
   const base = new F1Physics2026(track).telemetry;
   const gt3 = scenario === "gt3";
   const lights = scenario === "lights";
+  // The player's laps done (none on the grid); a race counts its first lap from the grid (race-session.ts)
   const lap = lights ? 0 : scenario === "final" ? 5 : 4;
+  const raceLap = Math.max(1, lap);
   // 72.4 s into a 101.4 s lap: about 0.7 round, in the last sector
   const progress = lights ? 0.995 : 0.7;
   const t: CarTelemetry = {
@@ -117,6 +119,8 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     trackDistanceM: progress * track.totalLengthM,
     currentSector: 3,
     currentTurnNumber: 7,
+    // The corner's own name, as the track gives it (else the start pose's would show under turn 7)
+    currentTurnName: TURN_METADATA.find((c) => c.number === 7)?.name ?? "",
     lapCount: lap,
     currentLapTimeMs: lights ? 0 : 72_408,
     lastLapTimeMs: lights ? null : 101_902,
@@ -124,6 +128,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     sectorTimesMs: lights ? [0, 0, 0] : [31_204, 34_870, 6_334],
     bestSectorTimesMs: lights ? [null, null, null] : [31_316, 34_972, 35_089],
     topSpeedThisLapKmh: 296,
+    allTimeTopSpeedKmh: 301,
     tireTempsC: [96, 98, 104, 112],
     tireBandTempsC: [[94, 96, 98], [99, 98, 97], [101, 104, 107], [115, 112, 108]],
     tirePressuresPsi: [23.1, 23.3, 21.8, 22.0],
@@ -135,7 +140,8 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
     lapInvalid: false,
     outLap: false,
     radar: lights ? [] : [{ x: 2.4, z: -1.8, yaw: 0, color: "#4DA6FF" }],
-    trackLimits: { warnings: 1, strikesPerPenalty: 3, totalStrikes: 1, penaltyS: 0, pending: null, message: null },
+    // One strike so far in the race; none on the grid
+    trackLimits: { warnings: lights ? 0 : 1, strikesPerPenalty: 3, totalStrikes: lights ? 0 : 1, penaltyS: 0, pending: null, message: null },
     f12026: gt3 ? GT3_CHANNELS : base.f12026,
     liveTuner: base.liveTuner
       ? { ...base.liveTuner, tcLevel: 5, absLevel: 3, brakeBiasPct: 56.5, engineMap: 2, ersMode: "BAL", hasErs: !gt3 }
@@ -147,7 +153,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
       name: f.name,
       teamColorHex: f.color,
       isPlayer: f.code === "YOU",
-      lap,
+      lap: raceLap,
       gapToLeaderS: lights ? 0 : f.gap,
       intervalS: lights ? 0 : f.interval,
       bestLapMs: lights ? null : f.best,
@@ -163,7 +169,7 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
       totalLaps: 5,
       position: 3,
       fieldSize: 8,
-      lap,
+      lap: raceLap,
       standings,
       splits: lights
         ? undefined
@@ -171,8 +177,13 @@ export function hudFixture(track: BuiltTrackData, scenario: HudScenario): HudFix
             ahead: { driverCode: "MUS", teamColorHex: "#FF2A3C", gapS: 0.466, changeS: -0.08 },
             behind: { driverCode: "RUB", teamColorHex: "#4DA6FF", gapS: 0.471, changeS: 0.03 },
           },
+      // The 6 % the pit crew would repair: a knock to the front left
+      damage: lights
+        ? undefined
+        : { front: 0.12, rear: 0, left: 0.08, right: 0, suspension: [0, 0.05, 0, 0], punctured: [false, false, false, false], overall: 0.06, terminal: false },
     };
-    t.pit = PIT;
+    // On the grid the car is whole: nothing for the crew to repair
+    t.pit = lights ? { ...PIT, damage: 0, repairS: 0 } : PIT;
   }
   return { t, deltaS: lights ? null : -0.214, compound: "soft", weather: WEATHER };
 }

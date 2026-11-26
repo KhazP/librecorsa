@@ -181,6 +181,24 @@ async function main() {
         lastLobby.players[0].peerId === 'peer_lmdh',
     );
 
+    // A car that came in the wrong car and then switched (the game does on the refusal): back in the lobby, then on the grid
+    const switchWs = new FakeSocket();
+    await server.connect(switchWs, 'peer_switch', token('d'), lmdhSlot, V);
+    await server.webSocketMessage(
+      switchWs,
+      JSON.stringify({ ctl: { type: 'hello', name: 'Switcher', code: 'SWT', color: '#ffff00', vehicle: 'lc26', trackId: 'le_mans_82' }, from: 'peer_switch' }),
+    );
+    await server.webSocketMessage(
+      switchWs,
+      JSON.stringify({ ctl: { type: 'hello', name: 'Switcher', code: 'SWT', color: '#ffff00', vehicle: 'lc-lmdh', trackId: 'le_mans_82' }, from: 'peer_switch' }),
+    );
+    const switchedLobby = [...lmdhWs.sent].reverse().map((m) => sanitizeControl(m.ctl)).find((c) => c?.type === 'lobby')?.lobby as LobbyState | undefined;
+    check(
+      'a car refused for its car and then switched to the LC-LMDH is in the lobby',
+      !!switchedLobby?.players.some((p) => p.peerId === 'peer_switch' && p.vehicle === 'lc-lmdh') && !switchedLobby.players.some((p) => p.peerId === 'peer_f1'),
+      JSON.stringify(switchedLobby?.players.map((p) => p.peerId)),
+    );
+
     // Second valid LC-LMDH player joins; F1 player stays excluded from grid when race starts
     const lmdh2Ws = new FakeSocket();
     await server.connect(lmdh2Ws, 'peer_lmdh2', token('c'), lmdhSlot, V);
@@ -193,11 +211,12 @@ async function main() {
     await server.webSocketMessage(lmdhWs, JSON.stringify({ ctl: { type: 'ping', t0: 1 }, from: 'peer_lmdh' }));
     await server.webSocketMessage(lmdh2Ws, JSON.stringify({ ctl: { type: 'ping', t0: 1 }, from: 'peer_lmdh2' }));
     await server.webSocketMessage(f1Ws, JSON.stringify({ ctl: { type: 'ping', t0: 1 }, from: 'peer_f1' }));
+    await server.webSocketMessage(switchWs, JSON.stringify({ ctl: { type: 'ping', t0: 1 }, from: 'peer_switch' }));
     await server.alarm();
     const start = [...lmdhWs.sent].reverse().map((m) => sanitizeControl(m.ctl)).find((c) => c?.type === 'start')?.start as RaceStartInfo | undefined;
     check(
-      'starting grid includes only LC-LMDH entrants and excludes mismatched F1 entrant',
-      !!start && start.vehicle === 'lc-lmdh' && start.carClass === 'proto' && start.grid.includes('peer_lmdh') && start.grid.includes('peer_lmdh2') && !start.grid.includes('peer_f1'),
+      'starting grid includes only LC-LMDH entrants (the one that switched among them) and excludes mismatched F1 entrant',
+      !!start && start.vehicle === 'lc-lmdh' && start.carClass === 'proto' && start.grid.includes('peer_lmdh') && start.grid.includes('peer_lmdh2') && start.grid.includes('peer_switch') && !start.grid.includes('peer_f1'),
       JSON.stringify(start?.grid),
     );
 

@@ -4,10 +4,11 @@ import { LEAD, READ, SiteIntro, SitePage, SiteSection, TEXT_LINK } from "@/compo
 import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 
 // What the site keeps about the people who play it. Every statement here follows from the code: the browser's own
-// storage, cloudflare/api (boards, races, rooms, usage, accounts) and the connection servers in multiplayer-sync.ts.
+// storage, cloudflare/api (boards, races, rooms, usage, accounts), the connection servers in multiplayer-sync.ts and
+// the desktop app's own requests (launcher/update.go, launcher/toolchain.go).
 // Change this page in the same commit as anything that changes what is stored or sent.
 const DESCRIPTION = "What LibreCorsa keeps in your browser, what it sends online and when, and how to have it removed.";
-const UPDATED = "24 November 2026";
+const UPDATED = "26 November 2026";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -37,7 +38,8 @@ export default function PrivacyPage() {
           Your settings, controls, car setups, saved laps, race history, careers and driver name are kept in your browser’s
           own storage on your device. So is a driver key: a random code that proves a name on the lap boards is yours.
           None of it leaves your device except as described below, and clearing this site’s data in your browser
-          removes all of it.
+          removes all of it. Telemetry out, if you switch it on, goes only to the bridge program running on your own
+          computer, which passes it to that computer or to a device on your own network.
         </p>
       </SiteSection>
 
@@ -108,7 +110,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <span className={B}>The synced save.</span> Your settings (not controls, graphics or volumes), car setups,
-            liveries, race history, careers, and best laps with their ghosts.
+            liveries, race history, careers, driver totals, and best laps with their ghosts.
           </li>
         </ul>
         <p className={READ}>
@@ -139,6 +141,30 @@ export default function PrivacyPage() {
           , and choose Delete. The account, its sign-ins, passkeys, devices and synced save are deleted at once. Its
           driver names and laps stay on the boards, unless you tick “Also remove my laps and race results from the
           boards”, which removes them as well.
+        </p>
+      </SiteSection>
+
+      <SiteSection id="desktop-app" title="The desktop app">
+        <p className={READ}>
+          The desktop app plays the same game. While it is online it loads the game’s pages, cars and circuits from
+          librecorsa.org as a browser would, and keeps a copy on your computer so it can play offline, so everything on
+          this page applies to it too. Apart from that, it sends only this:
+        </p>
+        <ul className={LIST}>
+          <li>
+            <span className={B}>Update checks.</span> Shortly after it starts and every six hours while it runs, it asks
+            GitHub for the app’s latest release, and downloads a newer one from GitHub when there is one. GitHub sees your
+            IP address and which version of the app you have.
+          </li>
+          <li>
+            <span className={B}>The converter’s tools.</span> Only when you convert a circuit or a car and agree to the
+            download: uv and Node.js from GitHub and nodejs.org, then Python and the converter’s packages through uv, from
+            GitHub and the Python Package Index. Those sites see your IP address.
+          </li>
+        </ul>
+        <p className={READ}>
+          Your mods, the files you convert and what the converter makes stay on your computer. The game’s window tells
+          the app it is still open, so the app can quit when you close it; that message never leaves your computer.
         </p>
       </SiteSection>
 

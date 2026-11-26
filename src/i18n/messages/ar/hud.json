@@ -131,10 +131,10 @@
       "protected": "محمي"
     },
     "collisionHint": {
-      "on": "تلامس كامل",
+      "on": "تلامس كامل (شبح عند الظهور، في حارة الصيانة، عند الغياب أو التأخر الشديد)",
       "ghostLap1": "دون تلامس في اللفة الافتتاحية",
       "off": "تمر السيارات عبر بعضها",
-      "protected": "شبح في اللفة 1، ثم تُمنع السيارة الخطرة من ملامسة الآخرين"
+      "protected": "التلامس مفعّل بعد الانطلاق؛ وتمرّ السيارات الخطرة والسيارات في حارة الصيانة والاصطدامات المتعمدة بلا تلامس"
     },
     "anyCar": "أي سيارة",
     "startType": {
@@ -497,7 +497,7 @@
     "position": "P{position}",
     "place": "P{position}، {name}",
     "classification": "الترتيب",
-    "pointsScored": "{count, plural, zero {+0 نقطة} one {+1 نقطة} two {+2 نقطة} few {+# نقاط} many {+# نقطة} other {+# نقطة}}",
+    "pointsScored": "{count, plural, zero {+0 نقاط} one {+نقطة واحدة} two {+نقطتان} few {+# نقاط} many {+# نقطة} other {+# نقطة}}",
     "noPoints": "بلا نقاط",
     "championshipPlace": "البطولة P{position}",
     "placesUp": "{count, plural, zero {لا تقدّم} one {تقدّم مركزًا واحدًا} two {تقدّم مركزين} few {تقدّم # مراكز} many {تقدّم # مركزًا} other {تقدّم # مركز}}",
@@ -718,7 +718,7 @@
     "foldTuner": "طيّ أداة الضبط"
   },
   "f12026ChannelsPanel": {
-    "region": "القنوات الهندسية",
+    "region": "قياسات التعليق والانسيابية",
     "title": "التعليق والانسيابية",
     "suspensionGrip": "التعليق والتماسك",
     "wheelLegend": "الانزلاق · المصدّ",
@@ -805,7 +805,7 @@
     "nextCarTitle": "السيارة التالية ({key})",
     "cameraAngle": "زاوية كاميرا الإعادة",
     "cycleCamera": "تبديل كاميرا الإعادة",
-    "flashbackTitle": "Flashback — استأنف القيادة من هذه اللحظة ({key}، يُلغي اللفة الحالية)",
+    "flashbackTitle": "Flashback: استأنف القيادة من هذه اللحظة ({key}، يُلغي اللفة الحالية)",
     "flashback": "Flashback",
     "exit": "خروج",
     "hints": {
@@ -1257,8 +1257,8 @@
     "stationary": "{seconds} s",
     "battleFor": "معركة على P{position}",
     "attacking": "يهاجم",
-    "closing": "يقلّص {rate} s/لفة",
-    "closingCatch": "يقلّص {rate} s/لفة · يلحق خلال {laps, plural, one {لفة واحدة} two {لفتين} few {# لفات} many {# لفة} other {# لفة}}",
+    "closing": "يقلّص {rate} s لكل لفة",
+    "closingCatch": "يقلّص {rate} s لكل لفة · يلحق خلال {laps, plural, zero {0 لفات} one {لفة واحدة} two {لفتين} few {# لفات} many {# لفة} other {# لفة}}",
     "pullingAway": "يبتعد",
     "stable": "الفارق ثابت"
   },

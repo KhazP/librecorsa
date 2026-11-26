@@ -131,10 +131,10 @@
       "protected": "Protégées"
     },
     "collisionHint": {
-      "on": "Contact total",
+      "on": "Contact intégral (fantôme au départ, dans les stands, si inactif ou fort lag)",
       "ghostLap1": "Pas de contact au premier tour",
       "off": "Les voitures se traversent",
-      "protected": "Tour 1 fantôme, puis une voiture dangereuse ne peut plus toucher les autres"
+      "protected": "Contact actif après le départ ; dangers, voie des stands et chocs volontaires traversent"
     },
     "anyCar": "Toute voiture",
     "startType": {
@@ -718,7 +718,7 @@
     "foldTuner": "Replier les réglages électroniques"
   },
   "f12026ChannelsPanel": {
-    "region": "Canaux d’ingénierie",
+    "region": "Télémétrie suspension et aéro",
     "title": "Suspension et aéro",
     "suspensionGrip": "Suspension et adhérence",
     "wheelLegend": "Glissement · Butée",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel} : taux de glissement, course restante avant la butée, adhérence utilisée",
     "slipRatio": "%GL",
     "aeroHeightTitle": "Hauteur de caisse aéro",
-    "aeroHeight": "Haut. aéro",
+    "aeroHeight": "Hauteur",
     "aeroBalanceTitle": "Équilibre aéro (part d’appui à l’avant)",
     "aeroBalance": "Équil. aéro",
     "lsdTitle": "Couple de verrouillage du différentiel",
@@ -1240,7 +1240,7 @@
       "fwd": "Traction",
       "awd": "Transmission intégrale"
     },
-    "revLimit": "Rupteur à {value} tr/min",
+    "revLimit": "Rupteur à {value} rpm",
     "go": "C’est parti",
     "sector": "S{n}"
   },

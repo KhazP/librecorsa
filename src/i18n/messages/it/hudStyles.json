@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {Salita {lap}} other {Giro {lap}}}",
     "raceLap": "Giro {lap}",
     "raceLapOfTotal": "Giro {lap}/{total}",
+    "raceLaps": "{laps} giri",
     "best": "Migl."
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "Sessione",
     "lastLap": "Ultimo giro",
     "historyLap": "GIRO {lap}",
+    "lapShort": "G{lap}",
+    "lapShortOfTotal": "G{lap} / {total}",
     "shiftLights": "Luci di cambiata: {lit} accese su {total}",
     "aidOff": "Off",
     "fuel": "Carb.",
@@ -100,6 +103,8 @@
     "fuelLaps": "Giri ~{laps}",
     "raceLaps": "Giro {lap}",
     "raceLapsOfTotal": "Giro {lap}/{total}",
+    "lapShort": "G{lap}",
+    "lapShortOfTotal": "G{lap}/{total}",
     "aidWorking": "{aid} attivo",
     "inputs": "Input",
     "shiftLights": "Luci di cambiata: {lit} su {total}",
@@ -226,6 +231,12 @@
     "aidOff": "OFF",
     "fuel": "CARB",
     "aero": "AERO",
+    "corners": {
+      "fl": "AS",
+      "fr": "AD",
+      "rl": "PS",
+      "rr": "PD"
+    },
     "open": "APER",
     "armed": "PRON",
     "shut": "CHIU",
@@ -501,8 +512,8 @@
     "tyres": {
       "life": "Vita {pct}%",
       "window": "Finestra {low}–{high}",
-      "hot": "Calde",
-      "cold": "Fredde",
+      "hot": "Calda",
+      "cold": "Fredda",
       "flat": "Forata",
       "corner": "{corner}: battistrada {temp}, pressione {pressure}, freno {brake}",
       "fl": "Anteriore sinistra",
@@ -646,7 +657,7 @@
       "mguk": "MGU-K",
       "deploy": "Erogazione",
       "harvest": "Recupero",
-      "idle": "Fermo",
+      "idle": "Inattivo",
       "kg": "kg",
       "laps": "giri",
       "kw": "kW"
@@ -679,6 +690,13 @@
       "engineMap": "Mappa motore",
       "ers": "ERS",
       "ersMode": "Modalità ERS",
+      "ersModes": {
+        "CHR": "Carica",
+        "LIC": "Bassa v.",
+        "BAL": "Bilanc.",
+        "RAC": "Gara",
+        "PSH": "Attacco"
+      },
       "boost": "Boost",
       "overtake": "Sorpasso",
       "motor": "Motore",

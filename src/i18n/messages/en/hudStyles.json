@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {Run {lap}} other {Lap {lap}}}",
     "raceLap": "Lap {lap}",
     "raceLapOfTotal": "Lap {lap}/{total}",
+    "raceLaps": "{laps} laps",
     "best": "Best"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "Session",
     "lastLap": "Last lap",
     "historyLap": "LAP {lap}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "Shift lights: {lit} of {total} lit",
     "aidOff": "Off",
     "fuel": "Fuel",
@@ -100,6 +103,8 @@
     "fuelLaps": "Laps ~{laps}",
     "raceLaps": "Laps {lap}",
     "raceLapsOfTotal": "Laps {lap}/{total}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} working",
     "inputs": "Inputs",
     "shiftLights": "Shift lights: {lit} of {total}",
@@ -226,6 +231,12 @@
     "aidOff": "OFF",
     "fuel": "FUEL",
     "aero": "AERO",
+    "corners": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
     "open": "OPEN",
     "armed": "ARM",
     "shut": "SHUT",
@@ -679,6 +690,13 @@
       "engineMap": "Engine map",
       "ers": "ERS",
       "ersMode": "ERS mode",
+      "ersModes": {
+        "CHR": "Charge",
+        "LIC": "Low speed",
+        "BAL": "Balanced",
+        "RAC": "Race",
+        "PSH": "Attack"
+      },
       "boost": "Boost",
       "overtake": "Overtake",
       "motor": "Motor",

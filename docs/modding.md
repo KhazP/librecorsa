@@ -7,7 +7,7 @@ Mod packages let you add new circuits, cars, liveries, and physics variants to L
 ## How mods behave in-game and online
 
 - **Leaderboards and weekly challenges:** Laps driven on a mod circuit or in a mod car stay strictly local and are never submitted to online lap boards or the weekly challenge. A mod livery applied to a built-in car only changes textures, so those laps post normally.
-- **Local bests and ghosts:** Mod circuits save personal bests and ghosts normally. Mod cars keep lap times for the current session only—because they share their base vehicle model's ID, they start fresh each session and never overwrite the base car's saved bests.
+- **Local bests and ghosts:** Mod circuits save personal bests and ghosts normally. Mod cars keep lap times for the current session only, because they share their base vehicle model's ID, they start fresh each session and never overwrite the base car's saved bests.
 - **Private multiplayer rooms:** Hosts can run mod circuits; the room advertises the package ID and its content hash. Guests who do not have the exact matching version cannot ready up and sit out the race.
 - **Car visibility online:** Remote clients render cars strictly by built-in vehicle model ID. In scheduled open races, any mod car is swapped for its base built-in car. In private rooms (including qualifying), any mod car with custom physics is likewise swapped for its base car. Weekly challenges always run in the built-in car.
 
@@ -38,7 +38,7 @@ Package constraints enforced by the importer:
 - **Allowed file types:** `.glb`, `.gltf`, `.bin`, `.json`, `.webp`, `.png`, `.jpg`, `.jpeg`, `.ktx2`, `.ogg`, `.wav`, `.mp3`, `.txt`, and `.md`.
 - **Paths:** Must be relative, use forward slashes (`/`), and contain no `..` traversal segments.
 - **Case sensitivity:** No two files may differ only in letter casing (to prevent collisions on Windows and macOS).
-- **No symlinks:** Symbolic links are not followed—include actual files inside the package.
+- **No symlinks:** Symbolic links are not followed; include actual files inside the package.
 - **Size limits:** Up to `20,000` files and `2 GB` uncompressed per package (whether imported as a `.zip` or a folder).
 
 ## `mod.json` reference
@@ -94,7 +94,7 @@ Package constraints enforced by the importer:
 
 ### Core fields
 
-- **`id`:** Uses the format `author.name`, containing only lowercase letters, digits, `-`, and `_`, with each segment starting with a letter or digit (`author` max 16 characters, `name` max 24 characters). This also serves as the folder name in `mods/`. Never change a package's `id` across releases—LibreCorsa treats a changed ID as a completely separate package.
+- **`id`:** Uses the format `author.name`, containing only lowercase letters, digits, `-`, and `_`, with each segment starting with a letter or digit (`author` max 16 characters, `name` max 24 characters). This also serves as the folder name in `mods/`. Never change a package's `id` across releases: LibreCorsa treats a changed ID as a completely separate package.
 - **`version`:** Freeform string up to 32 characters (e.g., `1.0.0` or `2024-rc2`). Displayed in the Mods panel and in multiplayer rooms when a guest has a version mismatch.
 - **Internal item IDs (`tracks`, `cars`, `skins`):** Lowercase letters, digits, `-`, and `_`, starting with a letter or digit, up to 16 characters. At runtime, LibreCorsa namespaces every entry as `mod:<package>/<id>`, preventing collisions with built-in content or other mods.
 - **`credit`:** Requires `author` and `license`; `url`, `authorUrl`, `licenseUrl`, and `note` are optional. All URLs must use `https://`. Credits appear on each circuit and car (and in the main credits list for circuits). Individual circuits or cars can override `credit` when created by a different author.
@@ -103,7 +103,7 @@ Package constraints enforced by the importer:
 
 Point `data` at a `track_data.json` built by the track pipeline (see [Porting circuits](PORTING-TRACKS.md)). Inside `track_data.json`, both `metadata.mesh.url` and `metadata.mesh.scenery` must use package-relative `.glb` paths (such as `"monza/monza.glb"`) rather than `/tracks/…` URLs. External URLs, built-in site paths, cross-package references, or `.gltf` files (which can reference external resources) are rejected.
 
-All other circuit data—surfaces, kerbs, DRS zones, racing lines, AI plans, and pit lanes—works identically to built-in circuits. Optional manifest fields include `type` (`permanent`, `street`, `oval`, or `hillclimb`) and `defaultTimeOfDay` (`dawn`, `morning`, `noon`, `afternoon`, `golden_hour`, `dusk`, or `night`).
+All other circuit data (surfaces, kerbs, DRS zones, racing lines, AI plans, and pit lanes) works identically to built-in circuits. Optional manifest fields include `type` (`permanent`, `street`, `oval`, or `hillclimb`) and `defaultTimeOfDay` (`dawn`, `morning`, `noon`, `afternoon`, `golden_hour`, `dusk`, or `night`).
 
 ### Liveries for built-in cars (`skins`)
 
@@ -115,13 +115,13 @@ Supported built-in `car` IDs: `amg-gt3`, `bmw-m4-gt3`, `mtr-496r`, `lc-lmdh`, `l
 
 ### Cars (`cars`)
 
-A mod car pairs a custom 3D body and audio bank with one of LibreCorsa's built-in vehicle physics models (`physics`): `lc26`, `f12026-car`, `amg-gt3`, `liana`, `mtr-496r`, `lc-lmdh`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, or `porsche-934-rsr`. By default, it inherits that base model's handling, garage setup ranges, tyres, and AI.
+A mod car pairs a custom 3D body and audio bank with one of LibreCorsa's built-in vehicle physics models (`physics`): `lc26`, `lc25`, `f12026-car`, `amg-gt3`, `liana`, `mtr-496r`, `lc-lmdh`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, or `porsche-934-rsr`. By default, it inherits that base model's handling, garage setup ranges, tyres, and AI.
 
 - **`model`:** Path to a GLB matching LibreCorsa's car rig. `scripts/cars/port_ac_car.py` generates compatible models (see [Porting cars](PORTING-CARS.md)).
 - **`bodyPlan`:** Optional barrier-height outline polygon so wall collisions match your custom bodywork instead of the base car's shape. Generate one with `scripts/cars/measure-car-plans.ts`.
 - **`sound`:** Either a package-local audio bank with its recorded rev limiter (`{ "dir": "cars/gt-x/audio", "limiterRpm": 7500 }`) or a reference to any built-in car's audio, including `lc26` (`{ "car": "amg-gt3" }`). In either case, the sound bank automatically scales to the car's active rev limiter.
 - **`skins`:** The first entry describes the default paint baked into the GLB; subsequent entries are file-based liveries stored in `<model folder>/skins/<id>/` by default.
-- **`classId`:** One of `f1`, `gt3`, `proto`, `classic`, or `road`. Together with `year`, this controls menu placement and—for `f1` cars—determines whether DRS or 2026 Overtake Mode rules apply.
+- **`classId`:** One of `f1`, `gt3`, `proto`, `classic`, or `road`. Together with `year`, this controls menu placement and, for `f1` cars, determines whether DRS or 2026 Overtake Mode rules apply.
 
 ### Custom physics patches
 
@@ -149,7 +149,7 @@ The patch file contains only the fields you want to override from the base model
 The patched profile runs in the exact same 500 Hz simulation worker as built-in cars, matching the structure of `*_SIM_PROFILE` and `*Config.ts` under `src/lib/sim/*/`. Patches are validated against strict safety invariants:
 
 - **Existing keys and types only:** Every patched key must already exist in the base profile and keep the same value type (numbers stay numbers, arrays stay arrays, objects merge recursively).
-- **Positive divisor guardrails:** Any parameter the simulation divides by must remain strictly greater than `0` when the base value is positive—including masses, inertias (the engine's too), wheelbase, track widths, centre-of-gravity height, wheel radius and width, gear ratios, redline, shift points, steering lock, a tyre's peak slip ratio (`slip_ratio_limit`), and a turbo's spool times and reference rpm. Other fields may be `0` (to disable a component) or negative (such as positions or camber angles).
+- **Positive divisor guardrails:** Any parameter the simulation divides by must remain strictly greater than `0` when the base value is positive, including masses, inertias (the engine's too), wheelbase, track widths, centre-of-gravity height, wheel radius and width, gear ratios, redline, shift points, steering lock, a tyre's peak slip ratio (`slip_ratio_limit`), and a turbo's spool times and reference rpm. Other fields may be `0` (to disable a component) or negative (such as positions or camber angles).
 - **Structured tables and arrays:** Curve tables must keep `[x, y]` pairs with strictly increasing `x`; suspension coordinates stay `[x, y, z]`; two-value ranges stay length 2. You may change the number of gear ratios or ride-height map breakpoints (heights must stay strictly increasing), provided the map's value grids resize to match.
 - **Element-wise list validation:** List items are checked position-by-position against the base list (for example, rear wing against rear wing). A list that is empty on the base car (such as aero wings on a road car) cannot be populated by a patch.
 - **Physical sanity checks:** `frontWeightFraction` must stay between `0` and `1`, and `totalMassKg` must exceed the combined unsprung mass of all four wheels.
@@ -157,7 +157,7 @@ The patched profile runs in the exact same 500 Hz simulation worker as built-in 
 
 If a patch violates any rule, contains a typo, or uses the wrong type, that car is skipped (the rest of the package still loads) and the **Mods** panel pinpoints the failing field path. Updating `gearbox.gears.redline_rpm` automatically adjusts audio pitch scaling and the shift warning beep. Garage setup ranges, AI profiles, and HUD layouts remain inherited from the base model.
 
-All base vehicle models support physics patches except `lc26`, which uses its own separate simulation engine. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
+All base vehicle models support physics patches except `lc26` and `lc25`. To validate custom handling, compare against the measurements in `npm run physics:report` and the `scripts/verify/verify-*.ts` suites.
 
 ## Checking, packing, and importing with the CLI
 
@@ -196,7 +196,7 @@ Because `npm run dev` does not run the production service worker, packages impor
 npm run mod -- index
 ```
 
-This writes `public/mods/_index.json` so the dev server discovers your package immediately (`npm run mod -- import` and `from-circuit` refresh this index automatically when writing to `public/mods/`). Re-run `npm run mod -- index` after editing files so the content hash updates. Both production builds (`npm run build`, served from `out/`) and the live site run the service worker and support full in-browser imports through the **Mods** panel.
+This writes `public/mods/_index.json` so the dev server discovers your package immediately (`npm run mod -- import` and `from-circuit` refresh this index automatically when writing to `public/mods/`). Re-run `npm run mod -- index` after editing files so the content hash updates. A production build (`npm run build`, served from `out/` on `localhost`) and the offline launcher run the service worker and support full in-browser imports through the **Mods** panel. The live site takes no mods at all.
 
 ## Sharing packages through a catalogue
 
@@ -214,7 +214,7 @@ Put the zips in one folder and run:
 npm run mod -- catalogue <folder of zips> [--base-url <url>] [--out <file>]
 ```
 
-It reads each zip with the game's own zip reader, unpacks it into a temporary folder, checks it as `npm run mod -- check` does, and lists it with the zip's size and SHA-256 and the package's content hash. It writes `catalogue.json` in the folder (or `--out`), and nothing at all if any zip fails, a second zip holds a package already listed, or the game would drop an entry. Links are `--base-url` followed by the file name. Without `--base-url` they are just the file names, so the catalogue must sit beside the zips.
+It reads each zip with the game's own zip reader, unpacks it into a temporary folder, checks it as `npm run mod -- check` does, and lists it with the zip's size and SHA-256 and the package's content hash. It writes `catalogue.json` in the folder (or `--out`), and nothing at all if any zip fails, a second zip holds a package already listed, the game would drop an entry, or a package's credit (or a circuit's or car's) carries the importers' "For personal use only" note. Links are `--base-url` followed by the file name. Without `--base-url` they are just the file names, so the catalogue must sit beside the zips.
 
 The game reads catalogues from two places, only when the Mods panel opens, and gives each 6 seconds:
 

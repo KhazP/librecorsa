@@ -5,6 +5,7 @@
  * Run with: npx tsx scripts/verify/verify-car-sounds.ts
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { CARS, carById, type CarId } from "../../src/lib/cars/car-registry";
@@ -98,12 +99,15 @@ for (const exp of Object.values(EXPECTED_SOUNDS)) {
   }
 }
 
-// The repository carries only the 2026 prototype's bank; the others are skipped where a clone lacks them
+// The repository carries only the banks of its own cars; the others are skipped where a clone lacks them. A repository
+// car can still play a hosted bank (the LC25's RB21 bank in /cars/lc25-v6/, its synthesised one in git being the
+// fallback), so a bank in a git-ignored folder is hosted however its car is listed
 const repoBanks = new Set([...REPO_CAR_IDS].map((id) => carById(id as CarId).sound.id));
+const gitIgnored = (path: string): boolean => spawnSync("git", ["check-ignore", "-q", path]).status === 0;
 for (const [bankId, { sound, maxIdleRpm, authorLevels }] of seenBanks) {
   const relDir = join("public", sound.assetDir.replace(/^\/+|\/+$/g, ""));
   const manifestPath = join(relDir, "manifest.json");
-  if (!existsSync(manifestPath) && !repoBanks.has(bankId)) {
+  if (!existsSync(manifestPath) && (!repoBanks.has(bankId) || gitIgnored(manifestPath))) {
     noteSkip(bankId, manifestPath);
     continue;
   }

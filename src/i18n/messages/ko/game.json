@@ -128,7 +128,30 @@
     "surfaceDry": "건조",
     "surfaceWet": "젖음",
     "renameUnreachable": "온라인 보드에 연결할 수 없습니다. 잠시 후 다시 시도해 주십시오.",
-    "renameFailed": "이름을 변경할 수 없습니다(HTTP {status})."
+    "renameFailed": "이름을 변경할 수 없습니다(HTTP {status}).",
+    "errors": {
+      "unreachable": "온라인 보드에 연결할 수 없습니다. 계속 다시 시도하겠습니다",
+      "unreachableGaveUp": "온라인 보드에 연결할 수 없습니다",
+      "olderPhysics": "이전 버전의 물리 또는 서킷에서 달린 랩이며, 해당 보드는 읽기 전용입니다",
+      "olderPhysicsReload": "이전 버전의 물리 또는 서킷에서 달린 랩입니다. 게임을 새로고침하여 새 버전에서 주행해 주십시오",
+      "modLap": "모드 차량이나 모드 서킷의 랩은 온라인 보드에 등록되지 않습니다",
+      "unknownCircuit": "게임에 포함되지 않은 서킷의 랩은 온라인 보드에 등록되지 않습니다",
+      "boardOff": "지금은 온라인 보드를 사용할 수 없습니다",
+      "invalidRecording": "랩 기록 데이터가 올바르지 않습니다",
+      "olderGame": "이전 버전의 게임에서 기록된 랩입니다",
+      "tooManyUploads": "업로드가 너무 많습니다. 나중에 다시 시도해 주십시오",
+      "tooManyChanges": "변경이 너무 많습니다. 나중에 다시 시도해 주십시오",
+      "nameTaken": "이미 사용 중인 이름입니다. 이 이름을 가진 계정에 로그인하거나, 랩 타임에서 드라이버 키를 가져오거나, 다른 이름으로 레이스해 주십시오",
+      "pickName": "다른 이름을 선택해 주십시오",
+      "challengeEnded": "해당 주간 챌린지가 종료되었습니다",
+      "challengeRules": "이번 주 챌린지 규칙에 맞게 주행한 랩이 아닙니다",
+      "tooFewSamples": "기록된 샘플이 너무 적습니다",
+      "lapNotClosed": "랩이 시작한 지점에서 끝나지 않습니다",
+      "standingStartRun": "구간 주행 타임 런은 스탠딩 스타트로 시작해야 합니다",
+      "speedsVsDistance": "기록된 속도가 주행 거리와 맞지 않습니다",
+      "distanceVsLength": "주행 거리가 랩 길이와 맞지 않습니다",
+      "impliedSpeed": "기록된 위치로 보면 속도가 420km/h를 넘습니다"
+    }
   },
   "badges": {
     "weeklyGold": "주간 골드",
@@ -138,20 +161,20 @@
     "og": "OG 드라이버",
     "bulb": "아이디어 기여자",
     "times": "{badge} ×{count}",
-    "withNote": "{badge} — {note}",
+    "withNote": "{badge}: {note}",
     "medalDetail": "주간 챌린지 {place, select, first {1위} second {2위} other {3위}}",
     "medalDetailWeeks": "주간 챌린지 {place, select, first {1위} second {2위} other {3위}}: {weeks}",
     "recordDetailCount": "{count, plural, other {오픈 보드 #곳에서 패스티스트 랩 보유}}",
     "recordCar": "{car} ×{count}",
     "recordManual": "수동 +{count}",
-    "recordDetail": "{boards} — 눌러서 서킷 보기",
+    "recordDetail": "{boards}: 눌러서 서킷 보기",
     "ogDetail": "물리 V1에서 LibreCorsa를 주행함",
     "bulbDetailNote": "아이디어 기여자: {note}",
     "bulbDetail": "아이디어 또는 커뮤니티 기여",
     "creator": "제작자",
     "creatorDetail": "LibreCorsa 제작",
     "goat": "GOAT",
-    "goatDetail": "명예의 전당 최다 수상 드라이버. 공동 1위는 모두 이 배지를 받음."
+    "goatDetail": "명예의 전당 최다 수상 드라이버입니다. 공동 1위는 모두 이 배지를 받습니다."
   },
   "camera": {
     "chaseClose": "근접 체이스",
@@ -829,13 +852,15 @@
     "clutchPaddle": "업시프트 패들"
   },
   "vr": {
-    "paused": "일시정지",
+    "paused": "일시 정지",
     "resumeHint": "A 또는 오른쪽 트리거: 계속 주행",
     "recenterHint": "Y: 시점 재정렬",
     "leaveHint": "B: VR 나가기",
-    "pauseHint": "B를 길게 눌러 일시정지",
+    "pauseHint": "B를 길게 눌러 일시 정지",
     "menusOutside": "메뉴는 헤드셋 밖에서 표시됩니다",
     "lap": "랩 {lap}",
+    "run": "런 {lap}",
+    "outLap": "아웃 랩",
     "lapOf": "랩 {lap}/{total}",
     "last": "이전",
     "best": "최고"

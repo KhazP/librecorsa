@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {第 {lap} 趟} other {第 {lap} 圈}}",
     "raceLap": "第 {lap} 圈",
     "raceLapOfTotal": "第 {lap}/{total} 圈",
+    "raceLaps": "{laps} 圈",
     "best": "最佳"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "賽程最佳",
     "lastLap": "上一圈",
     "historyLap": "第 {lap} 圈",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "換檔指示燈：已亮起 {lit}／{total} 盞",
     "aidOff": "關閉",
     "fuel": "燃油",
@@ -100,6 +103,8 @@
     "fuelLaps": "剩餘約 {laps} 圈",
     "raceLaps": "第 {lap} 圈",
     "raceLapsOfTotal": "第 {lap}/{total} 圈",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} 介入中",
     "inputs": "操作輸入",
     "shiftLights": "換檔指示燈：{lit}／{total}",
@@ -226,6 +231,12 @@
     "aidOff": "關閉",
     "fuel": "燃油",
     "aero": "空力",
+    "corners": {
+      "fl": "左前",
+      "fr": "右前",
+      "rl": "左後",
+      "rr": "右後"
+    },
     "open": "開啟",
     "armed": "待命",
     "shut": "關閉",
@@ -612,7 +623,7 @@
     "steering": "轉向",
     "tab": {
       "order": "排名",
-      "laps": "圈數",
+      "laps": "單圈",
       "fuel": "燃油",
       "tyres": "輪胎",
       "car": "車輛",
@@ -679,6 +690,13 @@
       "engineMap": "引擎模式",
       "ers": "ERS",
       "ersMode": "ERS 模式",
+      "ersModes": {
+        "CHR": "充電",
+        "LIC": "低速",
+        "BAL": "平衡",
+        "RAC": "正賽",
+        "PSH": "進攻"
+      },
       "boost": "助推",
       "overtake": "超車",
       "motor": "馬達",
@@ -768,7 +786,7 @@
       "label": "頁面",
       "tyres": "輪胎",
       "relative": "前後車距",
-      "laps": "圈數"
+      "laps": "單圈"
     },
     "window": "溫域 {low}–{high}",
     "corner": {
@@ -858,7 +876,7 @@
     "finished": "完賽",
     "conditions": "賽道邊界與天氣",
     "trackLimits": "賽道邊界",
-    "strikes": "第 {count}／{total} 次違規",
+    "strikes": "違規 {count}／{total} 次",
     "penalty": "+{seconds} s",
     "air": "氣溫",
     "track": "賽道",
@@ -941,7 +959,7 @@
     "track": "賽道",
     "rain": "降雨",
     "limits": "邊界",
-    "limitsSpoken": "賽道邊界：第 {count}／{of} 次",
+    "limitsSpoken": "賽道邊界：{count}／{of} 次",
     "penalty": "+{seconds}s",
     "map": "賽道地圖",
     "timing": "單圈計時",

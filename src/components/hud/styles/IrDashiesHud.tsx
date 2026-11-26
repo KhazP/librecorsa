@@ -95,6 +95,8 @@ function useIrDashiesWords() {
       sessionBest: tx("sessionBest"),
       lastLap: tx("lastLap"),
       historyLap: formatOnce((lap: number) => tx("historyLap", { lap: String(lap) })),
+      lapShort: formatOnce((lap: number) => tx("lapShort", { lap: String(lap) })),
+      lapShortOfTotal: formatOnce((lap: number, total: number) => tx("lapShortOfTotal", { lap: String(lap), total: String(total) })),
       shiftLights: formatOnce((lit: number, total: number) => tx("shiftLights", { lit: String(lit), total: String(total) })),
       aidOff: tx("aidOff"),
       fuel: tx("fuel"),
@@ -200,10 +202,7 @@ const Standings: React.FC<{ t: CarTelemetry; lengthM: number; gaps: "interval" |
       <div className={BAR}>
         <span className="font-semibold text-(--tp-text)">{w.race}</span>
         <span>{formatClock(clock)}</span>
-        <span>
-          L{race.lap}
-          {race.totalLaps ? ` / ${race.totalLaps}` : ""}
-        </span>
+        <span>{race.totalLaps ? w.lapShortOfTotal(race.lap, race.totalLaps) : w.lapShort(race.lap)}</span>
         <span>
           {race.position} / {race.standings.length}
         </span>
@@ -672,7 +671,10 @@ export const IrDashiesHud: React.FC<HudDesignProps> = ({
     ) : null}
 
     <div className="absolute top-[clamp(14px,2.2cqw,24px)] right-[clamp(14px,2.2cqw,24px)] hidden w-[210px] md:block" style={anchor(scale, "top right")}>
-      <MiniMap map={map} t={t} local={mapMode === "local"} className="block h-[150px] w-full drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" stroke={20} />
+      {/* On the layout's panel, so the line reads over a bright sky or grandstand */}
+      <div className="rounded-md bg-(--tp-panel) p-1.5">
+        <MiniMap map={map} t={t} local={mapMode === "local"} className="block h-[150px] w-full" stroke={20} />
+      </div>
       {!t.race && weather ? (
         <div className="mt-2">
           <IrDashiesWeatherPanel weather={weather} />

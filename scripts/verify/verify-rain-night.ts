@@ -522,6 +522,26 @@ console.log("\n== Heavy-rain performance budgets");
   );
   phoneCones.dispose();
 
+  // A standalone headset (a Quest: a fine pointer, a phone's GPU) takes the phones' spray pool and cones by default
+  const navDesc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", {
+    value: { userAgent: "Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/35.0 Chrome/128.0 VR Safari/537.36" },
+    configurable: true,
+  });
+  const headsetSpray = new TyreSpray();
+  headsetSpray.setQuality("medium");
+  const headsetCones = new HeadlightCones();
+  headsetCones.setQuality("medium");
+  if (navDesc) Object.defineProperty(globalThis, "navigator", navDesc);
+  else delete (globalThis as { navigator?: unknown }).navigator;
+  check(
+    "A standalone headset keeps the phones' spray pool and cones",
+    headsetSpray.budget === SPRAY_BUDGET_TOUCH && headsetCones.cars === CONE_CARS.low,
+    `spray ${headsetSpray.budget}, cone cars ${headsetCones.cars}`
+  );
+  headsetSpray.dispose();
+  headsetCones.dispose();
+
   // Verify shader hot-path guards stay intact
   const rainSrc = readFileSync(resolve(process.cwd(), "src/lib/render/rain-fx.ts"), "utf8");
   const visualFxSrc = readFileSync(resolve(process.cwd(), "src/lib/sim/visual-fx.ts"), "utf8");

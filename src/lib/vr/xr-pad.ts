@@ -1,4 +1,4 @@
-import type { PadLike } from "@/lib/input/device-input";
+import { padTriggerDown, type PadLike } from "@/lib/input/device-input";
 
 /**
  * A headset's two hand controllers (Meta Quest Touch and alike) as one standard-mapping pad, so they drive through the
@@ -125,25 +125,51 @@ export interface VrPauseInput {
 }
 
 /**
+ * The headset's buttons did something this frame (paused, drove on, recentred or left): the pad's presses of the same
+ * frame are theirs, not the drive's. The A that drives on is Gear up on the default layout, and the drive is handed
+ * back within the same frame, so the press would shift up a gear as well.
+ */
+export function headsetTookPress(v: VrPauseInput): boolean {
+  return v.pause || v.resume || v.recenter || v.leave;
+}
+
+/**
  * The headset's own buttons, read from the controllers' pad: the pause menu in a headset is the HUD's paused panel.
  * Driving, a long B pauses (a tap of B stays the pad's B). Paused, A or the throttle trigger drives on, Y recentres
  * and B leaves the headset; the B that paused has to be let go first, so holding it never leaves as well.
+ *
+ * The paused panel's A / RT / Y / B are read from any standard pad plugged in too (`others`): on PC VR an Xbox pad is
+ * often all the player holds, and the page's pause menu, which its buttons would drive, is not drawn in the headset.
+ * Their presses are tracked while driving as well, so a trigger held as the pause comes is not taken as a press. Only
+ * the controllers' long B pauses: a pad's B is a held action on some layouts (Boost). The first frame after `reset`
+ * only notes what is held: the A that clicked Enter VR, still down as the headset starts, does not drive on.
  */
 export class HeadsetButtons {
   private readonly prev: boolean[] = [];
   private bHeldSinceMs: number | null = null;
   private bHoldFired = false;
+  private primed = false;
 
   reset(): void {
     this.prev.length = 0;
     this.bHeldSinceMs = null;
     this.bHoldFired = false;
+    this.primed = false;
   }
 
-  read(pad: PadLike | null, nowMs: number, paused: boolean): VrPauseInput {
+  read(pad: PadLike | null, nowMs: number, paused: boolean, others: readonly PadLike[] = []): VrPauseInput {
     const out: VrPauseInput = { pause: false, resume: false, recenter: false, leave: false };
     const down = (i: number) => Boolean(pad?.buttons[i]?.pressed);
-    const edge = (i: number) => down(i) && !this.prev[i];
+    // A pad's trigger counts from its press point, not the browser's pressed bit, which a finger resting on it sets
+    const padDown = (o: PadLike, i: number) =>
+      i === PAD_RT ? padTriggerDown(o.buttons[i], Boolean(this.prev[i])) : Boolean(o.buttons[i]?.pressed);
+    const anyDown = (i: number) => down(i) || others.some((o) => o.mapping === "standard" && padDown(o, i));
+    const edge = (i: number) => anyDown(i) && !this.prev[i];
+    if (!this.primed) {
+      this.primed = true;
+      for (const i of [PAD_A, PAD_B, PAD_Y, PAD_RT]) this.prev[i] = anyDown(i);
+      return out;
+    }
     if (!paused) {
       if (down(PAD_B)) {
         this.bHeldSinceMs ??= nowMs;
@@ -156,13 +182,13 @@ export class HeadsetButtons {
         this.bHoldFired = false;
       }
     } else {
-      if (!down(PAD_B)) this.bHoldFired = false;
+      if (!anyDown(PAD_B)) this.bHoldFired = false;
       out.resume = edge(PAD_A) || edge(PAD_RT);
       out.recenter = edge(PAD_Y);
       out.leave = !this.bHoldFired && edge(PAD_B);
       this.bHeldSinceMs = null;
     }
-    for (const i of [PAD_A, PAD_B, PAD_Y, PAD_RT]) this.prev[i] = down(i);
+    for (const i of [PAD_A, PAD_B, PAD_Y, PAD_RT]) this.prev[i] = anyDown(i);
     return out;
   }
 }

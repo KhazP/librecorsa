@@ -410,7 +410,7 @@
     },
     "engineeringTelemetry": {
       "label": "Telemetri suspensi & aero",
-      "hint": "Cengkeraman roda langsung, jarak main bumpstop, tinggi suspensi, keseimbangan aero, dan penguncian diferensial"
+      "hint": "Data langsung: cengkeraman roda, jarak main bumpstop, tinggi suspensi, keseimbangan aero, dan penguncian diferensial"
     },
     "inputTrace": {
       "label": "Grafik input"
@@ -708,6 +708,7 @@
       "retirements": "Gagal finis",
       "mostDrivenCar": "Mobil paling sering dikemudikan",
       "mostDrivenCircuit": "Sirkuit paling sering dipakai",
+      "none": "Belum ada",
       "hoursMinutes": "{hours} j {minutes} mnt",
       "minutes": "{minutes} mnt",
       "km": "{km} km"

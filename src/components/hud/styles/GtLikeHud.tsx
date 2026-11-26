@@ -84,8 +84,12 @@ type Words = ReturnType<typeof useGtWords>;
 
 function useGtWords() {
   const tx = useTranslations("hudStyles.gtLike");
+  // The pedal gauges' tags: the Input trace's short pedal names, the same three letters in every layout
+  const tt = useTranslations("hud.inputTrace");
   return useMemo(
     () => ({
+      brakeTag: tt("brake"),
+      throttleTag: tt("throttle"),
       positionOf: formatOnce((position: number, total: number) => tx("positionOf", { position, total })),
       lap: tx("lap"),
       lapOf: formatOnce((lap: number, total: number) => tx("lapOf", { lap, total })),
@@ -130,7 +134,7 @@ function useGtWords() {
       abs: tx("abs"),
       car: tx("car"),
     }),
-    [tx],
+    [tx, tt],
   );
 }
 
@@ -1002,7 +1006,7 @@ const Cluster: React.FC<{ t: CarTelemetry; revRange: [number, number]; w: Words 
             color={HUD_BRAKE}
             active={p.absActive}
             label={w.brake}
-            shortTag="BRK"
+            shortTag={w.brakeTag}
           />
           <VerticalPedalGauge
             demand={p.throttle}
@@ -1010,7 +1014,7 @@ const Cluster: React.FC<{ t: CarTelemetry; revRange: [number, number]; w: Words 
             color={HUD_THROTTLE}
             active={p.tcActive}
             label={w.throttle}
-            shortTag="THR"
+            shortTag={w.throttleTag}
           />
         </div>
       </div>

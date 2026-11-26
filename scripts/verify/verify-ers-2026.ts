@@ -669,7 +669,7 @@ console.log('\n== Through the car: the race\'s 250 kW, the Overtake press and it
 console.log('\n== Low Grip Conditions (B1.5.11, B7.1.2 b, B7.2.1 g, B7.2.2 d, C5.12.4)');
 {
   check('Race control declares Low Grip once the line calls for intermediates, Normal Grip again under damp',
-    !lowGripCall(0.14, false) && lowGripCall(0.15, false) && recommendedCompound(0.15) === 'intermediate' && lowGripCall(0.1, true) && !lowGripCall(0.07, true));
+    !lowGripCall(0.2, false) && lowGripCall(0.21, false) && recommendedCompound(0.21) === 'intermediate' && lowGripCall(0.1, true) && !lowGripCall(0.07, true));
   // The Boost only holds the power: no 150 kW floor in a race, nothing more in practice, nothing given back mid-cut
   const holdFrom = (fromW: number, capped: boolean) => {
     const c = new Ers2026Control();

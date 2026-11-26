@@ -180,7 +180,8 @@ import { pitBoxIndex } from "@/lib/sim/pit/ai-pit";
 import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 import { VrPresenter } from "@/lib/vr/vr-presenter";
 import { isStandaloneHeadset, mobileClassGpu } from "@/lib/vr/headset";
-import { driveModel as driveVrHud, menuModel as menuVrHud, pausedModel as pausedVrHud } from "@/lib/vr/vr-hud";
+import { driveModel as driveVrHud, headsetPanel, menuModel as menuVrHud, pausedModel as pausedVrHud } from "@/lib/vr/vr-hud";
+import { headsetTookPress } from "@/lib/vr/xr-pad";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -855,7 +856,9 @@ export class DriveSession {
     this.togglePause = () => {
       if (disposed) return;
       const paused = !this.snapshot.paused;
-      this.publish(paused ? { paused } : { paused, pauseNotice: null });
+      // The snapshot's telemetry is only republished when its shape changes: the pause menu shows this moment's (its lap
+      // header read a lap behind the timing tower after a lap was completed)
+      this.publish(paused ? { paused, telemetry: this.telemetrySnapshot } : { paused, pauseNotice: null });
       if (paused) {
         wheelFfb.stop();
         releaseHeldKeys();
@@ -3402,11 +3405,16 @@ export class DriveSession {
       // The headset's own buttons (its pause menu is the HUD panel): a long B pauses; paused, or in the menus the page
       // alone shows, A or the throttle drives on, Y recentres and B leaves the headset for the page's menus
       if (vr.presenting && !gpuLost) {
-        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel);
+        // A pad plugged in presses the paused panel too, in the drive's pause only: in the menus its B is the page's
+        // Back, and the seat panel reads the pad itself
+        const panelPads = !inMenu && !this.snapshot.seatPanel ? pads : [];
+        const v = vr.pauseInput(nowMs, inMenu || this.snapshot.paused || this.snapshot.seatPanel, panelPads);
         if (v.pause && !inMenu) this.togglePause();
         if (v.resume && !inMenu) this.endPause();
         if (v.recenter) vr.recenter();
         if (v.leave) vr.exit();
+        // The press was the headset's: the A that drove on must not also shift up as the car is handed back
+        if (headsetTookPress(v)) device.pressed.clear();
       }
       // The pause menu, the seat panel or a lost GPU context: the car waits
       // The career's pre-race show holds the car too: the physics, the lights and the qualifying clock wait under it
@@ -3458,6 +3466,8 @@ export class DriveSession {
             if (this.snapshot.seatPanel) this.closeSeatPanel();
             // Opening only: in the pause menu, B / Menu resume through the menu's own navigation
             else if (!this.snapshot.paused) this.togglePause();
+            // In a headset the page's pause menu is not shown: a pad's or a wheel's Menu drives on again
+            else if (vr.presenting) this.endPause();
             continue;
           }
           if (!driving) continue;
@@ -4071,10 +4081,12 @@ export class DriveSession {
 
       // Laps: summary card, personal best (saved, and raced as the ghost) — practice only
       if (driving && !aiField && !mpRace && !quali) {
+        // The pose the telemetry's lap time is from, not the one drawn this frame (`telemetryPose`)
+        const lapPose = physics.telemetryPose;
         const done = lapRecorder.update({
           telemetry: physics.telemetry,
-          position: physics.worldPosition,
-          quaternion: physics.worldQuaternion,
+          position: lapPose?.position ?? physics.worldPosition,
+          quaternion: lapPose?.quaternion ?? physics.worldQuaternion,
           // Laps are ranked only against laps driven with the same assists, realism, surface and physics revision;
           // an autopilot lap never ranks
           conditions: {
@@ -4866,6 +4878,11 @@ export class DriveSession {
           }),
         );
       }
+      // Paused, in a replay, the menus, the pre-race show or the podium shot (its cars are posed, not racing): the call
+      // in progress is cut and the spotter starts from clear, so the time away never counts as time alongside (a
+      // "still there" the moment the drive resumed)
+      const spotterLive = driving && !podium.playing;
+      if (!spotterLive) spotter.reset();
       if (driving) {
         // The spotter speaks through the car audio's output: the master volume, mute and pause apply to it
         spotter.update(
@@ -4875,7 +4892,7 @@ export class DriveSession {
           physics.vxMs,
           drawnPeers,
           {
-            enabled: settingsNow.audio.spotter,
+            enabled: spotterLive && settingsNow.audio.spotter,
             volume: settingsNow.audio.spotterVolume,
             voice: settingsNow.audio.spotterVoice,
             radioFilter: settingsNow.audio.spotterRadio,
@@ -5169,11 +5186,18 @@ export class DriveSession {
         wingMirrors?.update(mirrorRefresh, view.mirrorsInShot && !podium.playing, carRig.chassisGroup);
         if (inVr) {
           // The head's pose on top of the driver's eye point; the HUD panel shows what the page's HUD would
-          const hudModel = inMenu
-            ? menuVrHud()
-            : this.snapshot.paused
-              ? pausedVrHud()
-              : driveVrHud(physics.telemetry, settingsNow.ui.units.speed, vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null);
+          const panel = headsetPanel({ inMenu, paused: this.snapshot.paused, seatPanel: this.snapshot.seatPanel });
+          const hudModel =
+            panel === "menu"
+              ? menuVrHud()
+              : panel === "paused"
+                ? pausedVrHud()
+                : driveVrHud(
+                    physics.telemetry,
+                    settingsNow.ui.units.speed,
+                    vr.showingPauseHint(nowMs) ? tx("game.vr.pauseHint") : null,
+                    Boolean(track.pointToPoint)
+                  );
           vr.render(scene, camera.position, camera.quaternion, hudModel, nowMs);
         } else {
           const t0 = loggedFirstFrame ? 0 : performance.now();

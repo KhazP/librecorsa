@@ -1,6 +1,6 @@
 # UDP telemetry and the local bridge
 
-LibreCorsa streams 60 Hz vehicle telemetry as compact JSON UDP datagrams for external dashboards, SimHub plugins, bass shakers, and motion rigs. Because browsers cannot open raw UDP sockets directly, telemetry goes through the repository's lightweight Node.js bridge (`scripts/ffb-bridge/ffb-bridge.ts`)—the same bridge that drives DirectInput force-feedback wheels on Windows.
+LibreCorsa streams 60 Hz vehicle telemetry as compact JSON UDP datagrams for external dashboards, SimHub plugins, bass shakers, and motion rigs. Because browsers cannot open raw UDP sockets directly, telemetry goes through the repository's lightweight Node.js bridge (`scripts/ffb-bridge/ffb-bridge.ts`), the same bridge that drives DirectInput force-feedback wheels on Windows.
 
 UDP telemetry relay works on **Windows, macOS, and Linux**, with or without a racing wheel connected.
 
@@ -43,7 +43,7 @@ UDP telemetry relay works on **Windows, macOS, and Linux**, with or without a ra
 
 Once you go on track, the bridge logs `Telemetry → udp://127.0.0.1:20790` and emits one UTF-8 JSON packet per frame at 60 Hz.
 
-> **Why port `20790` instead of `20777`?** Port `20777` is used by the commercial F1 games' binary UDP protocol—sending JSON there confuses SimHub and dashboards expecting binary F1 structs. LibreCorsa defaults to `20790` and warns in Settings if you enter `20777`.
+> **Why port `20790` instead of `20777`?** Port `20777` is used by the commercial F1 games' binary UDP protocol, and sending JSON there confuses SimHub and dashboards expecting binary F1 structs. LibreCorsa defaults to `20790` and warns in Settings if you enter `20777`.
 
 ## CLI flags and environment variables
 

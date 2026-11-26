@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { isTouchDevice } from "@/lib/input/touch-input";
+import { mobileClassGpu } from "@/lib/vr/headset";
 import { DETAIL_LAYER } from "./layers";
 import { RAIN_BEAMS, type RainLight } from "./rain-fx";
 
@@ -234,7 +234,7 @@ export class TyreSpray {
   private readonly beamDir = Array.from({ length: RAIN_BEAMS }, () => new THREE.Vector4());
 
   constructor(options: { touch?: boolean } = {}) {
-    this.touch = options.touch ?? isTouchDevice();
+    this.touch = options.touch ?? mobileClassGpu();
     this.noise = createNoiseTexture();
     const geometry = new THREE.InstancedBufferGeometry();
     const quad = new THREE.PlaneGeometry(1, 1);

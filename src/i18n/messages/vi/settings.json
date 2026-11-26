@@ -708,6 +708,7 @@
       "retirements": "Bỏ cuộc",
       "mostDrivenCar": "Xe lái nhiều nhất",
       "mostDrivenCircuit": "Đường đua lái nhiều nhất",
+      "none": "Chưa có",
       "hoursMinutes": "{hours} giờ {minutes} phút",
       "minutes": "{minutes} phút",
       "km": "{km} km"

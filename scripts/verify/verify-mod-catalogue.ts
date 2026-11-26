@@ -30,6 +30,7 @@ import { holdModsStore, installPackage, modsStoreHeld, onModsStoreHold, readInst
 import { buildCatalogue, catalogueBytes, catalogueJson, linkBase, type CatalogueFile } from "../mods/lib/catalogue";
 import { checkPackage, hashFolder } from "../mods/lib/package-check";
 import { zipPackage } from "../mods/lib/zip-writer";
+import { PERSONAL_USE_NOTE } from "../mods/lib/licences";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -487,12 +488,19 @@ async function generatorChecks(): Promise<void> {
   wrongManifest.skins[0].car = "no-such-car";
   writeFileSync(join(wrongCar, "mod.json"), JSON.stringify(wrongManifest));
   writeFileSync(join(bad, "wrong-car.zip"), zipPackage(wrongCar, ["mod.json", "skins/blue/paint.png"]));
+  // What an importer converted without a licence that lets it be shared: its credit carries the personal-use note
+  const personal = makePackage(join(tmp, "src", "jdoe.personal"), "1", "paint", "jdoe.personal", "Personal");
+  const personalManifest = JSON.parse(readFileSync(join(personal, "mod.json"), "utf8"));
+  personalManifest.credit = { author: "J. Doe", license: "unknown", note: PERSONAL_USE_NOTE };
+  writeFileSync(join(personal, "mod.json"), JSON.stringify(personalManifest));
+  writeFileSync(join(bad, "personal.zip"), zipPackage(personal, ["mod.json", "skins/blue/paint.png"]));
   const failing = await buildCatalogue(bad, "https://packs.example.org/");
   const why = (file: string) => failing.failures.find((f) => f.file === file)?.problems.join("; ") ?? "";
   check("A file that isn't a zip fails", /not a zip the game reads/.test(why("broken.zip")), why("broken.zip"));
   check("A zip without mod.json fails", /no mod\.json/.test(why("loose.zip")), why("loose.zip"));
   check("A zip with a path out of its folder fails, nothing written outside", /not a path a package may use/.test(why("slip.zip")) && !existsSync(join(tmpdir(), escape)), why("slip.zip"));
   check("A package the game's checks refuse fails, saying why", /skins\[0\]\.car/.test(why("wrong-car.zip")), why("wrong-car.zip"));
+  check("A package marked for personal use only fails", /credit: marked "For personal use only/.test(why("personal.zip")), why("personal.zip"));
   check("A second zip of one package fails", /holds acme\.red-gt, which red-again\.zip holds too/.test(why("red-copy.zip")), why("red-copy.zip"));
   check("The good zip among them is still listed", failing.catalogue.packages.length === 1 && failing.catalogue.packages[0].url === "https://packs.example.org/red-again.zip");
 

@@ -805,7 +805,7 @@
     "nextCarTitle": "Next car ({key})",
     "cameraAngle": "Replay camera angle",
     "cycleCamera": "Cycle replay camera",
-    "flashbackTitle": "Flashback — resume driving from this moment ({key}, invalidates current lap)",
+    "flashbackTitle": "Flashback: resume driving from this moment ({key}, invalidates current lap)",
     "flashback": "Flashback",
     "exit": "Exit",
     "hints": {

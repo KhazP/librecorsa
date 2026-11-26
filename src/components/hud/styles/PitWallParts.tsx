@@ -174,6 +174,8 @@ export function usePitWallWords() {
         engineMap: tx("car.engineMap"),
         ers: tx("car.ers"),
         ersMode: tx("car.ersMode"),
+        /** The ERS mode's name by the tuner's code */
+        ersModes: Object.fromEntries((["CHR", "LIC", "BAL", "RAC", "PSH"] as const).map((m) => [m, tx(`car.ersModes.${m}`)])) as Record<string, string | undefined>,
         boost: tx("car.boost"),
         overtake: tx("car.overtake"),
         motor: tx("car.motor"),

@@ -22,16 +22,58 @@ const PUBLIC_FILES = join(SITE, "public/files");
 const BRAND = join(SITE, "src/assets/brand");
 
 const bySource = new Map(PAGES.map((p) => [p.source, p]));
+
+/**
+ * The anchors of a Markdown file's headings, as GitHub and the site (github-slugger) make them: the heading's text
+ * without its Markdown, in lower case, punctuation dropped, spaces as hyphens, a repeat numbered -1, -2...
+ */
+const anchorCache = new Map();
+function anchorsOf(repoPath) {
+  let anchors = anchorCache.get(repoPath);
+  if (anchors) return anchors;
+  anchors = new Set();
+  const seen = new Map();
+  let fenced = false;
+  for (const line of readFileSync(join(REPO, repoPath), "utf8").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    const m = !fenced && /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
+    if (!m) continue;
+    const base = m[1]
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\p{M}_\- ]/gu, "")
+      .replace(/ /g, "-");
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    anchors.add(n ? `${base}-${n}` : base);
+  }
+  anchorCache.set(repoPath, anchors);
+  return anchors;
+}
+
+/** Throws when `hash` ("#section") names no heading of the Markdown file at `repoPath` */
+function checkAnchor(hash, repoPath, source, target) {
+  if (!hash || !repoPath.endsWith(".md")) return;
+  const id = decodeURIComponent(hash.slice(1));
+  if (!anchorsOf(repoPath).has(id)) throw new Error(`${source}: link ${target} names no heading of ${repoPath}`);
+}
 const routeOf = (slug) => (slug ? `/${slug}/` : "/");
 
 /** Where a link written in `source` goes on the site, or null to leave it as written */
 function rewrite(target, source, copied) {
-  if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#") || target.startsWith("//")) return null;
+  if (target.startsWith("#")) {
+    checkAnchor(target, source, source, target);
+    return null;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//")) return null;
   const [path, hash = ""] = target.split(/(?=#)/);
   const repoPath = posix.normalize(posix.join(posix.dirname(source), decodeURI(path)));
   if (repoPath.startsWith("..")) throw new Error(`${source}: link ${target} leaves the repository`);
   const page = bySource.get(repoPath);
-  if (page) return routeOf(page.slug) + hash;
+  if (page) {
+    checkAnchor(hash, repoPath, source, target);
+    return routeOf(page.slug) + hash;
+  }
   const file = join(REPO, repoPath);
   if (!existsSync(file)) throw new Error(`${source}: link ${target} points at ${repoPath}, which does not exist`);
   // Charts and data next to a published page are served from the site; anything else lives on GitHub
@@ -40,6 +82,7 @@ function rewrite(target, source, copied) {
     return `/files/${repoPath.slice("docs/".length)}${hash}`;
   }
   const kind = statSync(file).isDirectory() ? "tree" : "blob";
+  if (kind === "blob") checkAnchor(hash, repoPath, source, target);
   return `${REPO_URL}/${kind}/main/${repoPath}${hash}`;
 }
 

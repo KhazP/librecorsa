@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "use-intl/react";
+import { useLocale, useTranslations } from "use-intl/react";
 import { isVehicleModelId, type TurnMetadata, type VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SessionLapEntry } from "@/lib/sim/lap-analysis";
 import { LapTelemetryView } from "./LapTelemetryView";
 import { boardLabel } from "@/lib/net/leaderboard";
+import { boardWords } from "@/lib/net/board-words";
 import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
@@ -134,6 +135,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   jumpTarget = null,
 }) => {
   const tx = useTranslations("hud.leaderboardPanel");
+  // Dates in the game's language, not the browser's
+  const locale = useLocale();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const keyFileRef = useRef<HTMLInputElement | null>(null);
   // Laps on their way to the online board from here, by lap. An answer redraws the rows (their state is in storage);
@@ -307,15 +310,16 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       meta: e.conditions ? (
         <LapConditionBadges assists={e.conditions.assists} realism={e.conditions.realism} surface={e.conditions.surface} />
       ) : undefined,
-      detail: new Date(e.recordedAt).toLocaleDateString(),
-      detailTitle: `${board ? `${board} · ` : ""}${new Date(e.recordedAt).toLocaleString()}`,
+      detail: new Date(e.recordedAt).toLocaleDateString(locale),
+      detailTitle: `${board ? `${board} · ` : ""}${new Date(e.recordedAt).toLocaleString(locale)}`,
       lapMs: e.lapTimeMs,
       fastest: i === 0 && rows.length > 1,
       sectorsMs: e.sectorTimesMs,
       bestSectors: e.sectorTimesMs.map((s, k) => s > 0 && s === bestSector[k] && rows.length > 1),
       note: unposted ? (
         unposted.error ? (
-          <span className="text-lc-amber">{tx("notPosted", { error: unposted.error })}</span>
+          // The board's answer was kept as it came (in English): shown in the player's language
+          <span className="text-lc-amber">{tx("notPosted", { error: boardWords(unposted.error) })}</span>
         ) : (
           <span className="text-lc-slate">{tx("notPostedYet")}</span>
         )

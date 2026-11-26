@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {المحاولة {lap}} other {اللفة {lap}}}",
     "raceLap": "اللفة {lap}",
     "raceLapOfTotal": "اللفة {lap}/{total}",
+    "raceLaps": "{laps} لفات",
     "best": "الأفضل"
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "الجلسة",
     "lastLap": "الأخيرة",
     "historyLap": "لفة {lap}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap} / {total}",
     "shiftLights": "أضواء تبديل التروس: {lit} من {total} مضاءة",
     "aidOff": "معطّل",
     "fuel": "الوقود",
@@ -100,6 +103,8 @@
     "fuelLaps": "لفات ~{laps}",
     "raceLaps": "اللفة {lap}",
     "raceLapsOfTotal": "اللفة {lap}/{total}",
+    "lapShort": "L{lap}",
+    "lapShortOfTotal": "L{lap}/{total}",
     "aidWorking": "{aid} يعمل",
     "inputs": "المدخلات",
     "shiftLights": "أضواء تبديل التروس: {lit} من {total}",
@@ -119,7 +124,7 @@
     "radar": "رادار القرب"
   },
   "h2h": {
-    "notAvailable": "—",
+    "notAvailable": "–",
     "best": "الأفضل",
     "last": "الأخيرة",
     "gap": "الفارق",
@@ -226,6 +231,12 @@
     "aidOff": "OFF",
     "fuel": "وقود",
     "aero": "AERO",
+    "corners": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
     "open": "مفتوح",
     "armed": "جاهز",
     "shut": "مغلق",
@@ -427,7 +438,7 @@
       "blue": "علم أزرق",
       "vsc": "VSC",
       "vscEnding": "انتهاء VSC",
-      "finalLap": "اللفة النهائية",
+      "finalLap": "اللفة الأخيرة",
       "finished": "انتهى"
     },
     "closing": "لصالحك",
@@ -478,7 +489,7 @@
       "clipped": "اقتصاص",
       "superclip": "اقتصاص فائق",
       "braking": "استعادة",
-      "liftCoast": "رفع وانزلاق",
+      "liftCoast": "رفع وانسياب",
       "trickle": "شحن",
       "neutral": "محايد"
     },
@@ -504,7 +515,7 @@
       "hot": "ساخن",
       "cold": "بارد",
       "flat": "مثقوب",
-      "corner": "{corner}: النقشة {temp}، الضغط {pressure}، المكابح {brake}",
+      "corner": "{corner}: سطح الإطار {temp}، الضغط {pressure}، المكابح {brake}",
       "fl": "الأمامي الأيسر",
       "fr": "الأمامي الأيمن",
       "rl": "الخلفي الأيسر",
@@ -565,7 +576,7 @@
       "vsc": "VSC",
       "vscEnding": "انتهاء VSC",
       "blue": "أزرق",
-      "finalLap": "اللفة النهائية",
+      "finalLap": "اللفة الأخيرة",
       "finished": "النهاية",
       "grid": "الشبكة"
     },
@@ -679,6 +690,13 @@
       "engineMap": "خريطة المحرك",
       "ers": "ERS",
       "ersMode": "وضع ERS",
+      "ersModes": {
+        "CHR": "شحن",
+        "LIC": "منخفضة",
+        "BAL": "متوازن",
+        "RAC": "سباق",
+        "PSH": "هجوم"
+      },
       "boost": "تعزيز",
       "overtake": "تجاوز",
       "motor": "المحرك الكهربائي",
@@ -686,7 +704,7 @@
       "diffEntry": "التفاضلي عند الدخول",
       "diffMid": "التفاضلي في المنتصف",
       "diffExit": "التفاضلي عند الخروج",
-      "aero": "هوائية",
+      "aero": "الانسيابية",
       "aeroBalance": "التوازن الهوائي",
       "front": "% أمامي",
       "downforce": "القوة السفلية",
@@ -727,7 +745,7 @@
       "blue": "علم أزرق",
       "vsc": "VSC",
       "vscEnding": "انتهاء VSC",
-      "finalLap": "اللفة النهائية",
+      "finalLap": "اللفة الأخيرة",
       "finished": "انتهى",
       "grid": "الشبكة"
     },
@@ -737,7 +755,7 @@
     "disqualified": "DSQ",
     "finished": "أنهى",
     "penalty": "+{seconds} s",
-    "penaltyTitle": "عقوبة {seconds} ثوانٍ",
+    "penaltyTitle": "عقوبة زمنية {seconds} s",
     "fastestLap": "أسرع لفة في السباق",
     "row": "المركز {position}، {driver}",
     "map": "خريطة الحلبة",
@@ -854,7 +872,7 @@
     "doubleYellow": "أصفر مزدوج",
     "vsc": "VSC",
     "vscEnding": "انتهاء VSC",
-    "finalLap": "اللفة النهائية",
+    "finalLap": "اللفة الأخيرة",
     "finished": "انتهى",
     "conditions": "حدود الحلبة والطقس",
     "trackLimits": "حدود الحلبة",
@@ -892,7 +910,7 @@
       "clipped": "اقتصاص",
       "superclip": "اقتصاص فائق",
       "braking": "استعادة",
-      "liftCoast": "رفع وانزلاق",
+      "liftCoast": "رفع وانسياب",
       "trickle": "شحن"
     },
     "electronics": "الإلكترونيات",

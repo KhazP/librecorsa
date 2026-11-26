@@ -131,10 +131,10 @@
       "protected": "Bảo vệ"
     },
     "collisionHint": {
-      "on": "Va chạm đầy đủ",
+      "on": "Va chạm đầy đủ (hóa bóng ma khi mới xuất hiện, trong làn pit, treo máy hoặc giật lag nặng)",
       "ghostLap1": "Không va chạm ở vòng đầu tiên",
       "off": "Các xe đi xuyên qua nhau",
-      "protected": "Xuyên xe vòng 1, sau đó xe chạy nguy hiểm không thể chạm vào xe khác"
+      "protected": "Bật va chạm sau khi xuất phát; xe nguy hiểm, xe trong làn pit và cú cố tình đâm sẽ đi xuyên qua"
     },
     "anyCar": "Mọi loại xe",
     "startType": {
@@ -718,7 +718,7 @@
     "foldTuner": "Thu gọn bộ chỉnh"
   },
   "f12026ChannelsPanel": {
-    "region": "Kênh kỹ thuật",
+    "region": "Dữ liệu đo từ xa hệ thống treo và khí động",
     "title": "Treo & khí động",
     "suspensionGrip": "Treo & độ bám",
     "wheelLegend": "Trượt · Đệm chặn",
@@ -805,7 +805,7 @@
     "nextCarTitle": "Xe sau ({key})",
     "cameraAngle": "Góc camera phát lại",
     "cycleCamera": "Đổi góc camera phát lại",
-    "flashbackTitle": "Flashback — tiếp tục lái từ thời điểm này ({key}, hủy thành tích vòng hiện tại)",
+    "flashbackTitle": "Flashback: tiếp tục lái từ thời điểm này ({key}, hủy thành tích vòng hiện tại)",
     "flashback": "Flashback",
     "exit": "Thoát",
     "hints": {
@@ -1177,7 +1177,7 @@
     "done": "Xong"
   },
   "pit": {
-    "boxBox": "Box",
+    "boxBox": "Vào pit",
     "limiter": "Giới hạn pit",
     "stop": "Dừng",
     "go": "Đi",
@@ -1192,7 +1192,7 @@
     "approach": "Lối vào pit · giới hạn {limit} km/h",
     "limiterKey": "Giới hạn pit: {key}",
     "stopsPill": "Pit {made}/{required}",
-    "stopRequired": "{remaining, plural, other {Box · bắt buộc dừng pit # lần}}"
+    "stopRequired": "{remaining, plural, other {Vào pit · bắt buộc dừng # lần}}"
   },
   "preRace": {
     "label": "Chương trình trước cuộc đua",
@@ -1241,7 +1241,7 @@
       "awd": "Dẫn động bốn bánh"
     },
     "revLimit": "Giới hạn vòng tua {value} rpm",
-    "go": "Đi",
+    "go": "Bắt đầu",
     "sector": "S{n}"
   },
   "raceBroadcast": {

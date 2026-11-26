@@ -1,16 +1,16 @@
 # Porting cars
 
-A fresh clone of LibreCorsa ships with one circuit (RISE Motordrome) and one car—the 2026 prototype (`public/cars/f12026/model/` and `public/cars/f12026/audio/`). This guide walks through porting additional cars into a local clone from two common sources:
+A fresh clone of LibreCorsa ships with one circuit (RISE Motordrome) and two cars, the LC26 Prototype (`public/cars/f12026/model/` and `public/cars/f12026/audio/`) and the LC25 Prototype (`public/cars/lc25/`). This guide walks through porting additional cars into a local clone from two common sources:
 
 - **Car mods from other racing sims:** Folders containing `.kn5` geometry, skins, and FMOD `.bank` audio.
 - **Sketchfab-style 3D models:** Standalone `.glb` / `.gltf` downloads.
 
-Because each porting script was built around specific source cars, treat them as adaptable templates—you will usually need to inspect the source hierarchy and add or tweak a preset.
+Because each porting script was built around specific source cars, treat them as adaptable templates: you will usually need to inspect the source hierarchy and add or tweak a preset.
 
 ## Prerequisites
 
 - **Node.js:** Run `npm install` once to enable the simulator, verification scripts, and GLB compressor.
-- **[uv](https://docs.astral.sh/uv/):** Runs the Python converters with isolated `--with` dependencies—no manual virtualenv or Blender installation required (the scripts read and write GLB binaries directly).
+- **[uv](https://docs.astral.sh/uv/):** Runs the Python converters with isolated `--with` dependencies, with no manual virtualenv or Blender installation required (the scripts read and write GLB binaries directly).
 - **Audio tools (for FMOD banks):** `ffmpeg` compiled with `libvorbis`, plus system `libvorbis` and `libogg` libraries (loaded by `python-fsb5` to decode Vorbis banks). By default the script looks for `/opt/homebrew/bin/ffmpeg`; override it with `--ffmpeg <path>` if installed elsewhere.
 
 ## Expected GLB rig
@@ -29,14 +29,14 @@ CAR                 root node storing vehicle measurements in glTF extras
 Coordinate system and metadata contract:
 
 - **Units and orientation:** Metres, `+X` to the car's left, `+Y` up, `+Z` forward, lowest tyre point resting at `y = 0`, and `X` centred across the four wheels.
-- **Root `extras`:** Must include `wheelCentres` (`WHEEL_RF`, `WHEEL_LF`, `WHEEL_RR`, `WHEEL_LR`), `tyreRadius` and `tyreHalfWidth` (`RF`, `LF`, `RR`, `LR`), `wheelbaseM`, and `cameras` (`cockpit`, `tcam`, `dash`, `bumper`, `nearChase`, `farChase`—each `{ pos, pitchDeg, fov }`).
+- **Root `extras`:** Must include `wheelCentres` (`WHEEL_RF`, `WHEEL_LF`, `WHEEL_RR`, `WHEEL_LR`), `tyreRadius` and `tyreHalfWidth` (`RF`, `LF`, `RR`, `LR`), `wheelbaseM`, and `cameras` (`cockpit`, `tcam`, `dash`, `bumper`, `nearChase`, `farChase`, each `{ pos, pitchDeg, fov }`).
 - **Root discovery:** LibreCorsa locates the root node by the presence of `wheelCentres` in its extras rather than by node name. All porting scripts below produce this structure automatically.
 
 ## Route A: Porting a car mod from another sim
 
 ### Converting the 3D body
 
-`scripts/cars/port_ac_car.py` reads the mod's main `.kn5` model and a chosen skin. It splits geometry by node hierarchy—meshes under `WHEEL_RF`/`LF`/`RR`/`LR` become wheels, `STEER_HR` becomes the steering wheel, and everything else goes into `BODY`. The cockpit eye position is read from `DRIVEREYES` in `car.ini` (inside `data/` or `data.acd`).
+`scripts/cars/port_ac_car.py` reads the mod's main `.kn5` model and a chosen skin. It splits geometry by node hierarchy: meshes under `WHEEL_RF`/`LF`/`RR`/`LR` become wheels, `STEER_HR` becomes the steering wheel, and everything else goes into `BODY`. The cockpit eye position is read from `DRIVEREYES` in `car.ini` (inside `data/` or `data.acd`).
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
@@ -63,7 +63,7 @@ A car with no preset gets an automatic one, and the porter prints what it found:
 - **Discs** beside the wheels (`DISC_xx` at all four corners) spin with them. Broken glass, blurred rims, the low-detail cockpit and fastened belts are left out.
 - **Materials** come from their shader values (as with `auto=True`), every texture a skin replaces becomes a livery file, and the name comes from `ui/ui_car.json`.
 
-> Keep the mod's original folder name intact—`data.acd` decryption derives its key from the folder name.
+> Keep the mod's original folder name intact: `data.acd` decryption derives its key from the folder name.
 
 The automatic choices are guesses. When one is wrong, a preset of the car's own in `PRESETS` fixes it; copy the closest and configure:
 
@@ -116,7 +116,7 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
 - **Auto-detection and presets:** Matches `CAR_PRESETS` by input/output filename or `--car <preset>`. For unknown models, it classifies materials automatically: names matching `tyre`, `tread`, or `sidewall` sitting more than `0.45 m` from the centreline become tyres; `rim`, `wheel_hub`, `disc`, or `brake` become rims; `steer`, `_sw`, or `lcd` attach to the steering wheel.
 - **Manual overrides:** If heuristics miss, pass `--tyre-mats`, `--rim-mats`, or `--steer-mats` with explicit material lists, constrain the steering wheel with `--steer-box XMIN XMAX YMIN YMAX ZMIN ZMAX` (in metres), or pass `--no-steer` to keep the wheel inside `BODY`. If tyre detection fails (`"Could not find any tyre primitives"`), the error prints every material name it checked.
 - **Scaling and textures:** Resize via `--scale <factor>` or `--wheelbase <metres>`, and adjust textures with `--max-tex`, `--small-tex`, and `--jpeg-quality` (defaults: `2048`, `1024`, `92`).
-- **Orientation prerequisite:** The script does not rotate the model—ensure the source GLB already follows standard glTF orientation (`+Z` forward, `+Y` up) and uses metric scale before running, because detection heuristics measure prior to `--scale`.
+- **Orientation prerequisite:** The script does not rotate the model, so make sure the source GLB already follows standard glTF orientation (`+Z` forward, `+Y` up) and uses metric scale before running, because detection heuristics measure prior to `--scale`.
 
 ### GT3 and closed-wheel cars
 
@@ -168,7 +168,7 @@ Open `http://localhost:3000/?car=<id>` to inspect your port in-game. For `f1`-cl
 
 Although `scripts/verify/verify-ported-gt3.ts` targets the hosted GT3 models by name (and skips them in a local clone), it is a great checklist for verifying your own port: GLB file size, single-primitive tyres, symmetrical wheel centres, ground clearance, and all six camera viewpoints.
 
-During deployment, car GLBs are meshopt-compressed (LibreCorsa loads both raw and compressed files). Keep raw GLBs locally while iterating, as the porters and verification tools operate on uncompressed meshes. To test compressed file size, run `node scripts/cars/compress-car-glb.mjs <file.glb>` on a copy—it overwrites the input file in place.
+During deployment, car GLBs are meshopt-compressed (LibreCorsa loads both raw and compressed files). Keep raw GLBs locally while iterating, as the porters and verification tools operate on uncompressed meshes. To test compressed file size, run `node scripts/cars/compress-car-glb.mjs <file.glb>` on a copy: it overwrites the input file in place.
 
 ## Licences
 

@@ -37,7 +37,7 @@ No. LibreCorsa is an independent fan project, not affiliated with Formula 1, the
 
 In the desktop app, yes. It has the game built in and keeps every car and circuit it loads, so without a connection it plays what it kept. Most circuits and cars are only served from librecorsa.org, because their makers allowed LibreCorsa to host them, not for the files to be passed around, so each needs loading once while you're online. Racing online needs a connection, of course.
 
-In a browser, not yet. If you clone the repository, you can run RISE Motordrome with the 2026 Prototype on your own machine without a connection.
+In a browser, not yet. If you clone the repository, you can run RISE Motordrome with the LC26 and LC25 Prototypes on your own machine without a connection.
 
 ### Which wheels and controllers work?
 
@@ -97,7 +97,7 @@ Yes. The code is under the [GNU Affero General Public License v3.0](../LICENSE),
 
 It depends on each one, and [CREDITS.md](../CREDITS.md) lists every maker and licence.
 
-- **Under a Creative Commons licence**, you can use it on that licence's terms. That includes the 2026 Prototype's and the LC-LMDH's bodies (CC BY 4.0) and RISE Motordrome, which is mine ([CC BY-NC-SA 4.0](../public/tracks/rwanda_official/LICENSE.md): with credit, non-commercially, under the same licence).
+- **Under a Creative Commons licence**, you can use it on that licence's terms. That includes the LC26 Prototype's, the LC25 Prototype's and the LC-LMDH's bodies (CC BY 4.0) and RISE Motordrome, which is mine ([CC BY-NC-SA 4.0](../public/tracks/rwanda_official/LICENSE.md): with credit, non-commercially, under the same licence).
 - **Used with permission**, as most modders' cars and circuits are, means the permission is for LibreCorsa only. Ask the maker yourself.
 
 ### How can I support LibreCorsa?

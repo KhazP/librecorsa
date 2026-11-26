@@ -131,10 +131,10 @@
       "protected": "Korumalı"
     },
     "collisionHint": {
-      "on": "Tam temas",
+      "on": "Tam temas (doğuşta, pit yolunda, AFK’da veya ağır gecikmede hayalet)",
       "ghostLap1": "İlk turda temas yok",
       "off": "Araçlar birbirinin içinden geçer",
-      "protected": "1. tur hayalet, ardından tehlikeli süren araç diğerlerine temas edemez"
+      "protected": "Kalkıştan sonra temas açık; tehlikeli araçlar, pit yolundakiler ve kasıtlı çarpmalar içinden geçer"
     },
     "anyCar": "Herhangi bir araç",
     "startType": {
@@ -592,7 +592,7 @@
       "repairTime": "Hasar %{damage} · +{seconds} s",
       "noDamage": "Hasar yok",
       "box": "Bu tur pite gir",
-      "limit": "Sınır {limit} km/h · box {box}",
+      "limit": "Sınır {limit} km/h · pit alanı {box}",
       "on": "Açık",
       "off": "Kapalı",
       "boxCalled": "Pit çağrıldı",
@@ -718,7 +718,7 @@
     "foldTuner": "Ayarlayıcıyı daralt"
   },
   "f12026ChannelsPanel": {
-    "region": "Mühendislik kanalları",
+    "region": "Süspansiyon ve aero telemetrisi",
     "title": "Süspansiyon ve aero",
     "suspensionGrip": "Süspansiyon ve tutuş",
     "wheelLegend": "Kayma · Takoz",
@@ -805,7 +805,7 @@
     "nextCarTitle": "Sonraki araç ({key})",
     "cameraAngle": "Tekrar kamera açısı",
     "cycleCamera": "Tekrar kamerasını değiştir",
-    "flashbackTitle": "Flashback — bu andan sürmeye devam et ({key}, mevcut turu geçersiz kılar)",
+    "flashbackTitle": "Flashback: bu andan sürmeye devam et ({key}, mevcut turu geçersiz kılar)",
     "flashback": "Flashback",
     "exit": "Çık",
     "hints": {
@@ -1185,10 +1185,10 @@
     "fitting": "Takılan: {compound}",
     "fittingRepairing": "Takılan: {compound} · onarım",
     "stopTime": "Duruş {seconds} s",
-    "inBox": "Box {box}",
+    "inBox": "Pit alanı {box}",
     "lane": "Pit yolu",
-    "boxIn": "Box {box}: {metres} m kaldı",
-    "boxPassed": "Box {box} geçildi",
+    "boxIn": "Pit alanı {box}: {metres} m kaldı",
+    "boxPassed": "Pit alanı {box} geçildi",
     "approach": "Pit girişi · sınır {limit} km/h",
     "limiterKey": "Sınırlayıcı: {key}",
     "stopsPill": "Pit {made}/{required}",
@@ -1240,7 +1240,7 @@
       "fwd": "Önden çekiş",
       "awd": "Dört çeker"
     },
-    "revLimit": "Devir sınırı {value} d/dk",
+    "revLimit": "Devir sınırı {value} rpm",
     "go": "Başla",
     "sector": "S{n}"
   },
@@ -1250,7 +1250,7 @@
       "winner": "Kazanan",
       "newLeader": "Yeni lider",
       "fastestLap": "En hızlı tur",
-      "pitStop": "Pit duruşu",
+      "pitStop": "Pit stop",
       "retired": "Yarış dışı"
     },
     "lap": "{lap}. tur",
@@ -1258,7 +1258,7 @@
     "battleFor": "P{position} mücadelesi",
     "attacking": "Atakta",
     "closing": "Turda {rate} s yaklaşıyor",
-    "closingCatch": "Turda {rate} s yaklaşıyor · {laps, plural, other {# turda}} yetişir",
+    "closingCatch": "Turda {rate} s yaklaşıyor · {laps, plural, one {# turda} other {# turda}} yetişir",
     "pullingAway": "Uzaklaşıyor",
     "stable": "Fark sabit"
   },

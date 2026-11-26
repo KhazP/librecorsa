@@ -8,6 +8,7 @@
     "lapOrRun": "{kind, select, run {Montée {lap}} other {Tour {lap}}}",
     "raceLap": "Tour {lap}",
     "raceLapOfTotal": "Tour {lap}/{total}",
+    "raceLaps": "{laps} tours",
     "best": "Meil."
   },
   "broadcast": {
@@ -68,6 +69,8 @@
     "sessionBest": "Session",
     "lastLap": "Dern. tour",
     "historyLap": "TOUR {lap}",
+    "lapShort": "T{lap}",
+    "lapShortOfTotal": "T{lap} / {total}",
     "shiftLights": "Témoins de changement de rapport : {lit} allumés sur {total}",
     "aidOff": "Off",
     "fuel": "Carb.",
@@ -100,6 +103,8 @@
     "fuelLaps": "Tours ~{laps}",
     "raceLaps": "Tour {lap}",
     "raceLapsOfTotal": "Tour {lap}/{total}",
+    "lapShort": "T{lap}",
+    "lapShortOfTotal": "T{lap}/{total}",
     "aidWorking": "{aid} actif",
     "inputs": "Commandes",
     "shiftLights": "Témoins de changement de rapport : {lit} sur {total}",
@@ -226,6 +231,12 @@
     "aidOff": "OFF",
     "fuel": "CARB",
     "aero": "AÉRO",
+    "corners": {
+      "fl": "AVG",
+      "fr": "AVD",
+      "rl": "ARG",
+      "rr": "ARD"
+    },
     "open": "OUV.",
     "armed": "PRÊT",
     "shut": "FERM",
@@ -679,6 +690,13 @@
       "engineMap": "Cartographie moteur",
       "ers": "ERS",
       "ersMode": "Mode ERS",
+      "ersModes": {
+        "CHR": "Charge",
+        "LIC": "V. basse",
+        "BAL": "Équilibré",
+        "RAC": "Course",
+        "PSH": "Attaque"
+      },
       "boost": "Boost",
       "overtake": "Dépassement",
       "motor": "Moteur",
@@ -976,7 +994,7 @@
     "ersMode": "ERS · {mode}",
     "ersModes": {
       "CHR": "Charge",
-      "LIC": "Basse vit",
+      "LIC": "V. basse",
       "BAL": "Équilibré",
       "RAC": "Course",
       "PSH": "Attaque"
