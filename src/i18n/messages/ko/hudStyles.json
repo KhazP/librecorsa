@@ -564,7 +564,7 @@
     },
     "positionShort": "P{position}",
     "positionOf": "{total}위 중 {position}위",
-    "ofField": "/ {total}",
+    "ofField": "{total}대 중",
     "lapOf": "랩 {lap} / {total}",
     "lap": "랩 {lap}",
     "run": "런 {lap}",

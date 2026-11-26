@@ -564,7 +564,7 @@
     },
     "positionShort": "P{position}",
     "positionOf": "第 {position} 名，共 {total} 輛",
-    "ofField": "/ {total}",
+    "ofField": "共 {total} 輛",
     "lapOf": "第 {lap} / {total} 圈",
     "lap": "第 {lap} 圈",
     "run": "第 {lap} 趟",
