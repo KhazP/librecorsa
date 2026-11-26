@@ -330,7 +330,7 @@ export const TyreMini: React.FC<{ t: CarTelemetry; i: number }> = ({ t, i }) => 
     [tx, corners, i, temps, pressure, brakeTemp, condition]
   );
   return (
-    <div className="flex min-w-0 items-center gap-1.5 rounded-lc-nub border border-lc-titanium bg-lc-well px-1.5 py-1" title={title}>
+    <div className="flex min-w-0 items-center gap-1 rounded-lc-nub border border-lc-titanium bg-lc-well px-1 py-1" title={title}>
       <span className="flex h-5.5 w-3.75 flex-none gap-px rounded-sm border-[1.5px] p-px" style={{ borderColor: tyreHeatColor(c.temp, window) }}>
         {c.bands.map((b, k) => (
           <span key={k} className="flex-1 rounded-xs" style={{ backgroundColor: tyreHeatColor(b, window) }} />
@@ -339,7 +339,8 @@ export const TyreMini: React.FC<{ t: CarTelemetry; i: number }> = ({ t, i }) => 
       <span className="h-5.5 w-0.75 flex-none overflow-hidden rounded-full bg-lc-carbon">
         <span className="block h-full w-full" style={{ backgroundColor: brakeGlowColor(c.brake), opacity: Math.min(1, 0.25 + c.brake / 900) }} />
       </span>
-      <span className="flex min-w-0 flex-col leading-none">
+      {/* The temperature keeps its width ("104°", "219°" in Fahrenheit): the pressure change beside it never runs into it */}
+      <span className="flex flex-none flex-col leading-none">
         <span className="flex items-center gap-1">
           <span className={HUD_LBL}>{corners[i]}</span>
           {/* A condition (graining, blistering, flat spot, dirt): a warning sign in its tone, named in the tooltip */}
