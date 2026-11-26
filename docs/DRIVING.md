@@ -23,12 +23,12 @@ Each tyre evaluates grip across three lateral tread strips (inner, middle, outer
 | Compound | Dry grip (vs. slick) | Wet film grip | Water cleared at 200 km/h | Initial groove depth | Working window shift | Dry wear / heat penalty |
 | :-- | --: | --: | --: | --: | --: | :-- |
 | **Slicks** (Soft / Medium / Hard) | `100%` | `54%` | `0.42 mm` | `0 mm` | Baseline | `1.0×` wear · `1.0×` heat |
-| **Intermediate** | `91%` | `89%` | `1.30 mm` | `2.5 mm` | `-30 °C` (F1 peak `75 °C`) | `3.0×` wear · `1.35×` heat |
-| **Full wet** | `84%` | `93%` | `3.10 mm` | `5.5 mm` | `-42 °C` (F1 peak `70 °C`) | `4.0×` wear · `1.50×` heat |
+| **Intermediate** | `90%` | `78%` | `1.25 mm` | `2.5 mm` | `-30 °C` (F1 peak `75 °C`) | `3.0×` wear · `1.35×` heat |
+| **Full wet** | `82%` | `79%` | `2.65 mm` | `5.5 mm` | `-42 °C` (F1 peak `70 °C`) | `4.0×` wear · `1.50×` heat |
 
 Key wet-tyre behaviours on track:
 
-- **Water thresholds:** The track transitions from **Damp** (`> 0.08 mm`) to **Wet** (`> 0.5 mm`) to **Standing water** (`> 1.5 mm`). As a rule of thumb, intermediates become faster than slicks above `0.14 mm`, and full wets take over above `1.1 mm`.
+- **Water thresholds:** The track transitions from **Damp** (`> 0.08 mm`) to **Wet** (`> 0.5 mm`) to **Standing water** (`> 1.5 mm`). As a rule of thumb, the game's tyre calls put intermediates on above `0.2 mm` of water on the racing line, and full wets above `1.15 mm`.
 - **Aquaplaning and tread wear:** Every tyre clears more water at lower speed (the contact patch has longer to drain) and less as speed rises. Once water depth exceeds a tyre's clearing capacity, it rides up onto the film and loses up to 80% of its grip. Worn rain grooves lose up to 55% of their water-clearing capacity.
 - **Steering feel in standing water:** Before full aquaplaning begins, a hydrodynamic water wedge builds at the leading edge of the contact patch, shortening pneumatic trail and lightening steering self-aligning torque in your wheel. Above `0.6 mm` of water, rolling drag through puddles also creates asymmetric pull if one side of the car hits deeper water.
 - **Dry track penalty on rain tyres:** Running intermediates or full wets on drying asphalt overheats the soft silica blocks and accelerates tread wear (`3×`–`4×`) until you find damp off-line patches or pit for slicks.
@@ -64,7 +64,7 @@ On 2026 cars, pressing the **Active aero** button (`X` on keyboard, `Y` / `△` 
 
 - **Where flaps open:** Both front and rear wing flaps open on every designated straight at least `250 m` long (radius `≥ 800 m`, bridging gentle kinks up to `100 m` long with radius `≥ 500 m`) with **no gap requirement** to the car ahead.
 - **Pre-queueing:** A HUD notice appears `150 m` before a straight-mode zone. Pressing the flap button up to `250 m` before the zone queues activation (held for up to `12 s`) and opens the flaps the instant you cross the activation line.
-- **Low Grip Conditions and wet lockout:** When racing-line water exceeds `0.14 mm`, race control declares **Low Grip Conditions** (cleared once water falls below `0.08 mm`). Under Low Grip Conditions, rear flaps stay locked out above `0.25` wetness, only the **front flaps** open, and activation zones shift `50 m` further down the straight. Under open-wheel race rules, local yellow-flag zones also lock out flaps and Overtake Mode.
+- **Low Grip Conditions and wet lockout:** When racing-line water exceeds `0.2 mm`, race control declares **Low Grip Conditions** (cleared once water falls below `0.08 mm`). Under Low Grip Conditions, rear flaps stay locked out above `0.25` wetness, only the **front flaps** open, and activation zones shift `50 m` further down the straight. Under open-wheel race rules, local yellow-flag zones also lock out flaps and Overtake Mode.
 
 ### 350 kW MGU-K, 4 MJ battery, and Overtake Mode
 
