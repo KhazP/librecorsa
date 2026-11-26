@@ -1065,7 +1065,7 @@
     "remove": "Supprimer",
     "removeNamed": "Supprimer {name}",
     "removeTitle": "Supprimer {name} ?",
-    "removeBody": "Ses circuits, voitures et livrées quitteront le jeu au redémarrage. Les tours réalisés avec restent enregistrés.",
+    "removeBody": "Ses circuits, voitures et livrées quitteront le jeu au redémarrage. Vos meilleurs tours sur ses circuits restent enregistrés.",
     "removeFailed": "{name} n’a pas pu être supprimé :",
     "broken": "Problèmes (les éléments concernés restent hors du jeu) :",
     "moreProblems": "{count, plural, one {et # autre problème} other {et # autres problèmes}}",

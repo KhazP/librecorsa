@@ -1065,7 +1065,7 @@
     "remove": "Rimuovi",
     "removeNamed": "Rimuovi {name}",
     "removeTitle": "Rimuovere {name}?",
-    "removeBody": "I suoi circuiti, le sue auto e le sue livree escono dal gioco al riavvio. I tuoi giri con questi contenuti restano salvati.",
+    "removeBody": "I suoi circuiti, le sue auto e le sue livree escono dal gioco al riavvio. I tuoi giri migliori sui suoi circuiti restano salvati.",
     "removeFailed": "Impossibile rimuovere {name}:",
     "broken": "Problemi (ciò che riguardano resta fuori dal gioco):",
     "moreProblems": "{count, plural, one {e # altro problema} other {e altri # problemi}}",

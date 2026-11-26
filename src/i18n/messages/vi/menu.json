@@ -1065,7 +1065,7 @@
     "remove": "Gỡ bỏ",
     "removeNamed": "Gỡ bỏ {name}",
     "removeTitle": "Gỡ bỏ {name}?",
-    "removeBody": "Các đường đua, xe và màu sơn của gói này sẽ biến mất khi trò chơi khởi động lại. Thành tích vòng của bạn với chúng vẫn được lưu.",
+    "removeBody": "Các đường đua, xe và màu sơn của gói này sẽ biến mất khi trò chơi khởi động lại. Thành tích vòng tốt nhất của bạn trên các đường đua của gói vẫn được lưu.",
     "removeFailed": "Không thể gỡ bỏ {name}:",
     "broken": "Sự cố (nội dung bị ảnh hưởng sẽ không được nạp vào trò chơi):",
     "moreProblems": "{count, plural, other {và # sự cố khác}}",

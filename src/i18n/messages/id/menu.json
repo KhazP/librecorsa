@@ -1065,7 +1065,7 @@
     "remove": "Hapus",
     "removeNamed": "Hapus {name}",
     "removeTitle": "Hapus {name}?",
-    "removeBody": "Sirkuit, mobil, dan livery di dalamnya akan dihapus dari game saat dimulai ulang. Catatan lap-mu dengannya tetap tersimpan.",
+    "removeBody": "Sirkuit, mobil, dan livery di dalamnya akan dihapus dari game saat dimulai ulang. Lap terbaikmu di sirkuitnya tetap tersimpan.",
     "removeFailed": "{name} gagal dihapus:",
     "broken": "Masalah (bagian yang terdampak tidak dimuat ke game):",
     "moreProblems": "{count, plural, other {dan # masalah lainnya}}",
