@@ -805,7 +805,7 @@
     "nextCarTitle": "Sonraki araç ({key})",
     "cameraAngle": "Tekrar kamera açısı",
     "cycleCamera": "Tekrar kamerasını değiştir",
-    "flashbackTitle": "Flashback — bu andan sürmeye devam et ({key}, mevcut turu geçersiz kılar)",
+    "flashbackTitle": "Flashback: bu andan sürmeye devam et ({key}, mevcut turu geçersiz kılar)",
     "flashback": "Flashback",
     "exit": "Çık",
     "hints": {

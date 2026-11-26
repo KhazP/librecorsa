@@ -805,7 +805,7 @@
     "nextCarTitle": "다음 차량({key})",
     "cameraAngle": "리플레이 카메라 각도",
     "cycleCamera": "리플레이 카메라 전환",
-    "flashbackTitle": "플래시백 — 이 시점부터 주행 재개({key}, 현재 랩 무효화)",
+    "flashbackTitle": "플래시백: 이 시점부터 주행 재개({key}, 현재 랩 무효화)",
     "flashback": "플래시백",
     "exit": "나가기",
     "hints": {

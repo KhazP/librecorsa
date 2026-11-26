@@ -805,7 +805,7 @@
     "nextCarTitle": "Mobil berikutnya ({key})",
     "cameraAngle": "Sudut kamera tayangan ulang",
     "cycleCamera": "Ganti kamera tayangan ulang",
-    "flashbackTitle": "Flashback — lanjutkan mengemudi dari momen ini ({key}, membatalkan lap saat ini)",
+    "flashbackTitle": "Flashback: lanjutkan mengemudi dari momen ini ({key}, membatalkan lap saat ini)",
     "flashback": "Flashback",
     "exit": "Keluar",
     "hints": {
