@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
 import { SteeringWheelDisplay, type WheelScreenSpec } from "./steering-display";
+import { AcDigitalItems, type AcDigitalItem } from "./ac-digital-items";
 import {
   createLmdhWheelScreen,
   LMDH_WHEEL_HIDE_MATERIALS,
@@ -49,8 +50,9 @@ const WHEEL_SCREENS: Readonly<Record<string, PortedWheelScreenConfig>> = {
  * The live steering wheel of a ported car: its screen (the `INT_DISPLAY` mesh under `STEER`, drawn by
  * `SteeringWheelDisplay` with the car's own LED range, or a dedicated prototype page for `lc-lmdh`) and its shift
  * lights (the `STEER` children the CAR node's `revLeds` extras list, which the rig puts on `STEER`: each lit in its
- * colour from its rpm, all blinking past `blinkRpm`). The rig shares the GLB template's materials between cars, so
- * each LED gets its own material copy; `dispose` puts the template's back.
+ * colour from its rpm, all blinking past `blinkRpm`), and the texts an Assetto Corsa car's digital_instruments.ini
+ * writes in its LCD windows (the `digitalItems` extras, `AcDigitalItems`). The rig shares the GLB template's materials
+ * between cars, so each LED gets its own material copy; `dispose` puts the template's back.
  */
 export class PortedWheelDash {
   readonly found: boolean;
@@ -59,6 +61,8 @@ export class PortedWheelDash {
   private readonly leds: { led: RevLed; meshes: THREE.Mesh[]; originals: THREE.Material[]; mat: THREE.MeshStandardMaterial }[] = [];
   private readonly blinkRpm: number = Infinity;
   private readonly blinkHz: number = 5;
+  /** The texts the mod's digital_instruments.ini writes in the wheel's LCD windows (the CAR node's `digitalItems`) */
+  private readonly items: AcDigitalItems | null = null;
 
   /**
    * The dash of the ported body under `root`, once its GLB has loaded (null until then); `found` is false for a car
@@ -108,7 +112,8 @@ export class PortedWheelDash {
       this.blinkRpm = table.blinkRpm ?? Infinity;
       this.blinkHz = table.blinkHz ?? 5;
       for (const led of table.leds) {
-        const node = steer.getObjectByName(led.node);
+        // On the wheel, or on the body beside it (a dash's lights)
+        const node = steer.getObjectByName(led.node) ?? steer.parent?.getObjectByName(led.node);
         if (!node) continue;
         const meshes: THREE.Mesh[] = [];
         node.traverse((o) => {
@@ -126,11 +131,17 @@ export class PortedWheelDash {
         this.leds.push({ led, meshes, originals, mat });
       }
     }
-    this.found = this.screen !== null || this.leds.length > 0;
+    const items = steer.userData?.digitalItems as AcDigitalItem[] | undefined;
+    if (items?.length) {
+      const live = new AcDigitalItems(steer, items);
+      this.items = live.found ? live : null;
+    }
+    this.found = this.screen !== null || this.leds.length > 0 || this.items !== null;
   }
 
   update(t: CarTelemetry, nowMs: number, extra?: { deltaMs?: number | null }): void {
     this.screen?.update(t, nowMs, extra);
+    this.items?.update(t, nowMs, extra);
     const rpm = Number.isFinite(t.rpm) ? t.rpm : 0;
     const blinkOff = rpm >= this.blinkRpm && Math.floor((nowMs / 1000) * this.blinkHz * 2) % 2 === 1;
     for (const { led, mat } of this.leds) mat.emissiveIntensity = rpm >= led.rpm && !blinkOff ? LED_INTENSITY : 0;
@@ -138,6 +149,7 @@ export class PortedWheelDash {
 
   dispose(): void {
     this.screen?.dispose();
+    this.items?.dispose();
     for (const h of this.hiddenOverlays) h.mesh.visible = h.visible;
     this.hiddenOverlays.length = 0;
     for (const { meshes, originals, mat } of this.leds) {

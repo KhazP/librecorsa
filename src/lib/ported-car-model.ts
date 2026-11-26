@@ -83,6 +83,8 @@ interface PortedExtras {
   cameras?: Partial<Record<string, { pos: [number, number, number]; pitchDeg: number; fov: number }>>;
   /** The wheel's shift lights (ported-wheel-dash.ts), handed on to the `STEER` node */
   revLeds?: unknown;
+  /** The texts digital_instruments.ini draws (ac-digital-items.ts), handed on to the `STEER` node */
+  digitalItems?: unknown;
   /** GLB material name -> the file of a livery that replaces its colour texture */
   skinMaps?: Record<string, string>;
   /** PART_ node -> the livery variants that show it (`CarSkin.variant`, "base" for a livery that names none) */
@@ -282,11 +284,13 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
         if (body) {
           if (url.includes("lc-lmdh")) parkLcLmdhWiper(body);
           const variantNodes = new Set(Object.keys(extras.partVariants ?? {}));
+          // Shift lights on the body (a dash's) stay nodes of their own, for the dash to light
+          const ledNodes = new Set(((extras.revLeds as { leds?: { node: string }[] } | undefined)?.leds ?? []).map((l) => l.node));
           mergeStaticMeshesByMaterial(body, {
             namePrefix: "PORTED_BODY_Merged",
             disposeSources: true,
             skip: (obj) => {
-              if (obj.name === "STEER" || variantNodes.has(obj.name) || obj.name.startsWith("PART_")) return true;
+              if (obj.name === "STEER" || variantNodes.has(obj.name) || ledNodes.has(obj.name) || obj.name.startsWith("PART_")) return true;
               if (PRESERVED_BODY_NODE_RE.test(obj.name)) return true;
               const m = (obj as THREE.Mesh).isMesh && !Array.isArray((obj as THREE.Mesh).material) ? ((obj as THREE.Mesh).material as THREE.Material) : null;
               if (m && PRESERVED_BODY_NODE_RE.test(m.name)) return true;
@@ -635,6 +639,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         steerPivot = steerNode;
         steerRest.copy(steerNode.quaternion);
         if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
+        if (extras.digitalItems) steerNode.userData.digitalItems = extras.digitalItems;
       }
     }
     for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
