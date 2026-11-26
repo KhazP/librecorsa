@@ -10,6 +10,8 @@
  *    layers follow the inputs.
  * 4. A pitched grid's loops waking: mid-sweep they start where the others' pitch glide has got to; after a silence
  *    (an opponent's voice handed to another car) they start at the target.
+ * 5. Loops in their source bank's own mix (`EngineEntry.gain`, `throttleGain`, `flatEngine`): every loop of a layer at
+ *    its own gain, none crossfaded, on a grid and in a ported bank (F1 2007's, hosted only).
  *
  * Run with: npx tsx scripts/verify/verify-bank-layers.ts
  */
@@ -100,6 +102,7 @@ LoopGrid.prototype.update = function (this: LoopGrid, x: number, level: number, 
 };
 
 interface BankInside {
+  engine: Record<"ext" | "int", { on: LoopGrid; off: LoopGrid }>;
   transOn: LoopGrid | null;
   transOff: LoopGrid | null;
   mguVoice: { gain: Node; source: Node | null } | null;
@@ -321,6 +324,65 @@ function wakingLoops(): void {
   }
 }
 
+/** A voice's gain and playback rate as last sent */
+const voiceState = (grid: LoopGrid, key: number) => {
+  const v = grid.voiceFor(key) as unknown as { gain: Node; source: Node | null } | undefined;
+  return { gain: v?.gain.gain.value ?? NaN, rate: v?.source?.playbackRate.value ?? NaN };
+};
+const lerp = (t: [number, number][], x: number) => {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) return t[i - 1][1] + ((t[i][1] - t[i - 1][1]) * (x - t[i - 1][0])) / (t[i][0] - t[i - 1][0]);
+  return t[t.length - 1][1];
+};
+
+async function bankOwnMix(): Promise<void> {
+  console.log("\n5. Loops in their bank's own mix (gain tables)");
+  // A grid given its keys out of order, each with its gain over rpm: every loop sounds at its own gain, none crossfaded
+  const tables: Record<number, [number, number][]> = {
+    8000: [[5000, 0], [7000, 1], [20000, 1]],
+    4000: [[0, 1], [5000, 1], [7000, 0]],
+    6000: [[3000, 0], [5500, 0.8], [9000, 0.2]],
+  };
+  const keys = [8000, 4000, 6000];
+  const grid = new LoopGrid(ctx as unknown as AudioContext, new Node() as unknown as AudioNode, keys, keys.map((k) => tables[k]));
+  for (const v of grid.voices) v.buffer = { duration: 2 } as AudioBuffer;
+  grid.update(6200, 0.5, true, (ctx.currentTime += 1 / 120), 1 / 120, 0.03);
+  const states = keys.map((k) => ({ k, ...voiceState(grid, k), want: lerp(tables[k], 6200) * 0.5 }));
+  check(
+    "keys out of order: each loop at its own table's gain at 6200 rpm, times the layer's level",
+    states.every((s) => near(s.gain, s.want, 1e-9)),
+    states.map((s) => `${s.k}: ${s.gain.toFixed(4)} / ${s.want.toFixed(4)}`).join(", ")
+  );
+  check(
+    "each loop pitched to the revs from its own root",
+    states.every((s) => s.want < 1e-4 || near(s.rate, 6200 / s.k, 1e-9)),
+    states.map((s) => `${s.k}: ${s.rate.toFixed(4)}`).join(", ")
+  );
+
+  const dir = "/cars/f1-2007/audio/ferrari/";
+  if (!existsSync(join("public", dir, "manifest.json"))) {
+    noteSkip("F1 2007's ported bank", join("public", dir, "manifest.json"));
+    return;
+  }
+  const m = JSON.parse(readFileSync(join("public", dir, "manifest.json"), "utf8")) as Lc26AudioManifest;
+  const { bank, loaded, inside } = await loadBank(dir, "int");
+  check("F1 2007's bank loads", loaded);
+  const inp: Lc26AudioInputs = { ...base, rpm: 9300, throttle: 0.45, pedal: 0.45, limiterRpm: 19000 };
+  settle(bank, inside, inp, 1.5);
+  const tg = m.throttleGain!.int!;
+  for (const layer of ["on", "off"] as const) {
+    const level = sent.get(inside.engine.int[layer])?.level ?? NaN;
+    const want = lerp(tg[layer], 0.45);
+    check(`the cockpit ${layer} layer at the throttle's own gain (${want.toFixed(3)} at 45 %), not the sin/cos blend`, near(level, want, 0.002), level.toFixed(4));
+    const entries = m.engine.int.filter((e) => e.layer === layer);
+    const off = entries
+      .map((e) => ({ e, got: voiceState(inside.engine.int[layer], e.rpm).gain, want: lerp(e.gain!, 9300) * level }))
+      .filter(({ got, want }) => !(want < 1e-4 && (Number.isNaN(got) || got < 1e-4)) && !near(got, want, 0.002 * Math.max(1, want)));
+    check(`every ${layer} loop at its gain table's value at 9300 rpm`, off.length === 0, off.map(({ e, got, want }) => `${e.rpm}: ${got} / ${want}`).join(", "));
+  }
+  check("no rpm/load filter on the bank's own mix (flatEngine)", inside.engineFilter.frequency.value >= 24000, `${inside.engineFilter.frequency.value} Hz`);
+}
+
 async function main() {
   mixingMaths();
   await bankWithoutSections();
@@ -328,6 +390,7 @@ async function main() {
   // Its Engine Lab engine renders the cockpit and the outside itself, with no tone stage on top
   await bankWithSections("the LC-LMDH's", "/cars/lc-lmdh/audio/", { required: false, viewTone: false });
   wakingLoops();
+  await bankOwnMix();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

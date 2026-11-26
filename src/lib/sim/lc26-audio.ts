@@ -22,6 +22,12 @@ interface LoopEntry {
 }
 interface EngineEntry extends LoopEntry {
   rpm: number;
+  /**
+   * The loop's gain over rpm, [rpm, gain] (a bank ported from its FMOD events' own mix, port_ac_bank.py
+   * `engineFromBank`): every loop of the layer sounds at once at its own gain, as the source's instruments do, with
+   * `rpm` the speed it plays at its own pitch. Without it the layer's loops are anchors crossfaded with their neighbours
+   */
+  gain?: [number, number][];
 }
 interface TurboEntry extends LoopEntry {
   boost: number;
@@ -52,6 +58,13 @@ export interface Lc26AudioManifest {
   transmission: TransmissionEntry[];
   oneshots: OneshotEntry[];
   throttleCurve: { ext: [number, number][]; int: [number, number][] };
+  /**
+   * The throttle's gain on each layer, [throttle, gain], where the source sets the on-load and the overrun levels apart
+   * (its own volume curves) instead of one blend: in place of `throttleCurve`'s sin/cos pair for the engine
+   */
+  throttleGain?: Partial<Record<'ext' | 'int', { on: [number, number][]; off: [number, number][] }>>;
+  /** The engine is heard as its loops and gains have it (a source's own mix): no rpm/load low-pass or presence shelf */
+  flatEngine?: boolean;
   limiterParamEffect?: { ext: number; int: number };
   /**
    * Overrun pops on a lift above `popMinRpm`, then crackle above `crackleMinRpm` (default: the LC26's 8500 / 9000);
@@ -338,9 +351,14 @@ export class LoopVoice {
 /** Length of the upshift's ignition-cut envelope (s) */
 const UPSHIFT_S = 0.06;
 
-/** A 1-D grid of loops (rpm, boost or speed) crossfaded between neighbours with equal-power weights */
+/**
+ * A 1-D grid of loops (rpm, boost or speed) crossfaded between neighbours with equal-power weights; or, given a gain
+ * table per loop (`EngineEntry.gain`), loops that all sound at once, each at its own gain along the axis
+ */
 export class LoopGrid {
   public readonly voices: LoopVoice[];
+  /** Per voice (in key order), its gain along the axis: no neighbour crossfade */
+  private readonly gains: [number, number][][] | null;
   /** Where the voices' pitch glide has got to on the grid axis: a voice waking mid-sweep joins the others there, instead
    * of starting at the target up to a few semitones away from them. `glideT` < 0: no glide under way (the grid has
    * not played yet or was silent last update), so waking voices start at the target */
@@ -349,8 +367,11 @@ export class LoopGrid {
   private glideTau = 0.02;
   private glideT = -1;
 
-  constructor(ctx: AudioContext, destination: AudioNode, keys: number[]) {
-    this.voices = [...keys].sort((a, b) => a - b).map((k) => new LoopVoice(ctx, destination, k));
+  /** `gains`: one table per key (in the keys' order), or none for the neighbour crossfade */
+  constructor(ctx: AudioContext, destination: AudioNode, keys: number[], gains?: ([number, number][] | undefined)[]) {
+    const order = keys.map((k, i) => ({ k, g: gains?.[i] })).sort((a, b) => a.k - b.k);
+    this.voices = order.map(({ k }) => new LoopVoice(ctx, destination, k));
+    this.gains = order.length > 0 && order.every(({ g }) => g && g.length > 0) ? order.map(({ g }) => g!) : null;
   }
 
   public voiceFor(key: number): LoopVoice | undefined {
@@ -395,9 +416,11 @@ export class LoopGrid {
       pitched && vs.length > 1 && vs.length <= 6
         ? Math.min(1, Math.max(0, (rawF - 0.1) / 0.8))
         : rawF;
-    for (const v of vs) {
+    for (let vi = 0; vi < vs.length; vi++) {
+      const v = vs[vi];
       let w = 0;
-      if (v === lo) w = Math.cos(f * Math.PI * 0.5);
+      if (this.gains) w = lerpTable(this.gains[vi], x);
+      else if (v === lo) w = Math.cos(f * Math.PI * 0.5);
       else if (v === hi) w = Math.sin(f * Math.PI * 0.5);
       const rate = (pitched ? Math.min(4, Math.max(0.25, x / v.key)) : 1) * rateScale;
       const wake = (pitched ? Math.min(4, Math.max(0.25, this.glideX / v.key)) : 1) * rateScale;
@@ -532,10 +555,11 @@ export class Lc26SoundBank {
 
     for (const view of ['ext', 'int'] as Lc26View[]) {
       const entries = manifest.engine[view];
-      this.engine[view] = {
-        on: new LoopGrid(ctx, this.viewBus[view], entries.filter((e) => e.layer === 'on').map((e) => e.rpm)),
-        off: new LoopGrid(ctx, this.viewBus[view], entries.filter((e) => e.layer === 'off').map((e) => e.rpm)),
+      const grid = (layer: 'on' | 'off') => {
+        const es = entries.filter((e) => e.layer === layer);
+        return new LoopGrid(ctx, this.viewBus[view], es.map((e) => e.rpm), es.map((e) => e.gain));
       };
+      this.engine[view] = { on: grid('on'), off: grid('off') };
     }
     this.turboOn = new LoopGrid(ctx, this.bus, manifest.turbo.filter((e) => e.layer === 'on').map((e) => e.boost));
     this.turboOff = new LoopGrid(ctx, this.bus, manifest.turbo.filter((e) => e.layer === 'off').map((e) => e.boost));
@@ -838,8 +862,12 @@ export class Lc26SoundBank {
 
     // Dynamic exhaust filter: opens up progressively with RPM and load so high revs scream cleanly
     const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, rpmTop - this.rpmRange[0])));
-    const cutoffHz = m.loadFilter ? loadFilterHz(m.loadFilter, effThrottle) : 3200 + rpmNorm * 6800 + effThrottle * 3800;
-    const shelfDb = -1.5 + rpmNorm * 5.0 * (0.4 + 0.6 * effThrottle);
+    const cutoffHz = m.flatEngine
+      ? this.ctx.sampleRate / 2
+      : m.loadFilter
+        ? loadFilterHz(m.loadFilter, effThrottle)
+        : 3200 + rpmNorm * 6800 + effThrottle * 3800;
+    const shelfDb = m.flatEngine ? 0 : -1.5 + rpmNorm * 5.0 * (0.4 + 0.6 * effThrottle);
     this.engineFilter.frequency.setTargetAtTime(cutoffHz, now, 0.018);
     this.engineShelf.gain.setTargetAtTime(shelfDb, now, 0.018);
 
@@ -847,8 +875,9 @@ export class Lc26SoundBank {
     const engineTau = this.upshiftTimer > 0 || this.downshiftTimer > 0 ? 0.012 : tau;
     for (const view of ['ext', 'int'] as Lc26View[]) {
       const onness = lerpTable(m.throttleCurve[view], effThrottle);
-      const wOn = Math.sin(onness * Math.PI * 0.5) * shiftOnScale * engineAlive;
-      const wOff = Math.cos(onness * Math.PI * 0.5) * shiftOffScale * engineAlive;
+      const tg = m.throttleGain?.[view];
+      const wOn = (tg ? lerpTable(tg.on, effThrottle) : Math.sin(onness * Math.PI * 0.5)) * shiftOnScale * engineAlive;
+      const wOff = (tg ? lerpTable(tg.off, effThrottle) : Math.cos(onness * Math.PI * 0.5)) * shiftOffScale * engineAlive;
       const viewLevel = view === 'int' ? this.viewMix : 1 - this.viewMix;
       const active = viewLevel > 0.002 && engineAlive > 0;
       this.engine[view].on.update(rpm, active ? wOn : 0, true, now, dt, engineTau, pitchTau);

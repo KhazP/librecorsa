@@ -50,6 +50,11 @@ export interface CarSoundSource {
   physicsLimiterRpm?: number;
   /** Optional per-car tuning for downshift/lift-off exhaust pops and crackles */
   popTuning?: Partial<SoundBankPopTuning>;
+  /**
+   * Another bank with the same outside loops (F1 2007's teams: one exterior recording set under eleven cockpit
+   * engines): the other cars, heard from outside only, play that bank's, so the same loops decode once
+   */
+  outsideAssetDir?: string;
 }
 
 export const LC26_SOUND: CarSoundSource = { id: 'lc26', assetDir: LC26_AUDIO_DIR, limiterRpm: LC26_ENGINE.limiterRpm };

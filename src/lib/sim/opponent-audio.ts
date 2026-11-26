@@ -58,8 +58,13 @@ interface SharedBank {
   onBuffers: AudioBuffer[];
   offKeys: number[];
   offBuffers: AudioBuffer[];
+  /** Per loop, its gain over rpm (a bank in its source's own mix: `EngineEntry.gain`) */
+  onGains: ([number, number][] | undefined)[];
+  offGains: ([number, number][] | undefined)[];
   skid: AudioBuffer | null;
   throttleCurve: [number, number][];
+  /** The throttle's gain on each layer, where the bank sets them apart (`Lc26AudioManifest.throttleGain`) */
+  throttleGain: { on: [number, number][]; off: [number, number][] } | null;
   rpmMin: number;
   rpmMax: number;
 }
@@ -88,6 +93,9 @@ async function loadSharedBank(ctx: AudioContext, assetDir: string, bank: SharedB
     bank.onBuffers = onBuffers;
     bank.offKeys = off.map((e) => e.rpm);
     bank.offBuffers = offBuffers;
+    bank.onGains = on.map((e) => e.gain);
+    bank.offGains = off.map((e) => e.gain);
+    bank.throttleGain = m.throttleGain?.ext ?? null;
     bank.skid = skid;
     bank.throttleCurve = m.throttleCurve?.ext ?? [];
     bank.rpmMin = Math.min(...rpms) * 0.75;
@@ -207,8 +215,8 @@ class OpponentVoice {
     this.onGrid?.dispose();
     this.offGrid?.dispose();
     this.skidVoice?.dispose();
-    this.onGrid = new LoopGrid(this.ctx, this.engineGain, bank.onKeys);
-    this.offGrid = new LoopGrid(this.ctx, this.engineGain, bank.offKeys);
+    this.onGrid = new LoopGrid(this.ctx, this.engineGain, bank.onKeys, bank.onGains);
+    this.offGrid = new LoopGrid(this.ctx, this.engineGain, bank.offKeys, bank.offGains);
     bank.onKeys.forEach((k, i) => {
       const v = this.onGrid?.voiceFor(k);
       if (v) v.buffer = bank.onBuffers[i];
@@ -308,9 +316,12 @@ class OpponentVoice {
     const onness = bank.throttleCurve.length ? lerpTable(bank.throttleCurve, this.throttle) : this.throttle;
     const cut01 = this.shiftTimer > 0 ? 0.55 : 1;
     const full = this.rank < HRTF_VOICES;
+    const tg = bank.throttleGain;
+    const gOn = tg ? lerpTable(tg.on, this.throttle) : Math.sin(onness * Math.PI * 0.5);
+    const gOff = tg ? lerpTable(tg.off, this.throttle) : Math.cos(onness * Math.PI * 0.5);
     // A far voice plays the on-load grid only, held up a little off throttle so a lift does not drop it out
-    const wOn = (full ? Math.sin(onness * Math.PI * 0.5) : Math.max(0.6, Math.sin(onness * Math.PI * 0.5))) * cut01;
-    const wOff = full ? Math.cos(onness * Math.PI * 0.5) * (this.shiftTimer > 0 ? 0.75 : 1) : 0;
+    const wOn = (full ? gOn : Math.max(0.6, gOn)) * cut01;
+    const wOff = full ? gOff * (this.shiftTimer > 0 ? 0.75 : 1) : 0;
     // (Cars past CULL_DISTANCE_M never get a voice: they are dropped when the candidates are gathered)
     this.onGrid.update(this.rpm, wOn, true, now, dt, 0.03, 0.02, this.doppler);
     this.offGrid.update(this.rpm, wOff, true, now, dt, 0.03, 0.02, this.doppler);
@@ -565,7 +576,8 @@ export class OpponentAudio {
         continue;
       }
       const sound = f.soundFor(p);
-      const bank = this.bankFor(sound.assetDir);
+      // Sounds that share their outside loops load them once (`CarSoundSource.outsideAssetDir`)
+      const bank = this.bankFor(sound.outsideAssetDir ?? sound.assetDir);
       v.bind(sound, bank);
       v.setHrtf(!f.lowQuality && v.rank < HRTF_VOICES);
       if (bank.state !== 'ready') continue;
@@ -628,8 +640,11 @@ export class OpponentAudio {
         onBuffers: [],
         offKeys: [],
         offBuffers: [],
+        onGains: [],
+        offGains: [],
         skid: null,
         throttleCurve: [],
+        throttleGain: null,
         rpmMin: 3000,
         rpmMax: 16000,
       };
