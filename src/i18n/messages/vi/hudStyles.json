@@ -594,8 +594,8 @@
     "markBest": "Tốt",
     "markPb": "PB",
     "live": "đang chạy",
-    "ahead": "Phía trước",
-    "behind": "Phía sau",
+    "ahead": "Xe trước",
+    "behind": "Xe sau",
     "limits": "Giới hạn",
     "penalty": "+{seconds} s",
     "trend": {
