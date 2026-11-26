@@ -10,7 +10,17 @@ import React, { useEffect, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import type { VehicleModelId } from "@/types/f1";
 import { ALL_CARS, type BoardCar } from "@/lib/net/board-client";
-import { challengeAt, challengeById, challengeConditionsLabel, challengesSoFar, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
+import {
+  MIDDLE_GEAR_CHALLENGE,
+  challengeAt,
+  challengeById,
+  challengeConditionsLabel,
+  challengesSoFar,
+  isPermanentChallenge,
+  timeLeftLabel,
+  type TimeTrialEvent,
+  type WeeklyChallenge,
+} from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
 import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
@@ -57,13 +67,15 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
   // A clock set before the first week still shows the week it says
   const so = challengesSoFar(now);
   const weeks = so.length > 0 ? so : [challengeAt(now)];
-  /** The week picked; none, this week (which stays the pick when the week turns) */
-  const [weekPick, setWeekPick] = useState<string | null>(null);
-  const week = weeks.find((w) => w.id === weekPick) ?? weeks[0];
-  const thisWeek = week.id === weeks[0].id;
+  const allEvents: readonly TimeTrialEvent[] = [weeks[0], MIDDLE_GEAR_CHALLENGE, ...weeks.slice(1)];
+  /** The time trial picked; none, this week (which stays the pick when the week turns) */
+  const [eventPick, setEventPick] = useState<string | null>(null);
+  const activeEvent = allEvents.find((e) => e.id === eventPick) ?? weeks[0];
+  const permanent = isPermanentChallenge(activeEvent);
+  const thisWeek = !permanent && activeEvent.id === weeks[0].id;
 
   const circuitName = (id: string) => circuits.find((c) => c.id === id)?.label ?? id;
-  const carName = (w: WeeklyChallenge) => carTitles[w.car ?? w.vehicle] ?? carTag(w.vehicle).label;
+  const carName = (e: TimeTrialEvent) => carTitles[e.car ?? e.vehicle] ?? carTag(e.vehicle).label;
   const openRecordBoard = (trackId: string, vehicle: VehicleModelId) => {
     onCircuitChange(trackId);
     setCar(vehicle);
@@ -77,7 +89,7 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
       onChange={setView}
       options={[
         { id: "laps", label: tx("allLaps") },
-        { id: "challenge", label: tx("challenge") },
+        { id: "challenge", label: tx("timeTrials") },
         { id: "hof", label: tx("hallOfFame") },
       ]}
       className="self-start phone:self-stretch"
@@ -123,43 +135,61 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
     <div className="flex flex-col gap-3">
       {switcher}
       <OnlineBoard
-        title={tx("challengeTitle")}
+        title={tx("timeTrialsTitle")}
         headingAs="h2"
         circuits={circuits}
-        circuit={week.trackId}
+        circuit={activeEvent.trackId}
         onCircuitChange={() => {}}
-        event={{ id: week.id, vehicle: week.vehicle, carLabel: carName(week), ended: !thisWeek }}
+        event={{ id: activeEvent.id, vehicle: activeEvent.vehicle, carLabel: carName(activeEvent), ended: !permanent && !thisWeek }}
         picker={
           <Select
-            aria-label={tx("week")}
+            aria-label={tx("trialPicker")}
             className="w-80 max-w-full"
-            value={week.id}
-            onChange={(id) => setWeekPick(id === weeks[0].id ? null : id)}
-            options={weeks.map((w, i) => ({
-              id: w.id,
-              label: i === 0 ? tx("thisWeek", { circuit: circuitName(w.trackId) }) : tx("pastWeek", { dates: weekSpan(w), circuit: circuitName(w.trackId) }),
-              detail: carName(w),
-            }))}
+            value={activeEvent.id}
+            onChange={(id) => setEventPick(id === weeks[0].id ? null : id)}
+            options={allEvents.map((ev) => {
+              if (isPermanentChallenge(ev)) {
+                return {
+                  id: ev.id,
+                  label: tx("middleGearOption", { circuit: circuitName(ev.trackId) }),
+                  detail: carName(ev),
+                };
+              }
+              const isCurrent = ev.id === weeks[0].id;
+              return {
+                id: ev.id,
+                label: isCurrent
+                  ? tx("thisWeek", { circuit: circuitName(ev.trackId) })
+                  : tx("pastWeek", { dates: weekSpan(ev), circuit: circuitName(ev.trackId) }),
+                detail: carName(ev),
+              };
+            })}
           />
         }
         intro={
           <div className="flex min-w-0 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <p className="lc-body m-0">
-                <span className="font-semibold text-lc-chalk">{circuitName(week.trackId)}</span>
-                <span className="text-lc-fog"> · {carName(week)}</span>
+                <span className="font-semibold text-lc-chalk">{circuitName(activeEvent.trackId)}</span>
+                <span className="text-lc-fog"> · {carName(activeEvent)}</span>
               </p>
-              <Badge size="sm" icon="time" variant="outline">
-                {thisWeek ? tx("timeLeft", { timeLeft: timeLeftLabel(week.endsMs, now) }) : tx("ran", { dates: weekSpan(week) })}
-              </Badge>
+              {permanent ? (
+                <Badge size="sm" icon="locked" tone={{ color: "amber" }} variant="soft">
+                  {tx("permanent")}
+                </Badge>
+              ) : (
+                <Badge size="sm" icon="time" variant="outline">
+                  {thisWeek ? tx("timeLeft", { timeLeft: timeLeftLabel(activeEvent.endsMs, now) }) : tx("ran", { dates: weekSpan(activeEvent) })}
+                </Badge>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-1.5" aria-label={tx("rules")}>
-              <LapConditionBadges assists={week.assists} realism={week.realism} />
-              <span className="lc-mono text-[12px] text-lc-slate">{challengeConditionsLabel(week.vehicle)}</span>
+              <LapConditionBadges assists={activeEvent.assists} realism={activeEvent.realism} />
+              <span className="lc-mono text-[12px] text-lc-slate">{challengeConditionsLabel(activeEvent.vehicle)}</span>
             </div>
           </div>
         }
-        emptyText={thisWeek ? tx("emptyThisWeek") : tx("emptyPastWeek")}
+        emptyText={permanent ? tx("emptyPermanent") : thisWeek ? tx("emptyThisWeek") : tx("emptyPastWeek")}
         carTag={carTag}
         onOpenRecordBoard={openRecordBoard}
       />

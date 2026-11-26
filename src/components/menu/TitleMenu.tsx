@@ -18,7 +18,7 @@ import { formatLapTime } from "@/components/hud/hud-format";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { ChallengePanel, type ChallengePanelProps } from "@/components/menu/ChallengePanel";
-import { timeLeftLabel } from "@/lib/net/weekly-challenge";
+import { isPermanentChallenge, timeLeftLabel } from "@/lib/net/weekly-challenge";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
 import { ACTIVE_TRACK_ID, getActivePointToPoint, getTrackData } from "@/lib/track-data";
@@ -87,6 +87,7 @@ const PANEL_WIDTH = "lg:grid-cols-[240px_minmax(0,1160px)]";
 const PANEL_COLUMNS: Partial<Record<TitlePanel, string>> = {
   circuit: "lg:grid-cols-[240px_minmax(0,1480px)]",
   car: "lg:grid-cols-[240px_minmax(0,1480px)]",
+  challenge: "lg:grid-cols-[240px_minmax(0,1360px)]",
   leaderboard: "lg:grid-cols-[240px_minmax(0,1200px)]",
   request: "lg:grid-cols-[240px_minmax(0,1080px)]",
   garage: "lg:grid-cols-[240px_minmax(0,1000px)]",
@@ -773,21 +774,29 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: () => openPanel("multiplayer"),
       badge: props.races?.entry.state === "joined" ? t("multiplayerEntered") : lobbyPlayers > 1 ? t("multiplayerInLobby", { count: lobbyPlayers }) : undefined,
     },
-    ...(props.challengePanel
-      ? [
-          {
-            id: "challenge",
-            label: t("challenge"),
-            short: t("challengeShort"),
-            detail: t("challengeDetail", {
-              timeLeft: timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now()),
-              circuit: props.challengePanel.trackName,
-            }),
-            icon: "challenge" as const,
-            panel: "challenge" as const,
-            run: () => openPanel("challenge"),
-          },
-        ]
+    ...(props.challengePanel && props.challengePanel.trials.length > 0
+      ? (() => {
+          const weeklyTrial = props.challengePanel.trials.find((tr) => !isPermanentChallenge(tr.event));
+          const detail =
+            weeklyTrial && !isPermanentChallenge(weeklyTrial.event)
+              ? t("timeTrialsDetail", {
+                  timeLeft: timeLeftLabel(weeklyTrial.event.endsMs, Date.now()),
+                  circuit: weeklyTrial.trackName,
+                })
+              : props.challengePanel.trials[0]?.trackName;
+          return [
+            {
+              id: "challenge",
+              label: t("timeTrials"),
+              short: t("timeTrialsShort"),
+              detail,
+              badge: props.challengePanel.trials.length > 1 ? String(props.challengePanel.trials.length) : undefined,
+              icon: "challenge" as const,
+              panel: "challenge" as const,
+              run: () => openPanel("challenge"),
+            },
+          ];
+        })()
       : []),
     {
       id: "circuit",
