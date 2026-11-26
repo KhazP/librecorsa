@@ -1268,6 +1268,166 @@ AC_TRACKS = {
             'licenseUrl': 'https://www.overtake.gg/downloads/willow-springs-big-willow.32338/',
         },
     },
+    'las_vegas': {
+        'folder': 'lasvegas23',
+        'layout_dir': '',
+        'models_ini': None,
+        'kn5_files': [
+            'lasvegas23.kn5', 'lasvegas23-objects.kn5', 'lasvegas23__caesars.kn5', 'paris2.kn5',
+            'palazzo.kn5', 'wynn.kn5', 'bellagio-f.kn5', 'south.kn5', 'wheel.kn5', 'cosmo.kn5',
+            'wardorf.kn5', 'mariott.kn5', 'hilton.kn5', 'background.kn5', 'msg.kn5', 'bellagio.kn5',
+            'lasvegas23-walls.kn5', 'lasvegas23-sf.kn5', 'lasvegas23-stringobjects.kn5',
+            'lv-23-start-lights.kn5', 'lasvegas23-buildings.kn5', 'palazzo2.kn5',
+            'lasvegas23-objects-extra.kn5', 'heli_yellowfly.kn5', 'heli_hughesfly_00.kn5',
+        ],
+        'name': 'Las Vegas Strip Circuit',
+        'layout': 'Grand Prix layout',
+        'country': 'United States',
+        'city': 'Las Vegas, Nevada',
+        'type': 'street',
+        'defaultTimeOfDay': 'night',
+        'baseAltitudeM': 610,
+        'pitboxes': 30,
+        'modelledKerbs': True,
+        'blendedCutouts': True,
+        'physicsFiles': ('lasvegas23-walls.kn5',),
+        'physicsOverridesFirst': True,
+        'physicsNodeOverrides': [
+            (r'^1ASAPHALT$', 'road'),
+            (r'^1ASPHALT', 'runoff'),
+            (r'^1ROAD1[34]$', 'runoff'),
+            (r'^1_PAINTED', 'kerb'),
+        ],
+        'notRoadMaterials': r'PALAZZO|SOUTH_|kuwait_bridge',
+        'hideNodes': r'^(CROWD_STAND|CROWD_SIT)',
+        'doubleSidedMaterials': r'metal_frame_40cm|wiremeshl|fence_transparent|loxia|BELLAGIO_Shingles|BELLAGIOWallPillar2|baranda_pasarela',
+        'minWidthM': 8.5,
+        'maxWidthM': 26.0,
+        'maxWidthRatio': 2.2,
+        'refinePasses': 3,
+        'refineMedianSamples': 3,
+        'refineSmoothSamples': 0.8,
+        'refineShiftSmoothSamples': 0.8,
+        'wallMinGapM': 0.0,
+        'wallCapM': 32.0,
+        'openWalls': False,
+        'autoKn5Emissive': True,
+        'autoKn5EmissiveMax': 3.5,
+        'autoKn5EmissiveDefault': 2.2,
+        'nightEmissiveMaterials': [
+            {'match': r'^material1$', 'day': 0.35, 'night': 3.6, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^rgb(_|$)', 'day': 0.25, 'night': 2.8, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^(tv_screen|tv_screens|tv_screens2|vegas-screen-[12]|start_ads)$', 'day': 0.2, 'night': 2.6, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^lv_signs$', 'day': 0.1, 'night': 2.8, 'color': [1.0, 0.98, 0.9], 'emissiveMap': 'extension/lv_signs_emissive.dds', 'spill': True},
+            {'match': r'^lv_signs2$', 'day': 0.1, 'night': 2.8, 'color': [1.0, 0.98, 0.9], 'emissiveMap': 'extension/lv_signs2_emissive.dds', 'spill': True},
+            {'match': r'^lv_signs3$', 'day': 0.1, 'night': 2.2, 'color': [1.0, 0.98, 0.9], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^PALAZZOwindow_large$', 'day': 0.0, 'night': 2.2, 'color': [1.0, 0.95, 0.85], 'emissiveMap': 'extension/window_large_emissive.dds', 'spill': True},
+            {'match': r'^(PALAZZOname_Treasure|PALAZZOname_Island|PALAZZOsands2_1|WYNNtitle|WYNNtop1|PH_LV_logo_1|SOUTH_sign|SOUTH_cirque|COSMOlightup|BELLAGIOBellagio)$', 'day': 0.1, 'night': 3.0, 'color': [1.0, 0.95, 0.82], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^(PALAZZOglass1|PALAZZO_Black_3|PALAZZObottom|PALAZZOpazo3|COSMOpt(800|323)|SOUTH_goldtile|Paris_LV_Eiffel_Glass_1|Ballys_LV_1|WAR_waldorf|torre_02|m_glass|lv-windows)$', 'day': 0.0, 'night': 1.4, 'color': [1.0, 0.93, 0.8], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^brown$', 'day': 0.0, 'night': 1.15, 'color': [1.0, 0.82, 0.48], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^purewhite$', 'day': 0.0, 'night': 1.25, 'color': [0.75, 0.88, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(Kuwait_windows_9|Kuwait_windows_10|Kuwait_glass_[2-5])$', 'day': 0.0, 'night': 1.6, 'color': [0.95, 0.97, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^BELLAGIOWindow', 'day': 0.0, 'night': 1.3, 'color': [1.0, 0.92, 0.78], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(fountain2|bfountain1)$', 'day': 0.0, 'night': 1.6, 'color': [0.85, 0.95, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^led_flag', 'day': 0.15, 'night': 2.5, 'color': [0.3, 1.0, 0.45], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^(Hughes500_(Red|Green|White)Light)', 'day': 0.2, 'night': 3.0, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+        ],
+        'materialDepthOffset': [
+            (r'^(Line White|Line Yellow|Line Red|flat_kerbs_white|flat_kerbs_red|vegas track overlays|tyre_skids[12]|decal5|marbles5)$', -2),
+        ],
+        'simplifyMaterials': [
+            (r'^(metal_surfaces|concrete_wall_nd)$', 0.22, 0.14, True),
+            (r'^fence_transparent$', 0.20, 0.22, True),
+            (r'^(Aluminum2|Steel_Brushed_Stainless|tecpro_barriers|metal_frame_40cm|marbles5)', 0.22, 0.16, True),
+            (r'^(concrete_smooth|Metal1|vegas-sponsors-main|Tents1|Textures (WheeL|Body))', 0.28, 0.10, True),
+        ],
+        'turns_override': [
+            (225, 'Turn 1 — Harbor Island'),
+            (475, 'Turn 3 — Rochelle Ave'),
+            (1509, 'Turn 5 — Caesars Forum'),
+            (1974, 'Turn 6 — Sphere'),
+            (2019, 'Turn 7 — Sphere Chicane'),
+            (2154, 'Turn 9 — Sands Ave'),
+            (2634, 'Turn 10 — Sands Sweep'),
+            (2914, 'Turn 11 — Palazzo Venetian'),
+            (3110, 'Turn 12 — Treasure Island'),
+            (5098, 'Turn 14 — City Center'),
+            (5143, 'Turn 15 — Chicane'),
+            (5213, 'Turn 16 — Harmon Ave'),
+            (5992, 'Turn 17 — Top Golf'),
+        ],
+        'description': 'Las Vegas Strip Circuit in Nevada — 6.17 km 17-turn night street circuit racing past the Sphere, Venetian, Palazzo, Wynn, Caesars Palace, Bellagio Fountains, and Paris along Las Vegas Boulevard.',
+        'credit': {
+            'title': 'Las Vegas 2023',
+            'author': 'Nukedrop',
+            'url': 'https://www.patreon.com/cw/nukedrop/',
+            'short': None,
+            'license': 'Used with permission',
+            'licenseUrl': 'https://www.patreon.com/cw/nukedrop/',
+            'note': 'UI by Fanapryde; helicopters by Mascot.',
+        },
+    },
+    'jeddah': {
+        'folder': 'jeddah21',
+        'layout_dir': '',
+        'models_ini': 'models.ini',
+        'name': 'Jeddah Corniche Circuit',
+        'layout': 'Grand Prix layout',
+        'country': 'Saudi Arabia',
+        'city': 'Jeddah',
+        'type': 'street',
+        'defaultTimeOfDay': 'night',
+        'baseAltitudeM': 5,
+        'pitboxes': 28,
+        'modelledKerbs': True,
+        'blendedCutouts': True,
+        'colliderRowsPerSample': 2,
+        'roadTwistM': 0.005,
+        'minWidthM': 8.5,
+        'maxWidthM': 22.0,
+        'wallMinGapM': 0.0,
+        'wallCapM': 32.0,
+        'openWalls': False,
+        'notRoadMaterials': r'^(Background|Dazzle\d*|TarmacLightAC)$',
+        'physicsNodeOverrides': [
+            (r'^1ASPHALT', 'runoff'),
+            (r'^1ROAD(18|24)$', 'pit'),
+            (r'^1ROAD(19|20|22|23|25|28)$', 'runoff'),
+            (r'^PAINT_KERB', 'kerb'),
+        ],
+        'physicsOverridesFirst': True,
+        'hideMaterials': r'^(Grid01|BackColor(_jeddah21_string)?|BackColor2|wire_fence_green)$',
+        'hideNodes': r'^MARBLES',
+        'hideTextures': r'^(ac_crew|props_pitlane|commiss01|commissario\w*|marshal+\w*)\.dds$',
+        'doubleSidedMaterials': r'wire_fence|gstand|fence|flag|bleacher|rail|^green2?$',
+        'simplifyMaterials': [
+            (r'^tecpro_barriers$', 0.28, 0.08, True),
+            (r'^(green|green2|signs_metal|Rail01)$', 0.30, 0.08, True),
+            (r'^nd_walls1$', 0.35, 0.06),
+        ],
+        'materialDepthOffset': [
+            (r'^(JapaneseRoadMarkings|main_kerbs|Line White|Line Yellow|Skidmark01|tyre_skids1)$', -2),
+        ],
+        'nightEmissiveMaterials': [
+            {'match': r'^rgb$', 'day': 0.0, 'night': 2.4, 'color': [1.0, 1.0, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^jeddahglassMaterial$', 'day': 0.0, 'night': 1.35, 'color': [0.85, 0.94, 1.0], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^mat11$', 'day': 0.0, 'night': 1.4, 'color': [1.0, 0.95, 0.85], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^(mat29|mat93|mat97)$', 'day': 0.0, 'night': 1.1, 'color': [1.0, 0.92, 0.78], 'emissiveMap': 'diffuse', 'spill': True},
+            {'match': r'^SS [25]$', 'day': 0.0, 'night': 0.95, 'color': [0.95, 0.96, 1.0], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^glassgreen$', 'day': 0.0, 'night': 0.85, 'color': [0.75, 1.0, 0.88], 'emissiveMap': 'diffuse', 'spill': False},
+            {'match': r'^led_flag2?$', 'day': 0.1, 'night': 0.6, 'color': [0.4, 0.9, 0.5], 'emissiveMap': 'diffuse', 'spill': False},
+        ],
+        'description': 'Jeddah Corniche Circuit along the Red Sea waterfront in Saudi Arabia — a 6.17 km high-speed 27-turn floodlit night street circuit featuring blind sweeps, the banked Turn 13 hairpin, and wall-lined esses.',
+        'credit': {
+            'title': 'Jeddah Corniche Circuit',
+            'author': 'Nukedrop',
+            'url': 'https://www.patreon.com/cw/nukedrop/',
+            'short': None,
+            'license': 'Used with permission',
+            'licenseUrl': 'https://www.patreon.com/cw/nukedrop/',
+            'note': 'Logo, UI and sections by Fanapryde.',
+        },
+    },
 }
 
 
@@ -1419,6 +1579,55 @@ def get_kn5_list(cfg):
             if f and f.lower().endswith('.kn5') and os.path.exists(os.path.join(base, f)):
                 if f not in out:
                     out.append(f)
+    return out
+
+
+def _compose_ini_matrix(pos, rot_deg):
+    """Build a 4x4 world transform from AC models.ini POSITION (x, y, z) and ROTATION (deg)."""
+    M = np.eye(4, dtype=np.float64)
+    rx, ry, rz = (math.radians(float(a)) for a in rot_deg)
+    if rx or ry or rz:
+        cx, sx = math.cos(rx), math.sin(rx)
+        cy, sy = math.cos(ry), math.sin(ry)
+        cz, sz = math.cos(rz), math.sin(rz)
+        Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]], np.float64)
+        Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]], np.float64)
+        Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]], np.float64)
+        M[:3, :3] = Ry @ Rx @ Rz
+    M[:3, 3] = [float(p) for p in pos]
+    return M
+
+
+def get_kn5_transforms(cfg):
+    """Per-KN5 world transforms from models*.ini POSITION/ROTATION and optional cfg['kn5Transforms']."""
+    base = cfg['base_dir']
+    candidates = []
+    if cfg.get('models_ini'):
+        candidates.append(cfg['models_ini'])
+    if cfg.get('layout_dir'):
+        candidates.append(f"models_{cfg['layout_dir']}.ini")
+    candidates.append('models.ini')
+    out = {}
+    for rel in candidates:
+        ini_path = os.path.join(base, rel)
+        if not os.path.exists(ini_path):
+            continue
+        cp = parse_ac_ini(ini_path)
+        for sec in cp.sections():
+            if not sec.startswith('MODEL_'):
+                continue
+            f = ac_mod_entry.model_path(base, cp[sec].get('FILE', ''))
+            if not f:
+                continue
+            pos = [float(x) for x in cp[sec].get('POSITION', '0,0,0').split(',')]
+            rot = [float(x) for x in cp[sec].get('ROTATION', '0,0,0').split(',')]
+            if any(abs(v) > 1e-6 for v in pos) or any(abs(v) > 1e-6 for v in rot):
+                out[f.lower()] = _compose_ini_matrix(pos, rot)
+        break
+    for f, tr in (cfg.get('kn5Transforms') or {}).items():
+        pos = tr.get('position', [0, 0, 0])
+        rot = tr.get('rotation', [0, 0, 0])
+        out[f.lower()] = _compose_ini_matrix(pos, rot)
     return out
 
 
@@ -1700,7 +1909,7 @@ def is_ac_editor_marker(name):
 
 
 def is_semaphore_node(name):
-    return bool(re.match(r'^(AC_SEMAPHORE_(RED|GREEN)\d+|startlight_SUB1)$', name, re.I))
+    return bool(re.match(r'^(AC_SEMAPHORE_(RED|GREEN)\d+|KS_START_LIGHT_[0-4]|startlight_SUB1)$', name, re.I))
 
 
 def read_ai_lane(path):
@@ -2356,6 +2565,80 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             n_baked += 1
         log(f'  multilayer masks baked into {n_baked} materials')
 
+    # Resolve per-material night emissive rules (explicit nightEmissiveMaterials + optional autoKn5Emissive)
+    base_max_tex = int((cfg or {}).get('maxTex', MAX_TEX))
+    emissive_rules = []
+    for rule in (cfg or {}).get('nightEmissiveMaterials', ()):
+        if isinstance(rule, dict):
+            emissive_rules.append((rule['match'], rule))
+        elif isinstance(rule, (list, tuple)) and len(rule) == 2:
+            emissive_rules.append((rule[0], rule[1]))
+    depth_offset_rules = list((cfg or {}).get('materialDepthOffset', ()))
+    auto_kn5_emissive = bool((cfg or {}).get('autoKn5Emissive', False))
+    auto_kn5_cap = float((cfg or {}).get('autoKn5EmissiveMax', 4.0))
+    auto_kn5_default = float((cfg or {}).get('autoKn5EmissiveDefault', 2.0))
+    base_dir = (cfg or {}).get('base_dir')
+
+    mat_emissive = {}
+    for old_mi in used_mats:
+        m = materials[old_mi]
+        mname = m['name']
+        spec = None
+        for rx, rcfg in emissive_rules:
+            if re.search(rx, mname, re.I):
+                spec = dict(rcfg)
+                break
+        em_vec = m.get('props', {}).get('ksEmissive_vec3', [0.0, 0.0, 0.0])
+        em_peak = max((float(v) for v in em_vec), default=0.0)
+        kn5_tx_em = m['maps'].get('txEmissive')
+        if spec is None and auto_kn5_emissive and (em_peak > 0.01 or (kn5_tx_em and kn5_tx_em in tex_pool)):
+            if em_peak > 0.01:
+                col = [max(0.0, float(v)) / em_peak for v in em_vec]
+                night_val = min(em_peak, auto_kn5_cap)
+            else:
+                col = [1.0, 1.0, 1.0]
+                night_val = auto_kn5_default
+            spec = {'day': 0.0, 'night': night_val, 'color': col}
+        if spec is None:
+            continue
+        col = spec.get('color')
+        if col is None:
+            col = [max(0.0, float(v)) / em_peak for v in em_vec] if em_peak > 0.01 else [1.0, 1.0, 1.0]
+        else:
+            cpeak = max((float(v) for v in col), default=1.0)
+            col = [max(0.0, float(v)) / cpeak for v in col] if cpeak > 1.0 else [max(0.0, float(v)) for v in col]
+        # Resolve emissive texture: explicit path/keyword, else KN5 txEmissive, else txDiffuse
+        if 'emissiveMap' in spec:
+            emap = spec['emissiveMap']
+            if emap is None or emap is False or emap == '':
+                etex = None
+            elif emap == 'diffuse':
+                etex = m['maps'].get('txDiffuse')
+            elif emap == 'txEmissive':
+                etex = kn5_tx_em
+            else:
+                etex = emap
+                if etex not in tex_pool and base_dir:
+                    fpath = os.path.join(base_dir, etex)
+                    if os.path.isfile(fpath):
+                        tex_pool[etex] = open(fpath, 'rb').read()
+                    else:
+                        log(f'  nightEmissive {mname}: emissiveMap {etex} not found')
+                        etex = None
+        else:
+            etex = kn5_tx_em if (kn5_tx_em and kn5_tx_em in tex_pool) else m['maps'].get('txDiffuse')
+        if etex and etex not in tex_pool:
+            etex = None
+        mat_emissive[old_mi] = {
+            'day': float(spec.get('day', 0.0)),
+            'night': float(spec.get('night', auto_kn5_default)),
+            'color': col,
+            'tex': etex,
+            'spill': spec.get('spill', True),
+        }
+    if mat_emissive:
+        log(f'  nightEmissive: {len(mat_emissive)} material(s) configured')
+
     # Determine which textures are used and whether any user material requires alpha
     tex_alpha_need = {}
     # A material's `maxTex` lets its texture keep more than MAX_TEX px (the drifting objects' atlas)
@@ -2374,7 +2657,12 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         tname = m['maps'].get('txDiffuse')
         if tname and tname in tex_pool:
             tex_alpha_need[tname] = tex_alpha_need.get(tname, False) or needs_alpha
-            tex_max[tname] = max(tex_max.get(tname, MAX_TEX), m.get('maxTex', MAX_TEX))
+            tex_max[tname] = max(tex_max.get(tname, base_max_tex), m.get('maxTex', base_max_tex))
+        em_spec = mat_emissive.get(old_mi)
+        if em_spec and em_spec['tex'] and em_spec['tex'] in tex_pool:
+            etex = em_spec['tex']
+            tex_alpha_need[etex] = tex_alpha_need.get(etex, False)
+            tex_max[etex] = max(tex_max.get(etex, base_max_tex), m.get('maxTex', base_max_tex))
 
     chunks = []
     accessors = []
@@ -2449,6 +2737,22 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             gmat['doubleSided'] = True
         elif double_sided_re and re.search(double_sided_re, m['name'], re.I):
             gmat['doubleSided'] = True
+        mat_extras = {}
+        em_spec = mat_emissive.get(old_mi)
+        if em_spec:
+            gmat['emissiveFactor'] = [round(float(c), 4) for c in em_spec['color']]
+            if em_spec['tex'] and em_spec['tex'] in tex_to_gltf_idx:
+                gmat['emissiveTexture'] = {'index': tex_to_gltf_idx[em_spec['tex']]}
+            ne = {'day': round(em_spec['day'], 3), 'night': round(em_spec['night'], 3)}
+            if em_spec['spill'] is False:
+                ne['spill'] = False
+            mat_extras['nightEmissive'] = ne
+        for rx, doff in depth_offset_rules:
+            if re.search(rx, m['name'], re.I):
+                mat_extras['depthOffset'] = float(doff)
+                break
+        if mat_extras:
+            gmat['extras'] = mat_extras
         gltf_materials.append(gmat)
 
     # Build visual meshes & child nodes under Track_Model
@@ -2618,6 +2922,7 @@ def index_entry(tid, cfg, data):
         'credit': cfg['credit'],
         **({'type': cfg['type']} if cfg.get('type') else {}),
         'quality': 'sim',
+        **({'defaultTimeOfDay': cfg['defaultTimeOfDay']} if cfg.get('defaultTimeOfDay') else {}),
         # `unlisted`: left out of the game's lists, opened by its link only (src/lib/track-registry.ts)
         **({'unlisted': True} if cfg.get('unlisted') else {}),
     }
@@ -3318,11 +3623,15 @@ def build_ac_track(tid, cfg, args):
         re.I,
     )
 
+    kn5_transforms = get_kn5_transforms(cfg)
     for kf in kn5_files:
         kpath = os.path.join(base, kf)
         t_dict, mats, nodes = read_kn5_full(kpath)
-        tex_pool.update(t_dict)
-        kf_stem = os.path.splitext(os.path.basename(kf))[0].replace(' ', '_')
+        m_ini = kn5_transforms.get(kf.lower())
+        if m_ini is not None:
+            log(f'  {kf}: applying models.ini transform offset {m_ini[:3, 3].round(2).tolist()}')
+            for nd in nodes:
+                nd['world'] = m_ini @ nd['world']
         # ksGrass is mostly 3D grass (small upright blade cards, left out below), but some mods also draw their grass
         # ground with it: Grobnik's verges between the road and the barriers (01GRASS..) and its terrain tiles. Left out,
         # that ground was invisible while still driving as grass. A ksGrass material whose faces lie flat in large
@@ -3354,14 +3663,7 @@ def build_ac_track(tid, cfg, args):
         for mi in sorted(kerb_grass):
             mats[mi].update(shader='ksPerPixel', alpha_tested=False, blend=0)
             log(f'  ksGrass kerb drawn opaque: {mats[mi]["name"]}')
-        for m_obj in mats:
-            orig_name = m_obj['name']
-            sig = (orig_name, m_obj['shader'], m_obj['blend'], m_obj['alpha_tested'], m_obj['maps'].get('txDiffuse'))
-            if orig_name in seen_mat_names and seen_mat_names[orig_name] != sig:
-                m_obj['name'] = f'{orig_name}_{kf_stem}'
-            seen_mat_names[m_obj['name']] = sig
-        mat_offset = len(materials)
-        materials.extend(mats)
+        mat_offset = merge_kn5_assets(t_dict, mats, kf, tex_pool, materials, seen_mat_names)
         # `physicsFiles`: the KN5 files that hold only physics meshes (SpeedVegas's walls.kn5 also draws its tyre walls)
         is_phys_file = kf.lower() in cfg.get('physicsFiles', ('physical.kn5', 'walls.kn5'))
 
@@ -4047,6 +4349,14 @@ def build_from_sources(tid, cfg, args, src):
             build_ac_kerb_mesh(phys_tris['kerb'], xz, tan2, rgt2, yc, width, ds, off, extra)
         glb_out = os.path.join(out_dir, f'{tid}.glb')
         src['write_glb'](off, extra, glb_out)
+        if cfg.get('simplifyMaterials'):
+            r = subprocess.run(
+                ['node', 'scripts/tracks/simplify-ac-glb.mjs', glb_out, json.dumps(cfg['simplifyMaterials'])],
+                cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace',
+            )
+            log('  simplify:', (r.stdout.strip() or r.stderr.strip()))
+            if r.returncode != 0:
+                raise RuntimeError(f'simplify-ac-glb failed on {glb_out}: {r.stderr}')
         if not args.no_compress:
             r = subprocess.run(
                 ['node', 'scripts/tracks/compress-track-glb.mjs', glb_out],

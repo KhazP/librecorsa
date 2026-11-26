@@ -9,7 +9,7 @@
  *        TRACK_JSON_DIR=<dir> reads <dir>/<id>.json in place of each circuit's track_data.json
  */
 import * as THREE from 'three';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, RWANDA_DRS_ZONES, BASE_ALTITUDE_M, type BuiltTrackData, type RawTrackJson } from '../../src/lib/track-data';
 import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
@@ -179,6 +179,15 @@ function driveLap(track: BuiltTrackData, root: THREE.Object3D, car: 'lc26' | 'f1
 // RISE Motordrome comes first in the index: the baseline the thresholds are judged against
 const index = JSON.parse(readFileSync('public/tracks/index.json', 'utf8')) as { id: string; name: string }[];
 const only = process.argv[2] && process.argv[2] !== 'all' ? process.argv[2].split(',') : null;
+const entries = only
+  ? only.map((id) => {
+      const found = index.find((e) => e.id === id);
+      if (found) return found;
+      const standalone = `public/tracks/${id}/circuit.json`;
+      if (existsSync(standalone)) return JSON.parse(readFileSync(standalone, 'utf8')) as { id: string; name: string };
+      return { id, name: id };
+    })
+  : index;
 const pace = Number(process.argv[3] ?? 0.9);
 let failed = 0;
 const fail = (msg: string) => {
@@ -186,8 +195,7 @@ const fail = (msg: string) => {
   console.log(`FAIL  ${msg}`);
 };
 
-for (const entry of index) {
-  if (only && !only.includes(entry.id)) continue;
+for (const entry of entries) {
   // TRACK_JSON_DIR=<dir> reads <dir>/<id>.json instead (e.g. saved copies, to compare against a baseline)
   const raw = process.env.TRACK_JSON_DIR
     ? (JSON.parse(readFileSync(`${process.env.TRACK_JSON_DIR}/${entry.id}.json`, 'utf8')) as RawTrackJson)
