@@ -87,3 +87,6 @@ UI-RESEARCH-*.md
 
 # The launcher's import folder when it runs in a clone (go run . in launcher/)
 /launcher/import/
+
+# Renders of cars wearing their livery templates (scripts/cars/build-livery-templates.ts checks), for review only
+/docs/livery-templates/_checks/
