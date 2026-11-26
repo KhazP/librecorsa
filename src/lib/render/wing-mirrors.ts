@@ -152,6 +152,9 @@ function buildMirrorGeometry(src: THREE.BufferGeometry, upZ: boolean): THREE.Buf
   });
 }
 
+/** Smallest reflecting glass on screen (px across) that gets the rear-view pass */
+const MIN_GLASS_PX = 8;
+
 export class WingMirrors {
   readonly found: boolean;
   /** Mirrors on the car's sides (wing mirrors), not just a rear-view mirror */
@@ -309,9 +312,10 @@ export class WingMirrors {
   }
 
   /**
-   * Whether any reflecting glass is on screen from `camera` (`heightPx` tall): facing it, inside its frustum and
-   * over a pixel or two across; `framed`: with its centre inside the frame, not just an edge of it in shot. True for
-   * mirrors that aren't reflecting ones (the caller's view flags decide those)
+   * Whether any reflecting glass is on screen from `camera` (`heightPx` tall): facing it, inside its frustum and at least
+   * `MIN_GLASS_PX` across (a chase view's glass on a phone, about 5 px, isn't worth a rear-view pass); `framed`: with
+   * its centre inside the frame, not just an edge of it in shot. True for mirrors that aren't reflecting ones (the
+   * caller's view flags decide those)
    */
   inView(camera: THREE.Camera, heightPx: number, framed = false): boolean {
     if (!this.found) return false;
@@ -339,7 +343,7 @@ export class WingMirrors {
         c.applyMatrix4(camera.projectionMatrix);
         if (Math.abs(c.x) > 1 || Math.abs(c.y) > 1) continue;
       }
-      if ((isl.radius / dist) * pxPerM >= 1.5) return true;
+      if (2 * (isl.radius / dist) * pxPerM >= MIN_GLASS_PX) return true;
     }
     return false;
   }
