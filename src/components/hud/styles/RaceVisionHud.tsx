@@ -221,7 +221,7 @@ const Standings: React.FC<{
       <div className="flex items-center justify-between gap-3 px-0.5 font-black">
         <span className="truncate">
           {race ? w.race : upper(sessionWord(t))}
-          <span className="pl-2">{race ? `L${race.lap}${race.totalLaps ? `/${race.totalLaps}` : ""}` : `L${Math.max(1, t.lapCount)}`}</span>
+          <span className="ps-2">{race ? (race.totalLaps ? w.lapShortOfTotal(race.lap, race.totalLaps) : w.lapShort(race.lap)) : w.lapShort(Math.max(1, t.lapCount))}</span>
         </span>
         {/* The session's running time, where the source shows its clock */}
         <span className="inline-flex shrink-0 items-center gap-1" aria-label={w.sessionTime(formatClock(clock))}>
