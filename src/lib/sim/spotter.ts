@@ -1,7 +1,7 @@
 /**
  * The spotter: a recorded voice that calls the cars alongside the player ("car left", "three wide", "clear"), as a
  * spotter does on the radio. Cars are placed in the player's car frame, with hysteresis and a gap between calls so a
- * car hovering at the edge doesn't chatter. The clips are CrewChief's spotter packs (MIT, public/audio/spotter); they
+ * car hovering at the edge doesn't chatter. The clips are Kokoro-82M spotter voices (Apache-2.0, public/audio/spotter); they
  * play through the car audio's master output, so the master volume, mute and pause apply, and can go through a team
  * radio filter (band-pass, presence peak and a squelch click).
  */

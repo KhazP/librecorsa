@@ -1,5 +1,5 @@
 /**
- * GT / prototype / classic racing tyre sidewalls from sagatron918's six RSS GT-M Tyre Extension packs (used with
+ * GT / prototype / classic racing tyre sidewalls from sagatron918's six GT-M Tyre Extension packs (used with
  * permission, see CREDITS.md; textures ported by `scripts/cars/port_sagatron_tyres.py`).
  *
  * Each brand is a full-colour sRGB planar disc centred on the axle (lossless WebP), with an optional wet disc where

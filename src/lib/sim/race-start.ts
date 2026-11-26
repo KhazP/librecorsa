@@ -239,7 +239,7 @@ export const ROLLING_READY_WINDOW_S = 4.2;
 export const ROLLING_COUNTDOWN_S = 3;
 
 /**
- * Rolling-start formation speed limiter (Nuzzi AC style): lets the driver hold throttle and steer cleanly at formation
+ * Rolling-start formation speed limiter: lets the driver hold throttle and steer cleanly at formation
  * pace (~65 km/h) without jumping the start or surging, while preserving full driver braking. Smoothly tapers throttle
  * into the speed ceiling, cuts ignition/throttle slightly past it, and applies light proportional braking on downhill
  * overspeed so every car class (100 hp road car to 1000 hp F1) holds steady right at `limitMs`.
@@ -270,7 +270,7 @@ export function applySpeedLimiter(
 }
 
 /**
- * Advances a rolling start's Nuzzi-style countdown state monotonically as P1 approaches Start/Finish:
+ * Advances a rolling start's countdown state monotonically as P1 approaches Start/Finish:
  *   stageOrder 0: 'formation' (hold formation speed)
  *   stageOrder 1: 'ready'     ("GET READY", ~4.2–3.0 s out)
  *   stageOrder 2: 'countdown' (3, ~3.0–2.0 s out)

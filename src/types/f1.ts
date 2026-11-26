@@ -342,7 +342,7 @@ export interface RaceResultEntry {
   gridPosition?: number;
 }
 
-/** Stage of a Nuzzi-style rolling-start approach before Start/Finish */
+/** Stage of a rolling-start approach before Start/Finish */
 export type RollingFormationStage = 'formation' | 'ready' | 'countdown';
 
 /** Live state of a rolling-start formation approach, driving the HUD prompt, 3-2-1 countdown and speed limiter */

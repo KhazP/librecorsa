@@ -1073,7 +1073,7 @@ export class AiOpponentField implements AiRace {
   private rollingLeaderStallS = 0;
   /** Maximum race time (s) for a rolling formation before safety green-flag release */
   private rollingMaxWaitS = 0;
-  /** Monotonic stage order of the Nuzzi-style rolling start (0=formation, 1=ready, 2=3, 3=2, 4=1) */
+  /** Monotonic stage order of the rolling start (0=formation, 1=ready, 2=3, 3=2, 4=1) */
   private rollingStageOrder = 0;
   /** Approximate distance remaining for P1 to reach Start/Finish during rolling formation (m) */
   private rollingDistanceToLineM = 0;
@@ -1876,7 +1876,7 @@ export class AiOpponentField implements AiRace {
   }
 
   /**
-   * Monitors a rolling-start formation approach (Nuzzi AC style), advances the monotonic 3-2-1 countdown as P1
+   * Monitors a rolling-start formation approach, advances the monotonic 3-2-1 countdown as P1
    * approaches Start/Finish, keeps the player's formation speed limiter engaged, and drops the green flag when:
    *  1. The P1 leader (AI or player) crosses Start/Finish (`distM >= 0`),
    *  2. Safety fallback: P1 stalls for > 6 s or the overall formation exceeds `rollingMaxWaitS`.

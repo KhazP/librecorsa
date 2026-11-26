@@ -671,7 +671,7 @@ export const FLYING_SLOT_SPACING_M = 28;
 /** Tighter staggered spacing between slots in a rolling-start formation (m) */
 export const ROLLING_SLOT_SPACING_M = 14;
 
-/** Target formation speed for a rolling start (m/s): 65 km/h (Nuzzi-style rolling start) */
+/** Target formation speed for a rolling start (m/s): 65 km/h */
 export const ROLLING_START_PACE_MS = 65 / 3.6;
 
 /** Maximum lead distance before Start/Finish for pole in a rolling start (m): ~9 s formation approach at 65 km/h */

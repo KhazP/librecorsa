@@ -515,7 +515,7 @@ export class MultiplayerRace {
     return slot >= 0 ? slot : this.start.grid.length;
   }
 
-  /** Arms the Nuzzi-style rolling-start formation limiter and 3-2-1 countdown after placing the car on its rolling slot */
+  /** Arms the rolling-start formation limiter and 3-2-1 countdown after placing the car on its rolling slot */
   startRollingFormation(paceMs: number): void {
     const clamped = Math.min(ROLLING_START_PACE_MS, Math.max(0, paceMs));
     if (this.start.startType !== "rolling" || clamped <= 5) {
