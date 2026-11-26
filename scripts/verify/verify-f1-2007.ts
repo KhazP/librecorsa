@@ -371,6 +371,28 @@ async function driverChecks(): Promise<void> {
       for (let i = 0; i < 30; i++) driver.update(0, tel(4), 1 / 60);
       const after = finger && before ? THREE.MathUtils.radToDeg(finger.quaternion.angleTo(before)) : NaN;
       check('an upshift flexes the fingers on the paddle and lets them go', flexed > 4 && after < 0.5, `${extras.shift?.shift_up?.join(' ')}: ${fmt(flexed, 1)}° mid-shift, ${fmt(after, 2)}° after`);
+      // HEAD_MOVEMENT: in a right-hand corner at its MAX_G the head turns right (into the corner) by YAW_MAX_DEG and
+      // leans left (out of it); under braking it nods forward
+      const headNode = node.getObjectByName(extras.head!.node)!;
+      const headTurn = (lateralG: number, longitudinalG: number) => {
+        const t = { gear: 4, lateralG, longitudinalG } as unknown as CarTelemetry;
+        for (let i = 0; i < 180; i++) driver.update(0, t, 1 / 60);
+        scene.updateMatrixWorld(true);
+        return headNode.getWorldQuaternion(new THREE.Quaternion());
+      };
+      const still = headTurn(0, 0);
+      const turnOf = (q: THREE.Quaternion) => {
+        const e = new THREE.Euler().setFromQuaternion(q.clone().multiply(still.clone().invert()), 'YXZ');
+        return { yaw: THREE.MathUtils.radToDeg(e.y), pitch: THREE.MathUtils.radToDeg(e.x), roll: THREE.MathUtils.radToDeg(e.z) };
+      };
+      const right = turnOf(headTurn(extras.head!.maxG, 0));
+      const braking = turnOf(headTurn(0, -extras.head!.maxG));
+      headTurn(0, 0);
+      check(
+        'the head turns into a right-hand corner, leans out of it, and nods under braking',
+        right.yaw < -0.9 * Math.abs(extras.head!.yawDeg) && right.roll < -0.5 * Math.abs(extras.head!.rollDeg) && braking.pitch > 0.5 * Math.abs(extras.head!.pitchDeg),
+        `yaw ${fmt(right.yaw, 1)}° (car +y is left), roll ${fmt(right.roll, 1)}°, braking pitch ${fmt(braking.pitch, 1)}°`,
+      );
     }
     driver.dispose();
 
