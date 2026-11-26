@@ -16,7 +16,7 @@ common questions.
 - **Translations**: see [Translating](docs/TRANSLATING.md). A new language, or a fix to one, is a pull request on its files in
   `src/i18n/messages/`.
 - **Security problems**: report them privately, as described in [SECURITY.md](SECURITY.md).
-- **You own an asset we use**: open a [rights / takedown request](https://github.com/librecorsa/librecorsa/issues/new?template=takedown-request.yml).
+- **You own an asset LibreCorsa uses**: open a [rights / takedown request](https://github.com/librecorsa/librecorsa/issues/new?template=takedown-request.yml).
 
 ## Running it
 
