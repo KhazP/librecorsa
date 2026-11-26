@@ -151,6 +151,8 @@ const _turn = new THREE.Quaternion();
 export class CarStateView {
   readonly worldPosition = new THREE.Vector3();
   readonly worldQuaternion = new THREE.Quaternion();
+  /** The pose of the state the last telemetry came with, never carried forward (`SimulatorCar.telemetryPose`) */
+  readonly telemetryPose = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
   worldVelocity: THREE.Vector3 | undefined = undefined;
   private readonly velocity = new THREE.Vector3();
   readonly wheels: [SimulatorWheel, SimulatorWheel, SimulatorWheel, SimulatorWheel];
@@ -241,8 +243,13 @@ export class CarStateView {
     }
   }
 
-  /** Takes the worker's telemetry, leaving the fields the page fills in itself as they are */
+  /**
+   * Takes the worker's telemetry, leaving the fields the page fills in itself as they are. It comes with a state, applied
+   * just before: that state's pose is the telemetry's
+   */
   applyTelemetry(telemetry: Partial<CarTelemetry>): void {
+    this.telemetryPose.position.copy(this.statePosition);
+    this.telemetryPose.quaternion.copy(this.stateQuaternion);
     const mine = this.telemetry as unknown as Record<string, unknown>;
     const kept = PAGE_OWNED_TELEMETRY.map((key) => mine[key]);
     Object.assign(this.telemetry, telemetry);
