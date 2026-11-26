@@ -823,6 +823,16 @@ class TexStats:
         return self.cache[name]
 
 
+def multimap_bake_key(m, stats):
+    """The colour-map key of a ksPerPixelMultiMap material `m` whose diffuse carries a pattern: 'bake:' when its detail is
+    drawn once over the diffuse's own UVs (detailUVMultiplier 1, not one flat colour: a livery, its numbers and
+    sponsors), else 'bakemean:' (a fine tiled pattern, carbon weave or paint flake, as its mean colour)"""
+    det = m['maps'].get('txDetail')
+    t = stats(det) if det else None
+    uvm = m['props'].get('detailUVMultiplier', 1.0) or 1.0
+    return ('bake:' if abs(uvm - 1.0) < 1e-3 and t is not None and not t['flat'] else 'bakemean:') + m['name']
+
+
 def auto_spec(m, stats, preset, by_name=None):
     """The spec (as the MATERIALS tables write them) of kn5 material `m`, from its shader and values, plus its class"""
     name, shader, props, maps = m['name'], m['shader'], m['props'], m['maps']
@@ -857,8 +867,7 @@ def auto_spec(m, stats, preset, by_name=None):
                 colour = d['mean']
         else:
             # The detail tiled on the diffuse's own UVs bakes as it is; one tiled finer, as its mean colour
-            uvm = props.get('detailUVMultiplier', 1.0) or 1.0
-            tex = ('bake:' if abs(uvm - 1.0) < 1e-3 and not t['flat'] else 'bakemean:') + name
+            tex = multimap_bake_key(m, stats)
     elif d['flat']:
         colour = d['mean']
         alpha = d['alpha'] / 255.0
@@ -896,15 +905,16 @@ def auto_spec(m, stats, preset, by_name=None):
     paint_of = next((p for p in preset.get('paint', ()) if p != name and diff and
                      (by_name.get(p) or {}).get('maps', {}).get('txDiffuse') == diff), None) if by_name else None
     if paint_of and not glass:
-        # Another part drawn from the paint's own atlas (a banner, a weatherstrip): the paint's texture, so a livery
-        # changes one file for both. The atlas's alpha is the multimap mask, not transparency
+        # Another part drawn from the paint's own atlas (a banner, a weatherstrip, a wishbone): the paint's texture, so a
+        # livery changes one file for both. The atlas's alpha is the multimap mask, not transparency
         paint_det = (by_name[paint_of]['maps'].get('txDetail') if 'MultiMap' in by_name[paint_of]['shader'] else None)
         spec.pop('detail', None)
-        spec.update(tex=('bakemean:' + paint_of) if paint_det else diff, color=(255, 255, 255), mode='OPAQUE', alpha=1.0)
+        spec.update(tex=multimap_bake_key(by_name[paint_of], stats) if paint_det else diff, color=(255, 255, 255),
+                    mode='OPAQUE', alpha=1.0)
     if name in preset.get('paint', ()):
         cls = 'paint'
-        # The livery bakes over its mean detail colour, at the paint's size cap
-        spec['tex'] = 'bakemean:' + name if det else diff
+        # The livery bakes at the paint's size cap: a livery drawn 1:1 as it is, a tiled detail (flake) as its mean colour
+        spec['tex'] = multimap_bake_key(m, stats) if det else diff
         spec.pop('detail', None)
         spec.update(color=(255, 255, 255), scale=1.0, mode='OPAQUE', alpha=1.0)
     elif shader == 'ksTyres' or name in preset.get('tyre_class', ()):
