@@ -29,7 +29,7 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
 ## How Mapping & Loop Generation Work
 
 1. **FMOD Parameter Intervals & Autopitch Roots (`car_configs.json`)**:
-   - Each AC engine event (`event:/cars/<car>/engine_int` and `engine_ext`) uses two FMOD `PMLB` parameter tables (power/on-throttle and coast/off-throttle) mapping RPM intervals `[start, end]` to instrument `INST` chunks.
+   - Each AC engine event (`event:/cars/<car>/engine_int` and `engine_ext`) places its instruments on an rpm parameter sheet (a `PMLB` chunk: per instrument, its guid, then its start and its length on the parameter), so each covers `[start, start + length)`; `--inspect` prints those as `start` and `end`.
    - Each `INST` chunk stores an FMOD **Autopitch Reference (`rootRpm`)** — the exact RPM at which the raw sample plays at `1.0x` pitch.
    - During porting, `port_ac_bank.py` resamples each loop by `anchorRpm / rootRpm` so that when `Lc26SoundBank` (`LoopGrid`) plays the loop at `playbackRate = rpm / anchorRpm`, the effective pitch is `rpm / rootRpm`, matching FMOD Studio's exact pitch curve across the entire rev range.
 2. **Click-Free Seamless Loops (`make_seamless_loop`)**:
@@ -41,6 +41,15 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
 4. **Channel & Level Optimization**:
    - Stereo samples whose L-R difference RMS is `< 3%` of signal RMS are automatically downmixed to mono, alongside interior/auxiliary loops (`turbo`, `transmission`, `skid`, `tc`, `oneshots`).
    - Engine loops are RMS-leveled along a smooth curve from idle to limiter (`0.165 → 0.220` on-throttle, `0.125 → 0.175` off-throttle) with soft-knee peak limiting at `0.92`, then encoded with `ffmpeg -c:a libvorbis -q:a 4`. An anchor with its own `"rms"` keeps that level instead (the 496R's overrun, which its bank fades out as the revs rise).
+5. **The bank's own mix (`engineFromBank`)**:
+   - Instead of hand-picked anchors, the engine is read from the bank's FMOD tables (`FmodEventTables`, `bank_engine_view`): per view, `{ "event": "engine_int" }` or `{ "event": "engine_ext", "fixed": { "Event Cone Angle": 0 } }` (parameters other than rpm and throttle held where the view hears them; the event names come from the `GUIDs.txt` beside the bank). An event's tracks are on or off load by which end of the throttle opens them; tracks the fixed parameters silence are left out.
+   - Each recording the event plays becomes one loop at its own pitch, keyed by its autopitch root, with a `gain` table over rpm in the manifest: its fade-in and fade-out curves, the instrument's, track's and event master's volumes. A recording on several instruments of a layer is one loop (instruments with the same range and start offset add in step, the others in power). The player sounds all of a layer's loops at once at those gains, at `rpm / root`, as FMOD does, so no recording plays against a copy of itself.
+   - The throttle's own volume curves become `throttleGain` (an on and an overrun gain per view, in place of the sin/cos blend); `throttleCurve` is fitted to them for the transmission. `flatEngine` turns off the player's rpm/load low-pass and presence shelf: the loops are the bank's sound as it is.
+   - FMOD curve segments run `y0 + (y1 - y0) * (e^(k u) - 1) / (e^k - 1)` with `k = 6.95 * shape`, the fades as gains and the track volumes as dB through the property's mapping. An instrument's own volume counts twice (the runtime turns each stored dB into 2 dB of output). Measured against the FMOD runtime playing the bank, pitch, start offset, fades and throttle gains agree within 0.2 dB.
+   - A loop is cut from the first 3 s after the instrument's start offset: FMOD restarts an instrument there each time the revs enter its range, so that is the part heard most.
+   - Levels: each loop file sits at 0.2 RMS and its table carries the recording's own level; one scale per view puts the on-load mix at full throttle, averaged from idle (`idleRpm`, else the lowest root) to the limiter, at 0.2, so the bank keeps its balance across rpm and between on and off load while playing as loud as the others.
+   - Not followed: the event master's effects (panner, distance filter, EQ or low-pass). The port prints what their automation sets them to at the held parameters; `engine_ext`'s cone-angle low-pass is open at 30 degrees and below (22 kHz) and closes to about 5.4 kHz at 180, so hold the cone angle at the open end. Its `transmission` and other events stay on their hand-made configs.
+   - `variants` (one car, a bank per team: F1 2007) ports the config once per variant, each with its keys over the base config, into `outDir/<variant>/`.
 
 ## Custom banks from raw recordings (`build_custom_soundbank.py`)
 
