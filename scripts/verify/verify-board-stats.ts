@@ -12,11 +12,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi, onlineConfig, SHARED_ANSWER_S } from '../../cloudflare/api/index';
 import { PresenceCounter } from '../../cloudflare/api/presence';
-import { formatCount, parseBoardPage, parsePopular, parseSiteTotals } from '../../src/lib/net/board-client';
+import { formatCount, parseBoardPage, parsePopular, parsePublicStats, parseSiteTotals } from '../../src/lib/net/board-client';
 import { HEARTBEAT_MS, nextHeartbeatInMs } from '../../src/lib/net/live-heartbeat';
 import { towerLines } from '../../src/components/hud/board-data';
 import { ALL_CARS, currentPhysicsByCar, driverNameKey, listLaps, renameDriver, sha256Hex, type BoardDeps } from '../../cloudflare/api/board';
-import { circuitTotals, driversToDate, popularRanks, POPULAR_DAYS, POPULAR_MIN_SESSIONS, siteTotals } from '../../cloudflare/api/stats';
+import { circuitTotals, driversToDate, popularRanks, POPULAR_DAYS, POPULAR_MIN_SESSIONS, PUBLIC_MIN_SESSIONS, PUBLIC_STATS_DAYS, publicStats, siteTotals } from '../../cloudflare/api/stats';
 import { CIRCUIT_IDS } from '../../cloudflare/api/admin';
 import { recordUsage, utcDay } from '../../cloudflare/api/usage';
 import { usageLapsOf, MAX_LAPS_PER_MINUTE } from '../../src/lib/net/usage-modes';
@@ -506,6 +506,147 @@ async function main(): Promise<void> {
     } finally {
       delete RESETS[ON];
     }
+  }
+
+  // 11. Public stats page API (GET /api/stats/public) -----------------------------------------------------------------
+  {
+    const pub = fakeD1(FULL);
+    const today = utcDay(NOW);
+    const row = (day: string, track: string, vehicle: string, mode: string, country: string, sessions: number, minutes: number, laps = 0) =>
+      pub
+        .prepare('INSERT INTO usage_daily (day, track_id, vehicle, mode, country, sessions, minutes, laps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(day, track, vehicle, mode, country, sessions, minutes, laps)
+        .run();
+    const extra = (day: string, name: string, value: string, sessions: number, minutes: number) =>
+      pub
+        .prepare('INSERT INTO usage_extra (day, name, value, sessions, minutes) VALUES (?, ?, ?, ?, ?)')
+        .bind(day, name, value, sessions, minutes)
+        .run();
+
+    await row(today, 'spielberg', 'lc26', 'practice', 'DE', 25, 300, 120);
+    await row(today, 'monaco', 'amg-gt3', 'ai_race', 'IT', 15, 450, 90);
+    await row(today, 'okayama', 'liana', 'time_trial', 'TR', PUBLIC_MIN_SESSIONS - 1, 900, 30);
+    await row(today, 'monza', 'lc26', 'practice', 'DE', 50, 1200, 400); // retired circuit
+    await row(today, 'junk_track', 'bus', 'practice', 'XX', 50, 500, 10); // junk circuit + junk car + unknown country
+    await extra(today, 'input', 'wheel', 10, 200);
+    await extra(today, 'input', 'keyboard', 15, 100);
+    await extra(today, 'device', 'desktop', 20, 260);
+    await extra(today, 'weather', 'dry', 22, 270);
+    await extra(today, 'assists', 'pro', 12, 180);
+    await extra(today, 'build', 'abc1234', 25, 300); // internal build must stay out
+    await lap(pub, { name: 'Public One', vehicle: 'lc26', ms: 88_000, track: 'spielberg', created: NOW });
+    await lap(pub, { name: 'Public One', vehicle: 'lc26', ms: 89_000, track: 'spielberg', event: '2026-W46', created: NOW });
+    await pub.prepare("INSERT INTO races (id, week, kind, track_id, vehicle, laps, finished_ms) VALUES ('pr1', '2026-W46', 'open', 'spielberg', 'lc26', 5, ?)").bind(NOW).run();
+    await pub.prepare("INSERT INTO race_cars (race_id, position, name_key, name, code, laps, dnf, grid) VALUES ('pr1', 1, 'public one', 'Public One', 'PUB', 5, 0, 1)").run();
+    await pub.prepare("INSERT INTO race_cars (race_id, position, name_key, name, code, laps, dnf, grid) VALUES ('pr1', 2, NULL, 'Driver', 'DRV', 2, 1, 2)").run();
+
+    const s = await publicStats(pub, NOW, { withBoards: true, withRaces: true });
+    check(
+      'publicStats: active circuits/cars/countries pass the session floor; retired, junk and XX stay out',
+      s.days === PUBLIC_STATS_DAYS &&
+        s.byCircuit.map((c) => c.id).join() === 'monaco,spielberg' &&
+        s.byCar.map((c) => c.id).join() === 'lc26,amg-gt3' &&
+        s.byCountry.map((c) => c.id).join() === 'DE,IT',
+      `circuits=${s.byCircuit.map((c) => c.id).join()} cars=${s.byCar.map((c) => c.id).join()} countries=${s.byCountry.map((c) => c.id).join()}`,
+    );
+    check(
+      'publicStats: extras include input/device/weather/assists and never builds',
+      s.extras !== null && s.extras.input.map((x) => x.id).join() === 'wheel,keyboard' && !('build' in s.extras),
+      JSON.stringify(s.extras),
+    );
+    check(
+      'publicStats: boards and open races aggregate cleanly without driver names',
+      s.boards !== null &&
+        s.boards.lapsTotal === 2 &&
+        s.boards.challenges.length === 1 &&
+        s.races !== null &&
+        s.races.count === 1 &&
+        s.races.cars === 2 &&
+        s.races.finished === 1 &&
+        s.races.fieldMax === 2,
+      JSON.stringify({ boards: s.boards, races: s.races }),
+    );
+    const bare = await publicStats(fakeD1(sql('0001_lap_boards.sql', '0003_usage.sql')), NOW, { withBoards: false, withRaces: false });
+    check('publicStats: handles older schemas and off switches gracefully', bare.extras === null && bare.boards === null && bare.races === null && bare.totals.lapsCounted === false);
+
+    // Through the API: edge-cached, rejects query string, off with ONLINE_USAGE=off, parses on the client
+    const pubEnv = { ...env, BOARD_DB: pub, ONLINE_RACES: 'on', RACES: {} as DurableObjectNamespace } as Env;
+    const res = await api('/api/stats/public', pubEnv);
+    const resBody = await res.json();
+    check(
+      'api: GET /api/stats/public returns 200, cached an hour, and parses on the client',
+      res.status === 200 &&
+        res.headers.get('Cache-Control') === `public, max-age=${SHARED_ANSWER_S.publicStats}` &&
+        res.headers.get('Cloudflare-CDN-Cache-Control') === `public, max-age=${SHARED_ANSWER_S.publicStats}` &&
+        parsePublicStats(resBody) !== null,
+      String(res.headers.get('Cache-Control')),
+    );
+    check(
+      'api: GET /api/stats/public rejects query strings and honours ONLINE_USAGE=off',
+      (await api('/api/stats/public?days=7', pubEnv)).status === 400 && (await api('/api/stats/public', { ...pubEnv, ONLINE_USAGE: 'off' } as Env)).status === 404,
+    );
+    check('client: parsePublicStats rejects malformed payloads', parsePublicStats({ ok: true, days: 0 }) === null && parsePublicStats(null) === null);
+
+    // Spam resistance: STATS_LIMIT rate limiting, Worker Cache API immunity to client no-cache, and single-flight coalescing
+    let prepareCalls = 0;
+    const countingDb: D1Database = {
+      prepare: (sqlText: string) => {
+        prepareCalls++;
+        return pub.prepare(sqlText);
+      },
+      batch: (stmts) => pub.batch(stmts),
+    };
+    const cacheStore = new Map<string, string>();
+    const fakeCache = {
+      match: async (req: Request) => {
+        const hit = cacheStore.get(req.url);
+        return hit ? new Response(hit, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } }) : undefined;
+      },
+      put: async (req: Request, response: Response) => {
+        cacheStore.set(req.url, await response.text());
+      },
+    };
+    const seenIps = new Map<string, number>();
+    const statsLimit: RateLimit = {
+      limit: async ({ key }) => {
+        const n = (seenIps.get(key) ?? 0) + 1;
+        seenIps.set(key, n);
+        return { success: n <= 2 };
+      },
+    };
+    const guardedEnv = { ...pubEnv, BOARD_DB: countingDb, STATS_LIMIT: statsLimit } as Env;
+    const callGuarded = (ip: string, headers: Record<string, string> = {}) => {
+      const url = new URL('https://librecorsa.org/api/stats/public');
+      return handleApi(new Request(url, { headers: { 'CF-Connecting-IP': ip, ...headers } }), guardedEnv, url, { statsCache: fakeCache });
+    };
+    // Measure how many prepares one cold call makes, then verify a 5-request concurrent storm runs only 1x
+    await publicStats(countingDb, NOW, { withBoards: true, withRaces: true });
+    const oneCallPrepares = prepareCalls;
+    prepareCalls = 0;
+    // 5 concurrent cold-cache hits from different IPs coalesce into a single D1 read batch
+    const storm = await Promise.all(['10.0.1.1', '10.0.1.2', '10.0.1.3', '10.0.1.4', '10.0.1.5'].map((ip) => callGuarded(ip)));
+    const firstBatchCalls = prepareCalls;
+    check(
+      'spam: concurrent cold-cache storm coalesces into one D1 batch',
+      storm.every((r) => r.status === 200) && firstBatchCalls === oneCallPrepares,
+      `${firstBatchCalls} prepares for 5 concurrent requests (1x = ${oneCallPrepares})`,
+    );
+    // Subsequent requests carrying no-cache / Pragma headers hit the Worker Cache API with 0 D1 queries
+    const busted = await callGuarded('10.0.1.6', { 'Cache-Control': 'no-cache, max-age=0', Pragma: 'no-cache' });
+    check(
+      'spam: client no-cache headers still hit the Worker Cache API (0 D1 reads)',
+      busted.status === 200 && prepareCalls === firstBatchCalls && parsePublicStats(await busted.json()) !== null,
+      `${prepareCalls - firstBatchCalls} extra prepares`,
+    );
+    // Exceeding STATS_LIMIT returns 429 no-store before touching D1
+    const r1 = await callGuarded('10.0.9.9');
+    const r2 = await callGuarded('10.0.9.9');
+    const r3 = await callGuarded('10.0.9.9');
+    check(
+      'spam: STATS_LIMIT blocks excess requests with 429 no-store',
+      r1.status === 200 && r2.status === 200 && r3.status === 429 && r3.headers.get('Cache-Control') === 'no-store' && prepareCalls === firstBatchCalls,
+      `${r1.status},${r2.status},${r3.status}`,
+    );
   }
 
   if (failures.length > 0) {
