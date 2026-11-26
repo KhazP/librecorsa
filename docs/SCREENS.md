@@ -11,7 +11,7 @@ The game draws into its browser window, so the window has to cover all three mon
 - **NVIDIA Surround or AMD Eyefinity (recommended):** the driver joins the three monitors into one wide display (for example 5760 x 1080). Put the game in full screen (F11, or the browser's full screen) and it fills all three.
 - **Without Surround or Eyefinity:** a browser's full screen covers one monitor only. You can drag the window across all three and maximise its size by hand, with the window's title bar left showing. On macOS, turn off **Displays have separate Spaces** (System Settings > Desktop & Dock) first, or a window can't cross a monitor's edge.
 
-When the window is the shape of three screens and the game still draws one view, the title screen offers to set it up once.
+When the window is the shape of three screens and the game still draws one view, the title screen offers to set it up once. With **Three** chosen on a window only one screen wide, the game draws one view and the Screens tab says why.
 
 ## Your measurements
 
@@ -36,7 +36,7 @@ The chase, TV and other outside cameras keep their own field of view on the cent
 
 ## Performance
 
-Three screens draw the scene three times each frame, so they cost more than one wide screen of the same size, mostly on the processor side.
+Three screens draw the scene three times each frame, each with its own shadows and sky. On Bugesera that is about 1,900 draw calls a frame against about 870 for one wide view of the same size, so expect a lower frame rate than with one screen.
 
 - **Side screen resolution:** render the side screens at `75%` or `50%`. Your eyes take in less detail at the edges, and the frame rate goes up.
 - **Automatic quality** and **Render resolution** apply to all three screens (see [Performance and troubleshooting](PERFORMANCE.md)).
