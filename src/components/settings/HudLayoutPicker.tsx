@@ -91,21 +91,22 @@ function LayoutTile({
         </span>
       </button>
       {credit ? (
-        // Above the tile's hit area; only the links take clicks, the gap between them selects the tile
-        <span className="pointer-events-none relative z-10 -mt-1 me-auto ms-1 inline-flex max-w-full min-w-0 items-center gap-1.5 text-[12px] leading-tight text-lc-slate">
+        // Above the tile's hit area; only the links take clicks, the gap between them selects the tile. On a narrow tile
+        // the site goes under the author rather than cutting the author's name short
+        <span className="pointer-events-none relative z-10 -mt-1 me-auto ms-1 inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] leading-tight text-lc-slate">
           <a
             href={credit.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
             data-nav-skip=""
             aria-label={tx("sourceLink", { layout: layout.label, author: credit.author })}
-            className={cx(CREDIT_LINK, "min-w-0")}
+            className={cx(CREDIT_LINK, "shrink-0")}
           >
-            <span className="truncate">by {credit.author}</span>
+            <span>by {credit.author}</span>
             <Icon name="externalLink" size="xs" className="size-3 shrink-0" />
           </a>
           {credit.site ? (
-            <>
+            <span className="inline-flex items-center gap-1.5">
               <span aria-hidden="true">·</span>
               <a
                 href={credit.site.url}
@@ -118,7 +119,7 @@ function LayoutTile({
                 {credit.site.name}
                 <Icon name="externalLink" size="xs" className="size-3 shrink-0" />
               </a>
-            </>
+            </span>
           ) : null}
         </span>
       ) : null}
