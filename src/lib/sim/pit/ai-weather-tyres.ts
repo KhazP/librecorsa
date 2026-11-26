@@ -3,12 +3,13 @@
  * how a real field meets a passing shower, not on any code:
  *
  *  - A call reads the racing line's water (`WeatherState.lineWaterMm`), the measure the player's automatic tyre choice
- *    reads (`recommendedCompound`), and its thresholds: intermediates past `LOW_GRIP_DECLARED_MM`, full wets past
- *    1.1 mm. Coming off them waits longer, so a line hovering at a threshold does not bring the field in and out:
- *    back onto slicks under 0.09 mm, from full wets back to intermediates under 0.8 mm. The wet-tyre model's slick ⇄
- *    intermediate crossover (both grip the same at 0.113 mm) lies inside that band, so a car between the thresholds
- *    loses little on either tyre; full wets go on where intermediates start to aquaplane at speed (they fall behind
- *    from 1.0 mm at 216 km/h) and come off where intermediates grip better through the corners.
+ *    reads (`recommendedCompound`), and its thresholds: intermediates past `LOW_GRIP_DECLARED_MM` (0.2 mm), full wets
+ *    past `FULL_WETS_MM` (1.15 mm). Coming off them waits longer, so a line hovering at a threshold does not bring the
+ *    field in and out: back onto slicks under 0.13 mm, from full wets back to intermediates under 0.8 mm. The wet-tyre
+ *    model's slick ⇄ intermediate crossover (both grip the same at 0.164 mm since ec048874 lowered the rain tyres'
+ *    grip) lies inside that band, so a car between the thresholds loses little on either tyre; full wets go on where
+ *    intermediates start to aquaplane at speed (they fall behind from 1.08 mm at 216 km/h) and come off where
+ *    intermediates grip better through the corners.
  *  - Each driver's thresholds sit a little either side (`nerve`, up to 12 %; every driver's band still holds the
  *    crossover): a bold one stays out on slicks longer into a shower and goes back onto them sooner as it dries.
  *  - A call stands a few seconds before the car is told to come in, and the cars are told in running order, the leader
@@ -21,13 +22,13 @@
  */
 import type { TireCompound } from "@/types/f1";
 import { hashString, seededRng } from "@/lib/sim/ai-tuning";
-import { LOW_GRIP_DECLARED_MM } from "@/lib/sim/wet-tyres";
+import { FULL_WETS_MM, LOW_GRIP_DECLARED_MM } from "@/lib/sim/wet-tyres";
 
 /** The line's water (mm) that calls for intermediates, and that sends a car on them back onto slicks */
 export const INTER_ON_MM = LOW_GRIP_DECLARED_MM;
-export const INTER_OFF_MM = 0.09;
+export const INTER_OFF_MM = 0.13;
 /** ... that calls for full wets, and that sends a car on them back onto intermediates */
-export const WET_ON_MM = 1.1;
+export const WET_ON_MM = FULL_WETS_MM;
 export const WET_OFF_MM = 0.8;
 /** A driver's thresholds sit up to this share either side of the field's (`nerve` ±1) */
 export const NERVE_SPREAD = 0.12;
