@@ -651,6 +651,7 @@
       "retirements": "리타이어",
       "mostDrivenCar": "최다 주행 차량",
       "mostDrivenCircuit": "최다 주행 서킷",
+      "none": "아직 없음",
       "hoursMinutes": "{hours}시간 {minutes}분",
       "minutes": "{minutes}분",
       "km": "{km} km"

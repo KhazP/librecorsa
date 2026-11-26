@@ -651,6 +651,7 @@
       "retirements": "Gagal finis",
       "mostDrivenCar": "Mobil paling sering dikemudikan",
       "mostDrivenCircuit": "Sirkuit paling sering dipakai",
+      "none": "Belum ada",
       "hoursMinutes": "{hours} j {minutes} mnt",
       "minutes": "{minutes} mnt",
       "km": "{km} km"

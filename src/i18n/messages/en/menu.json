@@ -818,7 +818,7 @@
     "objectivesRevealBonus": "+{points} pts",
     "objectivesRevealContinue": "Go to season",
     "circuitPickerFullHint": "Calendar is full: deselect a circuit to swap another in.",
-    "unranked": "—",
+    "unranked": "–",
     "qualifyingOffObjectiveWarn": "Qualifying is off: qualifying objectives need it on.",
     "mulligansLeft": "{left} of {total} mulligans left",
     "mulligansNone": "No mulligans",

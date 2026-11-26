@@ -106,10 +106,10 @@ function DriverStatsCard() {
         <StatTile value={num(stats.wins)} label={tx("wins")} />
         <StatTile value={num(stats.podiums)} label={tx("podiums")} />
         <StatTile value={num(stats.fastestLaps)} label={tx("fastestLaps")} />
-        <StatTile value={avg === null ? "—" : `P${num(avg, 1)}`} label={tx("averageFinish")} />
+        <StatTile value={avg === null ? tx("none") : `P${num(avg, 1)}`} label={tx("averageFinish")} />
         <StatTile value={num(stats.races - stats.finishes)} label={tx("retirements")} />
-        <StatTile value={car ? carTitle(car) : "—"} label={tx("mostDrivenCar")} text className="col-span-2" />
-        <StatTile value={circuit ? circuitName(circuit) : "—"} label={tx("mostDrivenCircuit")} text className="col-span-2" />
+        <StatTile value={car ? carTitle(car) : tx("none")} label={tx("mostDrivenCar")} text className="col-span-2" />
+        <StatTile value={circuit ? circuitName(circuit) : tx("none")} label={tx("mostDrivenCircuit")} text className="col-span-2" />
       </div>
     </SettingsCard>
   );

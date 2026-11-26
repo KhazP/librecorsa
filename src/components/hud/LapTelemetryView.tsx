@@ -602,7 +602,7 @@ export const LapTelemetryView: React.FC<LapTelemetryViewProps> = ({
                     {formatSectorTime(sec.cmpMs)} {tx("units.seconds")}
                   </span>
                   <span className={!hasBoth ? "text-lc-slate" : sec.deltaMs <= 0 ? "text-lc-gain" : "text-lc-caution"}>
-                    {hasBoth ? `${formatDelta(sec.deltaMs / 1000)} ${tx("units.seconds")}` : "—"}
+                    {hasBoth ? `${formatDelta(sec.deltaMs / 1000)} ${tx("units.seconds")}` : "–"}
                   </span>
                 </div>
               );

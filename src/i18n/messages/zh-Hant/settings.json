@@ -651,6 +651,7 @@
       "retirements": "退賽",
       "mostDrivenCar": "最常駕駛的車輛",
       "mostDrivenCircuit": "最常駕駛的賽道",
+      "none": "尚無",
       "hoursMinutes": "{hours} 小時 {minutes} 分",
       "minutes": "{minutes} 分",
       "km": "{km} km"

@@ -651,6 +651,7 @@
       "retirements": "الانسحابات",
       "mostDrivenCar": "السيارة الأكثر قيادة",
       "mostDrivenCircuit": "الحلبة الأكثر قيادة",
+      "none": "لا شيء بعد",
       "hoursMinutes": "{hours} س {minutes} د",
       "minutes": "{minutes} د",
       "km": "{km} km"

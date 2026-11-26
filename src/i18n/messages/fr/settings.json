@@ -651,6 +651,7 @@
       "retirements": "Abandons",
       "mostDrivenCar": "Voiture la plus conduite",
       "mostDrivenCircuit": "Circuit le plus parcouru",
+      "none": "Pas encore",
       "hoursMinutes": "{hours} h {minutes} min",
       "minutes": "{minutes} min",
       "km": "{km} km"
