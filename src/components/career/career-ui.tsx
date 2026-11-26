@@ -193,7 +193,8 @@ export const StatTile: React.FC<{
   <Well className={cx("flex min-w-0 flex-col gap-1 px-3 py-2.5 short:gap-0.5 short:px-2.5 short:py-1.5", className)}>
     <span className="lc-lbl truncate">{label}</span>
     <span className="lc-data truncate text-[18px] leading-tight text-lc-chalk phone:text-[15px] short:text-[15px]">
-      {value}
+      {/* Isolated by its own first letter: "+8,096", "23×" and "P3" read left to right in Arabic too, a word in its own way */}
+      <bdi>{value}</bdi>
     </span>
     {sub ? <span className="lc-hint truncate">{sub}</span> : null}
   </Well>
@@ -552,7 +553,7 @@ export const StandingsTable: React.FC<{
                         : "text-lc-slate",
                   )}
                 >
-                  {roundPts && roundPts > 0 ? `+${roundPts}` : tx("unranked")}
+                  {roundPts && roundPts > 0 ? <bdi>+{roundPts}</bdi> : tx("unranked")}
                 </span>
               ) : null}
 

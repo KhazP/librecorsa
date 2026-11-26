@@ -217,7 +217,7 @@ const PodiumCard: React.FC<{ entry: BoardEntry; mirror: boolean; delayMs: number
               <span className="lc-mono text-[11px] font-extrabold tracking-[0.12em] text-lc-slate sm:text-[13px]">{d.code}</span>
             )}
             <span className={`lc-mono rounded-lc-nub bg-lc-carbon px-1.5 py-0.5 text-[11px] font-bold sm:px-2 sm:text-[13px] ${gapTone(entry.gap)}`}>
-              {gapText(entry.gap)}
+              <bdi>{gapText(entry.gap)}</bdi>
             </span>
           </div>
         </div>
@@ -265,7 +265,7 @@ const ClassificationTower: React.FC<{ rows: readonly BoardEntry[]; playerApart: 
                 {first ? <span className={d.isPlayer ? "font-semibold text-lc-void/85" : "font-normal text-lc-fog"}>{first} </span> : null}
                 <span className={`font-extrabold ${first ? "uppercase" : ""} ${d.isPlayer ? "text-lc-void" : "text-lc-chalk"}`}>{main}</span>
               </span>
-              <span className={`lc-mono shrink-0 text-[12px] font-bold sm:text-[13px] ${d.isPlayer ? "text-lc-void" : gapTone(e.gap)}`}>{gapText(e.gap)}</span>
+              <span className={`lc-mono shrink-0 text-[12px] font-bold sm:text-[13px] ${d.isPlayer ? "text-lc-void" : gapTone(e.gap)}`}><bdi>{gapText(e.gap)}</bdi></span>
             </li>
           );
         })}
