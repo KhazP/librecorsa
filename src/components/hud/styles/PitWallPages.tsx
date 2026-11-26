@@ -44,7 +44,7 @@ const signed = (v: number, digits = 1) => `${v >= 0 ? "+" : "−"}${Math.abs(v).
 /** A label and its reading: one row of a page */
 const Row: React.FC<{ label: string; children: React.ReactNode; lit?: boolean }> = ({ label, children, lit = false }) => (
   <div className="flex h-[29px] items-center justify-between gap-2 px-3">
-    <span className={lit ? lbl("text-lc-chalk") : LBL}>{label}</span>
+    <span dir="auto" className={lit ? lbl("text-lc-chalk") : LBL}>{label}</span>
     <span className={`${NUM} inline-flex items-baseline gap-1.5 text-[14px]`}>{children}</span>
   </div>
 );
@@ -323,8 +323,8 @@ const LapsPage: React.FC<{ t: CarTelemetry; w: PitWallWords }> = ({ t, w }) => {
 /** A dial's setting, or "off" at zero: a car without the aid shows it as off, never as a number */
 const dial = (level: number, w: PitWallWords) => (level > 0 ? String(level) : w.car.off);
 
-/** The ERS mode's three-letter code, as the tuner names it */
-const ersModeCode = (mode: string) => mode.slice(0, 3).toUpperCase();
+/** The ERS mode's name, as Blade gives it (the tuner's three-letter code for a mode without one) */
+const ersModeName = (mode: string, w: PitWallWords) => w.car.ersModes[mode.slice(0, 3).toUpperCase()] ?? mode.slice(0, 3).toUpperCase();
 
 const CarPage: React.FC<{ t: CarTelemetry; w: PitWallWords }> = ({ t, w }) => {
   const units = useUnits();
@@ -346,7 +346,7 @@ const CarPage: React.FC<{ t: CarTelemetry; w: PitWallWords }> = ({ t, w }) => {
     if (tuner.hasErs && hasErs(t))
       right.push(
         <Row key="ers" label={w.car.ersMode}>
-          <span className="text-lc-info">{ersModeCode(tuner.ersMode)}</span>
+          <span className="text-lc-info">{ersModeName(tuner.ersMode, w)}</span>
         </Row>,
       );
     if (tuner.motorDeployKw !== null)
@@ -468,7 +468,7 @@ const DamagePage: React.FC<{ damage: PlayerDamageStatus | undefined; w: PitWallW
 
 const Stat: React.FC<{ label?: string; children: React.ReactNode }> = ({ label, children }) => (
   <span className="inline-flex items-baseline gap-1.5">
-    {label ? <span className={LBL}>{label}</span> : null}
+    {label ? <span dir="auto" className={LBL}>{label}</span> : null}
     <span className={`${NUMB} inline-flex items-baseline gap-1.5 text-[15px]`}>{children}</span>
   </span>
 );
@@ -520,7 +520,7 @@ const StatusLines: React.FC<{ t: CarTelemetry; fuel: FuelFigures; w: PitWallWord
         <Stat label={w.car.map}>{tuner ? tuner.engineMap : NONE}</Stat>
         {tuner?.hasErs && ers ? (
           <Stat label={w.car.ersMode}>
-            <span className="text-lc-info">{ersModeCode(tuner.ersMode)}</span>
+            <span className="text-lc-info">{ersModeName(tuner.ersMode, w)}</span>
           </Stat>
         ) : null}
       </div>
