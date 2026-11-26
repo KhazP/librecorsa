@@ -2402,7 +2402,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     specs = {}
     # The meshes mirrors.ini names (`mirror_meshes`): MIRROR_n nodes of their own in a material of their own
     mirror_at = mirror_meshes(nodes, read_mirrors(data))
-    mirror_section = {}  # id(part) -> its mirrors.ini section
+    mirror_section = {}  # id(part) -> its mirrors.ini section (or '<section>_<part>' for a livery's own body's)
+    mirror_part = {}  # '<section>_<part>' -> the part whose mirror it is
 
     def spec_of(key):
         """The material spec of kn5 material `key` ('material@node' for a node's own entry)"""
@@ -2450,8 +2451,12 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             continue
         part = part_of.get(i) if kind == 'body' else None
         parts.append([kind, corner, mat, *world_mesh(n), n['name'], part])
-        if kind == 'body' and part is None and i in mirror_at:
-            mirror_section[id(parts[-1])] = mirror_at[i]
+        if kind == 'body' and i in mirror_at:
+            # A livery's own body's mirror (`add_model_replacements`: the mesh of the NAME mirrors.ini gives, in that
+            # body): a MIRROR node of its own, shown for that body's liveries
+            mirror_section[id(parts[-1])] = mirror_at[i] if part is None else f'{mirror_at[i]}_{part}'
+            if part is not None:
+                mirror_part[f'{mirror_at[i]}_{part}'] = part
 
     # Shift: lowest tyre point to y = 0, X centred on the four tyres
     tyres = [p for p in parts if p[0] == 'tyre']
@@ -2730,7 +2735,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     # The mirrors (mirrors.ini): MIRROR_n, the glass of every mesh its NAME gives in one material of its own, the
     # section in the node's extras, for the game's live mirrors to find
     mirrors = []
-    for section in sorted(set(mirror_section.values()), key=lambda s: int(s.split('_')[1])):
+    for section in sorted(set(mirror_section.values()), key=lambda s: (int(s.split('_')[1]), s)):
         group = [p for p in body_parts if mirror_section.get(id(p)) == section]
         out = prims(group, key=lambda p, section=section: f'{p[2]}@{section}')
         node = writer.add_mesh_node(section, [pi for _, pi in out])
@@ -2741,12 +2746,16 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     # A livery's parts (`parts`, `extra_kn5`): PART_<name>, one mesh per material, shown for its variants' liveries
     variant_nodes = {}
     for part in sorted({p[8] for p in body_parts if p[8] is not None}):
-        out = prims([p for p in body_parts if p[8] == part], order=lambda k: order[k])
+        out = prims([p for p in body_parts if p[8] == part and not is_mirror(p)], order=lambda k: order[k])
         kids = [writer.add_mesh_node(f'PART_{part}_{node_label(mi)}', [pi]) for mi, pi in out]
         body_kids.append(writer.add_node(f'PART_{part}', children=kids))
         variant_nodes[f'PART_{part}'] = list(part_variants.get(part, ('base',)))
     # A live mirror a livery's own body replaces (`add_model_replacements`): shown for the liveries that keep it
     for entry in mirrors:
+        if entry['node'] in mirror_part:
+            # (a livery's own body's mirror: shown with that body)
+            variant_nodes[entry['node']] = list(part_variants.get(mirror_part[entry['node']], ('base',)))
+            continue
         keep = sorted({v for k in entry['kn5'] for v in preset.get('mirror_variants', {}).get(k, ())})
         if keep:
             variant_nodes[entry['node']] = keep
