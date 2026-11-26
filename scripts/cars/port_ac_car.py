@@ -1253,7 +1253,8 @@ def apply_ac_finish(gm, m, cls, spec, pool, writer):
         pbr['metallicFactor'] = pbr['roughnessFactor'] = 1.0
     elif weave is not None:
         im, reps = weave
-        ti = pool.data_map(f"weave:{m['maps']['txDetail']}", im, alpha=True)
+        # (the map carries the material's own roughness and metalness: materials sharing a weave share it only when those match)
+        ti = pool.data_map(f"weave:{m['maps']['txDetail']}:{fin['rough']}:{fin['metal']}", im, alpha=True)
         tiled = {'index': ti, 'extensions': {'KHR_texture_transform': {'scale': [reps, reps]}}}
         pbr['metallicRoughnessTexture'] = tiled
         pbr['metallicFactor'] = pbr['roughnessFactor'] = 1.0

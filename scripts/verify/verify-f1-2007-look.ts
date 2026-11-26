@@ -184,6 +184,16 @@ async function main(): Promise<void> {
     check("Red Bull's and Williams' wishbones barely reflect", spec('red-bull', 'RBR3_SUSPENSION') < 0.03 && spec('williams', 'FW29_SUSPENSION') < 0.01, `${spec('red-bull', 'RBR3_SUSPENSION')} / ${spec('williams', 'FW29_SUSPENSION')}`);
     // The McLaren's wishbone detail is a DXT1 (no alpha, so no mask of its own): its brightness masks it instead
     check("the McLaren's wishbones (a detail with no alpha) reflect as little as the others'", spec('mclaren', 'MP4_22_SUSPENSION') < 0.04, String(spec('mclaren', 'MP4_22_SUSPENSION')));
+    // A weave map carries its material's roughness: Toyota's calipers (ksSpecularEXP 20) and wheel cover (90) share
+    // carbon_fiber.dds but not its map
+    const weaveOf = (team: string, kn5: string) => {
+      const glb = glbs.get(team)!;
+      const ti = byKn5(glb, kn5)?.pbrMetallicRoughness?.metallicRoughnessTexture?.index;
+      return ti === undefined ? '' : ((glb.json.images![glb.json.textures![ti].source] as { name?: string }).name ?? '');
+    };
+    check("parts sharing a carbon weave keep their own roughness (Toyota's wheel cover vs its calipers)",
+      weaveOf('toyota', 'WHeelcover').startsWith('weave:') && weaveOf('toyota', 'CALLIPER').startsWith('weave:') && weaveOf('toyota', 'WHeelcover') !== weaveOf('toyota', 'CALLIPER'),
+      `${weaveOf('toyota', 'WHeelcover')} / ${weaveOf('toyota', 'CALLIPER')}`);
     check('a ksAmbient 0.3 / ksDiffuse 0.2 rim at 0.53, a 0.2 one at 0.22', Math.abs(base('honda', 'RA107_RIMS') - 0.53) < 1e-3 && Math.abs(base('ferrari', 'F2007_RIMS_FRONT') - 0.22) < 1e-3, `${base('honda', 'RA107_RIMS')} / ${base('ferrari', 'F2007_RIMS_FRONT')}`);
     check("a livery's own parts keep the paint's plain dimming (the Ferrari's sidepods 0.8, not 0.53)", Math.abs(base('ferrari', 'WCEXTRA0') - 0.8) < 0.06, String(base('ferrari', 'WCEXTRA0')));
   }
