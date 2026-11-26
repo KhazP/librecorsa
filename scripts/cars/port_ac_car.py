@@ -778,6 +778,13 @@ class TexturePool:
     def mean_colour(self, name):
         return np.asarray(decode(self.src[name]), np.float64)[..., :3].reshape(-1, 3).mean(0)
 
+    def data_map(self, key, im, alpha=False):
+        """A map of values rather than colours (a finish map), encoded once as a normal map is (no chroma subsampling),
+        or as PNG with `alpha`"""
+        if key in self.cache:
+            return self.cache[key]
+        return self._add(key, im, FINISH_MAP_SIZE, alpha, normal=True)
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Materials from AC's shader values (`auto` presets). AC lights a material as `diffuse map * (ksAmbient * ambient +
@@ -945,6 +952,219 @@ def auto_spec(m, stats, preset, by_name=None):
     if 'tex' in spec or spec.get('detail'):
         spec['scale'] = round(spec['scale'] * 10) / 10
     return spec, cls
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Finishes from AC's shader values (an automatic preset's materials). AC draws a material as its diffuse lit through
+# ksAmbient / ksDiffuse, a highlight of ksSpecular and ksSpecularEXP, and a reflection of its surroundings rising from
+# fresnelC head on to fresnelMaxLevel at grazing angles; a multimap masks those per pixel with its txMaps (R specular,
+# G gloss, B reflection) and, where its detail is drawn, the detail's alpha (a livery's panel gaps and matte stickers,
+# a carbon weave's tows). glTF gets the same: roughness from the highlight, KHR_materials_specular for the reflection
+# head on (its colour factor over a dielectric's 0.04) and at grazing angles (its factor), and a polished coat's sharp
+# reflections as KHR_materials_clearcoat; a map holds what varies per pixel (R clearcoat, G roughness, B metalness), and
+# a tiled detail's weave stays a repeating roughness map. extras.acFinish marks the material, so the game keeps the
+# finish as made (src/lib/render/ported-car-materials.ts) instead of finishing it by its name.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# The classes whose finish comes from the AC values (glass, lights, screens, tyres and mirrors keep the game's own)
+FINISH_CLASSES = ('paint', 'part', 'carbon', 'decal', 'metal')
+# A coat polished to mirror its surroundings: AC's reflection reaching this far at grazing angles, under a highlight at
+# least this tight
+LACQUER_FRESNEL = 0.3
+LACQUER_EXP = 100.0
+# The detail alpha of a full coat (a multimap livery's paint carries about this; less is a thinner one)
+FULL_COAT_ALPHA = 0.25
+FINISH_MAP_SIZE = 1024
+CLEARCOAT_ROUGHNESS = 0.06
+
+
+def skin_shader_replacements(car_dir, skin):
+    """{kn5 material: {property: value}} a skin's ext_config.ini sets for its materials ([SHADER_REPLACEMENT_...]:
+    MATERIALS = a, b and its PROP_... = name, value lines, which repeat their key); {} without one"""
+    path = os.path.join(car_dir or '', 'skins', skin or '', 'ext_config.ini')
+    if not car_dir or not skin or not os.path.isfile(path):
+        return {}
+    sections, section = [], None
+    for line in open(path, 'rb').read().decode('latin1').splitlines():
+        line = line.split(';', 1)[0].split('//', 1)[0].strip()
+        if line.startswith('[') and line.endswith(']'):
+            section = None
+            if line[1:-1].strip().upper().startswith('SHADER_REPLACEMENT'):
+                section = {'materials': [], 'props': {}}
+                sections.append(section)
+            continue
+        if section is None or '=' not in line:
+            continue
+        k, v = (s.strip() for s in line.split('=', 1))
+        if k.upper() == 'MATERIALS':
+            section['materials'] = [s.strip() for s in v.split(',') if s.strip()]
+        elif k.upper().startswith('PROP_'):
+            name, _, value = (s.strip() for s in v.partition(','))
+            try:
+                section['props'][name] = float(value.split(',')[0])
+            except ValueError:
+                pass
+    out = {}
+    for sec in sections:
+        for mat in sec['materials']:
+            out.setdefault(mat, {}).update(sec['props'])
+    return out
+
+
+def apply_skin_shader_replacements(car_dir, skin, materials):
+    """Sets a skin's material properties (`skin_shader_replacements`) on `materials`; returns what it set"""
+    rep = skin_shader_replacements(car_dir, skin)
+    for m in materials:
+        if m['name'] in rep:
+            m['props'] = {**m['props'], **rep[m['name']]}
+    return rep
+
+
+def ac_finish(m, cls, spec):
+    """The glTF finish of kn5 material `m` (its class and `auto_spec`) from its AC values, or None for a class the
+    game finishes itself: {rough, metal, specular (F90), specular_color (F0 over 0.04), clearcoat, lacquer, ...}"""
+    if cls not in FINISH_CLASSES:
+        return None
+    p = m['props']
+    exp_ = max(0.0, p.get('ksSpecularEXP', 20.0))
+    fc, fmax = max(0.0, p.get('fresnelC', 0.0)), max(0.0, p.get('fresnelMaxLevel', 0.0))
+    fmax = max(fmax, fc)
+    lacquer = fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP
+    f0 = float(np.clip(fc, 0.004, 1.0))
+    # A polished coat: its sharp reflection (the clearcoat, 4 % head on) rises to fresnelMaxLevel at grazing angles, over
+    # a base reflecting fresnelC all round. Any other surface: one reflection from fresnelC head on to fresnelMaxLevel
+    f90 = f0 if lacquer else float(np.clip(fmax, f0, 1.0))
+    return dict(
+        rough=round(float(np.clip((2.0 / (exp_ + 2.0)) ** 0.25, 0.08, 0.95)), 3),
+        exp=exp_,
+        metal=float(spec.get('metal', 0.0)),
+        specular=round(f90, 3),
+        specular_color=round(f0 / (0.04 * f90), 3),
+        clearcoat=round(min(1.0, fmax), 3) if lacquer else 0.0,
+        lacquer=lacquer,
+    )
+
+
+def finish_map(m, src, fin):
+    """The per-pixel finish of a multimap drawn once over its UVs (R clearcoat, G roughness, B metalness, at most
+    FINISH_MAP_SIZE) and the mean of its reflection mask, or (None, 1) when nothing in it varies: the reflection masked
+    by txMaps' B and the detail's alpha where the detail is drawn (the coat full at FULL_COAT_ALPHA), the highlight's
+    exponent by txMaps' G"""
+    maps, props = m['maps'], m['props']
+    if 'MultiMap' not in m['shader'] or maps.get('txDiffuse') not in src:
+        return None, 1.0
+    diffuse = decode(src[maps['txDiffuse']])
+    side = min(FINISH_MAP_SIZE, max(diffuse.size))
+    size = (side, side)
+    ad = np.asarray(diffuse.getchannel('A').resize(size, Image.BILINEAR), np.float32) / 255.0
+    refl = np.ones(size[::-1], np.float32)
+    coat = np.ones(size[::-1], np.float32)
+    gloss = np.ones(size[::-1], np.float32)
+    uvm = props.get('detailUVMultiplier', 1.0) or 1.0
+    if props.get('useDetail', 0) >= 0.5 and maps.get('txDetail') in src and abs(uvm - 1.0) < 1e-3:
+        at = np.asarray(decode(src[maps['txDetail']]).getchannel('A').resize(size, Image.BILINEAR), np.float32) / 255.0
+        refl *= at * (1.0 - ad) + ad
+        coat *= np.clip(refl / FULL_COAT_ALPHA, 0.0, 1.0)
+    if maps.get('txMaps') in src:
+        mp = np.asarray(decode(src[maps['txMaps']]).convert('RGB').resize(size, Image.BILINEAR), np.float32) / 255.0
+        refl *= mp[..., 2]
+        coat *= mp[..., 2]
+        gloss = np.maximum(mp[..., 1], 1e-3)
+    used = np.asarray(diffuse.convert('L').resize(size, Image.BILINEAR), np.float32) > 8
+    mean = float(refl[used].mean()) if used.any() else 1.0
+    rough = np.clip((2.0 / (fin['exp'] * gloss + 2.0)) ** 0.25, 0.08, 0.95)
+    cc = fin['clearcoat'] * coat
+    metal = np.full(size[::-1], fin['metal'], np.float32)
+    if cc.std() < 0.01 and rough.std() < 0.01:
+        return None, mean
+    rgb = np.stack([cc, rough, metal], -1)
+    return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB'), mean
+
+
+def weave_map(m, src, fin):
+    """A tiled detail's weave (carbon: its alpha the tows' sheen) as a repeating map, and its repeat count, or None:
+    G roughness, B metalness, A the reflection's strength (KHR_materials_specular reads A), the glossy tows at the
+    material's own roughness and the ones between rougher and duller"""
+    maps, props = m['maps'], m['props']
+    uvm = props.get('detailUVMultiplier', 1.0) or 1.0
+    if ('MultiMap' not in m['shader'] or props.get('useDetail', 0) < 0.5 or maps.get('txDetail') not in src
+            or abs(uvm - 1.0) < 1e-3):
+        return None
+    det = decode(src[maps['txDetail']])
+    a = np.asarray(det.getchannel('A'), np.float32) / 255.0
+    if a.std() < 0.05:
+        return None
+    rough = np.clip(fin['rough'] * (1.5 - 0.5 * a), 0.08, 0.95)
+    rgba = np.stack([np.zeros_like(a), rough, np.full_like(a, fin['metal']), a], -1)
+    return Image.fromarray(np.clip(rgba * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGBA'), float(uvm)
+
+
+def reflection_occlusion(m, src):
+    """The mean of a multimap's txMaps B (its reflection mask, an AO bake here) over the texels it covers, or 1"""
+    t = m['maps'].get('txMaps')
+    if t not in src:
+        return 1.0
+    b = np.asarray(decode(src[t]).getchannel('B'), np.float32) / 255.0
+    used = b > 0.02
+    return float(b[used].mean()) if used.any() else 1.0
+
+
+def apply_ac_finish(gm, m, cls, spec, pool, writer):
+    """Writes `ac_finish` of kn5 material `m` onto glTF material `gm` (its maps through `pool`); returns the finish"""
+    fin = ac_finish(m, cls, spec)
+    if fin is None:
+        return None
+    used = writer.j.setdefault('extensionsUsed', [])
+
+    def uses(ext):
+        if ext not in used:
+            used.append(ext)
+
+    pbr = gm['pbrMetallicRoughness']
+    pbr['metallicFactor'], pbr['roughnessFactor'] = fin['metal'], fin['rough']
+    p = m['props']
+    if cls == 'paint':
+        # The paint dimmed by its own ksDiffuse / ksAmbient, as `auto_spec` dims every other material
+        k = float(np.clip(max(p.get('ksDiffuse', 0.4), p.get('ksAmbient', 0.4)) / 0.4, 0.05, 1.0))
+        pbr['baseColorFactor'] = [round(c * k, 4) for c in pbr['baseColorFactor'][:3]] + pbr['baseColorFactor'][3:]
+    gm.setdefault('extensions', {})['KHR_materials_specular'] = {
+        'specularFactor': fin['specular'], 'specularColorFactor': [fin['specular_color']] * 3}
+    uses('KHR_materials_specular')
+    # A tiled detail's weave, else a 1:1 multimap's per-pixel map
+    weave = weave_map(m, pool.src, fin)
+    fmap, refl_mean = (None, 1.0) if weave is not None else finish_map(m, pool.src, fin)
+    if fmap is not None:
+        # The base reflection (fresnelC all round under a coat) dimmed as AC's mask dims it on average
+        gm['extensions']['KHR_materials_specular']['specularFactor'] = round(fin['specular'] * refl_mean, 3)
+        ti = pool.data_map(f"finish:{m['name']}", fmap)
+        pbr['metallicRoughnessTexture'] = {'index': ti}
+        pbr['metallicFactor'] = pbr['roughnessFactor'] = 1.0
+    elif weave is not None:
+        im, reps = weave
+        ti = pool.data_map(f"weave:{m['maps']['txDetail']}", im, alpha=True)
+        tiled = {'index': ti, 'extensions': {'KHR_texture_transform': {'scale': [reps, reps]}}}
+        pbr['metallicRoughnessTexture'] = tiled
+        pbr['metallicFactor'] = pbr['roughnessFactor'] = 1.0
+        # The weave's alpha masks the reflection, and the material's txMaps B dims it where the bodywork shades it
+        spec_ext = gm['extensions']['KHR_materials_specular']
+        spec_ext['specularTexture'] = json.loads(json.dumps(tiled))
+        spec_ext['specularFactor'] = round(fin['specular'] * reflection_occlusion(m, pool.src), 3)
+        uses('KHR_texture_transform')
+    elif not fin['lacquer']:
+        # One reflection all over: dimmed as the material's txMaps B dims it on average
+        gm['extensions']['KHR_materials_specular']['specularFactor'] = round(
+            fin['specular'] * reflection_occlusion(m, pool.src), 3)
+    if fin['clearcoat'] > 0:
+        coat = {'clearcoatFactor': 1.0 if fmap is not None else round(fin['clearcoat'] * reflection_occlusion(m, pool.src), 3),
+                'clearcoatRoughnessFactor': CLEARCOAT_ROUGHNESS}
+        if fmap is not None:
+            coat['clearcoatTexture'] = {'index': pbr['metallicRoughnessTexture']['index']}
+        gm['extensions']['KHR_materials_clearcoat'] = coat
+        uses('KHR_materials_clearcoat')
+    gm['extras'] = {**gm.get('extras', {}), 'acFinish': {
+        k: round(float(p[k]), 3) for k in ('ksAmbient', 'ksDiffuse', 'ksSpecular', 'ksSpecularEXP', 'fresnelC',
+                                           'fresnelMaxLevel') if k in p}}
+    return fin
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -2065,6 +2285,9 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             gm['alphaMode'] = mode
         if spec.get('double'):
             gm['doubleSided'] = True
+        if auto and (preset.get('generated') or preset.get('ac_finish')) and not spec.get('palette'):
+            # The finish from the AC material's own values (`apply_ac_finish`)
+            apply_ac_finish(gm, src, cls, spec, pool, writer)
         if spec.get('palette'):
             # One material per class and finish; its colour comes from the palette (UVs at the colour's cell)
             pkey = (cls, float(spec.get('metal', 0.0)), float(spec['rough']))
@@ -2093,7 +2316,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
                 mat_index[kn5_name] = mi
                 return mi
             gm['name'] = f'{cls}_{len(shared):03d}'
-            gm['extras'] = {'kn5': [kn5_name]}
+            gm['extras'] = {**gm.get('extras', {}), 'kn5': [kn5_name]}
             if tex and skinnable(tex):
                 stem = re.sub(r'[^A-Za-z0-9]+', '_', tex.split(':', 1)[-1].rsplit('.', 1)[0]).strip('_').lower()
                 skin_files[gm['name']] = (f'{stem}.png' if mode != 'OPAQUE' else f'{stem}.jpg', tex)
@@ -2434,6 +2657,10 @@ def main():
         ui = read_loose_json(os.path.join(a.car_dir, 'ui', 'ui_car.json'))
         title = str(ui.get('name') or '').strip() or None
         preset = auto_preset(a.car_dir, loaded, data, kn5_name, title=title)
+        # The material values the painted skin's ext_config.ini sets (its paint's gloss and reflection)
+        replaced = apply_skin_shader_replacements(a.car_dir, a.skin or preset['default_skin'], loaded[1])
+        if replaced:
+            print(f'  skin material values: {replaced}')
         car = 'auto'
         print(f'automatic preset for {a.car_dir} ({kn5_name}):')
         print('  ' + json.dumps(preset['detected']))
