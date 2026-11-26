@@ -226,7 +226,7 @@ const TrialEventCard: React.FC<{
         </div>
 
         {/* Title + artwork composition */}
-        <div className="relative z-10 mt-3 flex items-end justify-between gap-3">
+        <div className="relative z-10 mt-2.5 flex items-end justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span
               className={cx(
@@ -236,17 +236,17 @@ const TrialEventCard: React.FC<{
             >
               {trial.title}
             </span>
-            <h3 className="lc-h3 m-0 truncate text-lc-chalk">{trial.trackName}</h3>
+            <h3 className="lc-h3 m-0 line-clamp-2 text-[18px] leading-tight text-lc-chalk">{trial.trackName}</h3>
             <p className="m-0 truncate text-[14px] font-semibold text-lc-fog">{trial.carTitle}</p>
             {trial.tagline ? <p className="m-0 mt-0.5 truncate text-[12px] text-lc-slate">{trial.tagline}</p> : null}
           </div>
 
-          <div className="relative hidden h-[86px] w-[148px] shrink-0 sm:block">
+          <div className="relative hidden h-[82px] w-[138px] shrink-0 sm:block">
             {outline ? (
               <TrackOutline
                 map={outline}
                 thin
-                className="pointer-events-none absolute -top-2 right-0 h-[72px] w-[96px] opacity-35 transition group-hover:opacity-55"
+                className="pointer-events-none absolute -top-2 right-0 h-[68px] w-[90px] opacity-35 transition group-hover:opacity-55"
               />
             ) : null}
             {car ? (
@@ -645,12 +645,12 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
               bodyClassName="gap-3.5"
             >
               {/* Circuit & Car visual telemetry strip */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lc-tile border border-lc-line bg-lc-well/60 p-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="flex items-center justify-between gap-3 rounded-lc-tile border border-lc-line bg-lc-well/60 px-3 py-2.5">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   {selectedOutline ? (
-                    <TrackOutline map={selectedOutline} sectors className="h-[68px] w-[86px] shrink-0" />
+                    <TrackOutline map={selectedOutline} sectors className="h-[60px] w-[78px] shrink-0" />
                   ) : null}
-                  <div className="flex min-w-0 flex-col gap-0.5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="truncate text-[14px] font-semibold text-lc-chalk">{selected.trackName}</span>
                     {selectedTrackInfo ? (
                       <span className="lc-hint truncate">
@@ -658,15 +658,15 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
                       </span>
                     ) : null}
                     {selectedCar ? (
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
                         <CarClassTag car={selectedCar} size="sm" />
-                        <span className="truncate text-[12px] text-lc-fog">{selectedCar.sub}</span>
+                        <span className="min-w-0 truncate text-[12px] text-lc-fog">{selectedCar.sub}</span>
                       </div>
                     ) : null}
                   </div>
                 </div>
                 {selectedCar ? (
-                  <div className="relative hidden h-[64px] w-[112px] shrink-0 sm:block">
+                  <div className="relative hidden h-[58px] w-[104px] shrink-0 sm:block">
                     <CarThumb car={selectedCar} />
                   </div>
                 ) : null}
