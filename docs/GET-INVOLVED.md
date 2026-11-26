@@ -20,6 +20,10 @@ I can only host what I have the right to: your own work, something under an open
 
 If you can't port it yourself, asking the author is still the biggest step: post their answer in a [content request](https://github.com/librecorsa/librecorsa/issues/new?template=content-request.yml).
 
+## Paint a livery
+
+The two F1 cars, the two GT3s and the LC-LMDH take liveries you paint yourself, on a template that matches each car exactly. [Painting liveries](LIVERIES.md) has the templates, how to try a livery in the desktop app, and how to send it in so it ships in the game with your name on it.
+
 ## Translate
 
 The game's text lives in `src/i18n/messages/`, one folder per language. A new language, or a fix to one, is a pull request on those files. [Translating](TRANSLATING.md) explains the steps, including how to translate with an AI model and check the result.
