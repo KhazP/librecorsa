@@ -203,7 +203,7 @@ def read_car_data(car_dir):
     """{file name: text} from the car's data folder or data.acd ({} when neither is there)"""
     data_dir = os.path.join(car_dir, 'data')
     if os.path.isdir(data_dir):
-        # Its files: a folder in it (a mod's backup, CSP's extension data) is no file of the car's data
+        # Its files: a folder in it (a mod's backup, its extension data) is no file of the car's data
         return {f: open(os.path.join(data_dir, f), 'rb').read().decode('latin1') for f in os.listdir(data_dir)
                 if os.path.isfile(os.path.join(data_dir, f))}
     acd = os.path.join(car_dir, 'data.acd')
