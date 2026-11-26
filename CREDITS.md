@@ -6,8 +6,9 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 People whose pull requests are in the game (the list the home page's About section shows is `src/lib/contributors.ts`):
 
-* **[adamikoo](https://github.com/adamikoo)**: the Grand Prix HUD layout ([#162](https://github.com/librecorsa/librecorsa/pull/162)), the live HUD layout editor and start reaction timer ([#182](https://github.com/librecorsa/librecorsa/pull/182)), and frame-loop scratch reuse and Windows ARM GPU detection ([#192](https://github.com/librecorsa/librecorsa/pull/192)).
+* **[adamikoo](https://github.com/adamikoo)**: the Grand Prix HUD layout ([#162](https://github.com/librecorsa/librecorsa/pull/162)), the live HUD layout editor and start reaction timer ([#182](https://github.com/librecorsa/librecorsa/pull/182)), frame-loop scratch reuse and Windows ARM GPU detection ([#192](https://github.com/librecorsa/librecorsa/pull/192)), live multiplayer livery sync ([#193](https://github.com/librecorsa/librecorsa/pull/193)), the voice spotter ([#198](https://github.com/librecorsa/librecorsa/pull/198)), lap telemetry analysis ([#200](https://github.com/librecorsa/librecorsa/pull/200)), Driver Profile 2.0 career totals ([#201](https://github.com/librecorsa/librecorsa/pull/201)), and movable HUD proximity radar with per-panel visibility toggles ([#202](https://github.com/librecorsa/librecorsa/pull/202)).
 * **[dardalo-si](https://github.com/dardalo-si)**: absolute pressure in the tyre gas law ([#17](https://github.com/librecorsa/librecorsa/pull/17)).
+* **[hskl18](https://github.com/hskl18)**: screenshots for the Controls guide ([#205](https://github.com/librecorsa/librecorsa/pull/205)).
 * **[Ravi Giri](https://github.com/Ravigiri2022)**: the verify runner that runs the suites several at once and reports every failure ([#130](https://github.com/librecorsa/librecorsa/pull/130)).
 
 ---
@@ -148,11 +149,11 @@ The soundtrack of the menus, races, results and the career's pre-race show (whos
 
 ### Fonts (`src/app/fonts/`)
 
-Latin subsets as served by Google Fonts, each under the [SIL Open Font License 1.1](https://openfontlicense.org), licence text alongside:
+Latin, Latin Extended and Vietnamese subsets bundled locally, each under the [SIL Open Font License 1.1](https://openfontlicense.org), licence text alongside:
 
-* **Titillium Web** by Accademia di Belle Arti di Urbino
+* **Chakra Petch** by The Chakra Petch Project Authors
+* **Geist** and **Geist Mono** by Vercel, in collaboration with basement.studio
 * **Orbitron** by The Orbitron Project Authors (The League of Moveable Type); Reserved Font Name "Orbitron"
-* **JetBrains Mono** by The JetBrains Mono Project Authors
 
 ### Optional circuits (`public/tracks/<id>/`)
 
