@@ -144,7 +144,13 @@
       "nameTaken": "Bu isim alınmış. İsmin bağlı olduğu hesaba giriş yap, pilot anahtarını Tur zamanları bölümünden içe aktar ya da başka bir isimle yarış",
       "pickName": "Başka bir isim seç",
       "challengeEnded": "O haftalık mücadele sona erdi",
-      "challengeRules": "Bu tur bu haftaki mücadelenin kurallarına göre sürülmedi"
+      "challengeRules": "Bu tur bu haftaki mücadelenin kurallarına göre sürülmedi",
+      "tooFewSamples": "Kayıtta çok az örnek var",
+      "lapNotClosed": "Tur başladığı yerde bitmiyor",
+      "standingStartRun": "Noktadan noktaya zamanlı tırmanış durarak kalkışla başlamalı",
+      "speedsVsDistance": "Kaydedilen hızlar katedilen mesafeyle uyuşmuyor",
+      "distanceVsLength": "Katedilen mesafe tur uzunluğuyla uyuşmuyor",
+      "impliedSpeed": "Konumlar 420 km/h üzerinde bir hız gösteriyor"
     }
   },
   "badges": {

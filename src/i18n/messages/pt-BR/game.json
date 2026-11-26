@@ -144,7 +144,13 @@
       "nameTaken": "Este nome já está em uso. Entre na conta que o possui, importe sua chave do piloto em Tempos de volta ou corra com outro nome",
       "pickName": "Escolha outro nome",
       "challengeEnded": "Esse desafio semanal terminou",
-      "challengeRules": "Esta volta não foi feita com as regras do desafio desta semana"
+      "challengeRules": "Esta volta não foi feita com as regras do desafio desta semana",
+      "tooFewSamples": "A gravação tem amostras de menos",
+      "lapNotClosed": "A volta não termina onde começou",
+      "standingStartRun": "Uma subida cronometrada ponto a ponto deve começar com largada parada",
+      "speedsVsDistance": "As velocidades gravadas não batem com a distância percorrida",
+      "distanceVsLength": "A distância percorrida não bate com o comprimento da volta",
+      "impliedSpeed": "As posições indicam uma velocidade acima de 420 km/h"
     }
   },
   "badges": {

@@ -478,5 +478,11 @@
   "board.errors.nameTaken": "The server's answer when the driver name belongs to someone else. \"Lap times\" is the screen where the driver key is exported and imported: use that screen's title. The driver key is the file that proves who owns a name.",
   "board.errors.pickName": "The server's answer when the driver name is not allowed (an offensive word).",
   "board.errors.challengeEnded": "The server's answer when a lap for a weekly challenge arrives after that week's challenge is over.",
-  "board.errors.challengeRules": "The server's answer when a lap sent to the weekly challenge was not driven with the week's car, circuit, tyres or other rules."
+  "board.errors.challengeRules": "The server's answer when a lap sent to the weekly challenge was not driven with the week's car, circuit, tyres or other rules.",
+  "board.errors.tooFewSamples": "On the lap card when a lap can't go on the online lap board: its recording (the car's position, speed and inputs saved many times a second, the samples) has too few points to check.",
+  "board.errors.lapNotClosed": "On the lap card when a lap can't go on the online lap board: the recording's last position is far from its first, so it is not a whole lap of the circuit.",
+  "board.errors.standingStartRun": "On the lap card when a hill climb's timed run can't go on the online lap board: the run must start with the car stopped at the start line. Use the same words as the game's term for a point-to-point timed run and for a standing start.",
+  "board.errors.speedsVsDistance": "On the lap card when a lap can't go on the online lap board: the speeds saved in the recording don't add up to the distance its positions cover.",
+  "board.errors.distanceVsLength": "On the lap card when a lap can't go on the online lap board: the distance the recording covers doesn't match the length of the circuit's lap.",
+  "board.errors.impliedSpeed": "The server's answer when a lap's recording has two positions so far apart for the time between them that the car would have gone faster than 420 km/h. Keep the number and the unit as they are."
 }

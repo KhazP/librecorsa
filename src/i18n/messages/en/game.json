@@ -144,7 +144,13 @@
       "nameTaken": "This name is taken. Sign in to the account that holds it, import your driver key under Lap times, or race under another name",
       "pickName": "Pick another name",
       "challengeEnded": "That weekly challenge has ended",
-      "challengeRules": "This lap was not driven to this week's challenge rules"
+      "challengeRules": "This lap was not driven to this week's challenge rules",
+      "tooFewSamples": "Recording has too few samples",
+      "lapNotClosed": "The lap does not end where it started",
+      "standingStartRun": "A point-to-point run must begin from a standing start",
+      "speedsVsDistance": "Recorded speeds do not match the distance driven",
+      "distanceVsLength": "Distance driven does not match the lap length",
+      "impliedSpeed": "Positions imply a speed above 420 km/h"
     }
   },
   "badges": {

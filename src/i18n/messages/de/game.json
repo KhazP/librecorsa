@@ -144,7 +144,13 @@
       "nameTaken": "Dieser Name ist vergeben. Melde dich bei dem Konto an, zu dem er gehört, importiere deinen Fahrerschlüssel unter Rundenzeiten oder fahre unter einem anderen Namen",
       "pickName": "Wähle einen anderen Namen",
       "challengeEnded": "Diese Wochenchallenge ist vorbei",
-      "challengeRules": "Diese Runde wurde nicht nach den Regeln der Wochenchallenge gefahren"
+      "challengeRules": "Diese Runde wurde nicht nach den Regeln der Wochenchallenge gefahren",
+      "tooFewSamples": "Die Aufzeichnung hat zu wenige Messpunkte",
+      "lapNotClosed": "Die Runde endet nicht dort, wo sie begonnen hat",
+      "standingStartRun": "Ein Punkt-zu-Punkt-Zeitlauf muss mit einem stehenden Start beginnen",
+      "speedsVsDistance": "Die aufgezeichneten Geschwindigkeiten passen nicht zur gefahrenen Strecke",
+      "distanceVsLength": "Die gefahrene Strecke passt nicht zur Rundenlänge",
+      "impliedSpeed": "Die Positionen ergeben eine Geschwindigkeit über 420 km/h"
     }
   },
   "badges": {

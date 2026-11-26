@@ -144,7 +144,13 @@
       "nameTaken": "Tên này đã có người dùng. Hãy đăng nhập vào tài khoản đang giữ tên, nhập khóa tay đua của bạn trong Thành tích vòng, hoặc đua với tên khác",
       "pickName": "Hãy chọn tên khác",
       "challengeEnded": "Thử thách tuần đó đã kết thúc",
-      "challengeRules": "Vòng này không được chạy theo luật thử thách của tuần này"
+      "challengeRules": "Vòng này không được chạy theo luật thử thách của tuần này",
+      "tooFewSamples": "Bản ghi có quá ít mẫu",
+      "lapNotClosed": "Vòng chạy không kết thúc tại điểm bắt đầu",
+      "standingStartRun": "Lượt tính giờ điểm-đến-điểm phải bắt đầu bằng xuất phát đứng",
+      "speedsVsDistance": "Tốc độ đã ghi không khớp với quãng đường đã chạy",
+      "distanceVsLength": "Quãng đường đã chạy không khớp với chiều dài vòng",
+      "impliedSpeed": "Các vị trí đã ghi cho thấy tốc độ trên 420 km/h"
     }
   },
   "badges": {
