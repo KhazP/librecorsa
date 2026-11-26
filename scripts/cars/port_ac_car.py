@@ -2614,7 +2614,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             vis = part_variants.get(p[8], ('base',)) if p[8] is not None else None
             seen[name] = None if vis is None or seen.get(name, ()) is None else {*seen.get(name, ()), *vis}
         everyone = {'base', *preset.get('skin_variants', {}).values()}
-        preset['variant_files'] = {v: sorted({f for n, (f, _) in skin_files.items() if seen.get(n, ()) is None or v in seen[n]})
+        # (a file whose material no part holds, none hides)
+        preset['variant_files'] = {v: sorted({f for n, (f, _) in skin_files.items() if seen.get(n) is None or v in seen[n]})
                                    for v in everyone}
     # The cameras read the body as the first livery wears it
     body_parts = [p for p in body_parts if p[8] is None or 'base' in part_variants.get(p[8], ('base',))]
