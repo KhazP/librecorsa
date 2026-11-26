@@ -48,9 +48,10 @@ import { BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, boardKeyOf, loadBoardBest
 import { BOARD_SENTENCES, boardWords } from '../../src/lib/net/board-words';
 import { bindText } from '../../src/lib/text';
 import { challengePlaceLabel, challengeTarget } from '../../src/lib/net/challenge-target';
-import { boardDeps, driverNameKey, listLaps, OLDER_PHYSICS, renameDriver, submitLap, type BoardDeps } from '../../cloudflare/api/board';
+import { boardDeps, driverNameKey, listLaps, lookupDriver, OLDER_PHYSICS, renameDriver, sha256Hex, submitLap, type BoardDeps } from '../../cloudflare/api/board';
+import { applyImportedDriverIdentity, importDriverKeyFile, loadDriverKey, resolveImportedDriverName } from '../../src/lib/net/driver-key';
 import { nameProblem } from '../../src/lib/net/name-filter';
-import { randomDriverProfile } from '../../src/lib/settings/player-settings';
+import { DEFAULT_DRIVER_PROFILE, randomDriverProfile } from '../../src/lib/settings/player-settings';
 import type { Env } from '../../cloudflare/api/types';
 import { fakeD1, fakeR2 } from '../lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from '../online/migrate-supabase-board';
@@ -930,6 +931,186 @@ async function main(): Promise<void> {
     const marked = checkLap({ ...rec, mod: true });
     check('mods: and a lap marked mod', !marked.ok && /mod/.test(marked.error), marked.ok ? 'accepted' : marked.error);
     check('mods: a lap on a shipped circuit still passes the server check', checkLap(rec).ok);
+  }
+
+  // Driver key import & POST /api/drivers/lookup (#227) ------------------------------------------------------------
+  {
+    const raceSchema = readFileSync(join(__dirname, '../../cloudflare/migrations/0002_race_results.sql'), 'utf8');
+    const accountsBoardSchema = readFileSync(join(__dirname, '../../cloudflare/migrations/0011_accounts.sql'), 'utf8');
+    let lookupNow = week.startsMs + 2 * 86_400_000;
+    const db = fakeD1(`${schema}\n${raceSchema}\n${accountsBoardSchema}`);
+    const deps: BoardDeps = { db, ghosts: fakeR2(), eventRule: challengeProblem, now: () => lookupNow };
+    const env = { BOARD_DB: db, GHOSTS: deps.ghosts, ONLINE_BOARD: 'on' } as unknown as Env;
+    let ip = 1;
+    const postJson = (path: string, body: unknown) =>
+      new Request(`https://librecorsa.test${path}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': `10.12.0.${ip++}` },
+      });
+    type LookupBody = { ok: boolean; name?: string | null; code?: string | null; nameKey?: string | null; error?: string };
+    const lookup = async (body: unknown) => {
+      const a = await lookupDriver(deps, postJson('/api/drivers/lookup', body));
+      return { status: a.status, body: a.body as LookupBody };
+    };
+
+    const empty = await lookup({ driverKey: KEY_A });
+    check(
+      'driver key lookup: unclaimed key returns null identity',
+      empty.status === 200 && empty.body.ok === true && empty.body.name === null && empty.body.code === null && empty.body.nameKey === null,
+    );
+
+    // Upload a lap as BlazinG with custom code BLZ
+    const blazingLap: LapRecording = { ...variant(1.01, 'BlazinG'), driverCode: 'BLZ' };
+    const posted = await submitLap(deps, postJson('/api/laps', { rec: blazingLap, driverKey: KEY_A }));
+    check('driver key lookup: test lap uploaded under BlazinG', posted.status === 200);
+
+    const foundViaApi = await handleApi(postJson('/api/drivers/lookup', { driverKey: KEY_A }), env, new URL('https://librecorsa.test/api/drivers/lookup'));
+    const foundText = await foundViaApi.text();
+    const foundBody = JSON.parse(foundText) as LookupBody;
+    check(
+      'driver key lookup: POST /api/drivers/lookup recovers exact cased name & code with no-store and no private fields',
+      foundViaApi.status === 200 &&
+        foundViaApi.headers.get('Cache-Control') === 'no-store' &&
+        foundBody.ok === true &&
+        foundBody.name === 'BlazinG' &&
+        foundBody.code === 'BLZ' &&
+        foundBody.nameKey === 'blazing' &&
+        !foundText.includes('key_hash') &&
+        !foundText.includes(KEY_A) &&
+        !foundText.includes('claimed_at') &&
+        !foundText.includes('last_seen'),
+      foundText,
+    );
+
+    // If the key also later claimed a generated name (e.g. uploaded before the fix), a file hinting BlazinG still resolves BlazinG
+    lookupNow += 60_000;
+    await submitLap(deps, postJson('/api/laps', { rec: { ...variant(1.02, 'Wild Orca 62'), driverCode: 'ORC' }, driverKey: KEY_A }));
+    const hinted = await lookup({ driverKey: KEY_A, name: 'BlazinG' });
+    const unhinted = await lookup({ driverKey: KEY_A });
+    check(
+      'driver key lookup: hint prefers still-owned name from key file; without hint picks most recently seen',
+      hinted.body.name === 'BlazinG' && hinted.body.code === 'BLZ' && unhinted.body.name === 'Wild Orca 62' && unhinted.body.code === 'ORC',
+      `hinted=${hinted.body.name}/${hinted.body.code} unhinted=${unhinted.body.name}/${unhinted.body.code}`,
+    );
+
+    // After renaming BlazinG -> BlazePro (with an older key file still saying BlazinG), lookup resolves the new name
+    lookupNow += 60_000;
+    await renameDriver(deps, postJson('/api/drivers/rename', { from: 'BlazinG', to: 'BlazePro', code: 'BZP', driverKey: KEY_A }));
+    const afterRename = await lookup({ driverKey: KEY_A, name: 'BlazinG' });
+    check(
+      'driver key lookup: stale hint name after rename falls back to the active claimed name',
+      afterRename.body.name === 'BlazePro' && afterRename.body.code === 'BZP' && afterRename.body.nameKey === 'blazepro',
+      JSON.stringify(afterRename.body),
+    );
+
+    // Driver with only race_cars (no laps) still resolves display name & code
+    const keyRace = 'r'.repeat(43);
+    const raceHash = await sha256Hex(keyRace);
+    await db.prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES ('racer only', ?, ?, ?)").bind(raceHash, lookupNow, lookupNow).run();
+    await db.prepare("INSERT INTO race_cars (race_id, position, name_key, name, code, laps, dnf, grid) VALUES ('r-lookup', 1, 'racer only', 'Racer Only', 'RCR', 5, 0, 1)").run();
+    const fromRace = await lookup({ driverKey: keyRace });
+    check(
+      'driver key lookup: falls back to race_cars when driver has no laps',
+      fromRace.body.name === 'Racer Only' && fromRace.body.code === 'RCR' && fromRace.body.nameKey === 'racer only',
+    );
+
+    // Claim with neither laps nor race_cars returns nameKey only so client can preserve file casing
+    const keyClaimOnly = 'c'.repeat(43);
+    await renameDriver(deps, postJson('/api/drivers/rename', { from: '', to: 'Fresh Claim', driverKey: keyClaimOnly }));
+    const claimOnly = await lookup({ driverKey: keyClaimOnly });
+    check(
+      'driver key lookup: claim without laps or races returns name=null and canonical nameKey',
+      claimOnly.body.ok === true && claimOnly.body.name === null && claimOnly.body.code === null && claimOnly.body.nameKey === 'fresh claim',
+    );
+
+    // Account-linked second key resolves the account's name and never lapses
+    const keyAcct1 = '1'.repeat(43);
+    const keyAcct2 = '2'.repeat(43);
+    const h1 = await sha256Hex(keyAcct1);
+    const h2 = await sha256Hex(keyAcct2);
+    await db.prepare("INSERT INTO account_keys (key_hash, account_id, label, added_at) VALUES (?, 'acct-1', 'Old PC', ?), (?, 'acct-1', 'New PC', ?)").bind(h1, lookupNow, h2, lookupNow).run();
+    await submitLap(deps, postJson('/api/laps', { rec: { ...variant(1.01, 'Acct Driver'), driverCode: 'ACT' }, driverKey: keyAcct1 }));
+    // Jump past 6 months: unlinked claims lapse, account claims survive
+    lookupNow += 200 * 86_400_000;
+    const lapsed = await lookup({ driverKey: keyClaimOnly });
+    const survived = await lookup({ driverKey: keyAcct2 });
+    check(
+      'driver key lookup: lapsed unlinked claim returns null while account-linked key still resolves',
+      lapsed.body.nameKey === null && survived.body.name === 'Acct Driver' && survived.body.code === 'ACT',
+      `lapsed=${JSON.stringify(lapsed.body)} survived=${JSON.stringify(survived.body)}`,
+    );
+
+    // Pre-0002 / pre-0011 minimal schema (no account_id, no race_cars) works cleanly
+    const minDb = fakeD1(schema);
+    const minDeps: BoardDeps = { db: minDb, ghosts: fakeR2(), eventRule: challengeProblem, now: () => week.startsMs + 2 * 86_400_000 };
+    await minDb.prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES ('old db', ?, ?, ?)").bind(await sha256Hex(KEY_B), minDeps.now(), minDeps.now()).run();
+    const minAns = await lookupDriver(minDeps, postJson('/api/drivers/lookup', { driverKey: KEY_B }));
+    const minBody = minAns.body as LookupBody;
+    check('driver key lookup: works on pre-0002/pre-0011 schema without race_cars or account_id', minAns.status === 200 && minBody.nameKey === 'old db' && minBody.name === null);
+
+    // Bad inputs and board-off gate
+    const badKey = await lookup({ driverKey: 'short' });
+    const offRes = await handleApi(postJson('/api/drivers/lookup', { driverKey: KEY_A }), { ...env, ONLINE_BOARD: 'off' }, new URL('https://librecorsa.test/api/drivers/lookup'));
+    check('driver key lookup: rejects malformed key (400) and respects ONLINE_BOARD=off (404)', badKey.status === 400 && offRes.status === 404);
+
+    // Client key import + profile restoration (#227)
+    const store = new Map<string, string>();
+    const prevStorage = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+    };
+    try {
+      const makeFile = (obj: unknown) =>
+        new File([JSON.stringify(obj)], 'librecorsa-driver-key.json', { type: 'application/json' });
+      const imp = await importDriverKeyFile(makeFile({ type: 'librecorsa-driver-key', version: 1, name: 'BlazinG', key: KEY_A }));
+      check(
+        'driver key client: imports v1 file, saves key to localStorage, and returns saved name',
+        imp.ok === true && imp.name === 'BlazinG' && imp.code === '' && loadDriverKey() === KEY_A,
+      );
+      const impWithCode = await importDriverKeyFile(makeFile({ type: 'librecorsa-driver-key', version: 1, name: 'BlazinG', code: 'BLZ', key: KEY_B }));
+      check(
+        'driver key client: imports optional code field when present',
+        impWithCode.ok === true && impWithCode.name === 'BlazinG' && impWithCode.code === 'BLZ' && loadDriverKey() === KEY_B,
+      );
+
+      const generated = { ...DEFAULT_DRIVER_PROFILE, name: 'Wild Orca 62', code: 'ORC', color: '#00D2BE', generated: true };
+      const restoredFromFile = applyImportedDriverIdentity(generated, { name: 'BlazinG', code: '' });
+      check(
+        'driver key client: replaces generated Wild Orca profile with imported BlazinG name, derived code, and generated=false',
+        restoredFromFile.name === 'BlazinG' &&
+          restoredFromFile.code === 'BLA' &&
+          restoredFromFile.generated === false &&
+          restoredFromFile.color === '#00D2BE',
+      );
+      const refinedFromServer = applyImportedDriverIdentity(generated, { name: 'BlazinG', code: 'BLZ', nameKey: 'blazing' }, { name: 'BlazinG', code: '' });
+      check(
+        'driver key client: server lookup upgrades custom three-letter code',
+        refinedFromServer.name === 'BlazinG' && refinedFromServer.code === 'BLZ' && refinedFromServer.generated === false,
+      );
+      const staleFileRenamed = applyImportedDriverIdentity(generated, { name: 'BlazePro', code: null, nameKey: 'blazepro' }, { name: 'OldName', code: 'OLD' });
+      check(
+        'driver key client: stale file code is not carried over when server resolves a renamed driver',
+        staleFileRenamed.name === 'BlazePro' && staleFileRenamed.code === 'BLA' && staleFileRenamed.generated === false,
+      );
+      const preserveCasing = applyImportedDriverIdentity(generated, { name: null, code: null, nameKey: 'blazing' }, { name: 'BlazinG', code: 'BZG' });
+      check(
+        'driver key client: preserves key file casing and code when server has claim-only nameKey',
+        preserveCasing.name === 'BlazinG' && preserveCasing.code === 'BZG' && resolveImportedDriverName({ name: null, nameKey: 'blazing' }, { name: 'BlazinG' }) === 'BlazinG',
+      );
+      const namelessFile = applyImportedDriverIdentity(generated, { name: '', code: '' });
+      check('driver key client: empty file name leaves generated profile untouched until server lookup', namelessFile === generated);
+      const sameCustom = { ...DEFAULT_DRIVER_PROFILE, name: 'BlazinG', code: 'BZG', generated: false };
+      const reimportedSame = applyImportedDriverIdentity(sameCustom, { name: 'BlazinG', code: '' });
+      check('driver key client: re-importing key for same driver preserves existing custom code', reimportedSame === sameCustom);
+      const blockedName = applyImportedDriverIdentity(generated, { name: 'Admin', code: '' });
+      check('driver key client: tampered key file with forbidden name is not applied', blockedName === generated && resolveImportedDriverName({ name: 'Admin' }) === null);
+    } finally {
+      if (prevStorage === undefined) delete (globalThis as { localStorage?: unknown }).localStorage;
+      else (globalThis as { localStorage?: unknown }).localStorage = prevStorage;
+    }
   }
 
   {
