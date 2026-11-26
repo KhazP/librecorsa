@@ -42,7 +42,7 @@ import { useInputMode } from "@/components/menu/input-mode";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "@/components/menu/menu-shell";
 import { Button, Card, Select, SettingRow, Tabs, Toggle } from "@/components/ui";
-import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
+import { CAMERA_MODES, DEFAULT_DRIVING_CAMERA, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "@/components/settings/HudLayoutPicker";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { usePhoneLayout } from "./styles/PhoneHud";
@@ -583,7 +583,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
     () => DRIVING_CAMERA_MODES.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
     []
   );
-  const savedCamera: CameraMode = p.cameraMode === "free" ? (p.settings?.camera ?? "chase") : p.cameraMode;
+  const savedCamera: CameraMode = p.cameraMode === "free" ? (p.settings?.camera ?? DEFAULT_DRIVING_CAMERA) : p.cameraMode;
   const tx = useTranslations("hud.pauseMenu.session");
   const autopilot = (
     <SettingRow label={tx("autopilot")} hint={tx("key", { key: p.keyNames?.autopilot ?? "P" })}>

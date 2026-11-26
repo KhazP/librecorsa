@@ -2,7 +2,7 @@ import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
 import { mobileClassGpu } from "@/lib/vr/headset";
-import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
+import { CAMERA_MODES, DEFAULT_DRIVING_CAMERA, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
 import { RENDER_SCALE_FLOOR, sharpLowStepAllowed } from "@/lib/render/adaptive-quality";
 import {
   AUTO_QUALITY_MIN_SCALES,
@@ -796,9 +796,9 @@ export const defaultView = choice("select", {
   get label() { return rt("camera.label"); },
   hint: (env) => rt("camera.hint", { key: key(env, "camera") }),
   options: () => DRIVING_CAMERA_MODES.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
-  read: (env) => env.settings.camera ?? "chase",
+  read: (env) => env.settings.camera ?? DEFAULT_DRIVING_CAMERA,
   write: (env, id) => env.update((s) => ({ ...s, camera: id as PlayerSettings["camera"] })),
-  initial: () => DEFAULT_PLAYER_SETTINGS.camera ?? "chase",
+  initial: () => DEFAULT_PLAYER_SETTINGS.camera ?? DEFAULT_DRIVING_CAMERA,
 });
 
 export const fieldOfView = slider({

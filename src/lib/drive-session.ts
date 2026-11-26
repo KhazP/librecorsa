@@ -117,7 +117,7 @@ import {
   wetnessFromWater,
 } from "@/lib/sim/wet-tyres";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
-import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG } from "@/lib/render/camera-modes";
+import { CAMERA_MODES, DEFAULT_DRIVING_CAMERA, FALLBACK_COCKPIT_FOV_DEG } from "@/lib/render/camera-modes";
 import type { FreeCameraInput } from "@/lib/render/free-camera";
 import { createGroundHit } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OnboardViews } from "@/lib/render/onboard-views";
@@ -4573,7 +4573,7 @@ export class DriveSession {
       const inVr = renderer.xr.isPresenting;
       // In a headset always the driver's seat: a camera that moves the head for the player makes them sick
       const mode: CameraMode =
-        inVr ? "cockpit" : inMenu || podium.playing || preRaceShow.playing ? "chase" : (cameraOverride ?? settings.camera ?? "chase");
+        inVr ? "cockpit" : inMenu || podium.playing || preRaceShow.playing ? "chase" : (cameraOverride ?? settings.camera ?? DEFAULT_DRIVING_CAMERA);
       const view = CAMERA_MODES[mode];
       const lc26Cams = carRig.getCameraAnchors();
       const carFovDeg = lc26Cams ? lc26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;

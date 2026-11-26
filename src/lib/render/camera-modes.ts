@@ -215,6 +215,9 @@ export const CAMERA_CYCLE: readonly CameraMode[] = [
   "chase_far",
 ];
 
+/** Default driving view before the player chooses one (T-Cam / TV Pod) */
+export const DEFAULT_DRIVING_CAMERA: CameraMode = "tv_pod";
+
 /** Views the setup screen offers to start in */
 export const STARTING_CAMERAS: readonly CameraMode[] = ["cockpit", "tv_pod", "chase"];
 
