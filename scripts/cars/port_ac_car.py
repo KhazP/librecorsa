@@ -831,7 +831,8 @@ class TexturePool:
 # Materials from AC's shader values (`auto` presets). AC lights a material as `diffuse map * (ksAmbient * ambient +
 # ksDiffuse * N.L)` with a Blinn-Phong highlight of exponent ksSpecularEXP and a reflection of strength fresnelC rising
 # to fresnelMaxLevel; modders darken a grey map with a low ksDiffuse instead of painting it black. So: the base colour is
-# the diffuse (times its multimap detail, as `bake_multimap`), dimmed by ksDiffuse against AC's usual ~0.4; roughness
+# the diffuse (times its multimap detail, as `bake_multimap`), dimmed by ksDiffuse against AC's usual ~0.4 (on the parts
+# finished from their AC values, by that ratio's 2.2th power: AC lights in gamma space); roughness
 # follows the highlight's exponent; a material is metal when it reflects strongly head on, or reflects strongly at
 # grazing angles and is named or textured as metal. The GLB name is its class plus a number, because the game's
 # material clean-up (src/lib/render/ported-car-materials.ts) classes materials by name and the kn5 names mislead it
@@ -940,6 +941,8 @@ def auto_spec(m, stats, preset, by_name=None):
         spec['tex'] = tex
     spec['color'] = tuple(int(round(float(c))) for c in np.clip(colour if colour is not None else (255, 255, 255), 0, 255))
     spec['scale'] = round(scale, 2)
+    # (the plain ratio, for a material the porter finishes from its AC values: `port` dims those by its 2.2th power)
+    spec['dim'] = round(scale, 3)
     nrm = maps.get('txNormal')
     # A damage shader's normal map is its dents (AC fades it in with the damage): the undamaged car has none
     if nrm and 'damage' in shader.lower() and 'damage' in nrm.lower():
@@ -1179,8 +1182,9 @@ def apply_ac_finish(gm, m, cls, spec, pool, writer):
     pbr['metallicFactor'], pbr['roughnessFactor'] = fin['metal'], fin['rough']
     p = m['props']
     if cls == 'paint':
-        # The paint dimmed by its own ksDiffuse / ksAmbient, as `auto_spec` dims every other material
-        k = float(np.clip(max(p.get('ksDiffuse', 0.4), p.get('ksAmbient', 0.4)) / 0.4, 0.05, 1.0))
+        # The paint dimmed by its own ksDiffuse / ksAmbient: by the plain ratio, which matched the McLaren's and the
+        # Ferrari's paint to the mod's renders (`auto_spec` dims every other material by its 2.2th power)
+        k = diffuse_dimming(p)
         pbr['baseColorFactor'] = [round(c * k, 4) for c in pbr['baseColorFactor'][:3]] + pbr['baseColorFactor'][3:]
     gm.setdefault('extensions', {})['KHR_materials_specular'] = {
         'specularFactor': fin['specular'], 'specularColorFactor': [fin['specular_color']] * 3}
@@ -2463,6 +2467,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         spec = spec_of(kn5_name)
         cls = specs[kn5_name][1]
         mode = spec.get('mode', 'OPAQUE')
+        # Whether its finish comes from its AC values (`apply_ac_finish`)
+        acf = auto and bool(preset.get('generated') or preset.get('ac_finish')) and not spec.get('palette')
         pbr = {'metallicFactor': float(spec.get('metal', 0.0)), 'roughnessFactor': float(spec.get('rough', 0.5))}
         colour = [1.0, 1.0, 1.0]
         alpha = float(spec.get('alpha', 1.0))
@@ -2472,7 +2478,15 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             tex = None
         elif spec.get('color') is not None:
             colour = srgb_to_linear(spec['color']).tolist()
-        colour = [c * float(spec.get('scale', 1.0)) for c in colour]
+        scale = float(spec.get('scale', 1.0))
+        if (acf and cls in FINISH_CLASSES and cls != 'paint' and spec.get('dim') is not None
+                and not skinnable(src['maps'].get('txDetail') if spec.get('detail') else spec.get('tex'))):
+            # A part finished from its AC values: AC lights in gamma space, so its dimming of the gamma-space colour is
+            # the ratio's 2.2th power on the linear one (a wheel at ksDiffuse 0.2 is a dark grey, not a light one). The
+            # rest keep the plain ratio they were matched with: a livery's parts (as its paint), tyres, glass, lights,
+            # screens and the driver
+            scale = round(spec['dim'] ** 2.2, 2)
+        colour = [c * scale for c in colour]
         if tex:
             if tex.startswith('crop:'):
                 # A small region of a large atlas, cut out with its alpha (the rear window's defrost lines)
@@ -2501,7 +2515,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             gm['alphaMode'] = mode
         if spec.get('double'):
             gm['doubleSided'] = True
-        if auto and (preset.get('generated') or preset.get('ac_finish')) and not spec.get('palette'):
+        if acf:
             # The finish from the AC material's own values (`apply_ac_finish`)
             apply_ac_finish(gm, src, cls, spec, pool, writer)
         if spec.get('palette'):
