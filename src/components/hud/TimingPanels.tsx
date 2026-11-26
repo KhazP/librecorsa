@@ -150,7 +150,8 @@ export const TowerRows: React.FC<{
             <span className={`text-center ${e.isPlayer ? "" : "text-lc-slate"}`}>{i + 1}</span>
             <span className="h-4 rounded-full" style={{ backgroundColor: e.isPlayer ? "var(--color-lc-void)" : e.teamColorHex }} />
             <span className="flex min-w-0 items-center gap-1.5 tracking-[0.1em]">
-              <span className="truncate">{e.driverCode}</span>
+              {/* The code is never cut short: a badge beside it gives way first */}
+              <span className="shrink-0">{e.driverCode}</span>
               {e.compound ? <CompoundGlyph compound={e.compound} size={14} /> : null}
               {purple ? (
                 <Badge tone="best" variant="solid" size="hud" title={L.fastestLap} aria-label={L.fastestLap}>
@@ -160,7 +161,7 @@ export const TowerRows: React.FC<{
               {e.dq ? (
                 <PenaltyBadge penalty={{ kind: "disqualified" }} size="hud" variant="solid" />
               ) : e.penaltyS ? (
-                <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" />
+                <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" bare />
               ) : null}
               {e.finished ? <FlagIcon flag="chequered" size={14} label={L.finished} /> : null}
               {!e.retired && e.damage !== undefined && e.damage >= 0.15 ? (
