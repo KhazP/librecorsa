@@ -131,10 +131,10 @@
       "protected": "Protette"
     },
     "collisionHint": {
-      "on": "Contatto completo",
+      "on": "Contatto pieno (ghost allo spawn, ai box, se AFK o con lag forte)",
       "ghostLap1": "Nessun contatto al primo giro",
       "off": "Le auto si attraversano",
-      "protected": "Ghost al giro 1, poi un’auto pericolosa non può toccare le altre"
+      "protected": "Contatto attivo dopo la partenza; pericoli, corsia dei box e speronamenti passano attraverso"
     },
     "anyCar": "Qualsiasi auto",
     "startType": {
@@ -718,11 +718,11 @@
     "foldTuner": "Comprimi il tuner"
   },
   "f12026ChannelsPanel": {
-    "region": "Canali ingegneristici",
+    "region": "Telemetria sospensioni e aero",
     "title": "Sospensioni e aero",
     "suspensionGrip": "Sospensioni e aderenza",
     "wheelLegend": "Slittamento · Tampone",
-    "grip": "Aderenza",
+    "grip": "Ader.",
     "aeroDiff": "Aero e differenziale",
     "activeAero": "Aerodinamica attiva",
     "driverAids": "Aiuti alla guida",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}: slittamento, corsa residua fino al tampone, aderenza usata",
     "slipRatio": "%SR",
     "aeroHeightTitle": "Altezza da terra aero",
-    "aeroHeight": "Alt. aero",
+    "aeroHeight": "Altezza",
     "aeroBalanceTitle": "Bilanciamento aero (quota di deportanza anteriore)",
     "aeroBalance": "Bil. aero",
     "lsdTitle": "Coppia di bloccaggio del differenziale",
@@ -1240,7 +1240,7 @@
       "fwd": "Trazione anteriore",
       "awd": "Trazione integrale"
     },
-    "revLimit": "Limitatore a {value} giri/min",
+    "revLimit": "Limitatore a {value} rpm",
     "go": "Vai",
     "sector": "S{n}"
   },

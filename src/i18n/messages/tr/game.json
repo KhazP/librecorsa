@@ -903,7 +903,7 @@
     "terminalDamage": "Ağır hasar",
     "puncture": "Patlak",
     "punctureCorner": "{corner} patlak",
-    "steeringDamage": "Dir. hasarı",
+    "steeringDamage": "Direksiyon hasarı",
     "suspensionDamage": "Süsp. hasarı",
     "aeroDamage": "Aero hasarı",
     "damage": "Hasar"

@@ -501,8 +501,8 @@
     "tyres": {
       "life": "Vita {pct}%",
       "window": "Finestra {low}–{high}",
-      "hot": "Calde",
-      "cold": "Fredde",
+      "hot": "Calda",
+      "cold": "Fredda",
       "flat": "Forata",
       "corner": "{corner}: battistrada {temp}, pressione {pressure}, freno {brake}",
       "fl": "Anteriore sinistra",
@@ -646,7 +646,7 @@
       "mguk": "MGU-K",
       "deploy": "Erogazione",
       "harvest": "Recupero",
-      "idle": "Fermo",
+      "idle": "Inattivo",
       "kg": "kg",
       "laps": "giri",
       "kw": "kW"

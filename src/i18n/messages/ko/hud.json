@@ -131,10 +131,10 @@
       "protected": "보호"
     },
     "collisionHint": {
-      "on": "충돌 적용",
+      "on": "완전 접촉 (스폰, 피트 레인, 자리 비움 또는 심한 지연 시 고스트 처리)",
       "ghostLap1": "첫 랩 충돌 없음",
       "off": "차량끼리 통과",
-      "protected": "1랩 고스트, 이후 위험 주행 차량은 충돌 차단"
+      "protected": "출발 직후 충돌 적용; 위험 차량, 피트 레인 및 고의 충돌은 통과"
     },
     "anyCar": "모든 차량",
     "startType": {
@@ -210,7 +210,7 @@
       "notReady": "준비 안 됨",
       "hostOn": "호스트가 {circuit}에 있습니다",
       "modMissing": "호스트가 모드 {mod}의 서킷에서 레이스 중입니다. 이 레이스에 참가하려면 모드 메뉴에서 해당 모드를 설치하십시오.",
-      "modDifferent": "호스트가 사용 중인 모드 {mod}와 보유한 버전이 다릅니다. 이 레이스에 참가하려면 동일한 버전을 설치하십시오.",
+      "modDifferent": "호스트가 사용 중인 모드 {mod}의 버전과 보유한 버전이 다릅니다. 이 레이스에 참가하려면 동일한 버전을 설치하십시오.",
       "switchCircuit": "서킷 전환",
       "wrongCar": "선택한 차량이 이 방의 허용 클래스({class})가 아닙니다.",
       "wrongCarSwitch": "선택한 차량이 이 방의 허용 클래스({class})가 아닙니다. 차량 변경:",
@@ -718,7 +718,7 @@
     "foldTuner": "튜너 접기"
   },
   "f12026ChannelsPanel": {
-    "region": "엔지니어링 채널",
+    "region": "서스펜션 및 에어로 텔레메트리",
     "title": "서스펜션 및 에어로",
     "suspensionGrip": "서스펜션 및 그립",
     "wheelLegend": "슬립 · 범프스톱",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}: 슬립률, 범프 러버까지 남은 스트로크, 그립 사용량",
     "slipRatio": "%SR",
     "aeroHeightTitle": "에어로 차고",
-    "aeroHeight": "에어로 차고",
+    "aeroHeight": "차고",
     "aeroBalanceTitle": "에어로 밸런스(전륜 다운포스 비율)",
     "aeroBalance": "에어로 밸런스",
     "lsdTitle": "디퍼렌셜 잠금 토크",
@@ -1192,7 +1192,7 @@
     "approach": "피트 진입 · 제한 {limit} km/h",
     "limiterKey": "리미터: {key}",
     "stopsPill": "피트 {made}/{required}",
-    "stopRequired": "{remaining, plural, other {박스 · 의무 피트 스톱 #회}}"
+    "stopRequired": "{remaining, plural, other {박스 · 의무 피트 스톱 #회 남음}}"
   },
   "preRace": {
     "label": "프리 레이스 쇼",

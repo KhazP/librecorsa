@@ -131,10 +131,10 @@
       "protected": "Geschützt"
     },
     "collisionHint": {
-      "on": "Voller Kontakt",
+      "on": "Voller Kontakt (Ghost beim Spawn, in der Boxengasse, bei AFK oder starkem Lag)",
       "ghostLap1": "Kein Kontakt in der Eröffnungsrunde",
       "off": "Autos fahren durcheinander hindurch",
-      "protected": "Ghost in Runde 1, danach kann ein gefährliches Auto die anderen nicht berühren"
+      "protected": "Kontakt nach dem Start an; Gefahren, Boxengasse und Rammstöße gehen durch"
     },
     "anyCar": "Jedes Auto",
     "startType": {
@@ -718,7 +718,7 @@
     "foldTuner": "Tuner einklappen"
   },
   "f12026ChannelsPanel": {
-    "region": "Engineering-Kanäle",
+    "region": "Fahrwerks- und Aero-Telemetrie",
     "title": "Fahrwerk & Aero",
     "suspensionGrip": "Fahrwerk & Grip",
     "wheelLegend": "Schlupf · Anschlag",
@@ -735,7 +735,7 @@
     "wheelTitle": "{wheel}: Schlupf, Restfederweg bis zum Anschlagpuffer, genutzter Grip",
     "slipRatio": "% Schl.",
     "aeroHeightTitle": "Aero-Fahrhöhe",
-    "aeroHeight": "Aero-Höhe",
+    "aeroHeight": "Fahrhöhe",
     "aeroBalanceTitle": "Aero-Balance (Anteil des Abtriebs vorne)",
     "aeroBalance": "Aero-Bal.",
     "lsdTitle": "Sperrmoment des Differenzials",
@@ -1240,7 +1240,7 @@
       "fwd": "Frontantrieb",
       "awd": "Allradantrieb"
     },
-    "revLimit": "Begrenzer bei {value} U/min",
+    "revLimit": "Begrenzer bei {value} rpm",
     "go": "Los",
     "sector": "S{n}"
   },

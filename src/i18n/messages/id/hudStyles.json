@@ -536,7 +536,7 @@
       "title": "Urutan balapan",
       "interval": "Interval",
       "toLeader": "Ke pemimpin",
-      "lead": "Pimpin",
+      "lead": "Pemimpin",
       "out": "Out"
     }
   },
@@ -605,9 +605,9 @@
       "clutch": "Kopling",
       "brake": "Rem",
       "throttle": "Gas",
-      "clutchShort": "C",
-      "brakeShort": "B",
-      "throttleShort": "T"
+      "clutchShort": "K",
+      "brakeShort": "R",
+      "throttleShort": "G"
     },
     "steering": "Kemudi",
     "tab": {
@@ -646,7 +646,7 @@
       "mguk": "MGU-K",
       "deploy": "Salurkan",
       "harvest": "Pulihkan",
-      "idle": "Diam",
+      "idle": "Siaga",
       "kg": "kg",
       "laps": "lap",
       "kw": "kW"
@@ -660,9 +660,9 @@
       "hot": "panas",
       "cold": "dingin",
       "puncture": "bocor",
-      "outer": "O",
-      "middle": "M",
-      "inner": "I",
+      "outer": "L",
+      "middle": "T",
+      "inner": "D",
       "brake": "Rem"
     },
     "car": {

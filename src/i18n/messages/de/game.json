@@ -331,7 +331,7 @@
     "logitechHidpp": "Ungetestet; startet über WebHID mit HID++ Force Feedback, wie es Linux hid-logitech-hidpp sendet, sobald Logitech G HUB das Lenkrad in den PC-Modus geschaltet hat",
     "logitechBridgeOnly": "Ungetestet; nur Bridge: Kein Mainline-Linux-Treiber steuert das G923 für PlayStation oder das G PRO an, und der Browser kann die Lenkachse des DFP nicht skalieren",
     "thrustmaster": "Ungetestet; die Befehle von Linux hid-tmff2, sobald ein Treiber das Lenkrad aus seinem Startmodus geschaltet hat. Falls nicht oder falls Windows die Befehle ablehnt, übernimmt die Bridge",
-    "thrustmasterPid": "Ungetestet; der Treiber für HID PID, sofern der Browser die HID PID-Reports des Lenkrads sieht (Chrome unter Windows tut das). Ohne sie übernimmt die Bridge",
+    "thrustmasterPid": "Ungetestet; der Treiber für HID PID, sofern der Browser die HID-PID-Reports des Lenkrads sieht (Chrome unter Windows tut das). Ohne sie übernimmt die Bridge",
     "thrustmasterBridgeOnly": "Ungetestet; nur Bridge: hid-tmff2 deckt das T500RS nicht ab",
     "fanatecCslElite": "Ungetestet; ohne HID-PID-Force-Feedback wechselt die Seite zur Bridge",
     "tested": "Getestet",

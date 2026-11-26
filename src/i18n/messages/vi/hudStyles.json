@@ -468,7 +468,7 @@
       "PSH": "Tấn công"
     },
     "ersState": {
-      "overtakeOn": "Đang vượt",
+      "overtakeOn": "Vượt đang bật",
       "overtakeAuto": "Vượt tự động",
       "overtakeReady": "Sẵn sàng vượt",
       "overtakeLocked": "Chưa mở vượt",
@@ -819,7 +819,7 @@
     },
     "overtake": {
       "ready": "Sẵn sàng vượt",
-      "on": "Đang vượt",
+      "on": "Vượt đang bật",
       "locked": "Chưa mở vượt",
       "boost": "Đang tăng lực",
       "lowGrip": "Độ bám thấp"
@@ -884,7 +884,7 @@
     "battery": "ERS {pct}%",
     "boost": "Tăng lực",
     "lowGrip": "Độ bám thấp",
-    "overtakeOn": "Đang vượt",
+    "overtakeOn": "Vượt đang bật",
     "overtakeReady": "Sẵn sàng vượt",
     "overtakeLocked": "Chưa mở vượt",
     "ers": {

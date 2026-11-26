@@ -612,7 +612,7 @@
     "steering": "轉向",
     "tab": {
       "order": "排名",
-      "laps": "圈數",
+      "laps": "單圈",
       "fuel": "燃油",
       "tyres": "輪胎",
       "car": "車輛",
@@ -768,7 +768,7 @@
       "label": "頁面",
       "tyres": "輪胎",
       "relative": "前後車距",
-      "laps": "圈數"
+      "laps": "單圈"
     },
     "window": "溫域 {low}–{high}",
     "corner": {
@@ -858,7 +858,7 @@
     "finished": "完賽",
     "conditions": "賽道邊界與天氣",
     "trackLimits": "賽道邊界",
-    "strikes": "第 {count}／{total} 次違規",
+    "strikes": "違規 {count}／{total} 次",
     "penalty": "+{seconds} s",
     "air": "氣溫",
     "track": "賽道",
@@ -941,7 +941,7 @@
     "track": "賽道",
     "rain": "降雨",
     "limits": "邊界",
-    "limitsSpoken": "賽道邊界：第 {count}／{of} 次",
+    "limitsSpoken": "賽道邊界：{count}／{of} 次",
     "penalty": "+{seconds}s",
     "map": "賽道地圖",
     "timing": "單圈計時",
