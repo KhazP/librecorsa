@@ -778,6 +778,13 @@ class TexturePool:
     def mean_colour(self, name):
         return np.asarray(decode(self.src[name]), np.float64)[..., :3].reshape(-1, 3).mean(0)
 
+    def data_map(self, key, im, alpha=False):
+        """A map of values rather than colours (a finish map), encoded once as a normal map is (no chroma subsampling),
+        or as PNG with `alpha`"""
+        if key in self.cache:
+            return self.cache[key]
+        return self._add(key, im, FINISH_MAP_SIZE, alpha, normal=True)
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Materials from AC's shader values (`auto` presets). AC lights a material as `diffuse map * (ksAmbient * ambient +
@@ -823,6 +830,16 @@ class TexStats:
         return self.cache[name]
 
 
+def multimap_bake_key(m, stats):
+    """The colour-map key of a ksPerPixelMultiMap material `m` whose diffuse carries a pattern: 'bake:' when its detail is
+    drawn once over the diffuse's own UVs (detailUVMultiplier 1, not one flat colour: a livery, its numbers and
+    sponsors), else 'bakemean:' (a fine tiled pattern, carbon weave or paint flake, as its mean colour)"""
+    det = m['maps'].get('txDetail')
+    t = stats(det) if det else None
+    uvm = m['props'].get('detailUVMultiplier', 1.0) or 1.0
+    return ('bake:' if abs(uvm - 1.0) < 1e-3 and t is not None and not t['flat'] else 'bakemean:') + m['name']
+
+
 def auto_spec(m, stats, preset, by_name=None):
     """The spec (as the MATERIALS tables write them) of kn5 material `m`, from its shader and values, plus its class"""
     name, shader, props, maps = m['name'], m['shader'], m['props'], m['maps']
@@ -857,8 +874,7 @@ def auto_spec(m, stats, preset, by_name=None):
                 colour = d['mean']
         else:
             # The detail tiled on the diffuse's own UVs bakes as it is; one tiled finer, as its mean colour
-            uvm = props.get('detailUVMultiplier', 1.0) or 1.0
-            tex = ('bake:' if abs(uvm - 1.0) < 1e-3 and not t['flat'] else 'bakemean:') + name
+            tex = multimap_bake_key(m, stats)
     elif d['flat']:
         colour = d['mean']
         alpha = d['alpha'] / 255.0
@@ -896,15 +912,16 @@ def auto_spec(m, stats, preset, by_name=None):
     paint_of = next((p for p in preset.get('paint', ()) if p != name and diff and
                      (by_name.get(p) or {}).get('maps', {}).get('txDiffuse') == diff), None) if by_name else None
     if paint_of and not glass:
-        # Another part drawn from the paint's own atlas (a banner, a weatherstrip): the paint's texture, so a livery
-        # changes one file for both. The atlas's alpha is the multimap mask, not transparency
+        # Another part drawn from the paint's own atlas (a banner, a weatherstrip, a wishbone): the paint's texture, so a
+        # livery changes one file for both. The atlas's alpha is the multimap mask, not transparency
         paint_det = (by_name[paint_of]['maps'].get('txDetail') if 'MultiMap' in by_name[paint_of]['shader'] else None)
         spec.pop('detail', None)
-        spec.update(tex=('bakemean:' + paint_of) if paint_det else diff, color=(255, 255, 255), mode='OPAQUE', alpha=1.0)
+        spec.update(tex=multimap_bake_key(by_name[paint_of], stats) if paint_det else diff, color=(255, 255, 255),
+                    mode='OPAQUE', alpha=1.0)
     if name in preset.get('paint', ()):
         cls = 'paint'
-        # The livery bakes over its mean detail colour, at the paint's size cap
-        spec['tex'] = 'bakemean:' + name if det else diff
+        # The livery bakes at the paint's size cap: a livery drawn 1:1 as it is, a tiled detail (flake) as its mean colour
+        spec['tex'] = multimap_bake_key(m, stats) if det else diff
         spec.pop('detail', None)
         spec.update(color=(255, 255, 255), scale=1.0, mode='OPAQUE', alpha=1.0)
     elif shader == 'ksTyres' or name in preset.get('tyre_class', ()):
@@ -935,6 +952,220 @@ def auto_spec(m, stats, preset, by_name=None):
     if 'tex' in spec or spec.get('detail'):
         spec['scale'] = round(spec['scale'] * 10) / 10
     return spec, cls
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Finishes from AC's shader values (an automatic preset's materials). AC draws a material as its diffuse lit through
+# ksAmbient / ksDiffuse, a highlight of ksSpecular and ksSpecularEXP, and a reflection of its surroundings rising from
+# fresnelC head on to fresnelMaxLevel at grazing angles; a multimap masks those per pixel with its txMaps (R specular,
+# G gloss, B reflection) and, where its detail is drawn, the detail's alpha, read here as a reflection mask too (it
+# follows what reflects in the mods' renders: the McLaren's chrome bright, a livery's panel gaps and matte stickers
+# dark, a carbon weave's tows; inferred from those, not from the shader's code). glTF gets the same: roughness from the highlight, KHR_materials_specular for the reflection
+# head on (its colour factor over a dielectric's 0.04) and at grazing angles (its factor), and a polished coat's sharp
+# reflections as KHR_materials_clearcoat; a map holds what varies per pixel (R clearcoat, G roughness, B metalness), and
+# a tiled detail's weave stays a repeating roughness map. extras.acFinish marks the material, so the game keeps the
+# finish as made (src/lib/render/ported-car-materials.ts) instead of finishing it by its name.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# The classes whose finish comes from the AC values (glass, lights, screens, tyres and mirrors keep the game's own)
+FINISH_CLASSES = ('paint', 'part', 'carbon', 'decal', 'metal')
+# A coat polished to mirror its surroundings: AC's reflection reaching this far at grazing angles, under a highlight at
+# least this tight
+LACQUER_FRESNEL = 0.3
+LACQUER_EXP = 100.0
+# The detail alpha of a full coat (a multimap livery's paint carries about this; less is a thinner one)
+FULL_COAT_ALPHA = 0.25
+FINISH_MAP_SIZE = 1024
+CLEARCOAT_ROUGHNESS = 0.06
+
+
+def skin_shader_replacements(car_dir, skin):
+    """{kn5 material: {property: value}} a skin's ext_config.ini sets for its materials ([SHADER_REPLACEMENT_...]:
+    MATERIALS = a, b and its PROP_... = name, value lines, which repeat their key); {} without one"""
+    path = os.path.join(car_dir or '', 'skins', skin or '', 'ext_config.ini')
+    if not car_dir or not skin or not os.path.isfile(path):
+        return {}
+    sections, section = [], None
+    for line in open(path, 'rb').read().decode('latin1').splitlines():
+        line = line.split(';', 1)[0].split('//', 1)[0].strip()
+        if line.startswith('[') and line.endswith(']'):
+            section = None
+            if line[1:-1].strip().upper().startswith('SHADER_REPLACEMENT'):
+                section = {'materials': [], 'props': {}}
+                sections.append(section)
+            continue
+        if section is None or '=' not in line:
+            continue
+        k, v = (s.strip() for s in line.split('=', 1))
+        if k.upper() == 'MATERIALS':
+            section['materials'] = [s.strip() for s in v.split(',') if s.strip()]
+        elif k.upper().startswith('PROP_'):
+            name, _, value = (s.strip() for s in v.partition(','))
+            try:
+                section['props'][name] = float(value.split(',')[0])
+            except ValueError:
+                pass
+    out = {}
+    for sec in sections:
+        for mat in sec['materials']:
+            out.setdefault(mat, {}).update(sec['props'])
+    return out
+
+
+def apply_skin_shader_replacements(car_dir, skin, materials):
+    """Sets a skin's material properties (`skin_shader_replacements`) on `materials`; returns what it set"""
+    rep = skin_shader_replacements(car_dir, skin)
+    for m in materials:
+        if m['name'] in rep:
+            m['props'] = {**m['props'], **rep[m['name']]}
+    return rep
+
+
+def ac_finish(m, cls, spec):
+    """The glTF finish of kn5 material `m` (its class and `auto_spec`) from its AC values, or None for a class the
+    game finishes itself: {rough, metal, specular (F90), specular_color (F0 over 0.04), clearcoat, lacquer, ...}"""
+    if cls not in FINISH_CLASSES:
+        return None
+    p = m['props']
+    exp_ = max(0.0, p.get('ksSpecularEXP', 20.0))
+    fc, fmax = max(0.0, p.get('fresnelC', 0.0)), max(0.0, p.get('fresnelMaxLevel', 0.0))
+    fmax = max(fmax, fc)
+    lacquer = fmax >= LACQUER_FRESNEL and exp_ >= LACQUER_EXP
+    f0 = float(np.clip(fc, 0.004, 1.0))
+    # A polished coat: its sharp reflection (the clearcoat, 4 % head on) rises to fresnelMaxLevel at grazing angles, over
+    # a base reflecting fresnelC all round. Any other surface: one reflection from fresnelC head on to fresnelMaxLevel
+    f90 = f0 if lacquer else float(np.clip(fmax, f0, 1.0))
+    return dict(
+        rough=round(float(np.clip((2.0 / (exp_ + 2.0)) ** 0.25, 0.08, 0.95)), 3),
+        exp=exp_,
+        metal=float(spec.get('metal', 0.0)),
+        specular=round(f90, 3),
+        specular_color=round(f0 / (0.04 * f90), 3),
+        clearcoat=round(min(1.0, fmax), 3) if lacquer else 0.0,
+        lacquer=lacquer,
+    )
+
+
+def finish_map(m, src, fin):
+    """The per-pixel finish of a multimap drawn once over its UVs (R clearcoat, G roughness, B metalness, at most
+    FINISH_MAP_SIZE) and the mean of its reflection mask, or (None, 1) when nothing in it varies: the reflection masked
+    by txMaps' B and the detail's alpha where the detail is drawn (the coat full at FULL_COAT_ALPHA), the highlight's
+    exponent by txMaps' G"""
+    maps, props = m['maps'], m['props']
+    if 'MultiMap' not in m['shader'] or maps.get('txDiffuse') not in src:
+        return None, 1.0
+    diffuse = decode(src[maps['txDiffuse']])
+    side = min(FINISH_MAP_SIZE, max(diffuse.size))
+    size = (side, side)
+    ad = np.asarray(diffuse.getchannel('A').resize(size, Image.BILINEAR), np.float32) / 255.0
+    refl = np.ones(size[::-1], np.float32)
+    coat = np.ones(size[::-1], np.float32)
+    gloss = np.ones(size[::-1], np.float32)
+    uvm = props.get('detailUVMultiplier', 1.0) or 1.0
+    if props.get('useDetail', 0) >= 0.5 and maps.get('txDetail') in src and abs(uvm - 1.0) < 1e-3:
+        at = np.asarray(decode(src[maps['txDetail']]).getchannel('A').resize(size, Image.BILINEAR), np.float32) / 255.0
+        refl *= at * (1.0 - ad) + ad
+        coat *= np.clip(refl / FULL_COAT_ALPHA, 0.0, 1.0)
+    if maps.get('txMaps') in src:
+        mp = np.asarray(decode(src[maps['txMaps']]).convert('RGB').resize(size, Image.BILINEAR), np.float32) / 255.0
+        refl *= mp[..., 2]
+        coat *= mp[..., 2]
+        gloss = np.maximum(mp[..., 1], 1e-3)
+    used = np.asarray(diffuse.convert('L').resize(size, Image.BILINEAR), np.float32) > 8
+    mean = float(refl[used].mean()) if used.any() else 1.0
+    rough = np.clip((2.0 / (fin['exp'] * gloss + 2.0)) ** 0.25, 0.08, 0.95)
+    cc = fin['clearcoat'] * coat
+    metal = np.full(size[::-1], fin['metal'], np.float32)
+    if cc.std() < 0.01 and rough.std() < 0.01:
+        return None, mean
+    rgb = np.stack([cc, rough, metal], -1)
+    return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB'), mean
+
+
+def weave_map(m, src, fin):
+    """A tiled detail's weave (carbon: its alpha the tows' sheen) as a repeating map, and its repeat count, or None:
+    G roughness, B metalness, A the reflection's strength (KHR_materials_specular reads A), the glossy tows at the
+    material's own roughness and the ones between rougher and duller"""
+    maps, props = m['maps'], m['props']
+    uvm = props.get('detailUVMultiplier', 1.0) or 1.0
+    if ('MultiMap' not in m['shader'] or props.get('useDetail', 0) < 0.5 or maps.get('txDetail') not in src
+            or abs(uvm - 1.0) < 1e-3):
+        return None
+    det = decode(src[maps['txDetail']])
+    a = np.asarray(det.getchannel('A'), np.float32) / 255.0
+    if a.std() < 0.05:
+        return None
+    rough = np.clip(fin['rough'] * (1.5 - 0.5 * a), 0.08, 0.95)
+    rgba = np.stack([np.zeros_like(a), rough, np.full_like(a, fin['metal']), a], -1)
+    return Image.fromarray(np.clip(rgba * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGBA'), float(uvm)
+
+
+def reflection_occlusion(m, src):
+    """The mean of a multimap's txMaps B (its reflection mask, an AO bake here) over the texels it covers, or 1"""
+    t = m['maps'].get('txMaps')
+    if t not in src:
+        return 1.0
+    b = np.asarray(decode(src[t]).getchannel('B'), np.float32) / 255.0
+    used = b > 0.02
+    return float(b[used].mean()) if used.any() else 1.0
+
+
+def apply_ac_finish(gm, m, cls, spec, pool, writer):
+    """Writes `ac_finish` of kn5 material `m` onto glTF material `gm` (its maps through `pool`); returns the finish"""
+    fin = ac_finish(m, cls, spec)
+    if fin is None:
+        return None
+    used = writer.j.setdefault('extensionsUsed', [])
+
+    def uses(ext):
+        if ext not in used:
+            used.append(ext)
+
+    pbr = gm['pbrMetallicRoughness']
+    pbr['metallicFactor'], pbr['roughnessFactor'] = fin['metal'], fin['rough']
+    p = m['props']
+    if cls == 'paint':
+        # The paint dimmed by its own ksDiffuse / ksAmbient, as `auto_spec` dims every other material
+        k = float(np.clip(max(p.get('ksDiffuse', 0.4), p.get('ksAmbient', 0.4)) / 0.4, 0.05, 1.0))
+        pbr['baseColorFactor'] = [round(c * k, 4) for c in pbr['baseColorFactor'][:3]] + pbr['baseColorFactor'][3:]
+    gm.setdefault('extensions', {})['KHR_materials_specular'] = {
+        'specularFactor': fin['specular'], 'specularColorFactor': [fin['specular_color']] * 3}
+    uses('KHR_materials_specular')
+    # A tiled detail's weave, else a 1:1 multimap's per-pixel map
+    weave = weave_map(m, pool.src, fin)
+    fmap, refl_mean = (None, 1.0) if weave is not None else finish_map(m, pool.src, fin)
+    if fmap is not None:
+        # The base reflection (fresnelC all round under a coat) dimmed as AC's mask dims it on average
+        gm['extensions']['KHR_materials_specular']['specularFactor'] = round(fin['specular'] * refl_mean, 3)
+        ti = pool.data_map(f"finish:{m['name']}", fmap)
+        pbr['metallicRoughnessTexture'] = {'index': ti}
+        pbr['metallicFactor'] = pbr['roughnessFactor'] = 1.0
+    elif weave is not None:
+        im, reps = weave
+        ti = pool.data_map(f"weave:{m['maps']['txDetail']}", im, alpha=True)
+        tiled = {'index': ti, 'extensions': {'KHR_texture_transform': {'scale': [reps, reps]}}}
+        pbr['metallicRoughnessTexture'] = tiled
+        pbr['metallicFactor'] = pbr['roughnessFactor'] = 1.0
+        # The weave's alpha masks the reflection, and the material's txMaps B dims it where the bodywork shades it
+        spec_ext = gm['extensions']['KHR_materials_specular']
+        spec_ext['specularTexture'] = json.loads(json.dumps(tiled))
+        spec_ext['specularFactor'] = round(fin['specular'] * reflection_occlusion(m, pool.src), 3)
+        uses('KHR_texture_transform')
+    elif not fin['lacquer']:
+        # One reflection all over: dimmed as the material's txMaps B dims it on average
+        gm['extensions']['KHR_materials_specular']['specularFactor'] = round(
+            fin['specular'] * reflection_occlusion(m, pool.src), 3)
+    if fin['clearcoat'] > 0:
+        coat = {'clearcoatFactor': 1.0 if fmap is not None else round(fin['clearcoat'] * reflection_occlusion(m, pool.src), 3),
+                'clearcoatRoughnessFactor': CLEARCOAT_ROUGHNESS}
+        if fmap is not None:
+            coat['clearcoatTexture'] = {'index': pbr['metallicRoughnessTexture']['index']}
+        gm['extensions']['KHR_materials_clearcoat'] = coat
+        uses('KHR_materials_clearcoat')
+    gm['extras'] = {**gm.get('extras', {}), 'acFinish': {
+        k: round(float(p[k]), 3) for k in ('ksAmbient', 'ksDiffuse', 'ksSpecular', 'ksSpecularEXP', 'fresnelC',
+                                           'fresnelMaxLevel') if k in p}}
+    return fin
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1088,8 +1319,9 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
         sid = ids[skin]
         os.makedirs(os.path.join(out_dir, sid), exist_ok=True)
         own = []
+        shows = preset.get('variant_files', {}).get(preset.get('skin_variants', {}).get(skin, 'base'))
         for fname, key in files:
-            if all(src[n] == base[n] for n in sources(key)):
+            if all(src[n] == base[n] for n in sources(key)) or (shows is not None and fname not in shows):
                 continue
             im = image(key, src)
             out = os.path.join(out_dir, sid, fname)
@@ -1279,6 +1511,124 @@ def add_extension_parts(car_dir, preset, textures, materials, nodes):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# A livery's own body (an automatic preset's car). A skin's ext_config.ini may swap part of the model for its season
+# ([MODEL_REPLACEMENT_n] on the main kn5: HIDE these nodes, INSERT this kn5 from the skin's folder under INSERT_IN, at
+# OFFSET). The skins that swap alike share a variant (named by the word their folder names end in, as `_early`); the
+# hidden nodes become a part shown for the other liveries and the inserted model one shown for that variant's
+# (`parts`, CarSkin.variant). A mirror mirrors.ini names stays the main model's live mirror (MIRROR_n), shown for the
+# liveries that keep its body; an inserted model's own mirror glass is part of that model.
+# ---------------------------------------------------------------------------------------------------------------------
+
+def skin_model_replacements(car_dir, kn5_name):
+    """{skin folder: (hidden node names, inserted kn5 path, INSERT_IN, OFFSET)} for the skins whose ext_config.ini
+    swaps part of the main model (`kn5_name`), ACTIVE ones only"""
+    out = {}
+    for skin in skin_folders(car_dir):
+        path = os.path.join(car_dir, 'skins', skin, 'ext_config.ini')
+        if not os.path.isfile(path):
+            continue
+        sections, cur = [], None
+        for line in open(path, 'rb').read().decode('latin1').splitlines():
+            line = line.split(';', 1)[0].strip()
+            if line.startswith('[') and line.endswith(']'):
+                cur = {} if line[1:-1].strip().upper().startswith('MODEL_REPLACEMENT') else None
+                if cur is not None:
+                    sections.append(cur)
+            elif cur is not None and '=' in line:
+                k, v = (s.strip() for s in line.split('=', 1))
+                cur[k.upper()] = v
+        for sec in sections:
+            if sec.get('FILE', '').lower() != kn5_name.lower() or sec.get('ACTIVE', '1').strip() == '0':
+                continue
+            insert = os.path.join(car_dir, 'skins', skin, sec.get('INSERT', ''))
+            if not sec.get('INSERT') or not os.path.isfile(insert):
+                continue
+            hide = tuple(sorted(s.strip() for s in sec.get('HIDE', '').split(',') if s.strip()))
+            offset = tuple(float(re.sub(r'[^0-9.eE+-]', '', v) or 0) for v in sec.get('OFFSET', '0,0,0').split(',')[:3])
+            out[skin] = (hide, insert, sec.get('INSERT_IN', '').strip(), offset)
+    return out
+
+
+def add_model_replacements(car_dir, kn5_name, textures, materials, nodes, mirror_names=()):
+    """Appends each variant's inserted model to `nodes` (its materials and textures to the car's, a clashing name
+    as `<name>~<variant>`) and returns {part_nodes: {node index: part}, part_variants, skin_variants, mirror_variants:
+    {mirrors.ini mesh name: the variants that keep it}} for the preset, or {} when no skin swaps anything"""
+    swaps = skin_model_replacements(car_dir, kn5_name)
+    if not swaps:
+        return {}
+    groups = {}
+    for skin, (hide, insert, insert_in, offset) in sorted(swaps.items()):
+        digest = hashlib.sha1(open(insert, 'rb').read()).hexdigest()
+        groups.setdefault((hide, digest, insert_in, offset), []).append((skin, insert))
+    by_name = {m['name']: i for i, m in enumerate(materials)}
+    part_nodes, part_variants, skin_variants = {}, {}, {}
+    hidden_by = {}  # hidden node name -> variants hiding it
+    used_names = {'base'}
+    for (hide, _, insert_in, offset), members in groups.items():
+        words = {re.split(r'[_\s-]+', s.lower())[-1] for s, _ in members}
+        variant = words.pop() if len(words) == 1 else os.path.splitext(os.path.basename(members[0][1]))[0].lower()
+        base_name, n = variant, 2
+        while variant in used_names:
+            variant, n = f'{base_name}_{n}', n + 1
+        used_names.add(variant)
+        for skin, _ in members:
+            skin_variants[skin] = variant
+        for h in hide:
+            hidden_by.setdefault(h, []).append(variant)
+        parent = next((i for i, nd in enumerate(nodes) if nd['name'] == insert_in), None)
+        ptx = (nodes[parent]['world'] if parent is not None else np.eye(4)).copy()
+        ptx[:3, 3] += offset
+        tex, mats, ext_nodes = read_kn5(members[0][1])
+        rename = {}
+        for k, v in tex.items():
+            if k in textures and textures[k] != v:
+                rename[k] = f'{k}~{variant}'
+            textures.setdefault(rename.get(k, k), v)
+        remap = {}
+        for i, m in enumerate(mats):
+            m = {**m, 'maps': {s: rename.get(t, t) for s, t in m['maps'].items()}}
+            own = by_name.get(m['name'])
+            if own is not None and materials[own]['maps'] == m['maps'] and materials[own]['shader'] == m['shader']:
+                remap[i] = own
+                continue
+            if own is not None:
+                m['name'] = f"{m['name']}~{variant}"
+            materials.append(m)
+            by_name[m['name']] = len(materials) - 1
+            remap[i] = len(materials) - 1
+        part = f'{variant}_model'
+        part_variants[part] = (variant,)
+        first = len(nodes)
+        for nd in ext_nodes:
+            nd = dict(nd, world=ptx @ nd['world'])
+            nd['parent'] = parent if nd['parent'] is None else nd['parent'] + first
+            if nd['mesh'] is not None:
+                nd['mesh'] = {**nd['mesh'], 'mat': remap[nd['mesh']['mat']]}
+                part_nodes[len(nodes)] = part
+            nodes.append(nd)
+    # The main model's hidden nodes: a part for the liveries that keep them; a hidden mirror stays the live mirror,
+    # shown for those liveries alone (`mirror_variants`)
+    variants = sorted(set(skin_variants.values()))
+    mirror_variants = {}
+    for i, nd in enumerate(nodes):
+        if nd['mesh'] is None or i in part_nodes:
+            continue
+        names = [nd['name'], *ancestors(nodes, i)]
+        h = next((h for h in names if h in hidden_by), None)
+        if h is None:
+            continue
+        keep = ('base', *[v for v in variants if v not in hidden_by[h]])
+        if nd['name'] in mirror_names or (len(names) > 1 and names[1] in mirror_names):
+            mirror_variants[nd['name'] if nd['name'] in mirror_names else names[1]] = keep
+            continue
+        part = f'{h.lower()}_main'
+        part_nodes[i] = part
+        part_variants[part] = keep
+    return {'part_nodes': part_nodes, 'part_variants': part_variants, 'skin_variants': skin_variants,
+            'mirror_variants': mirror_variants}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # The tyres as a mod's extension config draws them (an automatic preset's car). Its extension/ext_config.ini may give
 # each set of compounds tyre meshes of their own ([TYRES_FX_CUSTOM_MESHES_...]: a grooved dry tyre and a slick, both in
 # the kn5 at once) and textures of their own ([TYRES_FX_CUSTOMTEXTURE_<compound>]: from a zip under the game's
@@ -1422,11 +1772,44 @@ def merge_tyre_textures(textures, materials, nodes):
     return 'tyre_merged'
 
 
-def read_digital_items(data, nodes, frames):
+def item_surface_depth(nodes, materials, world, position, reach=0.015):
+    """How far behind an item's POSITION (along its node's +Z, away from the driver) the screen it is drawn on lies:
+    the nearest opaque, drawn mesh surface within `reach` m, or None. A screen often sits a few millimetres behind
+    its node's plane, and a text drawn on the plane would float in front of it, sliding off its cell seen from above"""
+    origin = (world @ np.r_[np.asarray(position, float), 1.0])[:3]
+    axis = world[:3, 2] / np.linalg.norm(world[:3, 2])
+    best = None
+    for i in visible_meshes(nodes):
+        m = materials[nodes[i]['mesh']['mat']]
+        if m['blend'] == 1:
+            continue
+        pos, _, _, tris = world_mesh(nodes[i])
+        if not len(tris) or np.linalg.norm(pos - origin, axis=1).min() > 0.08:
+            continue
+        v0, v1, v2 = pos[tris[:, 0]], pos[tris[:, 1]], pos[tris[:, 2]]
+        e1, e2 = v1 - v0, v2 - v0
+        pv = np.cross(axis, e2)
+        det = (e1 * pv).sum(1)
+        ok = np.abs(det) > 1e-12
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        tv = origin - v0
+        u = (tv * pv).sum(1) * inv
+        qv = np.cross(tv, e1)
+        v = (qv @ axis) * inv
+        t = (e2 * qv).sum(1) * inv
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > -0.002) & (t < reach)
+        if hit.any():
+            d = float(t[hit].min())
+            best = d if best is None else min(best, d)
+    return best
+
+
+def read_digital_items(data, nodes, frames, materials=None):
     """The texts digital_instruments.ini draws ([ITEM_n]: a gear, speed, rpm, fuel, lap time ... on a node's plane), as
     the rig's `digitalItems` extras: each with its parent node's frame in the node the rig puts it on (`frames`: kn5
     node name -> (rig node, 4x4 in that node's axes)), its place, size, colour and format. AC draws each from its
-    POSITION along the node's -X (the driver's right), its baseline there, SIZE high"""
+    POSITION along the node's -X (the driver's right), its baseline there, SIZE high. With `materials`, each also gets
+    `depth`: how far behind its POSITION its screen's surface lies (`item_surface_depth`)"""
     if 'digital_instruments.ini' not in data:
         return []
     cp = ini(data['digital_instruments.ini'])
@@ -1456,6 +1839,11 @@ def read_digital_items(data, nodes, frames):
                 item[field] = sec[key].strip()
         if sec.get('DECIMALS', '').strip():
             item['decimals'] = int(float(sec['DECIMALS']))
+        pnode = next((n for n in nodes if n['name'] == parent and n['kind'] == 1), None)
+        if materials is not None and pnode is not None:
+            depth = item_surface_depth(nodes, materials, pnode['world'], item['position'])
+            if depth is not None:
+                item['depth'] = round(depth, 5)
         items.append(item)
     return items
 
@@ -1865,6 +2253,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     textures, materials, nodes = loaded if loaded is not None else read_kn5(kn5_path)
     pose_nodes(car_dir, preset, nodes)
     part_of = add_extension_parts(car_dir, preset, textures, materials, nodes)
+    # A livery's own body (`add_model_replacements`, by node index)
+    part_of.update(preset.get('part_nodes', {}))
     part_variants = preset.get('part_variants', {})
     by_name = {m['name']: m for m in materials}
     auto = bool(preset.get('auto'))
@@ -2055,6 +2445,9 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
             gm['alphaMode'] = mode
         if spec.get('double'):
             gm['doubleSided'] = True
+        if auto and (preset.get('generated') or preset.get('ac_finish')) and not spec.get('palette'):
+            # The finish from the AC material's own values (`apply_ac_finish`)
+            apply_ac_finish(gm, src, cls, spec, pool, writer)
         if spec.get('palette'):
             # One material per class and finish; its colour comes from the palette (UVs at the colour's cell)
             pkey = (cls, float(spec.get('metal', 0.0)), float(spec['rough']))
@@ -2083,7 +2476,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
                 mat_index[kn5_name] = mi
                 return mi
             gm['name'] = f'{cls}_{len(shared):03d}'
-            gm['extras'] = {'kn5': [kn5_name]}
+            gm['extras'] = {**gm.get('extras', {}), 'kn5': [kn5_name]}
             if tex and skinnable(tex):
                 stem = re.sub(r'[^A-Za-z0-9]+', '_', tex.split(':', 1)[-1].rsplit('.', 1)[0]).strip('_').lower()
                 skin_files[gm['name']] = (f'{stem}.png' if mode != 'OPAQUE' else f'{stem}.jpg', tex)
@@ -2211,7 +2604,26 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         kids = [writer.add_mesh_node(f'PART_{part}_{node_label(mi)}', [pi]) for mi, pi in out]
         body_kids.append(writer.add_node(f'PART_{part}', children=kids))
         variant_nodes[f'PART_{part}'] = list(part_variants.get(part, ('base',)))
+    # A live mirror a livery's own body replaces (`add_model_replacements`): shown for the liveries that keep it
+    for entry in mirrors:
+        keep = sorted({v for k in entry['kn5'] for v in preset.get('mirror_variants', {}).get(k, ())})
+        if keep:
+            variant_nodes[entry['node']] = keep
     body_node = writer.add_node('BODY', children=body_kids)
+    if variant_nodes and skin_files:
+        # The livery files each variant's liveries show (a file only a hidden part wears is no livery's)
+        seen = {}  # glTF material name -> the variants that show it (None: every one)
+        for p in body_parts + [q for q in parts if q[0] != 'body']:
+            mi = mat_index.get(p[2])
+            if mi is None or id(p) in mirror_section:
+                continue
+            name = writer.j['materials'][mi]['name']
+            vis = part_variants.get(p[8], ('base',)) if p[8] is not None else None
+            seen[name] = None if vis is None or seen.get(name, ()) is None else {*seen.get(name, ()), *vis}
+        everyone = {'base', *preset.get('skin_variants', {}).values()}
+        # (a file whose material no part holds, none hides)
+        preset['variant_files'] = {v: sorted({f for n, (f, _) in skin_files.items() if seen.get(n) is None or v in seen[n]})
+                                   for v in everyone}
     # The cameras read the body as the first livery wears it
     body_parts = [p for p in body_parts if p[8] is None or 'base' in part_variants.get(p[8], ('base',))]
 
@@ -2300,7 +2712,7 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         if n['name'] in item_parents and n['name'] not in item_frames:
             world = to_model @ n['world']
             item_frames[n['name']] = ('STEER', to_steer @ world) if 'STEER_HR' in ancestors(nodes, i) else ('BODY', world)
-    digital_items = read_digital_items(data, nodes, item_frames)
+    digital_items = read_digital_items(data, nodes, item_frames, materials)
 
     lf, rf, lr, rr = (wheel_centres[f'WHEEL_{c}'] for c in ('LF', 'RF', 'LR', 'RR'))
     extras = {
@@ -2424,6 +2836,19 @@ def main():
         ui = read_loose_json(os.path.join(a.car_dir, 'ui', 'ui_car.json'))
         title = str(ui.get('name') or '').strip() or None
         preset = auto_preset(a.car_dir, loaded, data, kn5_name, title=title)
+        # The material values the painted skin's ext_config.ini sets (its paint's gloss and reflection)
+        replaced = apply_skin_shader_replacements(a.car_dir, a.skin or preset['default_skin'], loaded[1])
+        if replaced:
+            print(f'  skin material values: {replaced}')
+        # The skins that bring a body of their own
+        mirror_names = {n for _, n in read_mirrors(data)}
+        swap = add_model_replacements(a.car_dir, kn5_name, *loaded, mirror_names=mirror_names)
+        if swap:
+            preset.update(swap)
+            # The textures the skins replace, the inserted models' among them
+            by_lower = {t.lower(): t for t in loaded[0]}
+            preset['skin_textures'] = tuple(sorted(by_lower.get(t, t) for t in skin_override_counts(a.car_dir, loaded[0])))
+            print(f"  liveries' own bodies: {swap['skin_variants']}, parts {swap['part_variants']}")
         car = 'auto'
         print(f'automatic preset for {a.car_dir} ({kn5_name}):')
         print('  ' + json.dumps(preset['detected']))
@@ -2438,7 +2863,10 @@ def main():
         if a.skins_out:
             kn5 = os.path.join(a.car_dir, a.kn5 or preset.get('kn5') or
                                f'{os.path.basename(os.path.normpath(a.car_dir))}.kn5')
-            textures, materials, _ = read_kn5(kn5)
+            textures, materials, kn5_nodes = read_kn5(kn5)
+            if preset.get('part_nodes'):
+                add_model_replacements(a.car_dir, os.path.basename(kn5), textures, materials, kn5_nodes,
+                                       mirror_names={n for _, n in read_mirrors(read_car_data(a.car_dir))})
             if preset.get('auto'):
                 if not skin_files and preset.get('generated'):
                     # Nothing a skin repaints: the model's own paint is the one livery
