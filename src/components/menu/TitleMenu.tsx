@@ -150,7 +150,8 @@ const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 10
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="flex flex-col gap-1.5 border-t border-lc-line py-4">
     <h3 className="lc-row-label m-0">{title}</h3>
-    <p className="lc-body m-0">{children}</p>
+    {/* Credit lines stay in English (docs/TRANSLATING.md): left to right, so a right-to-left page keeps their quotes and years in place */}
+    <p dir="ltr" className="lc-body m-0 text-start">{children}</p>
   </div>
 );
 
