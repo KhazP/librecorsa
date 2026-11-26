@@ -1,4 +1,8 @@
+import { useSyncExternalStore } from "react";
 import { tripleRects } from "./screen-layout";
+
+/** The element the page's layers sit in (LibreCorsaSimulator.tsx): the centre screen's frame while there are three */
+export const UI_FRAME_ID = "lc-ui-frame";
 
 /**
  * Where the menus and the HUD go: the whole window, or on three screens the centre one (as sims keep them, so the
@@ -31,6 +35,16 @@ export const uiFrame = (): UiFrame | null => frame;
 
 /** The width the UI lays out in (CSS px): the centre screen of three, else the window */
 export const uiViewportWidth = (): number => (frame ? frame.w : typeof window !== "undefined" ? window.innerWidth : 0);
+
+/**
+ * Where a layer pinned to the window's edges should be portalled: into the centre screen's frame while there are
+ * three (document.body is the whole 48:9 window, whose right edge is the far side of the right screen), else the body
+ */
+export function useUiPortalRoot(): HTMLElement | null {
+  const framed = useSyncExternalStore(onUiViewportChange, () => frame !== null, () => false);
+  if (typeof document === "undefined") return null;
+  return (framed ? document.getElementById(UI_FRAME_ID) : null) ?? document.body;
+}
 
 /** Calls `listener` when the UI's width may have changed: a resize, or one screen becoming three and back */
 export function onUiViewportChange(listener: () => void): () => void {

@@ -25,6 +25,7 @@ import {
 import { SkinBanner, SkinButton, skinCss, SkinPanel, skinRootClass, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudMode } from "./hud-mode";
 import { claimSignInHint } from "@/lib/account/sign-in-hint";
+import { useUiPortalRoot } from "@/lib/display/ui-frame";
 
 const EMPTY = "-";
 const MINUS = "−";
@@ -174,8 +175,10 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   const lift = useLiftOverHud(boxRef);
   // The box is zoomed on big screens; the lift is in window pixels
   const zoom = useUiZoom();
+  // Pinned to the bottom right: on three screens, the centre one's
+  const portalRoot = useUiPortalRoot();
 
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined" || !portalRoot) return null;
   return createPortal(
     <div
       key={s.lapNumber}
@@ -205,7 +208,7 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
         </>
       )}
     </div>,
-    document.body
+    portalRoot
   );
 };
 

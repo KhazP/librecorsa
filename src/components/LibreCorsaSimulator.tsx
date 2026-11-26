@@ -107,7 +107,7 @@ import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type C
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
 import { TripleScreenPrompt } from "@/components/hud/TripleScreenPrompt";
-import { centreFrame, setUiFrame, type UiFrame } from "@/lib/display/ui-frame";
+import { centreFrame, setUiFrame, UI_FRAME_ID, type UiFrame } from "@/lib/display/ui-frame";
 import { physicalVerticalFovDeg, screenRig, tripleFits } from "@/lib/display/screen-layout";
 import { accountActions, useAccountState } from "@/lib/account/account-store";
 
@@ -2558,6 +2558,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           containment makes it the box the fixed layers inside place themselves in (and clips them to it), and as a
           size container their cqw widths measure it */}
       <div
+        id={UI_FRAME_ID}
         className={uiFrameRect ? "absolute inset-y-0" : "contents"}
         style={uiFrameRect ? { left: uiFrameRect.x, width: uiFrameRect.w, containerType: "size", contain: "layout paint" } : undefined}
       >
