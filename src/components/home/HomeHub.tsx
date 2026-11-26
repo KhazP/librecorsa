@@ -579,7 +579,10 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                     {data.whatsNew.map((entry, index) => (
                       <li key={entry.date} className="grid gap-x-8 gap-y-2 border-t border-lc-line py-5 last:border-b sm:grid-cols-[150px_minmax(0,1fr)]">
                         <div className="flex items-baseline justify-between gap-3 sm:flex-col sm:items-start sm:justify-start sm:gap-1.5">
-                          <span className="lc-data text-[14px] text-lc-chalk">{day(entry.date)}</span>
+                          {/* The notes are English in every language: they read left to right under a right-to-left page too */}
+                          <span lang="en" dir="ltr" className="lc-data text-[14px] text-lc-chalk">
+                            {day(entry.date)}
+                          </span>
                           <a
                             href={
                               entry.commits === 1
@@ -596,7 +599,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                             <Icon name="externalLink" size="sm" />
                           </a>
                         </div>
-                        <div className="flex min-w-0 flex-col gap-2">
+                        <div lang="en" dir="ltr" className="flex min-w-0 flex-col gap-2">
                           <h2 className="lc-title m-0 text-[17px] leading-snug text-lc-chalk">{entry.title}</h2>
                           <ul className="m-0 -mb-1.5 list-none p-0 xl:columns-[26rem] xl:gap-x-10">
                             {entry.items.map((item) => (
