@@ -170,12 +170,16 @@ export class TrackEnvironment {
    * Pace multiplier for an AI car in the conditions (1 in the dry on slicks): its tyres' grip on the water of the
    * racing line here relative to dry slicks, with a little extra margin as the road gets wet. Corner speed goes
    * between √μ (mechanical grip) and faster than μ (downforce), so the grip ratio is taken to the power 0.65.
+   * `offLineM`: the water this far off the racing line counts too where it is deeper than under the car (the field's
+   * drive plans: a car never holds the swept line exactly)
    */
-  public weatherPaceScale(sim: SimulatorCar): number {
+  public weatherPaceScale(sim: SimulatorCar, offLineM = 0): number {
     const w = this.weather;
     if (!(w.waterMm > 0) && sim.tireCompound !== 'intermediate' && sim.tireCompound !== 'wet') return 1;
     const sample = this.track.getSampleAtDistance(sim.sMeters);
-    const water = w.waterAt(sim.sMeters, sim.lateralOffsetM, aiLineOffsetM(sample));
+    const lineM = aiLineOffsetM(sample);
+    const under = w.waterAt(sim.sMeters, sim.lateralOffsetM, lineM);
+    const water = offLineM > 0 ? Math.max(under, w.waterAt(sim.sMeters, lineM + offLineM, lineM)) : under;
     const traits = WET_TYRE_TRAITS[sim.tireCompound];
     const gripCorner = traits.dryGrip * wetGripFactor(traits, water, AI_PACE_REF_MS, this.realism.wetSeverity);
     // In standing water (> 1 mm), also account for high-speed aquaplaning into heavy braking zones

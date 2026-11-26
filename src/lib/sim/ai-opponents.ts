@@ -500,6 +500,13 @@ const PLAN_GRIP = 0.97;
 const RACE_GRIP_MARGIN = 0.04;
 /** Drive plans a field keeps by car, line and grip (a plan is ~60 kB on a 4 km lap) */
 const PLAN_MEMO_MAX = 48;
+/**
+ * A wet plan takes the water this far off the racing line where it is deeper than under the car (m): the half-width of
+ * the groove the cars sweep (weather.ts `LINE_SIGMA_M`). Planned on the swept line alone (0.2 mm where the road beside
+ * it still had 0.39), the GT3 started a corner on the line's grip, ran a metre or two wide into the deeper water and on
+ * off the road
+ */
+const PLAN_WET_OFF_LINE_M = 2.1;
 
 /**
  * Lights out to the car moving (s) for an AI skill 0..100 and two seeded draws 0..1: a reaction of 0.30 s for a rookie
@@ -1312,7 +1319,7 @@ export class AiOpponentField implements AiRace {
       sim.aiPlan = car.heldPlan;
       car.heldPlan = null;
     }
-    const weather = this.environment.weatherPaceScale(sim);
+    const weather = this.environment.weatherPaceScale(sim, PLAN_WET_OFF_LINE_M);
     // On a wet road or on rain tyres the weather's pace counts only the water: the tyres' own state takes more (cold
     // slicks the wet rubber's grip, rain tyres past their window their temperature grip), taken to the same 0.65 power
     // (`aiTyreGrip`, in 0.01 steps so a degree of tyre temperature is no new plan). Planned on the water alone, the
