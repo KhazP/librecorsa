@@ -23,6 +23,9 @@ LibreCorsa's AI field drives the same 500 Hz rigid-body vehicle physics as the p
 - **Blue flags:** Cars about to be lapped concede the inside line at the upcoming corner.
 - **Hazards and local yellows:** Spinning, stopped, crawling, or retired cars are treated as obstacles rather than cars to draft: AI steers to whichever side offers clear space and slows when gaps are tight. Each hazard projects a yellow-flag zone from `350 m` before to `40 m` after the incident, within which AI drivers lift and hold position.
 - **Side-by-side clearance:** Cars leave roughly `0.9 m` of daylight between bodies (`2.9 m` centre-to-centre).
+- **Default AI skill:** Offline races default to skill `95` (almost Alien), and new career seasons default to **Expert**.
+- **Pit stops and wet tyres:** On circuits with a pit lane (`src/lib/sim/pit/ai-pit.ts`, `ai-weather-tyres.ts`), AI cars pit for intermediates (`> 0.2 mm` racing-line water), full wets (`> 1.15 mm`), and back to slicks (`< 0.13 mm`), as well as for mandatory race stops and damage repairs.
+- **Virtual Safety Car:** When a retired car on track or a persistent double-yellow hazard triggers a VSC (`src/lib/sim/vsc.ts`), every car paces to ~`65%` of its own racing speed (`65`–`216 km/h`) with overtaking locked out until green resumes `10`–`15 s` after `"VSC ending"`.
 
 ## Contact and driver reaction
 

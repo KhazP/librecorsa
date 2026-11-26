@@ -8,17 +8,18 @@ A map of the repository for anyone who wants to change the code: where each part
 - **`/play` is the game.** `TrackGate` loads the circuit, `LibreCorsaSimulator` is the React shell (menus, settings, HUD), and `DriveSession` owns the renderer, the scene, the player's car and the frame loop.
 - **The physics runs in a Web Worker by default**, at 500 Hz in fixed 2 ms steps. The page draws with Three.js and sends the inputs.
 - **The online side is optional.** A Cloudflare Worker (`cloudflare/`) serves rooms, races, lap boards, accounts and the usage counter. Without it the game still has peer-to-peer rooms and local lap times.
-- **Most cars and circuits aren't in git.** A clone has RISE Motordrome and the 2026 car. Everything else is served from R2 on librecorsa.org.
+- **Most cars and circuits aren't in git.** A clone has RISE Motordrome and the LC26 and LC25 Prototypes. Everything else is served from R2 on librecorsa.org.
 
 ## Where things are
 
 | Folder | What's in it |
 | :-- | :-- |
-| `src/app/` | The pages (`/`, `/play`, `/press`, `/download`, `/privacy`, `/about`, `/account`, `/admin`) and static route handlers (`/build.json`, `/feed.xml`, `/.well-known/security.txt`, the manifest, robots and sitemap) |
+| `src/app/` | The pages (`/`, `/play`, `/stats`, `/press`, `/download`, `/privacy`, `/about`, `/account`, `/admin`) and static route handlers (`/build.json`, `/feed.xml`, `/.well-known/security.txt`, the manifest, robots and sitemap) |
 | `src/components/` | React: the game shell, `menu/`, `hud/`, `settings/`, `home/`, `account/` and the UI kit in `ui/` |
-| `src/lib/sim/` | Physics, cars, race control, AI, laps, replays, weather and multiplayer |
+| `src/lib/sim/` | Physics, cars, pit stops (`pit/`), race control, AI, laps, replays, weather and multiplayer |
 | `src/lib/sim/runtime/` | The sim worker and how the page talks to it |
-| `src/lib/render/` | Lighting, sky, cameras, car models, graphics quality |
+| `src/lib/career/`, `src/lib/mods/` | Career mode ladders/state and the data-only mod package loader, catalogue and launcher bridge |
+| `src/lib/render/`, `src/lib/display/`, `src/lib/vr/` | Lighting, sky, cameras, car models, graphics quality, triple screens and WebXR VR |
 | `src/lib/input/` | Bindings, pads, wheels, WebHID force feedback, telemetry out |
 | `src/lib/net/` | Wire formats, race schedule, results and online config |
 | `src/lib/audio/`, `src/lib/sim/CarAudio.ts` | Music and car sound |
@@ -81,7 +82,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 ## Audio
 
 - **`src/lib/sim/CarAudio.ts`**: one `AudioContext`, with the engine voice from a sample bank, recorded samples or a synth, through a compressor to the master gain.
-- **`sim/lc26-audio.ts`** plays the multi-layer banks (`manifest.json` plus ogg files in each car's `audio/` folder). `opponent-audio.ts` places the other cars in 3D, and `contact-acoustics.ts` adds road, kerb and stone noise.
+- **`sim/lc26-audio.ts`** plays the multi-layer banks (`manifest.json` plus ogg files in each car's `audio/` folder). `opponent-audio.ts` places the other cars in 3D, `contact-acoustics.ts` adds road, kerb and stone noise, and `sim/spotter.ts` runs the optional Kokoro-82M voice spotter with a pit-wall radio filter.
 - **Music**: `src/lib/audio/` picks and plays the tracks on two decks that keep playing across circuit changes.
 
 ## Input, wheels and telemetry
@@ -103,7 +104,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 
 ## Races, laps and replays
 
-- **Setting up and starting**: `race-setup.ts`, `race-rules.ts`, `race-start.ts` (including jump starts) and `qualifying.ts`.
+- **Setting up and starting**: `race-setup.ts`, `race-rules.ts`, `race-start.ts` (including jump starts and rolling-start speed gauge), `qualifying.ts`, `time-trial.ts`, and `pit/` (pit lane and stops).
 - **Race control**: track limits, penalties (`penalty-ledger.ts`), blue and yellow flags, the Virtual Safety Car and incidents.
 - **Laps**: `lap-recorder.ts` records and validates laps and plays ghosts. `ghost-store.ts` keeps them in IndexedDB. `lap-plausibility.ts` is shared with the Worker's lap check.
 - **Replays**: `replay-buffer.ts`, a ring of typed-array chunks.
