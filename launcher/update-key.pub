@@ -1,0 +1,3 @@
+# The launcher's update key (Ed25519, base64): a launcher built with it installs only an update whose
+# manifest this key signed. Made by `npm run launcher:keygen`; its private half is the LAUNCHER_UPDATE_KEY secret.
+kxSYI2guN1nk9zVaMMwR878r71SRWF5qxAdKqydcSDE=
