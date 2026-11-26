@@ -15,6 +15,9 @@ import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 /** Built-in F1 cars that accept painted 2048x2048 atlas image liveries */
 export const F1_ATLAS_CARS: ReadonlySet<string> = new Set<F1AtlasCarId>(["lc26", "lc25"]);
 
+/** Built-in ported cars that accept painted 2048x2048 5-panel atlas image liveries */
+export const PORTED_ATLAS_CARS: ReadonlySet<string> = new Set(["amg-gt3", "bmw-m4-gt3", "lc-lmdh"]);
+
 /**
  * What a package may name: the game's own cars (for sounds), those with file-based liveries, those with painted atlas
  * liveries, vehicle models (for cars), and the models a physics file can change (those the game's car simulation runs
@@ -23,7 +26,7 @@ export const F1_ATLAS_CARS: ReadonlySet<string> = new Set<F1AtlasCarId>(["lc26",
 export const modDefinitions = (): Required<ModKnownIds> => ({
   cars: BUILT_IN_CAR_IDS,
   skinCars: new Set([...BUILT_IN_CAR_IDS].filter((id) => anyCarById(id as BuiltInCarId)?.skins?.length)),
-  atlasCars: new Set([...F1_ATLAS_CARS]),
+  atlasCars: new Set([...F1_ATLAS_CARS, ...PORTED_ATLAS_CARS]),
   vehicles: new Set(VEHICLE_MODEL_IDS),
   physicsBases: new Set(VEHICLE_MODEL_IDS.filter((v) => VEHICLE_MODELS[v].simProfile)),
 });
@@ -52,13 +55,15 @@ const carCredit = (c: ModCredit, title: string) => ({
 
 /** A package livery as the registry lists it: `mod:<package>/<id>`, its files in the package (`car`: the mod car it is for) */
 export function modSkin(packageId: string, s: ModSkin, origin: ModOrigin, car?: ModCar): CarSkin {
+  const dir = modSkinDir(s, car);
   return {
     id: modContentId(packageId, s.id),
     name: s.name,
     swatch: s.swatch,
     files: s.files,
     variant: s.variant,
-    baseUrl: modDirUrl(packageId, modSkinDir(s, car)).replace(/\/$/, ""),
+    ...(s.atlas ? { atlas: modFileUrl(packageId, `${dir}/${s.atlas}`), finish: s.finish ?? "gloss" } : {}),
+    baseUrl: modDirUrl(packageId, dir).replace(/\/$/, ""),
     mod: origin,
   };
 }
