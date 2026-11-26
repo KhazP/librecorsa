@@ -8,7 +8,7 @@ import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { TRACKS, getTrackInfo, venueHeroUrl, venueOf } from "@/lib/track-registry";
 import { withBasePath } from "@/lib/base-path";
 import { driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
-import { boardChoiceOf, boardChoices, currentBoardBase } from "@/lib/sim/lap-types";
+import { boardChoiceOf, boardChoices } from "@/lib/sim/lap-types";
 import {
   challengeById,
   challengeConditionsLabel,
@@ -16,7 +16,6 @@ import {
   timeLeftLabel,
   type TimeTrialEvent,
 } from "@/lib/net/weekly-challenge";
-import { formatLapTime } from "@/components/hud/hud-format";
 import { CarThumb } from "@/components/menu/CarBrowser";
 import { CarClassTag } from "@/components/menu/menu-content-ui";
 import { TrackOutline, useCircuitOutline } from "@/components/menu/circuit-outline";
@@ -24,7 +23,7 @@ import { HallOfFame } from "@/components/board/HallOfFame";
 import { DriverProfileModal } from "@/components/board/DriverProfileModal";
 import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
-import { Button, Card, EmptyState, Modal, Select, TextField } from "@/components/ui";
+import { Button, EmptyState, Modal, Select, TextField } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Segmented } from "@/components/ui/Segmented";
 import { Icon } from "@/components/ui/icons";
@@ -98,62 +97,99 @@ const resolveTrialCar = (event: TimeTrialEvent): CarDefinition | undefined => {
   return anyCarForVehicle(event.vehicle);
 };
 
-/** Compact GT7-style event banner card for selecting between active Online Time Trials */
-const TrialEventCard: React.FC<{
+/**
+ * One complete Time Trial column: GT7-inspired event hero banner + compact rules & CTA at the top,
+ * with its own live ranking board directly underneath it so each event's leaderboard stays paired
+ * with its car and circuit.
+ */
+const TrialColumn: React.FC<{
   trial: ChallengeTrialItem;
-  selected: boolean;
-  summary: RemoteBoard | null;
+  boardVersion: number;
+  driverName: string;
   now: number;
-  onSelect: () => void;
-}> = ({ trial, selected, summary, now, onSelect }) => {
+  onDrive: () => void;
+  onSelectDriver: (name: string) => void;
+  onOpenBoard?: (trackId: string, vehicle: VehicleModelId) => void;
+}> = ({ trial, boardVersion, driverName, now, onDrive, onSelectDriver, onOpenBoard }) => {
   const tx = useTranslations("menu.challenge");
+  const units = useUnits();
   const { event } = trial;
   const permanent = isPermanentChallenge(event);
-  const track = TRACKS.find((t) => t.id === event.trackId);
+  const trackInfo = getTrackInfo(event.trackId);
   const venue = venueOf(event.trackId);
   const car = resolveTrialCar(event);
-  const outline = useCircuitOutline(track, true, true);
+  const outline = useCircuitOutline(trackInfo, true, true);
   const [heroFailed, setHeroFailed] = useState(false);
 
-  const leader = summary?.entries[0] ?? null;
-  const me = summary?.me ?? null;
+  const [reload, setReload] = useState(0);
+  const choices = boardChoices(event.trackId);
+  const [boardPick, setBoardPick] = useState<string | null>(null);
+  const choice = boardChoiceOf(event.trackId, boardPick);
+  const older = !choice.current;
+  const version = choice.base;
+  const versionName = choice.label;
+
+  const [state, setState] = useState<{ of: number; board: RemoteBoard | null; loading: boolean; error: boolean }>({
+    of: version,
+    board: null,
+    loading: true,
+    error: false,
+  });
+
+  useEffect(() => {
+    let live = true;
+    setState((s) => ({ ...s, loading: true }));
+    void trial.loadBoard(version).then((board) => {
+      if (!live) return;
+      setState((s) => ({
+        of: version,
+        board: board ?? (s.of === version ? s.board : null),
+        loading: false,
+        error: board === null,
+      }));
+    });
+    return () => {
+      live = false;
+    };
+  }, [trial, boardVersion, event.id, reload, version]);
+
+  const board = state.of === version ? state.board : null;
+  const loading = state.loading || state.of !== version;
+  const myKey = driverNameKey(driverName);
+  const me = board?.me ?? null;
+  const ahead = me && me.rank >= 2 ? (board?.entries[me.rank - 2] ?? null) : null;
+  const aboveMs = me && me.rank >= 2 ? (me.aboveMs ?? ahead?.lapTimeMs ?? null) : null;
+
+  const trackLength = `${distanceIn(trackInfo.lengthM / 1000, units.speed).toFixed(2)}\u00a0${DISTANCE_LABEL[units.speed]}`;
 
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
+    <section
+      aria-label={trial.title}
       className={cx(
-        "group relative flex min-w-0 flex-col overflow-hidden rounded-lc-card border text-start transition",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-lc-volt focus-visible:ring-offset-2 focus-visible:ring-offset-lc-void",
-        selected
-          ? permanent
-            ? "border-[#F5C542]/85 bg-lc-carbon shadow-[0_0_0_1px_rgba(245,197,66,0.35),0_12px_32px_rgba(0,0,0,0.45)]"
-            : "border-lc-volt bg-lc-carbon shadow-[0_0_0_1px_rgba(204,255,0,0.3),0_12px_32px_rgba(0,0,0,0.45)]"
-          : "border-lc-line bg-lc-carbon/85 hover:border-lc-keyline hover:bg-lc-carbon"
+        "flex min-w-0 flex-col overflow-hidden rounded-lc-card border bg-lc-carbon/95",
+        permanent ? "border-[#F5C542]/45" : "border-lc-volt/40"
       )}
     >
       {/* Top accent stripe */}
       <span
         aria-hidden
         className={cx(
-          "h-1 w-full transition-opacity",
+          "h-1 w-full",
           permanent
             ? "bg-linear-to-r from-[#F5C542] via-amber-400 to-[#D98A4E]"
-            : "bg-linear-to-r from-lc-volt via-lc-info to-lc-cyan",
-          selected ? "opacity-100" : "opacity-40 group-hover:opacity-75"
+            : "bg-linear-to-r from-lc-volt via-lc-info to-lc-cyan"
         )}
       />
 
-      {/* Visual hero backdrop */}
-      <div className="relative flex min-h-[156px] flex-1 flex-col justify-between overflow-hidden px-4 pt-3.5 pb-3 sm:px-5">
+      {/* Event Hero Header */}
+      <div className="relative flex flex-col gap-3 overflow-hidden px-4 pt-3.5 pb-4 sm:px-5">
         {venue && !heroFailed ? (
           <img
             src={withBasePath(venueHeroUrl(venue.id, 960))}
             alt=""
             aria-hidden
             onError={() => setHeroFailed(true)}
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-30 transition duration-500 group-hover:scale-[1.03] group-hover:opacity-40"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-28"
           />
         ) : null}
         <div
@@ -161,12 +197,12 @@ const TrialEventCard: React.FC<{
           className={cx(
             "pointer-events-none absolute inset-0",
             permanent
-              ? "bg-linear-to-r from-lc-void/96 via-lc-void/86 to-amber-950/35"
-              : "bg-linear-to-r from-lc-void/96 via-lc-void/86 to-sky-950/35"
+              ? "bg-linear-to-b from-lc-void/85 via-lc-void/90 to-lc-carbon"
+              : "bg-linear-to-b from-lc-void/85 via-lc-void/90 to-lc-carbon"
           )}
         />
 
-        {/* Top status badges */}
+        {/* Status pills */}
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             {permanent ? (
@@ -191,11 +227,17 @@ const TrialEventCard: React.FC<{
               </>
             )}
           </div>
-          {!permanent ? <span className="lc-mono text-[11px] tracking-wider text-lc-slate uppercase">{event.id}</span> : null}
+          {permanent ? (
+            <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet" title={tx("stigHolderHint")}>
+              {tx("stigAward")}
+            </Badge>
+          ) : (
+            <span className="lc-mono text-[11px] tracking-wider text-lc-slate uppercase">{event.id}</span>
+          )}
         </div>
 
-        {/* Title + artwork composition */}
-        <div className="relative z-10 mt-2.5 flex items-end justify-between gap-3">
+        {/* Circuit & Car visual showcase (consistent height across side-by-side columns so both CTAs and boards align) */}
+        <div className="relative z-10 flex min-h-[108px] items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span
               className={cx(
@@ -205,163 +247,132 @@ const TrialEventCard: React.FC<{
             >
               {trial.title}
             </span>
-            <h3 className="lc-h3 m-0 line-clamp-2 text-[18px] leading-tight text-lc-chalk">{trial.trackName}</h3>
-            <p className="m-0 truncate text-[14px] font-semibold text-lc-fog">{trial.carTitle}</p>
-            {trial.tagline ? <p className="m-0 mt-0.5 truncate text-[12px] text-lc-slate">{trial.tagline}</p> : null}
+            <h3 className="lc-h3 m-0 line-clamp-2 text-[20px] leading-tight text-lc-chalk">{trial.trackName}</h3>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              {car ? <CarClassTag car={car} size="sm" /> : null}
+              <span className="truncate text-[14px] font-semibold text-lc-fog">{trial.carTitle}</span>
+            </div>
+            <p className="lc-hint m-0 mt-0.5 truncate">
+              {[trackInfo.country, trackLength, tx("turns", { count: trackInfo.turns })].filter(Boolean).join(" · ")}
+            </p>
           </div>
 
-          <div className="relative hidden h-[82px] w-[138px] shrink-0 sm:block">
-            {outline ? (
-              <TrackOutline
-                map={outline}
-                thin
-                className="pointer-events-none absolute -top-2 right-0 h-[68px] w-[90px] opacity-35 transition group-hover:opacity-55"
-              />
-            ) : null}
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+            {outline ? <TrackOutline map={outline} sectors className="h-[62px] w-[76px] shrink-0 opacity-90" /> : null}
             {car ? (
-              <div className="relative h-full w-full">
-                <CarThumb car={car} className="drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]" />
+              <div className="relative h-[74px] w-[124px] shrink-0">
+                <CarThumb car={car} className="drop-shadow-[0_6px_14px_rgba(0,0,0,0.75)]" />
               </div>
             ) : null}
           </div>
         </div>
-      </div>
 
-      {/* Live telemetry footer strip */}
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-t border-lc-line/80 bg-lc-well/85 px-4 py-2 sm:px-5">
-        <div className="flex min-w-0 items-center gap-2">
-          {me ? (
-            <>
-              {permanent && me.rank === 1 ? (
-                <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet" className="px-1.5">
-                  STIG
-                </Badge>
-              ) : null}
-              <span className="lc-data text-[13px] font-semibold text-lc-volt">P{me.rank}</span>
-              <span className="lc-mono text-[13px] text-lc-chalk">{formatLapTime(me.entry.lapTimeMs)}</span>
-            </>
+        {/* Compact rules & award metadata */}
+        <div className="relative z-10 flex flex-col gap-1.5 rounded-lc-row border border-lc-line/80 bg-lc-well/70 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2" aria-label={tx("rules")}>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <LapConditionBadges assists={event.assists} realism={event.realism} />
+              <span className="lc-mono text-[11.5px] text-lc-fog">{challengeConditionsLabel(event.vehicle)}</span>
+            </div>
+            <span className="text-[11.5px] font-medium text-lc-slate">
+              {permanent && event.fixedSetup ? tx("regSetupFixed") : tx("regSetupOpen")}
+            </span>
+          </div>
+          <p className="m-0 text-[12px] text-lc-slate">
+            {permanent
+              ? tx("stigHolderHint")
+              : trial.hasRaces && trial.available
+                ? `${tx("podiumRewardsHint")} · ${tx("aboutWithRaces")}`
+                : tx("podiumRewardsHint")}
+          </p>
+        </div>
+
+        {/* Primary Enter CTA */}
+        <div className="relative z-10">
+          {trial.available ? (
+            <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
+              {permanent ? tx("driveMiddleGear") : tx("enterTrial")}
+            </Button>
           ) : (
-            <span className="text-[12px] text-lc-slate">{tx("noTimeSet")}</span>
+            <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
+              <Icon name="warning" className="mt-0.5" />
+              {tx("unavailable")}
+            </p>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[12px] text-lc-fog">
-          {leader ? (
-            <span className="inline-flex items-baseline gap-1.5">
-              <span className="text-[11px] font-semibold tracking-wider text-lc-slate uppercase">{tx("leaderShort")}</span>
-              <span className="lc-mono font-semibold text-lc-chalk">{formatLapTime(leader.lapTimeMs)}</span>
-            </span>
-          ) : null}
-          {summary ? (
-            <span className="lc-mono text-lc-slate">{tx("drivers", { total: summary.total, count: formatCount(summary.total) })}</span>
-          ) : null}
-        </div>
       </div>
-    </button>
-  );
-};
 
-const PODIUM_SLOTS = [
-  { place: 1, tag: "P1", icon: "challenge" as const, tone: { color: "amber" as const }, variant: "soft" as const },
-  { place: 2, tag: "P2", icon: "medal" as const, tone: { color: "chalk" as const }, variant: "soft" as const },
-  { place: 3, tag: "P3", icon: "medal" as const, tone: { color: "amber" as const }, variant: "outline" as const },
-];
-
-/** Compact P1 / P2 / P3 podium preview for the rotating weekly challenge (matching Hall of Fame medals) */
-const WeeklyPodiumStrip: React.FC<{ board: RemoteBoard | null; myKey: string }> = ({ board, myKey }) => {
-  const tx = useTranslations("menu.challenge");
-  const top3 = board?.entries.slice(0, 3) ?? [];
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/60 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="lc-row-label flex items-center gap-1.5">
-          <Icon name="podium" size="sm" className="text-lc-fog" />
-          {tx("podiumStanding")}
-        </span>
-        <span className="text-[11px] text-lc-slate">{tx("podiumRewardsHint")}</span>
-      </div>
-      {top3.length === 0 ? (
-        <p className="lc-hint m-0">{tx("podiumEmpty")}</p>
-      ) : (
-        <div className="grid grid-cols-3 gap-2">
-          {PODIUM_SLOTS.map((slot, idx) => {
-            const entry = top3[idx];
-            const mine = Boolean(entry && myKey && driverNameKey(entry.name) === myKey);
-            return (
-              <div
-                key={slot.place}
-                className={cx(
-                  "flex min-w-0 flex-col gap-0.5 rounded-lc-row border px-2.5 py-2",
-                  mine ? "border-lc-volt/60 bg-lc-volt/10" : "border-lc-line/80 bg-lc-carbon/70"
-                )}
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <Badge size="sm" tone={slot.tone} variant={slot.variant} icon={slot.icon} className="px-1.5">
-                    {slot.tag}
-                  </Badge>
-                </div>
-                {entry ? (
-                  <>
-                    <span className={cx("mt-0.5 truncate text-[12px] font-semibold", mine ? "text-lc-volt" : "text-lc-chalk")}>
-                      {entry.name}
-                    </span>
-                    <span className={cx("lc-mono text-[12px]", idx === 0 ? "text-lc-best-ink" : "text-lc-fog")}>
-                      {formatLapTime(entry.lapTimeMs)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="lc-mono mt-1 text-[12px] text-lc-slate">—</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/** Live record-holder card for Middle Gear Lap Board's "The Stig" badge */
-const StigHolderStrip: React.FC<{ board: RemoteBoard | null; myKey: string }> = ({ board, myKey }) => {
-  const tx = useTranslations("menu.challenge");
-  const leader = board?.entries[0] ?? null;
-  const isMe = Boolean(leader && myKey && driverNameKey(leader.name) === myKey);
-
-  return (
-    <div
-      className={cx(
-        "flex flex-col gap-2 rounded-lc-tile border p-3",
-        isMe ? "border-lc-volt/65 bg-lc-volt/10" : "border-lc-line bg-lc-well/60"
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge size="sm" variant="solid" tone={{ color: "chalk" }} icon="helmet">
-          {tx("stigAward")}
-        </Badge>
-        <span className="text-[11px] text-lc-slate">{tx("stigHolderHint")}</span>
-      </div>
-      {leader ? (
-        <div className="flex items-center justify-between gap-3 rounded-lc-row border border-lc-line/80 bg-lc-carbon/75 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="lc-data text-[12px] font-bold text-lc-best-ink">{tx("stigPlace")}</span>
-            <span className={cx("truncate text-[14px] font-semibold", isMe ? "text-lc-volt" : "text-lc-chalk")}>{leader.name}</span>
+      {/* Live Ranking Board directly beneath its own event card */}
+      <div className="flex flex-1 flex-col gap-3 border-t border-lc-line bg-lc-well/35 px-4 pt-3.5 pb-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h4 className="lc-row-label m-0 text-lc-chalk">{permanent ? trial.title : tx("times")}</h4>
+            {board ? <Badge size="sm" variant="outline">{tx("drivers", { total: board.total, count: formatCount(board.total) })}</Badge> : null}
           </div>
-          <span className="lc-mono shrink-0 text-[14px] font-semibold text-lc-best-ink">{formatLapTime(leader.lapTimeMs)}</span>
+          {choices.length <= 2 ? (
+            <Segmented aria-label={tx("physicsVersion")} size="sm" value={choice.id} onChange={setBoardPick} options={choices} />
+          ) : (
+            <Select aria-label={tx("physicsVersion")} className="w-52 max-w-full" value={choice.id} onChange={setBoardPick} options={choices} />
+          )}
         </div>
-      ) : (
-        <p className="lc-hint m-0">{tx("stigEmpty")}</p>
-      )}
-    </div>
+
+        {me ? (
+          <MyPlace
+            rank={me.rank}
+            total={board?.total ?? me.rank}
+            lapMs={me.entry.lapTimeMs}
+            detail={
+              me.rank === 1
+                ? permanent
+                  ? tx("fastestPermanent")
+                  : tx("fastest")
+                : aboveMs !== null
+                  ? ahead && ahead.lapTimeMs === aboveMs
+                    ? tx("behindDriver", { gap: ((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3), driver: ahead.name })
+                    : tx("behindPlace", { gap: ((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3), place: String(me.rank - 1) })
+                  : ""
+            }
+          />
+        ) : null}
+
+        {loading && !board ? (
+          <BoardSkeleton label={tx("loadingTrialTimes")} />
+        ) : state.error && !board ? (
+          <BoardError onRetry={() => setReload((n) => n + 1)}>{tx("loadFailed")}</BoardError>
+        ) : !board || board.entries.length === 0 ? (
+          <EmptyState icon={<Icon name="challenge" />}>
+            {older ? tx("noTimesVersion", { version: versionName }) : tx("noTimes")}
+          </EmptyState>
+        ) : (
+          <BoardTable
+            label={older ? tx("tableLabelVersion", { version: versionName }) : tx("tableLabel")}
+            badgeContext={{ scope: "vehicle", vehicle: event.vehicle }}
+            circuitName={formatCircuitName}
+            onOpenRecordBoard={onOpenBoard}
+            onSelectDriver={onSelectDriver}
+            rows={board.entries.map((e, i) => ({
+              key: e.id ?? `${e.code}-${i}`,
+              rank: i + 1,
+              code: e.code,
+              title: e.name,
+              input: e.conditions?.input,
+              lapMs: e.lapTimeMs,
+              fastest: i === 0,
+              mine: myKey !== "" && driverNameKey(e.name) === myKey,
+            }))}
+          />
+        )}
+      </div>
+    </section>
   );
 };
 
 type ChallengeTab = "week" | "hof";
 
 /**
- * GT7 Sport Mode-inspired Online Time Trials panel:
- * side-by-side active event cards (Weekly Time Trial + permanent Middle Gear Lap Board),
- * Gold/Silver/Bronze pace targets relative to P1, structured event regulations, live ranking board,
- * and the Hall of Fame of completed weeks.
+ * Online Time Trials panel: side-by-side active event columns (Weekly Time Trial on the left,
+ * permanent Middle Gear Lap Board on the right), each with its hero artwork, rules, Drive CTA,
+ * and live ranking board directly underneath it, plus the Hall of Fame tab.
  */
 export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   trials,
@@ -373,9 +384,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   onOpenBoard,
 }) => {
   const tx = useTranslations("menu.challenge");
-  const units = useUnits();
   const [tab, setTab] = useState<ChallengeTab>("week");
-  const [selectedId, setSelectedId] = useState<string>(() => trials[0]?.event.id ?? "");
   const [profileDriver, setProfileDriver] = useState<string | null>(null);
   const [nameModal, setNameModal] = useState<{ mode: "drive"; trial: ChallengeTrialItem } | { mode: "edit" } | null>(null);
   const [nameDraft, setNameDraft] = useState(driverName);
@@ -386,27 +395,6 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-
-  // Selected trial falls back to the first if the week rolled over while open
-  const selected = trials.find((t) => t.event.id === selectedId) ?? trials[0];
-
-  // Preload current-revision summary boards for all active trials so every event banner shows live P1 + player standing
-  const [summaries, setSummaries] = useState<Record<string, RemoteBoard | null>>({});
-  const trialIdsKey = trials.map((t) => t.event.id).join("|");
-  useEffect(() => {
-    let live = true;
-    for (const item of trials) {
-      const base = currentBoardBase(item.event.trackId);
-      void item.loadBoard(base).then((board) => {
-        if (!live) return;
-        setSummaries((prev) => ({ ...prev, [item.event.id]: board ?? prev[item.event.id] ?? null }));
-      });
-    }
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trialIdsKey, boardVersion, driverName]);
 
   const openNamePrompt = (target: { mode: "drive"; trial: ChallengeTrialItem } | { mode: "edit" }) => {
     setNameDraft(driverName);
@@ -449,66 +437,8 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
     driveTrial?.onDrive();
   };
 
-  const [reload, setReload] = useState(0);
-  // Physics version picked for the selected trial (resets when switching trials)
-  const [boardPickByEvent, setBoardPickByEvent] = useState<Record<string, string>>({});
-  const selectedEventId = selected?.event.id ?? "";
-  const selectedTrackId = selected?.event.trackId ?? "";
-  const choices = selected ? boardChoices(selectedTrackId) : [];
-  const choice = selected ? boardChoiceOf(selectedTrackId, boardPickByEvent[selectedEventId] ?? null) : null;
-  const older = choice ? !choice.current : false;
-  const version = choice?.base ?? 0;
-  const versionName = choice?.label ?? "";
-
-  const [state, setState] = useState<{ eventId: string; of: number; board: RemoteBoard | null; loading: boolean; error: boolean }>({
-    eventId: selectedEventId,
-    of: version,
-    board: null,
-    loading: true,
-    error: false,
-  });
-
-  useEffect(() => {
-    if (!selected) return;
-    let live = true;
-    setState((s) => ({ ...s, loading: true }));
-    void selected.loadBoard(version).then((board) => {
-      if (!live) return;
-      setState((s) => ({
-        eventId: selected.event.id,
-        of: version,
-        board: board ?? (s.eventId === selected.event.id && s.of === version ? s.board : null),
-        loading: false,
-        error: board === null,
-      }));
-      if (board && choice?.current) {
-        setSummaries((prev) => ({ ...prev, [selected.event.id]: board }));
-      }
-    });
-    return () => {
-      live = false;
-    };
-  }, [selected, boardVersion, reload, version, choice?.current]);
-
-  const selectedTrackInfo = selected ? getTrackInfo(selected.event.trackId) : undefined;
-  const selectedOutline = useCircuitOutline(selectedTrackInfo, Boolean(selected), true);
-  const selectedCar = selected ? resolveTrialCar(selected.event) : undefined;
-
-  if (!selected || !choice) return null;
-
-  const isPermanent = isPermanentChallenge(selected.event);
-  // Use preloaded current-revision summary immediately when switching between trials so there is no blank flicker
-  const matchedStateBoard = state.eventId === selected.event.id && state.of === version ? state.board : null;
-  const board = matchedStateBoard ?? (choice.current ? (summaries[selected.event.id] ?? null) : null);
-  const loading = (state.loading || state.eventId !== selected.event.id || state.of !== version) && !board;
+  if (trials.length === 0) return null;
   const myKey = driverNameKey(driverName);
-  const me = board?.me ?? null;
-  const ahead = me && me.rank >= 2 ? (board?.entries[me.rank - 2] ?? null) : null;
-  const aboveMs = me && me.rank >= 2 ? (me.aboveMs ?? ahead?.lapTimeMs ?? null) : null;
-
-  const trackLength = selectedTrackInfo
-    ? `${distanceIn(selectedTrackInfo.lengthM / 1000, units.speed).toFixed(2)}\u00a0${DISTANCE_LABEL[units.speed]}`
-    : null;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -550,189 +480,19 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
           onOpenBoard={onOpenBoard}
         />
       ) : (
-        <div className="flex flex-col gap-3.5">
-          {/* GT7-style side-by-side Active Event Cards */}
-          <div
-            role="group"
-            aria-label={tx("selectTrial")}
-            className={cx("grid grid-cols-1 gap-3", trials.length > 1 && "md:grid-cols-2")}
-          >
-            {trials.map((item) => (
-              <TrialEventCard
-                key={item.event.id}
-                trial={item}
-                selected={item.event.id === selected.event.id}
-                summary={summaries[item.event.id] ?? null}
-                now={now}
-                onSelect={() => setSelectedId(item.event.id)}
-              />
-            ))}
-          </div>
-
-          {/* Selected Event Detail Stage: Briefing & Pace Targets (left) + Live Ranking Board (right) */}
-          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)]">
-            <Card
-              title={selected.title}
-              description={`${selected.trackName} · ${selected.carTitle}`}
-              action={
-                isPermanentChallenge(selected.event) ? (
-                  <Badge icon="challenge" tone={{ color: "amber" }} variant="soft">
-                    {tx("alwaysOpen")}
-                  </Badge>
-                ) : (
-                  <Badge icon="time" variant="outline">
-                    {tx("timeLeft", { timeLeft: timeLeftLabel(selected.event.endsMs, now) })}
-                  </Badge>
-                )
-              }
-              bodyClassName="gap-3.5"
-            >
-              {/* Circuit & Car visual telemetry strip */}
-              <div className="flex items-center justify-between gap-3 rounded-lc-tile border border-lc-line bg-lc-well/60 px-3 py-2.5">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  {selectedOutline ? (
-                    <TrackOutline map={selectedOutline} sectors className="h-[60px] w-[78px] shrink-0" />
-                  ) : null}
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-[14px] font-semibold text-lc-chalk">{selected.trackName}</span>
-                    {selectedTrackInfo ? (
-                      <span className="lc-hint truncate">
-                        {[selectedTrackInfo.country, trackLength, tx("turns", { count: selectedTrackInfo.turns })].filter(Boolean).join(" · ")}
-                      </span>
-                    ) : null}
-                    {selectedCar ? (
-                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                        <CarClassTag car={selectedCar} size="sm" />
-                        <span className="min-w-0 truncate text-[12px] text-lc-fog">{selectedCar.sub}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                {selectedCar ? (
-                  <div className="relative hidden h-[58px] w-[104px] shrink-0 sm:block">
-                    <CarThumb car={selectedCar} />
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Weekly P1/P2/P3 podium standing or Middle Gear "The Stig" record holder */}
-              {isPermanent ? <StigHolderStrip board={board} myKey={myKey} /> : <WeeklyPodiumStrip board={board} myKey={myKey} />}
-
-              {/* Event Regulations */}
-              <div className="flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/40 px-3.5 py-3">
-                <span className="lc-row-label">{tx("regulations")}</span>
-                <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 text-[13px]">
-                  <dt className="text-lc-slate">{tx("regConditions")}</dt>
-                  <dd className="lc-mono m-0 text-end text-lc-chalk">{challengeConditionsLabel(selected.event.vehicle)}</dd>
-
-                  <dt className="text-lc-slate">{tx("regSetup")}</dt>
-                  <dd className="m-0 text-end font-medium text-lc-chalk">
-                    {isPermanentChallenge(selected.event) && selected.event.fixedSetup ? tx("regSetupFixed") : tx("regSetupOpen")}
-                  </dd>
-
-                  <dt className="text-lc-slate">{tx("regAssists")}</dt>
-                  <dd className="m-0 flex justify-end">
-                    <div className="flex flex-wrap justify-end gap-1.5" aria-label={tx("rules")}>
-                      <LapConditionBadges assists={selected.event.assists} realism={selected.event.realism} />
-                    </div>
-                  </dd>
-
-                  <dt className="text-lc-slate">{tx("regFormat")}</dt>
-                  <dd className="m-0 text-end text-lc-fog">{tx("regFormatValue")}</dd>
-                </dl>
-                <p className="lc-hint m-0 border-t border-lc-line/70 pt-2">
-                  {isPermanent
-                    ? tx("aboutPermanent")
-                    : selected.hasRaces && selected.available
-                      ? tx("aboutWithRaces")
-                      : tx("about")}
-                </p>
-              </div>
-
-              {/* Primary Enter CTA */}
-              {selected.available ? (
-                <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={() => handleDriveClick(selected)}>
-                  {isPermanent ? tx("driveMiddleGear") : tx("enterTrial")}
-                </Button>
-              ) : (
-                <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
-                  <Icon name="warning" className="mt-0.5" />
-                  {tx("unavailable")}
-                </p>
-              )}
-            </Card>
-
-            {/* Live Ranking Board Card */}
-            <Card
-              title={isPermanent ? selected.title : tx("times")}
-              action={board ? <Badge variant="outline">{tx("drivers", { total: board.total, count: formatCount(board.total) })}</Badge> : null}
-              bodyClassName="gap-3"
-            >
-              {choices.length <= 2 ? (
-                <Segmented
-                  aria-label={tx("physicsVersion")}
-                  size="sm"
-                  value={choice.id}
-                  onChange={(id) => setBoardPickByEvent((prev) => ({ ...prev, [selected.event.id]: id }))}
-                  options={choices}
-                  className="self-start"
-                />
-              ) : (
-                <Select
-                  aria-label={tx("physicsVersion")}
-                  className="w-64 max-w-full self-start"
-                  value={choice.id}
-                  onChange={(id) => setBoardPickByEvent((prev) => ({ ...prev, [selected.event.id]: id }))}
-                  options={choices}
-                />
-              )}
-              {me ? (
-                <MyPlace
-                  rank={me.rank}
-                  total={board?.total ?? me.rank}
-                  lapMs={me.entry.lapTimeMs}
-                  detail={
-                    me.rank === 1
-                      ? isPermanent
-                        ? tx("fastestPermanent")
-                        : tx("fastest")
-                      : aboveMs !== null
-                        ? ahead && ahead.lapTimeMs === aboveMs
-                          ? tx("behindDriver", { gap: ((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3), driver: ahead.name })
-                          : tx("behindPlace", { gap: ((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3), place: String(me.rank - 1) })
-                        : ""
-                  }
-                />
-              ) : null}
-              {loading && !board ? (
-                <BoardSkeleton label={tx("loadingTrialTimes")} />
-              ) : state.error && !board ? (
-                <BoardError onRetry={() => setReload((n) => n + 1)}>{tx("loadFailed")}</BoardError>
-              ) : !board || board.entries.length === 0 ? (
-                <EmptyState icon={<Icon name="challenge" />}>
-                  {older ? tx("noTimesVersion", { version: versionName }) : tx("noTimes")}
-                </EmptyState>
-              ) : (
-                <BoardTable
-                  label={older ? tx("tableLabelVersion", { version: versionName }) : tx("tableLabel")}
-                  badgeContext={{ scope: "vehicle", vehicle: selected.event.vehicle }}
-                  circuitName={formatCircuitName}
-                  onOpenRecordBoard={onOpenBoard}
-                  onSelectDriver={setProfileDriver}
-                  rows={board.entries.map((e, i) => ({
-                    key: e.id ?? `${e.code}-${i}`,
-                    rank: i + 1,
-                    code: e.code,
-                    title: e.name,
-                    input: e.conditions?.input,
-                    lapMs: e.lapTimeMs,
-                    fastest: i === 0,
-                    mine: myKey !== "" && driverNameKey(e.name) === myKey,
-                  }))}
-                />
-              )}
-            </Card>
-          </div>
+        <div className={cx("grid grid-cols-1 items-start gap-4", trials.length > 1 && "xl:grid-cols-2")}>
+          {trials.map((trial) => (
+            <TrialColumn
+              key={trial.event.id}
+              trial={trial}
+              boardVersion={boardVersion}
+              driverName={driverName}
+              now={now}
+              onDrive={() => handleDriveClick(trial)}
+              onSelectDriver={setProfileDriver}
+              onOpenBoard={onOpenBoard}
+            />
+          ))}
         </div>
       )}
 
