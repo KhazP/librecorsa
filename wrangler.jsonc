@@ -93,7 +93,9 @@
     { "name": "PROFILE_LIMIT", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
     // Sign-ins, link codes and passkey ceremonies one address may start per minute; cloud save reads and writes
     { "name": "AUTH_LIMIT", "namespace_id": "1008", "simple": { "limit": 20, "period": 60 } },
-    { "name": "SAVE_LIMIT", "namespace_id": "1009", "simple": { "limit": 60, "period": 60 } }
+    { "name": "SAVE_LIMIT", "namespace_id": "1009", "simple": { "limit": 60, "period": 60 } },
+    // Public stats reads per address per minute (/api/stats, /api/stats/circuit, /api/stats/popular, /api/stats/totals, /api/stats/public)
+    { "name": "STATS_LIMIT", "namespace_id": "1010", "simple": { "limit": 30, "period": 60 } }
   ],
   // Workers caching: the circuit GLBs from R2 are kept at the edge, tiered, with byte ranges served from the cache
   "cache": { "enabled": true },

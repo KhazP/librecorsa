@@ -8,6 +8,7 @@
  *   fetchSiteStats     tabs in view now and drivers to date (the title screen's line)
  *   fetchPopular       the circuits and cars driven most this past month, as ranks (the browsers' Most driven sort)
  *   fetchSiteTotals    hours, laps, countries and drivers to date (the press page)
+ *   fetchPublicStats   public aggregate stats for /stats (all-time totals, 30-day breakdown, boards and open races)
  */
 import { text as t } from "@/lib/text";
 import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/types/f1";
@@ -351,6 +352,241 @@ export function parseSiteTotals(b: unknown): SiteTotals | null {
   const countries = count(b.countries);
   if (since === null || hours === null || laps === null || countries === null) return null;
   return { since, hours, laps, countries, drivers: count(b.drivers) };
+}
+
+export interface PublicUsageGroup {
+  id: string;
+  sessions: number;
+  minutes: number;
+  laps: number;
+}
+
+export interface PublicShareGroup {
+  id: string;
+  sessions: number;
+  minutes: number;
+}
+
+export interface PublicCount {
+  id: string;
+  n: number;
+}
+
+export interface PublicStatsData {
+  days: number;
+  from: string;
+  to: string;
+  allTime: { since: string | null; hours: number; laps: number; countries: number; drivers: number | null };
+  totals: { sessions: number; minutes: number; laps: number; countries: number; lapsCounted: boolean };
+  perDay: { day: string; sessions: number; minutes: number; laps: number; countries: number }[];
+  byCircuit: PublicUsageGroup[];
+  byCar: PublicUsageGroup[];
+  byMode: PublicUsageGroup[];
+  byCountry: PublicUsageGroup[];
+  extras: {
+    input: PublicShareGroup[];
+    device: PublicShareGroup[];
+    weather: PublicShareGroup[];
+    assists: PublicShareGroup[];
+  } | null;
+  boards: {
+    lapsTotal: number;
+    lapsInRange: number;
+    driversTotal: number;
+    lapsBy: {
+      assists: PublicCount[];
+      realism: PublicCount[];
+      surface: PublicCount[];
+      compound: PublicCount[];
+    };
+    challenges: { event: string; laps: number; drivers: number }[];
+  } | null;
+  races: {
+    count: number;
+    cars: number;
+    finished: number;
+    drivers: number;
+    fieldMax: number;
+    perDay: { day: string; races: number; cars: number }[];
+    perWeek: { week: string; races: number; cars: number }[];
+  } | null;
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const nonNeg = (value: unknown): number | null => {
+  const n = finiteNumber(value);
+  return n !== null && n >= 0 && n <= MAX_COUNT ? n : null;
+};
+
+function parseUsageGroups(raw: unknown): PublicUsageGroup[] | null {
+  if (!Array.isArray(raw) || raw.length > 100) return null;
+  const out: PublicUsageGroup[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) return null;
+    const id = cappedString(item.id, MAX_ID_LENGTH);
+    const sessions = count(item.sessions);
+    const minutes = nonNeg(item.minutes);
+    const laps = count(item.laps);
+    if (id === null || sessions === null || minutes === null || laps === null) return null;
+    out.push({ id, sessions, minutes, laps });
+  }
+  return out;
+}
+
+function parseShareGroups(raw: unknown): PublicShareGroup[] | null {
+  if (!Array.isArray(raw) || raw.length > 50) return null;
+  const out: PublicShareGroup[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) return null;
+    const id = cappedString(item.id, MAX_ID_LENGTH);
+    const sessions = count(item.sessions);
+    const minutes = nonNeg(item.minutes);
+    if (id === null || sessions === null || minutes === null) return null;
+    out.push({ id, sessions, minutes });
+  }
+  return out;
+}
+
+function parsePublicCounts(raw: unknown): PublicCount[] | null {
+  if (!Array.isArray(raw) || raw.length > 50) return null;
+  const out: PublicCount[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) return null;
+    const id = cappedString(item.id, MAX_ID_LENGTH);
+    const n = count(item.n);
+    if (id === null || n === null) return null;
+    out.push({ id, n });
+  }
+  return out;
+}
+
+/** Public aggregate stats for /stats: null when off, unreachable, or malformed */
+export async function fetchPublicStats(): Promise<PublicStatsData | null> {
+  const url = onlineUrl("/stats/public");
+  if (!url || !(await getOnlineConfig()).usage) return null;
+  const res = await requestJson(url, { method: "GET" }, true);
+  return res && res.status === 200 ? parsePublicStats(res.body) : null;
+}
+
+/** The server's public stats answer, checked: null when malformed */
+export function parsePublicStats(b: unknown): PublicStatsData | null {
+  if (!isRecord(b) || b.ok !== true) return null;
+  const days = count(b.days);
+  const from = typeof b.from === "string" && ISO_DAY.test(b.from) ? b.from : null;
+  const to = typeof b.to === "string" && ISO_DAY.test(b.to) ? b.to : null;
+  if (days === null || days < 1 || days > 366 || !from || !to) return null;
+
+  if (!isRecord(b.allTime)) return null;
+  const allSince = b.allTime.since === null ? null : typeof b.allTime.since === "string" && ISO_DAY.test(b.allTime.since) ? b.allTime.since : undefined;
+  const allHours = count(b.allTime.hours);
+  const allLaps = count(b.allTime.laps);
+  const allCountries = count(b.allTime.countries);
+  const allDrivers = b.allTime.drivers === null ? null : count(b.allTime.drivers);
+  if (allSince === undefined || allHours === null || allLaps === null || allCountries === null || (b.allTime.drivers !== null && allDrivers === null)) return null;
+
+  if (!isRecord(b.totals) || typeof b.totals.lapsCounted !== "boolean") return null;
+  const tSessions = count(b.totals.sessions);
+  const tMinutes = nonNeg(b.totals.minutes);
+  const tLaps = count(b.totals.laps);
+  const tCountries = count(b.totals.countries);
+  if (tSessions === null || tMinutes === null || tLaps === null || tCountries === null) return null;
+
+  if (!Array.isArray(b.perDay) || b.perDay.length > 366) return null;
+  const perDay: PublicStatsData["perDay"] = [];
+  for (const row of b.perDay) {
+    if (!isRecord(row) || typeof row.day !== "string" || !ISO_DAY.test(row.day)) return null;
+    const sessions = count(row.sessions);
+    const minutes = nonNeg(row.minutes);
+    const laps = count(row.laps);
+    const countries = count(row.countries);
+    if (sessions === null || minutes === null || laps === null || countries === null) return null;
+    perDay.push({ day: row.day, sessions, minutes, laps, countries });
+  }
+
+  const byCircuit = parseUsageGroups(b.byCircuit);
+  const byCar = parseUsageGroups(b.byCar);
+  const byMode = parseUsageGroups(b.byMode);
+  const byCountry = parseUsageGroups(b.byCountry);
+  if (!byCircuit || !byCar || !byMode || !byCountry) return null;
+
+  let extras: PublicStatsData["extras"] = null;
+  if (b.extras !== null) {
+    if (!isRecord(b.extras)) return null;
+    const input = parseShareGroups(b.extras.input);
+    const device = parseShareGroups(b.extras.device);
+    const weather = parseShareGroups(b.extras.weather);
+    const assists = parseShareGroups(b.extras.assists);
+    if (!input || !device || !weather || !assists) return null;
+    extras = { input, device, weather, assists };
+  }
+
+  let boards: PublicStatsData["boards"] = null;
+  if (b.boards !== null) {
+    if (!isRecord(b.boards) || !isRecord(b.boards.lapsBy) || !Array.isArray(b.boards.challenges) || b.boards.challenges.length > 50) return null;
+    const lapsTotal = count(b.boards.lapsTotal);
+    const lapsInRange = count(b.boards.lapsInRange);
+    const driversTotal = count(b.boards.driversTotal);
+    const assists = parsePublicCounts(b.boards.lapsBy.assists);
+    const realism = parsePublicCounts(b.boards.lapsBy.realism);
+    const surface = parsePublicCounts(b.boards.lapsBy.surface);
+    const compound = parsePublicCounts(b.boards.lapsBy.compound);
+    if (lapsTotal === null || lapsInRange === null || driversTotal === null || !assists || !realism || !surface || !compound) return null;
+    const challenges: NonNullable<PublicStatsData["boards"]>["challenges"] = [];
+    for (const c of b.boards.challenges) {
+      if (!isRecord(c)) return null;
+      const event = cappedString(c.event, MAX_ID_LENGTH);
+      const laps = count(c.laps);
+      const drivers = count(c.drivers);
+      if (event === null || laps === null || drivers === null) return null;
+      challenges.push({ event, laps, drivers });
+    }
+    boards = { lapsTotal, lapsInRange, driversTotal, lapsBy: { assists, realism, surface, compound }, challenges };
+  }
+
+  let races: PublicStatsData["races"] = null;
+  if (b.races !== null) {
+    if (!isRecord(b.races) || !Array.isArray(b.races.perDay) || !Array.isArray(b.races.perWeek)) return null;
+    const raceCount = count(b.races.count);
+    const cars = count(b.races.cars);
+    const finished = count(b.races.finished);
+    const drivers = count(b.races.drivers);
+    const fieldMax = count(b.races.fieldMax);
+    if (raceCount === null || cars === null || finished === null || drivers === null || fieldMax === null) return null;
+    const racesPerDay: NonNullable<PublicStatsData["races"]>["perDay"] = [];
+    for (const d of b.races.perDay) {
+      if (!isRecord(d) || typeof d.day !== "string" || !ISO_DAY.test(d.day)) return null;
+      const r = count(d.races);
+      const c = count(d.cars);
+      if (r === null || c === null) return null;
+      racesPerDay.push({ day: d.day, races: r, cars: c });
+    }
+    const perWeek: NonNullable<PublicStatsData["races"]>["perWeek"] = [];
+    for (const w of b.races.perWeek) {
+      if (!isRecord(w)) return null;
+      const week = cappedString(w.week, MAX_ID_LENGTH);
+      const r = count(w.races);
+      const c = count(w.cars);
+      if (week === null || r === null || c === null) return null;
+      perWeek.push({ week, races: r, cars: c });
+    }
+    races = { count: raceCount, cars, finished, drivers, fieldMax, perDay: racesPerDay, perWeek };
+  }
+
+  return {
+    days,
+    from,
+    to,
+    allTime: { since: allSince, hours: allHours, laps: allLaps, countries: allCountries, drivers: allDrivers },
+    totals: { sessions: tSessions, minutes: tMinutes, laps: tLaps, countries: tCountries, lapsCounted: b.totals.lapsCounted },
+    perDay,
+    byCircuit,
+    byCar,
+    byMode,
+    byCountry,
+    extras,
+    boards,
+    races,
+  };
 }
 
 const ASSIST_LABEL = { pro: "game.board.assistsPro", semi_pro: "game.board.assistsSemiPro", assisted: "game.board.assistsAssisted" } as const satisfies Record<AssistPreset, string>;

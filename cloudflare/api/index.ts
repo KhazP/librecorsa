@@ -16,6 +16,7 @@
  *   GET /api/drivers/profile                            a driver's best laps, ranks and rating across circuits (profile.ts)
  *   GET /api/stats, GET /api/stats/circuit              tabs in view and drivers to date; a circuit's laps and drivers (stats.ts)
  *   GET /api/stats/popular, GET /api/stats/totals      the most-driven circuits and cars; hours, laps and countries to date (stats.ts)
+ *   GET /api/stats/public                              public aggregate stats for /stats (stats.ts)
  *   POST /api/live                a heartbeat from a tab with the game in view, for the live count (presence.ts)
  *   /api/auth/*, /api/account/*   optional player accounts: sign-in, devices, the cloud save (accounts/)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
@@ -39,7 +40,7 @@ import { hallOfFame, listBadges, parseCreatorKeyHashes } from "./awards";
 import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
-import { circuitStats, driversToDate, popularRanks, siteTotals } from "./stats";
+import { circuitStats, driversToDate, popularRanks, publicStats, siteTotals } from "./stats";
 import { accountProviders, accountsOn, handleAccounts, isAccountsPath, type AccountsDeps } from "./accounts";
 import type { AccountProvider } from "../../src/lib/account/api-types";
 import type { DurableObjectNamespace, Env, RateLimit } from "./types";
@@ -109,10 +110,11 @@ function allowedOrigin(request: Request, url: URL, env: Env): string | null {
  * How long the answers anyone may share are kept, in the browser and in Workers caching at the edge (seconds): the
  * home page and the title screen read them on every view, and none of them is about the one asking
  */
-export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60, profile: 60, popular: 21_600, totals: 3600 } as const;
+export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60, profile: 60, popular: 21_600, totals: 3600, publicStats: 3600 } as const;
 
 function headersFor(origin: string | null, sharedForS = 0): Record<string, string> {
   const headers: Record<string, string> = { "Cache-Control": sharedForS > 0 ? `public, max-age=${sharedForS}` : "no-store", Vary: "Origin" };
+  if (sharedForS > 0) headers["Cloudflare-CDN-Cache-Control"] = `public, max-age=${sharedForS}`;
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
     headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
@@ -120,6 +122,82 @@ function headersFor(origin: string | null, sharedForS = 0): Record<string, strin
     headers["Access-Control-Max-Age"] = "86400";
   }
   return headers;
+}
+
+/** Minimal Cache API surface used for Worker-level edge caching (Cloudflare `caches.default`, or a stand-in in tests) */
+export interface SharedEdgeCache {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+}
+
+/** Concurrent cold-cache reads for the same canonical stats key coalesce into one D1 batch per isolate */
+const sharedInFlight = new Map<string, Promise<string>>();
+
+function defaultEdgeCache(): SharedEdgeCache | undefined {
+  if (typeof caches === "undefined") return undefined;
+  return (caches as unknown as { default?: SharedEdgeCache }).default;
+}
+
+/**
+ * Serve a parameterless shared JSON answer through Cloudflare's Cache API (`caches.default`) and in-isolate
+ * single-flight coalescing. Keyed on a canonical internal URL so client headers (`Cache-Control: no-cache`,
+ * `Pragma: no-cache`, cookies, etc.) cannot bust the cache or amplify D1 reads.
+ */
+async function cachedSharedJson(
+  cacheKey: string,
+  sharedForS: number,
+  origin: string | null,
+  compute: () => Promise<unknown>,
+  edgeCache: SharedEdgeCache | undefined = defaultEdgeCache(),
+): Promise<Response> {
+  const keyReq = new Request(cacheKey, { method: "GET" });
+  if (edgeCache) {
+    try {
+      const hit = await edgeCache.match(keyReq);
+      if (hit) {
+        const text = await hit.text();
+        return new Response(text, {
+          status: 200,
+          headers: { ...headersFor(origin, sharedForS), "Content-Type": "application/json; charset=utf-8" },
+        });
+      }
+    } catch {
+      // Fall through to compute if the cache store is unavailable
+    }
+  }
+  let pending = sharedInFlight.get(cacheKey);
+  if (!pending) {
+    pending = compute()
+      .then(async (body) => {
+        const text = JSON.stringify(body);
+        if (edgeCache) {
+          try {
+            await edgeCache.put(
+              keyReq,
+              new Response(text, {
+                status: 200,
+                headers: {
+                  "Content-Type": "application/json; charset=utf-8",
+                  "Cache-Control": `public, max-age=${sharedForS}`,
+                },
+              }),
+            );
+          } catch {
+            // Best-effort cache write
+          }
+        }
+        return text;
+      })
+      .finally(() => {
+        sharedInFlight.delete(cacheKey);
+      });
+    sharedInFlight.set(cacheKey, pending);
+  }
+  const text = await pending;
+  return new Response(text, {
+    status: 200,
+    headers: { ...headersFor(origin, sharedForS), "Content-Type": "application/json; charset=utf-8" },
+  });
 }
 
 /** A JSON answer; `sharedForS` lets a successful one be kept for that long (an error never is) */
@@ -161,9 +239,10 @@ async function raceWaiting(races: DurableObjectNamespace, slotS: number, url: UR
   return { startsMs: slot.startsMs, waiting, names };
 }
 
-/** Stand-ins for the checks (scripts/verify/verify-accounts.ts): the accounts' outbound fetch, clock and randomness */
+/** Stand-ins for the checks (scripts/verify/verify-accounts.ts, verify-board-stats.ts): outbound fetch, clock, cache */
 export interface ApiInjections {
   accounts?: Partial<AccountsDeps>;
+  statsCache?: SharedEdgeCache;
 }
 
 export async function handleApi(request: Request, env: Env, url: URL, inject: ApiInjections = {}): Promise<Response> {
@@ -275,6 +354,7 @@ export async function handleApi(request: Request, env: Env, url: URL, inject: Ap
   // The boards' totals: a circuit's laps and drivers, and the drivers to date (stats.ts)
   if (path === "/api/stats/circuit" && request.method === "GET") {
     if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    if (await overLimit(env.STATS_LIMIT, request)) return tooMany(origin);
     try {
       const answer = await circuitStats(env.BOARD_DB, url);
       return json(answer.body, answer.status, origin, SHARED_ANSWER_S.circuit);
@@ -288,6 +368,7 @@ export async function handleApi(request: Request, env: Env, url: URL, inject: Ap
     const boardOn = config.board && env.BOARD_DB;
     const liveOn = config.live && env.PRESENCE;
     if (!boardOn && !liveOn) return json({ ok: false, error: "The lap boards and the live count are off" }, 404, origin);
+    if (await overLimit(env.STATS_LIMIT, request)) return tooMany(origin);
     try {
       const [drivers, live] = await Promise.all([
         boardOn && env.BOARD_DB ? driversToDate(env.BOARD_DB) : null,
@@ -302,13 +383,39 @@ export async function handleApi(request: Request, env: Env, url: URL, inject: Ap
 
   // The usage totals' public side (stats.ts): one field at a time over a whole range, kept for a while because a
   // month's ranks and the totals to date barely move from one hour to the next, and each read scans the totals. A
-  // query string would make a copy of its own at the edge, and a read of the database each: none is taken
-  if ((path === "/api/stats/popular" || path === "/api/stats/totals") && request.method === "GET") {
+  // query string would make a copy of its own at the edge, and a read of the database each: none is taken. Backed by
+  // STATS_LIMIT, Cloudflare's Cache API (immune to client no-cache headers) and in-isolate single-flight coalescing.
+  if ((path === "/api/stats/popular" || path === "/api/stats/totals" || path === "/api/stats/public") && request.method === "GET") {
     if (!config.usage || !env.BOARD_DB) return json({ ok: false, error: "The usage totals are off" }, 404, origin);
     if (url.search) return json({ ok: false, error: "No query string here" }, 400, origin);
+    if (await overLimit(env.STATS_LIMIT, request)) return tooMany(origin);
+    const db = env.BOARD_DB;
     try {
-      if (path === "/api/stats/popular") return json({ ok: true, ...(await popularRanks(env.BOARD_DB, Date.now())) }, 200, origin, SHARED_ANSWER_S.popular);
-      return json({ ok: true, ...(await siteTotals(env.BOARD_DB, config.board)) }, 200, origin, SHARED_ANSWER_S.totals);
+      if (path === "/api/stats/popular") {
+        return await cachedSharedJson(
+          "https://stats-cache.internal/api/stats/popular",
+          SHARED_ANSWER_S.popular,
+          origin,
+          async () => ({ ok: true, ...(await popularRanks(db, Date.now())) }),
+          inject.statsCache,
+        );
+      }
+      if (path === "/api/stats/public") {
+        return await cachedSharedJson(
+          `https://stats-cache.internal/api/stats/public?b=${config.board ? 1 : 0}&r=${config.races ? 1 : 0}`,
+          SHARED_ANSWER_S.publicStats,
+          origin,
+          async () => ({ ok: true, ...(await publicStats(db, Date.now(), { withBoards: config.board, withRaces: config.races })) }),
+          inject.statsCache,
+        );
+      }
+      return await cachedSharedJson(
+        `https://stats-cache.internal/api/stats/totals?b=${config.board ? 1 : 0}`,
+        SHARED_ANSWER_S.totals,
+        origin,
+        async () => ({ ok: true, ...(await siteTotals(db, config.board)) }),
+        inject.statsCache,
+      );
     } catch (err) {
       console.error("usage totals", err);
       return json({ ok: false, error: "The totals could not be read" }, 500, origin);
