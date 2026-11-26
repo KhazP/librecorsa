@@ -146,10 +146,15 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
               </span>
             )}
             {race ? (
-              // On the grid the race's length, as Blade gives it; then the lap of the race
-              <span className={HUD_LBL} dir="auto">
-                {race.phase === "lights" && race.totalLaps ? w.raceLaps(race.totalLaps) : w.raceLap(race.lap, race.totalLaps ?? 0)}
-              </span>
+              // On the grid the race's length, as Blade gives it, read in its language's direction ("5 لفات"); then the
+              // lap of the race, left to right so 4/5 never turns into 5/4
+              race.phase === "lights" && race.totalLaps ? (
+                <span className={HUD_LBL} dir="auto">
+                  {w.raceLaps(race.totalLaps)}
+                </span>
+              ) : (
+                <span className={HUD_LBL}>{w.raceLap(race.lap, race.totalLaps ?? 0)}</span>
+              )
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
