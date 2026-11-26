@@ -1263,9 +1263,11 @@ function liveryCodeOf(peer: InterpolatedPeerState): string {
   return peer.isAiPeer && peer.peerId.startsWith('ai_') ? peer.peerId.slice(3) : peer.driverCode;
 }
 
-/** The livery the peer picked; null when it sent none (AI, older clients, the default) */
+/** The livery the peer picked; null when it sent none or a local-only mod livery */
 function chosenLiveryId(peer: InterpolatedPeerState): string | null {
-  return typeof peer.liveryId === 'string' && peer.liveryId.length > 0 ? peer.liveryId : null;
+  return typeof peer.liveryId === 'string' && peer.liveryId.length > 0 && !peer.liveryId.startsWith('mod:')
+    ? peer.liveryId
+    : null;
 }
 
 /** Everything a peer's livery is made from, as one string: a change repaints its car */

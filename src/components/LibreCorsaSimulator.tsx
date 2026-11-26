@@ -344,8 +344,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const autoGearbox = settings.autoGearbox;
   const mouseSteerEnabled = settings.mouseSteer;
   const selectedLivery = useMemo(
-    () => resolveLivery(settings.liveryId, settings.customLivery),
-    [settings.liveryId, settings.customLivery]
+    () => resolveLivery(settings.liveryId, settings.customLivery, carId),
+    [settings.liveryId, settings.customLivery, carId]
   );
   const cameraMode: CameraMode = settings.camera ?? DEFAULT_DRIVING_CAMERA;
   const activeCameraMode: CameraMode = cameraOverride ?? cameraMode;

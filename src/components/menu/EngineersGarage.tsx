@@ -43,7 +43,7 @@ import { currentInputMode, useInputMode } from "./input-mode";
 import { focusables, useMoveHandler } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
-import { LIVERIES } from "@/lib/track-data";
+import { liveriesForCar } from "@/lib/track-data";
 import { FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 
@@ -642,7 +642,7 @@ export const EngineersGarage: React.FC<
               />
             ) : carTakesLivery(p.carId) ? (
               <LiveryPicker
-                liveries={LIVERIES}
+                liveries={liveriesForCar(p.carId)}
                 value={p.selectedLivery}
                 onChange={p.onChangeLivery}
                 onHover={(livery) =>

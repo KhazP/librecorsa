@@ -727,7 +727,7 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
     teamColorHex: asColor(p.teamColorHex),
     ...(p.liveryId === null
       ? { liveryId: null }
-      : typeof p.liveryId === 'string' && p.liveryId.length > 0
+      : typeof p.liveryId === 'string' && p.liveryId.length > 0 && !p.liveryId.startsWith('mod:')
         ? { liveryId: p.liveryId.slice(0, 32) }
         : {}),
     ...(typeof p.customLivery === 'object' &&

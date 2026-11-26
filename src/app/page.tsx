@@ -16,7 +16,7 @@ import {
   type CarId,
 } from "@/lib/cars/car-registry";
 import { carBoardTag } from "@/lib/cars/board-tag";
-import { LIVERIES, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
+import { LIVERY_CATEGORY_LABELS, liveriesForCar } from "@/lib/track-data";
 import { VEHICLE_MODEL_IDS, type LiveryConfig, type VehicleModelId } from "@/types/f1";
 import { REPO_CAR_IDS, REPO_TRACK_IDS } from "@/lib/hosted-content";
 import outlines from "@/lib/home/circuit-outlines.json";
@@ -65,14 +65,15 @@ const F1_LIVERY_ORDER = ["house", "grid2026", "retro"] as const;
 
 function liveriesOf(c: CarDefinition): { liveryStore?: "settings" | "skin"; liveries: HomeLivery[] } {
   if (carTakesLivery(c.id)) {
+    const available = liveriesForCar(c.id);
     const ordered = F1_LIVERY_ORDER.flatMap((cat) =>
-      LIVERIES.filter((liv) => (liv.category ?? "house") === cat).map((liv) => ({
+      available.filter((liv) => (liv.category ?? "house") === cat).map((liv) => ({
         id: liv.id,
         name: liv.name,
         detail: liv.team,
         group: LIVERY_CATEGORY_LABELS[cat],
         swatch: F1_SWATCH(liv),
-        thumb: variantThumbOf(c.id, carLiveryThumbUrl(c.id, liv.id)),
+        thumb: variantThumbOf(c.id, liv.thumbUrl ?? carLiveryThumbUrl(c.id, liv.id)),
       })),
     );
     return { liveryStore: "settings", liveries: ordered };

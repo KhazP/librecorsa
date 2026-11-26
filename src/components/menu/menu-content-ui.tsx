@@ -91,7 +91,7 @@ const MINI_SWATCH = [
   "focus:shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-volt),0_0_0_8px_color-mix(in_srgb,var(--color-lc-volt)_14%,transparent)]",
 ].join(" ");
 
-const LIVERY_GROUPS: readonly Exclude<LiveryCategory, "custom">[] = ["house", "grid2026", "retro"];
+const LIVERY_GROUPS: readonly Exclude<LiveryCategory, "custom">[] = ["house", "grid2026", "retro", "mod"];
 const CUSTOM_WHEEL_GRADIENT =
   "conic-gradient(from 0deg, hsl(0 90% 56%), hsl(55 95% 54%), hsl(125 80% 48%), hsl(195 90% 52%), hsl(255 85% 60%), hsl(315 88% 58%), hsl(360 90% 56%))";
 

@@ -5,7 +5,7 @@ import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { withBasePath } from "@/lib/base-path";
 import { LC26_CHASSIS } from "@/lib/sim/lc26-data";
-import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
+import type { CarTelemetry, F1AtlasCarId, LiveryConfig, TireCompound } from "@/types/f1";
 import {
   installTyreDeformation,
   setTyreDeformationMap,
@@ -180,7 +180,7 @@ export function attachLc26Model(
   template: THREE.Group,
   root: THREE.Group,
   chassisGroup: THREE.Group,
-  options: { opponent?: boolean; chassis?: Lc26RigChassis } = {}
+  options: { opponent?: boolean; chassis?: Lc26RigChassis; carId?: F1AtlasCarId } = {}
 ): Lc26ModelInstance {
   const assets = templateAssets.get(template) ?? { tyreMaps: {}, animations: [] };
   const model = cloneSkinned(template) as THREE.Group;
@@ -439,7 +439,7 @@ export function attachLc26Model(
     });
   }
 
-  const proceduralPaint = !liveryMask && liverySurfaces.length ? installF1LiveryPaint(liverySurfaces) : null;
+  const proceduralPaint = !liveryMask && liverySurfaces.length ? installF1LiveryPaint(liverySurfaces, { carId: options.carId }) : null;
 
   // A body without a driver of its own gets one: a helmet in the cockpit and, with a steering wheel to hold, the
   // figure under it
@@ -590,7 +590,7 @@ export function attachLc26Model(
     const useProcedural = !liveryMask && proceduralPaint !== null;
     const appliedProcedural = useProcedural ? proceduralPaint.set(livery) : false;
     if (!appliedProcedural) {
-      proceduralPaint?.set(null);
+      if (!useProcedural) proceduralPaint?.set(null);
       for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
     }
     if (ownRimMat && defaultRimColor) {
@@ -602,6 +602,7 @@ export function attachLc26Model(
   };
 
   const dispose = () => {
+    proceduralPaint?.dispose?.();
     opponentLod?.dispose();
     driverMixer?.stopAllAction();
     driverHelmet?.dispose();

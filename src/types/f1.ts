@@ -63,7 +63,9 @@ export type CameraMode =
 /** Dry slicks, then the treaded rain tyres: intermediate (damp / light rain) and full wet (standing water) */
 export type TireCompound = "soft" | "medium" | "hard" | "intermediate" | "wet";
 
-export type LiveryCategory = "house" | "grid2026" | "retro" | "custom";
+export type LiveryCategory = "house" | "grid2026" | "retro" | "custom" | "mod";
+
+export type F1AtlasCarId = "lc26" | "lc25";
 
 export type LiveryFinish = "gloss" | "satin" | "matte" | "metallic" | "chrome";
 
@@ -126,7 +128,7 @@ export interface LiveryVisualSpec {
   swatchCss?: string;
 }
 
-export type LiveryId =
+export type BuiltInLiveryId =
   | "librecorsa"
   | "aurora"
   | "verdant"
@@ -149,6 +151,11 @@ export type LiveryId =
   | "retro_hornet_99"
   | "custom";
 
+/** A livery from a mod package (src/lib/mods): `mod:<package>/<id>` */
+export type ModLiveryId = `mod:${string}`;
+
+export type LiveryId = BuiltInLiveryId | ModLiveryId;
+
 export interface CustomLiveryColors {
   primary: string;
   secondary: string;
@@ -163,10 +170,18 @@ export interface LiveryConfig {
   secondary: string;
   accent: string;
   number: string;
-  /** Grouping in the livery picker (house originals, 2026 grid mockups, retro classics, custom) */
+  /** Grouping in the livery picker (house originals, 2026 grid mockups, retro classics, custom, mod) */
   category?: LiveryCategory;
   /** High-craft procedural livery pattern, finish, multi-zone palette, and fictional sponsors */
   visual?: LiveryVisualSpec;
+  /** Painted 2048x2048 atlas image URLs per F1 car body (PNG/WebP/JPEG in F1 atlas layout) */
+  atlas?: Partial<Record<F1AtlasCarId, string>>;
+  /** Paint finish profile for image-atlas liveries without a `visual` block (defaults to `"gloss"`) */
+  finish?: LiveryFinish;
+  /** Optional preview thumbnail URL (e.g. a mod livery's `thumb.webp` beside its atlas) */
+  thumbUrl?: string;
+  /** The mod package it comes from; absent for the game's own liveries */
+  mod?: { packageId: string; packageName: string; version: string; hash?: string };
 }
 
 export interface TrackControlPoint {

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { LiveryConfig, LiveryFinish, LiveryPatternId, LiveryVisualSpec } from "@/types/f1";
+import type { F1AtlasCarId, LiveryConfig, LiveryFinish, LiveryPatternId, LiveryVisualSpec } from "@/types/f1";
+import { withBasePath } from "@/lib/base-path";
 import { F1_LIVERY_SHADERS, F1_PROJECTION } from "@/lib/render/livery-projection";
 
 /**
@@ -3164,18 +3165,136 @@ export function renderF1LiveryToContext(
 const MAX_CACHED_ATLASES = 22;
 const atlasCache = new Map<string, THREE.CanvasTexture>();
 let customAtlasSlot: { key: string; tex: THREE.CanvasTexture } | null = null;
+const imageAtlasCache = new Map<string, THREE.Texture>();
+const imageAtlasInflight = new Map<string, Promise<THREE.Texture | null>>();
+const warnedFailedImageAtlases = new Set<string>();
 
-function atlasCacheKey(livery: LiveryConfig): string {
+export function atlasCacheKey(livery: LiveryConfig, carId: F1AtlasCarId = "lc26"): string {
   const v = livery.visual;
-  return `${livery.id}|${livery.primary}|${livery.secondary}|${livery.accent}|${livery.number}|${v?.pattern ?? "def"}`;
+  const atlasUrl = livery.atlas?.[carId] ?? "";
+  return `${livery.id}|${livery.primary}|${livery.secondary}|${livery.accent}|${livery.number}|${v?.pattern ?? "def"}|${atlasUrl}`;
 }
 
-function chooseAtlasResolution(): number {
+export function chooseAtlasResolution(): number {
   if (typeof window === "undefined") return F1_ATLAS_SIZE;
   // Crisp 2048px on desktop / tablets; 1024px on compact mobile viewports to stay GPU-memory friendly
   return typeof window.innerWidth === "number" && window.innerWidth > 0 && window.innerWidth < 768
     ? 1024
     : F1_ATLAS_SIZE;
+}
+
+function configureF1AtlasTexture(tex: THREE.Texture, name: string): void {
+  tex.name = name;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+}
+
+function imageAtlasCacheKey(url: string, resolution: number): string {
+  return `${url}|${resolution}`;
+}
+
+/** Synchronously returns a previously loaded painted image atlas texture if cached, touching LRU order */
+export function getCachedF1ImageAtlas(url: string, resolution = chooseAtlasResolution()): THREE.Texture | null {
+  const key = imageAtlasCacheKey(url, resolution);
+  const hit = imageAtlasCache.get(key);
+  if (!hit) return null;
+  imageAtlasCache.delete(key);
+  imageAtlasCache.set(key, hit);
+  return hit;
+}
+
+/**
+ * Loads a painted F1 atlas image (PNG/WebP/JPEG) asynchronously with sRGB, flipY=false, ClampToEdge and 8x anisotropy,
+ * downscaling to `resolution` (1024 px on phone viewports) when the source image is larger. Returns null on error and
+ * logs once per failing URL.
+ */
+export function loadF1ImageAtlasTexture(
+  url: string,
+  resolution = chooseAtlasResolution()
+): Promise<THREE.Texture | null> {
+  const hit = getCachedF1ImageAtlas(url, resolution);
+  if (hit) return Promise.resolve(hit);
+  const key = imageAtlasCacheKey(url, resolution);
+  const inflight = imageAtlasInflight.get(key);
+  if (inflight) return inflight;
+  if (typeof document === "undefined" || typeof Image === "undefined") return Promise.resolve(null);
+
+  const fullUrl = withBasePath(url);
+  const promise = new Promise<THREE.Texture | null>((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    const fail = () => {
+      if (!warnedFailedImageAtlases.has(url)) {
+        warnedFailedImageAtlases.add(url);
+        console.warn(`F1 livery atlas image "${url}" failed to load; falling back to base colours`);
+      }
+      resolve(null);
+    };
+    img.onerror = fail;
+    img.onload = () => {
+      const finalize = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (!w || !h) {
+          fail();
+          return;
+        }
+        let tex: THREE.Texture;
+        if (w > resolution || h > resolution) {
+          const canvas = document.createElement("canvas");
+          const scale = Math.min(resolution / w, resolution / h);
+          canvas.width = Math.max(1, Math.round(w * scale));
+          canvas.height = Math.max(1, Math.round(h * scale));
+          const ctx = canvas.getContext("2d");
+          if (ctx && typeof ctx.drawImage === "function") {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            tex = new THREE.CanvasTexture(canvas);
+          } else {
+            tex = new THREE.Texture(img);
+          }
+        } else {
+          tex = new THREE.Texture(img);
+        }
+        configureF1AtlasTexture(tex, `f1_livery_atlas_img_${url}`);
+        imageAtlasCache.set(key, tex);
+        while (imageAtlasCache.size > MAX_CACHED_ATLASES) {
+          const oldest = imageAtlasCache.keys().next().value;
+          if (oldest === undefined) break;
+          const stale = imageAtlasCache.get(oldest);
+          imageAtlasCache.delete(oldest);
+          stale?.dispose();
+        }
+        resolve(tex);
+      };
+      if (typeof img.decode === "function") img.decode().then(finalize, finalize);
+      else finalize();
+    };
+    img.src = fullUrl;
+  }).finally(() => {
+    imageAtlasInflight.delete(key);
+  });
+
+  imageAtlasInflight.set(key, promise);
+  return promise;
+}
+
+/** Resolves once all currently in-flight F1 image atlas loads finish */
+export function waitForF1ImageAtlases(): Promise<void> {
+  if (imageAtlasInflight.size === 0) return Promise.resolve();
+  return Promise.all([...imageAtlasInflight.values()]).then(() => undefined);
+}
+
+/** Disposes and clears cached painted F1 image atlases */
+export function clearF1ImageAtlasCache(): void {
+  for (const tex of imageAtlasCache.values()) tex.dispose();
+  imageAtlasCache.clear();
+  warnedFailedImageAtlases.clear();
 }
 
 /** Generates (or retrieves from cache) the high-DPI CanvasTexture livery atlas for an F1 livery */
@@ -3201,13 +3320,7 @@ export function getF1LiveryAtlasTexture(livery: LiveryConfig): THREE.CanvasTextu
   renderF1LiveryToContext(ctx, livery, size);
 
   const tex = new THREE.CanvasTexture(canvas);
-  tex.name = `f1_livery_atlas_${livery.id}`;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.flipY = false;
-  tex.wrapS = THREE.ClampToEdgeWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
+  configureF1AtlasTexture(tex, `f1_livery_atlas_${livery.id}`);
 
   if (isCustom) {
     customAtlasSlot?.tex.dispose();
@@ -3248,15 +3361,37 @@ export interface F1LiverySurface {
 }
 
 export interface F1LiveryPaintController {
-  /** Applies a procedural livery (or disables procedural override when `null`) */
+  /** Applies a procedural or image-atlas livery (or disables override when `null`). Returns true if an atlas is active immediately. */
   set: (livery: LiveryConfig | null) => boolean;
+  /** Cancels any pending asynchronous image atlas loads for this car instance */
+  dispose?: () => void;
+}
+
+export interface InstallF1LiveryPaintOptions {
+  /** Which F1 car body this controller paints (`"lc26"` or `"lc25"`), used to pick the matching image atlas */
+  carId?: F1AtlasCarId;
+}
+
+function resolveAtlasFinishAndCarbon(
+  livery: LiveryConfig,
+  isImageAtlas: boolean
+): { finish: LiveryFinishParams; carbonExposure: number } {
+  const finishName: LiveryFinish = livery.visual?.finish ?? livery.finish ?? (isImageAtlas ? "gloss" : "satin");
+  const finish = LIVERY_FINISH_PROFILES[finishName] ?? (isImageAtlas ? LIVERY_FINISH_PROFILES.gloss : LIVERY_FINISH_PROFILES.satin);
+  const carbonExposure = livery.visual?.carbonExposure ?? 0.7;
+  return { finish, carbonExposure };
 }
 
 /**
- * Installs the zero-recompile tri-orthographic procedural F1 livery shader onto a car's own paint materials.
- * When `set(null)` is called, the shader becomes a no-op and falls back to the base paint zone colours.
+ * Installs the zero-recompile tri-orthographic procedural & image-atlas F1 livery shader onto a car's own paint materials.
+ * When `set(null)` is called (or while an image atlas is still loading / fails to load), the shader becomes a no-op and
+ * falls back to the base paint zone colours.
  */
-export function installF1LiveryPaint(surfaces: readonly F1LiverySurface[]): F1LiveryPaintController {
+export function installF1LiveryPaint(
+  surfaces: readonly F1LiverySurface[],
+  options: InstallF1LiveryPaintOptions = {}
+): F1LiveryPaintController {
+  const carId: F1AtlasCarId = options.carId ?? "lc26";
   const sharedUniforms = {
     uLiveryAtlas: { value: BLANK_ATLAS as THREE.Texture },
     uLiveryEnabled: { value: 0.0 },
@@ -3303,36 +3438,73 @@ export function installF1LiveryPaint(surfaces: readonly F1LiverySurface[]): F1Li
     }
   };
 
+  const disableAtlas = () => {
+    sharedUniforms.uLiveryEnabled.value = 0.0;
+    sharedUniforms.uLiveryCarbonStrength.value = 0.0;
+    restoreBaseFinish();
+  };
+
+  const applyAtlasTexture = (atlas: THREE.Texture, livery: LiveryConfig, isImageAtlas: boolean) => {
+    const { finish, carbonExposure } = resolveAtlasFinishAndCarbon(livery, isImageAtlas);
+    sharedUniforms.uLiveryAtlas.value = atlas;
+    sharedUniforms.uLiveryEnabled.value = 1.0;
+    sharedUniforms.uLiveryCarbonStrength.value = carbonExposure;
+
+    for (const { material: m } of surfaces) {
+      m.color.setHex(0xffffff);
+      m.roughness = finish.roughness;
+      m.metalness = finish.metalness;
+      m.clearcoat = finish.clearcoat;
+      m.clearcoatRoughness = finish.clearcoatRoughness;
+      m.specularIntensity = finish.specularIntensity;
+    }
+  };
+
+  let applySeq = 0;
+  let disposed = false;
+
   return {
     set: (livery) => {
-      if (!livery) {
-        sharedUniforms.uLiveryEnabled.value = 0.0;
-        sharedUniforms.uLiveryCarbonStrength.value = 0.0;
-        restoreBaseFinish();
+      const seq = ++applySeq;
+      if (!livery || disposed) {
+        disableAtlas();
         return false;
       }
+
+      const atlasUrl = livery.atlas?.[carId];
+      if (atlasUrl) {
+        const res = chooseAtlasResolution();
+        const cached = getCachedF1ImageAtlas(atlasUrl, res);
+        if (cached) {
+          applyAtlasTexture(cached, livery, true);
+          return true;
+        }
+        // Show the livery's base colours until the painted image arrives (or stays on them if loading fails)
+        disableAtlas();
+        void loadF1ImageAtlasTexture(atlasUrl, res).then((tex) => {
+          if (disposed || seq !== applySeq || !tex) return;
+          applyAtlasTexture(tex, livery, true);
+        });
+        return false;
+      }
+
+      // An image livery fitted only to the other F1 body with no procedural visual fallback keeps base colours
+      if (livery.atlas && !livery.visual) {
+        disableAtlas();
+        return false;
+      }
+
       const atlas = getF1LiveryAtlasTexture(livery);
       if (!atlas) {
-        sharedUniforms.uLiveryEnabled.value = 0.0;
-        sharedUniforms.uLiveryCarbonStrength.value = 0.0;
-        restoreBaseFinish();
+        disableAtlas();
         return false;
       }
-      const spec = resolveLiveryVisual(livery);
-      const finish = LIVERY_FINISH_PROFILES[spec.finish] ?? LIVERY_FINISH_PROFILES.satin;
-      sharedUniforms.uLiveryAtlas.value = atlas;
-      sharedUniforms.uLiveryEnabled.value = 1.0;
-      sharedUniforms.uLiveryCarbonStrength.value = spec.carbonExposure;
-
-      for (const { material: m } of surfaces) {
-        m.color.setHex(0xffffff);
-        m.roughness = finish.roughness;
-        m.metalness = finish.metalness;
-        m.clearcoat = finish.clearcoat;
-        m.clearcoatRoughness = finish.clearcoatRoughness;
-        m.specularIntensity = finish.specularIntensity;
-      }
+      applyAtlasTexture(atlas, livery, false);
       return true;
+    },
+    dispose: () => {
+      disposed = true;
+      applySeq++;
     },
   };
 }

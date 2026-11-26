@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "use-intl/react";
-import { LIVERIES } from "@/lib/track-data";
+import { liveriesForCar } from "@/lib/track-data";
 import { FACTORY_LIVERY_NOTE, carById, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { CAMERA_MODES, STARTING_CAMERAS } from "@/lib/render/camera-modes";
 import { Card } from "@/components/ui";
@@ -49,7 +49,7 @@ export const CarStep: React.FC<SetupStepProps> = (p) => {
         </span>
         {carTakesLivery(p.carId) ? (
           <LiveryPicker
-            liveries={LIVERIES}
+            liveries={liveriesForCar(p.carId)}
             value={p.selectedLivery}
             onChange={p.onChangeLivery}
             onHover={(livery) =>
