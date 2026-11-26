@@ -759,7 +759,8 @@
     },
     "type": "street",
     "quality": "sim",
-    "defaultTimeOfDay": "night"
+    "defaultTimeOfDay": "night",
+    "unlisted": true
   },
   {
     "id": "jeddah",
@@ -782,6 +783,7 @@
     },
     "type": "street",
     "quality": "sim",
-    "defaultTimeOfDay": "night"
+    "defaultTimeOfDay": "night",
+    "unlisted": true
   }
 ]
