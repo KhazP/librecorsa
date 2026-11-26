@@ -98,7 +98,10 @@ const EventBlock: React.FC<{
     <div className="flex flex-col gap-2 rounded-lc-tile border border-white/7 bg-lc-void/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="lc-mono text-[13px] font-bold text-lc-chalk">{event.event}</span>
+          {/* "2026-W47" left to right, or a right-to-left page shows "W47-2026" */}
+          <span dir="ltr" className="lc-mono text-[13px] font-bold text-lc-chalk">
+            {event.event}
+          </span>
           {circuitLabel ? <span className="text-[14px] font-semibold text-lc-chalk">{circuitLabel}</span> : null}
           {carLabel ? <span className="text-[13px] text-lc-fog">{carLabel}</span> : null}
         </div>
