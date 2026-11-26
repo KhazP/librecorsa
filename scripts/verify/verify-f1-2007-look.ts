@@ -182,6 +182,8 @@ async function main(): Promise<void> {
     const spec = (team: string, kn5: string) => byKn5(glbs.get(team)!, kn5)?.extensions?.KHR_materials_specular?.specularFactor ?? NaN;
     const base = (team: string, kn5: string) => byKn5(glbs.get(team)!, kn5)?.pbrMetallicRoughness?.baseColorFactor?.[0] ?? NaN;
     check("Red Bull's and Williams' wishbones barely reflect", spec('red-bull', 'RBR3_SUSPENSION') < 0.03 && spec('williams', 'FW29_SUSPENSION') < 0.01, `${spec('red-bull', 'RBR3_SUSPENSION')} / ${spec('williams', 'FW29_SUSPENSION')}`);
+    // The McLaren's wishbone detail is a DXT1 (no alpha, so no mask of its own): its brightness masks it instead
+    check("the McLaren's wishbones (a detail with no alpha) reflect as little as the others'", spec('mclaren', 'MP4_22_SUSPENSION') < 0.04, String(spec('mclaren', 'MP4_22_SUSPENSION')));
     check('a ksAmbient 0.3 / ksDiffuse 0.2 rim at 0.53, a 0.2 one at 0.22', Math.abs(base('honda', 'RA107_RIMS') - 0.53) < 1e-3 && Math.abs(base('ferrari', 'F2007_RIMS_FRONT') - 0.22) < 1e-3, `${base('honda', 'RA107_RIMS')} / ${base('ferrari', 'F2007_RIMS_FRONT')}`);
     check("a livery's own parts keep the paint's plain dimming (the Ferrari's sidepods 0.8, not 0.53)", Math.abs(base('ferrari', 'WCEXTRA0') - 0.8) < 0.06, String(base('ferrari', 'WCEXTRA0')));
   }

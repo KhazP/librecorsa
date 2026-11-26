@@ -1124,6 +1124,19 @@ def ext_car_paint(car_dir):
                 colored='COLORED' in block.get('CLEARCOATSPECULAR', '').upper())
 
 
+def stores_alpha(raw):
+    """Whether texture file `raw` stores an alpha channel: a DXT1 / BC1 DDS stores none (bar its 1-bit cut-outs), nor
+    does an uncompressed DDS without alpha pixels or an RGB image"""
+    if raw[:4] == b'DDS ':
+        fourcc = raw[84:88]
+        if fourcc == b'DXT1' or (fourcc == b'DX10' and struct.unpack_from('<I', raw, 128)[0] in (70, 71, 72)):
+            return int(np.asarray(decode(raw).getchannel('A')).min()) < 255
+        if fourcc == b'\0\0\0\0':
+            return bool(struct.unpack_from('<I', raw, 80)[0] & 0x1)
+        return True
+    return 'A' in Image.open(io.BytesIO(raw)).getbands()
+
+
 def detail_drawn_once(m, src):
     """Whether multimap `m` draws its detail once over its own UVs (detailUVMultiplier 1): a livery, not a weave"""
     uvm = m['props'].get('detailUVMultiplier', 1.0) or 1.0
@@ -1147,7 +1160,14 @@ def finish_map(m, src, fin):
     coat = np.ones(size[::-1], np.float32)
     gloss = np.ones(size[::-1], np.float32)
     if detail_drawn_once(m, src):
-        at = np.asarray(decode(src[maps['txDetail']]).getchannel('A').resize(size, Image.BILINEAR), np.float32) / 255.0
+        det = decode(src[maps['txDetail']])
+        # A picture stored as a detail with no alpha channel (DXT1) carries no mask, and reads as 1 all over. On a part
+        # without a coat its brightness stands in: the mod's renders show such a part (the F1 2007 McLaren's wishbones)
+        # as dark as its siblings whose details mask theirs at 0.12-0.23. A coat keeps its full reflection, and so does
+        # a detail of one flat colour (a black.dds making a part glossy black, as the 934's exhaust)
+        bare = (not fin['lacquer'] and not stores_alpha(src[maps['txDetail']])
+                and np.asarray(det.convert('RGB'), np.float32).reshape(-1, 3).std(0).max() >= 3.0)
+        at = np.asarray((det.convert('L') if bare else det.getchannel('A')).resize(size, Image.BILINEAR), np.float32) / 255.0
         refl *= at * (1.0 - ad) + ad
         coat *= np.clip(refl / FULL_COAT_ALPHA, 0.0, 1.0)
     if maps.get('txMaps') in src:
