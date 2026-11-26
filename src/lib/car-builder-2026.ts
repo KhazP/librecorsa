@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
+import type { CarTelemetry, LiveryConfig, LiveryFinish, TireCompound } from "@/types/f1";
 import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import {
   applyLiveryFinishToMaterial,
@@ -26,6 +26,10 @@ export interface PortedSkin {
   variant?: string;
   /** Procedural livery id painted onto the car's body paint material (`gt3-livery-painter.ts`) */
   procedural?: string;
+  /** Painted 2048x2048 5-panel atlas image URL projected onto the car's body paint material (`ported-procedural-livery.ts`) */
+  atlas?: string;
+  /** Paint finish profile for an atlas livery (absent: "gloss") */
+  finish?: LiveryFinish;
 }
 
 export interface SimCarRig {

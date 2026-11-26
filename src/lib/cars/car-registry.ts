@@ -1,5 +1,5 @@
 import { text as t } from "@/lib/text";
-import type { VehicleModelId } from "@/types/f1";
+import type { LiveryFinish, VehicleModelId } from "@/types/f1";
 import type { CarClassRule } from "@/lib/net/wire";
 import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { LC25_SOUND } from "@/lib/sim/f12025-car/Lc25Sim";
@@ -179,6 +179,10 @@ export interface CarSkin {
   variant?: string;
   /** Procedural livery id (`gt3-livery-painter.ts`), projected directly onto the GLB's exterior paint material */
   procedural?: string;
+  /** Painted 2048x2048 5-panel atlas image URL (`ported-procedural-livery.ts`), projected directly onto the GLB's exterior paint material */
+  atlas?: string;
+  /** Paint finish profile for an atlas livery (absent: "gloss") */
+  finish?: LiveryFinish;
   /** Explicitly keeps the GLB's built-in factory paint (even when this skin is not `skins[0]`) */
   useModelPaint?: boolean;
   /** Where its files are, when not beside the car's model (a mod package's livery: `/mods/<package>/…`) */
@@ -746,6 +750,7 @@ export const carSkinBaseUrl = (id: CarId, skinId: string): string => `/cars/${id
  */
 export function portedSkinFor(id: CarId, skin: CarSkin | null | undefined): PortedSkin | null {
   if (!skin) return null;
+  if (skin.atlas) return { baseUrl: "", atlas: skin.atlas, finish: skin.finish, variant: skin.variant };
   if (skin.procedural) return { baseUrl: "", procedural: skin.procedural, variant: skin.variant };
   if (skin.useModelPaint) return null;
   const skins = anyCarById(id)?.skins;

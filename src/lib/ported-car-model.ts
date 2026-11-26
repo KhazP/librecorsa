@@ -494,11 +494,15 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const wearing = skin;
     const variant = wearing?.variant ?? "base";
     for (const part of parts) part.node.visible = part.variants.includes(variant);
-    proceduralLivery?.set(wearing?.procedural ?? null);
     const pending: Promise<void>[] = [];
+    if (wearing?.atlas && proceduralLivery) {
+      pending.push(proceduralLivery.setAtlas(wearing.atlas, wearing.finish).then(() => undefined));
+    } else {
+      proceduralLivery?.set(wearing?.procedural ?? null);
+    }
     for (const slot of skinSlots) {
-      // No livery, procedural GT3 livery, or one that leaves this file as the model has it
-      if (!wearing || wearing.procedural || (wearing.files && !wearing.files.includes(slot.file))) {
+      // No livery, procedural / painted-atlas livery, or one that leaves this file as the model has it
+      if (!wearing || wearing.procedural || wearing.atlas || (wearing.files && !wearing.files.includes(slot.file))) {
         slot.mat.map = slot.own;
         slot.mat.needsUpdate = true;
         continue;
@@ -734,7 +738,13 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // compound
     setLivery: () => {},
     setSkin: (next) => {
-      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant && next?.procedural === skin?.procedural) {
+      if (
+        next?.baseUrl === skin?.baseUrl &&
+        next?.variant === skin?.variant &&
+        next?.procedural === skin?.procedural &&
+        next?.atlas === skin?.atlas &&
+        next?.finish === skin?.finish
+      ) {
         return Promise.resolve();
       }
       skin = next;

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { LIVERY_FINISH_PROFILES } from "@/lib/render/f1-livery-painter";
+import { withBasePath } from "@/lib/base-path";
+import { chooseAtlasResolution, LIVERY_FINISH_PROFILES } from "@/lib/render/f1-livery-painter";
 import { PORTED_LIVERY_SHADERS } from "@/lib/render/livery-projection";
 import {
   clearGt3LiveryCache,
@@ -123,11 +124,131 @@ function resolveProceduralAtlas(id: string): ResolvedProceduralAtlas | null {
   return null;
 }
 
-/** Disposes all cached procedural bodywork livery atlases (called alongside `clearSkinTextureCache`) */
+const MAX_CACHED_IMAGE_ATLASES = 12;
+const portedImageAtlasCache = new Map<string, THREE.Texture>();
+const portedImageAtlasInflight = new Map<string, Promise<THREE.Texture | null>>();
+const warnedFailedPortedImageAtlases = new Set<string>();
+
+function portedImageAtlasKey(url: string, resolution: number): string {
+  return `${url}|${resolution}`;
+}
+
+function configurePortedAtlasTexture(tex: THREE.Texture, name: string): void {
+  tex.name = name;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+}
+
+/** Synchronously returns a previously loaded painted ported-car image atlas texture if cached, touching LRU order */
+export function getCachedPortedImageAtlas(url: string, resolution = chooseAtlasResolution()): THREE.Texture | null {
+  const key = portedImageAtlasKey(url, resolution);
+  const hit = portedImageAtlasCache.get(key);
+  if (!hit) return null;
+  portedImageAtlasCache.delete(key);
+  portedImageAtlasCache.set(key, hit);
+  return hit;
+}
+
+/**
+ * Loads a painted 5-panel ported-car atlas image (PNG/WebP/JPEG) asynchronously with sRGB, flipY=false,
+ * ClampToEdge and 8x anisotropy, downscaling to `resolution` (1024 px on phone viewports) when larger.
+ * Returns null on error and logs once per failing URL.
+ */
+export function loadPortedImageAtlasTexture(
+  url: string,
+  resolution = chooseAtlasResolution()
+): Promise<THREE.Texture | null> {
+  const hit = getCachedPortedImageAtlas(url, resolution);
+  if (hit) return Promise.resolve(hit);
+  const key = portedImageAtlasKey(url, resolution);
+  const inflight = portedImageAtlasInflight.get(key);
+  if (inflight) return inflight;
+  if (typeof document === "undefined" || typeof Image === "undefined") return Promise.resolve(null);
+
+  const fullUrl = withBasePath(url);
+  const promise = new Promise<THREE.Texture | null>((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    const fail = () => {
+      if (!warnedFailedPortedImageAtlases.has(url)) {
+        warnedFailedPortedImageAtlases.add(url);
+        console.warn(`Ported car livery atlas image "${url}" failed to load; falling back to model paint`);
+      }
+      resolve(null);
+    };
+    img.onerror = fail;
+    img.onload = () => {
+      const finalize = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (!w || !h) {
+          fail();
+          return;
+        }
+        let tex: THREE.Texture;
+        if (w > resolution || h > resolution) {
+          const canvas = document.createElement("canvas");
+          const scale = Math.min(resolution / w, resolution / h);
+          canvas.width = Math.max(1, Math.round(w * scale));
+          canvas.height = Math.max(1, Math.round(h * scale));
+          const ctx = canvas.getContext("2d");
+          if (ctx && typeof ctx.drawImage === "function") {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            tex = new THREE.CanvasTexture(canvas);
+          } else {
+            tex = new THREE.Texture(img);
+          }
+        } else {
+          tex = new THREE.Texture(img);
+        }
+        configurePortedAtlasTexture(tex, `ported_livery_atlas_img_${url}`);
+        portedImageAtlasCache.set(key, tex);
+        while (portedImageAtlasCache.size > MAX_CACHED_IMAGE_ATLASES) {
+          const oldest = portedImageAtlasCache.keys().next().value;
+          if (oldest === undefined) break;
+          const stale = portedImageAtlasCache.get(oldest);
+          portedImageAtlasCache.delete(oldest);
+          stale?.dispose();
+        }
+        resolve(tex);
+      };
+      if (typeof img.decode === "function") img.decode().then(finalize, finalize);
+      else finalize();
+    };
+    img.src = fullUrl;
+  }).finally(() => {
+    portedImageAtlasInflight.delete(key);
+  });
+
+  portedImageAtlasInflight.set(key, promise);
+  return promise;
+}
+
+/** Resolves once all currently in-flight ported-car image atlas loads finish */
+export function waitForPortedImageAtlases(): Promise<void> {
+  if (portedImageAtlasInflight.size === 0) return Promise.resolve();
+  return Promise.all([...portedImageAtlasInflight.values()]).then(() => undefined);
+}
+
+/** Disposes and clears cached painted ported-car image atlases */
+export function clearPortedImageAtlasCache(): void {
+  for (const tex of portedImageAtlasCache.values()) tex.dispose();
+  portedImageAtlasCache.clear();
+  warnedFailedPortedImageAtlases.clear();
+}
+
+/** Disposes all cached procedural & painted image bodywork livery atlases (called alongside `clearSkinTextureCache`) */
 export function clearAllProceduralLiveryCaches(): void {
   clearGt3LiveryCache();
   clearLmdhLiveryCache();
   clearLianaLiveryCache();
+  clearPortedImageAtlasCache();
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +274,7 @@ export interface ProceduralLiverySurface {
 
 export interface ProceduralLiveryController {
   set: (liveryId: string | null) => boolean;
+  setAtlas: (url: string | null, finish?: LiveryFinish) => Promise<boolean>;
   dispose: () => void;
 }
 
@@ -227,46 +349,80 @@ export function installPortedProceduralLivery(
     }
   };
 
+  const disableAtlas = () => {
+    sharedUniforms.uProcEnabled.value = 0.0;
+    sharedUniforms.uProcCarbonStrength.value = 0.0;
+    restoreOriginals();
+  };
+
+  const applyAtlas = (atlas: THREE.Texture, finishName: LiveryFinish, carbonExposure: number) => {
+    const finish = LIVERY_FINISH_PROFILES[finishName] ?? LIVERY_FINISH_PROFILES.gloss;
+    sharedUniforms.uProcAtlas.value = atlas;
+    sharedUniforms.uProcEnabled.value = 1.0;
+    sharedUniforms.uProcCarbonStrength.value = carbonExposure;
+
+    for (let i = 0; i < surfaces.length; i++) {
+      const m = surfaces[i].material;
+      const orig = originals[i];
+      const phys = m as THREE.MeshPhysicalMaterial;
+      m.color.setHex(0xffffff);
+      m.roughness = finish.roughness;
+      m.metalness = finish.metalness;
+      if (phys.isMeshPhysicalMaterial) {
+        phys.clearcoat = finish.clearcoat;
+        phys.clearcoatRoughness = finish.clearcoatRoughness;
+        phys.specularIntensity = finish.specularIntensity;
+      }
+      if (orig.normalScale && m.normalScale) {
+        const factor = finishName === "matte" ? 0.35 : 0.85;
+        m.normalScale.copy(orig.normalScale).multiplyScalar(factor);
+      }
+    }
+  };
+
+  let loadSeq = 0;
+  let disposed = false;
+
   return {
     set: (liveryId) => {
-      if (!liveryId) {
-        sharedUniforms.uProcEnabled.value = 0.0;
-        sharedUniforms.uProcCarbonStrength.value = 0.0;
-        restoreOriginals();
+      loadSeq++;
+      if (disposed || !liveryId) {
+        disableAtlas();
         return false;
       }
       const resolved = resolveProceduralAtlas(liveryId);
       if (!resolved) {
-        sharedUniforms.uProcEnabled.value = 0.0;
-        sharedUniforms.uProcCarbonStrength.value = 0.0;
-        restoreOriginals();
+        disableAtlas();
         return false;
       }
-      const finish = LIVERY_FINISH_PROFILES[resolved.finish] ?? LIVERY_FINISH_PROFILES.gloss;
-      sharedUniforms.uProcAtlas.value = resolved.atlas;
-      sharedUniforms.uProcEnabled.value = 1.0;
-      sharedUniforms.uProcCarbonStrength.value = resolved.carbonExposure;
-
-      for (let i = 0; i < surfaces.length; i++) {
-        const m = surfaces[i].material;
-        const orig = originals[i];
-        const phys = m as THREE.MeshPhysicalMaterial;
-        m.color.setHex(0xffffff);
-        m.roughness = finish.roughness;
-        m.metalness = finish.metalness;
-        if (phys.isMeshPhysicalMaterial) {
-          phys.clearcoat = finish.clearcoat;
-          phys.clearcoatRoughness = finish.clearcoatRoughness;
-          phys.specularIntensity = finish.specularIntensity;
-        }
-        if (orig.normalScale && m.normalScale) {
-          const factor = resolved.finish === "matte" ? 0.35 : 0.85;
-          m.normalScale.copy(orig.normalScale).multiplyScalar(factor);
-        }
-      }
+      applyAtlas(resolved.atlas, resolved.finish, resolved.carbonExposure);
       return true;
     },
+    setAtlas: (url, finishName = "gloss") => {
+      const seq = ++loadSeq;
+      if (disposed || !url) {
+        disableAtlas();
+        return Promise.resolve(false);
+      }
+      const cached = getCachedPortedImageAtlas(url);
+      if (cached) {
+        applyAtlas(cached, finishName, 0.7);
+        return Promise.resolve(true);
+      }
+      disableAtlas();
+      return loadPortedImageAtlasTexture(url).then((tex) => {
+        if (disposed || seq !== loadSeq) return false;
+        if (!tex) {
+          disableAtlas();
+          return false;
+        }
+        applyAtlas(tex, finishName, 0.7);
+        return true;
+      });
+    },
     dispose: () => {
+      disposed = true;
+      loadSeq++;
       for (const s of surfaces) s.material.dispose();
     },
   };
