@@ -66,6 +66,8 @@ export function Modal({
       if (el.hasAttribute("data-nav-zone")) break;
     }
     const raf = requestAnimationFrame(() => {
+      // A field that took focus as it mounted (autoFocus: the driver-name prompt) keeps it
+      if (sheetRef.current?.contains(document.activeElement)) return;
       const target =
         sheetRef.current?.querySelector<HTMLElement>("[data-nav-default]") ??
         sheetRef.current?.querySelector<HTMLElement>("[data-modal-close]");
