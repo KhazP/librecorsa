@@ -854,7 +854,9 @@ export class DriveSession {
     this.togglePause = () => {
       if (disposed) return;
       const paused = !this.snapshot.paused;
-      this.publish(paused ? { paused } : { paused, pauseNotice: null });
+      // The snapshot's telemetry is only republished when its shape changes: the pause menu shows this moment's (its lap
+      // header read a lap behind the timing tower after a lap was completed)
+      this.publish(paused ? { paused, telemetry: this.telemetrySnapshot } : { paused, pauseNotice: null });
       if (paused) {
         wheelFfb.stop();
         releaseHeldKeys();
