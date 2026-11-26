@@ -43,9 +43,11 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 export type ModDirection = "clockwise" | "anticlockwise";
 export type ModCircuitType = "permanent" | "street" | "oval" | "hillclimb";
 export type ModCarClass = "f1" | "gt3" | "proto" | "classic" | "road";
+export type ModLiveryFinish = "gloss" | "satin" | "matte" | "metallic" | "chrome";
 const DIRECTIONS: readonly ModDirection[] = ["clockwise", "anticlockwise"];
 const CIRCUIT_TYPES: readonly ModCircuitType[] = ["permanent", "street", "oval", "hillclimb"];
 const CAR_CLASSES: readonly ModCarClass[] = ["f1", "gt3", "proto", "classic", "road"];
+const LIVERY_FINISHES: readonly ModLiveryFinish[] = ["gloss", "satin", "matte", "metallic", "chrome"];
 const TIMES_OF_DAY = ["dawn", "morning", "noon", "afternoon", "golden_hour", "dusk", "night"] as const;
 
 export interface ModCredit {
@@ -77,7 +79,7 @@ export interface ModTrack {
   credit?: ModCredit;
 }
 
-/** A livery: its files' folder in the package, swapped onto the car's model by material name as the game's own are */
+/** A livery: its files' folder in the package, swapped onto the car's model by material name or projected via a painted atlas */
 export interface ModSkin {
   id: string;
   name: string;
@@ -86,6 +88,10 @@ export interface ModSkin {
   dir?: string;
   /** The files it has, when it changes only some of what a livery can */
   files?: string[];
+  /** Painted square atlas image (png/webp/jpg) inside the skin folder, for cars using tri-orthographic atlas projection */
+  atlas?: string;
+  /** Paint finish profile for an atlas livery (absent: "gloss") */
+  finish?: ModLiveryFinish;
   /** The model's part variant it wears (absent: "base") */
   variant?: string;
 }
@@ -280,12 +286,18 @@ function skin(p: Problems, where: string, v: unknown, seen: Set<string>): ModSki
     return undefined;
   }
   const id = localId(p, `${where}.id`, v.id, seen);
+  const files = list(p, `${where}.files`, v.files, 64, (f, w) => path(p, w, f, /\.(png|jpe?g|webp|ktx2)$/i));
+  const atlas = path(p, `${where}.atlas`, v.atlas, /\.(png|jpe?g|webp)$/i, true);
+  const finish = oneOf(p, `${where}.finish`, v.finish, LIVERY_FINISHES, true);
+  if (atlas && files !== undefined) p.add(`${where}.files`, 'cannot be used together with "atlas"');
   const out: ModSkin = {
     id: id ?? "",
     name: str(p, `${where}.name`, v.name, { max: 80 }) ?? "",
     swatch: swatch(p, `${where}.swatch`, v.swatch),
     dir: path(p, `${where}.dir`, v.dir, undefined, true),
-    files: list(p, `${where}.files`, v.files, 64, (f, w) => path(p, w, f, /\.(png|jpe?g|webp|ktx2)$/i)),
+    files,
+    atlas,
+    finish,
     variant: str(p, `${where}.variant`, v.variant, { max: 64, optional: true }),
   };
   return out;
@@ -305,8 +317,10 @@ function list<T>(p: Problems, where: string, v: unknown, max: number, item: (v: 
 export interface ModKnownIds {
   /** Cars a mod car's `sound` may borrow */
   cars: ReadonlySet<string>;
-  /** Cars a livery may be for: those with liveries (the cars less the 2026 prototype); `cars` when left out */
+  /** Cars a file-based livery may be for; `cars` when left out */
   skinCars?: ReadonlySet<string>;
+  /** Cars that accept painted atlas image liveries (`skins` entry with `atlas`); empty when left out */
+  atlasCars?: ReadonlySet<string>;
   /** Vehicle models a mod car may drive as */
   vehicles: ReadonlySet<string>;
   /** Vehicle models a physics file may change; `vehicles` when left out */
@@ -358,8 +372,22 @@ export function validateModManifest(
     const s = skin(p, where, v, skinIds);
     if (!s || !isRecord(v)) return undefined;
     const skinCars = known.skinCars ?? known.cars;
-    if (typeof v.car !== "string" || !skinCars.has(v.car)) {
-      p.add(`${where}.car`, `must be one of the game's cars with liveries (${[...skinCars].join(", ")})`);
+    const atlasCars = known.atlasCars ?? new Set<string>();
+    const allSkinCars = new Set([...skinCars, ...atlasCars]);
+    if (typeof v.car !== "string" || !allSkinCars.has(v.car)) {
+      p.add(`${where}.car`, `must be one of the game's cars with liveries (${[...allSkinCars].join(", ")})`);
+      return undefined;
+    }
+    if (s.atlas || v.atlas !== undefined) {
+      if (!atlasCars.has(v.car)) {
+        p.add(`${where}.car`, `atlas liveries are supported for ${[...atlasCars].join(", ")}`);
+        return undefined;
+      }
+    } else if (!skinCars.has(v.car)) {
+      p.add(
+        `${where}.car`,
+        `requires an "atlas" image file for ${v.car} (atlas cars: ${[...atlasCars].join(", ")}; file-based skin cars: ${[...skinCars].join(", ")})`
+      );
       return undefined;
     }
     return { ...s, car: v.car } satisfies ModCarSkin;
@@ -403,7 +431,11 @@ export function validateModManifest(
       physics,
       model: path(p, `${where}.model`, v.model, /\.glb$/i) ?? "",
       bodyPlan,
-      skins: list(p, `${where}.skins`, v.skins, 64, (s, w) => skin(p, w, s, carSkinIds)),
+      skins: list(p, `${where}.skins`, v.skins, 64, (s, w) => {
+        const parsed = skin(p, w, s, carSkinIds);
+        if (parsed?.atlas) p.add(`${w}.atlas`, "atlas liveries are only supported for built-in cars");
+        return parsed;
+      }),
       sound,
       credit: credit(p, `${where}.credit`, v.credit, true),
     } satisfies ModCar;
@@ -426,7 +458,9 @@ export function modSkinDir(s: ModSkin, car?: ModCar): string {
 export function manifestFiles(m: ModManifest): string[] {
   const files = new Set<string>(["mod.json"]);
   const skinFiles = (s: ModSkin, car?: ModCar) => {
-    for (const f of s.files ?? []) files.add(`${modSkinDir(s, car)}/${f}`);
+    const dir = modSkinDir(s, car);
+    if (s.atlas) files.add(`${dir}/${s.atlas}`);
+    for (const f of s.files ?? []) files.add(`${dir}/${f}`);
   };
   for (const t of m.tracks ?? []) files.add(t.data);
   for (const s of m.skins ?? []) skinFiles(s);
