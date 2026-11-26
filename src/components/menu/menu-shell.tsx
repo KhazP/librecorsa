@@ -124,7 +124,11 @@ export const RailRow: React.FC<RailRowProps> = ({
           {badge ? <span className="inline-flex shrink-0 not-italic">{badge}</span> : null}
         </span>
         {detail ? (
-          <span className={cx("truncate text-[12px] leading-snug text-lc-slate group-focus:text-lc-void/75 phone:text-[11px]")} title={detail}>
+          // Up to two lines, never cut mid-number ("5.8…") or, right to left, from its start
+          <span
+            className="line-clamp-2 text-[12px] leading-snug break-words text-lc-slate group-focus:text-lc-void/75 phone:text-[11px]"
+            title={detail}
+          >
             {detail}
           </span>
         ) : null}
