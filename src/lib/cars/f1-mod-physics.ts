@@ -66,7 +66,8 @@ export function useF1ModPhysics(): F1ModPhysics {
  */
 export const carTakesPhysicsSwitch = (id: CarId): boolean => {
   const def = carById(id);
-  return def.classId === "f1" && !!def.modelUrl && !def.mod;
+  // A car with a vehicle model of its own (F1 2007) keeps it
+  return def.classId === "f1" && !!def.modelUrl && !def.mod && isF1ModPhysics(def.physics);
 };
 
 /** The vehicle model a car drives on, with the physics switch applied to the ported F1 cars */

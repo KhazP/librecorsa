@@ -24,6 +24,7 @@ import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
 import { BMW_M1_PROCAR_CONFIG } from "./classic/BmwM1ProcarConfig";
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG, CHAPARRAL_ENGINE_BRAKING } from "./classic/Chaparral2dConfig";
 import { PORSCHE_934_RSR_CONFIG } from "./classic/Porsche934RsrConfig";
+import { F12007_CONFIG } from "./f1-2007/F12007Config";
 import { VW_SCIROCCO_CONFIG } from "./road/VwSciroccoConfig";
 import { type CarPhysicsConfig, racesOnBlankets } from "./f12026-car/F12026CarConfig";
 
@@ -48,6 +49,7 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   "chaparral-2d": "gt3",
   "chaparral-2d-67": "gt3",
   "porsche-934-rsr": "gt3",
+  "f1-2007": "f1",
 };
 
 export interface SetupState {
@@ -185,6 +187,8 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   "chaparral-2d-67": { ...rigidBaseline(CHAPARRAL_2D_67_CONFIG, "chaparral-2d-67"), brakeBiasRangePct: [48, 80], engineBrakingPct: 100 * CHAPARRAL_ENGINE_BRAKING },
   // Its adjuster [spec setup.ini FRONT_BIAS]
   "porsche-934-rsr": { ...rigidBaseline(PORSCHE_934_RSR_CONFIG, "porsche-934-rsr"), brakeBiasRangePct: [52, 80] },
+  // Its adjuster [spec setup.ini FRONT_BIAS]
+  "f1-2007": { ...rigidBaseline(F12007_CONFIG, "f1-2007"), brakeBiasRangePct: [53, 62] },
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
@@ -205,6 +209,7 @@ const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
   "chaparral-2d": CHAPARRAL_2D_CONFIG as unknown as CarPhysicsConfig,
   "chaparral-2d-67": CHAPARRAL_2D_67_CONFIG as unknown as CarPhysicsConfig,
   "porsche-934-rsr": PORSCHE_934_RSR_CONFIG as unknown as CarPhysicsConfig,
+  "f1-2007": F12007_CONFIG as unknown as CarPhysicsConfig,
 };
 
 /** Cars whose electronics have the third traction dial, for the driven axle's slide */

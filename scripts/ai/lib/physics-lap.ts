@@ -22,6 +22,7 @@ import { createNissanR32Sim } from '../../../src/lib/sim/classic/NissanR32Sim';
 import { createBmwM1ProcarSim } from '../../../src/lib/sim/classic/BmwM1ProcarSim';
 import { createChaparral2d67Sim, createChaparral2dSim } from '../../../src/lib/sim/classic/Chaparral2dSim';
 import { createPorsche934RsrSim } from '../../../src/lib/sim/classic/Porsche934RsrSim';
+import { createF12007Sim } from '../../../src/lib/sim/f1-2007/F12007Sim';
 import { createVwSciroccoSim } from '../../../src/lib/sim/road/VwSciroccoSim';
 import type { RacingLineId, VehicleModelId } from '../../../src/types/f1';
 import { VEHICLE_MODELS } from '../../../src/lib/cars/vehicle-models';
@@ -99,6 +100,8 @@ export function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THR
       return createChaparral2d67Sim(track, root);
     case 'porsche-934-rsr':
       return createPorsche934RsrSim(track, root);
+    case 'f1-2007':
+      return createF12007Sim(track, root);
     default:
       return new F12026CarSim(track, root);
   }

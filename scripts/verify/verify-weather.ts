@@ -465,6 +465,7 @@ console.log('\n== Weather & time of day');
     'chaparral-2d',
     'chaparral-2d-67',
     'porsche-934-rsr',
+    'f1-2007',
   ] as const;
   check(
     'Every car in the registry resolves a measured headlight and taillight profile',

@@ -13,9 +13,11 @@ import { BMW_M1_PROCAR_SOUND } from "@/lib/sim/classic/BmwM1ProcarSim";
 import { PORSCHE_934_RSR_SOUND } from "@/lib/sim/classic/Porsche934RsrSim";
 import { VW_SCIROCCO_SOUND } from "@/lib/sim/road/VwSciroccoSim";
 import { CHAPARRAL_2D_67_SOUND, CHAPARRAL_2D_SOUND } from "@/lib/sim/classic/Chaparral2dSim";
+import { F12007_SOUND } from "@/lib/sim/f1-2007/F12007Sim";
 import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
 import { BMW_M1_PROCAR_SKINS, PORSCHE_934_RSR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
 import { CHAPARRAL_2D_67_SKINS, CHAPARRAL_2D_SKINS } from "./chaparral-skins";
+import { F1_2007_SKINS, f12007BodyUrl } from "./f1-2007-skins";
 import { AMG_GT3_SKINS, BMW_M4_GT3_SKINS } from "./gt3-skins";
 import { LC_LMDH_SKINS } from "./lmdh-skins";
 import { LIANA_SKINS } from "./liana-skins";
@@ -51,7 +53,8 @@ export type BuiltInCarId =
   | "vw-scirocco-gtx"
   | "chaparral-2d"
   | "chaparral-2d-67"
-  | "porsche-934-rsr";
+  | "porsche-934-rsr"
+  | "f1-2007";
 
 /**
  * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
@@ -139,6 +142,7 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "chaparral-2d": "Its physics come from the Assetto Corsa mod this car was made for.",
   "chaparral-2d-67": "Its physics come from the Assetto Corsa mod this car was made for.",
   "porsche-934-rsr": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "f1-2007": "Its physics come from the Assetto Corsa mod these cars were made for, one set for every team.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -247,6 +251,20 @@ const npanic = (title: string): CarCredit => ({
   license: "Used with the author's permission",
   licenseUrl: NPANIC_CHAPARRAL_URL,
 });
+
+/**
+ * Cimmerian Iter's F1 2007 cars, the eleven teams' models, liveries, sound and physics, used with the author's
+ * permission (CREDITS.md). The mod's own pages are the author's GTPlanet resources
+ */
+const CIMMERIAN_ITER_URL = "https://www.gtplanet.net/forum/members/kakauiyt.314068/#resources";
+const CIMMERIAN_ITER_F1_2007: CarCredit = {
+  title: "F1 2007",
+  author: "Cimmerian Iter",
+  url: CIMMERIAN_ITER_URL,
+  authorUrl: "https://www.gtplanet.net/forum/members/kakauiyt.314068/",
+  license: "Used with the author's permission",
+  licenseUrl: CIMMERIAN_ITER_URL,
+};
 
 /** The 496R's 20 skins, the GLB's own MTR Green first [scripts/cars/port_ac_car.py --skins-out skins.json] */
 const MTR_496R_SKINS: readonly CarSkin[] = [
@@ -377,6 +395,23 @@ const BUILT_IN_CARS: readonly CarDefinition[] = [
     physics: "lc25",
     year: 2025,
     sound: LC25_SOUND,
+  },
+  {
+    // The 2007 grid under one entry: each driver's livery brings their team's car (`CarSkin.modelUrl`), all eleven on
+    // the one physics the mod gives every team
+    id: "f1-2007",
+    classId: "f1",
+    title: "F1 2007",
+    sub: "2007 season · 2.4 L V8 · all eleven teams",
+    badge: "F1 07",
+    quality: "own",
+    credit: CIMMERIAN_ITER_F1_2007,
+    physics: "f1-2007",
+    year: 2007,
+    // The champions' Ferrari F2007; the other teams' cars come with their drivers' liveries
+    modelUrl: f12007BodyUrl("ferrari"),
+    skins: F1_2007_SKINS,
+    sound: F12007_SOUND,
   },
   {
     id: "amg-gt3",

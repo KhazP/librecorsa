@@ -149,6 +149,15 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.47, 0.45, 0.44, 0.36, 0.28, 0.17, 0.13, -0.02],
     lockKappa: Math.tan((540 / 16.9) * (Math.PI / 180)) / 2.296,
   },
+  // Measured 2026-11-26 on warm softs, 35 kg of fuel, wings 45 / 60: past its ≈ 299 km/h top speed (83 m/s) the 85 m/s
+  // column is the drag it can't beat
+  'f1-2007': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.67, 1.85, 2.04, 2.27, 2.54, 2.83, 3.12, 3.42],
+    brakeG: [1.95, 2.08, 2.34, 2.69, 3.13, 3.64, 4.05, 4.26],
+    accelG: [1.16, 1.23, 1.25, 1.01, 0.74, 0.49, 0.23, -0.02],
+    lockKappa: Math.tan((225 / 12) * (Math.PI / 180)) / 3.131,
+  },
 };
 
 export const G = 9.81;

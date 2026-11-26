@@ -229,6 +229,7 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   "chaparral-2d-67": { compound: "soft", tyres: "slicks" },
   // The slicks, the mod's default set (the Group 4 tyres are its hard)
   "porsche-934-rsr": { compound: "soft", tyres: "slicks" },
+  "f1-2007": { compound: "soft", tyres: "soft" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */

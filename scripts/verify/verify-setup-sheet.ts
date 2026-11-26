@@ -240,6 +240,7 @@ console.log("Fuel load");
     "chaparral-2d": 22,
     "chaparral-2d-67": 22,
     "porsche-934-rsr": 22,
+    "f1-2007": 35,
   };
   // A setup saved before the fuel setting: no fuel field at all
   const { fuelDeltaKg: _drop, ...modern } = DEFAULT_CHASSIS_SETUP;

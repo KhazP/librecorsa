@@ -45,6 +45,7 @@ export const VEHICLE_CLASS_OF: Readonly<Record<VehicleModelId, VehicleClassId>> 
   "chaparral-2d": "classic",
   "chaparral-2d-67": "classic",
   "porsche-934-rsr": "classic",
+  "f1-2007": "f1",
   liana: "road",
   "vw-scirocco-gtx": "road",
 };
@@ -63,6 +64,7 @@ export const VEHICLE_DISPLAY_NAME: Readonly<Record<VehicleModelId, string>> = {
   "chaparral-2d": "Chaparral 2D '66",
   "chaparral-2d-67": "Chaparral 2D '67",
   "porsche-934-rsr": "Porsche 934 RSR",
+  "f1-2007": "F1 2007",
   liana: "Suzuki Liana",
   "vw-scirocco-gtx": "VW Scirocco GTX",
 };

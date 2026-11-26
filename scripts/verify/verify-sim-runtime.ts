@@ -115,6 +115,7 @@ const MODELS: [string, VehicleModelId, boolean][] = [
   ['Chaparral 2D', 'chaparral-2d', false],
   ['Chaparral 2D 1967', 'chaparral-2d-67', false],
   ['Porsche 934 Turbo RSR', 'porsche-934-rsr', false],
+  ['F1 2007', 'f1-2007', false],
   ['Liana', 'liana', false],
 ];
 for (const [name, vehicle, rigid] of MODELS) {

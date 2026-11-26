@@ -70,6 +70,7 @@ export const PROFILE_RACING_LINE: Readonly<Record<VehicleModelId, RacingLineId>>
   'chaparral-2d': 'road',
   'chaparral-2d-67': 'road',
   'porsche-934-rsr': 'road',
+  'f1-2007': 'f1',
 };
 
 /**

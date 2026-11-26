@@ -235,6 +235,15 @@ const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> =
     rearFlareSizeM: 0.18,
     measured: true,
   },
+  // The Ferrari F2007's rain light, on the crash structure; the other teams' sit within 10 cm of it
+  "f1-2007": {
+    rearHalfWidthM: 0,
+    rearHeightM: 0.42,
+    rearZM: -1.92,
+    flareSizeM: 0.2,
+    rearFlareSizeM: 0.18,
+    measured: true,
+  },
   "amg-gt3": {
     halfWidthM: 0.74,
     heightM: 0.50,

@@ -25,6 +25,7 @@ import { BMW_M1_PROCAR_CONFIG } from '../../src/lib/sim/classic/BmwM1ProcarConfi
 import { VW_SCIROCCO_CONFIG } from '../../src/lib/sim/road/VwSciroccoConfig';
 import { CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_67_CONFIG } from '../../src/lib/sim/classic/Chaparral2dConfig';
 import { PORSCHE_934_RSR_CONFIG } from '../../src/lib/sim/classic/Porsche934RsrConfig';
+import { F12007_CONFIG } from '../../src/lib/sim/f1-2007/F12007Config';
 
 const CARS: Record<string, CarPhysicsConfig> = {
   'f12026-car': F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
@@ -41,6 +42,7 @@ const CARS: Record<string, CarPhysicsConfig> = {
   'chaparral-2d': CHAPARRAL_2D_CONFIG as unknown as CarPhysicsConfig,
   'chaparral-2d-67': CHAPARRAL_2D_67_CONFIG as unknown as CarPhysicsConfig,
   'porsche-934-rsr': PORSCHE_934_RSR_CONFIG as unknown as CarPhysicsConfig,
+  'f1-2007': F12007_CONFIG as unknown as CarPhysicsConfig,
 };
 
 /** Flat road with a strip of 25 mm sine kerbs across the run (x 2..6 m, every 0.9 m along z) and a 40 mm ramp */

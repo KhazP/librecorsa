@@ -29,6 +29,8 @@ import { CHAPARRAL_2D_67_SIM_PROFILE, CHAPARRAL_2D_SIM_PROFILE, createChaparral2
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "@/lib/sim/classic/Chaparral2dConfig";
 import { PORSCHE_934_RSR_SIM_PROFILE, createPorsche934RsrSim } from "@/lib/sim/classic/Porsche934RsrSim";
 import { PORSCHE_934_RSR_CONFIG } from "@/lib/sim/classic/Porsche934RsrConfig";
+import { F12007_SIM_PROFILE, createF12007Sim } from "@/lib/sim/f1-2007/F12007Sim";
+import { F12007_CONFIG } from "@/lib/sim/f1-2007/F12007Config";
 import { VW_SCIROCCO_SIM_PROFILE, createVwSciroccoSim } from "@/lib/sim/road/VwSciroccoSim";
 import { VW_SCIROCCO_CONFIG } from "@/lib/sim/road/VwSciroccoConfig";
 import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
@@ -262,6 +264,20 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     rigConfig: PORSCHE_934_RSR_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
+  },
+  // Cimmerian Iter's 2007 grid: one physics for every team; each team's body is its ported GLB, chosen by the livery,
+  // and brings its own cameras
+  "f1-2007": {
+    id: "f1-2007",
+    classId: "f1",
+    createSim: (track, trackRoot) => createF12007Sim(track, trackRoot),
+    limiterRpm: F12007_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 20000,
+    tyreSetupRanges: F12007_SIM_PROFILE,
+    simProfile: F12007_SIM_PROFILE,
+    rigConfig: F12007_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: true,
   },
 };
 

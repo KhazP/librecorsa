@@ -19,6 +19,7 @@
   "verify-bmw-m1-procar.ts": 40.0,
   "verify-chaparral-2d.ts": 80.0,
   "verify-porsche-934-rsr.ts": 120.0,
+  "verify-f1-2007.ts": 5.0,
   "verify-cool-down.ts": 28,
   "verify-liana.ts": 22.3,
   "verify-weather.ts": 20.2,

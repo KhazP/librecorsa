@@ -16,6 +16,7 @@ import { createNissanR32Sim } from "../../src/lib/sim/classic/NissanR32Sim";
 import { createBmwM1ProcarSim } from "../../src/lib/sim/classic/BmwM1ProcarSim";
 import { createChaparral2d67Sim, createChaparral2dSim } from "../../src/lib/sim/classic/Chaparral2dSim";
 import { createPorsche934RsrSim } from "../../src/lib/sim/classic/Porsche934RsrSim";
+import { createF12007Sim } from "../../src/lib/sim/f1-2007/F12007Sim";
 import { createVwSciroccoSim } from "../../src/lib/sim/road/VwSciroccoSim";
 import { F1Physics2026 } from "../../src/lib/f1-physics-2026";
 import { getActiveTrackData } from "../../src/lib/track-data";
@@ -41,6 +42,7 @@ export const makers: Record<VehicleModelId, (t: TestTrack) => SimulatorCar> = {
   "chaparral-2d": (t) => createChaparral2dSim(t),
   "chaparral-2d-67": (t) => createChaparral2d67Sim(t),
   "porsche-934-rsr": (t) => createPorsche934RsrSim(t),
+  "f1-2007": (t) => createF12007Sim(t),
 };
 export const vehicles = Object.keys(makers) as VehicleModelId[];
 export const DT = 1 / 60;

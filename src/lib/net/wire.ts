@@ -376,6 +376,7 @@ export const VEHICLE_CLASS_BY_MODEL: Readonly<Record<VehicleModelId, CarClassId>
   'chaparral-2d': 'classic',
   'chaparral-2d-67': 'classic',
   'porsche-934-rsr': 'classic',
+  'f1-2007': 'f1',
 };
 
 /** The car class a vehicle model belongs to */

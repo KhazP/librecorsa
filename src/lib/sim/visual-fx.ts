@@ -27,6 +27,8 @@ import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
 import { BMW_M1_PROCAR_CONFIG } from './classic/BmwM1ProcarConfig';
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from './classic/Chaparral2dConfig';
 import { PORSCHE_934_RSR_CONFIG } from './classic/Porsche934RsrConfig';
+import { F12007_CONFIG } from './f1-2007/F12007Config';
+import { f12007BodyUrl } from '@/lib/cars/f1-2007-skins';
 import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC25_MODEL_URL, LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
@@ -1229,6 +1231,12 @@ const PORTED_ONLY = {
     url: '/cars/porsche-934-rsr/model/porsche-934-rsr.glb',
     config: PORSCHE_934_RSR_CONFIG,
     lockDeg: CAR_WHEEL_LOCKS_DEG['porsche-934-rsr'],
+  },
+  // The Ferrari; each driver's livery brings their team's car (`opponentSkin`)
+  'f1-2007': {
+    url: f12007BodyUrl('ferrari'),
+    config: F12007_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['f1-2007'],
   },
 } as const satisfies Partial<Record<VehicleModelId, { url: string; config: unknown; lockDeg: number }>>;
 type PortedKind = keyof typeof PORTED_ONLY;
