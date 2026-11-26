@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { toReversedDepth } from "../../src/lib/vr/reversed-depth";
 import { HeadsetButtons, PAUSE_HOLD_MS, XR_PAD_ID, XrPadMapper, headsetTookPress, type XrHandSource } from "../../src/lib/vr/xr-pad";
 import { isStandaloneHeadset } from "../../src/lib/vr/headset";
-import { driveModel, formatLapTime } from "../../src/lib/vr/vr-hud";
+import { driveModel, formatLapTime, headsetPanel } from "../../src/lib/vr/vr-hud";
 import type { CarTelemetry, RaceStatus } from "../../src/types/f1";
 
 let failed = 0;
@@ -149,6 +149,15 @@ const maxDiff = (a: THREE.Matrix4, b: THREE.Matrix4) => Math.max(...a.elements.m
   const reverse = driveModel(tel({ gear: -1 }), "kmh");
   check("reverse and neutral read R and N", reverse.kind === "drive" && reverse.gear === "R" && (driveModel(tel({ gear: 0 }), "kmh") as { gear: string }).gear === "N");
   check("lap times read m:ss.mmm, none as dashes", formatLapTime(92_104) === "1:32.104" && formatLapTime(null) === "-:--.---");
+}
+
+// --- Which panel the headset shows ---------------------------------------------------------------------------------
+{
+  const at = (inMenu: boolean, paused: boolean, seatPanel: boolean) => headsetPanel({ inMenu, paused, seatPanel });
+  check("driving: the drive's plates", at(false, false, false) === "drive");
+  check("paused: the paused panel", at(false, true, false) === "paused");
+  check("the seat panel (the car held, its rows on the page only): the paused panel", at(false, false, true) === "paused");
+  check("the menus: the menus panel", at(true, false, false) === "menu" && at(true, true, true) === "menu");
 }
 
 console.log(failed === 0 ? "\nAll VR checks pass" : `\n${failed} VR check(s) FAILED`);
