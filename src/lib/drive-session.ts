@@ -2230,7 +2230,39 @@ export class DriveSession {
     const floorSparks = new FloorSparks();
     scene.add(floorSparks.points);
 
+    // Auto-hide the mouse cursor over the game canvas after 2 s of inactivity while actively driving
+    const CURSOR_HIDE_IDLE_MS = 2000;
+    let cursorHidden = false;
+    let cursorLastMoveMs = performance.now();
+    let cursorEligibleLast = false;
+    let cursorOverUi = false;
+    let lastCursorX = Number.NaN;
+    let lastCursorY = Number.NaN;
+    const setCursorHidden = (hidden: boolean) => {
+      if (cursorHidden === hidden) return;
+      cursorHidden = hidden;
+      const value = hidden ? "none" : "";
+      renderer.domElement.style.cursor = value;
+      container.style.cursor = value;
+    };
+    const onCursorPointerDown = (e: PointerEvent) => {
+      cursorLastMoveMs = performance.now();
+      cursorOverUi = e.target !== renderer.domElement && e.target !== container;
+      setCursorHidden(false);
+    };
+    const onCursorLeave = () => {
+      setCursorHidden(false);
+    };
+
     const onMouseMove = (e: MouseEvent) => {
+      // Ignore synthetic mousemove events fired at the same coordinates when HUD banners mount/unmount under a stationary pointer
+      if (e.clientX !== lastCursorX || e.clientY !== lastCursorY) {
+        lastCursorX = e.clientX;
+        lastCursorY = e.clientY;
+        cursorLastMoveMs = performance.now();
+        cursorOverUi = e.target !== renderer.domElement && e.target !== container;
+        setCursorHidden(false);
+      }
       if (!settings.mouseSteer) return;
       const w = Math.max(1, window.innerWidth);
       // Center 65% of screen maps smoothly to [-1, 1] steering lock with slight precision curve
@@ -2664,6 +2696,8 @@ export class DriveSession {
     };
 
     window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("pointerdown", onCursorPointerDown);
+    document.addEventListener("mouseleave", onCursorLeave);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
 
@@ -2705,6 +2739,7 @@ export class DriveSession {
     };
     // Keys held while focus leaves the window (Cmd-Tab, a system dialog) never get their keyup
     const onWindowBlur = () => {
+      setCursorHidden(false);
       releaseHeldKeys();
       physicalKeys.clear();
       // Their keyups go to another window: the keys would stay swallowed, and a held camera key would open the panel
@@ -3501,6 +3536,27 @@ export class DriveSession {
       if (frozenLastFrame && !frozen && driving && !podium.playing) restoreHeldKeys();
       frozenLastFrame = frozen;
       const freeCamControl = !inMenu && !frozen && !podium.playing && !renderer.xr.isPresenting && cameraOverride === "free";
+      const cursorEligible =
+        driving &&
+        !podium.playing &&
+        !coolDown.active &&
+        !freeCamControl &&
+        !renderer.xr.isPresenting &&
+        physics.telemetry.race?.phase !== "finished";
+      if (!cursorEligible) {
+        cursorEligibleLast = false;
+        cursorOverUi = false;
+        setCursorHidden(false);
+      } else if (!cursorEligibleLast) {
+        cursorEligibleLast = true;
+        cursorOverUi = false;
+        cursorLastMoveMs = nowMs;
+        setCursorHidden(false);
+      } else if (!cursorHidden && !cursorOverUi && nowMs - cursorLastMoveMs >= CURSOR_HIDE_IDLE_MS) {
+        const modalOpen = document.querySelector('[role="dialog"], [role="menu"], [data-hud-editor]') !== null;
+        if (!modalOpen) setCursorHidden(true);
+        else cursorLastMoveMs = nowMs;
+      }
       wakeLock.setDesired(driving || showHold);
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
@@ -5530,6 +5586,9 @@ export class DriveSession {
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("blur", onWindowBlur);
       window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("pointerdown", onCursorPointerDown);
+      document.removeEventListener("mouseleave", onCursorLeave);
+      setCursorHidden(false);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
