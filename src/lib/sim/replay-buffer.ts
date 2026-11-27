@@ -4,6 +4,7 @@
  * back smoothly interpolated at any session time inside the buffered window.
  */
 import * as THREE from "three";
+import type { CarTelemetry } from "@/types/f1";
 import type { ReplayCarState, ReplayFrame } from "./lap-types";
 import { nlerpQuat } from "./lap-recorder";
 
@@ -493,4 +494,73 @@ export function poseFromReplayCar(car: ReplayCarState): {
     ...(car.lap !== undefined ? { lapCount: car.lap, outLap: Boolean(car.outLap) } : {}),
     pitLane: car.pit === true,
   };
+}
+
+/** Input flags that decide whether replay car and opponent audio should play on this frame */
+export interface ReplayAudioGate {
+  replaying: boolean;
+  playing: boolean;
+  frozen: boolean;
+  speed: number;
+  focusedCarId: string;
+  hasFocusedFrame: boolean;
+}
+
+/**
+ * Resolves replay audio playback gating: engine & opponent audio play only during forward active playback
+ * (`speed > 0`, unpaused, unfrozen). Pausing, scrubbing at 0x, or reversing mutes cleanly; when focusing an AI car
+ * that is absent in the current frame (e.g. retired), the focused engine voice stays muted while nearby cars remain audible.
+ */
+export function replayAudioState(gate: ReplayAudioGate): { active: boolean; focusEngine: boolean } {
+  const active = gate.replaying && gate.playing && !gate.frozen && Number.isFinite(gate.speed) && gate.speed > 0;
+  const focusEngine = active && (gate.focusedCarId === "player" || gate.hasFocusedFrame);
+  return { active, focusEngine };
+}
+
+/**
+ * Produces a clean baseline `CarTelemetry` snapshot for replay playback so stale live surface/slip/kerb/stall flags
+ * from the instant replay opened never produce stuck tyre squeal, kerb roar, or a silent stalled engine.
+ */
+export function sanitizeReplayTelemetry(base: CarTelemetry): CarTelemetry {
+  return {
+    ...base,
+    longitudinalG: 0,
+    lateralG: 0,
+    verticalG: 1,
+    manualOverrideActive: false,
+    surface: "asphalt",
+    wheelSurfaces: ["asphalt", "asphalt", "asphalt", "asphalt"],
+    onKerbLeft: false,
+    onKerbRight: false,
+    wheelSlipRatios: [0, 0, 0, 0],
+    wheelSlipAnglesDeg: [0, 0, 0, 0],
+    tireSlipRatio: [0, 0, 0, 0],
+    suspensionVelocityMs: [0, 0, 0, 0],
+    wheelLoadsN: [3200, 3200, 3800, 3800],
+    turboBoostBar: 1,
+    mgukPowerKw: 0,
+    engineStalled: false,
+    iceOff: false,
+    driveshaftRadS: undefined,
+    driveshaftTorqueNm: undefined,
+    mguRpm: undefined,
+    liveTuner: undefined,
+    f12026: undefined,
+  };
+}
+
+/** Writes one recorded replay car's audio/visual channels into a sanitized `CarTelemetry` buffer in place */
+export function applyReplayCarTelemetry(target: CarTelemetry, car: ReplayCarState): void {
+  const throttle = Number.isFinite(car.throttle) ? Math.max(0, Math.min(1, car.throttle)) : 0;
+  target.speedKmh = Number.isFinite(car.speedKmh) ? Math.max(0, car.speedKmh) : 0;
+  target.steering = Number.isFinite(car.steer) ? car.steer : 0;
+  target.throttle = throttle;
+  target.brake = Number.isFinite(car.brake) ? Math.max(0, Math.min(1, car.brake)) : 0;
+  target.gear = Number.isFinite(car.gear) ? car.gear : 0;
+  target.rpm = Number.isFinite(car.rpm) ? Math.max(0, car.rpm) : 0;
+  target.turboBoostBar = 1 + throttle * 2;
+  target.onKerbLeft = false;
+  target.onKerbRight = false;
+  target.engineStalled = false;
+  target.iceOff = false;
 }

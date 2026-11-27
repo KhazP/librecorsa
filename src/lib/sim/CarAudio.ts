@@ -798,6 +798,15 @@ export class CarAudioEngine {
     return this.isPaused;
   }
 
+  /** Resets edge-sensitive state (shift cut, bank edges, kerb roar, contact acoustics) across a seek, focus switch, or replay toggle */
+  public resync(): void {
+    this.edgesStale = true;
+    this.shiftCutTimer = 0;
+    this.lc26?.resync();
+    this.contactAcoustics?.reset();
+    if (this.ctx) this.resetKerbRoar(this.ctx.currentTime);
+  }
+
   /**
    * Short cockpit tones over the engine, through the master gain (so mute and pause apply): a rising two-tone
    * when DRS becomes available, a bright chime when the flap opens, a short shift beep, and the rolling-start

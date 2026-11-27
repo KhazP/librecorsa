@@ -28,11 +28,15 @@ import type { SimCommand, SimEvent } from '../../src/lib/sim/runtime/sim-protoco
 import { SIM_REALISM_FLAGS } from '../../src/lib/sim/sim-realism';
 import { WeatherState } from '../../src/lib/sim/weather';
 import {
+  applyReplayCarTelemetry,
   canFlashback,
   isInOnlineRoom,
   poseFromReplayCar,
+  replayAudioState,
   ReplayBuffer,
+  sanitizeReplayTelemetry,
 } from '../../src/lib/sim/replay-buffer';
+import { CarAudioEngine } from '../../src/lib/sim/CarAudio';
 import type { ReplayCarState } from '../../src/lib/sim/lap-types';
 import type { FieldCarRestorePose } from '../../src/lib/sim/ai-race';
 
@@ -999,6 +1003,104 @@ check('ReplayBuffer + poseFromReplayCar preserve outLap so Lap 1 -> out-lap Flas
     assert.equal(sim.telemetry.lapCount, 0, 'crossing line after rewinding onto out-lap starts lap 1 without counting out-lap as a lap');
     assert.equal(sim.telemetry.outLap, false, 'outLap clears after crossing the line');
   }
+});
+
+console.log('7. Replay audio gating, telemetry sanitization & CarAudio resync');
+check('replayAudioState activates only during unfrozen forward playback and mutes on pause/scrub/reverse/missing focus', () => {
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: true, frozen: false, speed: 1, focusedCarId: 'player', hasFocusedFrame: true }),
+    { active: true, focusEngine: true },
+    '1x forward playback on player'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: true, frozen: false, speed: 0.25, focusedCarId: 'ai-1', hasFocusedFrame: true }),
+    { active: true, focusEngine: true },
+    '0.25x slow-mo playback on AI focus car'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: true, frozen: false, speed: 1, focusedCarId: 'ai-1', hasFocusedFrame: false }),
+    { active: true, focusEngine: false },
+    'retired/absent AI focus car mutes focused engine while keeping nearby opponent audio'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: false, frozen: false, speed: 1, focusedCarId: 'player', hasFocusedFrame: true }),
+    { active: false, focusEngine: false },
+    'paused replay mutes all replay audio'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: true, frozen: true, speed: 1, focusedCarId: 'player', hasFocusedFrame: true }),
+    { active: false, focusEngine: false },
+    'frozen/menu state mutes replay audio'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: true, frozen: false, speed: 0, focusedCarId: 'player', hasFocusedFrame: true }),
+    { active: false, focusEngine: false },
+    '0x speed mutes replay audio'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: true, playing: true, frozen: false, speed: -1, focusedCarId: 'player', hasFocusedFrame: true }),
+    { active: false, focusEngine: false },
+    'reverse playback mutes replay audio'
+  );
+  assert.deepEqual(
+    replayAudioState({ replaying: false, playing: true, frozen: false, speed: 1, focusedCarId: 'player', hasFocusedFrame: true }),
+    { active: false, focusEngine: false },
+    'inactive replay reports false'
+  );
+});
+
+check('sanitizeReplayTelemetry + applyReplayCarTelemetry clear stale kerb/slip/stall flags and drive recorded engine channels', () => {
+  const track = getActiveTrackData(1200);
+  const sim = new F12026CarSim(track);
+  sim.resetToStartGrid(true);
+  const dirty = {
+    ...sim.telemetry,
+    surface: 'kerb' as const,
+    wheelSurfaces: ['kerb', 'kerb', 'grass', 'grass'] as ['kerb', 'kerb', 'grass', 'grass'],
+    onKerbLeft: true,
+    onKerbRight: true,
+    wheelSlipRatios: [0.8, 0.7, 0.9, 0.85] as [number, number, number, number],
+    wheelSlipAnglesDeg: [18, 17, 22, 20] as [number, number, number, number],
+    tireSlipRatio: [0.8, 0.7, 0.9, 0.85] as [number, number, number, number],
+    suspensionVelocityMs: [0.9, -0.8, 0.7, -0.6] as [number, number, number, number],
+    engineStalled: true,
+    iceOff: true,
+  };
+  const clean = sanitizeReplayTelemetry(dirty);
+  assert.equal(clean.surface, 'asphalt');
+  assert.deepEqual(clean.wheelSurfaces, ['asphalt', 'asphalt', 'asphalt', 'asphalt']);
+  assert.equal(clean.onKerbLeft, false);
+  assert.equal(clean.onKerbRight, false);
+  assert.deepEqual(clean.wheelSlipRatios, [0, 0, 0, 0]);
+  assert.deepEqual(clean.suspensionVelocityMs, [0, 0, 0, 0]);
+  assert.equal(clean.engineStalled, false);
+  assert.equal(clean.iceOff, false);
+
+  applyReplayCarTelemetry(clean, {
+    id: 'player',
+    x: 0,
+    y: 0,
+    z: 0,
+    qx: 0,
+    qy: 0,
+    qz: 0,
+    qw: 1,
+    speedKmh: 245,
+    steer: -0.15,
+    throttle: 0.9,
+    brake: 0,
+    gear: 6,
+    rpm: 11200,
+  });
+  near(clean.speedKmh, 245);
+  near(clean.rpm, 11200);
+  near(clean.throttle, 0.9);
+  assert.equal(clean.gear, 6);
+  assert.ok(clean.turboBoostBar > 2, 'boost scales with throttle');
+
+  const eng = new CarAudioEngine();
+  eng.resync();
+  assert.equal(eng.isInitialized, false, 'resync() is safe before AudioContext init');
 });
 
 console.log(`\n${passed} checks passed`);

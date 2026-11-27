@@ -95,7 +95,16 @@ import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplate
 import type { BadgeContext } from "@/lib/net/awards";
 import { isVehicleModelId } from "@/types/f1";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
-import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer, type ReplayLapMarker } from "@/lib/sim/replay-buffer";
+import {
+  applyReplayCarTelemetry,
+  canFlashback,
+  isInOnlineRoom,
+  poseFromReplayCar,
+  replayAudioState,
+  ReplayBuffer,
+  sanitizeReplayTelemetry,
+  type ReplayLapMarker,
+} from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
@@ -2812,12 +2821,23 @@ export class DriveSession {
     const replayLastFocusPos = new THREE.Vector3();
     const replayLastFocusQuat = new THREE.Quaternion();
     let replayLastFocusId: string | null = null;
+    /** Sound source id currently loaded on `audio` while a replay is focused on another car (null when player's own bank is active) */
+    let replayAudioSoundId: string | null = null;
+    const replayAudioPeersScratch: InterpolatedPeerState[] = [];
+    const restorePlayerAudioSound = () => {
+      if (replayAudioSoundId === null) return;
+      const own = soundFor(carIdNow);
+      if (replayAudioSoundId !== own.id) audio?.setCar(own);
+      replayAudioSoundId = null;
+    };
     const exitReplay = () => {
       const rp = replay;
       if (!rp.active) return;
       rp.active = false;
       rp.focusedCarId = "player";
       replayLastFocusId = null;
+      restorePlayerAudioSound();
+      audio?.resync();
       clearCameraOverride();
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
@@ -2851,23 +2871,14 @@ export class DriveSession {
       rp.wheelRotRad = physics.wheelRotationRad;
       rp.focusedCarId = "player";
       replayLastFocusId = null;
+      replayAudioSoundId = soundFor(carIdNow).id;
       rp.cars = buildReplayCarOptions();
       rp.lapMarkers = rp.buffer.lapMarkers();
-      // Neutralise live G-forces & boost flag so chase cameras don't stay locked sideways from the frame replay opened
-      replayPlayerTelemetry = {
-        ...physics.telemetry,
-        longitudinalG: 0,
-        lateralG: 0,
-        verticalG: 1,
-        manualOverrideActive: false,
-      };
-      replayFocusTelemetry = {
-        ...physics.telemetry,
-        longitudinalG: 0,
-        lateralG: 0,
-        verticalG: 1,
-        manualOverrideActive: false,
-      };
+      // Neutralise live G-forces, surface/kerb/slip and stall flags so replay cameras and audio start clean
+      replayPlayerTelemetry = sanitizeReplayTelemetry(physics.telemetry);
+      replayFocusTelemetry = sanitizeReplayTelemetry(physics.telemetry);
+      if (rp.playing) this.unlockAudio();
+      audio?.resync();
       cameraRig.reset();
       publishReplayUi();
       return true;
@@ -2925,6 +2936,8 @@ export class DriveSession {
       rp.active = false;
       rp.focusedCarId = "player";
       replayLastFocusId = null;
+      restorePlayerAudioSound();
+      audio?.resync();
       clearCameraOverride();
       cameraRig.reset();
       physics.aiAutopilot = false;
@@ -3003,12 +3016,15 @@ export class DriveSession {
           replay.timeS = replay.buffer.endS;
           replay.prevTimeS = replay.timeS;
         }
+        this.unlockAudio();
       }
       replay.playing = !replay.playing;
+      audio?.resync();
       publishReplayUi();
     };
     this.replaySeek = (tS) => {
       replay.timeS = THREE.MathUtils.clamp(tS, replay.buffer.startS, replay.buffer.endS);
+      audio?.resync();
       publishReplayUi();
     };
     this.replaySpeed = (speed) => {
@@ -3016,19 +3032,23 @@ export class DriveSession {
       // Shuttle behavior: picking a playback speed while paused starts playing unless already pinned at that boundary
       if (!replay.playing && ((speed < 0 && replay.timeS > replay.buffer.startS + 0.05) || (speed > 0 && replay.timeS < replay.buffer.endS - 0.05))) {
         replay.playing = true;
+        this.unlockAudio();
       }
+      audio?.resync();
       publishReplayUi();
     };
     this.replayStepFrame = (dir) => {
       if (!replay.active) return;
       replay.playing = false;
       replay.timeS = THREE.MathUtils.clamp(replay.timeS + dir / REPLAY_HZ, replay.buffer.startS, replay.buffer.endS);
+      audio?.resync();
       publishReplayUi();
     };
     this.replayFocusCar = (carId) => {
       if (!replay.active || replay.focusedCarId === carId) return;
       if (!replay.cars.some((c) => c.id === carId)) return;
       replay.focusedCarId = carId;
+      audio?.resync();
       cameraRig.reset();
       publishReplayUi();
     };
@@ -4556,14 +4576,7 @@ export class DriveSession {
               rp.buffer.velocityAt(rp.timeS, "player", replayPlayerVel);
               rp.wheelRotRad += ((car.speedKmh / 3.6) / 0.34) * replayDeltaT;
               replayPlayerS = car.s ?? physics.sMeters;
-              replayPlayerTelemetry.speedKmh = car.speedKmh;
-              replayPlayerTelemetry.steering = car.steer;
-              replayPlayerTelemetry.throttle = car.throttle;
-              replayPlayerTelemetry.brake = car.brake;
-              replayPlayerTelemetry.gear = car.gear;
-              replayPlayerTelemetry.rpm = car.rpm;
-              replayPlayerTelemetry.onKerbLeft = false;
-              replayPlayerTelemetry.onKerbRight = false;
+              applyReplayCarTelemetry(replayPlayerTelemetry, car);
               if (car.lap !== undefined) replayPlayerTelemetry.lapCount = car.lap;
             } else {
               peers.push(replayPeerState(car, rp.timeS, wheelDir));
@@ -4817,14 +4830,7 @@ export class DriveSession {
             replayCamCar.vyMs = 0;
             replayCamCar.wheelbaseM = physics.wheelbaseM;
             replayCamCar.cgHeightM = physics.cgHeightM;
-            replayFocusTelemetry.speedKmh = fc.speedKmh;
-            replayFocusTelemetry.steering = fc.steer;
-            replayFocusTelemetry.throttle = fc.throttle;
-            replayFocusTelemetry.brake = fc.brake;
-            replayFocusTelemetry.gear = fc.gear;
-            replayFocusTelemetry.rpm = fc.rpm;
-            replayFocusTelemetry.onKerbLeft = false;
-            replayFocusTelemetry.onKerbRight = false;
+            applyReplayCarTelemetry(replayFocusTelemetry, fc);
             replayCamCar.telemetry = replayFocusTelemetry;
             rp.buffer.velocityAt(rp.timeS, fc.id, replayFocusVel);
             camCar = replayCamCar;
@@ -4928,19 +4934,73 @@ export class DriveSession {
         // (a race in the worker lays its rubber there)
         builtCircuit.setGrooveRubber(aiFieldOf(raceNow())?.worker?.rubber ?? getTrackEnv().trackEvolution.meanRacingLineRubber());
       }
+      const replayAud = replayAudioState({
+        replaying,
+        playing: rp.playing,
+        frozen,
+        speed: rp.speed,
+        focusedCarId: rp.focusedCarId,
+        hasFocusedFrame: replayFocusCarFrame !== null,
+      });
+      // When replaying an AI focus car, exclude it from opponentAudio (CarAudio plays its engine) and include the player car spatially
+      let audioPeers: readonly InterpolatedPeerState[] = drawnPeers;
+      if (replayAud.active && rp.focusedCarId !== "player") {
+        replayAudioPeersScratch.length = 0;
+        for (let i = 0; i < drawnPeers.length; i++) {
+          if (drawnPeers[i].peerId !== rp.focusedCarId) replayAudioPeersScratch.push(drawnPeers[i]);
+        }
+        const playerWheelRpm = wheelRpmAtSpeed(replayPlayerTelemetry.speedKmh);
+        replayAudioPeersScratch.push({
+          peerId: "player",
+          driverCode: settingsNow.profile.code,
+          teamColorHex: settingsNow.profile.color,
+          vehicle: vehicleNow,
+          position: physics.worldPosition,
+          quaternion: physics.worldQuaternion,
+          linearVelocity: replayPlayerVel,
+          steerAngle: steerAngleOf(replayPlayerTelemetry.steering),
+          wheelRPMs: [playerWheelRpm, playerWheelRpm, playerWheelRpm, playerWheelRpm],
+          throttle: replayPlayerTelemetry.throttle,
+          brake: replayPlayerTelemetry.brake,
+          trackS: replayPlayerS,
+          speedKmh: replayPlayerTelemetry.speedKmh,
+          gear: replayPlayerTelemetry.gear,
+          rpm: replayPlayerTelemetry.rpm,
+          isAiPeer: true,
+        });
+        audioPeers = replayAudioPeersScratch;
+      }
+      if (replaying && audio) {
+        const focusSound =
+          rp.focusedCarId === "player"
+            ? soundFor(carIdNow)
+            : (() => {
+                const focusPeer = drawnPeers.find((p) => p.peerId === rp.focusedCarId);
+                if (focusPeer) return opponentSound(focusPeer);
+                const focusInfo = replayNames.get(rp.focusedCarId);
+                return focusInfo?.vehicle ? carForVehicle(focusInfo.vehicle).sound : soundFor(carIdNow);
+              })();
+        if (replayAudioSoundId !== focusSound.id) {
+          audio.setCar(focusSound);
+          replayAudioSoundId = focusSound.id;
+        }
+      }
       opponentAudio.update({
         context: audio?.context ?? null,
         output: audio?.output ?? null,
-        active: driving,
+        active: driving || replayAud.active,
         camera,
         cameraMode: mode,
-        peers: drawnPeers,
+        peers: audioPeers,
         soundFor: opponentSound,
         dt: dtSeconds,
         lowQuality: settingsNow.graphics.quality === "low",
       });
       audio?.setCameraMode(mode);
-      audio?.setPaused(!driving);
+      audio?.setPaused(!(driving || replayAud.focusEngine));
+      if (replayAud.focusEngine) {
+        audio?.update(rp.focusedCarId === "player" ? replayPlayerTelemetry : replayFocusTelemetry, dtSeconds);
+      }
       // The music follows where the player is: the menus, the grid, the race, the flag, a replay, the pause menu
       if (music.unlocked) {
         music.setCue(
