@@ -118,7 +118,7 @@ Outside of races (in practice and Time Trials), track-limits enforcement is stri
 
 Invalid laps display **Invalid: track limits** or **Invalid: wall contact** on the lap card. Before accepting an upload, the server also validates that the lap starts and ends at the timing line (except hill climbs), sector times sum to the total lap time, the lap time matches the ghost telemetry duration, recorded speeds match distance covered without exceeding `420 km/h` or teleporting, the car never gains speed faster than it can (measured from its positions over every second of the lap, against a limit for each car), and the lap was set on the current physics version.
 
-> **Honest limitation:** Server checks catch casual tampering (such as pasting a faster lap time onto a genuine ghost), but browser-side telemetry cannot cryptographically prove a lap was genuinely driven. A carefully fabricated payload can still pass validation. If you spot a cheated time on a board, please report it on [GitHub Issues](https://github.com/librecorsa/librecorsa/issues).
+> **Honest limitation:** Server checks catch casual tampering (such as pasting a faster lap time onto a genuine ghost), but browser-side telemetry cannot cryptographically prove a lap was genuinely driven. A carefully fabricated payload can still pass validation. If you spot a cheated time on a board, open the driver's profile (click their name) and press the flag beside the lap: it opens a **[Lap Issue]** report on GitHub with the driver and the lap filled in. Drivers found cheating lose their laps and can be barred from the boards.
 
 ### Driver name and identity key
 
