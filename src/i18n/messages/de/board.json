@@ -168,6 +168,9 @@
     "ariaNamed": "Fahrerprofil von {name}",
     "aria": "Fahrerprofil",
     "refreshLabel": "Fahrerprofil aktualisieren",
-    "refresh": "Aktualisieren"
+    "refresh": "Aktualisieren",
+    "report": "Runde melden",
+    "reportLabel": "Runde von {name} auf {circuit} ({car}) melden",
+    "colReport": "Melden"
   }
 }

@@ -168,6 +168,9 @@
     "ariaNamed": "{name} 的車手檔案",
     "aria": "車手檔案",
     "refreshLabel": "重新整理車手檔案",
-    "refresh": "重新整理"
+    "refresh": "重新整理",
+    "report": "檢舉圈速",
+    "reportLabel": "檢舉 {name} 在 {circuit}（{car}）的圈速",
+    "colReport": "檢舉"
   }
 }

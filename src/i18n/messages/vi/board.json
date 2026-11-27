@@ -168,6 +168,9 @@
     "ariaNamed": "Hồ sơ tay đua {name}",
     "aria": "Hồ sơ tay đua",
     "refreshLabel": "Làm mới hồ sơ tay đua",
-    "refresh": "Làm mới"
+    "refresh": "Làm mới",
+    "report": "Báo cáo vòng",
+    "reportLabel": "Báo cáo vòng của {name} tại {circuit} ({car})",
+    "colReport": "Báo cáo"
   }
 }

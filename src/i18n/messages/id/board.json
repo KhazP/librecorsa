@@ -168,6 +168,9 @@
     "ariaNamed": "Profil pembalap {name}",
     "aria": "Profil pembalap",
     "refreshLabel": "Muat ulang profil pembalap",
-    "refresh": "Muat ulang"
+    "refresh": "Muat ulang",
+    "report": "Laporkan lap",
+    "reportLabel": "Laporkan lap {name} di {circuit} ({car})",
+    "colReport": "Laporkan"
   }
 }

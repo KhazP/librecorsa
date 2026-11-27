@@ -168,6 +168,9 @@
     "ariaNamed": "Profil de pilote de {name}",
     "aria": "Profil du pilote",
     "refreshLabel": "Actualiser le profil du pilote",
-    "refresh": "Actualiser"
+    "refresh": "Actualiser",
+    "report": "Signaler le tour",
+    "reportLabel": "Signaler le tour de {name} sur {circuit} ({car})",
+    "colReport": "Signaler"
   }
 }
