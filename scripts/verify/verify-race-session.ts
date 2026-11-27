@@ -731,6 +731,9 @@ console.log("AI rolling start · formation pace until Start/Finish");
     field.playerGrid = "front";
     field.startRace(false);
     const paceMs = field.status().rollingFormation?.paceMs ?? 0;
+    check("rolling start does not force player.speedLimiterMs", player.speedLimiterMs === undefined);
+    // Player engages the manual pit limiter to hold the rolling-start pit speed limit until S/F
+    player.speedLimiterMs = paceMs;
     let maxPlayerBeforeGreen = 0;
     let greenDist = -Infinity;
     const seenStages: string[] = [];
@@ -743,12 +746,13 @@ console.log("AI rolling start · formation pace until Start/Finish");
         const key = rf.stage === "countdown" ? String(rf.countdown) : rf.stage;
         if (seenStages[seenStages.length - 1] !== key) seenStages.push(key);
       } else {
+        player.speedLimiterMs = undefined;
         greenDist = field.status().standings.find((s) => s.isPlayer)?.raceDistM ?? 0;
         break;
       }
     }
     check(
-      "formation speed limiter clamps full-throttle pole player near ~65 km/h until S/F",
+      "manual pit limiter holds full-throttle pole player at track pit speed limit until S/F",
       !field.isRollingFormation &&
         player.speedLimiterMs === undefined &&
         maxPlayerBeforeGreen <= paceMs + 1.5 &&
