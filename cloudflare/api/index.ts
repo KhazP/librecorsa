@@ -11,6 +11,7 @@
  *   GET /api/admin/stats          the owner's numbers, with the admin key as `Authorization: Bearer <key>` (admin.ts)
  *   GET /api/admin/cloudflare     Cloudflare's numbers for the site, the same way, once an analytics token is set (analytics.ts)
  *   GET/POST /api/admin/awards, DELETE /api/admin/awards/<id>  driver badges given by hand (awards.ts, admin.ts)
+ *   GET /api/admin/bans, POST/DELETE /api/admin/bans/<name>     drivers barred from the boards, their laps deleted (admin.ts)
  *   GET /api/hall-of-fame, GET /api/badges                     weekly challenge podiums (V1 & V2) and driver badges (awards.ts)
  *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
  *   GET /api/drivers/profile                            a driver's best laps, ranks and rating across circuits (profile.ts)
@@ -35,7 +36,7 @@ import { boardDeps, ghostOf, listLaps, lookupDriver, renameDriver, submitLap } f
 import { driverRecord, listRaceResults } from "./results";
 import { driverProfile } from "./profile";
 import { ROOM_CODE_RE } from "./room";
-import { adminClearDriverLaps, adminDeleteLap, adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
+import { adminBanDriver, adminClearDriverLaps, adminDeleteLap, adminGrantAward, adminKeyMatches, adminLiftBan, adminListAwards, adminListBans, adminRevokeAward, adminStats } from "./admin";
 import { hallOfFame, listBadges, parseCreatorKeyHashes } from "./awards";
 import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
@@ -593,6 +594,32 @@ export async function handleApi(request: Request, env: Env, url: URL, inject: Ap
         return json(answer.body, answer.status, origin);
       } catch (err) {
         console.error("admin driver laps clear failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    if (path === "/api/admin/bans" && request.method === "GET" && env.BOARD_DB) {
+      try {
+        const answer = await adminListBans(env.BOARD_DB);
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin bans list failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    const ban = /^\/api\/admin\/bans\/([^/]+)$/.exec(path);
+    if (ban && (request.method === "POST" || request.method === "DELETE") && env.BOARD_DB) {
+      let name: string;
+      try {
+        name = decodeURIComponent(ban[1]);
+      } catch {
+        return json({ ok: false, error: "Invalid driver name" }, 400, origin);
+      }
+      try {
+        const answer =
+          request.method === "POST" ? await adminBanDriver(env.BOARD_DB, env.GHOSTS, name, request, Date.now()) : await adminLiftBan(env.BOARD_DB, name);
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin ban failed:", err instanceof Error ? err.message : "error");
         return notFound(origin);
       }
     }
