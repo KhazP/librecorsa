@@ -99,8 +99,8 @@ export function checkLap(raw: unknown): LapCheck {
     if ((distance / dt) * 3.6 > MAX_SPEED_KMH) return bad("Positions imply a speed above 420 km/h");
   }
   // The samples agree with each other: the lap closes (a hill climb's run does not), and speed, positions and track
-  // distance match
-  const problem = lapPlausibilityProblem(samples, { open: isPointToPointTrack(trackId) });
+  // distance match, and the car gains speed no faster than it can
+  const problem = lapPlausibilityProblem(samples, { open: isPointToPointTrack(trackId), vehicle });
   if (problem) return bad(problem);
 
   // Optional car setup: strictly validated and clamped server-side.
