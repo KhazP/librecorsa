@@ -130,8 +130,10 @@ export function startAiRace(
   setup: RaceSetup,
   driver: RaceDriverLabel | null,
   standing = setup.startMode !== 'rolling',
+  autoGearbox = false,
 ): void {
-  field.manualStart = standing && setup.launch === 'manual';
+  // Automatic gearbox forces auto-clutch on, so manual clutch starts are disabled when auto gearbox is active
+  field.manualStart = standing && setup.launch === 'manual' && !autoGearbox;
   field.playerDriver = driver ? { code: driver.code, color: driver.color } : null;
   field.raceLaps = setup.laps;
   field.pitStopsRequired = Math.min(setup.pitStops ?? 0, Math.max(0, setup.laps - 2));

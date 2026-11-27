@@ -782,7 +782,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (race.kind === "ai" && !session.allowRestart()) return;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
-      if (race.kind === "ai") startAiRace(race.field, session.raceSetup(), settingsRef.current.profile, flyingStart ? false : undefined);
+      if (race.kind === "ai") startAiRace(race.field, session.raceSetup(), settingsRef.current.profile, flyingStart ? false : undefined, settingsRef.current.autoGearbox);
       else physics.resetToStartGrid(flyingStart);
     },
     [session]
@@ -800,7 +800,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     const field = session.takeAiField();
     session.setRace({ kind: "ai", field });
-    startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
+    startAiRace(field, settingsRef.current.race, settingsRef.current.profile, undefined, settingsRef.current.autoGearbox);
   }, [session]);
 
   const handleSelectTurn = useCallback(
@@ -1027,7 +1027,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const qualifyingMin = settingsRef.current.race.qualifying;
       startSession(field && !qualifyingMin ? { kind: "ai", field } : { kind: "practice" });
       if (field && qualifyingMin) session?.startQualifying(field, qualifyingMin);
-      else if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
+      else if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile, undefined, settingsRef.current.autoGearbox);
       else session?.car.resetToStartGrid(false);
       setLaunchHint(true);
     },
@@ -2047,7 +2047,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // The same rules for everyone: the car class's, with track limits on
         session.setRace({ kind: "ai", field, rules: { rulePreset: "auto", trackLimits: "auto" } });
         // No damage, as in an open race with other drivers (their cars take none)
-        startAiRace(field, { ...settingsRef.current.race, laps: weeklyRace.laps, startMode: "standing", damage: "off" }, settingsRef.current.profile);
+        startAiRace(field, { ...settingsRef.current.race, laps: weeklyRace.laps, startMode: "standing", damage: "off" }, settingsRef.current.profile, undefined, settingsRef.current.autoGearbox);
       } else {
         // polish:A — the time trial: its fixed tyre, fuel (and baseline setup when fixedSetup is set) and road, from a flying start
         session?.setTimeTrial(

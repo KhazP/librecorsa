@@ -224,9 +224,15 @@ export const practiceDamage = choice("segmented", {
 export const launch = choice("segmented", {
   id: "launch",
   get label() { return rt("launch.label"); },
-  hint: (env) => RACE_START_MODE_HINTS[env.settings.race.launch],
-  options: () => RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] })),
-  read: (env) => env.settings.race.launch,
+  hint: (env) => (env.settings.autoGearbox ? rt("autoClutch.off.gearbox") : RACE_START_MODE_HINTS[env.settings.race.launch]),
+  off: (env) => (env.settings.autoGearbox ? rt("autoClutch.off.gearbox") : null),
+  options: (env) =>
+    RACE_START_MODES.map((id) => ({
+      id,
+      label: RACE_START_MODE_LABELS[id],
+      disabled: env.settings.autoGearbox && id === "manual",
+    })),
+  read: (env) => (env.settings.autoGearbox ? "assisted" : env.settings.race.launch),
   initial: () => DEFAULT_PLAYER_SETTINGS.race.launch,
   write: (env, id) => env.update((s) => ({ ...s, race: { ...s.race, launch: id as RaceStartMode } })),
 });

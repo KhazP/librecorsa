@@ -25,6 +25,8 @@ export interface RaceSetupPanelProps {
   /** The player's driver code and colour on the grid (Settings > Display > Driver) */
   playerCode?: string;
   playerColor?: string;
+  /** Automatic gearbox disables manual clutch starts */
+  autoGearbox?: boolean;
   onOpenCircuit: () => void;
   onOpenConditions?: () => void;
   /** Opens the car browser (named for the Event row it once sat behind) */
@@ -109,6 +111,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
   car,
   playerCode = "YOU",
   playerColor,
+  autoGearbox = false,
   onOpenCircuit,
   onOpenConditions,
   onOpenGarage,
@@ -161,7 +164,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
         )}
       </Card>
 
-      <RaceRules context="title" setup={setup} onChange={onChange} aiSkill={aiSkill} onChangeAiSkill={onChangeAiSkill} trackLengthM={track.lengthM} />
+      <RaceRules context="title" setup={setup} onChange={onChange} aiSkill={aiSkill} onChangeAiSkill={onChangeAiSkill} trackLengthM={track.lengthM} autoGearbox={autoGearbox} />
 
       {/* Pinned to the bottom of the screen while the setup scrolls under it: the start is never below the fold. The
           scrim hides the rows passing behind and below the bar, so nothing shows in the gap under it */}
@@ -174,7 +177,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
                 : tx("summary", { laps: setup.laps, opponents: setup.opponents })}
             </span>
             <span className="lc-hint truncate phone:hidden">
-              {tx(setup.startMode !== "rolling" && setup.launch === "manual" ? "aiLineManual" : "aiLine", {
+              {tx(setup.startMode !== "rolling" && setup.launch === "manual" && !autoGearbox ? "aiLineManual" : "aiLine", {
                 skill: aiSkillLabel(aiSkill),
                 start: raceStartSuffix(setup.startMode, ", "),
               })}

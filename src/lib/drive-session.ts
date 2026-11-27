@@ -1100,7 +1100,7 @@ export class DriveSession {
       };
       this.resetRun("race");
       this.setRace({ kind: "ai", field: q.field });
-      startAiRace(q.field, raceSetupNow(), settings.profile);
+      startAiRace(q.field, raceSetupNow(), settings.profile, undefined, settings.autoGearbox);
     };
     this.startQualifying = (field, minutes) => {
       if (disposed) return;
@@ -1454,7 +1454,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, raceSetupNow(), settings.profile);
+        startAiRace(field, raceSetupNow(), settings.profile, undefined, settings.autoGearbox);
       }
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
@@ -2115,7 +2115,7 @@ export class DriveSession {
           const field = this.takeAiField();
           if (trackRoot) field.attachTrackRoot(trackRoot);
           this.setRace({ kind: "ai", field });
-          startAiRace(field, next.race, next.profile);
+          startAiRace(field, next.race, next.profile, undefined, next.autoGearbox);
         }
       }
     };
@@ -2673,7 +2673,7 @@ export class DriveSession {
       if (!this.allowRestart()) return;
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
-      startAiRace(race.field, raceSetupNow(), settings.profile);
+      startAiRace(race.field, raceSetupNow(), settings.profile, undefined, settings.autoGearbox);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -3853,7 +3853,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, raceSetupNow(), settings.profile);
+        startAiRace(field, raceSetupNow(), settings.profile, undefined, settingsNow.autoGearbox);
       }
       const aiField = aiFieldOf(raceNow());
       /** The race runs in the worker, the player's car with it: this page only sends the controls and draws it */
@@ -3908,7 +3908,7 @@ export class DriveSession {
         // its car there: the controls go on, which keep its clock running); an assisted one stops it
         // (not while an AI race's grid stands before its lights, after qualifying: the car waits still)
         const mpManualStart = mpRace
-          ? mpRace.start.startType !== "rolling" && (mpRace.start.manualStart ?? settingsNow.race.launch === "manual")
+          ? mpRace.start.startType !== "rolling" && !settingsNow.autoGearbox && (mpRace.start.manualStart ?? settingsNow.race.launch === "manual")
           : false;
         const gridHeld = raceInWorker
           ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
@@ -4040,15 +4040,23 @@ export class DriveSession {
           physics.speedLimiterMs = undefined;
         }
         wasRollingFormation = Boolean(rfNow);
-        const rollingCall = rollingSpeedWatch.update(
-          driving ? dtSeconds : 0,
-          Boolean(rfNow && driving && !physics.aiAutopilot),
-          physics.telemetry.speedKmh,
-          rfNow?.paceMs ?? 0
-        );
+        const rollingCall =
+          driving && !physics.aiAutopilot
+            ? rollingSpeedWatch.update(
+                dtSeconds,
+                Boolean(rfNow),
+                physics.telemetry.speedKmh,
+                rfNow?.paceMs ?? 0,
+                status?.phase === "racing"
+              )
+            : null;
         if (rollingCall === "penalty") {
-          console.info(`[race] rolling start speeding: +${rollingSpeedWatch.penaltyS} s at the flag`);
-          aiField?.penalisePlayer(rollingSpeedWatch.penaltyS, "jump_start", tx("game.session.jumpStart"));
+          console.info(`[race] rolling start speeding at green: +${rollingSpeedWatch.penaltyS} s at the flag`);
+          aiField?.penalisePlayer(
+            rollingSpeedWatch.penaltyS,
+            "jump_start",
+            rollingSpeedWatch.big ? tx("game.session.bigJumpStart") : tx("game.session.jumpStart")
+          );
         }
       }
       // The reaction to the lights: from the frame they go out, as this frame's status has it (a rolling start has none)

@@ -193,15 +193,16 @@ console.log('\n== Reaction to the lights');
 // ---- The launch rides with the race setup, so every race start (the menu, a restart, a new car) reads the same one
 {
   console.log('\n== the race setup');
-  const startWith = (patch: Partial<typeof DEFAULT_RACE_SETUP>, standing?: boolean) => {
+  const startWith = (patch: Partial<typeof DEFAULT_RACE_SETUP>, standing?: boolean, autoGearbox?: boolean) => {
     const field = { manualStart: false, startRace: () => {} } as unknown as AiRace;
-    startAiRace(field, { ...DEFAULT_RACE_SETUP, ...patch }, null, standing);
+    startAiRace(field, { ...DEFAULT_RACE_SETUP, ...patch }, null, standing, autoGearbox);
     return field.manualStart;
   };
   check('a new player starts assisted', DEFAULT_RACE_SETUP.launch === 'assisted');
   check('a manual launch makes a manual start (the start left to the rules)', DEFAULT_RACE_SETUP.startMode === 'auto' && startWith({ launch: 'manual' }));
   check('and from a standing start picked outright', startWith({ launch: 'manual', startMode: 'standing' }));
   check('an assisted launch does not', !startWith({ launch: 'assisted' }));
+  check('automatic gearbox disables manual start', !startWith({ launch: 'manual', startMode: 'standing' }, true, true));
   check('a rolling start is never a manual one', !startWith({ launch: 'manual', startMode: 'rolling' }));
   check('a flying start (standing forced off) is never a manual one', !startWith({ launch: 'manual' }, false));
   check('the launch is saved with the race setup', parseRaceSetup(JSON.parse(JSON.stringify({ ...DEFAULT_RACE_SETUP, launch: 'manual' }))).launch === 'manual');

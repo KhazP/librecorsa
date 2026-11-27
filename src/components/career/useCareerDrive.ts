@@ -315,7 +315,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
       if (plan.qualifying > 0) session.startQualifying(field, plan.qualifying);
       else {
         session.setRace({ kind: "ai", field });
-        startAiRace(field, setup, profile);
+        startAiRace(field, setup, profile, undefined, d.settingsRef.current.autoGearbox);
       }
       d.setLaunchHint(true);
     },

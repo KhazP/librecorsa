@@ -654,6 +654,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
       // switch there)
       onToggleAiOpponents={mpRace || getActivePointToPoint() ? undefined : p.onToggleAiOpponents}
       trackLengthM={getActiveTimedLengthM()}
+      autoGearbox={p.autoGearbox}
       extraFieldRows={autopilot}
     />
   );

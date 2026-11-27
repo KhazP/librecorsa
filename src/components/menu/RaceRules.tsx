@@ -58,6 +58,8 @@ export interface RaceRulesProps {
   onToggleAiOpponents?: () => void;
   /** Circuit length in metres, for the race distance under Laps */
   trackLengthM?: number;
+  /** Automatic gearbox disables manual clutch starts */
+  autoGearbox?: boolean;
   /** Rows to add at the end of the field card (pause: Autopilot) */
   extraFieldRows?: React.ReactNode;
   className?: string;
@@ -83,11 +85,13 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
   aiOpponents,
   onToggleAiOpponents,
   trackLengthM,
+  autoGearbox = false,
   extraFieldRows,
   className,
 }) => {
   const distance = useRaceDistance(setup.laps, trackLengthM);
   const tx = useTranslations("menu.raceRules");
+  const stx = useTranslations("settings.rows");
   const pause = context === "pause";
   const aggressionHint: Record<RaceAggression, string> = {
     clean: tx("aggressionClean"),
@@ -187,10 +191,23 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         />
       </SettingRow>
       {/* The same choice as Settings > Driving > Launch */}
-      <SettingRow label={tx("launch")} hint={setup.startMode !== "rolling" ? RACE_START_MODE_HINTS[setup.launch] : tx("launchRolling")}>
+      <SettingRow
+        label={tx("launch")}
+        hint={
+          setup.startMode === "rolling"
+            ? tx("launchRolling")
+            : autoGearbox
+              ? stx("autoClutch.off.gearbox")
+              : RACE_START_MODE_HINTS[setup.launch]
+        }
+      >
         <Segmented<RaceStartMode>
-          options={RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] }))}
-          value={setup.launch}
+          options={RACE_START_MODES.map((id) => ({
+            id,
+            label: RACE_START_MODE_LABELS[id],
+            disabled: autoGearbox && id === "manual",
+          }))}
+          value={autoGearbox ? "assisted" : setup.launch}
           onChange={(launch) => onChange({ launch })}
         />
       </SettingRow>
