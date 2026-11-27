@@ -72,18 +72,11 @@
   "liveryPicker.count": "How many liveries (paint schemes) a car has.",
   "downloads.introApps": "Opens the Download section: the desktop app (Windows, macOS, Linux) and the Android app. Mods = add-on packages of cars and circuits.",
   "downloads.directLink": "Link to the download page.",
-  "downloads.thisDevice": "Badge on the platform the visitor is using now.",
   "downloads.installed": "Badge: the Android app is already installed (shown inside it).",
   "downloads.artifact": "Screen-reader name of a download button. {label}: the button's text; {platform}: Windows, macOS…; {detail}: file type and architecture.",
   "downloads.artifactSized": "The same with the file size. {size}: such as 92 MB.",
   "downloads.detailSized": "{detail}: file type and architecture; {size}: such as 92 MB.",
-  "downloads.detailPending": "A file that will appear with the next release.",
   "downloads.installCommand": "Screen-reader name of a box with a terminal command. {platform}: operating system name.",
-  "downloads.highlights.desktopApp.text": "The desktop app's row. Mods = add-on packages of cars and circuits. GitHub Releases is a name.",
-  "downloads.highlights.live.text": "librecorsa.org is the site's address: not translated.",
-  "downloads.highlights.android.text": "Trusted Web Activity, Android Game Mode: Android feature names, usually kept as they are. Drive / Boards are the app's shortcut names.",
-  "downloads.highlights.browser.text": "Share and Add to Home Screen are Safari's menu items: use the names Apple uses in your language.",
-  "downloads.buildsSigned": "Keep the <code></code> tags around {file}; it is a file path, not translated. SignPath Foundation, GitHub Actions and GitHub Releases are names. SHA-256 = a file checksum; notarised = checked by Apple.",
   "downloads.signingPolicy": "Link to the page that explains how the Windows apps are code-signed.",
   "hub.prompts.back": "Button prompt: back to the Home section.",
   "hub.tabs.about": "Home page section: what the game is, the modders and the press.",
@@ -95,5 +88,6 @@
   "hub.facts.racing.label": "Label in the list of game facts: the kinds of racing.",
   "hub.facts.controls.label": "Label in the list of game facts: what it can be played with.",
   "hub.facts.conditions.label": "Label in the list of game facts: weather and time of day.",
-  "hub.facts.price.label": "Label in the list of game facts: what it costs."
+  "hub.facts.price.label": "Label in the list of game facts: what it costs.",
+  "downloads.comingSoon": "Shown instead of the download buttons while that app's release isn't out yet."
 }

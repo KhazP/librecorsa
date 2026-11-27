@@ -195,34 +195,12 @@
     "introApps": "Una aplicación de escritorio para Windows, macOS y Linux que también funciona sin conexión y admite mods, y una aplicación para Android. Con conexión, ambas usan el juego en vivo, así que las actualizaciones llegan sin reinstalar.",
     "directLink": "Enlace directo",
     "platforms": "Plataformas",
-    "thisDevice": "Este dispositivo",
     "installed": "Instalada",
+    "comingSoon": "Próximamente",
     "artifact": "{label}: {platform} ({detail})",
     "artifactSized": "{label}: {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (se publica con la próxima versión)",
     "installCommand": "Comando de instalación para {platform}",
-    "whyInstall": "Por qué instalar la app",
-    "highlights": {
-      "desktopApp": {
-        "label": "Escritorio",
-        "text": "Conserva las páginas, los autos y los circuitos que carga, así que el juego también funciona sin conexión. Admite mods, convierte circuitos y autos de otros juegos y se actualiza solo desde GitHub Releases."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Trusted Web Activity a pantalla completa sin barra de URL del navegador, gestos de borde inmersivos fijos, Android Game Mode y accesos directos Drive / Boards."
-      },
-      "live": {
-        "label": "Siempre al día",
-        "text": "Con conexión, ambas aplicaciones usan el juego en vivo de librecorsa.org, así que las actualizaciones de física, circuitos y multijugador llegan sin reinstalar. Sin conexión, la aplicación de escritorio usa lo que conservó."
-      },
-      "browser": {
-        "label": "Navegador e iOS",
-        "text": "No hay nada que instalar si prefieres jugar directamente en una pestaña. En iPhone y iPad, usa Compartir > Añadir a pantalla de inicio de Safari."
-      }
-    },
-    "buildsTitle": "Compilaciones y firma",
-    "buildsSigned": "GitHub Actions compila cada aplicación a partir del código fuente de este repositorio y la publica en GitHub Releases con resúmenes SHA-256. La aplicación de escritorio solo instala una actualización si su firma es válida. La firma de código gratuita para Windows a través de SignPath Foundation está en preparación; Apple aún no ha certificado la aplicación de macOS; el APK de Android está firmado con la clave de subida que verifica <code>{file}</code>.",
     "allReleases": "Todas las versiones en GitHub",
     "signingPolicy": "Política de firma de código",
     "appGuide": "Guía de las apps"

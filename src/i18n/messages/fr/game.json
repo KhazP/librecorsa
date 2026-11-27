@@ -827,13 +827,10 @@
     "ready": "Prêt. Les onglets de ce navigateur se trouvent entre eux ; les autres appareils rejoignent avec un code de salon."
   },
   "downloads": {
-    "desktopSummary": "Le jeu dans sa propre fenêtre, en ligne ou hors ligne. Il accepte les mods, convertit les circuits et voitures d’autres jeux et se met à jour automatiquement.",
     "windowsZipNote": "Décompressez-le dans un dossier où vous avez les droits d’écriture (pas dans Program Files) et lancez LibreCorsa.exe dans le dossier LibreCorsa. Tant que sa signature de code via SignPath Foundation n’est pas approuvée, SmartScreen peut le bloquer : cliquez sur Informations complémentaires, puis sur Exécuter quand même.",
-    "windowsStatusLabel": "Non signée",
     "windowsZipLabel": "Télécharger le .zip",
     "windowsZipDetail": "Windows x64",
     "macosDmgNote": "Ouvrez le .dmg et glissez LibreCorsa dans Applications. Apple ne l’a pas encore notarié, donc au premier blocage de macOS : ouvrez Réglages Système > Confidentialité et sécurité, puis cliquez sur Ouvrir quand même.",
-    "macosStatusLabel": "Non signée",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Mac Apple Silicon",
     "macosX64Label": "Intel (.dmg)",
@@ -841,9 +838,7 @@
     "linuxTarNote": "Décompressez-le où vous voulez et lancez librecorsa dans le dossier LibreCorsa. Au premier lancement, LibreCorsa s’ajoute à votre menu d’applications :",
     "linuxTarLabel": "Télécharger le .tar.gz",
     "linuxX64Detail": "Linux x64",
-    "androidSummary": "Trusted Web Activity en plein écran avec commandes immersives persistantes, Android Game Mode et raccourcis du lanceur. Nécessite Android 7+ et Chrome.",
     "androidInstallNote": "APK officiel signé. Autorisez l’installation depuis votre navigateur quand on vous le demande ; il se vérifie auprès de librecorsa.org et s’ouvre sans barre d’adresse.",
-    "androidStatusLabel": "APK signé",
     "androidApkLabel": "Télécharger l’.apk",
     "androidApkDetail": "Android 7+ (universel)"
   },

@@ -827,13 +827,10 @@
     "ready": "Bereit. Tabs in diesem Browser finden sich selbst; andere Geräte treten mit einem Raumcode bei."
   },
   "downloads": {
-    "desktopSummary": "Das Spiel im eigenen Fenster, online oder offline. Es nimmt Mods auf, konvertiert Strecken und Autos aus anderen Spielen und aktualisiert sich selbst.",
     "windowsZipNote": "Entpacke es an einem Ort, an dem du schreiben darfst (nicht Program Files), und starte LibreCorsa.exe im Ordner LibreCorsa. Bis die Codesignierung über SignPath Foundation genehmigt ist, kann SmartScreen es anhalten: Klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.",
-    "windowsStatusLabel": "Unsigniert",
     "windowsZipLabel": ".zip herunterladen",
     "windowsZipDetail": "Windows x64",
     "macosDmgNote": "Öffne die .dmg und ziehe LibreCorsa in den Ordner „Programme“. Apple hat die App noch nicht beglaubigt, deshalb hält macOS sie beim ersten Mal an: Öffne Systemeinstellungen > Datenschutz & Sicherheit und klicke auf „Dennoch öffnen“.",
-    "macosStatusLabel": "Unsigniert",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Apple-Silicon-Macs",
     "macosX64Label": "Intel (.dmg)",
@@ -841,9 +838,7 @@
     "linuxTarNote": "Entpacke es an einem beliebigen Ort und starte librecorsa im Ordner LibreCorsa. Der erste Start fügt LibreCorsa deinem App-Menü hinzu:",
     "linuxTarLabel": ".tar.gz herunterladen",
     "linuxX64Detail": "Linux x64",
-    "androidSummary": "Vollbild-Trusted-Web-Activity mit Sticky-Immersive-Steuerung, Android Game Mode und Launcher-Verknüpfungen. Erfordert Android 7+ und Chrome.",
     "androidInstallNote": "Signierte Release-APK. Erlaube die Installation aus deinem Browser, wenn du dazu aufgefordert wirst; sie wird gegen librecorsa.org geprüft und öffnet sich ohne Adressleiste.",
-    "androidStatusLabel": "Signierte APK",
     "androidApkLabel": ".apk herunterladen",
     "androidApkDetail": "Android 7+ (universal)"
   },

@@ -195,34 +195,12 @@
     "introApps": "Um app de desktop para Windows, macOS e Linux que também roda offline e aceita mods, e um app para Android. Online, os dois rodam o jogo ao vivo, então as atualizações chegam sem reinstalar.",
     "directLink": "Link direto",
     "platforms": "Plataformas",
-    "thisDevice": "Este dispositivo",
     "installed": "Instalado",
+    "comingSoon": "Em breve",
     "artifact": "{label}: {platform} ({detail})",
     "artifactSized": "{label}: {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (publicado na próxima tag de versão)",
     "installCommand": "Comando de instalação para {platform}",
-    "whyInstall": "Por que instalar o app",
-    "highlights": {
-      "desktopApp": {
-        "label": "Desktop",
-        "text": "Guarda as páginas, os carros e os circuitos que carrega, então o jogo também roda offline. Aceita mods, converte circuitos e carros de outros jogos e se atualiza sozinho pelo GitHub Releases."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Trusted Web Activity em tela cheia sem barra de endereço, gestos de borda imersivos fixos, Android Game Mode e atalhos Dirigir / Rankings na tela inicial."
-      },
-      "live": {
-        "label": "Sempre atual",
-        "text": "Online, os dois apps rodam o jogo ao vivo de librecorsa.org, então as atualizações de física, circuitos e multiplayer chegam sem reinstalar. Offline, o app de desktop roda o que guardou."
-      },
-      "browser": {
-        "label": "Navegador e iOS",
-        "text": "Nada para instalar se você prefere jogar direto em uma aba. No iPhone e no iPad, use Compartilhar > Adicionar à Tela de Início no Safari."
-      }
-    },
-    "buildsTitle": "Builds e assinatura",
-    "buildsSigned": "Cada app é compilado pelo GitHub Actions a partir do código-fonte deste repositório e publicado no GitHub Releases com resumos SHA-256. O app de desktop só instala uma atualização quando a assinatura dela confere. A assinatura de código gratuita para Windows pela SignPath Foundation está sendo configurada; a Apple ainda não autenticou o app de macOS; o APK de Android é assinado com a chave de upload verificada por <code>{file}</code>.",
     "allReleases": "Todas as versões no GitHub",
     "signingPolicy": "Política de assinatura de código",
     "appGuide": "Guia dos apps"

@@ -827,13 +827,10 @@
     "ready": "Siap. Tab di browser ini saling menemukan otomatis; perangkat lain bergabung dengan kode ruang."
   },
   "downloads": {
-    "desktopSummary": "Game di jendelanya sendiri, daring maupun offline. Mendukung mod, mengonversi sirkuit dan mobil dari game lain, serta memperbarui diri sendiri.",
     "windowsZipNote": "Ekstrak di mana saja yang bisa ditulis (bukan Program Files), lalu jalankan LibreCorsa.exe di dalam folder LibreCorsa. Sebelum penandatanganan kode lewat SignPath Foundation disetujui, SmartScreen mungkin menghentikannya: klik Info selengkapnya, lalu Tetap jalankan.",
-    "windowsStatusLabel": "Belum ditandatangani",
     "windowsZipLabel": "Unduh .zip",
     "windowsZipDetail": "Windows x64",
     "macosDmgNote": "Buka .dmg dan seret LibreCorsa ke Aplikasi. Apple belum menotarisasinya, jadi saat pertama kali macOS menghentikannya: buka Pengaturan Sistem > Privasi & Keamanan lalu klik Tetap Buka.",
-    "macosStatusLabel": "Belum ditandatangani",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Mac Apple Silicon",
     "macosX64Label": "Intel (.dmg)",
@@ -841,9 +838,7 @@
     "linuxTarNote": "Ekstrak di mana saja lalu jalankan librecorsa di dalam folder LibreCorsa. Saat pertama kali dijalankan, LibreCorsa akan ditambahkan ke menu aplikasimu:",
     "linuxTarLabel": "Unduh .tar.gz",
     "linuxX64Detail": "Linux x64",
-    "androidSummary": "Trusted Web Activity layar penuh dengan kontrol imersif, Android Game Mode, dan pintasan peluncur. Memerlukan Android 7+ dan Chrome.",
     "androidInstallNote": "APK rilis bertanda tangan. Izinkan pemasangan dari browser saat diminta; aplikasi diverifikasi terhadap librecorsa.org dan terbuka tanpa bilah URL.",
-    "androidStatusLabel": "APK bertanda tangan",
     "androidApkLabel": "Unduh .apk",
     "androidApkDetail": "Android 7+ (universal)"
   },

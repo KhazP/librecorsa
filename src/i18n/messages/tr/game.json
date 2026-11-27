@@ -827,13 +827,10 @@
     "ready": "Hazır. Bu tarayıcıdaki sekmeler birbirini otomatik bulur; diğer cihazlar oda koduyla katılır."
   },
   "downloads": {
-    "desktopSummary": "Oyun kendi penceresinde, çevrimiçi ya da çevrimdışı. Mod alır, başka oyunlardan pist ve araç dönüştürür ve kendini günceller.",
     "windowsZipNote": "Yazma iznin olan herhangi bir yere (Program Files olmasın) çıkar ve LibreCorsa klasöründeki LibreCorsa.exe dosyasını çalıştır. SignPath Foundation üzerinden kod imzalaması onaylanana kadar SmartScreen onu durdurabilir: Ek bilgi’ye, ardından Yine de çalıştır’a tıkla.",
-    "windowsStatusLabel": "İmzasız",
     "windowsZipLabel": ".zip indir",
     "windowsZipDetail": "Windows x64",
     "macosDmgNote": ".dmg dosyasını aç ve LibreCorsa’yı Uygulamalar’a sürükle. Apple onu henüz onaylamadı, bu yüzden macOS ilk açılışta durdurur: Sistem Ayarları > Gizlilik ve Güvenlik’i aç ve Yine de Aç’a tıkla.",
-    "macosStatusLabel": "İmzasız",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "Apple Silicon Mac’ler",
     "macosX64Label": "Intel (.dmg)",
@@ -841,9 +838,7 @@
     "linuxTarNote": "Herhangi bir yere çıkar ve LibreCorsa klasöründeki librecorsa programını çalıştır. İlk açılışta LibreCorsa uygulama menüne eklenir:",
     "linuxTarLabel": ".tar.gz indir",
     "linuxX64Detail": "Linux x64",
-    "androidSummary": "Kenar kaydırma korumalı tam ekran Trusted Web Activity, Android Game Mode ve başlatıcı kısayolları. Android 7+ ve Chrome gerekir.",
     "androidInstallNote": "İmzalı sürüm APK’sı. İstendiğinde tarayıcıdan yüklemeye izin ver; librecorsa.org üzerinden doğrulanır ve adres çubuğu olmadan açılır.",
-    "androidStatusLabel": "İmzalı APK",
     "androidApkLabel": ".apk indir",
     "androidApkDetail": "Android 7+ (evrensel)"
   },
