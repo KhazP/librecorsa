@@ -2343,9 +2343,10 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   const pitData = (activeRaw as { pitLane?: PitLaneData }).pitLane;
   const pitboxes = (activeRaw.metadata as { pitboxes?: number }).pitboxes;
   let pitModel: PitLaneModel | null | undefined;
+  const pitTrackId = ACTIVE_TRACK_ID;
   Object.defineProperty(built, "pitLane", {
     enumerable: false,
-    get: () => (pitModel === undefined ? (pitModel = PitLaneModel.build(pitData, built, pitboxes)) : pitModel),
+    get: () => (pitModel === undefined ? (pitModel = PitLaneModel.build(pitData, built, pitboxes, pitTrackId)) : pitModel),
   });
 
   return cachedBuiltTrack;

@@ -95,6 +95,51 @@ const MAX_RATE = 3;
 /** Clear lane kept between the zone ends and the first and last boxes (m) */
 const BOX_MARGIN_M = 30;
 
+/**
+ * Circuits whose legacy v1 `track_data.json` carries no real `boxes` array and whose painted pit-box strip lies
+ * further off the fast-lane centreline (or over a shorter stretch of the limit zone) than the generic
+ * `BOX_OFFSET_M = 3.2 m` fallback. Defined in lane-relative `(laneM, offsetM)` coordinates measured from the circuit
+ * geometry so shared venues with different `modelOffset`s (e.g. Watkins Glen full & short) get identical placement.
+ * Ignored once a circuit ships real `boxes` in its `track_data.json`.
+ */
+interface PitBoxStripOverride {
+  readonly startM: number;
+  readonly endM: number;
+  readonly offsetKnots: readonly (readonly [number, number])[];
+}
+
+const WATKINS_GLEN_BOX_STRIP: PitBoxStripOverride = {
+  // Painted pit-box ribbon (`pitburnouts_chunk0` / `linespit_chunk0`) runs along laneM 296..701 m,
+  // 6.5 m wide between the fast-lane dividing line (+5.0..6.7 m) and the right pit wall (+11.5..13.1 m).
+  startM: 304,
+  endM: 694,
+  offsetKnots: [
+    [296, 8.25],
+    [410, 8.4],
+    [510, 8.95],
+    [610, 9.85],
+    [701, 8.2],
+  ],
+};
+
+const PIT_BOX_STRIP_OVERRIDES: Readonly<Record<string, PitBoxStripOverride>> = {
+  watkins_glen: WATKINS_GLEN_BOX_STRIP,
+  watkins_glen_short: WATKINS_GLEN_BOX_STRIP,
+};
+
+function sampleKnotOffset(knots: readonly (readonly [number, number])[], m: number): number {
+  if (m <= knots[0][0]) return knots[0][1];
+  for (let i = 1; i < knots.length; i++) {
+    if (m <= knots[i][0]) {
+      const [m0, o0] = knots[i - 1];
+      const [m1, o1] = knots[i];
+      const t = m1 > m0 ? (m - m0) / (m1 - m0) : 0;
+      return o0 + (o1 - o0) * t;
+    }
+  }
+  return knots[knots.length - 1][1];
+}
+
 export class PitLaneModel {
   /** x, y, z per point, resampled to `STEP_M` (read-only outside: the verify script and the box visual) */
   readonly px: Float64Array;
@@ -165,7 +210,7 @@ export class PitLaneModel {
    * The model of a circuit's lane, or null where there is none. `track` is the built lap (its samples and projection);
    * `pitboxes` the circuit's box count (metadata) for a lane laid out here
    */
-  static build(data: PitLaneData | null | undefined, track: BuiltTrackData, pitboxes?: number): PitLaneModel | null {
+  static build(data: PitLaneData | null | undefined, track: BuiltTrackData, pitboxes?: number, trackId?: string): PitLaneModel | null {
     if (!data || data.none || track.pointToPoint) return null;
     const raw = (data.centerline ?? []).filter((p) => Array.isArray(p) && p.length >= 3 && p.every(Number.isFinite));
     if (raw.length < 6) return null;
@@ -311,7 +356,7 @@ export class PitLaneModel {
       boxes.sort((a, b) => a.laneM - b.laneM);
     }
     if (boxes.length < 4) {
-      boxes = layOutBoxes(shape, limitStartM, limitEndM, side, pitboxes);
+      boxes = layOutBoxes(shape, limitStartM, limitEndM, side, pitboxes, trackId ? PIT_BOX_STRIP_OVERRIDES[trackId] : undefined);
     }
     boxes.forEach((b, i) => (b.index = i));
     return new PitLaneModel({
@@ -498,10 +543,11 @@ function layOutBoxes(
   limitStartM: number,
   limitEndM: number,
   side: 1 | -1,
-  pitboxes?: number
+  pitboxes?: number,
+  override?: PitBoxStripOverride
 ): PitBox[] {
-  const a = limitStartM + BOX_MARGIN_M;
-  const b = limitEndM - BOX_MARGIN_M;
+  const a = override ? Math.max(limitStartM, override.startM) : limitStartM + BOX_MARGIN_M;
+  const b = override ? Math.min(limitEndM, override.endM) : limitEndM - BOX_MARGIN_M;
   const span = Math.max(0, b - a);
   const want = Math.max(10, Math.min(40, Math.round(pitboxes ?? 20)));
   const count = Math.max(1, Math.min(want, Math.floor(span / BOX_SPACING_M) + 1));
@@ -519,7 +565,7 @@ function layOutBoxes(
     // Right of the lane = (-tz, tx); the garages lie away from the track
     const rx = -tz;
     const rz = tx;
-    const off = BOX_OFFSET_M * side;
+    const off = override ? sampleKnotOffset(override.offsetKnots, m) : BOX_OFFSET_M * side;
     out.push({
       index: k,
       x: shape.px[i] + (shape.px[j] - shape.px[i]) * t + rx * off,

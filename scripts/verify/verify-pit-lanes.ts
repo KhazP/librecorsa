@@ -211,6 +211,15 @@ for (const id of ids) {
       } else {
         console.log(`ok    ${id}: car drove pit entry -> pit lane -> pit exit unobstructed to lane ${reachedM.toFixed(0)} m (0 wall hits)`);
       }
+      // Pit boxes sit right of the fast lane inside the painted box strip (not at +3.2 m in the fast lane)
+      const badBox = lane.boxes.find((b) => b.offsetM < 7.5 || b.offsetM > 10.5 || b.laneM < 300 || b.laneM > 700);
+      if (badBox) {
+        fail(id, `pit box #${badBox.index} outside box strip (laneM=${badBox.laneM.toFixed(1)}, offsetM=${badBox.offsetM.toFixed(2)})`);
+      } else {
+        const minOff = Math.min(...lane.boxes.map((b) => b.offsetM));
+        const maxOff = Math.max(...lane.boxes.map((b) => b.offsetM));
+        console.log(`ok    ${id}: all ${lane.boxes.length} pit boxes sit in box area (offsetM ${minOff.toFixed(2)}..${maxOff.toFixed(2)} m)`);
+      }
     }
   }
 
