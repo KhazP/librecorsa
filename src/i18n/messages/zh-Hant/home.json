@@ -224,6 +224,7 @@
     "buildsTitle": "建置與簽章",
     "buildsSigned": "所有應用程式皆由 GitHub Actions 自本專案原始碼建置，並附帶 SHA-256 校驗碼發佈於 GitHub Releases。桌面應用程式僅在簽章驗證通過時才會安裝更新。透過 SignPath Foundation 提供的免費 Windows 程式碼簽章正在設定中；macOS 應用程式尚未經過 Apple 公證；Android APK 使用經 <code>{file}</code> 驗證的上傳金鑰簽署。",
     "allReleases": "GitHub 所有發行版本",
-    "signingPolicy": "程式碼簽章政策"
+    "signingPolicy": "程式碼簽章政策",
+    "appGuide": "應用程式指南"
   }
 }

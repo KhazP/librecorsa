@@ -224,6 +224,7 @@
     "buildsTitle": "Build & penandatanganan",
     "buildsSigned": "Setiap aplikasi dibuat dari kode sumber repositori ini oleh GitHub Actions dan diterbitkan di GitHub Releases dengan digest SHA-256. Aplikasi desktop hanya memasang pembaruan jika tanda tangannya cocok. Penandatanganan kode Windows gratis melalui SignPath Foundation sedang disiapkan; Apple belum menotarisasi aplikasi macOS; APK Android ditandatangani dengan kunci unggah yang diverifikasi oleh <code>{file}</code>.",
     "allReleases": "Semua rilis di GitHub",
-    "signingPolicy": "Kebijakan penandatanganan kode"
+    "signingPolicy": "Kebijakan penandatanganan kode",
+    "appGuide": "Panduan aplikasi"
   }
 }

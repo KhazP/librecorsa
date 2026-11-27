@@ -224,6 +224,7 @@
     "buildsTitle": "Builds e assinatura",
     "buildsSigned": "Cada app é compilado pelo GitHub Actions a partir do código-fonte deste repositório e publicado no GitHub Releases com resumos SHA-256. O app de desktop só instala uma atualização quando a assinatura dela confere. A assinatura de código gratuita para Windows pela SignPath Foundation está sendo configurada; a Apple ainda não autenticou o app de macOS; o APK de Android é assinado com a chave de upload verificada por <code>{file}</code>.",
     "allReleases": "Todas as versões no GitHub",
-    "signingPolicy": "Política de assinatura de código"
+    "signingPolicy": "Política de assinatura de código",
+    "appGuide": "Guia dos apps"
   }
 }

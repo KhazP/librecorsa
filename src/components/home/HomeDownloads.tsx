@@ -239,6 +239,7 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
             {[
               [tx("allReleases"), RELEASE_LINKS.allReleasesUrl],
               [tx("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl],
+              [tx("appGuide"), RELEASE_LINKS.appGuideUrl],
             ].map(([label, href]) => (
               <a
                 key={href}

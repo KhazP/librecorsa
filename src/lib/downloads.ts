@@ -1,5 +1,5 @@
 import { text as t } from "@/lib/text";
-import { REPO_URL } from "./site";
+import { DOCS_URL, REPO_URL } from "./site";
 
 /**
  * The apps' downloads, each app from its own GitHub release:
@@ -83,6 +83,7 @@ export const ANDROID_RELEASE: AppRelease = {
 export const RELEASE_LINKS = {
   allReleasesUrl: `${REPO_URL}/releases`,
   codeSigningPolicyUrl: `${REPO_URL}#code-signing-policy`,
+  appGuideUrl: `${DOCS_URL}/playing/downloads/`,
 } as const;
 
 /** A desktop file's name, as launcher/build.mjs makes it: LibreCorsa-<version>-<platform>.<format> */

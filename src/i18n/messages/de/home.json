@@ -224,6 +224,7 @@
     "buildsTitle": "Builds & Signierung",
     "buildsSigned": "Jede App wird von GitHub Actions aus dem Quellcode dieses Repositorys gebaut und mit SHA-256-Prüfsummen auf GitHub Releases veröffentlicht. Die Desktop-App installiert ein Update nur, wenn seine Signatur stimmt. Die kostenlose Windows-Codesignierung über SignPath Foundation wird gerade eingerichtet; Apple hat die macOS-App noch nicht beglaubigt; die Android-APK ist mit dem Upload-Schlüssel signiert, den <code>{file}</code> bestätigt.",
     "allReleases": "Alle Releases auf GitHub",
-    "signingPolicy": "Richtlinie zur Codesignierung"
+    "signingPolicy": "Richtlinie zur Codesignierung",
+    "appGuide": "App-Anleitung"
   }
 }

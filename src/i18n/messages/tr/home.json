@@ -224,6 +224,7 @@
     "buildsTitle": "Derlemeler ve imzalama",
     "buildsSigned": "Her uygulama bu deponun kaynak kodundan GitHub Actions ile derlenir ve SHA-256 özetleriyle GitHub Releases’ta yayımlanır. Masaüstü uygulaması bir güncellemeyi yalnızca imzası doğrulanırsa kurar. SignPath Foundation üzerinden ücretsiz Windows kod imzalaması hazırlanıyor; Apple macOS uygulamasını henüz onaylamadı; Android APK’sı, <code>{file}</code> ile doğrulanan yükleme anahtarıyla imzalanır.",
     "allReleases": "GitHub’daki tüm sürümler",
-    "signingPolicy": "Kod imzalama politikası"
+    "signingPolicy": "Kod imzalama politikası",
+    "appGuide": "Uygulama rehberi"
   }
 }

@@ -224,6 +224,7 @@
     "buildsTitle": "Bản dựng & chữ ký số",
     "buildsSigned": "Mọi ứng dụng đều được dựng từ mã nguồn của kho lưu trữ này bằng GitHub Actions và phát hành trên GitHub Releases kèm mã băm SHA-256. Ứng dụng máy tính chỉ cài bản cập nhật khi chữ ký hợp lệ. Dịch vụ ký mã Windows miễn phí qua SignPath Foundation đang được thiết lập; Apple chưa công chứng ứng dụng macOS; tệp APK Android được ký bằng khóa tải lên xác thực bởi <code>{file}</code>.",
     "allReleases": "Tất cả bản phát hành trên GitHub",
-    "signingPolicy": "Chính sách ký mã số"
+    "signingPolicy": "Chính sách ký mã số",
+    "appGuide": "Hướng dẫn ứng dụng"
   }
 }

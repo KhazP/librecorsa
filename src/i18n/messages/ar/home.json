@@ -224,6 +224,7 @@
     "buildsTitle": "البناء والتوقيع",
     "buildsSigned": "يُبنى كل تطبيق من الشيفرة المصدرية لهذا المستودع عبر GitHub Actions ويُنشر على GitHub Releases مع بصمات SHA-256. لا يثبّت تطبيق سطح المكتب أي تحديث إلا إذا صحّ توقيعه. يجري إعداد توقيع مجاني لشيفرة Windows عبر SignPath Foundation؛ ولم توثّق Apple تطبيق macOS بعد؛ أما ملف APK لنظام Android فموقّع بمفتاح الرفع الذي يتحقق منه <code>{file}</code>.",
     "allReleases": "جميع الإصدارات على GitHub",
-    "signingPolicy": "سياسة توقيع الشيفرة"
+    "signingPolicy": "سياسة توقيع الشيفرة",
+    "appGuide": "دليل التطبيقات"
   }
 }

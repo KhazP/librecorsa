@@ -224,6 +224,7 @@
     "buildsTitle": "Compilaciones y firma",
     "buildsSigned": "GitHub Actions compila cada aplicación a partir del código fuente de este repositorio y la publica en GitHub Releases con resúmenes SHA-256. La aplicación de escritorio solo instala una actualización si su firma es válida. La firma de código gratuita para Windows a través de SignPath Foundation está en preparación; Apple aún no ha certificado la aplicación de macOS; el APK de Android está firmado con la clave de subida que verifica <code>{file}</code>.",
     "allReleases": "Todas las versiones en GitHub",
-    "signingPolicy": "Política de firma de código"
+    "signingPolicy": "Política de firma de código",
+    "appGuide": "Guía de las apps"
   }
 }

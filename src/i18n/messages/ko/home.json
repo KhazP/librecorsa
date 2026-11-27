@@ -224,6 +224,7 @@
     "buildsTitle": "빌드 및 서명",
     "buildsSigned": "모든 앱은 이 저장소의 소스 코드로부터 GitHub Actions에서 빌드되며 SHA-256 다이제스트와 함께 GitHub Releases에 게시됩니다. 데스크톱 앱은 서명이 검증된 경우에만 업데이트를 설치합니다. SignPath Foundation을 통한 무료 Windows 코드 서명은 현재 준비 중이며, macOS 앱은 아직 Apple 공증을 받지 않았습니다. Android APK는 <code>{file}</code>로 검증되는 업로드 키로 서명되어 있습니다.",
     "allReleases": "GitHub의 모든 릴리스",
-    "signingPolicy": "코드 서명 정책"
+    "signingPolicy": "코드 서명 정책",
+    "appGuide": "앱 가이드"
   }
 }
