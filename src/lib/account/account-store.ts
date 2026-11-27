@@ -265,6 +265,8 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
 
   function toSignedOut(): void {
     joined = false;
+    // A new account's skip of the question is for that account only: the next sign-in may be to one with a save
+    joinWithoutAsking = false;
     pushTimer = clear(pushTimer);
     periodicTimer = clear(periodicTimer);
     set({ phase: "signed-out", account: null, join: null, firstSync: null, elsewhere: [], sync: INITIAL.sync });

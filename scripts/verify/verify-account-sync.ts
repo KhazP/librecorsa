@@ -506,6 +506,11 @@ function fakeServer() {
       const path = new URL(url).pathname.replace(/^\/api/, "");
       const method = init.method ?? "GET";
       s.calls.push(`${method} ${path}`);
+      // A link code signs this browser in (the code is used up)
+      if (path === "/auth/link-code/redeem") {
+        s.signedIn = true;
+        return json(200, { ok: true, result: "signed-in" });
+      }
       if (!s.signedIn) return json(401, { ok: false, error: "Signed out", signedOut: true });
       const body = typeof init.body === "string" && method !== "PUT" ? JSON.parse(init.body) : null;
       if (path === "/account" && method === "GET") return json(200, { ok: true, account: s.account(), thisDevice: { joined: s.joined } });
@@ -1298,6 +1303,26 @@ async function main3(): Promise<void> {
     await settle();
     const st = store.getState();
     check("a new account: no join question, this device joins it and syncs", st.join === null && server.joined && server.calls.includes("POST /account/device") && st.notice?.text === AUTH_NOTICES.created.text, server.calls.join());
+  }
+  {
+    // A new account whose session never took (signed out at once), then a sign-in to an account with a save of its
+    // own: that one asks the join question
+    const server = fakeServer();
+    server.signedIn = false;
+    server.joined = false;
+    const f = fakeEnv(server, { accounts: true, hash: "#lc-account=created" });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => store.getState().phase === "signed-out");
+    await settle();
+    await store.actions.redeemLinkCode("ABCD-EFGH");
+    await settle();
+    const st = store.getState();
+    check(
+      "signed out after making an account, then signed in to another: the join question is asked",
+      st.phase === "signed-in" && st.join?.driverName === "Alp" && !server.calls.includes("POST /account/device"),
+      server.calls.join(),
+    );
   }
   {
     // A sign-in return, then the join question, then the first sync (cloud empty: upload)

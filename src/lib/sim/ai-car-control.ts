@@ -224,7 +224,11 @@ export class AiCarControl {
           out.inputs = { throttle: speed < TURN_CAP_MS ? 1 : 0, brake: 0, analogSteer: this.turnSteer };
         } else {
           out.speedCapMs = REJOIN_CAP_MS + (this.timerS / REJOIN_RAMP_S) * 80;
-          if (this.timerS > REJOIN_RAMP_S && speed > 20) this.mode = 'racing';
+          if (this.timerS > REJOIN_RAMP_S && speed > 20) {
+            this.mode = 'racing';
+            // Going again on its own: the marshals called while it was stuck no longer move it
+            this.needsMarshal = false;
+          }
         }
         break;
       }

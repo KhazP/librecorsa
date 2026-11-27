@@ -2272,16 +2272,18 @@ export class MultiplayerSyncManager {
 
   /** Opens the socket to a race ("next", or the number of the one to get back into) */
   private openRaceServer(which: 'next' | number, attempt: number): void {
+    // The entry this is for: one joined again meanwhile has a secret of its own, and its own read
+    const token = this.raceToken;
     // Asked again now when the last read got no answer, which is said as such, not as races being off
     void readOnlineConfig({ fresh: true }).then(({ config, reach }) => {
       // Left, or another race or room chosen, while the config was read
-      if (this.raceStatus.state === 'idle' || this.raceStatus.state === 'error' || this.raceWs) return;
+      if (this.raceToken !== token || this.raceStatus.state === 'idle' || this.raceStatus.state === 'error' || this.raceWs) return;
       if (reach === 'unreachable' && !config.races) {
         this.failRace(tx('game.connection.raceServerUnreachable'));
         return;
       }
       const url = config.races
-        ? onlineSocketUrl(`/races/${which}?peer=${encodeURIComponent(this.localPeerId)}&token=${this.raceToken}&v=${PROTOCOL_VERSION}`)
+        ? onlineSocketUrl(`/races/${which}?peer=${encodeURIComponent(this.localPeerId)}&token=${token}&v=${PROTOCOL_VERSION}`)
         : null;
       if (!url) {
         this.failRace(tx('game.connection.racesOff'));
