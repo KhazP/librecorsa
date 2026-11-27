@@ -48,7 +48,8 @@ import { BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, boardKeyOf, loadBoardBest
 import { BOARD_SENTENCES, boardWords } from '../../src/lib/net/board-words';
 import { bindText } from '../../src/lib/text';
 import { challengePlaceLabel, challengeTarget } from '../../src/lib/net/challenge-target';
-import { boardDeps, driverNameKey, listLaps, lookupDriver, OLDER_PHYSICS, renameDriver, sha256Hex, submitLap, type BoardDeps } from '../../cloudflare/api/board';
+import { BANNED, boardDeps, driverNameKey, isBanned, listLaps, lookupDriver, OLDER_PHYSICS, renameDriver, sha256Hex, submitLap, type BoardDeps } from '../../cloudflare/api/board';
+import { adminBanDriver, adminLiftBan, adminListBans } from '../../cloudflare/api/admin';
 import { applyImportedDriverIdentity, importDriverKeyFile, loadDriverKey, resolveImportedDriverName } from '../../src/lib/net/driver-key';
 import { nameProblem } from '../../src/lib/net/name-filter';
 import { DEFAULT_DRIVER_PROFILE, randomDriverProfile } from '../../src/lib/settings/player-settings';
@@ -1271,13 +1272,54 @@ async function main(): Promise<void> {
     }
   }
 
+  // Bans: a driver barred by hand loses their laps, and their key, name and account can't post or rename -------------
+  {
+    const banSchema = readFileSync(join(__dirname, '../../cloudflare/migrations/0012_driver_bans.sql'), 'utf8');
+    const b: BoardDeps = { db: fakeD1(`${schema}\n${banSchema}`), ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    let ip = 0;
+    const req = (path: string, body: unknown, method = 'POST') =>
+      new Request(`https://librecorsa.test${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'CF-Connecting-IP': `10.14.${Math.floor(ip / 250)}.${ip++ % 250}` } });
+    const upload = async (rec: LapRecording, driverKey: string) => {
+      const a = await submitLap(b, req('/api/laps', { rec, driverKey }));
+      return { status: a.status, body: a.body as PostAnswer };
+    };
+    const names = async () =>
+      ((await listLaps(b, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=lc26&physics=${CURRENT}`))).body as ListAnswer).laps.map((l) => l.name);
+    const KEY_C = 'c'.repeat(43);
+    const KEY_D = 'd'.repeat(43);
+    const KEY_E = 'e'.repeat(43);
+    const first = await upload(variant(0.97, 'Cheat Driver'), KEY_C);
+    await upload(variant(1.02, 'Honest Driver'), KEY_D);
+    check('bans: both drivers are on the board first', first.status === 200 && (await names()).includes('Cheat Driver') && (await names()).includes('Honest Driver'));
+    const banned = await adminBanDriver(b.db, b.ghosts, 'Cheat Driver', req('/api/admin/bans/Cheat%20Driver', { reason: 'cheated laps' }), nowMs);
+    const answer = banned.body as { ok: boolean; nameKey: string; key: boolean; deleted: number };
+    check('bans: a ban takes the driver\'s laps off the board', banned.status === 200 && answer.key && answer.deleted >= 1 && !(await names()).includes('Cheat Driver') && (await names()).includes('Honest Driver'), JSON.stringify(answer));
+    const again = await upload(variant(0.97, 'Cheat Driver'), KEY_C);
+    const renamed = await upload(variant(0.97, 'Fresh Start'), KEY_C);
+    check('bans: the key is refused under its name and under a new one', again.status === 403 && again.body.error === BANNED && renamed.status === 403 && renamed.body.error === BANNED, `${again.status} ${renamed.status}`);
+    const otherKey = await upload(variant(0.97, 'cheat driver'), KEY_E);
+    check('bans: the barred name is refused from another key', otherKey.status === 403 && otherKey.body.error === BANNED, String(otherKey.status));
+    const rename = await renameDriver(b, req('/api/drivers/rename', { from: 'Cheat Driver', to: 'New Me', driverKey: KEY_C }));
+    check('bans: a barred key can\'t rename', rename.status === 403 && (rename.body as { error?: string }).error === BANNED, String(rename.status));
+    const honest = await upload(variant(1.01, 'Honest Driver'), KEY_D);
+    check('bans: everyone else posts as before', honest.status === 200, String(honest.status));
+    const listed = await adminListBans(b.db);
+    const listText = JSON.stringify(listed.body);
+    check('bans: the list names the driver and the reason, never the key', listText.includes('"nameKey":"cheat driver"') && listText.includes('cheated laps') && !listText.includes(await sha256Hex(KEY_C)), listText);
+    const lifted = await adminLiftBan(b.db, 'Cheat Driver');
+    const back = await upload(variant(0.99, 'Cheat Driver'), KEY_C);
+    check('bans: lifting a ban lets the driver post again', lifted.status === 200 && back.status === 200, `${lifted.status} ${back.status}`);
+    check('bans: lifting a ban nobody has is a 404', (await adminLiftBan(b.db, 'Nobody Here')).status === 404);
+    check('bans: a database without the bans table bars nobody', (await isBanned(fakeD1(schema), await sha256Hex(KEY_C), ['cheat driver'])) === false);
+  }
+
   {
     // The lap card shows the boards' answers in the player's language (board-words.ts): every sentence the game and the
     // Worker send there has a message, word for word as the code says it
     const rec = lap as LapRecording;
     const unknown = checkLap({ ...rec, trackId: 'made_up_circuit' });
     const marked = checkLap({ ...rec, mod: true });
-    const sent = [BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, OLDER_PHYSICS_LAP, MOD_LAP, OLDER_PHYSICS, unknown.ok ? '' : unknown.error, marked.ok ? '' : marked.error];
+    const sent = [BOARD_UNREACHABLE, BOARD_UNREACHABLE_GAVE_UP, OLDER_PHYSICS_LAP, MOD_LAP, OLDER_PHYSICS, BANNED, unknown.ok ? '' : unknown.error, marked.ok ? '' : marked.error];
     const missing = sent.filter((s) => !Object.hasOwn(BOARD_SENTENCES, s));
     check('board words: the game\'s and the Worker\'s lap answers each have a message', missing.length === 0, missing.join(' | '));
     // A recording whose samples don't agree: every reason the game gives before uploading (lap-plausibility.ts, read from
