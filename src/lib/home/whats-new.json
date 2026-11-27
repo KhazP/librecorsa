@@ -1,14 +1,17 @@
 [
   {
     "date": "2026-11-27",
-    "title": "F1 2007 grid, AI drive-plan steering and defence, and expanded docs",
+    "title": "F1 2007 grid, AI drive-plan steering and defence, docs links and a simpler download page",
     "items": [
       "Added F1 2007 by Cimmerian Iter (used with permission): one entry whose 26 driver liveries bring all 11 teams' own 2007 chassis and V8 engine sounds (including the early-season Ferrari body), animated drivers steering with the wheel in their own team helmets, metallic and chrome paint, carbon weave finishes, live per-livery mirrors and working seven-segment steering-wheel displays on 2.4 L 19,000 rpm V8 physics with grooved tyres, traction control and no ERS or DRS.",
       "Re-tested every road, classic and prototype AI drive plan in the career against the same car on its own line at full race length, on Medium and High. Cars on a drive plan now steer up to 3600 deg/s at the rim and defend within 0.5 m of their line instead of sitting on the inside into the next corner, which cut spins and contacts sharply. The 19 plans that came out quicker (about 3% a lap) without extra spins, offs or contacts are on, including the Liana at SpeedVegas, Chang, Grobnik and RISE short, the R32 at Grobnik, Bridgehampton and RISE short, and new Scirocco plans at RISE GP, Istanbul Park, Qiddiya and Riverside, while the rest race on their own lines.",
-      "Expanded docs.librecorsa.org with a dedicated WebXR VR headsets guide, deeper Career mode, Time Trials, public /stats and Desktop and Android apps guides, a custom sound bank format and physics patch field guide in Making mods, social share metadata and Overview navigation on the docs site, and fixed /about rendering English facts from home messages."
+      "Expanded docs.librecorsa.org with a dedicated WebXR VR headsets guide, deeper Career mode, Time Trials, public /stats and Desktop and Android apps guides, a custom sound bank format and physics patch field guide in Making mods, social share metadata and Overview navigation on the docs site, and fixed /about rendering English facts from home messages.",
+      "Added a What's new panel to the title screen, with a New chip while there are notes you haven't read, and moved Press, Privacy and GitHub into its bottom bar next to a new Docs link.",
+      "Linked docs.librecorsa.org from the home page's bottom bar, the press page and a new App guide link on the download page, and the Mods panel's how-to link now opens the modding guide on the docs site.",
+      "Remade the download page as one plain list with your platform first, each row holding its download buttons, version, size and install steps. The desktop app says Coming soon until its first release is out instead of linking to the older build."
     ],
-    "commits": 29,
-    "lastSha": "40fcefbc386b28144aa9cb91e25379821e7221dd"
+    "commits": 42,
+    "lastSha": "9b24913736d94c9288f3b5a2a717557d4522b5de"
   },
   {
     "date": "2026-11-26",
