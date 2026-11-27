@@ -737,18 +737,27 @@ export class ForceWriter {
     c.lastSentMs = this.lastSendMs;
     const write = new Promise<void>((resolve, reject) => {
       let settled = false;
+      let timer: unknown = null;
       const clearWriteTimer = () => {
-        if (this.writeTimer !== null) {
-          this.deps.clearTimer(this.writeTimer);
-          this.writeTimer = null;
+        if (timer !== null) {
+          this.deps.clearTimer(timer);
+          if (this.writeTimer === timer) this.writeTimer = null;
+          timer = null;
         }
       };
-      this.writeTimer = this.deps.setTimer(() => {
-        this.writeTimer = null;
-        if (settled || this.dead) return;
+      timer = this.deps.setTimer(() => {
+        if (this.writeTimer === timer) this.writeTimer = null;
+        timer = null;
+        if (settled) return;
         settled = true;
+        if (this.dead) {
+          // Settle cleanly on kill()/stop() so a hung sendReport never blocks shutdown forever
+          resolve();
+          return;
+        }
         reject(new Error(`HID output report timed out after ${WRITE_TIMEOUT_MS} ms`));
       }, WRITE_TIMEOUT_MS);
+      this.writeTimer = timer;
       c.send(raw).then(
         () => {
           clearWriteTimer();
@@ -1125,6 +1134,7 @@ export function buildSetEffectReport(
   let axisFlags = 0;
   let axisDirections = 0;
   let scalarDirections = 0;
+  let primaryOrdinalWritten = false;
   for (const f of set.fieldList) {
     const page = f.usage >>> 16;
     if (f.usage === PID.EFFECT_BLOCK_INDEX) put(f, blockIndex);
@@ -1144,7 +1154,10 @@ export function buildSetEffectReport(
     } else if (f.usage === PID.DIRECTION) {
       put(f, scalarDirections++ === 0 ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
     } else if (page === PAGE_ORDINAL || page === PAGE_DESKTOP) {
-      const isPrimary = hasExplicitOrdinal1 ? f.usage === ORDINAL_1 : axisDirections === 0;
+      const isPrimary = hasExplicitOrdinal1
+        ? f.usage === ORDINAL_1 && !primaryOrdinalWritten
+        : axisDirections === 0;
+      if (isPrimary && f.usage === ORDINAL_1) primaryOrdinalWritten = true;
       axisDirections++;
       put(f, isPrimary ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
     }

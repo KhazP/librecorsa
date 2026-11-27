@@ -44,13 +44,14 @@ export class MfdRepeatController {
     }
     const fired: MfdDialAction[] = [];
     for (const action of MFD_DIAL_ACTIONS) {
-      if (!held?.has(action)) {
-        this.repeatAt.delete(action);
-        continue;
-      }
       if (pressed.has(action)) {
         fired.push(action);
-        this.repeatAt.set(action, nowMs + MFD_REPEAT_DELAY_MS);
+        if (held?.has(action)) this.repeatAt.set(action, nowMs + MFD_REPEAT_DELAY_MS);
+        else this.repeatAt.delete(action);
+        continue;
+      }
+      if (!held?.has(action)) {
+        this.repeatAt.delete(action);
         continue;
       }
       const nextAt = this.repeatAt.get(action);

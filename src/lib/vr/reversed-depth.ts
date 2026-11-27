@@ -39,18 +39,48 @@ const markReversed = (camera: THREE.Camera) => {
   (camera as unknown as { _reversedDepth: boolean })._reversedDepth = true;
 };
 
+/** Last reversed projection elements written per camera, so frames without a new XR viewer pose are not reversed twice */
+const lastReversed = new WeakMap<THREE.Camera, Float64Array>();
+
+function matchesLastReversed(camera: THREE.Camera): boolean {
+  const prev = lastReversed.get(camera);
+  if (!prev) return false;
+  const e = camera.projectionMatrix.elements;
+  for (let i = 0; i < 16; i++) {
+    if (e[i] !== prev[i]) return false;
+  }
+  return true;
+}
+
+function recordReversed(camera: THREE.Camera): void {
+  let buf = lastReversed.get(camera);
+  if (!buf) {
+    buf = new Float64Array(16);
+    lastReversed.set(camera, buf);
+  }
+  const e = camera.projectionMatrix.elements;
+  for (let i = 0; i < 16; i++) buf[i] = e[i];
+}
+
 /**
  * The headset camera's projections, after renderer.xr.updateCamera has copied this frame's views in, made reversed.
  * Each eye's projection is fresh from the headset every frame, so this runs once per frame, before the render.
+ * If the headset had no viewer pose this frame (matrix unchanged since the last reversal), reversing is skipped.
  */
 export function reverseXrDepth(xrCamera: THREE.ArrayCamera, maxFar = Infinity): void {
   for (const eye of xrCamera.cameras) {
-    toReversedDepth(eye.projectionMatrix, maxFar);
-    eye.projectionMatrixInverse.copy(eye.projectionMatrix).invert();
+    if (!matchesLastReversed(eye)) {
+      toReversedDepth(eye.projectionMatrix, maxFar);
+      eye.projectionMatrixInverse.copy(eye.projectionMatrix).invert();
+      recordReversed(eye);
+    }
     markReversed(eye);
   }
   // The array camera culls with the first eye's projection (WebXRManager.updateCamera copies it)
-  toReversedDepth(xrCamera.projectionMatrix, maxFar);
-  xrCamera.projectionMatrixInverse.copy(xrCamera.projectionMatrix).invert();
+  if (!matchesLastReversed(xrCamera)) {
+    toReversedDepth(xrCamera.projectionMatrix, maxFar);
+    xrCamera.projectionMatrixInverse.copy(xrCamera.projectionMatrix).invert();
+    recordReversed(xrCamera);
+  }
   markReversed(xrCamera);
 }

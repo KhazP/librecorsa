@@ -639,8 +639,10 @@ export class RaceServer {
     this.race = race;
     await this.state.storage.put("race", race);
     await this.state.storage.put("tokens", Object.fromEntries(entrants.map((e) => [e.peer, e.token])));
-    // The names the grid races under, for the results (a socket opened again later has no attachment of its own)
-    const gridCodes = dedupeDriverCodes(entrants.map((e) => ({ id: e.peer, code: e.code, name: e.name })));
+    // The names the grid races under, for the results (a socket opened again later has no attachment of its own).
+    // Deduplicate in join order (matching `players()`) so duplicate codes never swap suffixes between lobby and results.
+    const byJoin = [...entrants].sort((a, b) => a.joinedMs - b.joinedMs);
+    const gridCodes = dedupeDriverCodes(byJoin.map((e) => ({ id: e.peer, code: e.code, name: e.name })));
     await this.state.storage.put(
       "names",
       Object.fromEntries(
