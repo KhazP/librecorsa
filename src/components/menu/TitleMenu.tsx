@@ -61,7 +61,7 @@ import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
-import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
+import { DOCS_URL, REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
 import { HOSTED_CONTENT } from "@/lib/hosted-content";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { moddersList } from "@/lib/modders";
@@ -1344,6 +1344,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 [
                   ["press", t("press"), withBasePath("/press")],
                   ["privacy", t("privacy"), withBasePath("/privacy")],
+                  ["docs", t("docs"), DOCS_URL],
                   ["github", "GitHub", REPO_URL],
                 ] as const
               ).map(([id, label, href]) => (
