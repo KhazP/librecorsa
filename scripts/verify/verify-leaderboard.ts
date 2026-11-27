@@ -8,7 +8,7 @@
 import { getActiveTrackData } from '../../src/lib/track-data';
 import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../../src/lib/sim/lap-recorder';
-import { lapPlausibilityProblem } from '../../src/lib/sim/lap-plausibility';
+import { lapPlausibilityProblem, MAX_SUSTAINED_ACCEL_G, sustainedAccelG } from '../../src/lib/sim/lap-plausibility';
 import { checkLap } from '../../cloudflare/api/lap-check';
 import {
   LAP_SAMPLE_STRIDE,
@@ -350,6 +350,15 @@ const scaled = (k: number): LapRecording => {
   for (let i = 0; i < data.length; i += S) data[i] = Math.round(data[i] * k * 1000) / 1000;
   return { ...real, lapTimeMs: Math.round(real.lapTimeMs * k), sectorTimesMs: real.sectorTimesMs.map((x) => Math.round(x * k)) as [number, number, number], data };
 };
+/** The real lap driven `k` times slower all the way round (times longer, speeds lower, the same positions) */
+const slowed = (k: number): LapRecording => {
+  const data = real.data.slice();
+  for (let i = 0; i < data.length; i += S) {
+    data[i] = Math.round(data[i] * k * 1000) / 1000;
+    data[i + 9] /= k;
+  }
+  return { ...real, lapTimeMs: Math.round(real.lapTimeMs * k), sectorTimesMs: real.sectorTimesMs.map((x) => Math.round(x * k)) as [number, number, number], data };
+};
 const n = real.data.length / S;
 const cut: LapRecording = {
   ...real,
@@ -380,6 +389,85 @@ const makeOpenRun = (startKmh: number) => {
 };
 check('point-to-point run from a standing start is accepted', lapPlausibilityProblem(makeOpenRun(40), { open: true }) === null, String(lapPlausibilityProblem(makeOpenRun(40), { open: true })));
 check('point-to-point run with a flying start is refused (#191)', lapPlausibilityProblem(makeOpenRun(110), { open: true }) !== null, String(lapPlausibilityProblem(makeOpenRun(110), { open: true })));
+// Sustained acceleration, measured from the positions: a car can't gain speed faster than it can (the board's
+// 27 Nov 2026 laps gained 13 to 162 km/h in a second in the LC26, 2 g in the GT3)
+/**
+ * A closed lap round a circle at 20 Hz: from `lowKmh` the car gains speed at `gainG` to `highKmh`, brakes at 3 g back
+ * to `lowKmh`, and again, corner exit after corner exit (`gainG` 0: `lowKmh` all the way)
+ */
+const makeLoop = (lowKmh: number, gainG: number, highKmh: number, seconds = 60) => {
+  const dt = 0.05;
+  const speeds: number[] = [];
+  let kmh = lowKmh;
+  let gaining = true;
+  for (let t = 0; t <= seconds + 1e-9; t += dt) {
+    speeds.push(kmh);
+    if (gainG <= 0) continue;
+    if (gaining) {
+      kmh += gainG * 9.81 * 3.6 * dt;
+      if (kmh >= highKmh) [kmh, gaining] = [highKmh, false];
+    } else {
+      kmh -= 3 * 9.81 * 3.6 * dt;
+      if (kmh <= lowKmh) [kmh, gaining] = [lowKmh, true];
+    }
+  }
+  let total = 0;
+  for (let i = 1; i < speeds.length; i++) total += ((speeds[i - 1] + speeds[i]) / 2 / 3.6) * dt;
+  const r = total / (2 * Math.PI);
+  const rows: number[] = [];
+  let s = 0;
+  speeds.forEach((v, i) => {
+    if (i > 0) s += ((speeds[i - 1] + v) / 2 / 3.6) * dt;
+    const a = s / r;
+    rows.push(+(i * dt).toFixed(3), s, r * Math.cos(a), 0, r * Math.sin(a), 0, 0, 0, 1, v, 1, 0, 0, 4);
+  });
+  return rows;
+};
+const lc26Cap = MAX_SUSTAINED_ACCEL_G.lc26;
+check(
+  'the real lap is within its car\'s acceleration',
+  sustainedAccelG(real.data) < lc26Cap && lapPlausibilityProblem(real.data, { vehicle: 'lc26' }) === null,
+  `${sustainedAccelG(real.data).toFixed(2)} g, cap ${lc26Cap} g`
+);
+check(
+  'every car has an acceleration cap between 0.6 and 4 g',
+  VEHICLE_MODEL_IDS.every((v) => MAX_SUSTAINED_ACCEL_G[v] >= 0.6 && MAX_SUSTAINED_ACCEL_G[v] <= 4)
+);
+const flying = makeLoop(260, 0, 260);
+check(
+  'a flying lap at 260 km/h is no acceleration at all',
+  sustainedAccelG(flying) < 0.05 && VEHICLE_MODEL_IDS.every((v) => lapPlausibilityProblem(flying, { vehicle: v }) === null),
+  `${sustainedAccelG(flying).toFixed(3)} g`
+);
+const loopAt = (g: number) => makeLoop(80, g, 250);
+check(
+  'the measure reads the acceleration the positions show',
+  Math.abs(sustainedAccelG(loopAt(1.2)) - 1.2) < 0.05,
+  `${sustainedAccelG(loopAt(1.2)).toFixed(3)} g for 1.2 g`
+);
+const underCap = VEHICLE_MODEL_IDS.filter((v) => lapPlausibilityProblem(loopAt(0.85 * MAX_SUSTAINED_ACCEL_G[v]), { vehicle: v }) !== null);
+check('every car keeps a lap gaining speed under its cap', underCap.length === 0, underCap.join(', '));
+const overCap = VEHICLE_MODEL_IDS.filter((v) => lapPlausibilityProblem(loopAt(1.2 * MAX_SUSTAINED_ACCEL_G[v]), { vehicle: v }) === null);
+check('every car refuses a lap gaining speed past its cap', overCap.length === 0, overCap.join(', '));
+check(
+  'an LC26 lap with a 4 g launch is refused',
+  lapPlausibilityProblem(makeLoop(13, 4, 240), { vehicle: 'lc26' }) === 'The car gains speed faster than it can' &&
+    lapPlausibilityProblem(makeLoop(13, 4, 240)) === null
+);
+check(
+  'the GT3 is held to its own cap, not the LC26\'s',
+  MAX_SUSTAINED_ACCEL_G['amg-gt3'] < lc26Cap &&
+    lapPlausibilityProblem(loopAt(0.9 * lc26Cap), { vehicle: 'lc26' }) === null &&
+    lapPlausibilityProblem(loopAt(0.9 * lc26Cap), { vehicle: 'amg-gt3' }) !== null
+);
+check('the server refuses a lap gaining speed past its car\'s cap', (() => {
+  const data = makeLoop(13, 4, 240);
+  const t = data[data.length - LAP_SAMPLE_STRIDE];
+  const ms = Math.round(t * 1000);
+  const third = Math.floor(ms / 3);
+  const answer = checkLap({ ...real, vehicle: 'lc26', data, lapTimeMs: ms, sectorTimesMs: [third, third, ms - 2 * third] });
+  return !answer.ok && answer.error === 'The car gains speed faster than it can';
+})());
 
 // 3. The board API -----------------------------------------------------------------------------------------------------
 const schema = ['0001_lap_boards.sql', '0007_lap_input.sql', '0009_lap_setup.sql'].map((f) => readFileSync(join(__dirname, '../../cloudflare/migrations', f), 'utf8')).join('\n');
@@ -587,8 +675,10 @@ async function main(): Promise<void> {
       active.map((a) => a.id).join(', ')
     );
     const lianaPhys = lapPhysicsVersion('liana', 'dunsfold');
+    // The LC26's lap driven as slowly as the Liana gains speed (an LC26's acceleration is past the Liana's limit)
     const mgLap: LapRecording = {
       ...variant(1.01, 'Stig Cousin', { assists: MIDDLE_GEAR_CHALLENGE.assists, realism: MIDDLE_GEAR_CHALLENGE.realism, compound: 'soft', physicsVersion: lianaPhys }),
+      ...(({ data, lapTimeMs, sectorTimesMs }) => ({ data, lapTimeMs, sectorTimesMs }))(slowed(2)),
       trackId: 'dunsfold',
       vehicle: 'liana',
     };
