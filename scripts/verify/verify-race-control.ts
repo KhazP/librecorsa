@@ -21,7 +21,9 @@ import type { GroundHit, GroundQuery } from "../../src/lib/sim/f12026-car/TrackC
 import { resolveRaceRules } from "../../src/lib/sim/race-rules";
 import { YellowPassJudge, type YellowPassEvent } from "../../src/lib/sim/yellow-passes";
 import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagEvent } from "../../src/lib/sim/blue-flags";
-import { VscController, vscReferenceSpeedMs, type VscEvent } from "../../src/lib/sim/vsc";
+import { VscController, VSC_TRIGGER_S, vscReferenceSpeedMs, type VscEvent } from "../../src/lib/sim/vsc";
+import { CarDamage } from "../../src/lib/sim/car-damage";
+import { RaceIncidents } from "../../src/lib/sim/race-incidents";
 import { PenaltyLedger } from "../../src/lib/sim/penalty-ledger";
 import { parseRaceSetup, rulesForSetup } from "../../src/lib/sim/race-setup";
 import { VEHICLE_MODELS } from "../../src/lib/cars/vehicle-models";
@@ -1248,11 +1250,11 @@ console.log("Virtual Safety Car · deployment, delta enforcement and ending");
 
   // Early race (< 15 s): does not deploy during Lap 1 T1 bunching
   check("VSC does not deploy in the first 15 s of a race", stepVsc(5, { hasDoubleYellow: true }).length === 0 && !vsc.active);
-  // Advance past 15 s, then trigger via persistent double yellow (3.5 s)
+  // Advance past 15 s, then trigger via persistent double yellow (VSC_TRIGGER_S = 6.5 s)
   t = 20;
-  const brief = stepVsc(2.0, { hasDoubleYellow: true });
-  check("brief double yellow (< 3.5 s) does not deploy VSC", brief.length === 0 && !vsc.active);
-  const dep = stepVsc(2.0, { hasDoubleYellow: true });
+  const brief = stepVsc(4.0, { hasDoubleYellow: true });
+  check(`brief double yellow (< ${VSC_TRIGGER_S} s) does not deploy VSC`, brief.length === 0 && !vsc.active);
+  const dep = stepVsc(3.0, { hasDoubleYellow: true });
   check("persistent double yellow deploys VSC", dep.some((e) => e.kind === "deployed") && vsc.phase === "deployed");
 
   // Driving at reference pace keeps delta positive (no penalty)
@@ -1297,6 +1299,48 @@ console.log("Virtual Safety Car · deployment, delta enforcement and ending");
     rng: () => 0.5,
   });
   check("active VSC clears silently when racing becomes false", postFinish.length === 0 && !vsc.active && vsc.status() === undefined);
+
+  // Rolling start: formation holds racing=false for 18 s before green flag -> Turn 1 grace still protects 15 s post-green
+  const vscRoll = new VscController();
+  for (let s = 0; s < 18; s += DT) {
+    vscRoll.update({
+      dt: DT, raceTimeS: s, racing: false, finalLapClosing: false,
+      hasRetiredOnTrack: false, hasDoubleYellow: false,
+      playerSpeedMs: 18, playerOptimalKmh: 180, judgePlayer: true, rng: () => 0.5,
+    });
+  }
+  let rollEv: VscEvent[] = [];
+  for (let s = 18; s < 28; s += DT) {
+    rollEv.push(...vscRoll.update({
+      dt: DT, raceTimeS: s, racing: true, finalLapClosing: false,
+      hasRetiredOnTrack: false, hasDoubleYellow: true,
+      playerSpeedMs: 40, playerOptimalKmh: 180, judgePlayer: true, rng: () => 0.5,
+    }));
+  }
+  check("rolling start Turn 1 grace suppresses VSC for 15 s after green flag", rollEv.length === 0 && !vscRoll.active);
+
+  // Light Turn 1 car-to-car bumper tap vs heavy crash & wall hit
+  const tapDmg = new CarDamage("full", 2.5, 0.975, () => 0.99);
+  const lightRep = tapDmg.registerImpact({ localX: 0, localZ: 2.5, speedMs: 5.5, source: "car" });
+  check("light 5.5 m/s car-to-car bumper tap deals negligible damage (not 40%)", lightRep === null && tapDmg.front < 0.05, `front=${tapDmg.front.toFixed(3)}`);
+  const firmDmg = new CarDamage("full", 2.5, 0.975, () => 0.99);
+  const firmRep = firmDmg.registerImpact({ localX: 0, localZ: 2.5, speedMs: 10, source: "car" });
+  check("firm 10 m/s car-to-car hit deals moderate front damage (~10-15%)", firmRep !== null && firmDmg.front > 0.05 && firmDmg.front < 0.25, `front=${firmDmg.front.toFixed(3)}`);
+  const heavyDmg = new CarDamage("full", 2.5, 0.975, () => 0.99);
+  heavyDmg.registerImpact({ localX: 0, localZ: 2.5, speedMs: 22, source: "car" });
+  check("heavy 22 m/s crash still deals major front damage", heavyDmg.front > 0.5, `front=${heavyDmg.front.toFixed(3)}`);
+
+  // 1-frame yellow-flag flicker at rolling-start green produces zero race-control yellow/green banners
+  const rcFlicker = new RaceIncidents("YOU");
+  let rt = 12.0;
+  for (let i = 0; i < 10; i++) rcFlicker.update((rt += DT), [], 0);
+  // 1-frame spike to yellow, then immediately back to green
+  rcFlicker.update((rt += DT), [], 1);
+  for (let i = 0; i < 10; i++) rcFlicker.update((rt += DT), [], 0);
+  check("1-frame yellow-flag flicker at green posts no yellow or green banner", rcFlicker.messages.length === 0, JSON.stringify(rcFlicker.messages));
+  // Sustained yellow (> 0.35 s) still posts Yellow flag cleanly
+  for (let i = 0; i < 30; i++) rcFlicker.update((rt += DT), [], 1);
+  check("sustained yellow flag still announces Yellow flag", rcFlicker.messages.some((m) => m.kind === "yellow"));
 }
 
 console.log("Track limits · kerb hop with ungrounded inside wheels");

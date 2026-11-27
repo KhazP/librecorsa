@@ -23,10 +23,10 @@ export const VSC_PACE_SHARE = 0.65;
 /** Floor and ceiling on the VSC reference speed (m/s: ~65 km/h to ~216 km/h) */
 export const VSC_MIN_SPEED_MS = 18;
 export const VSC_MAX_SPEED_MS = 60;
-/** Earliest race time a VSC can trigger (s) — avoids Lap 1 Turn 1 start bunching */
+/** Earliest race time after green flag a VSC can trigger (s) — avoids Lap 1 Turn 1 start bunching */
 export const VSC_EARLIEST_RACE_S = 15;
-/** Persistent double-yellow duration before VSC deploys (s) */
-export const VSC_TRIGGER_S = 3.5;
+/** Persistent double-yellow duration before VSC deploys (s): long enough that brief bumps where cars keep moving never deploy VSC */
+export const VSC_TRIGGER_S = 6.5;
 /** Minimum and maximum deployed duration before transitioning to ending (s) */
 export const VSC_MIN_DURATION_S = 14;
 export const VSC_MAX_DURATION_S = 30;
@@ -101,6 +101,9 @@ export class VscController {
   private violationS = 0;
   private penaltyCooldownS = 0;
   private lastSpeedKmh = 120;
+  /** Race time when racing became active (e.g. rolling-start green flag), so Lap 1 T1 grace applies after formation too */
+  private seenInactive = false;
+  private greenAtRaceTimeS = 0;
 
   public reset(): void {
     this._phase = 'none';
@@ -113,6 +116,8 @@ export class VscController {
     this.violationS = 0;
     this.penaltyCooldownS = 0;
     this.lastSpeedKmh = 120;
+    this.seenInactive = false;
+    this.greenAtRaceTimeS = 0;
   }
 
   public get phase(): VscPhase {
@@ -150,6 +155,8 @@ export class VscController {
     const events: VscEvent[] = [];
     if (!inp.racing) {
       this.triggerAccumS = 0;
+      this.seenInactive = true;
+      this.greenAtRaceTimeS = inp.raceTimeS;
       if (this._phase !== 'none') {
         this._phase = 'none';
         this.phaseAgeS = 0;
@@ -163,7 +170,8 @@ export class VscController {
     this.lastSpeedKmh = vRef * 3.6;
 
     if (this._phase === 'none') {
-      const eligible = inp.raceTimeS >= VSC_EARLIEST_RACE_S && inp.raceTimeS >= this.cooldownUntilS && !inp.finalLapClosing;
+      const sinceGreenS = this.seenInactive ? Math.max(0, inp.raceTimeS - this.greenAtRaceTimeS) : inp.raceTimeS;
+      const eligible = sinceGreenS >= VSC_EARLIEST_RACE_S && inp.raceTimeS >= this.cooldownUntilS && !inp.finalLapClosing;
       if (!eligible) {
         this.triggerAccumS = 0;
         return events;
@@ -178,7 +186,7 @@ export class VscController {
           events.push(this.deploy(inp.raceTimeS));
         }
       } else {
-        this.triggerAccumS = Math.max(0, this.triggerAccumS - inp.dt * 2);
+        this.triggerAccumS = Math.max(0, this.triggerAccumS - inp.dt * 3);
       }
       return events;
     }

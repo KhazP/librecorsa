@@ -96,11 +96,18 @@ const LEVEL: Record<DamageLevel, { scale: number; terminalMs: number; punctures:
 
 /** Barriers do not give like another car's bodywork */
 const WALL_SEVERITY = 1.25;
-const AERO_FROM_MS = 2;
-const AERO_FULL_MS = 20;
-const SUSPENSION_FROM_MS = 6;
+const WALL_AERO_FROM_MS = 2;
+const WALL_AERO_FULL_MS = 20;
+const WALL_AERO_EXP = 1.3;
+const WALL_SUSPENSION_FROM_MS = 6;
+const WALL_PUNCTURE_FROM_MS = 4;
+/** Car-to-car contact: bumpers/bodywork flex and share momentum, so light low-delta taps break nothing */
+const CAR_AERO_FROM_MS = 4;
+const CAR_AERO_FULL_MS = 24;
+const CAR_AERO_EXP = 1.85;
+const CAR_SUSPENSION_FROM_MS = 8;
+const CAR_PUNCTURE_FROM_MS = 6.5;
 const SUSPENSION_FULL_MS = 22;
-const PUNCTURE_FROM_MS = 4;
 /** Toe a fully bent corner gets (rad): ~2.3°, a car that pulls hard */
 const BENT_TOE_RAD = 0.04;
 
@@ -199,25 +206,31 @@ export class CarDamage {
   /** Records an impact; null when it broke nothing */
   public registerImpact(hit: DamageImpact): DamageReport | null {
     const L = LEVEL[this.level];
-    if (L.scale === 0 || this.terminal || !(hit.speedMs > AERO_FROM_MS)) return null;
-    const v = hit.speedMs * (hit.source === 'wall' ? WALL_SEVERITY : 1);
+    const isWall = hit.source === 'wall';
+    const aeroFrom = isWall ? WALL_AERO_FROM_MS : CAR_AERO_FROM_MS;
+    if (L.scale === 0 || this.terminal || !(hit.speedMs > aeroFrom)) return null;
+    const v = hit.speedMs * (isWall ? WALL_SEVERITY : 1);
+    const aeroFull = isWall ? WALL_AERO_FULL_MS : CAR_AERO_FULL_MS;
+    const aeroExp = isWall ? WALL_AERO_EXP : CAR_AERO_EXP;
+    const suspFrom = isWall ? WALL_SUSPENSION_FROM_MS : CAR_SUSPENSION_FROM_MS;
+    const puncFrom = isWall ? WALL_PUNCTURE_FROM_MS : CAR_PUNCTURE_FROM_MS;
     const boxZ = hit.localZ - this.centreAheadM;
     const zone = zoneOf(hit.localX, boxZ, this.halfLengthM, this.halfWidthM);
-    const aero = L.scale * Math.pow(Math.min(1, (v - AERO_FROM_MS) / (AERO_FULL_MS - AERO_FROM_MS)), 1.3);
+    const aero = L.scale * Math.pow(Math.min(1, Math.max(0, (v - aeroFrom) / (aeroFull - aeroFrom))), aeroExp);
     let severity = aero;
-    this[zone] = Math.min(1, this[zone] + aero);
+    if (aero >= 0.02) this[zone] = Math.min(1, this[zone] + aero);
 
     // A corner: within the outer 40 % of the length and the outer half of the width (wheels stick out on an open-wheeler)
     const corner = cornerOf(hit.localX, boxZ, this.halfLengthM, this.halfWidthM);
     let puncture = false;
     if (corner >= 0) {
-      if (v > SUSPENSION_FROM_MS) {
-        const bend = L.scale * Math.min(1, (v - SUSPENSION_FROM_MS) / (SUSPENSION_FULL_MS - SUSPENSION_FROM_MS));
+      if (v > suspFrom) {
+        const bend = L.scale * Math.min(1, (v - suspFrom) / (SUSPENSION_FULL_MS - suspFrom));
         if (this.toeSign[corner] === 0) this.toeSign[corner] = this.rng() < 0.6 ? -1 : 1;
         this.suspension[corner] = Math.min(1, this.suspension[corner] + bend);
         severity = Math.max(severity, bend);
       }
-      if (L.punctures && !this.punctured[corner] && v > PUNCTURE_FROM_MS && this.rng() < Math.min(0.6, (v - PUNCTURE_FROM_MS) / 14)) {
+      if (L.punctures && !this.punctured[corner] && v > puncFrom && this.rng() < Math.min(0.6, (v - puncFrom) / 14)) {
         this.punctured[corner] = true;
         puncture = true;
       }
@@ -229,13 +242,13 @@ export class CarDamage {
       this.terminalReason =
         suspensionBroken && hit.speedMs < L.terminalMs
           ? 'suspension'
-          : hit.source === 'wall'
+          : isWall
             ? 'wall_impact'
             : 'collision';
     }
+    if (severity < 0.02 && !puncture && !terminal) return null;
     this.dirty = true;
     this.version++;
-    if (severity < 0.02 && !puncture && !terminal) return null;
     return { severity, zone, puncture, terminal };
   }
 

@@ -77,6 +77,8 @@ export const COLLISION_RETIRED_PENALTY_S = 10;
 export const AT_FAULT_COOLDOWN_S = 20;
 /** Messages stay on the feed this long (s) */
 const MESSAGE_LIFE_S = 6;
+/** Yellow flag onset debounce during frame-by-frame ticking (s): suppresses 1-frame flickers at rolling-start green */
+const YELLOW_ON_DEBOUNCE_S = 0.35;
 
 export class RaceIncidents {
   public readonly messages: RaceControlMessage[] = [];
@@ -91,6 +93,8 @@ export class RaceIncidents {
   private readonly pairAt = new Map<string, number>();
   private nextId = 1;
   private yellowShown: YellowLevel = 0;
+  private yellowPendingS = 0;
+  private lastUpdateS = -Infinity;
 
   constructor(
     private readonly playerCode = 'YOU',
@@ -107,6 +111,8 @@ export class RaceIncidents {
     this.open.length = 0;
     this.pairAt.clear();
     this.yellowShown = 0;
+    this.yellowPendingS = 0;
+    this.lastUpdateS = -Infinity;
   }
 
   /** Time penalties of a car (s) */
@@ -161,12 +167,26 @@ export class RaceIncidents {
       this.open.splice(i, 1);
       this.decide(o, raceTimeS);
     }
+    const dt = this.lastUpdateS > -Infinity ? raceTimeS - this.lastUpdateS : Infinity;
+    this.lastUpdateS = raceTimeS;
+    const ticking = dt > 0 && dt < 0.25;
     if (level > this.yellowShown) {
+      if (this.yellowShown === 0 && ticking) {
+        this.yellowPendingS += dt;
+        if (this.yellowPendingS < YELLOW_ON_DEBOUNCE_S) return;
+      }
+      this.yellowPendingS = 0;
       if (level === 2) this.post(raceTimeS, 'yellow', 'Double yellow', 'Car stopped ahead · slow down, no overtaking', true);
       else this.post(raceTimeS, 'yellow', 'Yellow flag', 'Incident ahead · no overtaking', true);
+      this.yellowShown = level;
+    } else if (level === 0) {
+      this.yellowPendingS = 0;
+      if (this.yellowShown > 0) this.post(raceTimeS, 'green', 'Track clear', undefined, true);
+      this.yellowShown = 0;
+    } else {
+      this.yellowPendingS = 0;
+      this.yellowShown = level;
     }
-    if (level === 0 && this.yellowShown > 0) this.post(raceTimeS, 'green', 'Track clear', undefined, true);
-    this.yellowShown = level;
   }
 
   private onContact(c: ContactIncident, raceTimeS: number): void {
