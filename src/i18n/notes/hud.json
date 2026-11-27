@@ -305,6 +305,7 @@
   "raceResults.promptSelect": "Button prompt: confirm the highlighted button.",
   "raceResults.promptClose": "Button prompt: close the results.",
   "raceResults.backToLobby": "Button: back to the online room's lobby.",
+  "raceResults.continue": "Primary button on the race results card after an offline AI or career race: continues out of the race.",
   "raceResults.restart": "Button: start the race again.",
   "raceResults.close": "Button: close the results.",
   "raceResults.fastestLapIcon": "Screen-reader name of the icon marking the race's fastest lap.",

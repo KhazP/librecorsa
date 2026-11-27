@@ -441,6 +441,7 @@
     "promptSelect": "اختيار",
     "promptClose": "إغلاق",
     "backToLobby": "العودة إلى الغرفة",
+    "continue": "متابعة",
     "watchReplay": "مشاهدة الإعادة",
     "restart": "إعادة السباق",
     "close": "إغلاق",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "منصة التتويج",
     "close": "إغلاق",
+    "continue": "متابعة",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}، {name}",

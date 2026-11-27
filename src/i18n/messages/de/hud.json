@@ -441,6 +441,7 @@
     "promptSelect": "Auswählen",
     "promptClose": "Schließen",
     "backToLobby": "Zurück zur Lobby",
+    "continue": "Weiter",
     "watchReplay": "Replay ansehen",
     "restart": "Rennen neu starten",
     "close": "Schließen",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "Podium",
     "close": "Schließen",
+    "continue": "Weiter",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}, {name}",

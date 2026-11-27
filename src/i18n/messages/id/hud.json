@@ -441,6 +441,7 @@
     "promptSelect": "Pilih",
     "promptClose": "Tutup",
     "backToLobby": "Kembali ke lobi",
+    "continue": "Lanjutkan",
     "watchReplay": "Tonton tayangan ulang",
     "restart": "Mulai ulang balapan",
     "close": "Tutup",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "Podium",
     "close": "Tutup",
+    "continue": "Lanjutkan",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}, {name}",

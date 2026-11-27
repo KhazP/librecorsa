@@ -441,6 +441,7 @@
     "promptSelect": "選擇",
     "promptClose": "關閉",
     "backToLobby": "返回大廳",
+    "continue": "繼續",
     "watchReplay": "觀看重播",
     "restart": "重新開始賽事",
     "close": "關閉",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "頒獎台",
     "close": "關閉",
+    "continue": "繼續",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}，{name}",

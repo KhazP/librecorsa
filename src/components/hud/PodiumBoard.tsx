@@ -84,7 +84,7 @@ export const PodiumBoard: React.FC<{
           }}
           className="inline-flex h-10 items-center gap-2 rounded-full bg-lc-volt px-4 text-[13px] font-bold text-lc-void shadow-lc-pop transition-colors duration-200 ease-lc hover:bg-lc-volt-hi sm:h-9"
         >
-          {tx("close")}
+          {tx("continue")}
           <KeyCap tone="ink" className="hidden sm:inline-flex">
             {tx("keyEsc")}
           </KeyCap>

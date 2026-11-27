@@ -441,6 +441,7 @@
     "promptSelect": "Chọn",
     "promptClose": "Đóng",
     "backToLobby": "Về sảnh chờ",
+    "continue": "Tiếp tục",
     "watchReplay": "Xem phát lại",
     "restart": "Đua lại từ đầu",
     "close": "Đóng",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "Bục vinh quang",
     "close": "Đóng",
+    "continue": "Tiếp tục",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}, {name}",

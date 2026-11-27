@@ -441,6 +441,7 @@
     "promptSelect": "Seç",
     "promptClose": "Kapat",
     "backToLobby": "Lobiye dön",
+    "continue": "Devam",
     "watchReplay": "Tekrarı izle",
     "restart": "Yarışı yeniden başlat",
     "close": "Kapat",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "Podyum",
     "close": "Kapat",
+    "continue": "Devam",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}, {name}",

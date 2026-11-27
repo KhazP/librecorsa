@@ -441,6 +441,7 @@
     "promptSelect": "선택",
     "promptClose": "닫기",
     "backToLobby": "로비로 돌아가기",
+    "continue": "계속",
     "watchReplay": "리플레이 보기",
     "restart": "레이스 재시작",
     "close": "닫기",
@@ -493,6 +494,7 @@
   "podiumBoard": {
     "label": "포디움",
     "close": "닫기",
+    "continue": "계속",
     "keyEsc": "Esc",
     "position": "P{position}",
     "place": "P{position}, {name}",

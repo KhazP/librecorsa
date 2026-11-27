@@ -2758,8 +2758,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onRestartRace={
             (raceKind === "mp" && !isMpHost) || !career.canRestart ? undefined : () => handleResetCar(false)
           }
-          onBackToLobby={raceKind === "mp" ? handleBackToLobby : career.driving ? career.backToCareer : undefined}
-          backToLobbyLabel={inScheduledRace ? tx("backToRaces") : career.driving ? tx("backToCareer") : undefined}
+          onBackToLobby={raceKind === "mp" ? handleBackToLobby : career.driving ? career.backToCareer : leaveSession}
+          backToLobbyLabel={inScheduledRace ? tx("backToRaces") : raceKind === "mp" ? undefined : tr("hud.raceResults.continue")}
           preRaceShow={preRaceShow}
           raceEnd={{
             podium: podiumUi,

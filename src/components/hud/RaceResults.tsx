@@ -53,11 +53,11 @@ const EARLY_PRESS_MS = 400;
 interface RaceResultsProps {
   race: RaceStatus;
   trackName: string;
-  onClose: () => void;
+  onClose?: () => void;
   onRestart?: () => void;
   onWatchReplay?: () => void;
   onBackToLobby?: () => void;
-  /** What going back leads to: the room's lobby, or (after a scheduled race) the races */
+  /** What going back leads to: Continue, the room's lobby, or (after a scheduled race) the races */
   backLabel?: string;
   /** The player's track-limits strikes this race */
   trackLimitStrikes?: number;
@@ -115,14 +115,16 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
   const tx = useTranslations("hud.raceResults");
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
-  // A controller closes the card with B and reaches its buttons (Esc is handled below)
-  // F1TelemetryHud mounts the card only while the HUD is live; the mode check also keeps Esc from closing it from under
+  const hasActions = Boolean(nextRace || onBackToLobby || onWatchReplay || onRestart);
+  const showClose = !hasActions && Boolean(onClose);
+  // A controller reaches the card's buttons (and closes with B only when Close is shown; otherwise Esc opens Pause)
+  // F1TelemetryHud mounts the card only while the HUD is live; the mode check also keeps Esc from acting from under
   // another screen (the pause menu) if it is ever shown there
   const hudModeRef = useHudModeRef();
-  useFocusNav(rootRef, { enabled: Boolean(results), onBack: onClose, keyboardBack: false });
+  useFocusNav(rootRef, { enabled: Boolean(results), onBack: showClose ? onClose : undefined, keyboardBack: false });
 
   useEffect(() => {
-    if (!results) return;
+    if (!results || !showClose || !onClose) return;
     // Capture: ahead of the shell's own Esc (pause) on the same press. After it, React can commit the pause between the
     // two listeners and unmount the card first, so Esc only paused and the card came back on resume
     const onKey = (e: KeyboardEvent) => {
@@ -131,7 +133,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true });
-  }, [results, onClose, hudModeRef]);
+  }, [results, showClose, onClose, hudModeRef]);
 
   // The key that skipped the podium shot, still held or pressed twice, must not press the button the card opens on (its
   // main action, Restart race): a key's Enter or Space here, a pad's A (a click with no pointer behind it) below
@@ -182,9 +184,9 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
   const me = ordered.find((r) => r.isPlayer);
   const meDnfReason = me && (me.dq || me.dnf) ? dnfReasonLabel(me.dnfReason, me.dq) : null;
   const showGrid = ordered.some((r) => r.gridPosition !== undefined);
-  // One main action: restart where there is one, else the way on, else closing. The card opens with the cursor on it:
-  // on the first button instead (Watch replay), the cursor's volt fill beside the main action's read as two main actions
-  const primary = onRestart ? "restart" : nextRace ? "next" : onBackToLobby ? "back" : "close";
+  // One main action: joining the next open race, else continuing / returning, else restarting, else replay or fallback close.
+  // The card opens with the cursor on it so only one button wears the primary volt fill.
+  const primary = nextRace ? "next" : onBackToLobby ? "back" : onRestart ? "restart" : onWatchReplay ? "replay" : "close";
   const startHere = (which: typeof primary) => (primary === which ? "" : undefined);
 
   return (
@@ -329,31 +331,47 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
           <PromptBar
             rule={false}
             className="me-auto max-sm:hidden"
-            prompts={[
-              { action: "select", label: tx("promptSelect") },
-              { action: "back", label: tx("promptClose") },
-            ]}
+            prompts={
+              showClose
+                ? [
+                    { action: "select", label: tx("promptSelect") },
+                    { action: "back", label: tx("promptClose") },
+                  ]
+                : [{ action: "select", label: tx("promptSelect") }]
+            }
           />
           <div className="flex flex-wrap justify-end gap-2">
-            {nextRace ? <JoinNextRace {...nextRace} primary={primary === "next"} /> : null}
+            {onRestart ? (
+              <Button
+                variant={primary === "restart" ? "primary" : "secondary"}
+                icon={<Icon name="restart" />}
+                onClick={onRestart}
+                data-nav-default={startHere("restart")}
+              >
+                {tx("restart")}
+              </Button>
+            ) : null}
+            {onWatchReplay ? (
+              <Button
+                variant={primary === "replay" ? "primary" : "secondary"}
+                icon={<Icon name="replay" />}
+                onClick={onWatchReplay}
+                data-nav-default={startHere("replay")}
+              >
+                {tx("watchReplay")}
+              </Button>
+            ) : null}
             {onBackToLobby ? (
               <Button variant={primary === "back" ? "primary" : "secondary"} onClick={onBackToLobby} data-nav-default={startHere("back")}>
                 {backLabel ?? tx("backToLobby")}
               </Button>
             ) : null}
-            {onWatchReplay ? (
-              <Button variant="secondary" icon={<Icon name="replay" />} onClick={onWatchReplay}>
-                {tx("watchReplay")}
+            {nextRace ? <JoinNextRace {...nextRace} primary={primary === "next"} /> : null}
+            {showClose && onClose ? (
+              <Button variant="primary" onClick={onClose} data-nav-default={startHere("close")}>
+                {tx("close")}
               </Button>
             ) : null}
-            {onRestart ? (
-              <Button variant="primary" icon={<Icon name="restart" />} onClick={onRestart} data-nav-default={startHere("restart")}>
-                {tx("restart")}
-              </Button>
-            ) : null}
-            <Button variant={primary === "close" ? "primary" : "secondary"} onClick={onClose} data-nav-default={startHere("close")}>
-              {tx("close")}
-            </Button>
           </div>
         </div>
       </div>
