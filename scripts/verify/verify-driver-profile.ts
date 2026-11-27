@@ -35,6 +35,7 @@ import { boardPhysicsVersion, lapPhysicsVersion, PHYSICS_VERSION, PHYSICS_VERSIO
 import type { VehicleModelId } from "../../src/types/f1";
 import { fakeD1, fakeR2 } from "../lib/fake-cloudflare";
 import { withEnglish } from "../lib/intl";
+import { lapReportUrl } from "../../src/lib/site";
 
 // Board components read their words through useTranslations: rendered here with the English messages
 const renderToStaticMarkup = (element: React.ReactElement) => renderBare(withEnglish(element));
@@ -586,6 +587,54 @@ async function main(): Promise<void> {
         loadedHtml.includes("Open races") &&
         loadedHtml.includes("P1") &&
         loadedHtml.includes("Best finish"),
+    );
+    // Reporting a lap: the flag on each row links to a [Lap Issue] GitHub issue with the lap filled in
+    const alice = {
+      ok: true as const,
+      name: "Alice",
+      nameKey: "alice",
+      code: "ALC",
+      rating: 78.4,
+      circuitsDriven: 1,
+      boardsEntered: 1,
+      laps: [
+        {
+          id: "3fe59433-25a1-4cbd-b364-ed1e0e108cf1",
+          trackId: "spielberg",
+          vehicle: "lc26" as VehicleModelId,
+          lapTimeMs: 71_234,
+          sectorTimesMs: [23_000, 24_000, 24_234] as [number, number, number],
+          recordedAt: NOW,
+          position: 1,
+          boardSize: 42,
+          conditions: { assists: "pro" as const, realism: "full" as const, surface: "dry" as const, compound: "soft" as const, physicsVersion: 538, input: "wheel" as const },
+        },
+      ],
+    };
+    const reportHref = lapReportUrl({ driver: "Alice", circuit: "Red Bull Ring", car: "Proto 26", lapTime: "1:11.234", lapId: alice.laps[0].id });
+    const reportQuery = new URL(reportHref).searchParams;
+    const reportHtml = renderToStaticMarkup(
+      React.createElement(DriverProfileBody, { ...common, profile: alice, record: null, loading: false, error: false, reportUrl: () => reportHref }),
+    );
+    const noReportHtml = renderToStaticMarkup(
+      React.createElement(DriverProfileBody, { ...common, profile: alice, record: null, loading: false, error: false }),
+    );
+    check(
+      "ui: each lap has a report link to a [Lap Issue] with the driver and lap filled in",
+      reportQuery.get("template") === "lap-report.yml" &&
+        reportQuery.get("title") === "[Lap Issue] Alice · Red Bull Ring · Proto 26 · 1:11.234" &&
+        reportQuery.get("driver") === "Alice" &&
+        reportQuery.get("lap-id") === alice.laps[0].id &&
+        reportHtml.includes('target="_blank"') &&
+        reportHtml.includes("Report Alice&#x27;s lap at Red Bull Ring (Proto 26)") &&
+        reportHtml.includes(reportHref.replaceAll("&", "&amp;")),
+      reportHref,
+    );
+    check("ui: no report link without one (the player's own profile)", !noReportHtml.includes("issues/new") && !noReportHtml.includes("Report lap"));
+    const template = readFileSync(join(process.cwd(), ".github/ISSUE_TEMPLATE/lap-report.yml"), "utf8");
+    check(
+      "ui: the issue template has the fields the link fills in",
+      template.includes('title: "[Lap Issue] "') && ["id: driver", "id: lap", "id: lap-id"].every((f) => template.includes(f)),
     );
   }
 
