@@ -307,6 +307,7 @@ interface PeerSnapshotBuffer {
     lastMs: number;
     graceUntilMs: number;
     primed: boolean;
+    hidden: boolean;
   };
 }
 
@@ -402,11 +403,14 @@ const TIMING_SNAP_MS = 40;
 const CLOCK_OFFSET_SNAP_MS = 250;
 /**
  * Remote players are drawn and collided where they are now: the newest packet carried forward by its age, with its
- * acceleration up to this far (s). Past it the packets are stale and the car can't be touched.
+ * acceleration up to `PREDICT_ACCEL_MAX_S` and constant velocity up to `PREDICT_MAX_S` (s). Past it the packets are
+ * stale and the car can't be touched.
  */
 const PREDICT_MAX_S = 0.3;
-/** A stale car keeps its speed and turn rate this long (s from its newest packet), rather than stopping dead */
+const PREDICT_ACCEL_MAX_S = 0.12;
+/** A stale car keeps its speed (gently damped) and turn rate this long (s from its newest packet), rather than stopping dead */
 const STALE_COAST_S = 1;
+const STALE_COAST_DECAY = 0.45;
 /**
  * With no packet for this long (ms, by arrival), or none newer, the car is drawn see-through; with none arriving for
  * STALE_HIDE_MS it is not drawn
@@ -415,9 +419,20 @@ const STALE_GHOST_MS = 500;
 const STALE_HIDE_MS = 2000;
 /** A new packet's correction to the prediction blends out over this time constant (s) */
 const PREDICT_SMOOTH_S = 0.1;
-/** A correction this large (m) is a reset or teleport: snap to it, and hold contact off for PREDICT_GRACE_MS */
+/**
+ * Maximum correction glide speed (m/s) when smoothly pulling a lagging car back into place: keeps medium lag
+ * recoveries (between PREDICT_SNAP_M and PREDICT_HARD_SNAP_M) smooth without multi-frame >1 m visual jumps.
+ */
+const PREDICT_MAX_CATCHUP_MS = 24;
+/**
+ * A correction past PREDICT_SNAP_M (m) holds contact off for PREDICT_GRACE_MS while smoothly gliding into place;
+ * only a genuine track reset / teleport past PREDICT_HARD_SNAP_M (m) snaps instantaneously.
+ */
 const PREDICT_SNAP_M = 3;
+const PREDICT_HARD_SNAP_M = 15;
 const PREDICT_GRACE_MS = 400;
+/** Default pre-lights grid preparation countdown for private room races (ms) */
+export const DEFAULT_ROOM_COUNTDOWN_MS = 6000;
 /** The acceleration the prediction carries forward is clamped to this (m/s²) */
 const PREDICT_MAX_ACCEL_MS2 = 60;
 const AXIS_Y = new THREE.Vector3(0, 1, 0);
@@ -809,7 +824,7 @@ export class MultiplayerSyncManager {
           // Room server timer expired (DO alarm): merge any valid server times and build the grid from the host's
           // live lobby roster so P2P guests whose signaling WS closed are never dropped and both timers agree
           if (Array.isArray(msg.qualifying)) this.mergeQualifyingTimes(msg.qualifying as QualifyingTime[]);
-          this.launchRaceInternal(4000, undefined, undefined, false);
+          this.launchRaceInternal(DEFAULT_ROOM_COUNTDOWN_MS, undefined, undefined, false);
         }
       } catch {
         // Ignore a malformed message
@@ -1638,7 +1653,7 @@ export class MultiplayerSyncManager {
    * Host: starts the session configured in the lobby — qualifying first in a private room when
    * `qualifyingMinutes > 0`, otherwise straight to the race.
    */
-  public startSession(countdownMs = 4000): RaceStartInfo | RoomSessionInfo | null {
+  public startSession(countdownMs = DEFAULT_ROOM_COUNTDOWN_MS): RaceStartInfo | RoomSessionInfo | null {
     if (!this.isHost) return null;
     if (!this.inScheduledRace && !this.activeQualifying && (this.lobbySettings.qualifyingMinutes ?? 0) > 0) {
       return this.startQualifying();
@@ -1711,7 +1726,7 @@ export class MultiplayerSyncManager {
   }
 
   /** Host: lines everyone up and starts the lights `countdownMs` from now. Returns the start, or null when not hosting */
-  public startRace(countdownMs = 4000): RaceStartInfo | null {
+  public startRace(countdownMs = DEFAULT_ROOM_COUNTDOWN_MS): RaceStartInfo | null {
     return this.launchRaceInternal(countdownMs, undefined, undefined, true);
   }
 
@@ -2618,6 +2633,7 @@ export class MultiplayerSyncManager {
           lastMs: 0,
           graceUntilMs: 0,
           primed: false,
+          hidden: false,
         },
       };
       this.peers.set(pkt.peerId, buffer);
@@ -2777,9 +2793,12 @@ export class MultiplayerSyncManager {
         continue;
       }
       if (this.predictRemotePlayers && !buf.isAiPeer) {
+        // Silent for long: no longer drawn (kept a while, so the car reappears cleanly at its true pose if it returns)
+        if (nowMs - buf.lastReceivedMs > STALE_HIDE_MS) {
+          buf.predict.hidden = true;
+          continue;
+        }
         this.predictPeer(buf, nowMs);
-        // Silent for long: no longer drawn (kept a while, so the car carries on where it was if it comes back)
-        if (nowMs - buf.lastReceivedMs > STALE_HIDE_MS) continue;
       } else {
         this.interpolatePeer(buf, renderTimeMs);
       }
@@ -2817,16 +2836,18 @@ export class MultiplayerSyncManager {
     const s0 = snaps.length > 1 ? snaps[snaps.length - 2] : null;
     // The snapshot's stamp is mapped to this clock, the trip included (updateTiming)
     const ageS = (nowMs - s1.timestampMs) / 1000;
-    // With its acceleration up to the cap, then (stale) at that speed and turn rate for a while: a fast car that
-    // stopped dead would read as a big jump once its packets came back
+    // With its acceleration up to PREDICT_ACCEL_MAX_S, then constant velocity up to PREDICT_MAX_S, then gently damped
+    // coast when stale: avoids quadratic overshoot under packet jitter while keeping fast cars smooth through stalls
     const h = Math.min(PREDICT_MAX_S, Math.max(0, ageS));
+    const ha = Math.min(PREDICT_ACCEL_MAX_S, h);
+    const hv = h - ha;
     const coastS = Math.max(0, Math.min(STALE_COAST_S, ageS) - h);
     let ax = 0;
     let ay = 0;
     let az = 0;
     if (s0) {
       const d = (s1.timestampMs - s0.timestampMs) / 1000;
-      if (d > 0.005 && d < 0.25) {
+      if (d >= 0.012 && d < 0.25) {
         ax = (s1.linVel[0] - s0.linVel[0]) / d;
         ay = (s1.linVel[1] - s0.linVel[1]) / d;
         az = (s1.linVel[2] - s0.linVel[2]) / d;
@@ -2840,55 +2861,69 @@ export class MultiplayerSyncManager {
       }
     }
     const yawRate = Number.isFinite(s1.angVel?.[1]) ? s1.angVel[1] : 0;
+    let vx = s1.linVel[0] + ax * ha;
+    const vy = s1.linVel[1] + ay * ha;
+    let vz = s1.linVel[2] + az * ha;
     // Raw prediction (a yaw rate + is turning right: clockwise about +Y)
     const rawPos = this.tempVec0.set(
-      s1.pos[0] + s1.linVel[0] * h + 0.5 * ax * h * h,
-      s1.pos[1] + s1.linVel[1] * h + 0.5 * ay * h * h,
-      s1.pos[2] + s1.linVel[2] * h + 0.5 * az * h * h
+      s1.pos[0] + s1.linVel[0] * ha + 0.5 * ax * ha * ha + vx * hv,
+      s1.pos[1] + s1.linVel[1] * ha + 0.5 * ay * ha * ha + vy * hv,
+      s1.pos[2] + s1.linVel[2] * ha + 0.5 * az * ha * ha + vz * hv
     );
-    let vx = s1.linVel[0] + ax * h;
-    const vy = s1.linVel[1] + ay * h;
-    let vz = s1.linVel[2] + az * h;
+    let effTurn = yawRate * h;
     if (coastS > 0) {
-      // On along an arc: the velocity turned at the yaw rate (by -yawRate·t about +Y), integrated over the coast
-      const w = yawRate;
-      const turn = w * coastS;
-      const sinT = Math.abs(w) > 1e-6 ? Math.sin(turn) / w : coastS;
+      // Gently damp speed and yaw rate during a stall so a lagging car does not rocket straight into barriers
+      const damp = Math.exp(-coastS * STALE_COAST_DECAY);
+      const effCoast = STALE_COAST_DECAY > 0 ? (1 - damp) / STALE_COAST_DECAY : coastS;
+      const w = yawRate * Math.exp(-coastS * 1.2);
+      const turn = w * effCoast;
+      effTurn += turn;
+      const sinT = Math.abs(w) > 1e-6 ? Math.sin(turn) / w : effCoast;
       const cosT = Math.abs(w) > 1e-6 ? (Math.cos(turn) - 1) / w : 0;
       rawPos.x += vx * sinT + vz * cosT;
-      rawPos.y += vy * coastS;
+      rawPos.y += vy * effCoast;
       rawPos.z += -vx * cosT + vz * sinT;
       const c = Math.cos(turn);
       const sn = Math.sin(turn);
-      const nx = vx * c - vz * sn;
-      vz = vx * sn + vz * c;
+      const nx = (vx * c - vz * sn) * damp;
+      vz = (vx * sn + vz * c) * damp;
       vx = nx;
     }
-    const rawQuat = this.tempQuat0.setFromAxisAngle(AXIS_Y, -yawRate * (h + coastS)).multiply(this.tempQuat1.set(...s1.quat));
+    const rawQuat = this.tempQuat0.setFromAxisAngle(AXIS_Y, -effTurn).multiply(this.tempQuat1.set(...s1.quat));
 
     const frameS = p.lastMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - p.lastMs) / 1000)) : 0;
-    if (!p.primed) {
+    if (!p.primed || p.hidden) {
       p.corrPos.set(0, 0, 0);
       p.corrQuat.identity();
       p.graceUntilMs = nowMs + PREDICT_GRACE_MS;
       p.primed = true;
+      p.hidden = false;
     } else if (s1.timestampMs !== p.newestTs) {
       // A new packet: carry on from where the car was shown, moved on over this frame
       const shown = this.tempVec1.copy(out.position).addScaledVector(out.linearVelocity, frameS);
       p.corrPos.copy(shown).sub(rawPos);
-      if (p.corrPos.length() > PREDICT_SNAP_M) {
+      const corrLen = p.corrPos.length();
+      if (corrLen > PREDICT_HARD_SNAP_M) {
         p.corrPos.set(0, 0, 0);
         p.corrQuat.identity();
         p.graceUntilMs = nowMs + PREDICT_GRACE_MS;
       } else {
+        if (corrLen > PREDICT_SNAP_M) p.graceUntilMs = nowMs + PREDICT_GRACE_MS;
         const shownQuat = this.tempQuat1.setFromAxisAngle(AXIS_Y, -(out.yawRateRadS ?? 0) * frameS).multiply(out.quaternion);
         p.corrQuat.copy(shownQuat).multiply(this.tempQuat2.copy(rawQuat).invert());
       }
     }
     // The correction blends out on every frame, also one with a new packet: with a packet every frame it would
-    // otherwise never shrink, and the car would run on its own dead reckoning
+    // otherwise never shrink, and the car would run on its own dead reckoning. Cap the per-frame glide step so a
+    // medium lag correction slides back smoothly without visual teleport jumps.
     const keep = Math.exp(-frameS / PREDICT_SMOOTH_S);
-    p.corrPos.multiplyScalar(keep);
+    const corrLenNow = p.corrPos.length();
+    if (corrLenNow > 1e-6) {
+      const desiredStep = corrLenNow * (1 - keep);
+      const maxStep = Math.max(0.05, PREDICT_MAX_CATCHUP_MS * frameS);
+      const actualStep = Math.min(desiredStep, maxStep);
+      p.corrPos.multiplyScalar(Math.max(0, (corrLenNow - actualStep) / corrLenNow));
+    }
     p.corrQuat.slerp(this.tempQuat1.identity(), 1 - keep);
     p.newestTs = s1.timestampMs;
     p.lastMs = nowMs;

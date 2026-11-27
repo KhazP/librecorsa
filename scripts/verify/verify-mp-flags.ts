@@ -229,9 +229,12 @@ const kinds = (f: MultiplayerFlags, t: number) => (f.feed(t) ?? []).map((m) => m
     peer('other', { z: 1500, vz: 0, race: { ...race(3000), id: 'race6' } }),
     peer('ai', { z: 1600, vz: 0, race: race(3000), ai: true }),
     peer('lobby', { z: 1700, vz: 0 }),
+    { ...peer('stale_lag', { z: 1250, vz: 0, race: race(3000) }), stale: true } as unknown as InterpolatedPeerState,
+    { ...peer('desync_lag', { z: 1260, vz: 0, race: race(3000) }), desync: true } as unknown as InterpolatedPeerState,
+    { ...peer('warping', { z: 1270, vz: 0, race: race(3000) }), contactReady: false } as unknown as InterpolatedPeerState,
   ], 'race7');
   const byId = new Map(cars.map((c) => [c.id, c]));
-  check('only this race\'s players are judged', [...byId.keys()].join(',') === 'back,off,done', [...byId.keys()].join(','));
+  check('only this race\'s settled players are judged (stale/desync/warping peers excluded)', [...byId.keys()].join(',') === 'back,off,done', [...byId.keys()].join(','));
   check('backwards along the track from the velocity', byId.get('back')?.alongMs === -15 && causeOf(byId.get('back')!) === 'wrong_way');
   check('off the track from the pose, its hazard flag carried', byId.get('off')?.latM === HALF + 3 && byId.get('off')?.hazard === true && causeOf(byId.get('off')!) === 'off_track');
   check('a finished car is not racing', byId.get('done')?.racing === false);

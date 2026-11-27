@@ -103,6 +103,7 @@ interface CarFlag {
   clearS: number;
   on: boolean;
   cause: YellowCause | null;
+  lastS: number | null;
 }
 
 /** The player's yellow flag in one race between people, and race control's messages about it */
@@ -128,11 +129,20 @@ export class MultiplayerFlags {
       seen.add(c.id);
       let f = this.cars.get(c.id);
       if (!f) {
-        f = { causeS: 0, clearS: 0, on: false, cause: null };
+        f = { causeS: 0, clearS: 0, on: false, cause: null, lastS: null };
         this.cars.set(c.id, f);
       }
+      // A lagging/warping remote car jumping tens of metres in a single frame must not accumulate a bogus yellow flag
+      const warped =
+        f.lastS !== null &&
+        lapLengthM > 0 &&
+        Math.abs(aheadM(f.lastS, c.s, lapLengthM)) > Math.max(40, Math.abs(c.speedMs) * dtS * 4 + 25);
+      f.lastS = c.s;
       const offTheStart = c.distM - startOriginM < START_QUIET_M && raceTimeS < START_GRACE_S;
-      const cause = quiet || offTheStart ? null : causeOf(c);
+      const cause = quiet || offTheStart || warped ? null : causeOf(c);
+      if (warped) {
+        f.causeS = 0;
+      }
       if (cause) {
         f.causeS += dtS;
         f.clearS = 0;
@@ -203,6 +213,8 @@ export function flagCarsOf(track: FlagTrack, peers: readonly InterpolatedPeerSta
   const out: FlagCar[] = [];
   for (const p of peers) {
     if (p.ghost || p.isAiPeer || !p.race || p.race.id !== raceId) continue;
+    // Lagging, heavily jittering, or recently teleported/unsettled remote cars must not spam yellow/green flags
+    if (p.stale === true || p.desync === true || p.contactReady === false) continue;
     const proj = track.projectWorldToTrack(p.position.x, p.position.z, p.trackS);
     if (!Number.isFinite(proj.s) || !Number.isFinite(proj.lateralOffset)) continue;
     const t = proj.sample.tangent;
