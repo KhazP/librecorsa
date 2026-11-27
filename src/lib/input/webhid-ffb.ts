@@ -864,11 +864,27 @@ export const GENERIC_PID_PROFILE: PidProfile = {
 };
 
 /**
- * Wheels with their own profile, by USB vendor / product id. PXN V99: the values 2ef8324 made the default for every
+ * Thrustmaster's Windows HID PID minidriver (B66E T300RS, B677 T150, B67F TMX, …) implements Windows DirectInput's
+ * pid.dll contract: Axes Enable X must be set alongside Direction Enable, and Create New Effect benefits from a short
+ * settle pause before reading PID Block Load.
+ */
+export const THRUSTMASTER_PID_PROFILE: PidProfile = {
+  noTriggerButton: 0,
+  directionEnable: "always",
+  axisFlags: "x",
+  loopCount: "max",
+  resetSleepMs: 60,
+  stopAllAfterReset: true,
+  createSettleMs: 20,
+};
+
+/**
+ * Wheels with their own profile, by USB vendor / product id (an entry without `productId` applies to that vendor's
+ * HID PID devices when no product-specific quirk matches). PXN V99: the values 2ef8324 made the default for every
  * wheel while it targeted this one. The ids come from a Gamepad.id in that change's tests, not from a device; if they
  * are wrong the entry never matches and the wheel gets the generic profile.
  */
-export const PID_QUIRKS: readonly { vendorId: number; productId: number; name: string; profile: PidProfile }[] = [
+export const PID_QUIRKS: readonly { vendorId: number; productId?: number; name: string; profile: PidProfile }[] = [
   {
     vendorId: 0x11ff,
     productId: 0x3245,
@@ -883,10 +899,18 @@ export const PID_QUIRKS: readonly { vendorId: number; productId: number; name: s
       createSettleMs: 20,
     },
   },
+  {
+    vendorId: THRUSTMASTER_VENDOR_ID,
+    name: "Thrustmaster",
+    profile: THRUSTMASTER_PID_PROFILE,
+  },
 ];
 
 function pidQuirkFor(device: Pick<HidDeviceLike, "vendorId" | "productId">) {
-  return PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === device.productId);
+  return (
+    PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === device.productId) ??
+    PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === undefined)
+  );
 }
 
 export function pidProfileFor(device: Pick<HidDeviceLike, "vendorId" | "productId">): PidProfile {
@@ -949,25 +973,35 @@ async function allocateEffect(
 
   const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
   const indexMin = getField(load, PID.EFFECT_BLOCK_INDEX)?.min ?? 1;
+  let sawBlankStatus = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     const { status, index } = await readBlockLoad(device, load);
     if (status === PID.BLOCK_LOAD_FULL) throw new Error("The wheel has no free effect memory");
     if (status === PID.BLOCK_LOAD_ERROR) throw new Error(`The wheel refused to create a ${effectName} effect`);
-    if (status === PID.BLOCK_LOAD_SUCCESS || status === null) {
+    if (status === PID.BLOCK_LOAD_SUCCESS) {
       if (index === undefined) return null;
       if (index > 0) return index;
       // Block 0 is a real block on a wheel whose index field starts at 0, once Block Load says Success outright: the
       // T150 under Windows (#144) answered block 0 for its first effect and block 1 for the next, so a force sent to a
       // guessed block 1 landed on the damper. Without that Success a 0 is a blank report and names no block
-      if (!(statusField && status === PID.BLOCK_LOAD_SUCCESS && indexMin <= 0)) return null;
+      if (!(statusField && indexMin <= 0)) return null;
       // That 0 was read 2 ms after the create. Read once more: a wheel still showing its earlier answer names the new
       // block now, and a second 0 means block 0 (both reads land in the setup trace)
       await deps.sleep(BLOCK_ZERO_REREAD_MS);
       const again = await readBlockLoad(device, load);
       return again.status === PID.BLOCK_LOAD_SUCCESS && again.index !== undefined && again.index > 0 ? again.index : 0;
     }
-    await deps.sleep(20);
+    if (status === null) {
+      if (index !== undefined && index > 0) return index;
+      // A completely blank Block Load (status 0, index 0) right after Create New Effect may mean the firmware/driver
+      // has not populated the reply yet: retry before giving up and falling back to block 1.
+      sawBlankStatus = true;
+      if (attempt < 2) await deps.sleep(20);
+      continue;
+    }
+    if (attempt < 2) await deps.sleep(20);
   }
+  if (sawBlankStatus) return null;
   throw new Error("The wheel did not confirm the effect it was asked to create");
 }
 
@@ -1021,6 +1055,8 @@ export function conditionReportValues(
   return v;
 }
 
+const DESKTOP_X = (PAGE_DESKTOP << 16) | 0x30;
+const ORDINAL_1 = ordinalUsage(1);
 /** A 1-bit Generic Desktop field (X, Y, Z…) is an Axes Enable flag; a wider one is a Direction */
 const isAxisFlag = (f: PidFieldEntry) => f.usage >>> 16 === PAGE_DESKTOP && f.bitSize === 1;
 
@@ -1029,6 +1065,9 @@ const isAxisFlag = (f: PidFieldEntry) => f.usage >>> 16 === PAGE_DESKTOP && f.bi
  * LogicalMax stops at 32767, as on the MOZA R9 Base; the field's max on a narrower one), Gain max, no trigger button,
  * X alone in the Axes Enable mask, the first Direction field at 90° (east, +X) and any further one at its minimum.
  * Walks `fieldList`, so a usage the report names twice (X as an Axes Enable flag and again as a Direction) gets both.
+ * Scalar `PID.DIRECTION` (0x57) fields are tracked separately from `PAGE_ORDINAL` / multi-bit `PAGE_DESKTOP` direction
+ * axes so descriptors that declare both (e.g. Thrustmaster's Windows HID PID report 11) still populate `ORDINAL_1` at
+ * 90° (+X) instead of leaving it at 0° (Y-axis, zero steering torque).
  */
 export function buildSetEffectReport(
   set: PidReportLayout,
@@ -1041,8 +1080,11 @@ export function buildSetEffectReport(
   // Duration and Trigger Button sentinels sit outside some descriptors' logical ranges, so they skip the clamp
   const putRaw = (f: PidFieldLayout, v: number) => writeBits(data, f.bitOffset, f.bitSize, v);
   const hasAxesMask = hasField(set, PID.AXES_ENABLE) || set.fieldList.some(isAxisFlag);
+  const hasExplicitXFlag = set.fieldList.some((f) => isAxisFlag(f) && f.usage === DESKTOP_X);
+  const hasExplicitOrdinal1 = set.fieldList.some((f) => f.usage === ORDINAL_1);
   let axisFlags = 0;
-  let directions = 0;
+  let axisDirections = 0;
+  let scalarDirections = 0;
   for (const f of set.fieldList) {
     const page = f.usage >>> 16;
     if (f.usage === PID.EFFECT_BLOCK_INDEX) put(f, blockIndex);
@@ -1055,9 +1097,16 @@ export function buildSetEffectReport(
       else put(f, f.max >= 255 ? 255 : 0);
     } else if (f.usage === PID.AXES_ENABLE) put(f, 1);
     else if (f.usage === PID.DIRECTION_ENABLE) put(f, profile.directionEnable === "always" || !hasAxesMask ? 1 : 0);
-    else if (isAxisFlag(f)) put(f, profile.axisFlags === "x" && axisFlags++ === 0 ? 1 : 0);
-    else if (page === PAGE_ORDINAL || page === PAGE_DESKTOP || f.usage === PID.DIRECTION) {
-      put(f, directions++ === 0 ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
+    else if (isAxisFlag(f)) {
+      const enable = profile.axisFlags === "x" && (hasExplicitXFlag ? f.usage === DESKTOP_X : axisFlags === 0);
+      axisFlags++;
+      put(f, enable ? 1 : 0);
+    } else if (f.usage === PID.DIRECTION) {
+      put(f, scalarDirections++ === 0 ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
+    } else if (page === PAGE_ORDINAL || page === PAGE_DESKTOP) {
+      const isPrimary = hasExplicitOrdinal1 ? f.usage === ORDINAL_1 : axisDirections === 0;
+      axisDirections++;
+      put(f, isPrimary ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
     }
   }
   return { reportId: set.reportId, data };
