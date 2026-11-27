@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { LauncherImports } from "@/components/menu/LauncherImports";
 import { launcherPresence, openLauncherFolder, type LauncherPresence } from "@/lib/mods/launcher-imports";
-import { REPO_URL } from "@/lib/site";
+import { DOCS_URL } from "@/lib/site";
 import { modDefinitions } from "@/lib/mods/mod-content";
 import { modsState, modsSwitchedOff, readPackages, type LoadedPackage } from "@/lib/mods/mod-loader";
 import {
@@ -227,7 +227,7 @@ export const ModsPanel: React.FC = () => {
           >
             {tx("importFolder")}
           </Button>
-          <a href={`${REPO_URL}/blob/main/docs/modding.md`} target="_blank" rel="noreferrer" className="lc-hint ms-auto underline underline-offset-2">
+          <a href={`${DOCS_URL}/modding/`} target="_blank" rel="noreferrer" className="lc-hint ms-auto underline underline-offset-2">
             {tx("howTo")}
           </a>
           <input ref={zipInput} type="file" accept=".zip,application/zip" hidden onChange={onZip} />
