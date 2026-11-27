@@ -168,6 +168,9 @@
     "ariaNamed": "ملف السائق {name}",
     "aria": "ملف السائق",
     "refreshLabel": "تحديث ملف السائق",
-    "refresh": "تحديث"
+    "refresh": "تحديث",
+    "report": "الإبلاغ عن اللفة",
+    "reportLabel": "الإبلاغ عن لفة {name} في {circuit} ({car})",
+    "colReport": "إبلاغ"
   }
 }

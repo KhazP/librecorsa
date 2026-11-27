@@ -168,6 +168,9 @@
     "ariaNamed": "Perfil de piloto de {name}",
     "aria": "Perfil del piloto",
     "refreshLabel": "Actualizar perfil del piloto",
-    "refresh": "Actualizar"
+    "refresh": "Actualizar",
+    "report": "Reportar vuelta",
+    "reportLabel": "Reportar la vuelta de {name} en {circuit} ({car})",
+    "colReport": "Reportar"
   }
 }

@@ -168,6 +168,9 @@
     "ariaNamed": "{name} 드라이버 프로필",
     "aria": "드라이버 프로필",
     "refreshLabel": "드라이버 프로필 새로고침",
-    "refresh": "새로고침"
+    "refresh": "새로고침",
+    "report": "랩 신고",
+    "reportLabel": "{circuit}({car})에서 {name}의 랩 신고",
+    "colReport": "신고"
   }
 }

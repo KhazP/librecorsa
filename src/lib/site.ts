@@ -16,6 +16,21 @@ export const CONTACT_EMAIL = "contact@alpyalay.org";
 export const DOCS_URL = "https://docs.librecorsa.org";
 /** Private vulnerability reports (SECURITY.md, /.well-known/security.txt) */
 export const SECURITY_REPORT_URL = `${REPO_URL}/security/advisories/new`;
+/**
+ * A GitHub issue reporting a board lap (.github/ISSUE_TEMPLATE/lap-report.yml), titled "[Lap Issue] driver · circuit ·
+ * car · time" with the lap's details filled in
+ */
+export function lapReportUrl(lap: { driver: string; circuit: string; car: string; lapTime: string; lapId: string }): string {
+  const what = `${lap.circuit} · ${lap.car} · ${lap.lapTime}`;
+  const q = new URLSearchParams({
+    template: "lap-report.yml",
+    title: `[Lap Issue] ${lap.driver} · ${what}`,
+    driver: lap.driver,
+    lap: what,
+    "lap-id": lap.lapId,
+  });
+  return `${REPO_URL}/issues/new?${q.toString()}`;
+}
 /** My own accounts, where I post about the game; they link back to the site */
 export const AUTHOR_LINKS = [
   { label: "YouTube", href: "https://www.youtube.com/@KhazAlp" },

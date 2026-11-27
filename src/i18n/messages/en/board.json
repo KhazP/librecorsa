@@ -168,6 +168,9 @@
     "ariaNamed": "{name} driver profile",
     "aria": "Driver profile",
     "refreshLabel": "Refresh driver profile",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "report": "Report lap",
+    "reportLabel": "Report {name}''s lap at {circuit} ({car})",
+    "colReport": "Report"
   }
 }

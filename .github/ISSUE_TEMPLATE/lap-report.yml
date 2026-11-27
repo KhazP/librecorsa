@@ -1,0 +1,47 @@
+name: Lap report
+description: Report a lap on the online boards that looks cheated or wrong
+title: "[Lap Issue] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The flag on a driver's profile fills in the driver and the lap for you.
+        Loading their ghost (Race ghost on the board) is the best way to see what happened.
+  - type: input
+    id: driver
+    attributes:
+      label: Driver
+      placeholder: The name on the board
+    validations:
+      required: true
+  - type: input
+    id: lap
+    attributes:
+      label: Lap
+      description: Circuit, car and lap time.
+      placeholder: Circuit de Monaco · Proto 26 · 1:10.016
+    validations:
+      required: true
+  - type: input
+    id: lap-id
+    attributes:
+      label: Lap id
+      description: Filled in by the flag on the driver's profile. Leave it empty if you don't have it.
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What looks wrong
+      options:
+        - The car is faster than it can be (speed, acceleration, grip)
+        - It cut the track or used the walls
+        - The name is offensive
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What did you see?
+      description: Where on the lap, and what the ghost does there. A screenshot or a clip helps.
+    validations:
+      required: true

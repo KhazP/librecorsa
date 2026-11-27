@@ -168,6 +168,9 @@
     "ariaNamed": "{name} pilot profili",
     "aria": "Pilot profili",
     "refreshLabel": "Pilot profilini yenile",
-    "refresh": "Yenile"
+    "refresh": "Yenile",
+    "report": "Turu bildir",
+    "reportLabel": "{name} sürücüsünün {circuit} ({car}) turunu bildir",
+    "colReport": "Bildir"
   }
 }
