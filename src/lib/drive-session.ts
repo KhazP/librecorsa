@@ -3852,7 +3852,8 @@ export class DriveSession {
           : false;
         const gridHeld = raceInWorker
           ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
-          : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && mpManualStart);
+          : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) ||
+            (mpFrame?.phase === "lights" && mpManualStart);
         if (!raceInWorker) {
           physics.gridHold = gridHeld;
           if (mpRace) {
