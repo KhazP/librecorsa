@@ -329,6 +329,32 @@ async function main() {
   check('an unproven name has no record', none.starts === 0 && none.bestFinish === null, JSON.stringify(none));
   check('a bad week or no name is refused; without races or the database, no results', (await api('/api/races/results?week=x', withDb)).status === 400 && (await api('/api/drivers/record', withDb)).status === 400 && (await api(`/api/races/results?week=${rules.id}`, live)).status === 404 && (await api(`/api/races/results?week=${rules.id}`, { ...withDb, ONLINE_RACES: 'off' })).status === 404);
 
+  // Duplicate / blank driver codes in a scheduled race lobby are normalized and deduplicated
+  {
+    const st = fakeState();
+    const slot3 = raceSlot(slot.index + 2, SLOT_S);
+    let t = slot3.startsMs - 60_000;
+    const srv = new RaceServer(st, {} as Env, () => t);
+    const s1 = new FakeSocket();
+    const s2 = new FakeSocket();
+    const s3 = new FakeSocket();
+    await srv.connect(s1, 'peer_d1', token('1'), slot3, V);
+    t += 100;
+    await srv.connect(s2, 'peer_d2', token('2'), slot3, V);
+    t += 100;
+    await srv.connect(s3, 'peer_d3', token('3'), slot3, V);
+    await srv.webSocketMessage(s1, JSON.stringify({ ctl: { type: 'hello', name: 'Driver', code: '', color: '#FF0000' }, from: 'peer_d1' }));
+    await srv.webSocketMessage(s2, JSON.stringify({ ctl: { type: 'hello', name: 'Driver', code: '   ', color: '#00FF00' }, from: 'peer_d2' }));
+    await srv.webSocketMessage(s3, JSON.stringify({ ctl: { type: 'hello', name: 'Éric', code: '', color: '#0000FF' }, from: 'peer_d3' }));
+    const dupLobby = lobbyOf(s3);
+    const codes = dupLobby?.players.map((p) => p.code) ?? [];
+    check(
+      'scheduled lobby normalizes blank codes and deduplicates colliding 3-letter codes',
+      codes.length === 3 && new Set(codes).size === 3 && codes[2] === 'ERI' && codes.every((c) => /^[A-Z0-9]{3}$/.test(c)),
+      codes.join(', '),
+    );
+  }
+
   if (failures.length > 0) {
     console.error(`\n${failures.length} check(s) failed`);
     process.exit(1);

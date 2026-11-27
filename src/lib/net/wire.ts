@@ -347,10 +347,120 @@ export const FALLBACK_TRACK_ID = 'rwanda_official_short';
 // Cut by code point, not UTF-16 unit, so a name never ends in half an emoji (a lone surrogate draws as a broken glyph)
 const clampStr = (v: unknown, max: number, fallback: string) =>
   typeof v === 'string' ? Array.from(v.replace(/[\u0000-\u001f\u007f<>]/g, '')).slice(0, max).join('') : fallback;
-const asCode = (v: unknown) => {
-  const s = typeof v === 'string' ? v.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) : '';
-  return s.length === 3 ? s : 'DRV';
-};
+const stripDiacritics = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+const peerChars = (peerId: unknown): string =>
+  typeof peerId === 'string' ? stripDiacritics(peerId).replace(/^PEER[_-]?/, '').replace(/[^A-Z0-9]/g, '') : '';
+
+/**
+ * Normalizes a 3-character uppercase driver code (`[A-Z0-9]{3}` with at least one letter) so online lobbies and timing
+ * boards never show blank codes. Preserves valid 3-char codes (including deduplicated codes with digits like `DR2`),
+ * folds diacritics (`Éric` -> `ERI`), and derives from `fallbackName` / `peerId` / `DRV` when blank or incomplete.
+ */
+export function normalizeDriverCode(rawCode: unknown, fallbackName?: unknown, peerId?: unknown): string {
+  const rawAlnum = typeof rawCode === 'string' ? stripDiacritics(rawCode).replace(/[^A-Z0-9]/g, '') : '';
+  if (rawAlnum.length >= 2 && /[A-Z]/.test(rawAlnum.slice(0, 3))) return rawAlnum.slice(0, 3);
+
+  const nameWords =
+    typeof fallbackName === 'string'
+      ? stripDiacritics(fallbackName)
+          .split(/[^A-Z0-9]+/)
+          .filter((w) => /[A-Z]/.test(w))
+      : [];
+  const nameLetters = nameWords.join('').replace(/[^A-Z]/g, '');
+  const nameAlnum = nameWords.join('');
+
+  if (rawAlnum.length > 0 && /[A-Z]/.test(rawAlnum)) {
+    if (nameLetters.length >= 3 && nameLetters.startsWith(rawAlnum)) return nameLetters.slice(0, 3);
+    if (nameAlnum.length >= 3 && nameAlnum.startsWith(rawAlnum)) return nameAlnum.slice(0, 3);
+    const pad = (nameAlnum.slice(rawAlnum.length) + peerChars(peerId) + 'DRV').slice(0, 3 - rawAlnum.length);
+    return (rawAlnum + pad).slice(0, 3);
+  }
+
+  if (nameWords.length >= 2) {
+    const lastLetters = nameWords[nameWords.length - 1].replace(/[^A-Z]/g, '');
+    if (lastLetters.length >= 3) return lastLetters.slice(0, 3);
+  }
+  if (nameLetters.length >= 3) return nameLetters.slice(0, 3);
+  if (nameAlnum.length >= 3 && /[A-Z]/.test(nameAlnum.slice(0, 3))) return nameAlnum.slice(0, 3);
+  if (nameAlnum.length > 0 && /[A-Z]/.test(nameAlnum)) {
+    return (nameAlnum + peerChars(peerId) + 'DRV').slice(0, 3);
+  }
+
+  const p = peerChars(peerId);
+  if (p.length >= 3 && /[A-Z]/.test(p.slice(0, 3))) return p.slice(0, 3);
+  return 'DRV';
+}
+
+const CODE_SUFFIX_CHARS = '23456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * Assigns every entry a unique, non-blank 3-character uppercase driver code in deterministic array order.
+ * The first entry keeps its normalized code; colliding entries try alternate letters from their name before
+ * falling back to numbered/suffixed variants (`XX2`, `XX3`, ..., `X10`).
+ */
+export function dedupeDriverCodes<T extends { id: string; code?: unknown; name?: unknown }>(
+  entries: readonly T[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  const used = new Set<string>();
+  for (const e of entries) {
+    if (out.has(e.id)) continue;
+    const base = normalizeDriverCode(e.code, e.name, e.id);
+    if (!used.has(base)) {
+      used.add(base);
+      out.set(e.id, base);
+      continue;
+    }
+    let chosen: string | null = null;
+    if (typeof e.name === 'string') {
+      const words = stripDiacritics(e.name)
+        .split(/[^A-Z0-9]+/)
+        .filter((w) => /[A-Z]/.test(w));
+      const candidates: string[] = [];
+      if (words.length >= 2) {
+        const first = words[0].replace(/[^A-Z]/g, '');
+        const last = words[words.length - 1].replace(/[^A-Z]/g, '');
+        if (first.length >= 3) candidates.push(first.slice(0, 3));
+        if (first.length >= 1 && last.length >= 2) candidates.push((first[0] + last.slice(0, 2)).slice(0, 3));
+        if (first.length >= 2 && last.length >= 1) candidates.push((first.slice(0, 2) + last[0]).slice(0, 3));
+      }
+      const joined = words.join('').replace(/[^A-Z0-9]/g, '');
+      for (let i = 3; i < joined.length; i++) candidates.push(base.slice(0, 2) + joined[i]);
+      for (const c of candidates) {
+        if (c.length === 3 && /[A-Z]/.test(c) && !used.has(c)) {
+          chosen = c;
+          break;
+        }
+      }
+    }
+    if (!chosen) {
+      const p2 = base.slice(0, 2);
+      for (let i = 0; i < CODE_SUFFIX_CHARS.length; i++) {
+        const c = p2 + CODE_SUFFIX_CHARS[i];
+        if (!used.has(c)) {
+          chosen = c;
+          break;
+        }
+      }
+    }
+    if (!chosen) {
+      const p1 = /[A-Z]/.test(base[0]) ? base[0] : 'D';
+      for (let n = 10; n <= 99; n++) {
+        const c = `${p1}${n}`;
+        if (!used.has(c)) {
+          chosen = c;
+          break;
+        }
+      }
+    }
+    const finalCode = chosen ?? base;
+    used.add(finalCode);
+    out.set(e.id, finalCode);
+  }
+  return out;
+}
+
+const asCode = (v: unknown, name?: unknown, peerId?: unknown) => normalizeDriverCode(v, name, peerId);
 const asColor = (v: unknown) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#E10600');
 const finite = (v: unknown, lo: number, hi: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
@@ -661,23 +771,29 @@ export function sanitizeLobby(v: unknown): LobbyState | null {
     proto: version(l.proto),
     sim: version(l.sim),
     settings: sanitizeLobbySettings(l.settings, roomKind),
-    players: l.players.slice(0, 32).flatMap((p): LobbyPlayer[] => {
-      if (!p || typeof p !== 'object') return [];
-      const q = p as Record<string, unknown>;
-      if (typeof q.peerId !== 'string') return [];
-      return [
-        {
-          peerId: q.peerId.slice(0, 64),
-          name: clampStr(q.name, 16, 'Driver'),
-          code: asCode(q.code),
-          color: asColor(q.color),
-          vehicle: asPeerVehicle(q.vehicle),
-          trackId: typeof q.trackId === 'string' ? q.trackId.slice(0, 64) : undefined,
-          ready: q.ready === true,
-          isHost: q.isHost === true,
-        },
-      ];
-    }),
+    players: (() => {
+      const rawPlayers = l.players.slice(0, 32).flatMap((p): LobbyPlayer[] => {
+        if (!p || typeof p !== 'object') return [];
+        const q = p as Record<string, unknown>;
+        if (typeof q.peerId !== 'string') return [];
+        const peerId = q.peerId.slice(0, 64);
+        const name = clampStr(q.name, 16, 'Driver');
+        return [
+          {
+            peerId,
+            name,
+            code: asCode(q.code, name, peerId),
+            color: asColor(q.color),
+            vehicle: asPeerVehicle(q.vehicle),
+            trackId: typeof q.trackId === 'string' ? q.trackId.slice(0, 64) : undefined,
+            ready: q.ready === true,
+            isHost: q.isHost === true,
+          },
+        ];
+      });
+      const codes = dedupeDriverCodes(rawPlayers.map((p) => ({ id: p.peerId, code: p.code, name: p.name })));
+      return rawPlayers.map((p) => ({ ...p, code: codes.get(p.peerId) ?? p.code }));
+    })(),
     race: l.race ? sanitizeStart(l.race) : null,
   };
   if (roomKind !== undefined) out.roomKind = roomKind;
@@ -726,9 +842,10 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
   const qLen = Math.hypot(quat[0], quat[1], quat[2], quat[3]);
   if (qLen < 1e-6) return null;
   const seq = typeof p.seq === 'number' && Number.isInteger(p.seq) && p.seq >= 0 ? p.seq : undefined;
+  const name = typeof p.name === 'string' ? clampStr(p.name, 16, 'Driver') : undefined;
   return {
     peerId: p.peerId,
-    driverCode: asCode(p.driverCode),
+    driverCode: asCode(p.driverCode, name, p.peerId),
     teamColorHex: asColor(p.teamColorHex),
     ...(p.liveryId === null
       ? { liveryId: null }
@@ -800,17 +917,19 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
   if (!v || typeof v !== 'object') return null;
   const m = v as Record<string, unknown>;
   switch (m.type) {
-    case 'hello':
+    case 'hello': {
+      const name = clampStr(m.name, 16, 'Driver');
       return {
         type: 'hello',
-        name: clampStr(m.name, 16, 'Driver'),
-        code: asCode(m.code),
+        name,
+        code: asCode(m.code, name),
         color: asColor(m.color),
         vehicle: asPeerVehicle(m.vehicle),
         trackId: typeof m.trackId === 'string' ? m.trackId.slice(0, 64) : undefined,
         proto: version(m.proto),
         sim: version(m.sim),
       };
+    }
     case 'refuse':
       if (m.reason === 'version') return { type: 'refuse', reason: 'version' };
       if (m.reason === 'car_class') {

@@ -6,7 +6,16 @@
 import * as THREE from "three";
 import { GapTimer, LapClock, MultiplayerRace, classificationClosed, classify, raceOrder, type RacerProgress } from "../../src/lib/sim/race-session";
 import type { InterpolatedPeerState, RaceStartInfo } from "../../src/lib/sim/multiplayer-sync";
-import { buildRaceGrid, sanitizePacket, sortQualifyingTimes, type ControlMessage, type NetworkVehiclePacket } from "../../src/lib/net/wire";
+import {
+  buildRaceGrid,
+  dedupeDriverCodes,
+  normalizeDriverCode,
+  sanitizeLobby,
+  sanitizePacket,
+  sortQualifyingTimes,
+  type ControlMessage,
+  type NetworkVehiclePacket,
+} from "../../src/lib/net/wire";
 import { QualifyingSession, aiQualifyingMs, qualifyingOrder, type QualifyingFrame } from "../../src/lib/sim/qualifying";
 import { AiOpponentField, AI_DRIVERS } from "../../src/lib/sim/ai-opponents";
 import { ROLLING_START_PACE_MS } from "../../src/lib/sim/simulator-car";
@@ -767,6 +776,137 @@ console.log("AI rolling start · formation pace until Start/Finish");
     }
     check("stalled P1 triggers safety fallback green flag (no deadlock)", !field.isRollingFormation, `released at ${field.timeS.toFixed(2)} s`);
   }
+}
+
+console.log("Multiplayer leaderboard: non-blank unique driver codes & non-zero separated gaps");
+{
+  check("normalizeDriverCode folds diacritics and never returns blank", normalizeDriverCode("", "Éric", "peer_1") === "ERI" && normalizeDriverCode("   ", "Bruno Fantozzi", "peer_2") === "FAN" && normalizeDriverCode("", "", "peer_3") === "DRV");
+  check("normalizeDriverCode preserves deduplicated alphanumeric codes", normalizeDriverCode("DR2", "Driver", "peer_2") === "DR2");
+  const deduped = dedupeDriverCodes([
+    { id: "p1", code: "DRV", name: "Driver" },
+    { id: "p2", code: "", name: "Driver" },
+    { id: "p3", code: "DRV", name: "Driver" },
+    { id: "p4", code: "BRU", name: "Bruno Alpha" },
+    { id: "p5", code: "BRU", name: "Bruno Beta" },
+  ]);
+  const dedupedVals = [...deduped.values()];
+  check(
+    "dedupeDriverCodes yields unique 3-char codes for every driver",
+    dedupedVals.length === 5 && new Set(dedupedVals).size === 5 && dedupedVals.every((c) => /^[A-Z0-9]{3}$/.test(c)),
+    dedupedVals.join(", "),
+  );
+  const sanLobby = sanitizeLobby({
+    hostId: "p1",
+    settings: { trackId: "watkins_glen", laps: 5, collisions: "protected", carClass: "gt3" },
+    players: [
+      { peerId: "p1", name: "Driver", code: "", color: "#ff0000", ready: true, isHost: true },
+      { peerId: "p2", name: "Driver", code: "   ", color: "#00ff00", ready: true, isHost: false },
+      { peerId: "p3", name: "Éric", code: "", color: "#0000ff", ready: true, isHost: false },
+    ],
+    race: null,
+  });
+  const lobbyCodes = sanLobby?.players.map((p) => p.code) ?? [];
+  check(
+    "sanitizeLobby normalizes blank codes and deduplicates collisions",
+    lobbyCodes.length === 3 && new Set(lobbyCodes).size === 3 && lobbyCodes[2] === "ERI" && lobbyCodes.every((c) => c.length === 3),
+    lobbyCodes.join(", "),
+  );
+
+  // Separated online cars never all collapse to +0.0 gap simultaneously (off grid launch OR mid-race)
+  const mpStart: RaceStartInfo = {
+    ...start,
+    id: "race-gaps",
+    lightsStartHostMs: 10_000,
+    holdMs: 500,
+    laps: 3,
+    grid: ["p1", "p2", "p3", "p4"],
+  };
+  const mpRoster = [
+    { peerId: "p1", name: "Driver", code: "", color: "#ff0000" },
+    { peerId: "p2", name: "Driver", code: "", color: "#00ff00" },
+    { peerId: "p3", name: "Driver", code: "DRV", color: "#0000ff" },
+    { peerId: "p4", name: "Marco", code: "   ", color: "#ffff00" },
+  ];
+  const mp = new MultiplayerRace(mpStart, L, "p2", { name: "Driver", code: "", color: "#00ff00" }, mpRoster);
+  const preFrame = mp.frame(8_000);
+  check("gridStanding is true during pre-lights countdown buffer", mp.gridStanding === true && preFrame.phase === "countdown");
+  const lightsOut = 10_000 + 5_000 + 500;
+  const pktAt = (id: string, code: string, name: string, dist: number, speedKmh: number): InterpolatedPeerState =>
+    ({
+      peerId: id,
+      driverCode: code,
+      name,
+      teamColorHex: "#fff",
+      position: new THREE.Vector3(),
+      quaternion: new THREE.Quaternion(),
+      linearVelocity: new THREE.Vector3(),
+      steerAngle: 0,
+      wheelRPMs: [0, 0, 0, 0],
+      throttle: 1,
+      brake: 0,
+      trackS: ((dist % L) + L) % L,
+      speedKmh,
+      isAiPeer: false,
+      race: { id: "race-gaps", dist, fin: null, best: null },
+    }) as InterpolatedPeerState;
+
+  // Launch frame (0.5 s after lights out): P1 at -4 m, P2 at -12 m, P3 at -20 m, P4 at -28 m
+  mp.lapClock.reset(L - 12);
+  mp.ingestPeers(
+    [pktAt("p1", "", "Driver", -4, 72), pktAt("p3", "DRV", "Driver", -20, 65), pktAt("p4", "", "Marco", -28, 60)],
+    0.5,
+  );
+  const launchSt = mp.status(mp.frame(lightsOut + 500), 18);
+  check(
+    "launch standings have unique non-blank 3-char codes",
+    new Set(launchSt.standings.map((s) => s.driverCode)).size === 4 &&
+      launchSt.standings.every((s) => /^[A-Z0-9]{3}$/.test(s.driverCode)) &&
+      launchSt.standings[3].driverCode === "MAR",
+    launchSt.standings.map((s) => s.driverCode).join(", "),
+  );
+  check(
+    "launch standings show strictly positive separated gaps (never all +0.0)",
+    launchSt.standings[0].gapToLeaderS === 0 &&
+      launchSt.standings[1].gapToLeaderS > 0.2 &&
+      launchSt.standings[2].gapToLeaderS > launchSt.standings[1].gapToLeaderS + 0.1 &&
+      launchSt.standings[3].gapToLeaderS > launchSt.standings[2].gapToLeaderS + 0.1,
+    launchSt.standings.map((s) => s.gapToLeaderS.toFixed(2)).join(", "),
+  );
+
+  // Mid-race (t = 1..20 s): cars cruise at distinct speeds; splitTimer tracks exact crossing times
+  let midSt = launchSt;
+  for (let s = 1; s <= 20; s++) {
+    const f = mp.frame(lightsOut + s * 1000);
+    mp.lapClock.distM = -12 + s * 48;
+    mp.ingestPeers(
+      [
+        pktAt("p1", "", "Driver", -4 + s * 52, 187),
+        pktAt("p3", "DRV", "Driver", -20 + s * 44, 158),
+        pktAt("p4", "", "Marco", -28 + s * 40, 144),
+      ],
+      s,
+    );
+    midSt = mp.status(f, 48);
+  }
+  check(
+    "mid-race standings keep strictly increasing non-zero gaps and intervals",
+    midSt.standings[0].gapToLeaderS === 0 &&
+      midSt.standings[1].gapToLeaderS > 1.0 &&
+      midSt.standings[2].gapToLeaderS > midSt.standings[1].gapToLeaderS + 1.0 &&
+      midSt.standings[3].gapToLeaderS > midSt.standings[2].gapToLeaderS + 1.0 &&
+      midSt.standings.slice(1).every((s) => (s.intervalS ?? 0) > 0.5),
+    midSt.standings.map((s) => `${s.driverCode}:+${s.gapToLeaderS.toFixed(2)}(int=${(s.intervalS ?? 0).toFixed(2)})`).join(" "),
+  );
+  // Overtake does not swap deduplicated codes between p1 and p2
+  const codeP1Before = midSt.standings.find((s) => !s.isPlayer && s.name === "Driver" && s.gapToLeaderS === 0)?.driverCode;
+  const codeP2Before = midSt.standings.find((s) => s.isPlayer)?.driverCode;
+  mp.lapClock.distM = 2000; // p2 overtakes p1
+  const passSt = mp.status(mp.frame(lightsOut + 21_000), 60);
+  check(
+    "overtaking preserves each driver's assigned unique code",
+    passSt.standings[0].isPlayer && passSt.standings[0].driverCode === codeP2Before && passSt.standings[1].driverCode === codeP1Before,
+    `before=${codeP1Before}/${codeP2Before}, after=${passSt.standings[0].driverCode}/${passSt.standings[1].driverCode}`,
+  );
 }
 
 console.log(`\n${passed} checks passed`);

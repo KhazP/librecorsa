@@ -5,6 +5,7 @@
  */
 import type { DnfReason, RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
+import { dedupeDriverCodes, normalizeDriverCode } from "@/lib/net/wire";
 import { ROLLING_SLOT_SPACING_M, ROLLING_START_PACE_MS, type SimulatorCar } from "@/lib/sim/simulator-car";
 import { rollingFormationStep } from "@/lib/sim/race-start";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
@@ -478,11 +479,31 @@ export class MultiplayerRace {
     const damageLevel = start.rules?.damage ?? "off";
     this.damage = damageLevel !== "off" ? new CarDamage(damageLevel, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M) : null;
     this.present = new Set(roster.map((p) => p.peerId));
-    const codeById = new Map<string, string>([[localPeerId, identity.code]]);
-    for (const p of roster) codeById.set(p.peerId, p.code);
+    this.identity = {
+      ...identity,
+      code: normalizeDriverCode(identity.code, identity.name, localPeerId),
+    };
+    const rosterById = new Map(roster.map((p) => [p.peerId, p]));
+    const initialPeers: { id: string; code?: string; name?: string }[] = [];
+    const seenInit = new Set<string>();
+    const addInit = (id: string, code?: string, name?: string) => {
+      if (seenInit.has(id)) return;
+      seenInit.add(id);
+      initialPeers.push({ id, code, name });
+    };
+    for (const id of start.grid) {
+      if (id === localPeerId) addInit(id, this.identity.code, this.identity.name);
+      else {
+        const rp = rosterById.get(id);
+        addInit(id, rp?.code, rp?.name);
+      }
+    }
+    addInit(localPeerId, this.identity.code, this.identity.name);
+    for (const p of roster) addInit(p.peerId, p.code, p.name);
+    const codeById = dedupeDriverCodes(initialPeers);
     if (start.qualifying && start.qualifying.length > 0) {
       this.qualifyingRows = start.qualifying.map((q) => ({
-        code: codeById.get(q.peer) ?? q.peer.slice(0, 3).toUpperCase(),
+        code: codeById.get(q.peer) ?? normalizeDriverCode(undefined, rosterById.get(q.peer)?.name, q.peer),
         isPlayer: q.peer === localPeerId,
         lapMs: q.ms,
       }));
@@ -491,7 +512,7 @@ export class MultiplayerRace {
       if (p.peerId === localPeerId || !start.grid.includes(p.peerId)) continue;
       this.remote.set(p.peerId, {
         id: p.peerId,
-        code: p.code,
+        code: normalizeDriverCode(p.code, p.name, p.peerId),
         name: p.name,
         color: p.color,
         isPlayer: false,
@@ -507,6 +528,45 @@ export class MultiplayerRace {
   /** Who is in the race now: the peer ids of the latest lobby */
   setPresent(peerIds: Iterable<string>): void {
     this.present = new Set(peerIds);
+  }
+
+  /** True while holding on the grid in the pre-lights countdown buffer (before Light 1) */
+  get gridStanding(): boolean {
+    return this.latestFrame?.phase === "countdown";
+  }
+
+  /**
+   * Resolves non-blank, session-unique 3-character driver codes in stable grid order so overtaking never swaps
+   * deduplicated codes mid-race.
+   */
+  private resolveFieldCodes(field: readonly RacerProgress[]): RacerProgress[] {
+    const byId = new Map(field.map((r) => [r.id, r]));
+    const orderedIds: string[] = [];
+    const seen = new Set<string>();
+    for (const id of this.start.grid) {
+      if (byId.has(id) && !seen.has(id)) {
+        seen.add(id);
+        orderedIds.push(id);
+      }
+    }
+    const extras = field
+      .map((r) => r.id)
+      .filter((id) => !seen.has(id))
+      .sort();
+    for (const id of extras) {
+      seen.add(id);
+      orderedIds.push(id);
+    }
+    const codes = dedupeDriverCodes(
+      orderedIds.map((id) => {
+        const r = byId.get(id)!;
+        return { id, code: r.code, name: r.name };
+      }),
+    );
+    return field.map((r) => {
+      const code = codes.get(r.id) ?? normalizeDriverCode(r.code, r.name, r.id);
+      return code === r.code ? r : { ...r, code };
+    });
   }
 
   /** The player's grid slot (0 = pole); a player missing from the grid starts at the back, not on pole */
@@ -780,10 +840,12 @@ export class MultiplayerRace {
       if (!p.race || p.race.id !== this.start.id) continue;
       const existing = this.remote.get(p.peerId);
       this.lastSeenS.set(p.peerId, raceTimeS);
+      const name = p.name ?? existing?.name ?? normalizeDriverCode(p.driverCode, undefined, p.peerId);
+      const code = normalizeDriverCode(p.driverCode, name, p.peerId);
       this.remote.set(p.peerId, {
         id: p.peerId,
-        code: p.driverCode,
-        name: p.name ?? existing?.name ?? p.driverCode,
+        code,
+        name,
         color: p.teamColorHex,
         isPlayer: false,
         // Where it is drawn: its race distance as reported, moved on as far as it is drawn ahead of that packet
@@ -831,7 +893,8 @@ export class MultiplayerRace {
         ? { ...placed, dnf: true, dnfReason: "disconnected" as const }
         : placed;
     });
-    const field = [me, ...remote];
+    const field = this.resolveFieldCodes([me, ...remote]);
+    const meResolved = field[0];
     const L = this.lapLengthM;
     if (frame.phase === "racing") {
       this.gaps.record(frame.raceTimeS, field.map((r) => r.distM));
@@ -843,13 +906,26 @@ export class MultiplayerRace {
     let prevGap = 0;
     const standings: RaceStandingEntry[] = ordered.map((r, i) => {
       let gap = 0;
-      if (frame.phase === "racing") {
+      if (frame.phase === "racing" && i > 0) {
         const rt = classifiedTimeS(r);
         const wt = classifiedTimeS(winner);
-        gap = rt !== null && wt !== null ? rt - wt : this.gaps.gapS(frame.raceTimeS, r.distM, r.speedMs);
+        if (rt !== null && wt !== null) {
+          gap = Math.max(0, rt - wt);
+        } else {
+          const splitGap = this.splitTimer.gapS(frame.raceTimeS, winner.id, r.distM);
+          const distBehindM = Math.max(0, winner.distM - r.distM);
+          if (splitGap !== null && (splitGap > 0 || distBehindM < 0.5)) {
+            gap = splitGap;
+          } else if (distBehindM > 0) {
+            // Leader has no checkpoint yet behind this car (e.g. grid launch): derive from distance over pace
+            // so separated cars don't collapse to simultaneous +0.0 gaps
+            const refSpeedMs = Math.max(8, r.speedMs, winner.speedMs * 0.5);
+            gap = distBehindM / refSpeedMs;
+          }
+        }
         gapFloor = Math.max(gapFloor, gap);
       }
-      const intervalS = i > 0 ? gapFloor - prevGap : undefined;
+      const intervalS = i > 0 ? Math.max(0, gapFloor - prevGap) : undefined;
       prevGap = gapFloor;
       return {
         driverCode: r.code,
@@ -917,7 +993,7 @@ export class MultiplayerRace {
       countdownS: frame.phase === "countdown" ? frame.countdownS : undefined,
       rollingFormation: rollingStatus,
       qualifying: this.qualifyingRows,
-      position: officialPlace >= 0 && playerFinished ? officialPlace + 1 : ordered.indexOf(me) + 1,
+      position: officialPlace >= 0 && playerFinished ? officialPlace + 1 : ordered.indexOf(meResolved) + 1,
       fieldSize: ordered.length,
       lap: Math.max(1, Math.min(this.start.laps, Math.floor(me.distM / L) + 1)),
       totalLaps: this.start.laps,

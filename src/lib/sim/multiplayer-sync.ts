@@ -42,7 +42,9 @@ import {
   STATE_SEND_HZ,
   StateInfoMemory,
   decodeState,
+  dedupeDriverCodes,
   encodeState,
+  normalizeDriverCode,
   stateInfoJson,
   vehicleClassOf,
   withLobbyDefaults,
@@ -1486,14 +1488,18 @@ export class MultiplayerSyncManager {
 
   /** Name, code and colour shown to other players; car and circuit for the lobby */
   public setIdentity(identity: DriverIdentity, vehicle?: VehicleModelId, trackId?: string): void {
+    const normalized: DriverIdentity = {
+      ...identity,
+      code: normalizeDriverCode(identity.code, identity.name, this.localPeerId),
+    };
     const vehicleChanged = vehicle !== this.localVehicle;
     const changed =
-      identity.name !== this.identity.name ||
-      identity.code !== this.identity.code ||
-      identity.color !== this.identity.color ||
+      normalized.name !== this.identity.name ||
+      normalized.code !== this.identity.code ||
+      normalized.color !== this.identity.color ||
       vehicleChanged ||
       trackId !== this.localTrackId;
-    this.identity = { ...identity };
+    this.identity = normalized;
     this.localVehicle = vehicle;
     this.localTrackId = trackId;
     if (!changed) return;
@@ -1865,12 +1871,15 @@ export class MultiplayerSyncManager {
     const me: LobbyPlayer = {
       peerId: this.localPeerId,
       ...this.identity,
+      code: normalizeDriverCode(this.identity.code, this.identity.name, this.localPeerId),
       vehicle: this.localVehicle,
       trackId: this.localTrackId,
       ready: true,
       isHost: true,
     };
-    return [me, ...this.members.values()];
+    const raw = [me, ...this.members.values()];
+    const codes = dedupeDriverCodes(raw.map((p) => ({ id: p.peerId, code: p.code, name: p.name })));
+    return raw.map((p) => ({ ...p, code: codes.get(p.peerId) ?? p.code }));
   }
 
   private broadcastLobby(): void {

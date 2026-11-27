@@ -29,8 +29,10 @@ import {
   PROTOCOL_VERSION,
   StateInfoMemory,
   decodeState,
+  dedupeDriverCodes,
   encodeState,
   isVehicleAllowed,
+  normalizeDriverCode,
   sanitizeControl,
   sanitizePacket,
   stateInfoJson,
@@ -275,20 +277,21 @@ export class RaceServer {
   }
 
   private players(gone?: ServerSocket): LobbyPlayer[] {
-    return this.sockets(gone)
+    const entrants = this.sockets(gone)
       .map(entrantOf)
       .filter((e): e is Entrant => e !== null && e.name !== undefined && e.vehicleMismatch !== true)
-      .sort((a, b) => a.joinedMs - b.joinedMs)
-      .map((e) => ({
-        peerId: e.peer,
-        name: e.name ?? "Driver",
-        code: e.code ?? "DRV",
-        color: e.color ?? "#E10600",
-        vehicle: e.vehicle,
-        trackId: e.trackId,
-        ready: true,
-        isHost: false,
-      }));
+      .sort((a, b) => a.joinedMs - b.joinedMs);
+    const codes = dedupeDriverCodes(entrants.map((e) => ({ id: e.peer, code: e.code, name: e.name })));
+    return entrants.map((e) => ({
+      peerId: e.peer,
+      name: e.name ?? "Driver",
+      code: codes.get(e.peer) ?? normalizeDriverCode(e.code, e.name, e.peer),
+      color: e.color ?? "#E10600",
+      vehicle: e.vehicle,
+      trackId: e.trackId,
+      ready: true,
+      isHost: false,
+    }));
   }
 
   private lobbyMessage(meta: Meta, race: RaceStartInfo | null, gone?: ServerSocket): string {
@@ -383,8 +386,9 @@ export class RaceServer {
           // The lobby, the Races card's look at who is waiting and the stored result all show this name: one the
           // boards would refuse races as "Driver"
           const name = nameProblem(msg.name) ? "Driver" : msg.name;
+          const code = normalizeDriverCode(msg.code, name, who.peer);
           const resolvedVehicle = msg.vehicle ?? rule?.vehicle;
-          ws.serializeAttachment({ ...who, name, code: msg.code, color: msg.color, vehicle: resolvedVehicle, trackId: msg.trackId, vehicleMismatch: false } satisfies Entrant);
+          ws.serializeAttachment({ ...who, name, code, color: msg.color, vehicle: resolvedVehicle, trackId: msg.trackId, vehicleMismatch: false } satisfies Entrant);
           await this.broadcastLobby();
           break;
         }
@@ -630,9 +634,15 @@ export class RaceServer {
     await this.state.storage.put("race", race);
     await this.state.storage.put("tokens", Object.fromEntries(entrants.map((e) => [e.peer, e.token])));
     // The names the grid races under, for the results (a socket opened again later has no attachment of its own)
+    const gridCodes = dedupeDriverCodes(entrants.map((e) => ({ id: e.peer, code: e.code, name: e.name })));
     await this.state.storage.put(
       "names",
-      Object.fromEntries(entrants.map((e): [string, GridName] => [e.peer, { name: e.name ?? "Driver", code: e.code ?? "DRV", color: e.color }])),
+      Object.fromEntries(
+        entrants.map((e): [string, GridName] => [
+          e.peer,
+          { name: e.name ?? "Driver", code: gridCodes.get(e.peer) ?? normalizeDriverCode(e.code, e.name, e.peer), color: e.color },
+        ]),
+      ),
     );
     this.book = newResultBook(race);
     await this.state.storage.put("book", this.book);
