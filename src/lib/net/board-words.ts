@@ -34,6 +34,7 @@ export const BOARD_SENTENCES: Readonly<Record<string, MessageKey>> = {
   "A point-to-point run must begin from a standing start": "game.board.errors.standingStartRun",
   "Recorded speeds do not match the distance driven": "game.board.errors.speedsVsDistance",
   "Distance driven does not match the lap length": "game.board.errors.distanceVsLength",
+  "The car gains speed faster than it can": "game.board.errors.gainsTooFast",
   "Positions imply a speed above 420 km/h": "game.board.errors.impliedSpeed",
 };
 

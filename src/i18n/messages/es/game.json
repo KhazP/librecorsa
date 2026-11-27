@@ -156,6 +156,7 @@
       "standingStartRun": "Un intento cronometrado de punto a punto debe empezar con salida parada",
       "speedsVsDistance": "Las velocidades registradas no coinciden con la distancia recorrida",
       "distanceVsLength": "La distancia recorrida no coincide con la longitud de la vuelta",
+      "gainsTooFast": "El coche gana velocidad más rápido de lo que puede",
       "impliedSpeed": "Las posiciones indican una velocidad superior a 420 km/h"
     }
   },

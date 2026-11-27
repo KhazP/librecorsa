@@ -156,6 +156,7 @@
       "standingStartRun": "구간 주행 타임 런은 스탠딩 스타트로 시작해야 합니다",
       "speedsVsDistance": "기록된 속도가 주행 거리와 맞지 않습니다",
       "distanceVsLength": "주행 거리가 랩 길이와 맞지 않습니다",
+      "gainsTooFast": "차가 낼 수 있는 것보다 빠르게 속도를 올립니다",
       "impliedSpeed": "기록된 위치로 보면 속도가 420km/h를 넘습니다"
     }
   },

@@ -156,6 +156,7 @@
       "standingStartRun": "Una salita a tempo punto a punto deve iniziare con una partenza da fermo",
       "speedsVsDistance": "Le velocità registrate non corrispondono alla distanza percorsa",
       "distanceVsLength": "La distanza percorsa non corrisponde alla lunghezza del giro",
+      "gainsTooFast": "L'auto prende velocità più in fretta di quanto possa",
       "impliedSpeed": "Le posizioni indicano una velocità superiore a 420 km/h"
     }
   },

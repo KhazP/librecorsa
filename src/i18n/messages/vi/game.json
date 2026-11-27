@@ -156,6 +156,7 @@
       "standingStartRun": "Lượt tính giờ điểm-đến-điểm phải bắt đầu bằng xuất phát đứng",
       "speedsVsDistance": "Tốc độ đã ghi không khớp với quãng đường đã chạy",
       "distanceVsLength": "Quãng đường đã chạy không khớp với chiều dài vòng đua",
+      "gainsTooFast": "Xe tăng tốc nhanh hơn mức nó có thể",
       "impliedSpeed": "Các vị trí đã ghi cho thấy tốc độ trên 420 km/h"
     }
   },

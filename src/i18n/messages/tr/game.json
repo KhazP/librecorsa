@@ -156,6 +156,7 @@
       "standingStartRun": "Noktadan noktaya zamanlı tırmanış durarak kalkışla başlamalı",
       "speedsVsDistance": "Kaydedilen hızlar katedilen mesafeyle uyuşmuyor",
       "distanceVsLength": "Katedilen mesafe tur uzunluğuyla uyuşmuyor",
+      "gainsTooFast": "Araç, yapabileceğinden daha hızlı hızlanıyor",
       "impliedSpeed": "Konumlar 420 km/h üzerinde bir hız gösteriyor"
     }
   },
