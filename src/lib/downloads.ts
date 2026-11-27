@@ -61,8 +61,8 @@ export interface PlatformDownload {
 export const DESKTOP_RELEASE: AppRelease = {
   tag: "launcher-v0.3.0",
   version: "0.3.0",
-  date: null,
-  published: false,
+  date: "2026-11-27",
+  published: true,
 };
 
 /**
@@ -97,7 +97,7 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
         get label() { return t("game.downloads.windowsZipLabel"); },
         get detail() { return t("game.downloads.windowsZipDetail"); },
         file: desktopFile("win-x64.zip"),
-        sizeBytes: null,
+        sizeBytes: 58076647,
       },
     ],
   },
@@ -112,14 +112,14 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
         get label() { return t("game.downloads.macosArm64Label"); },
         get detail() { return t("game.downloads.macosArm64Detail"); },
         file: desktopFile("mac-arm64.dmg"),
-        sizeBytes: null,
+        sizeBytes: 60337634,
       },
       {
         id: "macos-x64",
         get label() { return t("game.downloads.macosX64Label"); },
         get detail() { return t("game.downloads.macosX64Detail"); },
         file: desktopFile("mac-x64.dmg"),
-        sizeBytes: null,
+        sizeBytes: 60441123,
       },
     ],
   },
@@ -135,7 +135,7 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
         get label() { return t("game.downloads.linuxTarLabel"); },
         get detail() { return t("game.downloads.linuxX64Detail"); },
         file: desktopFile("linux-x64.tar.gz"),
-        sizeBytes: null,
+        sizeBytes: 57008418,
       },
     ],
   },
