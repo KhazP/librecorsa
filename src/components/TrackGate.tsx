@@ -87,7 +87,9 @@ export const TrackGate: React.FC = () => {
     const notice = applySafeStart();
     if (notice) setSafeStartNotice(notice);
     // The installed mod packages' circuits and cars join the lists first: a stored choice may name one of them
-    void loadMods().then(() => select(loadStoredTrackId()));
+    void loadMods()
+      .catch((err) => console.error("Mod loading failed:", err))
+      .then(() => select(loadStoredTrackId()));
   }, [select]);
 
   useEffect(() => {

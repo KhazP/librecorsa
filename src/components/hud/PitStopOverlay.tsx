@@ -57,7 +57,7 @@ export const PitStopOverlay: React.FC<{ telemetry: CarTelemetry; limiterKey?: st
           </Badge>
           <span className="lc-disp flex flex-1 items-center gap-1.5 text-[15px] leading-none whitespace-nowrap">
             <CompoundGlyph compound={c} size={15} decorative />
-            {pit.repairS > 0 ? tx("fittingRepairing", { compound: COMPOUNDS[c].name }) : tx("fitting", { compound: COMPOUNDS[c].name })}
+            {pit.repairS > 0 && pit.strategy.repairDamage ? tx("fittingRepairing", { compound: COMPOUNDS[c].name }) : tx("fitting", { compound: COMPOUNDS[c].name })}
           </span>
           <span className="lc-data text-[12px]">{pit.serviceLeftS.toFixed(1)} s</span>
         </div>

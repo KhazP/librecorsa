@@ -24,7 +24,9 @@ const SUFFIX = /^(?:[A-Za-z%°×+′″]+|[  ](?:km\/h|km|mph|kph|kW|bhp|hp|Nm|
 const JOIN = /^(?: ?\/ ?|[A-Za-z%\u00b0\u00d7+\u00b7:.\-\u2212]+)$/;
 
 /** A file type written in the text (".zip", ".tar.gz"): right to left, its dot would land at the far end ("zip.") */
-const FILE_TYPE = /(?<![\p{L}\p{N}._-])\.[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*(?![\p{L}\p{N}])/gu;
+const FILE_TYPE = /\.[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*(?![\p{L}\p{N}])/gu;
+/** Preceding characters that make a dot part of a word or version rather than a standalone file extension (no lookbehind for Safari < 16.4) */
+const BEFORE_FILE_TYPE = /[\p{L}\p{N}._-]$/u;
 
 const literal = (value: string): MessageFormatElement => ({ type: TYPE.literal, value });
 
@@ -58,7 +60,9 @@ function isolate(elements: MessageFormatElement[]): MessageFormatElement[] {
       continue;
     }
     if (el.type === TYPE.literal) {
-      el.value = el.value.replace(FILE_TYPE, (m) => FSI + m + PDI);
+      el.value = el.value.replace(FILE_TYPE, (m, offset: number, str: string) =>
+        offset > 0 && BEFORE_FILE_TYPE.test(str.slice(Math.max(0, offset - 2), offset)) ? m : FSI + m + PDI
+      );
     } else if (el.type === TYPE.plural || el.type === TYPE.select) {
       for (const option of Object.values(el.options)) option.value = isolate(option.value);
     } else if (el.type === TYPE.tag) {

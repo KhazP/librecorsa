@@ -201,7 +201,7 @@ const Tower: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t
 
   const me = race.standings.find((e) => e.isPlayer);
   const fastest = fastestLap(t);
-  const progress = race.totalLaps ? Math.min(1, Math.max(0, (lap - 1 + t.trackProgress) / race.totalLaps)) : null;
+  const progress = race.totalLaps ? Math.min(1, Math.max(0, (race.lap - 1 + t.trackProgress) / race.totalLaps)) : null;
   const caution = Boolean(race.vsc || race.yellow);
 
   return (
