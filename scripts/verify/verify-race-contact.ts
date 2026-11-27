@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { AiOpponentField, damagedGrip, type FieldIncident } from '../../src/lib/sim/ai-opponents';
+import { AiCarControl } from '../../src/lib/sim/ai-car-control';
 import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
 import { vscReferenceSpeedMs } from '../../src/lib/sim/vsc';
 import type { DamageLevel } from '../../src/lib/sim/car-damage';
@@ -269,6 +270,21 @@ function run(setup: Setup) {
     !clean.onPlan && !hurt.onPlan && Math.abs(hurt.pace - want) < 0.002,
     `pace ${f(clean.pace, 3)} → ${f(hurt.pace, 3)} (want ${f(want, 3)}), on a plan: ${clean.onPlan || hurt.onPlan}`
   );
+}
+
+// ---- 9. A car the marshals were called for that gets going again on its own races on: they don't move it later
+{
+  const ctl = new AiCarControl();
+  const at = (vxMs: number) => ({ vxMs, vyMs: 0, yawRateRadS: 0, roadYawRateRadS: 0, headingErrRad: 0, lateralM: 0, steer: 0, throttle: 0, brake: 0 });
+  const dt = 1 / 60;
+  ctl.stall();
+  for (let i = 0; i < 120; i++) ctl.update(dt, at(0), true);
+  // Stuck in its rejoin with cars coming (the road behind not clear): the marshals are called
+  for (let i = 0; i < 60 * 10; i++) ctl.update(dt, at(0), false);
+  const called = ctl.needsMarshal;
+  // It gets going before the road clears, and races again
+  for (let i = 0; i < 60 * 6; i++) ctl.update(dt, at(25), false);
+  check('Marshals: a car going again on its own is no longer waiting for them', called && ctl.mode === 'racing' && !ctl.needsMarshal, `called ${called}, mode ${ctl.mode}, waiting ${ctl.needsMarshal}`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll race contact checks passed.');
