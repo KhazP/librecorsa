@@ -143,7 +143,13 @@ export class RaceServer {
     private readonly state: DurableObjectState,
     private readonly env: Env,
     private readonly now: () => number = Date.now,
-  ) {}
+  ) {
+    // Plain-text "ping"/"pong" keepalives are answered at the edge without waking the Durable Object;
+    // JSON clock-sync messages (`{ ctl: { type: "ping", t0 } }`) pass through untouched.
+    if (typeof workers.WebSocketRequestResponsePair === "function") {
+      state.setWebSocketAutoResponse(new workers.WebSocketRequestResponsePair("ping", "pong"));
+    }
+  }
 
   async fetch(request: Request): Promise<Response> {
     // A look from someone deciding whether to join (GET /api/races/waiting): no socket, and nothing stored

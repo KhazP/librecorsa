@@ -35,6 +35,7 @@ import {
   MP_QUALIFYING_MINUTES,
   PEER_ID_RE,
   PROTOCOL_VERSION,
+  RACE_SERVER_STATE_SEND_HZ,
   sanitizeControl,
   sanitizeLobbySettings,
   sanitizePacket,
@@ -284,7 +285,10 @@ interface PeerSnapshotBuffer {
   seqWindow: { received: number; expected: number; startMs: number };
   lossPct: number;
   lastArrivalMs: number;
+  hasArrivalSample: boolean;
   jitterMs: number;
+  /** Per-peer adaptive interpolation delay (ms), driven by observed arrival jitter (~60–180 ms) */
+  adaptiveDelayMs: number;
   snapshots: NetworkVehiclePacket[];
   lastReceivedMs: number;
   /**
@@ -419,6 +423,12 @@ const STALE_COAST_DECAY = 0.45;
  */
 const STALE_GHOST_MS = 500;
 const STALE_HIDE_MS = 2000;
+/** Per-peer adaptive jitter buffer bounds (ms) for interpolated remote playback */
+const INTERP_DELAY_MIN_MS = 60;
+const INTERP_DELAY_MAX_MS = 180;
+/** Adaptive buffer rises quickly when jitter spikes and settles gently when the link clears */
+const INTERP_DELAY_RISE_ALPHA = 0.25;
+const INTERP_DELAY_FALL_ALPHA = 0.04;
 /** A new packet's correction to the prediction blends out over this time constant (s) */
 const PREDICT_SMOOTH_S = 0.1;
 /**
@@ -475,9 +485,11 @@ export class MultiplayerSyncManager {
   private peers = new Map<string, PeerSnapshotBuffer>();
   /** When the next state packet is due (ms, the clock `update` is given) */
   private nextSendDueMs = -Infinity;
-  /** State packets per second (STATE_SEND_HZ; the netcode bench tries others) */
+  /** State packets per second over WebRTC P2P (STATE_SEND_HZ; the netcode bench tries others) */
   public stateSendHz = STATE_SEND_HZ;
-  private readonly interpolationDelayMs = 65; // 65ms jitter buffer for cubic Hermite interpolation
+  /** State packets per second over TCP WebSocket to the scheduled-race server (20 Hz cuts DO message volume 3x) */
+  public raceServerStateSendHz = RACE_SERVER_STATE_SEND_HZ;
+  private readonly interpolationDelayMs = 65; // Baseline jitter buffer (ms); adapted per peer between 60 and 180 ms
 
   public status: P2PConnectionStatus = {
     mode: 'local',
@@ -2342,7 +2354,7 @@ export class MultiplayerSyncManager {
           if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: this.clock() });
           return;
         }
-        if (typeof ev.data !== 'string' || ev.data.length > 65536) return;
+        if (typeof ev.data !== 'string' || ev.data === 'pong' || ev.data.length > 65536) return;
         let data: Record<string, unknown>;
         try {
           data = JSON.parse(ev.data);
@@ -2612,7 +2624,9 @@ export class MultiplayerSyncManager {
         seqWindow: { received: 0, expected: 0, startMs: now },
         lossPct: 0,
         lastArrivalMs: now,
+        hasArrivalSample: false,
         jitterMs: 0,
+        adaptiveDelayMs: Math.max(INTERP_DELAY_MIN_MS, Math.min(INTERP_DELAY_MAX_MS, this.interpolationDelayMs)),
         snapshots: [],
         lastReceivedMs: now,
         mapMs: null,
@@ -2648,6 +2662,7 @@ export class MultiplayerSyncManager {
       this.peers.set(pkt.peerId, buffer);
     }
 
+    const prevSenderTs = buffer.lastSenderTimestampMs;
     let syncedTimestampMs = now;
     if (Number.isFinite(pkt.timestampMs)) {
       // Drop out-of-order packets: judged on the sender's own clock, which the mapping cannot reorder. However old: a
@@ -2662,7 +2677,8 @@ export class MultiplayerSyncManager {
       const lastSnap = buffer.snapshots[buffer.snapshots.length - 1];
       if (lastSnap && syncedTimestampMs <= lastSnap.timestampMs) syncedTimestampMs = lastSnap.timestampMs + 1;
     }
-    // Loss from gaps in the sender's counter (5 s windows), jitter from the spread of arrival intervals
+    // Loss from gaps in the sender's counter (5 s windows), jitter from RFC 3550 inter-arrival transit spread
+    // (send-rate agnostic, so 20 Hz RaceServer and 30 fps senders never register false jitter)
     if (typeof pkt.seq === 'number' && Number.isFinite(pkt.seq)) {
       const w = buffer.seqWindow;
       w.received++;
@@ -2675,8 +2691,21 @@ export class MultiplayerSyncManager {
         w.startMs = now;
       }
     }
-    const interval = now - buffer.lastArrivalMs;
-    buffer.jitterMs += (Math.abs(interval - 1000 / this.stateSendHz) - buffer.jitterMs) * 0.1;
+    if (buffer.hasArrivalSample) {
+      const arrivalDelta = now - buffer.lastArrivalMs;
+      const sampleJitter =
+        prevSenderTs > -Infinity && Number.isFinite(pkt.timestampMs)
+          ? Math.abs(arrivalDelta - (pkt.timestampMs - prevSenderTs))
+          : Math.abs(arrivalDelta - 1000 / this.activeStateSendHz());
+      buffer.jitterMs += (Math.min(500, sampleJitter) - buffer.jitterMs) * 0.1;
+      const targetDelayMs = Math.max(
+        INTERP_DELAY_MIN_MS,
+        Math.min(INTERP_DELAY_MAX_MS, Math.max(INTERP_DELAY_MIN_MS, this.interpolationDelayMs) + buffer.jitterMs * 2.5),
+      );
+      const alpha = targetDelayMs > buffer.adaptiveDelayMs ? INTERP_DELAY_RISE_ALPHA : INTERP_DELAY_FALL_ALPHA;
+      buffer.adaptiveDelayMs += (targetDelayMs - buffer.adaptiveDelayMs) * alpha;
+    }
+    buffer.hasArrivalSample = true;
     buffer.lastArrivalMs = now;
     buffer.lastReceivedMs = now;
     // Every caller passes a packet sanitizePacket already cleaned, so its fields are used as they are (checking them
@@ -2706,11 +2735,16 @@ export class MultiplayerSyncManager {
     }
   }
 
+  /** Effective outbound car-state send rate (Hz): 20 Hz over TCP WebSocket in scheduled races, 60 Hz over WebRTC P2P */
+  private activeStateSendHz(): number {
+    return this.inScheduledRace ? Math.min(this.stateSendHz, this.raceServerStateSendHz) : this.stateSendHz;
+  }
+
   /**
-   * Publishes the local car's state (STATE_SEND_HZ, on a fixed schedule) across BroadcastChannel, WebRTC data channels
-   * and the race server, and returns the remote cars as drawn now. With no car to send (`null`: the game lost its
-   * picture and waits) the room still runs, but nothing goes out: the others see the car fade and go, as when a player
-   * leaves, rather than a car parked where it stopped.
+   * Publishes the local car's state (60 Hz over WebRTC P2P, 20 Hz over scheduled-race WebSocket) across
+   * BroadcastChannel, WebRTC data channels and the race server, and returns the remote cars as drawn now. With no car
+   * to send (`null`: the game lost its picture and waits) the room still runs, but nothing goes out: the others see
+   * the car fade and go, as when a player leaves, rather than a car parked where it stopped.
    */
   public update(
     nowMs: number,
@@ -2719,13 +2753,14 @@ export class MultiplayerSyncManager {
     // A fixed schedule: the next packet is due one interval after the last was due, not after it went out, so the rate
     // holds at any frame rate. A frame up to a quarter interval early counts (display frames jitter); a frame more
     // than an interval late (a hitch, a tab in the background) starts the schedule again rather than sending a burst
-    const intervalMs = 1000 / this.stateSendHz;
+    const intervalMs = 1000 / this.activeStateSendHz();
     const activeRule = this.activeVehicleRule();
     const localVehicleBlocked =
       localPacket !== null &&
       activeRule !== null &&
       !isVehicleAllowed(localPacket.vehicle ?? this.localVehicle, activeRule, { allowUnspecified: false });
-    if (localPacket && !localVehicleBlocked && nowMs >= this.nextSendDueMs - intervalMs / 4) {
+    const canSendState = !this.inScheduledRace || (this.activeRace !== null && this.raceWs?.readyState === WebSocket.OPEN);
+    if (localPacket && canSendState && !localVehicleBlocked && nowMs >= this.nextSendDueMs - intervalMs / 4) {
       this.nextSendDueMs = nowMs - this.nextSendDueMs >= intervalMs ? nowMs + intervalMs : this.nextSendDueMs + intervalMs;
       // Stamped with the frame's time, the moment its pose is from; how much later it leaves goes with it, so a
       // receiver's timing counts from the send (a clock other than the frame's reads as on time)
@@ -2793,7 +2828,6 @@ export class MultiplayerSyncManager {
 
     this.tickControl(nowMs);
 
-    const renderTimeMs = nowMs - this.interpolationDelayMs;
     const activeStates: InterpolatedPeerState[] = [];
 
     for (const [peerId, buf] of this.peers.entries()) {
@@ -2809,7 +2843,7 @@ export class MultiplayerSyncManager {
         }
         this.predictPeer(buf, nowMs);
       } else {
-        this.interpolatePeer(buf, renderTimeMs);
+        this.interpolatePeer(buf, nowMs - buf.adaptiveDelayMs);
       }
       activeStates.push(buf.renderedState);
     }
@@ -2900,7 +2934,7 @@ export class MultiplayerSyncManager {
     }
     const rawQuat = this.tempQuat0.setFromAxisAngle(AXIS_Y, -effTurn).multiply(this.tempQuat1.set(...s1.quat));
 
-    const frameS = p.lastMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - p.lastMs) / 1000)) : 0;
+    const frameS = p.lastMs > 0 ? Math.min(0.25, Math.max(0, (nowMs - p.lastMs) / 1000)) : 0;
     if (!p.primed || p.hidden) {
       p.corrPos.set(0, 0, 0);
       p.corrQuat.identity();
@@ -2923,15 +2957,18 @@ export class MultiplayerSyncManager {
       }
     }
     // The correction blends out on every frame, also one with a new packet: with a packet every frame it would
-    // otherwise never shrink, and the car would run on its own dead reckoning. Cap the per-frame glide step so a
-    // medium lag correction slides back smoothly without visual teleport jumps.
-    const keep = Math.exp(-frameS / PREDICT_SMOOTH_S);
+    // otherwise never shrink, and the car would run on its own dead reckoning. High-jitter peers widen the blend time
+    // constant smoothly, and large lag corrections (> PREDICT_SNAP_M) glide at bounded speed instead of teleporting.
+    const smoothS = PREDICT_SMOOTH_S + Math.min(0.08, Math.max(0, buf.jitterMs - 20) * 0.002);
+    const keep = Math.exp(-frameS / smoothS);
     const corrLenNow = p.corrPos.length();
-    if (corrLenNow > 1e-6) {
+    if (corrLenNow > PREDICT_SNAP_M) {
       const desiredStep = corrLenNow * (1 - keep);
       const maxStep = Math.max(0.05, PREDICT_MAX_CATCHUP_MS * frameS);
       const actualStep = Math.min(desiredStep, maxStep);
       p.corrPos.multiplyScalar(Math.max(0, (corrLenNow - actualStep) / corrLenNow));
+    } else {
+      p.corrPos.multiplyScalar(keep);
     }
     p.corrQuat.slerp(this.tempQuat1.identity(), 1 - keep);
     p.newestTs = s1.timestampMs;

@@ -25,6 +25,16 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failures.push(name);
 };
 
+// Workers runtime global used by RaceServer for edge WebSocket keepalive auto-response
+Object.assign(globalThis, {
+  WebSocketRequestResponsePair: class {
+    constructor(
+      public request: string,
+      public response: string,
+    ) {}
+  },
+});
+
 const SLOT_S = 1200;
 const slot = raceSlot(Math.ceil(Date.UTC(2026, 10, 11, 12) / (SLOT_S * 1000)) + 1, SLOT_S);
 const rules = raceRules(slot);
@@ -353,6 +363,23 @@ async function main() {
       codes.length === 3 && new Set(codes).size === 3 && codes[2] === 'ERI' && codes.every((c) => /^[A-Z0-9]{3}$/.test(c)),
       codes.join(', '),
     );
+  }
+
+  // Edge WebSocket auto-response ("ping" -> "pong") is registered without interfering with JSON clock-sync pings
+  {
+    const st = fakeState();
+    let autoPair: unknown = null;
+    st.setWebSocketAutoResponse = (pair: unknown) => {
+      autoPair = pair;
+    };
+    const srv = new RaceServer(st, {} as Env, () => nowMs);
+    const pair = autoPair as { request?: string; response?: string } | null;
+    check(
+      'RaceServer registers edge setWebSocketAutoResponse("ping", "pong") for keepalives',
+      pair !== null && pair.request === 'ping' && pair.response === 'pong',
+      JSON.stringify(pair),
+    );
+    void srv;
   }
 
   if (failures.length > 0) {

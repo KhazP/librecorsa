@@ -85,10 +85,16 @@ export interface NetworkVehiclePacket {
 }
 
 /**
- * Car state packets per second, sent on a fixed schedule (MultiplayerSyncManager.update). A room's host and the race
- * server relay each car at this rate to every other.
+ * Car state packets per second, sent on a fixed schedule (MultiplayerSyncManager.update) over WebRTC P2P data channels.
+ * A room's host relays each car at this rate to every other.
  */
 export const STATE_SEND_HZ = 60;
+/**
+ * Car state packets per second sent over TCP WebSocket to the scheduled-race server (`cloudflare/api/race.ts`).
+ * Keeps WebRTC P2P (UDP) rooms at full `STATE_SEND_HZ` (60 Hz) while cutting Durable Object message volume 3x
+ * and avoiding TCP head-of-line fan-out bursts in 16-car scheduled races.
+ */
+export const RACE_SERVER_STATE_SEND_HZ = 20;
 /**
  * A car sending more than this per second is flooding: a room's host and the race server drop the excess. Half as much
  * again as the send rate, as packets bunch up on the way
@@ -352,13 +358,14 @@ const peerChars = (peerId: unknown): string =>
   typeof peerId === 'string' ? stripDiacritics(peerId).replace(/^PEER[_-]?/, '').replace(/[^A-Z0-9]/g, '') : '';
 
 /**
- * Normalizes a 3-character uppercase driver code (`[A-Z0-9]{3}` with at least one letter) so online lobbies and timing
- * boards never show blank codes. Preserves valid 3-char codes (including deduplicated codes with digits like `DR2`),
- * folds diacritics (`Éric` -> `ERI`), and derives from `fallbackName` / `peerId` / `DRV` when blank or incomplete.
+ * Normalizes a non-blank uppercase driver code (`[A-Z0-9]{1,3}` with at least one letter) so online lobbies and timing
+ * boards never show blank codes. Preserves explicit non-blank codes (including deduplicated codes with digits like
+ * `DR2`), folds diacritics (`Éric` -> `ERI`), and derives a 3-char code from `fallbackName` / `peerId` / `DRV` when
+ * blank or punctuation/digits-only.
  */
 export function normalizeDriverCode(rawCode: unknown, fallbackName?: unknown, peerId?: unknown): string {
   const rawAlnum = typeof rawCode === 'string' ? stripDiacritics(rawCode).replace(/[^A-Z0-9]/g, '') : '';
-  if (rawAlnum.length >= 2 && /[A-Z]/.test(rawAlnum.slice(0, 3))) return rawAlnum.slice(0, 3);
+  if (rawAlnum.length >= 1 && /[A-Z]/.test(rawAlnum.slice(0, 3))) return rawAlnum.slice(0, 3);
 
   const nameWords =
     typeof fallbackName === 'string'

@@ -68,9 +68,13 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 async function main() {
   // After the environment above is in place: the config module reads it as it loads
   const { MultiplayerSyncManager } = await import('../../src/lib/sim/multiplayer-sync');
-  const { encodeState, stateInfoJson, PROTOCOL_VERSION } = await import('../../src/lib/net/wire');
+  const { encodeState, stateInfoJson, PROTOCOL_VERSION, RACE_SERVER_STATE_SEND_HZ } = await import('../../src/lib/net/wire');
   const binary = (p: Record<string, unknown>) => encodeState(p as never, stateInfoJson(p as never));
-  type Internals = { peers: Map<string, { mapMs: number | null; snapshots: unknown[] }>; hostId: string | null; clockSynced: boolean };
+  type Internals = {
+    peers: Map<string, { mapMs: number | null; snapshots: unknown[]; adaptiveDelayMs: number; jitterMs: number }>;
+    hostId: string | null;
+    clockSynced: boolean;
+  };
 
   const m = new MultiplayerSyncManager();
   const inner = m as unknown as Internals;
@@ -142,6 +146,23 @@ async function main() {
   m.update(clock, local);
   check('racing, this car\'s state goes to the server', ws.states().length === 1);
 
+  // Scheduled-race WebSocket send rate is capped to 20 Hz (50 ms) even at 60 fps, cutting DO message load 3x
+  const beforeRateCount = ws.states().length;
+  for (let i = 0; i < 60; i++) {
+    clock += 1000 / 60;
+    m.update(clock, local);
+  }
+  const sentInOneSec = ws.states().length - beforeRateCount;
+  check(
+    `scheduled-race WebSocket sends at ${RACE_SERVER_STATE_SEND_HZ} Hz (not 60 Hz)`,
+    sentInOneSec >= RACE_SERVER_STATE_SEND_HZ - 2 && sentInOneSec <= RACE_SERVER_STATE_SEND_HZ + 2,
+    `${sentInOneSec} states/s`,
+  );
+
+  // Plain-text "pong" keepalive from edge auto-response is ignored cleanly without disturbing control state
+  ws.onmessage?.({ data: 'pong' });
+  check('plain-text keepalive "pong" is ignored cleanly', inner.hostId === SERVER && m.inScheduledRace);
+
   // Another car, at 50 m/s along x, a packet every 40 ms
   const SPEED = 50;
   const t0 = clock;
@@ -187,6 +208,24 @@ async function main() {
   check('and is back where it is', Math.abs(x - (SPEED * (clock - t0)) / 1000) < 2, `${x.toFixed(1)} m of ${((SPEED * (clock - t0)) / 1000).toFixed(1)}`);
   ws.getState(binary({ ...carAt(clock), peerId: me }));
   check("a packet claiming to be this car is not taken for another's", !inner.peers.has(me));
+
+  // Adaptive per-peer jitter buffer expands under arrival jitter spikes (~60..180 ms) and stays bounded
+  const baseDelay = inner.peers.get('peer_other')?.adaptiveDelayMs ?? 0;
+  let senderT = clock;
+  for (let i = 0; i < 40; i++) {
+    senderT += 50;
+    // Alternate early/late arrivals (+/- 40 ms jitter spike) while sender timestamps stay steady at 20 Hz
+    clock += i % 2 === 0 ? 90 : 10;
+    ws.getState(binary({ ...carAt(senderT), seq: 100 + i }));
+    m.update(clock, local);
+  }
+  const highJitterPeer = inner.peers.get('peer_other');
+  const peakDelay = highJitterPeer?.adaptiveDelayMs ?? 0;
+  check(
+    'adaptive jitter buffer widens under arrival jitter spikes and stays within 60..180 ms',
+    peakDelay > baseDelay + 25 && peakDelay >= 60 && peakDelay <= 180,
+    `${baseDelay.toFixed(1)} ms -> ${peakDelay.toFixed(1)} ms (jitter ${(highJitterPeer?.jitterMs ?? 0).toFixed(1)} ms)`,
+  );
 
   // The flag: the finish goes to the server, and only the server's result is taken
   const results: { final: boolean }[] = [];
