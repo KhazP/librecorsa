@@ -66,8 +66,8 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
   // 2026-11-16 (three layers and the gas), 9-15 % above: planned on the old row its plans ran slower than its own driver
   liana: {
     speedsMs: [10, 15, 20, 25, 30, 35, 40, 45, 50],
-    latG: [0.84, 0.84, 0.84, 0.83, 0.83, 0.83, 0.82, 0.82, 0.82],
-    brakeG: [0.8, 0.81, 0.87, 0.87, 0.89, 0.92, 0.92, 0.94, 0.96],
+    latG: [0.84, 0.84, 0.83, 0.83, 0.83, 0.83, 0.82, 0.82, 0.82],
+    brakeG: [0.79, 0.85, 0.87, 0.88, 0.87, 0.92, 0.92, 0.94, 0.96],
     accelG: [0.37, 0.28, 0.24, 0.18, 0.15, 0.12, 0.08, 0.05, 0.02],
     lockKappa: Math.tan(36 * (Math.PI / 180)) / 2.46,
   },
@@ -149,13 +149,13 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.47, 0.45, 0.44, 0.36, 0.28, 0.17, 0.13, -0.02],
     lockKappa: Math.tan((540 / 16.9) * (Math.PI / 180)) / 2.296,
   },
-  // Measured 2026-11-26 on warm softs, 35 kg of fuel, wings 45 / 60: past its ≈ 299 km/h top speed (83 m/s) the 85 m/s
+  // Measured 2026-11-27 on warm default supersofts, 35 kg of fuel, wings 45 / 60: past its ≈ 299 km/h top speed (83 m/s) the 85 m/s
   // column is the drag it can't beat
   'f1-2007': {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
-    latG: [1.67, 1.85, 2.04, 2.27, 2.54, 2.83, 3.12, 3.42],
-    brakeG: [1.95, 2.08, 2.34, 2.69, 3.13, 3.64, 4.05, 4.26],
-    accelG: [1.16, 1.23, 1.25, 1.01, 0.74, 0.49, 0.23, -0.02],
+    latG: [1.72, 1.91, 2.1, 2.34, 2.61, 2.9, 3.2, 3.51],
+    brakeG: [2.0, 2.13, 2.4, 2.76, 3.21, 3.72, 4.08, 4.27],
+    accelG: [1.2, 1.28, 1.26, 1.02, 0.74, 0.49, 0.24, -0.01],
     lockKappa: Math.tan((225 / 12) * (Math.PI / 180)) / 3.131,
   },
 };
