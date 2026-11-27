@@ -240,16 +240,14 @@ export class ReactionWatch {
 export const ROLLING_READY_WINDOW_S = 4.2;
 /** Seconds before P1 reaches Start/Finish when the 3-2-1 countdown begins */
 export const ROLLING_COUNTDOWN_S = 3;
-/** Grace above target formation speed before rolling-start speeding timer accumulates (km/h) */
-export const ROLLING_OVERSPEED_TOLERANCE_KMH = 5;
-/** Sustained overspeed duration above `ROLLING_OVERSPEED_TOLERANCE_KMH` before a speeding penalty (s) */
-export const ROLLING_OVERSPEED_PENALTY_HOLD_S = 1.5;
-/** Gross overspeed / jump threshold above target formation speed (km/h) */
+/** Grace above target formation speed at the green flag before a rolling-start jump penalty (km/h) */
+export const ROLLING_GREEN_TOLERANCE_KMH = 2.0;
+/** Gross overspeed / jump threshold above target formation speed at the green flag (km/h) */
 export const ROLLING_JUMP_SPEED_KMH = 15;
-/** Duration above `ROLLING_JUMP_SPEED_KMH` before an immediate speeding penalty (s) */
-export const ROLLING_JUMP_SPEED_HOLD_S = 0.5;
-/** Time penalty added at the flag for speeding during a rolling-start formation (s) */
-export const ROLLING_SPEED_PENALTY_S = 5;
+/** Time penalty added at the flag for crossing the green flag above the rolling-start speed limit (s) */
+export const ROLLING_SPEED_PENALTY_S = JUMP_START_PENALTY_S;
+/** Time penalty added at the flag for a gross rolling-start jump (> +15 km/h at green) (s) */
+export const ROLLING_BIG_SPEED_PENALTY_S = BIG_JUMP_START_PENALTY_S;
 
 /**
  * Target rolling-start speed limit (m/s) for a circuit: matches the circuit's pit lane speed limit (typically
@@ -265,46 +263,55 @@ export function rollingStartLimitMs(pitLimitKmh?: number | null): number {
 }
 
 /**
- * Watches the player's speed during a rolling-start formation now that the car is not artificially speed-capped:
- * drivers hold the pit-lane target speed manually or with the pit limiter. Brief throttle ripples stay penalty-free
- * (the gauge turns red past +3 km/h), while sustained speeding (> +5 km/h for 1.5 s) or jumping the pack (> +15 km/h
- * for 0.5 s) triggers one +5 s penalty per start.
+ * Watches the player's speed across a rolling-start formation: exceeding the speed limit while formation is still under
+ * way (before the lights turn green) warns on the HUD gauge without issuing an early jump-start penalty. Once the
+ * green flag drops, being over the formation speed limit (`> pace + ROLLING_GREEN_TOLERANCE_KMH`) triggers one penalty
+ * (+5 s, or +10 s when > +15 km/h over the limit).
  */
 export class RollingStartSpeedWatch {
-  private overS = 0;
-  private bigOverS = 0;
+  private wasActive = false;
+  private lastPaceKmh = PIT_LIMIT_KMH_DEFAULT;
   private penalisedNow = false;
+  private bigNow = false;
 
   get penalised(): boolean {
     return this.penalisedNow;
   }
 
+  get big(): boolean {
+    return this.bigNow;
+  }
+
   get penaltyS(): number {
-    return this.penalisedNow ? ROLLING_SPEED_PENALTY_S : 0;
+    return !this.penalisedNow ? 0 : this.bigNow ? ROLLING_BIG_SPEED_PENALTY_S : ROLLING_SPEED_PENALTY_S;
   }
 
   reset(): void {
-    this.overS = 0;
-    this.bigOverS = 0;
+    this.wasActive = false;
+    this.lastPaceKmh = PIT_LIMIT_KMH_DEFAULT;
     this.penalisedNow = false;
+    this.bigNow = false;
   }
 
-  update(dtS: number, active: boolean, speedKmh: number, paceMs: number): 'penalty' | null {
-    if (!active || !(dtS > 0)) {
-      this.overS = 0;
-      this.bigOverS = 0;
+  /**
+   * One frame. While `active` is true (formation / countdown before green), records the target pace without penalising.
+   * On the first frame `active` becomes false with `greenCheck` true (the lights just turned green), checks `speedKmh`
+   * against the formation limit and returns `'penalty'` once if the driver jumped the start above the limit.
+   */
+  update(dtS: number, active: boolean, speedKmh: number, paceMs: number, greenCheck = true): 'penalty' | null {
+    if (active) {
+      this.wasActive = true;
+      if (Number.isFinite(paceMs) && paceMs > 0) this.lastPaceKmh = paceMs * 3.6;
       return null;
     }
-    if (this.penalisedNow) return null;
-    const paceKmh = Number.isFinite(paceMs) && paceMs > 0 ? paceMs * 3.6 : PIT_LIMIT_KMH_DEFAULT;
+    if (!this.wasActive) return null;
+    this.wasActive = false;
+    if (!greenCheck || this.penalisedNow || !(dtS >= 0)) return null;
     const v = Number.isFinite(speedKmh) ? speedKmh : 0;
-    const overKmh = v - paceKmh;
-    if (overKmh > ROLLING_OVERSPEED_TOLERANCE_KMH) this.overS += dtS;
-    else this.overS = Math.max(0, this.overS - dtS * 2);
-    if (overKmh > ROLLING_JUMP_SPEED_KMH) this.bigOverS += dtS;
-    else this.bigOverS = Math.max(0, this.bigOverS - dtS * 2);
-    if (this.overS >= ROLLING_OVERSPEED_PENALTY_HOLD_S || this.bigOverS >= ROLLING_JUMP_SPEED_HOLD_S) {
+    const overKmh = v - this.lastPaceKmh;
+    if (overKmh > ROLLING_GREEN_TOLERANCE_KMH) {
       this.penalisedNow = true;
+      this.bigNow = overKmh > ROLLING_JUMP_SPEED_KMH;
       return 'penalty';
     }
     return null;
@@ -312,9 +319,10 @@ export class RollingStartSpeedWatch {
 }
 
 /**
- * Pit / rolling-start speed limiter: smoothly tapers throttle into `limitMs`, cuts ignition/throttle slightly past it,
+ * Pit / rolling-start speed limiter: smoothly tapers throttle into `limitMs`, cuts ignition/throttle at the limit,
  * and applies light proportional braking on downhill overspeed while always preserving full driver braking, so every
- * car class (100 hp road car to 1000 hp F1) holds steady right at the limit when the driver engages the limiter.
+ * car class (100 hp road car to 1000 hp F1) holds cleanly at or just below the limit (e.g. 59–60 km/h on a 60 km/h
+ * limit, never creeping to 61 km/h).
  */
 export function applySpeedLimiter(
   speedMs: number,
@@ -326,13 +334,13 @@ export function applySpeedLimiter(
     return { throttle, brake, ignitionCut: 1, active: false };
   }
   const v = Number.isFinite(speedMs) ? speedMs : 0;
-  // Taper throttle smoothly from 100 % at (limit - 1.35 m/s) down to 0 % at (limit + 0.45 m/s)
-  const throttleCap = Math.max(0, Math.min(1, (limitMs + 0.45 - v) / 1.8));
+  // Taper throttle smoothly from 100 % at (limit - 1.5 m/s) down to 0 % right at `limitMs`
+  const throttleCap = Math.max(0, Math.min(1, (limitMs - v) / 1.5));
   const outThrottle = Math.min(throttle, throttleCap);
-  const overspeed = v - (limitMs + 0.45);
+  const overspeed = v - limitMs;
   const ignitionCut = overspeed >= 0 ? 0 : 1;
-  // Gentle downhill / overspeed braking cap so the car never coasts past formation speed without locking wheels
-  const limiterBrake = overspeed > 0 ? Math.min(0.5, overspeed * 0.25) : 0;
+  // Gentle downhill / overspeed braking cap so the car never coasts past the limit without locking wheels
+  const limiterBrake = overspeed > 0 ? Math.min(0.5, overspeed * 0.35) : 0;
   return {
     throttle: outThrottle,
     brake: Math.max(brake, limiterBrake),
@@ -401,7 +409,7 @@ export function rollingSpeedGauge(speedKmh: number, paceMs: number): RollingSpee
   const v = Math.max(0, Number.isFinite(speedKmh) ? speedKmh : 0);
   const diffKmh = v - paceKmh;
   const lowTolKmh = Math.max(4.5, paceKmh * 0.1);
-  const highTolKmh = 3.0;
+  const highTolKmh = 0.5;
   const zone: RollingSpeedZone = diffKmh > highTolKmh ? 'fast' : diffKmh < -lowTolKmh ? 'slow' : 'hold';
   const targetFraction = 1 / ROLLING_GAUGE_HEADROOM;
   const fillFraction = Math.max(0, Math.min(1, v / (paceKmh * ROLLING_GAUGE_HEADROOM)));

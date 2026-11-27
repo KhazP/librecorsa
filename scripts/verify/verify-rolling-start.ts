@@ -26,6 +26,7 @@ import { vehicleModelSpec } from "../../src/lib/cars/vehicle-models";
 import { AiOpponentField, aiDriversFor } from "../../src/lib/sim/ai-opponents";
 import {
   applySpeedLimiter,
+  ROLLING_BIG_SPEED_PENALTY_S,
   ROLLING_GAUGE_HEADROOM,
   ROLLING_SPEED_PENALTY_S,
   rollingFormationStep,
@@ -89,8 +90,11 @@ console.log("== Rolling start pure helpers & pit-lane speed limit");
   const below = applySpeedLimiter(ROLLING_START_PACE_MS - 3, ROLLING_START_PACE_MS, 1, 0);
   check("well below formation speed: full throttle allowed", below.active && below.throttle === 1 && below.brake === 0 && below.ignitionCut === 1);
 
+  const nearLimit = applySpeedLimiter(ROLLING_START_PACE_MS - 0.3, ROLLING_START_PACE_MS, 1, 0);
+  check("just below limit: throttle smoothly tapered", nearLimit.active && nearLimit.throttle > 0 && nearLimit.throttle < 0.4 && nearLimit.brake === 0, `throttle=${nearLimit.throttle.toFixed(2)}`);
+
   const atLimit = applySpeedLimiter(ROLLING_START_PACE_MS, ROLLING_START_PACE_MS, 1, 0);
-  check("at formation speed: throttle smoothly tapered", atLimit.active && atLimit.throttle > 0 && atLimit.throttle < 0.4 && atLimit.brake === 0, `throttle=${atLimit.throttle.toFixed(2)}`);
+  check("at exact limit: throttle & ignition cut cleanly (never creeps to +1 km/h)", atLimit.active && atLimit.throttle === 0 && atLimit.ignitionCut === 0 && atLimit.brake === 0);
 
   const over = applySpeedLimiter(ROLLING_START_PACE_MS + 1.5, ROLLING_START_PACE_MS, 1, 0);
   check("above formation speed: throttle/ignition cut + gentle overspeed brake", over.active && over.throttle === 0 && over.ignitionCut === 0 && over.brake > 0 && over.brake <= 0.5, `brake=${over.brake.toFixed(2)}`);
@@ -98,25 +102,45 @@ console.log("== Rolling start pure helpers & pit-lane speed limit");
   const driverBrake = applySpeedLimiter(ROLLING_START_PACE_MS - 2, ROLLING_START_PACE_MS, 0, 0.8);
   check("driver braking always preserved under limiter", driverBrake.active && driverBrake.brake === 0.8);
 
-  // RollingStartSpeedWatch: clean hold, brief ripple, sustained speeding, and gross jump
-  const watchClean = new RollingStartSpeedWatch();
-  let cleanCall: string | null = null;
-  for (let i = 0; i < 600; i++) cleanCall ??= watchClean.update(1 / 60, true, 62, 60 / 3.6);
-  check("RollingStartSpeedWatch: holding near pit limit (+2 km/h) never penalizes", cleanCall === null && !watchClean.penalised && watchClean.penaltyS === 0);
-
-  const watchSustained = new RollingStartSpeedWatch();
-  let sustainedCall: string | null = null;
-  for (let i = 0; i < 120; i++) sustainedCall ??= watchSustained.update(1 / 60, true, 68, 60 / 3.6);
+  // RollingStartSpeedWatch: no penalty before green (even if over limit mid-formation); penalize only AFTER green if still over limit
+  const watchEarlySpike = new RollingStartSpeedWatch();
+  let earlyCall: string | null = null;
+  for (let i = 0; i < 180; i++) earlyCall ??= watchEarlySpike.update(1 / 60, true, 88, 60 / 3.6);
+  const recoveredAtGreen = watchEarlySpike.update(1 / 60, false, 60, 0, true);
   check(
-    "RollingStartSpeedWatch: sustained speeding (+8 km/h for >1.5s) issues +5s penalty once",
-    sustainedCall === "penalty" && watchSustained.penalised && watchSustained.penaltyS === ROLLING_SPEED_PENALTY_S && watchSustained.update(1, true, 90, 60 / 3.6) === null,
-    `penalty=${watchSustained.penaltyS}s`,
+    "RollingStartSpeedWatch: overspeed before green never penalizes early and clears if back at limit for green",
+    earlyCall === null && recoveredAtGreen === null && !watchEarlySpike.penalised && watchEarlySpike.penaltyS === 0,
   );
 
-  const watchJump = new RollingStartSpeedWatch();
-  let jumpCall: string | null = null;
-  for (let i = 0; i < 40; i++) jumpCall ??= watchJump.update(1 / 60, true, 98, 80 / 3.6);
-  check("RollingStartSpeedWatch: gross jump (+18 km/h for >0.5s) issues +5s penalty", jumpCall === "penalty" && watchJump.penaltyS === ROLLING_SPEED_PENALTY_S);
+  const watchOverAtGreen = new RollingStartSpeedWatch();
+  let preGreenCall: string | null = null;
+  for (let i = 0; i < 120; i++) preGreenCall ??= watchOverAtGreen.update(1 / 60, true, 68, 60 / 3.6);
+  const atGreenCall = watchOverAtGreen.update(1 / 60, false, 68, 0, true);
+  check(
+    "RollingStartSpeedWatch: crossing green above limit (+8 km/h) issues +5s penalty once after green",
+    preGreenCall === null &&
+      atGreenCall === "penalty" &&
+      watchOverAtGreen.penalised &&
+      !watchOverAtGreen.big &&
+      watchOverAtGreen.penaltyS === ROLLING_SPEED_PENALTY_S &&
+      watchOverAtGreen.update(1, false, 90, 0, true) === null,
+    `penalty=${watchOverAtGreen.penaltyS}s`,
+  );
+
+  const watchBigJump = new RollingStartSpeedWatch();
+  let preBigCall: string | null = null;
+  for (let i = 0; i < 60; i++) preBigCall ??= watchBigJump.update(1 / 60, true, 98, 80 / 3.6);
+  const bigGreenCall = watchBigJump.update(1 / 60, false, 98, 0, true);
+  check(
+    "RollingStartSpeedWatch: gross jump at green (+18 km/h) issues +10s big penalty after green",
+    preBigCall === null && bigGreenCall === "penalty" && watchBigJump.big && watchBigJump.penaltyS === ROLLING_BIG_SPEED_PENALTY_S,
+    `penalty=${watchBigJump.penaltyS}s`,
+  );
+
+  const watchAborted = new RollingStartSpeedWatch();
+  watchAborted.update(1 / 60, true, 95, 60 / 3.6);
+  const abortCall = watchAborted.update(1 / 60, false, 95, 0, false);
+  check("RollingStartSpeedWatch: leaving formation without green flag (greenCheck=false) never penalizes", abortCall === null && !watchAborted.penalised);
 
   // PitStopManager: manual limiter works on track (both 80 km/h pit lane & pitless 60 km/h track) and releases cleanly on green
   const mockLane80 = { limitKmh: 80, boxes: [], besideLap: () => false } as unknown as PitLaneModel;
@@ -169,16 +193,22 @@ console.log("== Rolling start pure helpers & pit-lane speed limit");
   const gFast = rollingSpeedGauge(95, pace80Ms);
   const gCornerHold = rollingSpeedGauge(42, 45 / 3.6);
   const gCornerSlow = rollingSpeedGauge(39, 45 / 3.6);
+  const g60Hold = rollingSpeedGauge(60.0, 60 / 3.6);
+  const g61Fast = rollingSpeedGauge(61.0, 60 / 3.6);
+  const g62Fast = rollingSpeedGauge(62.0, 60 / 3.6);
   check(
-    "rollingSpeedGauge classifies slow / hold / fast zones around pit-limit pace",
+    "rollingSpeedGauge classifies slow / hold / fast zones around pit-limit pace (61+ km/h is red on 60 limit)",
     gZero.zone === "slow" &&
       gSlow.zone === "slow" &&
       gHold.zone === "hold" &&
       gExact.zone === "hold" &&
       gFast.zone === "fast" &&
       gCornerHold.zone === "hold" &&
-      gCornerSlow.zone === "slow",
-    `zero=${gZero.zone}, slow=${gSlow.zone}, hold=${gHold.zone}, fast=${gFast.zone}`,
+      gCornerSlow.zone === "slow" &&
+      g60Hold.zone === "hold" &&
+      g61Fast.zone === "fast" &&
+      g62Fast.zone === "fast",
+    `zero=${gZero.zone}, slow=${gSlow.zone}, hold=${gHold.zone}, 60=${g60Hold.zone}, 61=${g61Fast.zone}, 62=${g62Fast.zone}`,
   );
   check(
     "rollingSpeedGauge fills monotonically and hits targetFraction at exact pace",
@@ -206,17 +236,18 @@ for (const carId of TEST_CARS) {
     freeCar.resetToStartGrid(true, 0, 4, true);
     const spawnKmh = freeCar.vxMs * 3.6;
     const watch = new RollingStartSpeedWatch();
-    let pen = false;
+    let earlyPen = false;
     for (let i = 0; i < 120 * 3; i++) {
       freeCar.speedLimiterMs = undefined;
       freeCar.step(DT, { throttle: 1, brake: 0 });
-      if (watch.update(DT, true, freeCar.vxMs * 3.6, rollingStartLimitMs(null)) === "penalty") pen = true;
+      if (watch.update(DT, true, freeCar.vxMs * 3.6, rollingStartLimitMs(null)) === "penalty") earlyPen = true;
     }
     const freeKmh = freeCar.vxMs * 3.6;
+    const greenPen = watch.update(DT, false, freeKmh, 0, true) === "penalty";
     check(
-      `${carId}: unthrottled without pit limiter accelerates freely (>80 km/h) and trips speed watch`,
-      spawnKmh >= 55 && spawnKmh <= 63 && freeKmh > 80 && pen,
-      `spawn=${spawnKmh.toFixed(1)}, 3.0s=${freeKmh.toFixed(1)} km/h, pen=${pen}`,
+      `${carId}: unthrottled accelerates freely (>80 km/h), no early penalty before green, penalizes after green`,
+      spawnKmh >= 55 && spawnKmh <= 63 && freeKmh > 80 && !earlyPen && greenPen,
+      `spawn=${spawnKmh.toFixed(1)}, 3.0s=${freeKmh.toFixed(1)} km/h, early=${earlyPen}, green=${greenPen}`,
     );
   }
 
@@ -266,8 +297,8 @@ for (const carId of TEST_CARS) {
     }
   }
   check(
-    `${carId}: pit limiter holds 56-64 km/h in green hold zone and releases on green`,
-    !field.isRollingFormation && maxBeforeGreenKmh <= 65 && minBeforeGreenKmh >= 54 && allGaugeInHold && !pit.limiterOn && player.speedLimiterMs === undefined,
+    `${carId}: pit limiter holds <=60.4 km/h (never 61) in green hold zone and releases on green`,
+    !field.isRollingFormation && maxBeforeGreenKmh <= 60.4 && minBeforeGreenKmh >= 54 && allGaugeInHold && !pit.limiterOn && player.speedLimiterMs === undefined,
     `range=${minBeforeGreenKmh.toFixed(1)}..${maxBeforeGreenKmh.toFixed(1)} km/h, hold=${allGaugeInHold}`,
   );
   check(
