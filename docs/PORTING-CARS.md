@@ -61,7 +61,8 @@ A car with no preset gets an automatic one, and the porter prints what it found:
 - **Paint:** the body material named as paint that covers the most of the body and is repainted by the most skins.
 - **Windscreen:** the glass most of the driver's sight lines pass through (from `DRIVEREYES`), an outer layer before an inner one or a gauge's glass.
 - **Discs** beside the wheels (`DISC_xx` at all four corners) spin with them. Broken glass, blurred rims, the low-detail cockpit and fastened belts are left out.
-- **Materials** come from their shader values (as with `auto=True`), every texture a skin replaces becomes a livery file, and the name comes from `ui/ui_car.json`.
+- **Materials** come from their shader values (as with `auto=True`), including metallic car paint, chrome masks from `txMaps`, carbon weave detail roughness, and per-skin body variants; every texture a skin replaces becomes a livery file, and the name comes from `ui/ui_car.json`.
+- **Drivers and steering-wheel LCDs:** `scripts/cars/ac_driver.py` ports skinned Assetto Corsa driver models, team helmets, and full-lock steering animations into the car GLB, and `port_ac_car.py` reads `digital_instruments.ini` to map seven-segment wheel screen readings and live per-livery mirrors.
 
 > Keep the mod's original folder name intact: `data.acd` decryption derives its key from the folder name.
 

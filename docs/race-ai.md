@@ -24,6 +24,7 @@ LibreCorsa's AI field drives the same 500 Hz rigid-body vehicle physics as the p
 - **Hazards and local yellows:** Spinning, stopped, crawling, or retired cars are treated as obstacles rather than cars to draft: AI steers to whichever side offers clear space and slows when gaps are tight. Each hazard projects a yellow-flag zone from `350 m` before to `40 m` after the incident, within which AI drivers lift and hold position.
 - **Side-by-side clearance:** Cars leave roughly `0.9 m` of daylight between bodies (`2.9 m` centre-to-centre).
 - **Default AI skill:** Offline races default to skill `95` (almost Alien), and new career seasons default to **Expert**.
+- **Audited career drive plans:** Road, classic, and prototype AI drive plans are audited against each car's own driver over full career race distances on both Medium and High AI levels (`scripts/ai/career-plan-audit.ts`). A drive plan is enabled only when it beats the car's own line on mean flying-lap pace without raising spins, offs, wall hits, contacts, or DNFs (currently 19 passing combos across the Liana, R32, Scirocco, and classics/prototypes); all other combos race on their own lines.
 - **Pit stops and wet tyres:** On circuits with a pit lane (`src/lib/sim/pit/ai-pit.ts`, `ai-weather-tyres.ts`), AI cars pit for intermediates (`> 0.2 mm` racing-line water), full wets (`> 1.15 mm`), and back to slicks (`< 0.13 mm`), as well as for mandatory race stops and damage repairs.
 - **Virtual Safety Car:** When a retired car on track or a persistent double-yellow hazard triggers a VSC (`src/lib/sim/vsc.ts`), every car paces to ~`65%` of its own racing speed (`65`–`216 km/h`) with overtaking locked out until green resumes `10`–`15 s` after `"VSC ending"`.
 
@@ -71,6 +72,14 @@ npx tsx scripts/verify/verify-race-contact.ts
 # Steward decisions, grid behavior, duels, and stopped-car avoidance
 npx tsx scripts/verify/verify-race-craft.ts
 
+# Drive-plan steering rate (3600 deg/s), 0.5 m plan defence reach, and plan-only aids
+npx tsx scripts/verify/verify-ai-plan-steer-rate.ts
+npx tsx scripts/verify/verify-ai-plan-defence.ts
+npx tsx scripts/verify/verify-ai-plan-aids.ts
+
 # Full headless race benchmark with results summary
 npm run race:headless -- --track rwanda_official_short --car f12026-car --laps 3 --cars 8 --grid qualifying --damage full
+
+# Full-distance career drive-plan A/B audit (plan vs. own driver)
+npx tsx scripts/ai/career-plan-audit.ts --combos combos.json --levels medium,high --races 8 --jobs 9 --out audit.jsonl
 ```

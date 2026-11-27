@@ -56,7 +56,7 @@ Open-wheel cars follow era-appropriate overtaking rules based on their model yea
 
 - **2026 onward (`straight-mode-2026`):** Active aero **Straight Mode** plus **Overtake Mode** hybrid deployment (`lc26`, `f12026-car`).
 - **2011–2025 (`drs-rear`):** Traditional rear-flap DRS inside DRS zones only (`lc25`, which also models 2025 MGU-H and ground-effect ride-height maps): free in practice, and in races restricted to cars within `1.0 s` at the detection point after the leader completes 2 laps.
-- **Pre-2011 (`none`):** Fixed wings; flaps stay closed.
+- **Pre-2011 (`none`):** Fixed wings; flaps stay closed (for example, **F1 2007**: 2.4 L naturally aspirated V8 to 19,000 rpm, grooved tyres, traction control and no ABS, no ERS or DRS, with 11 teams and 26 driver liveries).
 
 ### Active aero: Z-Mode and X-Mode (Straight Mode)
 
@@ -80,7 +80,7 @@ The 2026 power unit pairs a 1.6 L V6 turbo with a `350 kW` MGU-K, a `4 MJ` usabl
 
 Open the **Garage** from the menu or pause screen to tune your car, save named setups, or exchange setups via `LC1-` share codes and `.json` files (see [Sharing a car setup](ONLINE.md#sharing-a-car-setup)). Every car uses one of two class setup sheets anchored to that car's real physical baseline:
 
-### F1 setup sheet (`lc26`, `lc25`, `f12026-car`, and F1 mods)
+### F1 setup sheet (`lc26`, `lc25`, `f1-2007`, `f12026-car`, and F1 mods)
 
 | Tab | Adjustable parameters |
 | :-- | :-- |
@@ -161,7 +161,7 @@ Each season starts in **pre-season**. Until you click to start the season, you c
   - **Damage:** `Off`, `Reduced` (default), or `Full`.
   - **Qualifying:** `Off`, `3`, `5` (default), or `10` minutes, with free flying-lap restarts and **End qualifying** in the pause menu. If qualifying is turned off, you start from the back of the grid.
 
-Round weather and time of day are seeded deterministically from your career seed so re-running a round keeps identical conditions: most rounds are clear daytime sessions, **Touring Cup**, **GT3**, **Endurance Prototypes**, and **Grand Prix** also include occasional overcast or light-rain rounds, and night circuits always run at night.
+Round weather and time of day are seeded deterministically from your career seed so re-running a round keeps identical conditions: most rounds are clear daytime sessions, **Touring Cup**, **GT3**, **Endurance Prototypes**, and **Grand Prix** also include occasional overcast or light-rain rounds, and night circuits always run at night. Road, classic, and prototype AI opponents run race-length-audited drive plans (with faster 3600°/s plan steering and 0.5 m defensive reach) on the circuits where those plans improve pace cleanly, and drive their own lines everywhere else (see [Race AI, contact, and damage](race-ai.md)).
 
 ### Test days
 
