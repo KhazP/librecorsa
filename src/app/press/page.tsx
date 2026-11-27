@@ -16,7 +16,7 @@ import {
   RISE_PRESS_KIT_ZIP,
   RISE_RENDERS,
 } from "@/lib/press";
-import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
+import { CONTACT_EMAIL, DOCS_URL, REPO_URL, SITE_NAME } from "@/lib/site";
 import { CoverageList } from "./CoverageList";
 import { PlayerNumbers } from "./PlayerNumbers";
 import { CARD, CARD_ICON, CARD_LINK, day } from "./press-ui";
@@ -66,6 +66,12 @@ const FACTS: [string, React.ReactNode][] = [
     "Source",
     <a key="src" href={REPO_URL} translate="no" className={TEXT_LINK}>
       github.com/librecorsa/librecorsa
+    </a>,
+  ],
+  [
+    "Docs",
+    <a key="docs" href={DOCS_URL} translate="no" className={TEXT_LINK}>
+      docs.librecorsa.org
     </a>,
   ],
 ];
