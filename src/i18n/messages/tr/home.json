@@ -195,35 +195,14 @@
     "introApps": "Windows, macOS ve Linux için çevrimdışı da çalışan ve mod alan bir masaüstü uygulaması ile Android için bir uygulama. Çevrimiçiyken ikisi de canlı oyunu çalıştırır; güncellemeler yeniden kurmaya gerek kalmadan gelir.",
     "directLink": "Doğrudan bağlantı",
     "platforms": "Platformlar",
-    "thisDevice": "Bu cihaz",
     "installed": "Yüklü",
+    "comingSoon": "Yakında",
     "artifact": "{label}: {platform} ({detail})",
     "artifactSized": "{label}: {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (sonraki sürüm etiketinde yayımlanacak)",
     "installCommand": "{platform} kurulum komutu",
-    "whyInstall": "Neden uygulamayı kurmalısın",
-    "highlights": {
-      "desktopApp": {
-        "label": "Masaüstü",
-        "text": "Yüklediği sayfaları, araçları ve pistleri saklar; böylece oyun çevrimdışı da çalışır. Mod alır, başka oyunlardan pist ve araç dönüştürür ve kendini GitHub Releases üzerinden günceller."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Adres çubuğu olmayan tam ekran Trusted Web Activity, kenar kaydırma koruması, Android Game Mode ve Sür / Tablolar başlatıcı kısayolları."
-      },
-      "live": {
-        "label": "Her zaman güncel",
-        "text": "Çevrimiçiyken iki uygulama da canlı oyunu librecorsa.org üzerinden çalıştırır; fizik, pist ve çok oyunculu güncellemeleri yeniden kurmaya gerek kalmadan gelir. Çevrimdışıyken masaüstü uygulaması sakladıklarını çalıştırır."
-      },
-      "browser": {
-        "label": "Tarayıcı ve iOS",
-        "text": "Doğrudan sekmede oynamayı tercih ediyorsan kurulum gerekmez. iPhone ve iPad’de Safari’den Paylaş > Ana Ekrana Ekle’yi kullan."
-      }
-    },
-    "buildsTitle": "Derlemeler ve imzalama",
-    "buildsSigned": "Her uygulama bu deponun kaynak kodundan GitHub Actions ile derlenir ve SHA-256 özetleriyle GitHub Releases’ta yayımlanır. Masaüstü uygulaması bir güncellemeyi yalnızca imzası doğrulanırsa kurar. SignPath Foundation üzerinden ücretsiz Windows kod imzalaması hazırlanıyor; Apple macOS uygulamasını henüz onaylamadı; Android APK’sı, <code>{file}</code> ile doğrulanan yükleme anahtarıyla imzalanır.",
     "allReleases": "GitHub’daki tüm sürümler",
-    "signingPolicy": "Kod imzalama politikası"
+    "signingPolicy": "Kod imzalama politikası",
+    "appGuide": "Uygulama rehberi"
   }
 }

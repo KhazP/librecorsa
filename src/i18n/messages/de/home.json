@@ -195,35 +195,14 @@
     "introApps": "Eine Desktop-App für Windows, macOS und Linux, die auch offline läuft und Mods aufnimmt, und eine App für Android. Online spielen beide das Live-Spiel, Updates kommen also ohne Neuinstallation an.",
     "directLink": "Direktlink",
     "platforms": "Plattformen",
-    "thisDevice": "Dieses Gerät",
     "installed": "Installiert",
+    "comingSoon": "Demnächst",
     "artifact": "{label} – {platform} ({detail})",
     "artifactSized": "{label} – {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (wird mit dem nächsten Release-Tag veröffentlicht)",
     "installCommand": "Installationsbefehl für {platform}",
-    "whyInstall": "Warum die App installieren",
-    "highlights": {
-      "desktopApp": {
-        "label": "Desktop",
-        "text": "Behält die Seiten, Autos und Strecken, die sie lädt, sodass das Spiel auch offline läuft. Sie nimmt Mods auf, konvertiert Strecken und Autos aus anderen Spielen und aktualisiert sich selbst über GitHub Releases."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Vollbild-Trusted-Web-Activity ohne Adressleiste, Sticky-Immersive-Randwischen, Android Game Mode und Launcher-Verknüpfungen für Drive / Boards."
-      },
-      "live": {
-        "label": "Immer aktuell",
-        "text": "Online spielen beide Apps das Live-Spiel von librecorsa.org, sodass Updates für Physik, Strecken und Multiplayer ohne Neuinstallation ankommen. Offline spielt die Desktop-App, was sie behalten hat."
-      },
-      "browser": {
-        "label": "Browser & iOS",
-        "text": "Nichts zu installieren, wenn du lieber direkt im Tab spielst. Nutze auf iPhone und iPad in Safari Teilen > Zum Home-Bildschirm."
-      }
-    },
-    "buildsTitle": "Builds & Signierung",
-    "buildsSigned": "Jede App wird von GitHub Actions aus dem Quellcode dieses Repositorys gebaut und mit SHA-256-Prüfsummen auf GitHub Releases veröffentlicht. Die Desktop-App installiert ein Update nur, wenn seine Signatur stimmt. Die kostenlose Windows-Codesignierung über SignPath Foundation wird gerade eingerichtet; Apple hat die macOS-App noch nicht beglaubigt; die Android-APK ist mit dem Upload-Schlüssel signiert, den <code>{file}</code> bestätigt.",
     "allReleases": "Alle Releases auf GitHub",
-    "signingPolicy": "Richtlinie zur Codesignierung"
+    "signingPolicy": "Richtlinie zur Codesignierung",
+    "appGuide": "App-Anleitung"
   }
 }

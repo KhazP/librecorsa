@@ -195,35 +195,14 @@
     "introApps": "Une application de bureau pour Windows, macOS et Linux qui fonctionne aussi hors ligne et accepte les mods, ainsi qu’une application pour Android. En ligne, les deux lancent le jeu en direct, donc les mises à jour arrivent sans réinstallation.",
     "directLink": "Lien direct",
     "platforms": "Plateformes",
-    "thisDevice": "Cet appareil",
     "installed": "Installée",
+    "comingSoon": "Bientôt disponible",
     "artifact": "{label}: {platform} ({detail})",
     "artifactSized": "{label}: {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (publié avec la prochaine version)",
     "installCommand": "Commande d’installation {platform}",
-    "whyInstall": "Pourquoi installer l’app",
-    "highlights": {
-      "desktopApp": {
-        "label": "Bureau",
-        "text": "Conserve les pages, voitures et circuits chargés afin que le jeu fonctionne aussi hors ligne. Elle accepte les mods, convertit les circuits et voitures d’autres jeux et se met à jour depuis GitHub Releases."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Trusted Web Activity en plein écran sans barre d’adresse, balayages de bord immersifs persistants, Android Game Mode et raccourcis du lanceur Conduire / Classements."
-      },
-      "live": {
-        "label": "Toujours à jour",
-        "text": "En ligne, les deux applications lancent le jeu en direct depuis librecorsa.org, donc les mises à jour de physique, de circuits et de multijoueur arrivent sans réinstallation. Hors ligne, l’application de bureau lance ce qu’elle a conservé."
-      },
-      "browser": {
-        "label": "Navigateur et iOS",
-        "text": "Rien à installer si vous préférez jouer directement dans un onglet. Sur iPhone et iPad, utilisez Partager > Sur l’écran d’accueil dans Safari."
-      }
-    },
-    "buildsTitle": "Builds et signature",
-    "buildsSigned": "Chaque application est compilée depuis le code source de ce dépôt par GitHub Actions et publiée sur GitHub Releases avec des empreintes SHA-256. L’application de bureau n’installe une mise à jour que si sa signature est valide. La signature de code gratuite pour Windows via SignPath Foundation est en cours de mise en place ; Apple n’a pas encore notarié l’application macOS ; l’APK Android est signé avec la clé d’envoi vérifiée par <code>{file}</code>.",
     "allReleases": "Toutes les versions sur GitHub",
-    "signingPolicy": "Politique de signature de code"
+    "signingPolicy": "Politique de signature de code",
+    "appGuide": "Guide des apps"
   }
 }

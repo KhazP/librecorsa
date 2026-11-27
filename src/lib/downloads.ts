@@ -1,5 +1,5 @@
 import { text as t } from "@/lib/text";
-import { REPO_URL } from "./site";
+import { DOCS_URL, REPO_URL } from "./site";
 
 /**
  * The apps' downloads, each app from its own GitHub release:
@@ -9,8 +9,9 @@ import { REPO_URL } from "./site";
  * - the Android app (android/): an android-v* release, made by .github/workflows/release-android.yml and never marked
  *   latest.
  *
- * A link only ever goes to a file that is there: until a release is out (`published: false`) its buttons go to the
- * releases page, and a file a release doesn't have (`file: null`) to that release's page. Never a dead 404 link.
+ * A link only ever goes to a file that is there. Until a release is out (`published: false`) the page shows "Coming
+ * soon" with no button (the releases page would hand out an older app), though `artifactHref` still answers with the
+ * releases page; a file a published release doesn't have (`file: null`) links that release's page. Never a dead 404 link.
  */
 
 export type PlatformId = "windows" | "macos" | "linux" | "android";
@@ -44,21 +45,16 @@ export interface PlatformDownload {
   name: string;
   /** The release its files come from */
   release: AppRelease;
-  summary: string;
   /** Short honest note on opening/installing the build */
   installNote: string;
   /** Optional terminal command shown in <code> inside the note */
   installCommand?: string;
-  /** Whether the published build carries a trusted signature */
-  signed: boolean;
-  /** Short badge word when signed/unsigned status should be called out */
-  statusLabel: string;
   artifacts: readonly DownloadArtifact[];
 }
 
 /**
- * The desktop app's release. launcher-v0.3.0 is its first: until it is out the Windows, macOS and Linux buttons go to
- * the releases page. After it is published, set `published: true` and `date`, and fill in each desktop file's
+ * The desktop app's release. launcher-v0.3.0 is its first: until it is out Windows, macOS and Linux say "Coming soon".
+ * After it is published, set `published: true` and `date`, and fill in each desktop file's
  * `sizeBytes` from the release (`gh release view launcher-v0.3.0 --json assets`). For a later release, change `tag`,
  * `version` and `date` (the file names follow `version`), then the sizes.
  */
@@ -83,6 +79,7 @@ export const ANDROID_RELEASE: AppRelease = {
 export const RELEASE_LINKS = {
   allReleasesUrl: `${REPO_URL}/releases`,
   codeSigningPolicyUrl: `${REPO_URL}#code-signing-policy`,
+  appGuideUrl: `${DOCS_URL}/playing/downloads/`,
 } as const;
 
 /** A desktop file's name, as launcher/build.mjs makes it: LibreCorsa-<version>-<platform>.<format> */
@@ -93,10 +90,7 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
     id: "windows",
     name: "Windows",
     release: DESKTOP_RELEASE,
-    get summary() { return t("game.downloads.desktopSummary"); },
     get installNote() { return t("game.downloads.windowsZipNote"); },
-    signed: false,
-    get statusLabel() { return t("game.downloads.windowsStatusLabel"); },
     artifacts: [
       {
         id: "windows-x64",
@@ -111,10 +105,7 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
     id: "macos",
     name: "macOS",
     release: DESKTOP_RELEASE,
-    get summary() { return t("game.downloads.desktopSummary"); },
     get installNote() { return t("game.downloads.macosDmgNote"); },
-    signed: false,
-    get statusLabel() { return t("game.downloads.macosStatusLabel"); },
     artifacts: [
       {
         id: "macos-arm64",
@@ -136,11 +127,8 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
     id: "linux",
     name: "Linux",
     release: DESKTOP_RELEASE,
-    get summary() { return t("game.downloads.desktopSummary"); },
     get installNote() { return t("game.downloads.linuxTarNote"); },
     installCommand: `tar -xzf ${desktopFile("linux-x64.tar.gz")} && ./LibreCorsa/librecorsa`,
-    signed: false,
-    statusLabel: "tar.gz",
     artifacts: [
       {
         id: "linux-x64",
@@ -155,10 +143,7 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
     id: "android",
     name: "Android",
     release: ANDROID_RELEASE,
-    get summary() { return t("game.downloads.androidSummary"); },
     get installNote() { return t("game.downloads.androidInstallNote"); },
-    signed: true,
-    get statusLabel() { return t("game.downloads.androidStatusLabel"); },
     artifacts: [
       {
         id: "android-apk",

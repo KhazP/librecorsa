@@ -195,35 +195,14 @@
     "introApps": "提供適用於 Windows、macOS 與 Linux 的桌面應用程式（支援離線遊玩與模組），以及 Android 應用程式。連線時兩者皆直接執行線上最新版本，無需重新安裝即可獲得更新。",
     "directLink": "直接連結",
     "platforms": "支援平台",
-    "thisDevice": "此裝置",
     "installed": "已安裝",
+    "comingSoon": "即將推出",
     "artifact": "{label}：{platform}（{detail}）",
     "artifactSized": "{label}：{platform}（{detail}，{size}）",
     "detailSized": "{detail}，{size}",
-    "detailPending": "{detail}（將於下次版本發佈時提供）",
     "installCommand": "{platform} 安裝指令",
-    "whyInstall": "為何安裝應用程式",
-    "highlights": {
-      "desktopApp": {
-        "label": "桌面版",
-        "text": "會保留載入過的頁面、車輛與賽道，離線也能暢玩。支援模組、轉換其他遊戲的賽道與車輛，並自動從 GitHub Releases 更新。"
-      },
-      "android": {
-        "label": "Android",
-        "text": "全螢幕無網址列 Trusted Web Activity、沉浸式邊緣手勢、Android Game Mode，以及「開始駕駛／圈速榜」桌面捷徑。"
-      },
-      "live": {
-        "label": "永遠保持最新",
-        "text": "連線時，兩款應用程式皆從 librecorsa.org 執行最新版本，物理引擎、賽道與多人連線更新都會自動套用，無需重新安裝。離線時，桌面應用程式則遊玩已快取的內容。"
-      },
-      "browser": {
-        "label": "瀏覽器與 iOS",
-        "text": "若習慣直接在分頁遊玩，完全不需安裝。在 iPhone 與 iPad 上，可點選 Safari 的「分享 > 加入主畫面」。"
-      }
-    },
-    "buildsTitle": "建置與簽章",
-    "buildsSigned": "所有應用程式皆由 GitHub Actions 自本專案原始碼建置，並附帶 SHA-256 校驗碼發佈於 GitHub Releases。桌面應用程式僅在簽章驗證通過時才會安裝更新。透過 SignPath Foundation 提供的免費 Windows 程式碼簽章正在設定中；macOS 應用程式尚未經過 Apple 公證；Android APK 使用經 <code>{file}</code> 驗證的上傳金鑰簽署。",
     "allReleases": "GitHub 所有發行版本",
-    "signingPolicy": "程式碼簽章政策"
+    "signingPolicy": "程式碼簽章政策",
+    "appGuide": "應用程式指南"
   }
 }

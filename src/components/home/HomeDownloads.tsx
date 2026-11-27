@@ -7,6 +7,7 @@ import { focusOnHover } from "@/components/menu/useFocusNav";
 import { Button } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
+import { cx } from "@/components/ui/styles";
 import {
   PLATFORM_DOWNLOADS,
   RELEASE_LINKS,
@@ -16,7 +17,6 @@ import {
   formatDownloadSize,
   isDirectDownload,
   orderPlatformsForVisitor,
-  platformIdOf,
   type DetectedPlatform,
   type DownloadArtifact,
   type PlatformDownload,
@@ -30,14 +30,16 @@ interface NavigatorUAData {
   getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string; platform?: string }>;
 }
 
-/** Why install the app, one line each (home.downloads.highlights in the messages) */
-const APP_HIGHLIGHTS = ["desktopApp", "android", "live", "browser"] as const;
-
 function orderedArtifacts(platform: PlatformDownload, detected: DetectedPlatform): readonly DownloadArtifact[] {
   if (platform.id !== "macos" || detected !== "macos-x64") return platform.artifacts;
   return [...platform.artifacts].reverse();
 }
 
+/**
+ * The apps' downloads as one list, a row per platform with the visitor's first: its files' buttons, and once the release
+ * is out its version, date, sizes and how to install it. A release that isn't out yet says so and links nowhere (the
+ * releases page would hand out an older app). On the home page's Download tab and the /download page.
+ */
 export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }) => {
   const tx = useTranslations("home.downloads");
   const tc = useTranslations("common");
@@ -70,191 +72,142 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
   }, []);
 
   const platforms = useMemo(() => orderPlatformsForVisitor(PLATFORM_DOWNLOADS, detected), [detected]);
-  const matchedPlatformId = platformIdOf(detected);
+  // On the home tab the pad starts on the first download button there is
+  const navDefaultId =
+    variant === "hub" ? platforms.find((p) => p.release.published && !(p.id === "android" && storeBuild))?.id : undefined;
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       {variant === "hub" ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pt-1">
           <p className="lc-body m-0 max-w-[66ch] text-[15px] text-lc-fog">{tx("introApps")}</p>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
-            <Link href="/download" onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
-              {tx("directLink")}
-            </Link>
-            <a
-              href={RELEASE_LINKS.allReleasesUrl}
-              target="_blank"
-              rel="noopener"
-              onPointerEnter={focusOnHover}
-              className={`inline-flex items-center gap-1 pointer-coarse:min-h-11 ${TEXT_LINK}`}
-            >
-              GitHub Releases
-              <Icon name="externalLink" size="xs" />
-              <span className="sr-only"> {tc("newTab")}</span>
-            </a>
-          </div>
+          <Link href="/download" onPointerEnter={focusOnHover} className={`inline-flex items-center text-[13px] pointer-coarse:min-h-11 ${TEXT_LINK}`}>
+            {tx("directLink")}
+          </Link>
         </div>
       ) : null}
 
-      <section className="flex flex-col gap-4">
-        <h2 className={variant === "page" ? "lc-h2" : "sr-only"}>
-          {tx("platforms")}
-        </h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {platforms.map((platform, platformIdx) => {
-            const isMatch = matchedPlatformId === platform.id;
+      <section className="flex flex-col">
+        <h2 className="sr-only">{tx("platforms")}</h2>
+        <ul className="m-0 flex list-none flex-col p-0">
+          {platforms.map((platform) => {
             const artifacts = orderedArtifacts(platform, detected);
+            const { release } = platform;
+            const out = release.published;
+            const files = artifacts
+              .map((a) => {
+                const size = isDirectDownload(a, release) ? formatDownloadSize(a.sizeBytes) : null;
+                return size ? tx("detailSized", { detail: a.detail, size }) : a.detail;
+              })
+              .join(" · ");
             return (
-              <article
+              <li
                 key={platform.id}
-                className={`flex min-w-0 flex-col gap-4 rounded-lc-card border bg-lc-carbon p-5 sm:p-6 ${
-                  isMatch ? "border-lc-keyline" : "border-lc-line"
-                }`}
+                className={cx(
+                  "grid gap-x-10 gap-y-3 border-t border-lc-line py-6 last:border-b",
+                  // Not out yet: its name and "Coming soon" on one line, at every width. Out: the buttons under the version
+                  // line on a phone, on the right of the row from md, with how to install it under them / beside them
+                  out ? "md:grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto] items-baseline",
+                )}
               >
-                <header className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-col gap-2 md:col-start-1 md:row-start-1">
                   <h3 className="lc-h3 m-0">{platform.name}</h3>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {isMatch ? (
-                      <Badge tone="info" size="sm">
-                        {tx("thisDevice")}
-                      </Badge>
-                    ) : null}
-                    {platform.id === "android" && storeBuild ? (
-                      <Badge tone="good" size="sm" icon="check">
-                        {tx("installed")}
-                      </Badge>
-                    ) : null}
-                    <Badge tone={platform.signed ? "good" : "neutral"} size="sm">
-                      {platform.statusLabel}
+                  {out ? (
+                    <p className="lc-mono m-0 text-[12px] text-lc-slate">
+                      {/* The version and the (English) date read left to right on an Arabic page too */}
+                      <span dir="ltr">
+                        v{release.version}
+                        {release.date ? (
+                          <>
+                            <span aria-hidden> · </span>
+                            {day(release.date)}
+                          </>
+                        ) : null}
+                      </span>
+                      <span aria-hidden> · </span>
+                      {files}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5 md:col-start-2 md:row-span-2 md:row-start-1 md:justify-end md:self-start">
+                  {platform.id === "android" && storeBuild ? (
+                    <Badge tone="good" size="sm" icon="check">
+                      {tx("installed")}
                     </Badge>
-                  </div>
-                </header>
-
-                <p className="lc-body m-0">{platform.summary}</p>
-
-                <footer className="mt-auto flex flex-col gap-3 pt-1">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {buttonArtifacts(artifacts, platform.release).map(({ artifact, details }, artifactIdx) => {
-                      const href = artifactHref(artifact, platform.release);
+                  ) : out ? (
+                    buttonArtifacts(artifacts, release).map(({ artifact, details }, i) => {
+                      const isDirect = isDirectDownload(artifact, release);
                       const size = formatDownloadSize(artifact.sizeBytes);
-                      const isDirect = isDirectDownload(artifact, platform.release);
-                      const isNavDefault = variant === "hub" && platformIdx === 0 && artifactIdx === 0;
-                      const buttonLabel = isDirect ? artifact.label : "GitHub Releases";
-                      const ariaLabel =
-                        isDirect && size
-                          ? tx("artifactSized", { label: buttonLabel, platform: platform.name, detail: artifact.detail, size })
-                          : tx("artifact", { label: buttonLabel, platform: platform.name, detail: details });
-
+                      const label = isDirect ? artifact.label : "GitHub Releases";
                       return (
                         <Button
                           key={artifact.id}
-                          href={href}
+                          href={artifactHref(artifact, release)}
                           download={isDirect ? "" : undefined}
                           target={isDirect ? undefined : "_blank"}
                           rel={isDirect ? undefined : "noopener"}
                           variant="secondary"
                           size="md"
                           icon={<Icon name={isDirect ? "download" : "externalLink"} />}
-                          aria-label={ariaLabel}
-                          data-nav-default={isNavDefault ? "" : undefined}
+                          aria-label={
+                            isDirect && size
+                              ? tx("artifactSized", { label, platform: platform.name, detail: artifact.detail, size })
+                              : tx("artifact", { label, platform: platform.name, detail: details })
+                          }
+                          data-nav-default={navDefaultId === platform.id && i === 0 ? "" : undefined}
                         >
-                          {buttonLabel}
+                          {label}
                         </Button>
                       );
-                    })}
-                  </div>
+                    })
+                  ) : (
+                    <span className="lc-hint">{tx("comingSoon")}</span>
+                  )}
+                </div>
 
-                  <p className="lc-mono m-0 text-[12px] text-lc-slate">
-                    v{platform.release.version}
-                    {platform.release.published && platform.release.date ? (
-                      <>
-                        {" "}
-                        <span aria-hidden>·</span> {day(platform.release.date)}
-                      </>
+                {out ? (
+                  <div className="flex min-w-0 flex-col gap-2 md:col-start-1 md:row-start-2">
+                    {platform.id === "android" && storeBuild ? null : (
+                      <p className="lc-hint m-0 max-w-[68ch]">{platform.installNote}</p>
+                    )}
+                    {platform.installCommand ? (
+                      <pre
+                        role="region"
+                        aria-label={tx("installCommand", { platform: platform.name })}
+                        tabIndex={0}
+                        className="m-0 max-w-[68ch] overflow-x-auto rounded-lc-nub border border-lc-line bg-lc-well px-3 py-2"
+                      >
+                        <code className="lc-mono text-[12px] text-lc-fog">{platform.installCommand}</code>
+                      </pre>
                     ) : null}
-                    {artifacts.map((artifact) => {
-                      const size = formatDownloadSize(artifact.sizeBytes);
-                      const part = !isDirectDownload(artifact, platform.release)
-                        ? tx("detailPending", { detail: artifact.detail })
-                        : size
-                          ? tx("detailSized", { detail: artifact.detail, size })
-                          : artifact.detail;
-                      return (
-                        <React.Fragment key={artifact.id}>
-                          <span aria-hidden> · </span>
-                          {part}
-                        </React.Fragment>
-                      );
-                    })}
-                  </p>
-
-                  <p className="lc-hint m-0">{platform.installNote}</p>
-
-                  {platform.installCommand ? (
-                    <pre
-                      role="region"
-                      aria-label={tx("installCommand", { platform: platform.name })}
-                      tabIndex={0}
-                      className="m-0 overflow-x-auto rounded-lc-nub border border-lc-line bg-lc-well px-3 py-2"
-                    >
-                      <code className="lc-mono text-[12px] text-lc-fog">{platform.installCommand}</code>
-                    </pre>
-                  ) : null}
-                </footer>
-              </article>
+                  </div>
+                ) : null}
+              </li>
             );
           })}
-        </div>
+        </ul>
       </section>
 
-      <div className="grid gap-x-16 gap-y-10 border-t border-lc-line pt-8 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
-        <section className="flex min-w-0 flex-col gap-4">
-          <h2 className="lc-h2">
-            {tx("whyInstall")}
-          </h2>
-          <dl className="m-0 flex flex-col">
-            {APP_HIGHLIGHTS.map((id) => (
-              <div
-                key={id}
-                className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-5 border-t border-lc-line py-3.5 max-sm:grid-cols-1 max-sm:gap-y-1"
-              >
-                <dt className="lc-lbl pt-0.5">{tx(`highlights.${id}.label`)}</dt>
-                <dd className="lc-body m-0 text-[15px] text-lc-chalk">{tx(`highlights.${id}.text`)}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-
-        <section className="flex min-w-0 flex-col gap-4">
-          <h2 className="lc-h2">
-            {tx("buildsTitle")}
-          </h2>
-          <p className="lc-body m-0 max-w-[60ch] text-[15px] leading-[1.6]">
-            {tx.rich("buildsSigned", {
-              file: ".well-known/assetlinks.json",
-              code: (chunks) => <code className="lc-mono text-[13px] text-lc-chalk">{chunks}</code>,
-            })}
-          </p>
-          <div className="flex flex-wrap gap-x-6 gap-y-3 pt-1 text-[14px]">
-            {[
-              [tx("allReleases"), RELEASE_LINKS.allReleasesUrl],
-              [tx("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl],
-            ].map(([label, href]) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel="noopener"
-                onPointerEnter={focusOnHover}
-                className={`inline-flex items-center gap-1 pointer-coarse:min-h-11 ${TEXT_LINK}`}
-              >
-                {label}
-                <Icon name="externalLink" size="xs" />
-                <span className="sr-only"> {tc("newTab")}</span>
-              </a>
-            ))}
-          </div>
-        </section>
+      <div className="flex flex-wrap gap-x-6 gap-y-3 text-[14px]">
+        {[
+          [tx("allReleases"), RELEASE_LINKS.allReleasesUrl],
+          [tx("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl],
+          [tx("appGuide"), RELEASE_LINKS.appGuideUrl],
+        ].map(([label, href]) => (
+          <a
+            key={href}
+            href={href}
+            target="_blank"
+            rel="noopener"
+            onPointerEnter={focusOnHover}
+            className={`inline-flex items-center gap-1 pointer-coarse:min-h-11 ${TEXT_LINK}`}
+          >
+            {label}
+            <Icon name="externalLink" size="xs" />
+            <span className="sr-only"> {tc("newTab")}</span>
+          </a>
+        ))}
       </div>
     </div>
   );

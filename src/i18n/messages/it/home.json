@@ -195,35 +195,14 @@
     "introApps": "Un’app desktop per Windows, macOS e Linux che funziona anche offline e accetta le mod, e un’app per Android. Online entrambe usano il gioco live, quindi gli aggiornamenti arrivano senza reinstallare.",
     "directLink": "Link diretto",
     "platforms": "Piattaforme",
-    "thisDevice": "Questo dispositivo",
     "installed": "Installata",
+    "comingSoon": "Prossimamente",
     "artifact": "{label}: {platform} ({detail})",
     "artifactSized": "{label}: {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (pubblicato con il prossimo tag di rilascio)",
     "installCommand": "Comando di installazione per {platform}",
-    "whyInstall": "Perché installare l’app",
-    "highlights": {
-      "desktopApp": {
-        "label": "Desktop",
-        "text": "Conserva le pagine, le auto e i circuiti che carica, così il gioco funziona anche offline. Accetta le mod, converte circuiti e auto da altri giochi e si aggiorna da sola da GitHub Releases."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Trusted Web Activity a schermo intero senza barra degli indirizzi, swipe dai bordi sticky-immersive, Android Game Mode e scorciatoie Guida / Classifiche nel launcher."
-      },
-      "live": {
-        "label": "Sempre aggiornata",
-        "text": "Online entrambe le app usano il gioco live di librecorsa.org, quindi gli aggiornamenti di fisica, circuiti e multiplayer arrivano senza reinstallare. Offline l’app desktop usa ciò che ha conservato."
-      },
-      "browser": {
-        "label": "Browser e iOS",
-        "text": "Niente da installare se preferisci giocare direttamente in una scheda. Su iPhone e iPad usa Condividi > Aggiungi alla schermata Home di Safari."
-      }
-    },
-    "buildsTitle": "Build e firma",
-    "buildsSigned": "Ogni app è compilata da GitHub Actions a partire dal codice sorgente di questo repository e pubblicata su GitHub Releases con i digest SHA-256. L’app desktop installa un aggiornamento solo se la sua firma risulta valida. La firma del codice gratuita per Windows tramite SignPath Foundation è in fase di configurazione; Apple non ha ancora autenticato l’app per macOS; l’APK Android è firmato con la chiave di caricamento verificata da <code>{file}</code>.",
     "allReleases": "Tutte le release su GitHub",
-    "signingPolicy": "Criteri di firma del codice"
+    "signingPolicy": "Criteri di firma del codice",
+    "appGuide": "Guida alle app"
   }
 }

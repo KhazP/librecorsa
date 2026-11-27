@@ -1025,11 +1025,12 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
         >
           <PromptBar prompts={prompts} rule={false} />
           {/* SignPath Foundation's terms want the words "Code signing policy" on the home page. The arrows and the pad
-              pass over these; Tab reaches them. GitHub and the policy open in a new tab */}
+              pass over these; Tab reaches them. GitHub, the docs and the policy open in a new tab */}
           <div data-nav-skip="" className="flex shrink-0 items-center gap-x-5 text-[13px] font-semibold max-md:hidden">
             {(
               [
                 ["GitHub", data.repoUrl, true],
+                [tx("about.links.docs"), DOCS_URL, true],
                 [td("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl, true],
                 [tm("stats"), withBasePath("/stats"), false],
                 [tm("privacy"), withBasePath("/privacy"), false],

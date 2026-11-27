@@ -195,35 +195,14 @@
     "introApps": "Ứng dụng máy tính cho Windows, macOS và Linux hỗ trợ chơi ngoại tuyến lẫn cài mod, cùng một ứng dụng cho Android. Khi trực tuyến, cả hai đều chạy bản trực tiếp nên bản cập nhật đến ngay mà không cần cài lại.",
     "directLink": "Liên kết trực tiếp",
     "platforms": "Nền tảng",
-    "thisDevice": "Thiết bị này",
     "installed": "Đã cài đặt",
+    "comingSoon": "Sắp ra mắt",
     "artifact": "{label}: {platform} ({detail})",
     "artifactSized": "{label}: {platform} ({detail}, {size})",
     "detailSized": "{detail}, {size}",
-    "detailPending": "{detail} (sẽ phát hành ở bản tiếp theo)",
     "installCommand": "Lệnh cài đặt trên {platform}",
-    "whyInstall": "Vì sao nên cài ứng dụng",
-    "highlights": {
-      "desktopApp": {
-        "label": "Máy tính",
-        "text": "Lưu lại các trang, xe và đường đua đã tải để chơi được cả khi ngoại tuyến. Hỗ trợ mod, chuyển đổi đường đua và xe từ các trò chơi khác, và tự động cập nhật từ GitHub Releases."
-      },
-      "android": {
-        "label": "Android",
-        "text": "Toàn màn hình Trusted Web Activity không thanh địa chỉ, vuốt cạnh ẩn thanh điều hướng, Android Game Mode và lối tắt Lái xe / Bảng xếp hạng."
-      },
-      "live": {
-        "label": "Luôn mới nhất",
-        "text": "Khi trực tuyến, cả hai ứng dụng chạy bản trực tiếp từ librecorsa.org nên các bản cập nhật vật lý, đường đua và chơi mạng có ngay mà không cần cài lại. Khi ngoại tuyến, ứng dụng máy tính chạy dữ liệu đã lưu."
-      },
-      "browser": {
-        "label": "Trình duyệt & iOS",
-        "text": "Không cần cài đặt nếu bạn thích chơi ngay trên thẻ trình duyệt. Trên iPhone và iPad, dùng mục Chia sẻ > Thêm vào Màn hình chính của Safari."
-      }
-    },
-    "buildsTitle": "Bản dựng & chữ ký số",
-    "buildsSigned": "Mọi ứng dụng đều được dựng từ mã nguồn của kho lưu trữ này bằng GitHub Actions và phát hành trên GitHub Releases kèm mã băm SHA-256. Ứng dụng máy tính chỉ cài bản cập nhật khi chữ ký hợp lệ. Dịch vụ ký mã Windows miễn phí qua SignPath Foundation đang được thiết lập; Apple chưa công chứng ứng dụng macOS; tệp APK Android được ký bằng khóa tải lên xác thực bởi <code>{file}</code>.",
     "allReleases": "Tất cả bản phát hành trên GitHub",
-    "signingPolicy": "Chính sách ký mã số"
+    "signingPolicy": "Chính sách ký mã số",
+    "appGuide": "Hướng dẫn ứng dụng"
   }
 }
