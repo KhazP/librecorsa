@@ -362,6 +362,30 @@ export interface RacecraftParams {
    * driver (braking at 85 %) has. Without the last two, 1 car in 40 races at RISE short hit a weaving player, own driver 0
    */
   planPlayerMarginM: number;
+  /**
+   * The same cars' defensive move stays within this much of their line (m), held against the line where they are all
+   * the way to the corner. 0: as far as the defence takes them. A defence holds one spot across the road to the turn-in
+   * (the inside door, up to ~10 m off the line on a 15 m road), while the plan's line swings out for the corner: on its
+   * plan a Liana at Grobnik's back straight ended 10 m off its path, braked ~7 m/s early (the pace a car gives away
+   * that far off its line, with or without `planOffLinePace`), had the attacker come round the outside on the plan's
+   * later braking point, and was still on the inside, its bias coming back at the rate `planBiasShare` allows, when the
+   * attacker's line cut across to the apex. On their own driver the same cars make the same move, but the attacker
+   * follows them in and both brake at one point. At 0.5 m a plan car defending all but keeps its line.
+   * 24 career-grid races of 4 laps (Liana at Grobnik, Sachsenring and VIR North, R32 at Grobnik, R33 at Sachsenring,
+   * LMDh at RISE), the same seeds, no limit -> 2 m -> 0.5 m (own driver): AI v AI contacts 194 -> 65 -> 39 (57),
+   * passes 203 -> 68 -> 65 (68), spins, offs and wall hits 30 -> 3 -> 1 (3), the leader's mean lap 116.7 -> 115.1 ->
+   * 114.9 s (119.8). 8 races of 10-12 laps (two seeds: Liana and R32 at Grobnik, R33 at Sachsenring, LMDh at RISE):
+   * contacts 146 -> 63 -> 26 (26), spins, offs and wall hits 24 -> 4 -> 5 (0)
+   */
+  planDefendReachM: number;
+  /**
+   * The same cars drive their plans with their Assisted TC and ABS (1) instead of the Semi-pro dials every AI car's
+   * autopilot uses (0; the `pro` preset the field gives its cars is the driver's, which the autopilot never reads). The
+   * player's car and its dials are never touched. 9 races of 8-10 laps (R32 at Chang, LMDh at Istanbul, Liana at
+   * Okayama Piper), the same seeds: spins, offs and wall hits 9 -> 2, AI v AI contacts 35 -> 28 (all at Istanbul), the
+   * leader's lap within 0.13 s. Too few races to ship on: off until a bigger A/B
+   */
+  planAids: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -408,6 +432,8 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   planCornerShare: 0.5,
   planUrgentShare: 0.5,
   planPlayerMarginM: 1,
+  planDefendReachM: 0.5,
+  planAids: 0,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -2571,6 +2597,10 @@ export class AiOpponentField implements AiRace {
           craft.defendTargetLatM = clamp(me.lateralOffsetM, -half, half);
         }
         targetLat = clamp(craft.defendTargetLatM, -half, half);
+        // (`planDefendReachM`: against the line here, all the way in, as the line swings across for the turn-in)
+        if (this.rc.planDefendReachM > 0 && !onStartLane && me.aiPlan && tracksOwnPlanChecks(me.vehicleId ?? '')) {
+          targetLat = clamp(targetLat, line - this.rc.planDefendReachM, line + this.rc.planDefendReachM);
+        }
         biasRate = Math.max(biasRate, 3.2 * wetBiasScale);
       }
       // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
@@ -2776,6 +2806,7 @@ export class AiOpponentField implements AiRace {
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
+      if ('aiAssistedAids' in me) me.aiAssistedAids = this.rc.planAids > 0 && !!me.aiPlan && tracksOwnPlanChecks(me.vehicleId ?? '');
       // The own driver slows for damage as a plan does (its grip, in the plan): corner speed goes with √ grip. At full
       // pace a car with a front tyre at 45 % of its grip left the road at every corner of Sachsenring for two laps
       const planned = me.aiPlan ? 1 : car.pace * weatherPace * Math.sqrt(damagedGrip(car.damage));

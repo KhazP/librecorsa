@@ -314,6 +314,14 @@ export interface CarSimProfile {
    */
   aiOwnKerbShare?: number;
   /**
+   * Fastest the autopilot turns the rim (deg/s) while it tracks a drive plan (default `DRIVER_RIM_SPEED_DEG_S`, the
+   * player's 900). At 900 the road, classic and prototype cars' plan tracking ran out of steering speed on a quick
+   * correction, lagged and swung wider each time until the car spun: career-length races on their plans spun and left
+   * the road many times more than on their own driver. 3600 still eases a hand-back after a knock across in a few
+   * tenths instead of one step
+   */
+  aiPlanRimSpeedDegS?: number;
+  /**
    * The car's understeer gradient (front road-wheel angle beyond the kinematic one, rad per m/s² of lateral
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
    */
@@ -1308,6 +1316,11 @@ export class F12026CarSim implements SimulatorCar {
   public aiSpeedCapMs = Infinity;
   /** The plan's top speed is no limit (`SimulatorCar.aiTopSpeedOpen`) */
   public aiTopSpeedOpen = false;
+  /**
+   * The AI field's choice: the autopilot's TC and ABS at the car's Assisted dials, not its Semi-pro ones
+   * (`RacecraftParams.planAids`). The player's car is never given it
+   */
+  public aiAssistedAids = false;
   /**
    * AI tuning (`ai-tuning.ts`): target speed along the lap (m/s, uniform spacing) used instead of this car's own
    * limit profile (`aiBaseSpeedProfile`), e.g. with earlier braking points; null = the limit profile
@@ -2743,8 +2756,8 @@ export class F12026CarSim implements SimulatorCar {
    * threshold braking, which the autopilot's pedal alone does not do)
    */
   private autopilotDials(): AidDials {
-    const d = this.profile.assistDials.semi_pro;
     const assisted = this.profile.assistDials.assisted;
+    const d = this.aiAssistedAids ? assisted : this.profile.assistDials.semi_pro;
     const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
     const wet = clamp(this.vehicle.wetness, 0, 1);
     if (wet <= 0.15) {
@@ -3080,12 +3093,12 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /**
-   * The autopilot's steering, turned no faster than a driver's hands can turn the wheel when it tracks a plan (the
-   * player's 900°/s at the rim): a hand-back after a knock otherwise slammed the rack across in one step
+   * The autopilot's steering, turned no faster than `aiPlanRimSpeedDegS` at the rim when it tracks a plan (the player's
+   * 900°/s unless the car sets it): a hand-back after a knock otherwise slammed the rack across in one step
    */
   private autopilotSteer(want: number, h: number): number {
     if (!this.aiPlan) return want;
-    const maxStep = (DRIVER_RIM_SPEED_DEG_S / this.rimLockDeg) * h;
+    const maxStep = ((this.profile.aiPlanRimSpeedDegS ?? DRIVER_RIM_SPEED_DEG_S) / this.rimLockDeg) * h;
     return this.steerCmd + clamp(want - this.steerCmd, -maxStep, maxStep);
   }
 

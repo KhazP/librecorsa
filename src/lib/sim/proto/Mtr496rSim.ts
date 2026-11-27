@@ -76,6 +76,8 @@ export const MTR_496R_SIM_PROFILE: CarSimProfile = {
   // Its own driver keeps to the asphalt: on the flat kerbs (`aiOwnKerbShare`) its Proto Cup fields left the road more
   // (7 layouts, 15 races each: incidents 34 → 45, lap-1 offs 6 → 13), laps 2.5 % quicker
   aiOwnKerbShare: 0,
+  // Tracks a plan at 3600°/s at the rim: at the player's 900 its plan tracking swung wider until it spun (`aiPlanRimSpeedDegS`)
+  aiPlanRimSpeedDegS: 3600,
   // The GT3's line: closed-wheel grip and downforce, nearer a GT3's than an F1 car's
   racingLine: 'gt3',
   // Fuel flow with the engine's speed: 0.005659 l/s per 1000 rpm flat out, ≈ 0.048 l/s (0.036 kg/s) at 8500 rpm
