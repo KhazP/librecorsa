@@ -4012,6 +4012,8 @@ def build_from_sources(tid, cfg, args, src):
             rows = bt.upsample_rows(k_rows, *rows)
             log(f'  collider rows: {len(xz)} -> {len(rows[0])}, heights curved between the samples')
         c_xz, c_rgt, c_yprof, c_width, c_bank, c_kL, c_kR, c_run, c_grav, c_wall, c_open, c_closure = rows
+        pit_cl = data.get('pitLane', {}).get('centerline') or []
+        pit_lane_xz = (np.array([[p[0] + off[0], p[2] + off[2]] for p in pit_cl], dtype=float) if len(pit_cl) >= 2 else None)
         extra = bt.collider_meshes(
             soup, road_set, kerb_mats, c_xz, c_rgt, c_yprof, c_width, c_bank,
             c_kL, c_kR, c_run, c_grav, c_wall, off,
@@ -4023,6 +4025,7 @@ def build_from_sources(tid, cfg, args, src):
             closure=c_closure,
             skip=dead if p2p else None,
             road_twist_m=cfg.get('roadTwistM'),
+            pit_lane_xz=pit_lane_xz,
         )
         if cfg.get('offroadOverRoad'):
             extra = offroad_over_road(extra, soup, road_set, off, xz, rgt2, width, ds)

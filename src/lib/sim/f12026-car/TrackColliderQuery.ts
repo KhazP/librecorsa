@@ -833,9 +833,9 @@ export class TrackColliderQuery implements GroundQuery {
   static fromTrackRoot(
     root: THREE.Object3D,
     table: SurfaceTable = DEFAULT_SURFACE_TABLE,
-    options: { conformSurfaces?: boolean; prepare?: (root: THREE.Object3D) => void; splitDenseCells?: boolean } = {}
+    options: { conformSurfaces?: boolean; skipConformPass?: boolean; prepare?: (root: THREE.Object3D) => void; splitDenseCells?: boolean } = {}
   ): TrackColliderQuery {
-    if (options.conformSurfaces) {
+    if (options.conformSurfaces && !options.skipConformPass) {
       conformTrackSurfaceColliders(root);
       // After the fitting: the pieces kept of a face split here lie in its fitted plane, where the fitting left it
       clearOffroadOverRoad(root);
@@ -1545,6 +1545,107 @@ export interface TrackWallBuffers {
 /** Whether a wall face at (x, z) with horizontal normal (nx, nz) faces the road (its normal points toward the centreline) */
 export type RoadFacing = (x: number, z: number, nx: number, nz: number) => boolean;
 
+/** Predicate returning true when a generated wall-collider segment (ax, az) -> (bx, bz) should be omitted */
+export type WallSegmentFilter = (ax: number, az: number, bx: number, bz: number) => boolean;
+
+/** Minimal pit-lane centerline shape needed to clear blocking wall return panels at pit entry/exit */
+export interface PitLaneWallMask {
+  readonly px: ArrayLike<number>;
+  readonly pz: ArrayLike<number>;
+  readonly cum: ArrayLike<number>;
+  readonly leaveM: number;
+  readonly rejoinM: number;
+}
+
+/** Clearance half-width (m) around the pit lane entry/exit mouths where wall collider return panels must not intrude */
+const PIT_MOUTH_CLEAR_M = 2.2;
+/** Distance along the pit lane from leaveM / rejoinM treated as the entry / exit mouth (m) */
+const PIT_MOUTH_SPAN_M = 45;
+/** Minimum unobstructed half-width (m) along the full pit lane centerline */
+const PIT_CORRIDOR_CLEAR_M = 1.6;
+
+/**
+ * Returns a `WallSegmentFilter` that strips `Track_Collider_Wall_*` return panels cutting across a circuit's pit lane
+ * entry or exit (generated where the outer track barrier steps out/in around the pit lane), while leaving the parallel
+ * pit walls and outer garage walls intact.
+ */
+export function pitLaneWallExcluder(pitLane: PitLaneWallMask | null | undefined): WallSegmentFilter | undefined {
+  if (!pitLane || pitLane.px.length < 2) return undefined;
+  const { px, pz, cum, leaveM, rejoinM } = pitLane;
+  const n = px.length;
+  // Collect the pit-lane centerline samples covering [leaveM - 10, rejoinM + 10]
+  const startM = Math.max(0, leaveM - 10);
+  const endM = Math.min(cum[n - 1], rejoinM + 10);
+  const xs: number[] = [];
+  const zs: number[] = [];
+  const ms: number[] = [];
+  let minX = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxZ = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const m = cum[i];
+    if (m < startM - 2 || m > endM + 2) continue;
+    const x = px[i];
+    const z = pz[i];
+    xs.push(x);
+    zs.push(z);
+    ms.push(m);
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  if (xs.length < 2) return undefined;
+  const pad = PIT_MOUTH_CLEAR_M + 1;
+  minX -= pad;
+  maxX += pad;
+  minZ -= pad;
+  maxZ += pad;
+
+  const cross2 = (ux: number, uz: number, vx: number, vz: number) => ux * vz - uz * vx;
+  const segsCross = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): boolean => {
+    const rx = bx - ax;
+    const rz = bz - az;
+    const sx = dx - cx;
+    const sz = dz - cz;
+    const den = cross2(rx, rz, sx, sz);
+    if (Math.abs(den) < 1e-9) return false;
+    const qpx = cx - ax;
+    const qpz = cz - az;
+    const t = cross2(qpx, qpz, sx, sz) / den;
+    const u = cross2(qpx, qpz, rx, rz) / den;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+  };
+  const ptSegDist2 = (qx: number, qz: number, ax: number, az: number, bx: number, bz: number): number => {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const l2 = dx * dx + dz * dz;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((qx - ax) * dx + (qz - az) * dz) / l2)) : 0;
+    const ex = ax + t * dx - qx;
+    const ez = az + t * dz - qz;
+    return ex * ex + ez * ez;
+  };
+
+  return (ax: number, az: number, bx: number, bz: number): boolean => {
+    if (Math.max(ax, bx) < minX || Math.min(ax, bx) > maxX || Math.max(az, bz) < minZ || Math.min(az, bz) > maxZ) {
+      return false;
+    }
+    const mouth2 = PIT_MOUTH_CLEAR_M * PIT_MOUTH_CLEAR_M;
+    const corridor2 = PIT_CORRIDOR_CLEAR_M * PIT_CORRIDOR_CLEAR_M;
+    for (let i = 0; i < xs.length; i++) {
+      const m = ms[i];
+      const inMouth =
+        (m >= leaveM - 10 && m <= leaveM + PIT_MOUTH_SPAN_M) ||
+        (m >= rejoinM - PIT_MOUTH_SPAN_M && m <= rejoinM + 10);
+      const limit2 = inMouth ? mouth2 : corridor2;
+      if (ptSegDist2(xs[i], zs[i], ax, az, bx, bz) < limit2) return true;
+      if (i + 1 < xs.length && segsCross(xs[i], zs[i], xs[i + 1], zs[i + 1], ax, az, bx, bz)) return true;
+    }
+    return false;
+  };
+}
+
 /** A drawn barrier's face steeper than this (|normal.y|) is a top or an underside, not a wall */
 const DRAWN_BARRIER_MAX_NORMAL_Y = 0.5;
 /**
@@ -1570,9 +1671,16 @@ export class TrackWallQuery implements WallQuery {
 
   /**
    * Every node with `userData.collider === 'wall'` (or named `Track_Collider_Wall_*`) under the track root, and the
-   * drawn barriers named in `barrierMeshes` (a mesh `name` or its exported `name_chunkN` parts)
+   * drawn barriers named in `barrierMeshes` (a mesh `name` or its exported `name_chunkN` parts).
+   * `excludeSegment`, when provided, omits generated wall-collider segments that match (e.g. pit-lane entry/exit
+   * return panels) while keeping drawn barriers untouched.
    */
-  static fromTrackRoot(root: THREE.Object3D, barrierMeshes: readonly string[] = [], facesRoad?: RoadFacing): TrackWallQuery {
+  static fromTrackRoot(
+    root: THREE.Object3D,
+    barrierMeshes: readonly string[] = [],
+    facesRoad?: RoadFacing,
+    excludeSegment?: WallSegmentFilter
+  ): TrackWallQuery {
     root.updateMatrixWorld(true);
     const walls: THREE.Object3D[] = [];
     const drawn = new Set<THREE.Object3D>();
@@ -1584,7 +1692,7 @@ export class TrackWallQuery implements WallQuery {
         drawn.add(obj);
       }
     });
-    return new TrackWallQuery(walls, { drawn, facesRoad });
+    return new TrackWallQuery(walls, { drawn, facesRoad, excludeSegment });
   }
 
   /** The walls rebuilt from their data (`toBuffers`), e.g. in a worker */
@@ -1602,7 +1710,10 @@ export class TrackWallQuery implements WallQuery {
    * keeps only its upright faces at least DRAWN_BARRIER_MIN_FACE_M long, and of those (with `facesRoad`) the ones
    * facing the road, as a collider wall is built: one face, along the road
    */
-  constructor(objects: THREE.Object3D[] | TrackWallBuffers, drawnBarriers?: { drawn: ReadonlySet<THREE.Object3D>; facesRoad?: RoadFacing }) {
+  constructor(
+    objects: THREE.Object3D[] | TrackWallBuffers,
+    drawnBarriers?: { drawn: ReadonlySet<THREE.Object3D>; facesRoad?: RoadFacing; excludeSegment?: WallSegmentFilter }
+  ) {
     if (!Array.isArray(objects)) {
       this.segments = objects.segments;
       this.segmentCount = objects.segments.length / WALL_SEGMENT_STRIDE;
@@ -1662,6 +1773,7 @@ export class TrackWallQuery implements WallQuery {
           // Order the endpoints so both halves of a quad give the same key
           const swap = a.x > b.x || (a.x === b.x && a.z > b.z);
           const [s, e] = swap ? [b, a] : [a, b];
+          if (!drawn && drawnBarriers?.excludeSegment?.(s.x, s.z, e.x, e.z)) continue;
           const key = `${Math.round(s.x * 50)},${Math.round(s.z * 50)},${Math.round(e.x * 50)},${Math.round(e.z * 50)}`;
           if (seen.has(key)) continue;
           seen.add(key);

@@ -1278,7 +1278,7 @@ def subdivide_twisted_road(P, F, ncol, max_twist_m, k_lat=2):
 
 def collider_meshes(soup, road_set, kerb_mats, xz, rgt, yprof, width, bank, kerbL, kerbR, run, grav, wall, off, scan_kerbs=False,
                     surface_mats=None, edge_blend_m=None, wall_open=None, valid_runoff=None, closure=None, skip=None,
-                    road_twist_m=None):
+                    road_twist_m=None, pit_lane_xz=None):
     """Hidden physics meshes in final world space (source world minus `off`). `scan_kerbs` (`scanKerbs`): the physics
     kerb is the scan's own kerb paint (scan_kerb_mesh) and no generated kerb is drawn over it. `skip`: samples with
     no surfaces (a point-to-point course's dead stretch; pass `wall_open` there too). `road_twist_m` (`roadTwistM`):
@@ -1563,17 +1563,36 @@ def collider_meshes(soup, road_set, kerb_mats, xz, rgt, yprof, width, bank, kerb
             V.extend([(p0[0], y0 - 1.0, p0[1]), (p0[0], y0 + 3.0, p0[1]), (p1[0], y1 - 1.0, p1[1]), (p1[0], y1 + 3.0, p1[1])])
             F.extend([k, k + 2, k + 1, k + 1, k + 2, k + 3])
 
+        def crosses_pit(p0, p1):
+            if pit_lane_xz is None or len(pit_lane_xz) < 2:
+                return False
+            rx, rz = float(p1[0] - p0[0]), float(p1[1] - p0[1])
+            for k in range(len(pit_lane_xz) - 1):
+                cx, cz = float(pit_lane_xz[k, 0]), float(pit_lane_xz[k, 1])
+                sx, sz = float(pit_lane_xz[k + 1, 0] - cx), float(pit_lane_xz[k + 1, 1] - cz)
+                den = rx * sz - rz * sx
+                if abs(den) > 1e-9:
+                    qpx, qpz = cx - float(p0[0]), cz - float(p0[1])
+                    t = (qpx * sz - qpz * sx) / den
+                    u = (qpx * rz - qpz * rx) / den
+                    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+                        return True
+            return False
+
         for i in range(n):
             i1 = (i + 1) % n
             if wall_open is not None and (wall_open[i, 0 if side < 0 else 1] or wall_open[i1, 0 if side < 0 else 1]):
                 continue
             if abs(d[i1] - d[i]) <= 3.0:
-                quad(pts[i], base[i], pts[i1], base[i1])
+                if not crosses_pit(pts[i], pts[i1]):
+                    quad(pts[i], base[i], pts[i1], base[i1])
             else:
-                # the barrier steps in or out: close the gap across the normal at sample i and continue to sample i1
+                # the barrier steps in or out: close the gap across the normal at sample i unless it cuts across the pit lane
                 q1 = xz[i] + rgt[i] * side * d[i1]
-                quad(pts[i], base[i], q1, base[i1])
-                quad(q1, base[i1], pts[i1], base[i1])
+                if not crosses_pit(pts[i], q1):
+                    quad(pts[i], base[i], q1, base[i1])
+                if not crosses_pit(q1, pts[i1]):
+                    quad(q1, base[i1], pts[i1], base[i1])
         out.append((name, np.array(V) - off, np.array(F, np.uint32), {'collider': 'wall'}))
         if closure is not None and closure[:, 0 if side < 0 else 1].any():
             out.append(closure_barrier(xz, rgt, side, d, base, closure[:, 0 if side < 0 else 1], off,

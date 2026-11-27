@@ -10,8 +10,13 @@
  *   npx tsx scripts/verify/verify-pit-lanes.ts [id ...] [--verbose] [--dir <folder of <id>/track_data.json>]
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import * as THREE from "three";
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from "../../src/lib/track-data";
 import { PitLaneTracker } from "../../src/lib/sim/pit/pit-lane";
+import { pitLaneWallExcluder, TrackWallQuery, WALL_SEGMENT_STRIDE } from "../../src/lib/sim/f12026-car/TrackColliderQuery";
+import { trackColliders } from "../../src/lib/sim/track-colliders";
+import { createAmgGt3Sim } from "../../src/lib/sim/gt3/AmgGt3Sim";
+import { loadGlbGeometry } from "../lib/glb-geometry";
 
 const NO_PIT_LANE = new Set(["borgloh", "goodwood", "dunsfold", "spielberg_inner"]);
 const args = process.argv.slice(2);
@@ -125,7 +130,91 @@ for (const id of ids) {
   }
   if (strays) fail(id, `a car running wide is in the lane away from the pits (${strays} steps, first at ${strayWhere})`);
 
-  const ok = joinedAt !== null && !back && crossings <= 1 && !unreachable && !strays;
+  // 3. Wall colliders: if the circuit's layout/full GLB is present, verify zero wall collider segments block the pit lane
+  const dirFiles = existsSync(`${dir}/${id}`) ? readdirSync(`${dir}/${id}`) : [];
+  const glbFile = dirFiles.find((f) => f.endsWith(".glb") && f.includes(".layout.")) ?? (dirFiles.includes(`${id}.glb`) ? `${id}.glb` : undefined);
+  let blockedWalls = 0;
+  if (glbFile) {
+    const root = loadGlbGeometry(`${dir}/${id}/${glbFile}`);
+    const { walls } = trackColliders(root);
+    const nearBuf = new Int32Array(256);
+    const segs = walls.segments;
+    const cross2 = (ux: number, uz: number, vx: number, vz: number) => ux * vz - uz * vx;
+    for (let m = Math.max(0, lane.leaveM - 5); m <= Math.min(lane.lengthM, lane.rejoinM + 5); m += 1) {
+      const p0 = lane.pointAt(m);
+      const p1 = lane.pointAt(Math.min(lane.lengthM, m + 1));
+      const n = walls.near(p0.x, p0.z, 2.5, nearBuf);
+      for (let k = 0; k < n; k++) {
+        const o = nearBuf[k] * WALL_SEGMENT_STRIDE;
+        const ax = segs[o], az = segs[o + 1], bx = segs[o + 2], bz = segs[o + 3];
+        const rx = p1.x - p0.x, rz = p1.z - p0.z;
+        const dx = bx - ax, dz = bz - az;
+        const den = cross2(rx, rz, dx, dz);
+        if (Math.abs(den) > 1e-9) {
+          const qpx = ax - p0.x, qpz = az - p0.z;
+          const tt = cross2(qpx, qpz, dx, dz) / den;
+          const uu = cross2(qpx, qpz, rx, rz) / den;
+          if (tt >= 0 && tt <= 1 && uu >= 0 && uu <= 1) blockedWalls++;
+        }
+      }
+    }
+    if (blockedWalls > 0) fail(id, `${blockedWalls} wall collider segment(s) cross the pit lane centerline`);
+
+    // Drive an actual car into Watkins Glen pit entry, all the way down the pit lane, and out the pit exit
+    if (id === "watkins_glen" || id === "watkins_glen_short") {
+      const car = createAmgGt3Sim(track, root);
+      car.autoGearbox = true;
+      const startM = Math.max(0, lane.leaveM - 25);
+      const targetM = Math.min(lane.lengthM - 5, lane.rejoinM + 35);
+      const startPt = lane.pointAt(startM);
+      const startProj = track.projectWorldToTrack(startPt.x, startPt.z);
+      const startYaw = Math.atan2(startPt.tx, startPt.tz);
+      car.restorePose!({ x: startPt.x, z: startPt.z, yawRad: startYaw, speedMs: 14, s: startProj.s });
+      let wallHits = 0;
+      let lastWallAtMs = car.telemetry.f12026?.wallImpact?.atMs ?? -1;
+      let reachedM = startM;
+      const dt = 1 / 60;
+      for (let step = 0; step < 60 * 65; step++) {
+        // Pure pursuit toward a point 12 m ahead along the pit centerline
+        const pos = car.worldPosition;
+        let bestM = reachedM;
+        let bestD2 = Infinity;
+        for (let m = Math.max(0, reachedM - 10); m <= Math.min(lane.lengthM, reachedM + 40); m += 2) {
+          const q = lane.pointAt(m);
+          const d2 = (q.x - pos.x) ** 2 + (q.z - pos.z) ** 2;
+          if (d2 < bestD2) {
+            bestD2 = d2;
+            bestM = m;
+          }
+        }
+        reachedM = Math.max(reachedM, bestM);
+        const aim = lane.pointAt(Math.min(lane.lengthM, bestM + 12));
+        const q = car.worldQuaternion;
+        const yaw = Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+        const desiredYaw = Math.atan2(aim.x - pos.x, aim.z - pos.z);
+        let err = desiredYaw - yaw;
+        while (err > Math.PI) err -= 2 * Math.PI;
+        while (err < -Math.PI) err += 2 * Math.PI;
+        const steer = Math.max(-1, Math.min(1, -err * 2.2));
+        const throttle = car.vxMs < 15 ? 0.35 : 0;
+        const brake = car.vxMs > 18 ? 0.25 : 0;
+        car.step(dt, { throttle, brake, analogSteer: steer });
+        const wi = car.telemetry.f12026?.wallImpact;
+        if (wi && wi.atMs !== lastWallAtMs) {
+          lastWallAtMs = wi.atMs;
+          if (wi.speedMs > 1.5) wallHits++;
+        }
+        if (reachedM >= targetM) break;
+      }
+      if (wallHits > 0 || reachedM < targetM) {
+        fail(id, `car pit-lane drive hit wall (${wallHits} hits, reached lane ${reachedM.toFixed(0)} m vs target ${targetM.toFixed(0)} m)`);
+      } else {
+        console.log(`ok    ${id}: car drove pit entry -> pit lane -> pit exit unobstructed to lane ${reachedM.toFixed(0)} m (0 wall hits)`);
+      }
+    }
+  }
+
+  const ok = joinedAt !== null && !back && crossings <= 1 && !unreachable && !strays && blockedWalls === 0;
   if (ok || verbose) {
     console.log(
       `${ok ? "ok   " : "     "} ${id}: lane ${Math.round(lane.rejoinM - lane.leaveM)} m off the road (s ${Math.round(
@@ -138,6 +227,38 @@ for (const id of ids) {
     );
   }
 }
+// Synthetic unit check for pitLaneWallExcluder (always runs even without hosted GLBs)
+{
+  const px: number[] = [];
+  const pz: number[] = [];
+  const cum: number[] = [];
+  for (let m = 0; m <= 200; m += 2) {
+    px.push(0);
+    pz.push(m);
+    cum.push(m);
+  }
+  const excluder = pitLaneWallExcluder({ px, pz, cum, leaveM: 40, rejoinM: 160 });
+  const makeWall = (ax: number, az: number, bx: number, bz: number) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([ax, 0, az, bx, 0, bz, bx, 3, bz, ax, 0, az, bx, 3, bz, ax, 3, az], 3));
+    const mesh = new THREE.Mesh(g);
+    mesh.name = "Track_Collider_Wall_Right";
+    return mesh;
+  };
+  const root = new THREE.Group();
+  // Return panel crossing straight across pit entry at z = 50
+  root.add(makeWall(-4, 50, 4, 50));
+  // Legitimate parallel pit wall 4 m to the side of the pit centerline
+  root.add(makeWall(4, 40, 4, 160));
+  const unfiltered = TrackWallQuery.fromTrackRoot(root);
+  const filtered = TrackWallQuery.fromTrackRoot(root, [], undefined, excluder);
+  if (unfiltered.segmentCount !== 2 || filtered.segmentCount !== 1) {
+    fail("pitLaneWallExcluder", `expected return panel stripped (2 -> 1), got ${unfiltered.segmentCount} -> ${filtered.segmentCount}`);
+  } else {
+    console.log("ok    pitLaneWallExcluder: strips return panel across pit entry while keeping parallel pit wall");
+  }
+}
+
 if (!ids.length) console.log("SKIP  pit lanes (no circuits under public/tracks)");
 if (failures) {
   console.log(`\n${failures} failure(s)`);
