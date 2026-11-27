@@ -10,6 +10,7 @@ import { FlagBadge } from "@/components/ui/badges/FlagBadge";
 import { FlagIcon } from "@/components/ui/badges/FlagIcon";
 import { PenaltyBadge } from "@/components/ui/badges/PenaltyBadge";
 import { HUD_GLASS, HUD_LBL } from "./hud-format";
+import { localizeRaceControlMessage, type RaceControlTranslate } from "./race-control-i18n";
 import { SkinBanner, skinCss, skinRootClass, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 
 type Kind = RaceControlFeedMessage["kind"];
@@ -94,6 +95,11 @@ export const RaceIncidentFeed: React.FC<{
   // The feed re-renders every frame: its words are resolved once per language (the blue flag's once per car)
   const callWords = useCallWords();
   const tx = useTranslations("hud.raceIncidentFeed");
+  const txMsg = useTranslations("hud.raceIncidentFeed.messages");
+  const translateMsg = useMemo<RaceControlTranslate>(
+    () => (key, values) => (values ? txMsg(key, values) : txMsg(key)),
+    [txMsg],
+  );
   const L = useMemo(
     () => ({
       vsc: tx("vsc.tag"),
@@ -202,6 +208,7 @@ export const RaceIncidentFeed: React.FC<{
   // Bad news and cautions interrupt; the rest is read when convenient. Only bad news pulses (a crimson halo)
   const urgent = latest.kind === "penalty" || latest.kind === "retired" || latest.kind === "yellow" || latest.kind === "warning" || latest.kind === "investigation";
   const bad = latest.kind === "penalty" || latest.kind === "retired";
+  const localized = localizeRaceControlMessage(latest, translateMsg);
   if (skin !== null) {
     const call = SKIN_CALL[latest.kind];
     return (
@@ -219,8 +226,8 @@ export const RaceIncidentFeed: React.FC<{
             {callWords[latest.kind]}
           </SkinTag>
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="text-[13px] font-bold whitespace-nowrap sm:text-[14px]">{latest.text}</span>
-            {latest.detail ? <span className={`text-[10px] uppercase ${skinCss.inkDim}`}>{latest.detail}</span> : null}
+            <span className="text-[13px] font-bold whitespace-nowrap sm:text-[14px]">{localized.text}</span>
+            {localized.detail ? <span className={`text-[10px] uppercase ${skinCss.inkDim}`}>{localized.detail}</span> : null}
           </span>
         </SkinBanner>
       </div>
@@ -238,8 +245,8 @@ export const RaceIncidentFeed: React.FC<{
       >
         <CallBadge kind={latest.kind} text={latest.text} />
         <span className="flex min-w-0 flex-col leading-tight">
-          <span className="lc-disp text-[14px] whitespace-nowrap sm:text-[15px]">{latest.text}</span>
-          {latest.detail ? <span className={`${HUD_LBL} text-lc-fog`}>{latest.detail}</span> : null}
+          <span className="lc-disp text-[14px] whitespace-nowrap sm:text-[15px]">{localized.text}</span>
+          {localized.detail ? <span className={`${HUD_LBL} text-lc-fog`}>{localized.detail}</span> : null}
         </span>
       </div>
     </div>
