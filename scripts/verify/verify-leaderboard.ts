@@ -56,7 +56,7 @@ import { DEFAULT_DRIVER_PROFILE, randomDriverProfile } from '../../src/lib/setti
 import type { Env } from '../../cloudflare/api/types';
 import { fakeD1, fakeR2 } from '../lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from '../online/migrate-supabase-board';
-import { carById, type CarId } from '../../src/lib/cars/car-registry';
+import { anyCarById, type CarId } from '../../src/lib/cars/car-registry';
 import { activeChallenges, CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, challengesSoFar, fitsChallenge, isPermanentChallenge, isoWeekId, MIDDLE_GEAR_CHALLENGE, MIDDLE_GEAR_CHALLENGE_ID, permanentChallengeById, timeLeftLabel } from '../../src/lib/net/weekly-challenge';
 import { challengeOf } from '../../src/lib/net/board-queue';
 
@@ -634,7 +634,10 @@ async function main(): Promise<void> {
       check('challenge: no venue two weeks running', twice.length === 0, twice.map((c) => c.trackId).join(', '));
       // A week may name one car of its vehicle (the GT3 has two); its races are in the same one
       const named = CHALLENGE_ROTATION.filter((c) => c.car !== undefined);
-      const wrongCar = named.filter((c) => carById(c.car as CarId).id !== c.car || carById(c.car as CarId).physics !== c.vehicle || c.race.car !== c.car);
+      const wrongCar = named.filter((c) => {
+        const car = anyCarById(c.car as CarId);
+        return !car || car.id !== c.car || car.physics !== c.vehicle || c.race.car !== c.car;
+      });
       check('challenge: a week that names its car names one of its vehicle, 14 Dec the BMW', wrongCar.length === 0 && on(2026, 12, 14).car === 'bmw-m4-gt3' && on(2026, 11, 23).car === undefined, wrongCar.map((c) => c.car).join(', '));
       const dunsfold = CHALLENGE_ROTATION.filter((c) => c.trackId === 'dunsfold');
       check('challenge: a Dunsfold week\'s races name no car', dunsfold.every((c) => c.race.car === undefined));
