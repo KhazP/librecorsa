@@ -54,7 +54,7 @@ const FACTS: [string, React.ReactNode][] = [
   ["Plays on", "Any modern browser (computer, phone or tablet), plus desktop and Android apps"],
   ["Controls", "Keyboard, gamepad, touch or a force-feedback wheel"],
   ["Modes", "Career mode, time trials, hot laps, races against AI, multiplayer, online lap times"],
-  ["Content", "14 cars across five classes (2026 and 2025 open-wheelers, GT3, prototypes, classics and road cars) on 20 circuits and two hill climbs"],
+  ["Content", "15 cars across five classes (2026, 2025 and 2007 open-wheelers, GT3, prototypes, classics and road cars) on 20 circuits and two hill climbs"],
   ["Price", "Free. Tips are optional and unlock nothing"],
   [
     "Website",
@@ -268,8 +268,8 @@ export default function PressPage() {
         <div className="grid gap-3 lg:grid-cols-2">
           <div className={`${CARD} flex flex-col gap-4 p-4.5 sm:p-6`}>
             <p className="lc-body m-0 text-[16px] leading-[1.6]">
-              LibreCorsa is a free racing simulator that runs in a web browser, with nothing to install. You drive 14 cars across
-              five classes (2026 and 2025 open-wheelers, GT3 cars, prototypes, classics and road cars) on 20 circuits and two hill
+              LibreCorsa is a free racing simulator that runs in a web browser, with nothing to install. You drive 15 cars across
+              five classes (2026, 2025 and 2007 open-wheelers, GT3 cars, prototypes, classics and road cars) on 20 circuits and two hill
               climbs, in the dry or the rain, by day or at night. Work through a career ladder, take on weekly and permanent time
               trials, race AI drivers, set lap times against players around the world, or race friends online. It plays with a
               keyboard, a gamepad, a touch screen or a steering wheel with force feedback. I build it alone, and the code is open

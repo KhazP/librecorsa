@@ -17,7 +17,7 @@ Settings serve both through a Simple / Advanced switch: Simple shows the short l
 
 ## Product Purpose
 
-LibreCorsa is an open-source racing simulator that runs entirely in the browser, with nothing to install (plus optional native desktop and Android apps). It has 500 Hz vehicle dynamics, a thermal tyre model, 14 cars across five classes (2026 and 2025 open-wheelers, GT3 cars, prototypes, classic racing cars and road cars), 20 circuits (35 layouts) and two hill climbs, career mode, time trials, AI races with pit stops, ghosts, lap telemetry and replays, peer-to-peer multiplayer, and 12 languages.
+LibreCorsa is an open-source racing simulator that runs entirely in the browser, with nothing to install (plus optional native desktop and Android apps). It has 500 Hz vehicle dynamics, a thermal tyre model, 15 cars across five classes (2026, 2025 and 2007 open-wheelers, GT3 cars, prototypes, classic racing cars and road cars), 20 circuits (35 layouts) and two hill climbs, career mode, time trials, AI races with pit stops, ghosts, lap telemetry and replays, peer-to-peer multiplayer, and 12 languages.
 
 ## Positioning
 
