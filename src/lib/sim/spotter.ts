@@ -76,7 +76,11 @@ export class SpotterEngine {
     // Back from time away: what was alongside then is not known to be alongside now, nor for how long
     if (nowMs - this.lastUpdateMs > MAX_UPDATE_GAP_MS) this.reset();
     this.lastUpdateMs = nowMs;
-    if (!config.enabled || Math.abs(playerSpeedMs) < MIN_SPEED_MS) {
+    if (!config.enabled) {
+      this.reset();
+      return this.state;
+    }
+    if (Math.abs(playerSpeedMs) < MIN_SPEED_MS) {
       this.state = "clear";
       return this.state;
     }

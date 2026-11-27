@@ -62,6 +62,7 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "bugesera.gpu": "device",
   "bugesera.gpuLoss": "device",
   "bugesera.ffb_polarity_v2": "device",
+  "bugesera.spotter_default_off_v2": "device",
   "bugesera.rumble": "device",
   // First run and one-time prompts
   "bugesera.onboarded": "device",

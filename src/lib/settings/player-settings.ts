@@ -578,6 +578,8 @@ export const sanitizeColor = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v.toU
 
 /** Set once the force direction was flipped to match DirectInput / PID: an older save's `ffbInvert: true` is reset once */
 export const FFB_POLARITY_V2_KEY = "bugesera.ffb_polarity_v2";
+/** Set once the spotter's default moved to off: an older save's inherited `spotter: true` is reset once */
+export const SPOTTER_DEFAULT_OFF_V2_KEY = "bugesera.spotter_default_off_v2";
 
 /** Driver's-eye vertical FOV range (a calculated single-screen FOV is often near 30°) */
 export const COCKPIT_FOV_MIN_DEG = 25;
@@ -1056,22 +1058,35 @@ export function loadPlayerSettings(): PlayerSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
     const polarityV2 = localStorage.getItem(FFB_POLARITY_V2_KEY) === "1";
+    const spotterOffV2 = localStorage.getItem(SPOTTER_DEFAULT_OFF_V2_KEY) === "1";
     if (raw) {
       const json: unknown = JSON.parse(raw);
       rawProfile = isObj(json) ? json.profile : undefined;
       settings = parsePlayerSettings(json);
+      let migrated = false;
       if (!polarityV2 && settings.wheel.ffbInvert) {
         settings = { ...settings, wheel: { ...settings.wheel, ffbInvert: false } };
-        // The reset is stored before the flag that says it was done (just the field, the rest of the save as it
-        // was): a load that no save follows must not stamp the flag over a save that still says true
         if (isObj(json) && isObj(json.wheel)) {
           json.wheel.ffbInvert = false;
-          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(json));
+          migrated = true;
         }
+      }
+      if (!spotterOffV2 && settings.audio.spotter) {
+        settings = { ...settings, audio: { ...settings.audio, spotter: false } };
+        if (isObj(json) && isObj(json.audio)) {
+          json.audio.spotter = false;
+          migrated = true;
+        }
+      }
+      // The reset is stored before the flag that says it was done (just the migrated field(s), the rest of the save as
+      // it was): a load that no save follows must not stamp the flag over a save that still says true
+      if (migrated) {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(json));
       }
     }
     // Only after the migrated settings are stored (a failed write above skips it); nothing to migrate otherwise
     if (!polarityV2) localStorage.setItem(FFB_POLARITY_V2_KEY, "1");
+    if (!spotterOffV2) localStorage.setItem(SPOTTER_DEFAULT_OFF_V2_KEY, "1");
   } catch {
     // Storage unavailable or corrupt JSON: defaults
   }
@@ -1093,6 +1108,7 @@ export function savePlayerSettings(settings: PlayerSettings) {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     localStorage.setItem(FFB_POLARITY_V2_KEY, "1");
+    localStorage.setItem(SPOTTER_DEFAULT_OFF_V2_KEY, "1");
   } catch {
     // Storage unavailable: the settings last for this session only
   }

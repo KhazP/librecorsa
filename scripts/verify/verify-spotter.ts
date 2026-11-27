@@ -8,6 +8,16 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { SpotterEngine, type SpotterClipKey, type SpotterConfig } from "../../src/lib/sim/spotter";
 import type { InterpolatedPeerState } from "../../src/lib/sim/multiplayer-sync";
+import {
+  DEFAULT_AUDIO_SETTINGS,
+  DEFAULT_PLAYER_SETTINGS,
+  defaultPlayerSettings,
+  loadPlayerSettings,
+  parsePlayerSettings,
+  savePlayerSettings,
+  SETTINGS_STORAGE_KEY,
+  SPOTTER_DEFAULT_OFF_V2_KEY,
+} from "../../src/lib/settings/player-settings";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -114,6 +124,52 @@ check("reset() (the drive loop's pause, replay, menus, show and podium) starts f
   a.s.reset();
   a.run(1000, [peer(2, 0)]);
   assert.deepEqual(a.calls, ["car_left", "car_left"]);
+});
+
+check("disabling spotter mid-callout resets alongside state cleanly", () => {
+  const a = spotter();
+  a.run(2000, [peer(2, 0)]);
+  a.run(100, [peer(2, 0)], { config: { ...ON, enabled: false } });
+  a.run(1000, [peer(2, 0)]);
+  assert.deepEqual(a.calls, ["car_left", "car_left"]);
+});
+
+check("spotter is disabled by default across fresh profiles, parsed saves and legacy pre-migration saves", () => {
+  assert.equal(DEFAULT_AUDIO_SETTINGS.spotter, false, "DEFAULT_AUDIO_SETTINGS.spotter must be false");
+  assert.equal(DEFAULT_PLAYER_SETTINGS.audio.spotter, false, "DEFAULT_PLAYER_SETTINGS.audio.spotter must be false");
+  assert.equal(defaultPlayerSettings().audio.spotter, false, "defaultPlayerSettings().audio.spotter must be false");
+  assert.equal(parsePlayerSettings({}).audio.spotter, false, "empty save defaults spotter to false");
+  assert.equal(parsePlayerSettings({ audio: {} }).audio.spotter, false, "unconfigured audio object defaults spotter to false");
+
+  // Simulate localStorage with a legacy save created before spotter defaulted to off
+  const store = new Map<string, string>();
+  const prevStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  (globalThis as { localStorage?: Storage }).localStorage = {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (k: string) => store.get(k) ?? null,
+    key: (i: number) => [...store.keys()][i] ?? null,
+    removeItem: (k: string) => void store.delete(k),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+  };
+  try {
+    store.set(SETTINGS_STORAGE_KEY, JSON.stringify({ audio: { spotter: true, spotterVoice: "clare" } }));
+    const migrated = loadPlayerSettings();
+    assert.equal(migrated.audio.spotter, false, "legacy unmigrated save resets inherited spotter: true to false");
+    assert.equal(migrated.audio.spotterVoice, "clare", "other spotter fields remain untouched");
+    assert.equal(store.get(SPOTTER_DEFAULT_OFF_V2_KEY), "1", "migration flag stamped");
+    assert.equal(JSON.parse(store.get(SETTINGS_STORAGE_KEY)!).audio.spotter, false, "reset persisted to storage");
+
+    // Once migrated, explicitly enabling spotter in Settings > Audio sticks across reloads
+    savePlayerSettings({ ...migrated, audio: { ...migrated.audio, spotter: true } });
+    const reloaded = loadPlayerSettings();
+    assert.equal(reloaded.audio.spotter, true, "explicit opt-in after migration is preserved");
+  } finally {
+    if (prevStorage === undefined) delete (globalThis as { localStorage?: Storage }).localStorage;
+    else (globalThis as { localStorage?: Storage }).localStorage = prevStorage;
+  }
 });
 
 console.log(`\n${passed} checks passed`);
