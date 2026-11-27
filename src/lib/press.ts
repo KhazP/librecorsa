@@ -36,6 +36,23 @@ export interface DiscussionItem {
 
 export const COVERAGE: CoverageItem[] = [
   {
+    outlet: "Scuderia Fantozzi",
+    title: "LibreCorsa: O SIMULADOR de CORRIDA que RODA no NAVEGADOR!",
+    url: "https://www.youtube.com/watch?v=fVjHB4Owy1U",
+    date: "2026-11-26",
+    kind: "Video",
+    lang: "pt",
+    engagement: "4.5K views",
+  },
+  {
+    outlet: "cuzy",
+    title: "This Sim Racing Game Runs in Your BROWSER (Wheel Support)",
+    url: "https://www.youtube.com/watch?v=nitUETQX1zE",
+    date: "2026-11-24",
+    kind: "Video",
+    engagement: "105K views",
+  },
+  {
     outlet: "AppMunchies on Instagram",
     title: "This free F1-style sim runs in a browser tab, force feedback and all",
     url: "https://www.instagram.com/reel/Dfs4we0jXsa/",
@@ -191,6 +208,18 @@ export const COVERAGE: CoverageItem[] = [
 ];
 
 export const DISCUSSIONS: DiscussionItem[] = [
+  {
+    where: "Open Web Arcade",
+    title: "Listed in its directory of open-source browser games",
+    url: "https://openwebarcade.com/games/librecorsa",
+    date: "2026-11-23",
+  },
+  {
+    where: "Three.js Resources",
+    title: "Listed among the games built with Three.js",
+    url: "https://threejsresources.com/tool/librecorsa",
+    date: "2026-11-11",
+  },
   {
     // A plain repost has no page of its own: this links the trailer post it shared
     where: "X · three.js",
