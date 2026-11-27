@@ -1155,7 +1155,8 @@ export class AiOpponentField implements AiRace {
   private dryFollowCapDecelMs2(sim: SimulatorCar): number {
     if (this.classId === 'f1-2026') return 32;
     const id = sim.vehicleId;
-    if (!id || !(id in GGV_TABLES)) return this.classDecelMs2;
+    // Unknown/mod cars without a GGV table use a conservative 12 m/s² (~1.2 g) follow-braking cap, never F1's 32 m/s²
+    if (!id || !(id in GGV_TABLES)) return this.classId === 'gt3' ? 16 : 12;
     let lim = this.followLimits.get(id);
     if (!lim) {
       lim = carLimitsFor(id, 1);

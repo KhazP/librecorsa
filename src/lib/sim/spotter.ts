@@ -62,7 +62,7 @@ export class SpotterEngine {
   private radio: { input: AudioNode; gain: GainNode } | null = null;
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly loading = new Set<string>();
-  private readonly failed = new Set<string>();
+  private readonly retryAfterMs = new Map<string, number>();
   private activeSource: AudioBufferSourceNode | null = null;
 
   update(
@@ -142,7 +142,7 @@ export class SpotterEngine {
       this.radio = null;
       this.buffers.clear();
       this.loading.clear();
-      this.failed.clear();
+      this.retryAfterMs.clear();
     }
     if (!ctx || !out.output) return;
     if (!this.radio) this.radio = buildRadioChain(ctx, out.output);
@@ -150,18 +150,24 @@ export class SpotterEngine {
   }
 
   private preload(ctx: AudioContext, url: string): void {
-    if (this.buffers.has(url) || this.loading.has(url) || this.failed.has(url) || typeof fetch === "undefined") return;
+    const retryAt = this.retryAfterMs.get(url);
+    if (this.buffers.has(url) || this.loading.has(url) || (retryAt !== undefined && Date.now() < retryAt) || typeof fetch === "undefined") {
+      return;
+    }
     this.loading.add(url);
     void fetch(url)
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status} ${url}`))))
       .then((ab) => ctx.decodeAudioData(ab))
       .then((buf) => {
         // Kept only for the context it was decoded for
-        if (ctx === this.ctx) this.buffers.set(url, buf);
+        if (ctx === this.ctx) {
+          this.buffers.set(url, buf);
+          this.retryAfterMs.delete(url);
+        }
       })
       .catch(() => {
-        // Remember failed clips for this AudioContext so offline/missing clips aren't refetched every frame
-        if (ctx === this.ctx) this.failed.add(url);
+        // Back off for 30 s on failure so offline/missing clips don't refetch every frame but recover after a transient blip
+        if (ctx === this.ctx) this.retryAfterMs.set(url, Date.now() + 30_000);
       })
       .finally(() => this.loading.delete(url));
   }
