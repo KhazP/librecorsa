@@ -157,6 +157,7 @@
       "speedsVsDistance": "Kaydedilen hızlar katedilen mesafeyle uyuşmuyor",
       "distanceVsLength": "Katedilen mesafe tur uzunluğuyla uyuşmuyor",
       "gainsTooFast": "Araç, yapabileceğinden daha hızlı hızlanıyor",
+      "banned": "Bu sürücü çevrimiçi sıralamalara gönderemez",
       "impliedSpeed": "Konumlar 420 km/h üzerinde bir hız gösteriyor"
     }
   },

@@ -157,6 +157,7 @@
       "speedsVsDistance": "Die aufgezeichneten Geschwindigkeiten passen nicht zur gefahrenen Strecke",
       "distanceVsLength": "Die gefahrene Strecke passt nicht zur Rundenlänge",
       "gainsTooFast": "Das Auto gewinnt schneller an Tempo, als es kann",
+      "banned": "Dieser Fahrer darf nicht in die Online-Bestenlisten eintragen",
       "impliedSpeed": "Die Positionen ergeben eine Geschwindigkeit über 420 km/h"
     }
   },

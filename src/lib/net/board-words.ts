@@ -24,6 +24,7 @@ export const BOARD_SENTENCES: Readonly<Record<string, MessageKey>> = {
   "Too many changes, try again later": "game.board.errors.tooManyChanges",
   "This name is taken. Sign in to the account that holds it, import your driver key under Lap Times, or race under another name": "game.board.errors.nameTaken",
   "Pick another name": "game.board.errors.pickName",
+  "This driver can't post to the online boards": "game.board.errors.banned",
   "That weekly challenge has ended": "game.board.errors.challengeEnded",
   "This lap was not driven to this week's challenge rules": "game.board.errors.challengeRules",
   "This lap was not driven to this challenge's rules": "game.board.errors.permanentChallengeRules",

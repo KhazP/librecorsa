@@ -157,6 +157,7 @@
       "speedsVsDistance": "Le velocità registrate non corrispondono alla distanza percorsa",
       "distanceVsLength": "La distanza percorsa non corrisponde alla lunghezza del giro",
       "gainsTooFast": "L'auto prende velocità più in fretta di quanto possa",
+      "banned": "Questo pilota non può pubblicare nelle classifiche online",
       "impliedSpeed": "Le posizioni indicano una velocità superiore a 420 km/h"
     }
   },
