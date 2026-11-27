@@ -7,7 +7,7 @@ LibreCorsa's AI field drives the same 500 Hz rigid-body vehicle physics as the p
 | Layer | Source files | Responsibility |
 | :-- | :-- | :-- |
 | **Line and speed** | `speed-profile.ts`, `ai-tuning.ts`, `public/ai/*.json` | Computes each car's speed profile along its racing line, scaled by skill, per-lap error, and corner-by-corner learning |
-| **Vehicle control** | `F12026CarSim.autopilot` / `F1Physics2026` | Pure-pursuit steering with a yaw-rate feedback loop running on the full 500 Hz vehicle model |
+| **Vehicle control** | `F12026CarSim.autopilot` / `F1Physics2026` | Pure-pursuit steering with a yaw-rate feedback loop running on the full 500 Hz vehicle model. A road, classic or prototype car driving a drive plan turns its wheel at up to `3600°/s` at the rim; F1 and GT3 cars keep the player's `900°/s` |
 | **Driver reaction** | `ai-car-control.ts` | Post-impact reaction latency, catch-or-spin logic, braking to a stop, waiting for a safe gap, rejoining, and marshal recovery |
 | **Racecraft** | `ai-racecraft.ts`, `AiOpponentField.planTraffic` | Chooses lateral lane offsets and speed caps based on surrounding traffic and flags |
 | **Contact solver** | `track-evolution.ts` (OBB solver), `AiOpponentField.resolveContacts` | World-space broad phase plus oriented-bounding-box impulse solver with off-centre yaw torque and impact-scaled caps |
@@ -19,7 +19,7 @@ LibreCorsa's AI field drives the same 500 Hz rigid-body vehicle physics as the p
 - **Safe following:** A car caps its closing speed behind traffic ahead so it can always brake cleanly into corners: `v ≤ v_ahead + √(2·6·(gap − 2.5))`. This prevents pack pile-ups in heavy braking zones.
 - **Overtaking:** Attacking cars stay in the slipstream until nose-to-tail distance drops to `3 + (0.9 + t)·closing` metres (where `t` is the lateral lane-change time, plus an extra `6 m` when approaching a corner), then pull out to pass. Once initiated, the move is held even after leaving the tow. The car commits to a side approaching the braking zone and pushes slightly harder once alongside. Moves are gated by `passFeasible`, which cancels speculative lunges that cannot get alongside before turn-in plus part of the braking zone.
 - **Corner ownership:** An inside car with its nose at least level with the outside car's midpoint owns the corner. The outside car yields only if it does not hold ownership.
-- **Defending:** Limited to one defensive move per straight while on throttle: never against a car already alongside, never against a lapping car, and never under yellow flags.
+- **Defending:** Limited to one defensive move per straight while on throttle: never against a car already alongside, never against a lapping car, and never under yellow flags. A car on a drive plan defends within `0.5 m` of its line, so it doesn't sit on the inside while its line swings out for the corner and the attacker's line cuts back to the apex.
 - **Blue flags:** Cars about to be lapped concede the inside line at the upcoming corner.
 - **Hazards and local yellows:** Spinning, stopped, crawling, or retired cars are treated as obstacles rather than cars to draft: AI steers to whichever side offers clear space and slows when gaps are tight. Each hazard projects a yellow-flag zone from `350 m` before to `40 m` after the incident, within which AI drivers lift and hold position.
 - **Side-by-side clearance:** Cars leave roughly `0.9 m` of daylight between bodies (`2.9 m` centre-to-centre).
