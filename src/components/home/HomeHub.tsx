@@ -22,10 +22,11 @@ import { CODE_CONTRIBUTORS } from "@/lib/contributors";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
-import { day, GAME_FACTS, type HomeCar, type HomeData, type HomeLayout, type HomeQualityTexts, type HomeVenue, type WhatsNewDay } from "./home-data";
+import { day, GAME_FACTS, type HomeCar, type HomeData, type HomeLayout, type HomeQualityTexts, type HomeVenue } from "./home-data";
 import { useLocalizedHome } from "./home-labels";
 import { CarQualityTag, carQualityText, CarThumb, CircuitQualityTag, OutlineThumb } from "./home-ui";
 import { groupCoverage } from "@/lib/home/coverage";
+import { markWhatsNewSeen, whatsNewFingerprint, whatsNewUnseen } from "@/lib/whats-new-seen";
 import { preloadVenueHero, VenueHero } from "./VenueHero";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
@@ -61,21 +62,6 @@ const TABS = [
   { id: "download", key: "download" },
   { id: "about", key: "about" },
 ] as const satisfies readonly { id: Tab; key: string }[];
-
-/** The What's new feed the visitor last opened (its fingerprint), so a new or updated day lights the tab again */
-const WHATS_NEW_SEEN_KEY = "librecorsa.whatsNewSeen";
-
-/** A short fingerprint of the patch notes: any new or updated day changes it */
-function whatsNewFingerprint(days: readonly WhatsNewDay[]): string {
-  if (days.length === 0) return "";
-  const input = days.map((d) => `${d.date}:${d.lastSha}`).join("\n");
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
 
 /** The cyan dot after "What's new" while it holds notes the visitor has not opened (colour is not alone: it is named) */
 const UNREAD_DOT = (name: string) => (
@@ -184,12 +170,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
   const [unseenUpdates, setUnseenUpdates] = useState(false);
   const whatsNewToken = useMemo(() => whatsNewFingerprint(data.whatsNew), [data.whatsNew]);
   useEffect(() => {
-    if (!whatsNewToken) return;
-    try {
-      setUnseenUpdates(localStorage.getItem(WHATS_NEW_SEEN_KEY) !== whatsNewToken);
-    } catch {
-      setUnseenUpdates(true);
-    }
+    if (whatsNewToken) setUnseenUpdates(whatsNewUnseen(whatsNewToken));
   }, [whatsNewToken]);
   // A link to a section by its id (/#whats-new, as the RSS feed's items link) opens that section
   useEffect(() => {
@@ -206,11 +187,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
   useEffect(() => {
     if (tab !== "whats-new" || !whatsNewToken) return;
     setUnseenUpdates(false);
-    try {
-      localStorage.setItem(WHATS_NEW_SEEN_KEY, whatsNewToken);
-    } catch {
-      // Storage unavailable: the dot stays off for this visit
-    }
+    markWhatsNewSeen(whatsNewToken);
   }, [tab, whatsNewToken]);
   const tabs = useMemo(
     () =>
@@ -602,7 +579,10 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                     {data.whatsNew.map((entry, index) => (
                       <li key={entry.date} className="grid gap-x-8 gap-y-2 border-t border-lc-line py-5 last:border-b sm:grid-cols-[150px_minmax(0,1fr)]">
                         <div className="flex items-baseline justify-between gap-3 sm:flex-col sm:items-start sm:justify-start sm:gap-1.5">
-                          <span className="lc-data text-[14px] text-lc-chalk">{day(entry.date)}</span>
+                          {/* The notes are English in every language: they read left to right under a right-to-left page too */}
+                          <span lang="en" dir="ltr" className="lc-data text-[14px] text-lc-chalk">
+                            {day(entry.date)}
+                          </span>
                           <a
                             href={
                               entry.commits === 1
@@ -619,7 +599,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                             <Icon name="externalLink" size="sm" />
                           </a>
                         </div>
-                        <div className="flex min-w-0 flex-col gap-2">
+                        <div lang="en" dir="ltr" className="flex min-w-0 flex-col gap-2">
                           <h2 className="lc-title m-0 text-[17px] leading-snug text-lc-chalk">{entry.title}</h2>
                           <ul className="m-0 -mb-1.5 list-none p-0 xl:columns-[26rem] xl:gap-x-10">
                             {entry.items.map((item) => (

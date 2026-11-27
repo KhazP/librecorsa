@@ -1,7 +1,7 @@
 /**
- * What's new patch notes (`src/lib/home/whats-new.json`, `HomeHub.tsx`):
+ * What's new patch notes (`src/lib/home/whats-new.json`, `HomeHub.tsx`, the title menu's What's new panel):
  * validates ordering, entry schema, historical git alignment (when full history is checked out),
- * UI tab order, and unread pulse wiring.
+ * UI tab order, unread pulse wiring, and the read state the home page and the title menu share.
  *
  *   npx tsx scripts/verify/verify-whats-new.ts
  */
@@ -9,10 +9,12 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { WhatsNewDay } from "../../src/components/home/home-data";
+import { WHATS_NEW_SEEN_KEY, whatsNewFingerprint } from "../../src/lib/whats-new-seen";
 
 const ROOT = process.cwd();
 const DATA_PATH = join(ROOT, "src/lib/home/whats-new.json");
 const HOME_HUB_PATH = join(ROOT, "src/components/home/HomeHub.tsx");
+const TITLE_MENU_PATH = join(ROOT, "src/components/menu/TitleMenu.tsx");
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -122,7 +124,23 @@ const hub = readFileSync(HOME_HUB_PATH, "utf8");
 const tabOrderMatch = /id:\s*"cars"[\s\S]*?id:\s*"whats-new"[\s\S]*?id:\s*"about"/.test(hub);
 check("HomeHub places What's new between Cars and About", tabOrderMatch);
 check("HomeHub uses cyan (lc-cyan, #00E5FF) for unread dot", (hub.includes("bg-lc-cyan") || hub.includes("#00E5FF")) && hub.includes("UNREAD_DOT"));
-check("HomeHub persists seen state in librecorsa.whatsNewSeen", hub.includes("librecorsa.whatsNewSeen"));
+check("seen state is stored under librecorsa.whatsNewSeen", WHATS_NEW_SEEN_KEY === "librecorsa.whatsNewSeen");
+check("HomeHub reads and writes the shared seen state", hub.includes('from "@/lib/whats-new-seen"') && !hub.includes("localStorage.setItem(WHATS_NEW"));
+
+// The fingerprint: empty for no notes, the same for the same notes, new when a day is added or updated
+const sample: WhatsNewDay[] = [{ date: "2026-11-26", title: "T", items: ["a"], commits: 2, lastSha: "a".repeat(40) }];
+const print = whatsNewFingerprint(sample);
+check("fingerprint is empty for no notes", whatsNewFingerprint([]) === "");
+check("fingerprint is stable for the same notes", print === whatsNewFingerprint(structuredClone(sample)) && /^[0-9a-f]{8}$/.test(print));
+check("fingerprint changes when a day is updated", print !== whatsNewFingerprint([{ ...sample[0], lastSha: "b".repeat(40) }]));
+check("fingerprint changes when a day is added", print !== whatsNewFingerprint([{ ...sample[0], date: "2026-11-27" }, ...sample]));
+
+// The title menu's What's new panel: in both rails' link groups, the notes loaded after mount (not in /play's bundle)
+const menu = readFileSync(TITLE_MENU_PATH, "utf8");
+const railLists = menu.match(/byId\(\[[^\]]*"credits"[^\]]*\]\)/g) ?? [];
+check("title menu lists What's new in both rails", railLists.length === 2 && railLists.every((l) => l.includes('"whatsNew"')));
+check("title menu uses the shared notes and seen state", menu.includes("useWhatsNewNotes()") && menu.includes('panel === "whatsNew"'));
+check("title menu does not bundle whats-new.json", !/^import[^;]*whats-new\.json/m.test(menu));
 
 console.log(failed ? `\n${failed} What's new check(s) failed.` : "\nAll What's new checks passed.");
 if (failed) process.exit(1);
