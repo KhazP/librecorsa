@@ -2102,6 +2102,105 @@ async function asyncChecks() {
     console.log('  ok  WebHID connect(): a failing picker keeps a wheel that is already running');
   }
 
+  // Thrustmaster T300RS (B66E, 1080°, belt/gear, invert ON, curve 0.75) + separate USB PRS 2 Sport pedals:
+  // auto-config binds B66E (not pedals), reader merges both devices, and WheelFfbClient streams inverted force to B66E
+  {
+    const wheelId = 'B66E (Vendor: 044f Product: b66e)';
+    const pedalsId = 'PRS 2 Sport Pedals (Vendor: 1209 Product: 9901)';
+    const restPads: PadLike[] = [
+      pad(pedalsId, '', [0, -1, 1]),
+      pad(wheelId, '', [0]),
+    ];
+    const auto = autoConfigureWheel(restPads, DEFAULT_WHEEL_SETTINGS);
+    assert.ok(auto, 'B66E auto-configures even when separate USB pedals appear first');
+    assert.equal(auto.type, 'belt_gear');
+    assert.equal(auto.ffbEnabled, true);
+    assert.equal(auto.hidFfb, true);
+    assert.equal(auto.steer?.padId, wheelId);
+
+    const pads: PadLike[] = [
+      pad(pedalsId, '', [0, 1, -1]),
+      pad(wheelId, '', [0.15]),
+    ];
+
+    const wheelSettings = {
+      ...DEFAULT_WHEEL_SETTINGS,
+      ...auto,
+      rotationDeg: 1080,
+      throttle: { padId: pedalsId, axis: 1, idle: -1, full: 1 },
+      brake: { padId: pedalsId, axis: 2, idle: 1, full: -1 },
+      ffbInvert: true,
+      ffbCurve: 0.75,
+      ffbKerb: 0.35,
+      ffbAbs: 0.2,
+      ffbSlip: 1,
+      ffbDamping: 0,
+      ffbFilterS: 0,
+      ffbCollisionGuard: true,
+    };
+    const reader = new DeviceInputReader();
+    const frame = reader.read(pads, { wheel: wheelSettings, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+    assert.equal(frame.source, 'wheel');
+    assert.ok(frame.analogSteer !== undefined && frame.analogSteer > 0, 'steering read from B66E');
+    near(frame.throttle, 1);
+    near(frame.brake, 1);
+
+    const b66eWrites: { id: number; data: number[] }[] = [];
+    const b66eHid: HidDeviceLike = {
+      opened: false,
+      vendorId: 0x044f,
+      productId: 0xb66e,
+      productName: 'B66E',
+      collections: [
+        {
+          usagePage: 0x01,
+          usage: 0x04,
+          outputReports: [{ reportId: 0x60, items: [{ usages: [0xff000060], reportSize: 8, reportCount: 63, logicalMinimum: 0, logicalMaximum: 255, isArray: false, isConstant: false }] }],
+        },
+      ],
+      async open() {
+        this.opened = true;
+      },
+      async close() {
+        this.opened = false;
+      },
+      async sendReport(id, data) {
+        b66eWrites.push({ id, data: [...data] });
+      },
+      async sendFeatureReport() {},
+      async receiveFeatureReport() {
+        return new DataView(new ArrayBuffer(0));
+      },
+    };
+    const clock = manualClock();
+    const hid = fakeHidApi([b66eHid], [b66eHid]);
+    const ffb = new WebHidFfb(hid.api, clock.deps);
+    const client = new WheelFfbClient();
+    const unlink = linkHidSink(client, ffb);
+    assert.equal(await ffb.connect(), 'B66E');
+    assert.equal(ffb.status.state, 'ready');
+    b66eWrites.length = 0;
+    client.update(
+      { speedKmh: 120, ffbTorqueNorm: 0.5, rpm: 9000, gear: 3, throttle: 1 } as Parameters<WheelFfbClient['update']>[0],
+      wheelSettings,
+      pads,
+      1000,
+      true,
+      'lc26'
+    );
+    await flush();
+    const updateWrite = b66eWrites.find((w) => w.id === 0x60 && w.data[0] === 0x00 && w.data[2] === 0x6a && w.data[14] === 0x45);
+    assert.ok(updateWrite, 'non-zero constant-force update streamed to B66E while driving with separate pedals');
+    const level = (updateWrite.data[3] ?? 0) | ((updateWrite.data[4] ?? 0) << 8);
+    const signedLevel = level >= 0x8000 ? level - 0x10000 : level;
+    assert.ok(signedLevel > 0, `invert ON flips +0.5 torque through linkHidSink to +level on wire (got ${signedLevel})`);
+    client.dispose();
+    unlink();
+    await ffb.dispose();
+    passed++;
+    console.log('  ok  T300RS B66E + separate USB PRS 2 Sport pedals: auto-config, input merge, and inverted WebHID FFB stream');
+  }
+
   // ScreenWakeLock: acquires while driving & visible, releases in menus/pause/hidden, re-acquires on visibility, and cancels in-flight on dispose
   {
     assert.equal(shouldHoldWakeLock({ driving: true, visible: true }), true);

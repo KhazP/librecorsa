@@ -13,6 +13,7 @@ import {
   FORCE_KEEPALIVE_MS,
   GENERIC_PID_PROFILE,
   ForceWriter,
+  HidTrace,
   HOTPLUG_DELAY_MS,
   IDLE_ZERO_MS,
   isFatalHidStatus,
@@ -28,8 +29,11 @@ import {
   HID_STREAM_TRACE_SIZE,
   setupPidDevice,
   teardownPidSession,
+  THRUSTMASTER_PID_PROFILE,
+  tracedDevice,
   unpackReport,
   WebHidFfb,
+  WRITE_TIMEOUT_MS,
   type FfbDeps,
   type HidApiLike,
   type HidCollectionLike,
@@ -37,6 +41,7 @@ import {
   type HidInputReportEventLike,
   type HidReportItemLike,
   type PidFieldLayout,
+  type PidLayout,
   type PidReportLayout,
   type WebHidFfbStatus,
 } from "../../src/lib/input/webhid-ffb";
@@ -897,6 +902,10 @@ async function main() {
       ["out", 15, 1, 0, 0, 0, 0, 0], // Set Condition, block 1
       ["out", 81, 1, 1, 0xfe, 0, 0, 0], // start block 1
     ]);
+    // ORDINAL_1 (bytes 8..9 of Set Effect report 11) must be 0x4000 (90° = +X), not left at 0x0000 because PID.DIRECTION (byte 5) came first
+    const setEffectConst = dev.log.find((l) => l.kind === "out" && l.id === 11 && l.data[0] === 0);
+    assert.ok(setEffectConst, "Set Effect for constant force logged");
+    assert.deepEqual(setEffectConst.data.slice(8, 12), [0x00, 0x40, 0x00, 0x00], "ORDINAL_1 = 0x4000 (+X), ORDINAL_2 = 0");
     // The force stream goes to block 0
     dev.log.length = 0;
     res.session.writer.setForce(0.5, true);
@@ -2830,6 +2839,209 @@ async function main() {
     assert.match(report, /out\s+id\s+96\s+02 9c 00/, "gain traced");
     await ffb.dispose();
     assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+96\s+01 00 00/, "teardown traffic (close)");
+  });
+  await check("T300RS B66E under Windows HID PID: Thrustmaster profile sets X-axis enable + ORDINAL_1 90°, retries blank Block Load, ignores separate USB pedals", async () => {
+    const P = pid;
+    const makeTmCols = (shuffled: boolean): HidCollectionLike[] => {
+      const types = (shuffled ? [0x41, 0x40, 0x34, 0x33, 0x31, 0x32, 0x30, 0x26] : [0x26, 0x30, 0x31, 0x32, 0x33, 0x34, 0x40, 0x41]).map(P);
+      const ops = (shuffled ? [0x7a, 0x79, 0x7b] : [0x79, 0x7a, 0x7b]).map(P);
+      const dcs = (shuffled ? [0x9c, 0x9b, 0x98, 0x97, 0x99, 0x9a] : [0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c]).map(P);
+      const bls = (shuffled ? [0x8e, 0x8d, 0x8c] : [0x8c, 0x8d, 0x8e]).map(P);
+      const block8 = variable([P(0x22)], 8, 1, 0, 255);
+      const block16 = variable([P(0x22)], 16, 1, 0, 255);
+      const flag = (u: number) => variable([u], 1, 1, 0, 0);
+      return [
+        {
+          usagePage: 0x01,
+          usage: 0x04,
+          inputReports: [{ reportId: 7, items: [variable([X], 16, 1, 0, 65535)] }],
+          outputReports: [
+            {
+              reportId: 11,
+              items: [
+                block8,
+                selector(types),
+                variable([P(0x53)], 5, 1, 1, 8),
+                flag(P(0x56)),
+                flag(X),
+                flag(Y),
+                variable([P(0x50)], 16, 1, 0, 65534),
+                variable([P(0x57)], 8, 1, 0, 255),
+                variable([P(0x54)], 16, 1, 0, 65534),
+                variable([ordinalUsage(1)], 16, 1, 0, -1),
+                variable([ordinalUsage(2)], 16, 1, 0, -1),
+                variable([P(0xa7)], 16, 1, 0, 65534),
+                padding(392),
+              ],
+            },
+            { reportId: 13, items: [block16, variable([P(0x70)], 8, 1, -127, 127), padding(480)] },
+            {
+              reportId: 15,
+              items: [
+                block8,
+                variable([P(0x23)], 8, 1, 0, 1),
+                variable([P(0x61)], 8, 1, -100, 100),
+                variable([P(0x62)], 8, 1, -100, 100),
+                variable([P(0x60)], 16, 1, -500, 500),
+                variable([P(0x65)], 16, 1, 0, 1000),
+                variable([P(0x63)], 8, 1, 0, 100),
+                variable([P(0x64)], 8, 1, 0, 100),
+                padding(424),
+              ],
+            },
+            { reportId: 67, items: [variable([P(0x7e)], 8, 1, 0, 128), padding(496)] },
+            { reportId: 81, items: [block8, selector(ops), variable([P(0x7c)], 8, 1, 0, 254), padding(480)] },
+            { reportId: 82, items: [selector(dcs), padding(496)] },
+            { reportId: 88, items: [block8, padding(496)] },
+          ],
+          featureReports: [
+            { reportId: 21, items: [selector(types), padding(176)] },
+            { reportId: 22, items: [selector(bls), block8, padding(168)] },
+          ],
+        },
+      ];
+    };
+    const makeB66e = (cols: HidCollectionLike[], layout: PidLayout) => {
+      const dev = new FakeHidDevice(cols, layout.blockLoad);
+      dev.vendorId = 0x044f;
+      dev.productId = 0xb66e;
+      dev.productName = "B66E";
+      let creates = 0;
+      let readsForCreate = 0;
+      const origFeature = dev.sendFeatureReport.bind(dev);
+      dev.sendFeatureReport = async (id, data) => {
+        if (id === 21) {
+          creates++;
+          readsForCreate = 0;
+        }
+        return origFeature(id, data);
+      };
+      dev.receiveFeatureReport = async (id) => {
+        dev.reads.push({ id, at: dev.log.length });
+        readsForCreate++;
+        // Simulate Chrome returning a blank Block Load on the very first read after Create New Effect, then Success + block 0
+        if (creates === 1 && readsForCreate === 1) {
+          return new DataView(new Uint8Array([22, 0, 0, ...new Array<number>(21).fill(0)]).buffer);
+        }
+        return new DataView(new Uint8Array([22, 1, creates - 1, ...new Array<number>(21).fill(0)]).buffer);
+      };
+      return dev;
+    };
+
+    const winCols = makeTmCols(true);
+    const winLayout = parsePidLayout(winCols, "unordered");
+    assert.ok(winLayout);
+    const b66eWin = makeB66e(winCols, winLayout);
+    const clock = new FakeClock();
+    const res = await setupPidDevice(b66eWin, { deps: clock.deps, layout: winLayout });
+    assert.ok(res.ok);
+    if (!res.ok) return;
+    assert.equal(res.session.blockIndex, 0, "blank Block Load was retried and resolved to real block 0");
+    assert.equal(res.session.damperBlockIndex, 1);
+    assert.ok(clock.sleeps.includes(THRUSTMASTER_PID_PROFILE.createSettleMs), "waited createSettleMs after Create New Effect");
+    const setEffectConst = b66eWin.log.find((l) => l.kind === "out" && l.id === 11 && l.data[0] === 0);
+    assert.ok(setEffectConst);
+    assert.equal(setEffectConst.data[2], 0x60, "byte 2 enables both DIRECTION_ENABLE (0x20) and Axes Enable X (0x40)");
+    assert.equal(setEffectConst.data[5], 0x40, "byte 5 scalar PID.DIRECTION = 90°");
+    assert.deepEqual(setEffectConst.data.slice(8, 12), [0x00, 0x40, 0x00, 0x00], "bytes 8..9 ORDINAL_1 = 0x4000 (90° +X)");
+    assert.match(describeHidDevice(b66eWin), /PID profile: Thrustmaster/);
+
+    // Separate USB pedals (PRS 2 Sport) listed before B66E must be ignored by pickFfbDevice
+    const pedals = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 1, items: [variable([X], 16, 1, 0, 65535)] }] }]);
+    pedals.vendorId = 0x1209;
+    pedals.productId = 0x9901;
+    pedals.productName = "PRS 2 Sport";
+    const descCols = makeTmCols(false);
+    const descLayout = parsePidLayout(descCols, "descriptor");
+    assert.ok(descLayout);
+    const b66e = makeB66e(descCols, descLayout);
+    const ffb = new WebHidFfb(fakeHid([pedals, b66e], [pedals, b66e]).api, new FakeClock().deps);
+    assert.equal(await ffb.reconnect(), "B66E");
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(pedals.opened, false, "separate USB pedals are never opened for FFB");
+    b66e.log.length = 0;
+    ffb.setForce(-0.75);
+    await flush();
+    const forceWrite = b66e.log.find((l) => l.kind === "out" && l.id === 13);
+    assert.ok(forceWrite, "force report sent to B66E");
+    assert.deepEqual(forceWrite.data.slice(0, 3), [0, 0, (-95) & 0xff], "signed 8-bit magnitude streamed to block 0");
+    await ffb.dispose();
+  });
+  await check("T300RS picker filters include 044f:b66e; multi-interface picking prefers explicit report 0x60 and richer PID layout; declared report size respected", async () => {
+    // 1. REQUEST_FILTERS includes 044f:b66e so vendor-page collections are shown in Chrome/Edge
+    const t300a = thrustmaster(0xb66e, "B66E", 63, 0x0a);
+    const t300b = thrustmaster(0xb66e, "B66E", 64, 0x60);
+    let capturedFilters: { vendorId?: number; productId?: number }[] = [];
+    const hid = fakeHid([t300a, t300b]);
+    const origReq = hid.api.requestDevice;
+    hid.api.requestDevice = async (opts) => {
+      capturedFilters = opts.filters;
+      return origReq(opts);
+    };
+    const ffb = new WebHidFfb(hid.api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "B66E");
+    assert.ok(capturedFilters.some((f) => f.vendorId === 0x044f && f.productId === 0xb66e), "T300RS VID:PID is in REQUEST_FILTERS");
+    assert.equal(t300a.opened, false, "0x0a-only interface skipped in favour of interface declaring report 0x60");
+    assert.equal(t300b.opened, true, "interface declaring report 0x60 picked");
+    assert.equal(t300b.log[0]?.data.length, 64, "outgoing report 0x60 padded to descriptor's declared 64 bytes");
+    await ffb.dispose();
+
+    // 2. Multi-interface PID: richer PID collection (with Set Effect + Create New Effect) beats a stripped PID collection
+    const minimalPid = new FakeHidDevice([
+      {
+        usagePage: 0x0f,
+        usage: 0x92,
+        outputReports: [
+          { reportId: 5, items: [variable([pid(0x22)], 8, 1, 1, 40), variable([pid(0x70)], 16, 1, -10000, 10000)] },
+          { reportId: 10, items: [variable([pid(0x22)], 8, 1, 1, 40), selector(OP_LIST)] },
+        ],
+      },
+    ]);
+    minimalPid.productName = "Minimal Interface";
+    const fullCols = pidCollections();
+    const fullPid = new FakeHidDevice(fullCols, asLayout(fullCols).blockLoad);
+    fullPid.productName = "Full PID Interface";
+    const ffb2 = new WebHidFfb(fakeHid([minimalPid, fullPid]).api, new FakeClock().deps);
+    assert.equal(await ffb2.connect(), "Full PID Interface");
+    assert.equal(minimalPid.opened, false);
+    assert.equal(fullPid.opened, true);
+    await ffb2.dispose();
+  });
+  await check("ForceWriter times out a hung sendReport after WRITE_TIMEOUT_MS and tracedDevice emits diagnostic warnings on failures", async () => {
+    const t300 = thrustmaster(0xb66e, "B66E", 63, 0x60);
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([t300]).api, clock.deps);
+    await ffb.connect();
+    t300.hold = true; // simulate Chrome WriteFile hanging forever without settling
+    for (let i = 1; i <= 3; i++) {
+      ffb.setForce(i * 0.25);
+      await flush();
+      clock.advance(WRITE_TIMEOUT_MS);
+      await flush();
+      clock.advance(10);
+      await flush();
+    }
+    assert.equal(ffb.status.state, "error", "3 consecutive hung sendReports transition status to fatal error");
+    assert.match(ffb.status.message ?? "", /timed out/i);
+    t300.hold = false;
+    t300.release();
+    await settle();
+
+    // tracedDevice logs structured warnings on setup and stream sendReport failures
+    const warnings: string[] = [];
+    const trace = new HidTrace(clock.deps.now);
+    const broken = thrustmaster(0xb66e, "B66E", 63, 0x60);
+    broken.failSends = true;
+    const wrapped = tracedDevice(broken, trace, (m) => warnings.push(m));
+    trace.recording = true;
+    await assert.rejects(() => wrapped.sendReport(0x60, new Uint8Array(63)));
+    trace.recording = false;
+    for (let i = 0; i < 5; i++) {
+      await assert.rejects(() => wrapped.sendReport(0x60, new Uint8Array(63)));
+    }
+    assert.equal(warnings.length, 4, "1 setup warning + first 3 rate-limited stream warnings");
+    assert.match(warnings[0] ?? "", /B66E \[044f:b66e\].*0x60 \(63B\) failed/);
+    assert.match(warnings[1] ?? "", /stream sendReport id 0x60 \(63B\) failed \(#1\)/);
   });
 
   console.log(`\n${passed} checks passed`);
