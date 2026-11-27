@@ -127,6 +127,10 @@ func (l *appLog) writeLine(line string) {
 
 // rotate moves a full log aside and starts a new one (l.mu held)
 func (l *appLog) rotate() {
+	if currentLog.Load() == l {
+		// Release the duplicate crash-output handle before closing/renaming so Windows does not fail with a sharing violation.
+		debug.SetCrashOutput(nil, debug.CrashOptions{})
+	}
 	l.f.Close()
 	l.f = nil
 	os.Rename(l.path, l.path+".1")

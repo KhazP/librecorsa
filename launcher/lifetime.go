@@ -149,10 +149,14 @@ func (l *lifetime) step() (endPID int, quit string) {
 		return 0, ""
 	}
 	now := l.now()
+	hadPages := len(l.pages) > 0
 	for id, t := range l.pages {
 		if now.Sub(t) >= beatTimeout {
 			delete(l.pages, id)
 		}
+	}
+	if hadPages && len(l.pages) == 0 && l.closedAt.IsZero() {
+		l.closedAt = now
 	}
 	if b := l.browser; b != nil {
 		select {
