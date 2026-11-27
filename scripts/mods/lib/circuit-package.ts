@@ -135,6 +135,9 @@ export function packageCircuit(opts: CircuitPackageOptions): PackagedCircuit {
     data.metadata.author = `${said.author} (${said.license})`;
   }
 
+  // Validate package id and existing mod.json before deleting or writing any files
+  const manifest = readOrStartManifest(opts.packageDir, opts.info);
+
   // Those files, and only those
   rmSync(target, { recursive: true, force: true });
   for (const c of [...copies, ...extras]) {
@@ -163,7 +166,7 @@ export function packageCircuit(opts: CircuitPackageOptions): PackagedCircuit {
     ...((opts.listing?.defaultTimeOfDay ?? entry.defaultTimeOfDay) ? { defaultTimeOfDay: opts.listing?.defaultTimeOfDay ?? entry.defaultTimeOfDay } : {}),
     ...(credit ? { credit } : {}),
   } as ModTrack;
-  writeManifest(opts.packageDir, withTrack(readOrStartManifest(opts.packageDir, opts.info), track));
+  writeManifest(opts.packageDir, withTrack(manifest, track));
 
   // Only a working copy in public/tracks/ (never the folder itself, never one the game lists)
   if (opts.removeBuild && !gameListsCircuit(opts.builtId) && buildDir.startsWith(BUILT_TRACKS_DIR + sep) && isInside(BUILT_TRACKS_DIR, buildDir)) {

@@ -131,6 +131,9 @@ export function packageCar(opts: CarPackageOptions): PackagedCar {
   } else sound = { car: opts.sound.car };
   for (const f of opts.extraFiles ?? []) copies.push({ from: sourceFile(f.from, `extraFiles ${f.to}`), to: packageTarget(opts.packageDir, f.to, "extraFiles") });
 
+  // Validate package id and existing mod.json before deleting or writing any files
+  const manifest = readOrStartManifest(opts.packageDir, opts.info);
+
   rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
   for (const c of copies) {
@@ -158,6 +161,6 @@ export function packageCar(opts: CarPackageOptions): PackagedCar {
     sound,
     ...(car.credit ? { credit: car.credit } : {}),
   };
-  writeManifest(opts.packageDir, withCar(readOrStartManifest(opts.packageDir, opts.info), entry));
+  writeManifest(opts.packageDir, withCar(manifest, entry));
   return { contentId: `mod:${opts.info.id}/${localId}`, checked: checkPackage(opts.packageDir), skipped };
 }

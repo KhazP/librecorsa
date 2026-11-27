@@ -92,8 +92,19 @@ export function readOrStartManifest(packageDir: string, info: PackageInfo): ModM
   if (existing && existing.id !== info.id) {
     throw new Error(`${path} is package "${existing.id}", not "${info.id}": pick another folder or the same id`);
   }
+  const creditChanged = existing !== null && JSON.stringify(existing.credit) !== JSON.stringify(info.credit);
+  const tracks =
+    creditChanged && existing.tracks
+      ? existing.tracks.map((t) => (t.credit ? t : { ...t, credit: existing.credit }))
+      : existing?.tracks;
+  const cars =
+    creditChanged && existing.cars
+      ? existing.cars.map((c) => (c.credit ? c : { ...c, credit: existing.credit }))
+      : existing?.cars;
   return {
     ...(existing ?? {}),
+    ...(tracks ? { tracks } : {}),
+    ...(cars ? { cars } : {}),
     format: 1,
     id: info.id,
     name: info.name,

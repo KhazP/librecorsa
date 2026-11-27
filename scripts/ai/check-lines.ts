@@ -140,7 +140,13 @@ if (write) {
   }
   for (const car of cars) {
     const line = checkedOn.get(car) as RacingLineId;
-    if (planCheckFor(car, line) !== undefined && planCheckFor(car, line)?.physicsLapS === checks[car].physicsLapS) continue;
+    const got = planCheckFor(car, line);
+    const want = checks[car];
+    const lapMatches =
+      got !== undefined &&
+      got.ok === want.ok &&
+      (Number.isFinite(want.physicsLapS) ? got.physicsLapS === want.physicsLapS : !Number.isFinite(got.physicsLapS));
+    if (lapMatches) continue;
     console.error(`Not written: read back, ${car}'s check on the ${line} line is not where the game reads it`);
     process.exit(1);
   }

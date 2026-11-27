@@ -69,7 +69,11 @@ const between = (r: Run, a: number, b: number) => {
 };
 const minV = (r: Run, a: number, b: number) => {
   let m = Infinity;
-  for (let i = a; i !== b; i = (i + 1) % N) if (Number.isFinite(r.v[i])) m = Math.min(m, r.v[i]);
+  let i = a;
+  do {
+    if (Number.isFinite(r.v[i])) m = Math.min(m, r.v[i]);
+    i = (i + 1) % N;
+  } while (i !== b);
   return m * 3.6;
 };
 console.log(`${trackId} · ${car} on the ${line} line`);

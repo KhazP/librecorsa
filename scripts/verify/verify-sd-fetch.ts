@@ -189,11 +189,6 @@ async function main(): Promise<void> {
     g("add", "-A");
     g("commit", "-q", "-m", "plain");
     const plain = g("rev-parse", "HEAD").stdout.trim();
-    symlinkSync("/etc/passwd", join(repo, "car", "readme.txt"));
-    g("add", "-A");
-    g("commit", "-q", "-m", "a link");
-    const linked = g("rev-parse", "HEAD").stdout.trim();
-
     const out = join(tmp, "tree-ok");
     const n = writeTree(repo, plain, "car", out, "test");
     check(
@@ -201,9 +196,20 @@ async function main(): Promise<void> {
       n === 2 && readFileSync(join(out, "sub", "tex.png")).equals(Buffer.from([0, 1, 2, 255])),
       files(out).join(", "),
     );
-    const out2 = join(tmp, "tree-link");
-    const why = await refusal(() => writeTree(repo, linked, "car", out2, "test"));
-    check("a tree holding a link is refused before anything is written", /is a link/.test(why) && !existsSync(out2), why);
+    let linked: string | null = null;
+    try {
+      symlinkSync("/etc/passwd", join(repo, "car", "readme.txt"));
+      g("add", "-A");
+      g("commit", "-q", "-m", "a link");
+      linked = g("rev-parse", "HEAD").stdout.trim();
+    } catch {
+      // Windows runners without symlink privilege skip the symlink refusal test
+    }
+    if (linked) {
+      const out2 = join(tmp, "tree-link");
+      const why = await refusal(() => writeTree(repo, linked, "car", out2, "test"));
+      check("a tree holding a link is refused before anything is written", /is a link/.test(why) && !existsSync(out2), why);
+    }
     const blob = Buffer.from("surfaces\n");
     writeFileSync(join(tmp, "blob.txt"), blob);
     const want = spawnSync("git", ["hash-object", join(tmp, "blob.txt")], {

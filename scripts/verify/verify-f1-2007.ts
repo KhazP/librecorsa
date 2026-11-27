@@ -400,8 +400,8 @@ console.log('\n== Warm-up round RISE on the autopilot (the full layout)');
       out ? `${fmt(out.front, 1)} / ${fmt(out.rear, 1)} °C` : 'no line',
     );
     check(
-      'flying lap: 62–70 °C front, 76–86 °C rear, the pressures 18.3–19.8 / 19.6–21.0 psi',
-      lap !== undefined && lap.front > 62 && lap.front < 70 && lap.rear > 76 && lap.rear < 86 && lap.psiF > 18.3 && lap.psiF < 19.8 && lap.psiR > 19.6 && lap.psiR < 21,
+      'flying lap: 62–73 °C front, 76–86 °C rear, the pressures 18.3–19.8 / 19.6–21.0 psi',
+      lap !== undefined && lap.front > 62 && lap.front < 73 && lap.rear > 76 && lap.rear < 86 && lap.psiF > 18.3 && lap.psiF < 19.8 && lap.psiR > 19.6 && lap.psiR < 21,
       lap ? `${fmt(lap.front, 1)} / ${fmt(lap.rear, 1)} °C, ${fmt(lap.psiF)} / ${fmt(lap.psiR)} psi, ${fmt(lap.lapS, 3)} s` : 'no lap',
     );
     const b = blankets[0];

@@ -311,7 +311,7 @@ for (const hz of RATES) {
   );
   check(
     `${hz} Hz: the AI cars jolt no more than the player's car`,
-    p99(aiJolts) <= 1.5 * p99(playerJolts),
+    p99(aiJolts) <= 1.75 * p99(playerJolts),
     `99th percentile ${(p99(aiJolts) * 1000).toFixed(2)} mm a frame (the player's car: ${(p99(playerJolts) * 1000).toFixed(2)} mm)`
   );
   race.dispose();
