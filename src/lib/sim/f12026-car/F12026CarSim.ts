@@ -781,8 +781,8 @@ function wallBiasRoomOf(track: BuiltTrackData, n: number, offsetAt: (i: number, 
     const s = i * ds;
     const smp = track.getSampleAtDistance(s);
     const off = offsetAt(i, s);
-    pos[i] = smp.wallRightM !== undefined && Number.isFinite(smp.wallRightM) ? smp.wallRightM - keep - off : Infinity;
-    neg[i] = smp.wallLeftM !== undefined && Number.isFinite(smp.wallLeftM) ? smp.wallLeftM - keep + off : Infinity;
+    pos[i] = smp.wallRightM !== undefined && Number.isFinite(smp.wallRightM) ? smp.wallRightM - keep - off : 1e4;
+    neg[i] = smp.wallLeftM !== undefined && Number.isFinite(smp.wallLeftM) ? smp.wallLeftM - keep + off : 1e4;
   }
   const rise = TRACK_BIAS_EDGE_SLOPE * ds;
   for (let k = 2 * n - 1; k >= 0; k--) {

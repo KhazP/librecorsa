@@ -48,7 +48,9 @@ export function sampleGrid(arr: ArrayLike<number>, s: number, ds: number): numbe
   const t = k - f;
   const i0 = ((f % n) + n) % n;
   const i1 = (i0 + 1) % n;
-  return arr[i0] + (arr[i1] - arr[i0]) * t;
+  const a = arr[i0];
+  const b = arr[i1];
+  return t === 0 || a === b ? a : a + (b - a) * t;
 }
 
 /** Light circular smoothing (box of ±`half` points), for derivatives taken from sampled geometry */
