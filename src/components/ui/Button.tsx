@@ -225,6 +225,8 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
   /** `md` 44 px, `sm` 36 px (44 on touch screens) */
   size?: "md" | "sm";
   forceCursor?: boolean;
+  /** A link to another site with the same look, opened in a new tab (only `aria-label` and `title` carry over) */
+  href?: string;
 }
 
 /** A round button holding one icon, in the same variants as `Button` */
@@ -235,8 +237,34 @@ export function IconButton({
   forceCursor,
   className,
   onPointerEnter,
+  href,
   ...rest
 }: IconButtonProps) {
+  const look = cx(
+    "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full active:scale-[0.96] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:active:scale-100",
+    MOTION,
+    VARIANT[variant],
+    size === "md" ? "size-11 [&_svg]:size-5" : "size-9 pointer-coarse:size-11 [&_svg]:size-4",
+    className,
+  );
+  if (href !== undefined) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={rest["aria-label"]}
+        title={rest.title}
+        data-cursor={forceCursor ? "" : undefined}
+        onPointerEnter={focusOnHover}
+        className={look}
+      >
+        <span aria-hidden className="inline-flex">
+          {icon}
+        </span>
+      </a>
+    );
+  }
   return (
     <button
       type="button"
@@ -246,13 +274,7 @@ export function IconButton({
         focusOnHover(e);
         onPointerEnter?.(e);
       }}
-      className={cx(
-        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full active:scale-[0.96] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:active:scale-100",
-        MOTION,
-        VARIANT[variant],
-        size === "md" ? "size-11 [&_svg]:size-5" : "size-9 pointer-coarse:size-11 [&_svg]:size-4",
-        className,
-      )}
+      className={look}
     >
       <span aria-hidden className="inline-flex">
         {icon}
