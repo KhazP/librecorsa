@@ -12,6 +12,7 @@ import { fetchBadges, type DriverBadge } from "@/lib/net/awards";
 import { driverNameKey, formatCount } from "@/lib/net/board-client";
 import { fetchDriverProfile, lapBoardPercentile, type DriverProfile, type DriverProfileLap } from "@/lib/net/driver-profile";
 import { fetchDriverRecord, type DriverRecord } from "@/lib/net/race-results";
+import { lapReportUrl } from "@/lib/site";
 import { formatLapTime, formatSectorTime } from "@/components/hud/hud-format";
 import { Badge, type PaletteColor } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/Button";
@@ -63,6 +64,8 @@ export interface DriverProfileBodyProps {
   carTag: (vehicle: VehicleModelId) => ProfileCarTag;
   onRetry: () => void;
   onOpenBoard?: (trackId: string, vehicle: VehicleModelId) => void;
+  /** A link reporting the lap as a GitHub issue (site.ts `lapReportUrl`); absent on the player's own profile */
+  reportUrl?: (lap: DriverProfileLap) => string;
 }
 
 /**
@@ -78,6 +81,7 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
   carTag,
   onRetry,
   onOpenBoard,
+  reportUrl,
 }) => {
   const tx = useTranslations("board.profile");
   const tt = useTranslations("board.table");
@@ -250,6 +254,11 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
                   <th scope="col" className={`${TH} ${SECTOR}`}>
                     {tt("sector", { n: 3 })}
                   </th>
+                  {reportUrl ? (
+                    <th scope="col" className="w-0 p-0">
+                      <span className="sr-only">{tx("colReport")}</span>
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -319,6 +328,19 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
                           ) : null}
                         </td>
                       ))}
+                      {reportUrl ? (
+                        <td className="w-0 py-1.5 ps-1 pe-0 text-end">
+                          <IconButton
+                            size="sm"
+                            variant="ghost"
+                            icon={<Icon name="report" />}
+                            href={reportUrl(lap)}
+                            aria-label={tx("reportLabel", { name: profile.name, circuit: trackLabel, car: tag.label })}
+                            title={tx("report")}
+                            className="text-lc-slate"
+                          />
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
@@ -393,6 +415,18 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   const displayName = profile && profile.boardsEntered > 0 ? profile.name : (driverName?.trim() ?? "");
   const code = profile?.code ?? null;
 
+  const reportUrl =
+    !isMe && profile
+      ? (lap: DriverProfileLap) =>
+          lapReportUrl({
+            driver: profile.name,
+            circuit: circuitName(lap.trackId),
+            car: carTag(lap.vehicle).label,
+            lapTime: formatLapTime(lap.lapTimeMs),
+            lapId: lap.id,
+          })
+      : undefined;
+
   const handleOpenBoard = onOpenBoard
     ? (trackId: string, vehicle: VehicleModelId) => {
         onOpenBoard(trackId, vehicle);
@@ -451,6 +485,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
         carTag={carTag}
         onRetry={triggerRefresh}
         onOpenBoard={handleOpenBoard}
+        reportUrl={reportUrl}
       />
     </Modal>
   );
