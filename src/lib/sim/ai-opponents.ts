@@ -40,7 +40,7 @@ import {
 import { AI_TUNING_LIBRARY } from '@/lib/sim/ai-tuning-data';
 import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedCorner } from '@/lib/sim/ai-learning';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
-import { ROLLING_START_PACE_MS, type SimulatorCar } from '@/lib/sim/simulator-car';
+import type { SimulatorCar } from '@/lib/sim/simulator-car';
 import { rollingFormationStep } from '@/lib/sim/race-start';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
 import type { DnfReason, RaceStatus, RacingLineId, TireCompound, VehicleModelId } from '@/types/f1';
@@ -1749,11 +1749,12 @@ export class AiOpponentField implements AiRace {
     // just gone down it pair by pair)
     this.preStartS = standing && this.qualiResults && !this.qualifying?.gridShown ? QUALIFYING_GRID_SHOW_S : 0;
     this.holdS = 0.2 + this.rng() * 2.8;
-    // Rolling start: hold the whole field at ~65 km/h formation pace with player speed limiter until P1 crosses Start/Finish
+    // Rolling start: hold the AI field at the circuit's pit-lane speed limit (default 60 km/h) until P1 crosses Start/Finish
     const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
     const spawnSpeeds = this.cars.map((c) => c.sim.vxMs).filter((v) => v > 5);
     const wetRollingScale = leader ? clamp(this.environment.weatherPaceScale(leader.sim), 0.72, 1) : 1;
-    const paceMs = spawnSpeeds.length > 0 ? Math.min(ROLLING_START_PACE_MS * wetRollingScale, Math.min(...spawnSpeeds)) : 0;
+    const pitLimitMs = (this.track.pitLane?.limitKmh ?? 60) / 3.6;
+    const paceMs = spawnSpeeds.length > 0 ? Math.min(pitLimitMs * wetRollingScale, Math.min(...spawnSpeeds)) : 0;
     this.rollingFormation =
       !standing && !this.track.pointToPoint && paceMs > 5 && leader !== undefined && leader.clock.distM < -5;
     this.rollingPaceMs = this.rollingFormation ? paceMs : 0;
@@ -1766,7 +1767,6 @@ export class AiOpponentField implements AiRace {
     this.rollingMaxWaitS = this.rollingFormation
       ? Math.max(12, this.rollingDistanceToLineM / Math.max(5, paceMs) + 8)
       : 0;
-    this.player.speedLimiterMs = this.rollingFormation ? this.rollingPaceMs : undefined;
     if (this.rollingFormation) {
       for (const car of this.cars) {
         if (car.ai) {
@@ -1912,11 +1912,7 @@ export class AiOpponentField implements AiRace {
    * Also silently releases if a car was teleported mid-lap (headless test setups).
    */
   private updateRollingFormation(dt: number): void {
-    if (!this.rollingFormation) {
-      if (this.player.speedLimiterMs !== undefined) this.player.speedLimiterMs = undefined;
-      return;
-    }
-    this.player.speedLimiterMs = this.rollingPaceMs;
+    if (!this.rollingFormation) return;
     const L = this.track.totalLengthM;
     for (const car of this.cars) {
       if (!car.removed && Math.abs(wrapHalf(car.sim.sMeters - car.prevS, L)) > 40) {
@@ -1960,7 +1956,6 @@ export class AiOpponentField implements AiRace {
     this.rollingLeaderStallS = 0;
     this.rollingStageOrder = 0;
     this.rollingDistanceToLineM = 0;
-    this.player.speedLimiterMs = undefined;
     for (const car of this.cars) {
       if (!car.ai) continue;
       car.startLaneM = silent ? null : car.sim.lateralOffsetM;
@@ -3228,6 +3223,8 @@ export class AiOpponentField implements AiRace {
     if (this.offRoad(car) || car.sim.telemetry.pitLane) return false;
     if (this.rollingFormation) return car.retired;
     if (car.retired || car.control?.incident) return true;
+    // Right after a rolling start's green flag drops, the pack is still accelerating away from formation pace
+    if (this.rollingGreenAtS > 0 && this.raceTimeS - this.rollingGreenAtS < 8) return false;
     // Off the start everyone is slow; and a finished car on its in-lap is no obstacle anyone races
     const early = this.rc.earlyHazard > 0;
     if (early ? car.distM - car.clock.startDistM < 50 : this.raceTimeS < 10 || car.distM - car.clock.startDistM < 150) return false;
@@ -4165,7 +4162,6 @@ export class AiOpponentField implements AiRace {
       this.rollingStageOrder = this.rollingFormation
         ? rollingFormationStep(this.rollingDistanceToLineM, leader?.sim.vxMs ?? this.rollingPaceMs, this.rollingPaceMs, 0).stageOrder
         : 0;
-      this.player.speedLimiterMs = this.rollingFormation ? this.rollingPaceMs : undefined;
     }
   }
 
