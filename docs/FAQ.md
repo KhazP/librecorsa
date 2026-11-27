@@ -29,7 +29,7 @@ No. LibreCorsa is an independent fan project, not affiliated with Formula 1, the
 ### What can I play it on?
 
 - **In a browser** on Windows, macOS or Linux: any browser with WebGL2 and hardware acceleration turned on.
-- **The desktop app** for Windows, macOS and Linux, which plays offline, loads mod packages, converts circuits and cars from other games, and updates itself, plus an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Desktop and Android apps](DOWNLOADS.md).
+- **The desktop app** for Windows, macOS and Linux, which plays offline and updates itself, plus an **Android app** (Android 7 or later, with Chrome). Online, both play the live game, so updates arrive without reinstalling. See [Desktop and Android apps](DOWNLOADS.md).
 - **iPhone and iPad** in Safari. Share, then Add to Home Screen, gives you full screen.
 - **VR headsets** through WebXR (standalone headsets like Quest and Pico, or PCVR in Chrome/Chromium with SteamVR or OpenXR), from **Settings > Display > Graphics** or **Enter VR** in the pause menu, with in-cockpit HUD plates, headset controller support, and an in-headset pause and recenter panel. It's experimental, so expect rough edges. See [VR headsets](VR.md).
 

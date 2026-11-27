@@ -62,7 +62,7 @@
 
 ## Download apps
 
-You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install an app from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/librecorsa/librecorsa/releases)**. The desktop app ([launcher/](launcher/README.md)) plays the live game when online and what it kept when offline, takes mods, converts circuits and cars from other games, and updates itself. The Android app opens the live site, so game updates arrive without reinstalling.
+You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install an app from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/librecorsa/librecorsa/releases)**. The desktop app ([launcher/](launcher/README.md)) plays the live game when online and what it kept when offline, and updates itself. The Android app opens the live site, so game updates arrive without reinstalling.
 
 | Platform | Package | Notes |
 | :-- | :-- | :-- |

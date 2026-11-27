@@ -1,6 +1,6 @@
 # LibreCorsa Documentation
 
-LibreCorsa is a free, open-source racing simulator that runs directly in your browser at [librecorsa.org](https://librecorsa.org/). These docs cover everything from setting up a wheel and racing online to building mods, porting hardware or content, and inspecting the physics engine.
+LibreCorsa is a free, open-source racing simulator that runs directly in your browser at [librecorsa.org](https://librecorsa.org/). These docs cover everything from setting up a wheel and racing online to porting hardware or content and inspecting the physics engine.
 
 Everything here is maintained alongside the source code and published at [docs.librecorsa.org](https://docs.librecorsa.org/) directly from the repository's `docs/` directory.
 
@@ -18,12 +18,6 @@ Everything here is maintained alongside the source code and published at [docs.l
 - **[Triple screens](SCREENS.md)**: Three monitors with a view of their own each: measurements, the true field of view, and performance.
 - **[VR headsets](VR.md)**: WebXR on standalone headsets and PCVR: entering VR, head tracking and seat adjustment, cockpit HUD, performance defaults, and known limits.
 - **[Desktop and Android apps](DOWNLOADS.md)**: Installing and running the desktop and Android apps, user data and mod folders, offline play, signed auto-updates, official release sources, SHA-256 checksums, and Android signing certificate verification.
-
-## Modding
-
-- **[Making mods](modding.md)**: Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, custom sound banks, physics patches, and sharing through catalogues.
-- **[Painting liveries](LIVERIES.md)**: Templates for the F1 cars, GT3s, and LMDh, how to paint and package them, and how to send a livery in.
-- **[Importing mods from other games](importing-mods.md)**: Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
 
 ## Porting
 
@@ -43,6 +37,12 @@ Everything here is maintained alongside the source code and published at [docs.l
 - [How the code fits together](ARCHITECTURE.md): a map of the repository, the threads, and the rules that keep players' data working.
 - [Physics validation](physics/README.md): the tyre model and the cars measured against real telemetry and reference data.
 - [Race AI, contact and damage](race-ai.md): how the AI drivers race, and what happens when cars touch.
+
+## Modding
+
+- **[Making mods](modding.md)**: Creating, validating, and packaging data-only mod packages for circuits, cars, liveries, custom sound banks, physics patches, and sharing through catalogues.
+- **[Painting liveries](LIVERIES.md)**: Templates for the F1 cars, GT3s, and LMDh, how to paint and package them, and how to send a livery in.
+- **[Importing mods from other games](importing-mods.md)**: Converting Speed Dreams and Assetto Corsa circuits and cars (and your own Blender circuits) into packages, in the launcher or from the command line, and what their licences allow.
 
 ## Elsewhere
 
