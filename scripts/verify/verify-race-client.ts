@@ -234,6 +234,41 @@ async function main() {
   m.hostLocal();
   check('hosting something else leaves the race', third.closed && !m.inScheduledRace && m.raceStatus.state === 'idle');
 
+  // Lost more than 10 min into a race (the config is read again then) and being got back in, then left and joined
+  // again before that read heard back: the new entry goes to the next race, not back into the old one
+  m.joinScheduledRace();
+  await tick();
+  await tick();
+  const lost = FakeWebSocket.last!;
+  lost.get({ t: 'welcome', now: Date.now(), startsMs: startsAt, index: 8 });
+  const realFetch = globalThis.fetch;
+  const realNow = Date.now;
+  Date.now = () => realNow() + 11 * 60_000;
+  let release = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  globalThis.fetch = (async (...a: Parameters<typeof fetch>) => {
+    await gate;
+    return realFetch(...a);
+  }) as typeof fetch;
+  lost.readyState = 3;
+  lost.onclose?.();
+  // The retry's config read under way
+  await new Promise((r) => setTimeout(r, 600));
+  const retryWaiting = FakeWebSocket.last === lost;
+  m.leaveScheduledRace();
+  m.joinScheduledRace();
+  release();
+  await new Promise((r) => setTimeout(r, 20));
+  globalThis.fetch = realFetch;
+  Date.now = realNow;
+  const rejoined = FakeWebSocket.last!;
+  check(
+    'left and joined again while getting back in: the new entry is for the next race',
+    retryWaiting && rejoined !== lost && /\/races\/next\?/.test(rejoined.url),
+    `${retryWaiting ? '' : 'the retry did not wait for its read; '}${rejoined.url.replace(/token=[a-f0-9]*/, 'token=…')}`
+  );
+  m.leaveScheduledRace();
+
   if (failures.length > 0) {
     console.error(`\n${failures.length} check(s) failed`);
     process.exit(1);
