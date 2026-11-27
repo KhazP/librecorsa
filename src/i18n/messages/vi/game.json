@@ -835,7 +835,7 @@
     "macosDmgNote": "Mở tệp .dmg và kéo LibreCorsa vào Ứng dụng. Apple chưa công chứng ứng dụng này, nên lần đầu macOS chặn mở: vào Cài đặt hệ thống > Quyền riêng tư & Bảo mật rồi nhấp Vẫn mở.",
     "macosStatusLabel": "Chưa ký số",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "Máy Mac chip M1–M4",
+    "macosArm64Detail": "Máy Mac chip Apple Silicon",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Máy Mac Intel x64",
     "linuxTarNote": "Giải nén vào bất kỳ đâu rồi chạy librecorsa trong thư mục LibreCorsa. Lần khởi chạy đầu tiên sẽ thêm LibreCorsa vào menu ứng dụng của bạn:",

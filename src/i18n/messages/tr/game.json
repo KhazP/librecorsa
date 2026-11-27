@@ -835,7 +835,7 @@
     "macosDmgNote": ".dmg dosyasını aç ve LibreCorsa’yı Uygulamalar’a sürükle. Apple onu henüz onaylamadı, bu yüzden macOS ilk açılışta durdurur: Sistem Ayarları > Gizlilik ve Güvenlik’i aç ve Yine de Aç’a tıkla.",
     "macosStatusLabel": "İmzasız",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "M1–M4 Mac’ler",
+    "macosArm64Detail": "Apple Silicon Mac’ler",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel x64 Mac’ler",
     "linuxTarNote": "Herhangi bir yere çıkar ve LibreCorsa klasöründeki librecorsa programını çalıştır. İlk açılışta LibreCorsa uygulama menüne eklenir:",

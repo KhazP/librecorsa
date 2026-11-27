@@ -835,7 +835,7 @@
     "macosDmgNote": "افتح ملف .dmg واسحب LibreCorsa إلى «التطبيقات». لم توثّقه Apple بعد، لذا يوقفه macOS في المرة الأولى: افتح «إعدادات النظام > الخصوصية والأمن» وانقر «فتح على أي حال».",
     "macosStatusLabel": "غير موقّع",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "أجهزة Mac بشرائح M1–M4",
+    "macosArm64Detail": "أجهزة Mac بشرائح Apple Silicon",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "أجهزة Mac بمعالجات Intel x64",
     "linuxTarNote": "فُكّ الحزمة في أي مكان وشغّل librecorsa في مجلد LibreCorsa. عند أول تشغيل يُضاف LibreCorsa إلى قائمة تطبيقاتك:",

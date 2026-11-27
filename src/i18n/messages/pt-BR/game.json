@@ -835,7 +835,7 @@
     "macosDmgNote": "Abra o .dmg e arraste o LibreCorsa para Aplicativos. A Apple ainda não o autenticou, então na primeira vez o macOS o bloqueia: abra Ajustes do Sistema > Privacidade e Segurança e clique em Abrir Mesmo Assim.",
     "macosStatusLabel": "Sem assinatura",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "Macs M1–M4",
+    "macosArm64Detail": "Macs Apple Silicon",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Macs Intel x64",
     "linuxTarNote": "Descompacte em qualquer lugar e execute librecorsa na pasta LibreCorsa. Na primeira vez que abre, ele adiciona o LibreCorsa ao seu menu de aplicativos:",

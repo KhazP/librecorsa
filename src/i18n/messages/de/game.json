@@ -835,7 +835,7 @@
     "macosDmgNote": "Öffne die .dmg und ziehe LibreCorsa in den Ordner „Programme“. Apple hat die App noch nicht beglaubigt, deshalb hält macOS sie beim ersten Mal an: Öffne Systemeinstellungen > Datenschutz & Sicherheit und klicke auf „Dennoch öffnen“.",
     "macosStatusLabel": "Unsigniert",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "M1–M4-Macs",
+    "macosArm64Detail": "Apple-Silicon-Macs",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel-x64-Macs",
     "linuxTarNote": "Entpacke es an einem beliebigen Ort und starte librecorsa im Ordner LibreCorsa. Der erste Start fügt LibreCorsa deinem App-Menü hinzu:",

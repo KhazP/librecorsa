@@ -835,7 +835,7 @@
     "macosDmgNote": "Ouvrez le .dmg et glissez LibreCorsa dans Applications. Apple ne l’a pas encore notarié, donc au premier blocage de macOS : ouvrez Réglages Système > Confidentialité et sécurité, puis cliquez sur Ouvrir quand même.",
     "macosStatusLabel": "Non signée",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "Mac M1–M4",
+    "macosArm64Detail": "Mac Apple Silicon",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Mac Intel x64",
     "linuxTarNote": "Décompressez-le où vous voulez et lancez librecorsa dans le dossier LibreCorsa. Au premier lancement, LibreCorsa s’ajoute à votre menu d’applications :",

@@ -835,7 +835,7 @@
     "macosDmgNote": "Open the .dmg and drag LibreCorsa to Applications. Apple hasn’t notarised it yet, so the first time macOS stops it: open System Settings > Privacy & Security and click Open Anyway.",
     "macosStatusLabel": "Unsigned",
     "macosArm64Label": "Apple Silicon (.dmg)",
-    "macosArm64Detail": "M1–M4 Macs",
+    "macosArm64Detail": "Apple Silicon Macs",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel x64 Macs",
     "linuxTarNote": "Unpack it anywhere and run librecorsa in the LibreCorsa folder. Its first start adds LibreCorsa to your app menu:",
