@@ -169,6 +169,25 @@ export async function deleteDriverLaps(deps: { db: D1Database; ghosts?: R2Bucket
   return deleted;
 }
 
+/**
+ * Whether a driver is barred from the boards (admin.ts `adminBanDriver`, migration 0012): their driver key, a name or
+ * their account. False on a database without the table, so the boards keep working before the migration
+ */
+export async function isBanned(db: D1Database, keyHash: string, nameKeys: readonly string[], accountId?: string | null): Promise<boolean> {
+  try {
+    const names = nameKeys.filter(Boolean);
+    const row = await db
+      .prepare(
+        `SELECT 1 AS hit FROM driver_bans WHERE key_hash = ?${names.map(() => " OR name_key = ?").join("")}${accountId ? " OR account_id = ?" : ""} LIMIT 1`
+      )
+      .bind(keyHash, ...names, ...(accountId ? [accountId] : []))
+      .first<{ hit: number }>();
+    return row !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** This driver's place on a board (their fastest lap of any class against everyone else's) and the board's size */
 async function placeOf(deps: BoardDeps, rec: CheckedLap, event: string, nameKey: string): Promise<{ rank: number; total: number }> {
   const board = [rec.trackId, rec.vehicle, rec.conditions.physicsVersion, event];
@@ -307,6 +326,8 @@ async function claimName(deps: BoardDeps, nameKey: string, keyHash: string, acco
   return true;
 }
 
+/** The answer to a barred driver's upload or rename (`isBanned`) */
+export const BANNED = "This driver can't post to the online boards";
 const NAME_TAKEN = "This name is taken. Sign in to the account that holds it, import your driver key under Lap Times, or race under another name";
 /**
  * A lap driven on an older physics version, or before its circuit's boards started again (a tab left open from before
@@ -381,6 +402,7 @@ async function takeLap(deps: BoardDeps, request: Request, seen: LapSeen): Promis
   const keyHash = await sha256Hex(body.driverKey);
   const nameKey = driverNameKey(rec.driverName);
   const account = await accountOfKey(deps.db, keyHash);
+  if (await isBanned(deps.db, keyHash, [nameKey], account?.accountId)) return fail(BANNED, 403);
   if (!(await claimName(deps, nameKey, keyHash, account, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
 
   // A challenge lap also counts on the open board
@@ -588,6 +610,7 @@ export async function renameDriver(deps: BoardDeps, request: Request): Promise<A
   // Whether this key holds the old name (itself, or through the name's account), read before the new one is claimed
   // (which may be the same name in other letters)
   const account = await accountOfKey(deps.db, keyHash);
+  if (await isBanned(deps.db, keyHash, [fromKey, toKey], account?.accountId)) return fail(BANNED, 403);
   const oldOwner = fromKey
     ? await deps.db
         .prepare(`SELECT key_hash${account !== undefined ? ", account_id" : ""} FROM drivers WHERE name_key = ?`)

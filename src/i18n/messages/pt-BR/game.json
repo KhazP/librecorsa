@@ -156,6 +156,8 @@
       "standingStartRun": "Uma subida cronometrada ponto a ponto deve começar com largada parada",
       "speedsVsDistance": "As velocidades registradas não batem com a distância percorrida",
       "distanceVsLength": "A distância percorrida não bate com o comprimento da volta",
+      "gainsTooFast": "O carro ganha velocidade mais rápido do que consegue",
+      "banned": "Este piloto não pode publicar nos rankings online",
       "impliedSpeed": "As posições indicam uma velocidade acima de 420 km/h"
     }
   },

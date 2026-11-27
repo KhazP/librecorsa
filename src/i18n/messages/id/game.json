@@ -156,6 +156,8 @@
       "standingStartRun": "Run berwaktu titik-ke-titik harus dimulai dengan start diam",
       "speedsVsDistance": "Kecepatan yang direkam tidak sesuai dengan jarak yang ditempuh",
       "distanceVsLength": "Jarak yang ditempuh tidak sesuai dengan panjang lap",
+      "gainsTooFast": "Mobil menambah kecepatan lebih cepat dari kemampuannya",
+      "banned": "Pembalap ini tidak bisa mengirim ke papan peringkat online",
       "impliedSpeed": "Posisi yang direkam menunjukkan kecepatan di atas 420 km/h"
     }
   },

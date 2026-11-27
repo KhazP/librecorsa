@@ -505,3 +505,61 @@ export async function adminClearDriverLaps(db: D1Database, ghosts: R2Bucket | un
   const deleted = await deleteDriverLaps({ db, ghosts }, nameKey);
   return { status: 200, body: { ok: true, nameKey, deleted } };
 }
+
+const MAX_BAN_BODY_BYTES = 2048;
+const MAX_BAN_REASON = 200;
+
+/**
+ * POST /api/admin/bans/:name {reason?}: bars a driver from the online boards (board.ts `isBanned`): the name, the driver
+ * key that holds it and that key's account can no longer post laps or rename, and the driver's laps (and ghosts) are
+ * deleted as `adminClearDriverLaps` does. A name nobody holds is barred by itself. Banning again updates the row.
+ */
+export async function adminBanDriver(db: D1Database, ghosts: R2Bucket | undefined, rawName: string, request: Request, nowMs: number): Promise<Answer> {
+  const nameKey = driverNameKey(rawName);
+  if (!nameKey || nameKey.length > 64) return { status: 400, body: { ok: false, error: "Invalid driver name" } };
+  if (Number(request.headers.get("Content-Length") ?? 0) > MAX_BAN_BODY_BYTES) return { status: 413, body: { ok: false, error: "Body is too large" } };
+  const text = await request.text();
+  if (text.length > MAX_BAN_BODY_BYTES) return { status: 413, body: { ok: false, error: "Body is too large" } };
+  let reason = "";
+  if (text.trim()) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return { status: 400, body: { ok: false, error: "Body is not valid JSON" } };
+    }
+    const r = (raw as { reason?: unknown } | null)?.reason;
+    if (r !== undefined && typeof r !== "string") return { status: 400, body: { ok: false, error: "Invalid reason" } };
+    reason = (r ?? "").trim().slice(0, MAX_BAN_REASON);
+  }
+  // The driver's key and account, where the name is held (the account column only on a database with accounts)
+  const owner = await db.prepare("SELECT * FROM drivers WHERE name_key = ?").bind(nameKey).first<{ key_hash?: string; account_id?: string | null }>();
+  const keyHash = owner?.key_hash ?? null;
+  const accountId = owner?.account_id ?? null;
+  await db
+    .prepare(
+      "INSERT INTO driver_bans (name_key, key_hash, account_id, reason, banned_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (name_key) DO UPDATE SET key_hash = excluded.key_hash, account_id = excluded.account_id, reason = excluded.reason, banned_at = excluded.banned_at"
+    )
+    .bind(nameKey, keyHash, accountId, reason, nowMs)
+    .run();
+  const deleted = await deleteDriverLaps({ db, ghosts }, nameKey);
+  return { status: 200, body: { ok: true, nameKey, key: keyHash !== null, account: accountId !== null, deleted } };
+}
+
+/** GET /api/admin/bans: the barred drivers, newest first (names, reasons and when; never the keys) */
+export async function adminListBans(db: D1Database): Promise<Answer> {
+  const rows = await db
+    .prepare("SELECT name_key, reason, banned_at, key_hash IS NOT NULL AS has_key, account_id IS NOT NULL AS has_account FROM driver_bans ORDER BY banned_at DESC LIMIT 500")
+    .all<{ name_key: string; reason: string; banned_at: number; has_key: number; has_account: number }>();
+  const bans = rows.results.map((r) => ({ nameKey: r.name_key, reason: r.reason, bannedAt: r.banned_at, key: Boolean(r.has_key), account: Boolean(r.has_account) }));
+  return { status: 200, body: { ok: true, bans } };
+}
+
+/** DELETE /api/admin/bans/:name: lifts a driver's ban (their deleted laps stay deleted) */
+export async function adminLiftBan(db: D1Database, rawName: string): Promise<Answer> {
+  const nameKey = driverNameKey(rawName);
+  if (!nameKey || nameKey.length > 64) return { status: 400, body: { ok: false, error: "Invalid driver name" } };
+  const res = await db.prepare("DELETE FROM driver_bans WHERE name_key = ?").bind(nameKey).run();
+  if (!(res.meta?.changes ?? 0)) return { status: 404, body: { ok: false, error: "No ban for that name" } };
+  return { status: 200, body: { ok: true, nameKey } };
+}

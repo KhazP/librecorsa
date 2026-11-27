@@ -156,6 +156,8 @@
       "standingStartRun": "A point-to-point run must begin from a standing start",
       "speedsVsDistance": "Recorded speeds do not match the distance driven",
       "distanceVsLength": "Distance driven does not match the lap length",
+      "gainsTooFast": "The car gains speed faster than it can",
+      "banned": "This driver can't post to the online boards",
       "impliedSpeed": "Positions imply a speed above 420 km/h"
     }
   },

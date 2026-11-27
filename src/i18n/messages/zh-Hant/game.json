@@ -156,6 +156,8 @@
       "standingStartRun": "點對點單趟計時必須以靜態起跑開始",
       "speedsVsDistance": "記錄的速度與行駛距離不符",
       "distanceVsLength": "行駛距離與單圈長度不符",
+      "gainsTooFast": "賽車加速快過它的能力所及",
+      "banned": "此車手無法發布到線上排行榜",
       "impliedSpeed": "位置紀錄顯示速度超過 420 km/h"
     }
   },

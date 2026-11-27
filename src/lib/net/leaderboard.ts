@@ -387,7 +387,7 @@ export async function submitLap(rec: LapRecording, opts: { event?: string } = {}
   // Only the physics and the circuit as they are now take laps (a lap queued from before an update stays off)
   if (!isCurrentLapPhysics(valid.vehicle, valid.conditions.physicsVersion, valid.trackId)) return { ok: false, error: OLDER_PHYSICS_LAP };
   // The board refuses a lap whose samples don't agree with each other; say so before uploading
-  const problem = lapPlausibilityProblem(valid.data, { open: isPointToPointTrack(valid.trackId) });
+  const problem = lapPlausibilityProblem(valid.data, { open: isPointToPointTrack(valid.trackId), vehicle: valid.vehicle });
   if (problem) return { ok: false, error: problem };
   const body: Record<string, unknown> = { rec: toWirePayload({ ...valid, conditions: valid.conditions }), driverKey: getOrCreateDriverKey() };
   if (opts.event) body.event = opts.event;

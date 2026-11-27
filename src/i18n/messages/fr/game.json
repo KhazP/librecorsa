@@ -156,6 +156,8 @@
       "standingStartRun": "Un contre-la-montre point à point doit commencer par un départ arrêté",
       "speedsVsDistance": "Les vitesses enregistrées ne correspondent pas à la distance parcourue",
       "distanceVsLength": "La distance parcourue ne correspond pas à la longueur du tour",
+      "gainsTooFast": "La voiture prend de la vitesse plus vite qu'elle ne le peut",
+      "banned": "Ce pilote ne peut pas publier dans les classements en ligne",
       "impliedSpeed": "Les positions indiquent une vitesse supérieure à 420 km/h"
     }
   },
