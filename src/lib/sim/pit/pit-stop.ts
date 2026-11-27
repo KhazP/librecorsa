@@ -215,7 +215,7 @@ export class PitStopManager {
    * The limiter on the driver's controls: at the limit the throttle is cut and the car braked down to it, below it
    * the throttle is eased so the car settles on it; held still while the crew works
    */
-  filterInputs(inputs: ControlInputs, speedMs: number): void {
+  filterInputs(inputs: ControlInputs, speedMs: number, overrideLimitMs?: number): void {
     if (this.phase === "servicing") {
       inputs.throttle = 0;
       inputs.brake = 1;
@@ -229,7 +229,7 @@ export class PitStopManager {
       return;
     }
     if (!this.limiterOn) return;
-    const limitMs = this.limitKmh / 3.6;
+    const limitMs = overrideLimitMs !== undefined && Number.isFinite(overrideLimitMs) && overrideLimitMs > 0 ? overrideLimitMs : this.limitKmh / 3.6;
     const lim = applySpeedLimiter(speedMs, limitMs, inputs.throttle, inputs.brake);
     inputs.throttle = lim.throttle;
     inputs.brake = lim.brake;

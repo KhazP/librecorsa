@@ -117,8 +117,9 @@ function buildPitLaneGapBridge(
     const bLz = pz[i1] - rz * halfW;
     const bRx = px[i1] + rx * halfW;
     const bRz = pz[i1] + rz * halfW;
-    pos.push(aLx, y0, aLz, bLx, y1, bLz, bRx, y1, bRz);
-    pos.push(aLx, y0, aLz, bRx, y1, bRz, aRx, y0, aRz);
+    // Wind counter-clockwise from above so face normals point +Y (upward)
+    pos.push(aLx, y0, aLz, bRx, y1, bRz, bLx, y1, bLz);
+    pos.push(aLx, y0, aLz, aRx, y0, aRz, bRx, y1, bRz);
   }
   if (pos.length === 0) return null;
   const geom = new THREE.BufferGeometry();

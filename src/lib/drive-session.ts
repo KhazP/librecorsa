@@ -3964,8 +3964,18 @@ export class DriveSession {
             aiField.penalisePlayer(30 * missing, "pit_stop_missed", tx("game.pit.stopMissed", { count: missing }));
           }
         }
-        if (!coolDown.active) pitStop.filterInputs(inputs, Math.abs(physics.vxMs));
-        physics.speedLimiterMs = !coolDown.active && pitStop.limiterOn ? pitStop.limitKmh / 3.6 : undefined;
+        const rollingPaceMs =
+          !physics.telemetry.pitLane && physics.telemetry.race?.phase === "racing"
+            ? physics.telemetry.race.rollingFormation?.paceMs
+            : undefined;
+        const effectiveLimiterMs =
+          !coolDown.active && pitStop.limiterOn
+            ? rollingPaceMs !== undefined && rollingPaceMs > 0
+              ? Math.min(pitStop.limitKmh / 3.6, rollingPaceMs)
+              : pitStop.limitKmh / 3.6
+            : undefined;
+        if (!coolDown.active) pitStop.filterInputs(inputs, Math.abs(physics.vxMs), effectiveLimiterMs);
+        physics.speedLimiterMs = effectiveLimiterMs;
         if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;

@@ -50,7 +50,9 @@ export function sampleGrid(arr: ArrayLike<number>, s: number, ds: number): numbe
   const i1 = (i0 + 1) % n;
   const a = arr[i0];
   const b = arr[i1];
-  return t === 0 || a === b ? a : a + (b - a) * t;
+  if (t === 0 || a === b) return a;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.isFinite(a) ? a : b;
+  return a + (b - a) * t;
 }
 
 /** Light circular smoothing (box of ±`half` points), for derivatives taken from sampled geometry */

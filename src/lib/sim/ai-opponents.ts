@@ -70,7 +70,7 @@ import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
 import { aiTrackFor, gridIndex, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { buildSideLanes, type SideLanes } from '@/lib/sim/ai/side-lanes';
-import { carLimitsFor, type CarLimits } from '@/lib/sim/ai/ggv';
+import { carLimitsFor, GGV_TABLES, type CarLimits } from '@/lib/sim/ai/ggv';
 import { biasAccelMs2, ownCornerK, stepBias } from '@/lib/sim/ai/plan-bias';
 import { tracksOwnPlanChecks } from '@/lib/sim/ai/plan-tracking';
 import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveLine } from '@/lib/sim/ai/drive-plan';
@@ -1154,10 +1154,11 @@ export class AiOpponentField implements AiRace {
   private readonly followLimits = new Map<string, CarLimits>();
   private dryFollowCapDecelMs2(sim: SimulatorCar): number {
     if (this.classId === 'f1-2026') return 32;
-    const id = sim.vehicleId ?? 'amg-gt3';
+    const id = sim.vehicleId;
+    if (!id || !(id in GGV_TABLES)) return this.classDecelMs2;
     let lim = this.followLimits.get(id);
     if (!lim) {
-      lim = carLimitsFor(sim.vehicleId, 1);
+      lim = carLimitsFor(id, 1);
       this.followLimits.set(id, lim);
     }
     return lim.braking(Math.max(15, sim.vxMs));
@@ -2323,8 +2324,9 @@ export class AiOpponentField implements AiRace {
           roomLat = targetLat;
         }
         // Side by side with its nose behind the other car's: the one that yields if a corner comes and it doesn't own it
-        // (wider lateral window catches a defender who covered deep inside while the attacker approaches on the outside line)
-        if (ds > 0.5 && ds < CAR_LEN_M * 1.1 && (along || Math.abs(dLat) < alongsideSpace + 2.2) && Math.abs(dLat) < alongsideSpace + 2.2) {
+        // (wider lateral window catches a defender who covered deep inside while the attacker approaches on the outside line,
+        // without treating a car directly in front as alongside)
+        if (ds > 0.5 && ds < CAR_LEN_M * 1.1 && Math.abs(dLat) < alongsideSpace + 2.2 && (along || Math.abs(dLat) >= CAR_WID_M * 0.85)) {
           alongsideAhead = other;
         }
         if (ds > 0 && ds < 90 && Math.abs(dLat) < CAR_WID_M + 0.4 + extraLat && ds < aheadGap) {
