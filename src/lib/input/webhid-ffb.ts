@@ -44,6 +44,7 @@ import {
   THRUSTMASTER_NAMES,
   THRUSTMASTER_STARTUP_PRODUCT_IDS,
   THRUSTMASTER_VENDOR_ID,
+  THRUSTMASTER_WHEELS,
   thrustmasterModel,
   type LogitechClassicModel,
   type LogitechHidppModel,
@@ -52,6 +53,7 @@ import {
 import {
   setupThrustmasterDevice,
   teardownThrustmasterSession,
+  thrustmasterHasCommandReport,
   thrustmasterInterfaceFits,
   thrustmasterReleaseCommands,
   TMFF2_REPORT_ID,
@@ -201,6 +203,8 @@ const SELECTORS: readonly { key: number; lo: number; hi: number }[] = [
 const MIN_WRITE_INTERVAL_MS = 2;
 /** Consecutive failed writes after which the driver gives up and reports an error */
 const MAX_WRITE_FAILURES = 3;
+/** Maximum time a single in-flight sendReport may stay pending before counting as a write failure (ms) */
+export const WRITE_TIMEOUT_MS = 1000;
 /** An unchanged force is written again after this long (ms): covers a write the wheel dropped without an error */
 export const FORCE_KEEPALIVE_MS = 200;
 /** Direction value for "along +X" (90 degrees, east) as a fraction of the direction field's range */
@@ -618,6 +622,7 @@ export class ForceWriter {
   private current: Promise<void> | null = null;
   private lastSendMs = -Infinity;
   private timer: unknown = null;
+  private writeTimer: unknown = null;
   private failures = 0;
   private dead = false;
   private readonly force: ChannelState;
@@ -661,6 +666,10 @@ export class ForceWriter {
     if (this.timer !== null) {
       this.deps.clearTimer(this.timer);
       this.timer = null;
+    }
+    if (this.writeTimer !== null) {
+      this.deps.clearTimer(this.writeTimer);
+      this.writeTimer = null;
     }
   }
 
@@ -726,13 +735,44 @@ export class ForceWriter {
     this.lastChannel = this.channels.indexOf(c);
     this.lastSendMs = this.deps.now();
     c.lastSentMs = this.lastSendMs;
-    this.current = c
-      .send(raw)
+    const write = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const clearWriteTimer = () => {
+        if (this.writeTimer !== null) {
+          this.deps.clearTimer(this.writeTimer);
+          this.writeTimer = null;
+        }
+      };
+      this.writeTimer = this.deps.setTimer(() => {
+        this.writeTimer = null;
+        if (settled || this.dead) return;
+        settled = true;
+        reject(new Error(`HID output report timed out after ${WRITE_TIMEOUT_MS} ms`));
+      }, WRITE_TIMEOUT_MS);
+      c.send(raw).then(
+        () => {
+          clearWriteTimer();
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        },
+        (e: unknown) => {
+          clearWriteTimer();
+          if (!settled) {
+            settled = true;
+            reject(e);
+          }
+        }
+      );
+    });
+    this.current = write
       .then(
         () => {
           this.failures = 0;
         },
         (e: unknown) => {
+          if (this.dead) return;
           this.failures++;
           c.lastRaw = null; // resend the next value whatever it is
           const fatal = this.failures >= MAX_WRITE_FAILURES;
@@ -1647,13 +1687,28 @@ export function describePidState(layout: PidReportLayout, bytes: Uint8Array): st
 /** Stream writes {@link WebHidFfb.diagnose} shows (their first 8 bytes) */
 export const HID_STREAM_TRACE_SIZE = 24;
 
+/** Logs WebHID transport errors to DevTools in browser environments without spamming Node test runs */
+const defaultHidWarn = (message: string): void => {
+  if (typeof window !== "undefined" && typeof console !== "undefined" && typeof console.warn === "function") {
+    console.warn(message);
+  }
+};
+
 /**
  * `device` with every report it sends, every feature report read back and every input report its listeners get (the
  * replies of a HID++ wheel) written to `trace` while it records
  */
-export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceLike {
-  const failed = (kind: string, id: number) => (e: unknown) => {
-    if (trace.recording) trace.note(`${kind} id ${id} FAILED: ${errorMessage(e)}`);
+export function tracedDevice(
+  device: HidDeviceLike,
+  trace: HidTrace,
+  warn: (message: string) => void = defaultHidWarn
+): HidDeviceLike {
+  const tag = `${deviceName(device)} [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}]`;
+  const failed = (kind: string, id: number, len?: number) => (e: unknown) => {
+    const err = errorMessage(e);
+    const size = len !== undefined ? ` (${len}B)` : "";
+    if (trace.recording) trace.note(`${kind} id ${id}${size} FAILED: ${err}`);
+    warn(`[WebHID FFB] ${tag} ${kind} report 0x${hex(id)}${size} failed: ${err}`);
     throw e;
   };
   type InputListener = (e: HidInputReportEventLike) => void;
@@ -1674,16 +1729,20 @@ export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceL
       if (!trace.recording) {
         trace.streamWrite(id, data);
         return device.sendReport(id, data).catch((e: unknown) => {
-          trace.streamFailed(`id ${id}: ${errorMessage(e)}`);
+          const err = errorMessage(e);
+          trace.streamFailed(`id ${id} (${data.byteLength}B): ${err}`);
+          if (trace.streamFailures <= 3 || trace.streamFailures % 50 === 0) {
+            warn(`[WebHID FFB] ${tag} stream sendReport id 0x${hex(id)} (${data.byteLength}B) failed (#${trace.streamFailures}): ${err}`);
+          }
           throw e;
         });
       }
       trace.report("out", id, data);
-      return device.sendReport(id, data).catch(failed("out", id));
+      return device.sendReport(id, data).catch(failed("out", id, data.byteLength));
     },
     sendFeatureReport: (id, data) => {
       trace.report("feature out", id, data);
-      return device.sendFeatureReport(id, data).catch(failed("feature out", id));
+      return device.sendFeatureReport(id, data).catch(failed("feature out", id, data.byteLength));
     },
     receiveFeatureReport: (id) =>
       device.receiveFeatureReport(id).then((view) => {
@@ -1896,8 +1955,9 @@ export function isFatalHidStatus(s: WebHidFfbStatus): boolean {
 }
 
 /**
- * The picker lists joysticks, gamepads, multi-axis controllers and PID devices, plus every interface of a listed HID++
- * wheel by its ids: its HID++ reports may sit on a vendor-defined collection no usage filter names
+ * The picker lists joysticks, gamepads, multi-axis controllers and PID devices, plus every interface of listed HID++
+ * Logitech and Thrustmaster wheels by their USB ids: vendor-defined collections carrying FFB reports may not match a
+ * generic usage filter.
  */
 const REQUEST_FILTERS = [
   { usagePage: 0x01, usage: 0x04 },
@@ -1905,6 +1965,7 @@ const REQUEST_FILTERS = [
   { usagePage: 0x01, usage: 0x08 },
   { usagePage: 0x0f },
   ...LOGITECH_HIDPP_WHEELS.map((m) => ({ vendorId: LOGITECH_VENDOR_ID, productId: m.productId })),
+  ...THRUSTMASTER_WHEELS.map((m) => ({ vendorId: THRUSTMASTER_VENDOR_ID, productId: m.productId })),
 ];
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
@@ -1956,21 +2017,38 @@ type FfbPick =
   | { kind: "logitech-hidpp"; device: HidDeviceLike; model: LogitechHidppModel }
   | { kind: "thrustmaster"; device: HidDeviceLike; model: ThrustmasterModel };
 
+/** Completeness score of a parsed PID layout so multi-interface bases pick their primary FFB collection reliably */
+function pidLayoutScore(layout: PidLayout): number {
+  return (
+    (layout.setEffect ? 4 : 0) +
+    (layout.createNewEffect ? 2 : 0) +
+    (layout.blockLoad ? 2 : 0) +
+    (layout.deviceControl ? 2 : 0) +
+    (layout.deviceGain ? 1 : 0) +
+    (layout.setCondition ? 1 : 0)
+  );
+}
+
 /**
  * The interface to drive among the HIDDevices a pick or a grant returned (a wheel may list an input-only interface
- * next to its force-feedback one): the first with a HID PID layout, else the first listed classic Logitech wheel with
- * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report, else the first listed
- * Thrustmaster base with an output report long enough for its commands. Null when there is none, e.g. only a
- * DualSense, a gamepad, an unlisted Logitech wheel or a T500RS.
+ * next to its force-feedback one): the most complete HID PID layout, else the first listed classic Logitech wheel with
+ * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report, else a listed
+ * Thrustmaster base preferring an interface that explicitly declares report 0x60 before falling back to any interface
+ * with an output report long enough for its commands. Null when there is none, e.g. only a DualSense, a gamepad, an
+ * unlisted Logitech wheel or a T500RS.
  */
 function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
+  let bestPid: { device: HidDeviceLike; layout: PidLayout; score: number } | null = null;
   for (const device of devices) {
     // The T500RS and start-up ids stay on the bridge even if the browser shows a HID PID collection for them (#189);
     // the T150 and TMX take the PID driver (#144)
     if (isThrustmasterBridgeOnly(device.vendorId, device.productId)) continue;
     const layout = parsePidLayout(device.collections);
-    if (layout) return { kind: "pid", device, layout };
+    if (!layout) continue;
+    const score = pidLayoutScore(layout);
+    if (!bestPid || score > bestPid.score) bestPid = { device, layout, score };
   }
+  if (bestPid) return { kind: "pid", device: bestPid.device, layout: bestPid.layout };
   for (const device of devices) {
     const model = logitechClassicModel(device.vendorId, device.productId);
     if (model && lg4ffOutputReport(device.collections)) return { kind: "logitech-classic", device, model };
@@ -1978,6 +2056,10 @@ function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
   for (const device of devices) {
     const model = logitechHidppModel(device.vendorId, device.productId);
     if (model && hidppReports(device.collections)) return { kind: "logitech-hidpp", device, model };
+  }
+  for (const device of devices) {
+    const model = thrustmasterModel(device.vendorId, device.productId);
+    if (model && thrustmasterHasCommandReport(device.collections, model)) return { kind: "thrustmaster", device, model };
   }
   for (const device of devices) {
     const model = thrustmasterModel(device.vendorId, device.productId);

@@ -179,6 +179,25 @@ function maxOutputReportBytes(collections: readonly HidCollectionLike[]): number
   return max;
 }
 
+/** Declared data byte length of a specific output report id in the descriptor, or 0 if not listed */
+export function thrustmasterOutputReportBytes(collections: readonly HidCollectionLike[], reportId: number): number {
+  let max = 0;
+  for (const c of collections) {
+    for (const r of c.outputReports ?? []) {
+      if ((r.reportId ?? 0) !== reportId) continue;
+      const bits = (r.items ?? []).reduce((s, i) => s + Math.max(0, i.reportSize ?? 0) * Math.max(0, i.reportCount ?? 0), 0);
+      max = Math.max(max, Math.ceil(bits / 8));
+    }
+    max = Math.max(max, thrustmasterOutputReportBytes(c.children ?? [], reportId));
+  }
+  return max;
+}
+
+/** Whether this interface explicitly declares the hid-tmff2 command report (0x60) with at least the model's length */
+export function thrustmasterHasCommandReport(collections: readonly HidCollectionLike[], model: ThrustmasterModel): boolean {
+  return thrustmasterOutputReportBytes(collections, TMFF2_REPORT_ID) >= model.reportBytes;
+}
+
 /** Whether this interface can carry the model's command report (an output report at least that long) */
 export function thrustmasterInterfaceFits(collections: readonly HidCollectionLike[], model: ThrustmasterModel): boolean {
   return maxOutputReportBytes(collections) >= model.reportBytes;
@@ -236,7 +255,8 @@ export async function setupThrustmasterDevice(
     return { ok: false, unsupported: true, message: `This ${model.name} interface has no ${model.reportBytes}-byte output report for force feedback` };
   }
   const send = (c: ThrustmasterCommand) => {
-    const data = new Uint8Array(model.reportBytes);
+    const declared = thrustmasterOutputReportBytes(device.collections, c.reportId);
+    const data = new Uint8Array(Math.max(model.reportBytes, declared));
     for (let i = 0; i < c.bytes.length && i < data.length; i++) data[i] = (c.bytes[i] as number) & 0xff;
     return device.sendReport(c.reportId, data);
   };
