@@ -20,7 +20,7 @@ import {
   sessionBestLapMs,
   trackSurfaceState,
 } from "../third-party-data";
-import { useSessionClock } from "./third-party-parts";
+import { useDisplayLap, useSessionClock } from "./third-party-parts";
 import { anchor, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
 import { fastestLap, onFinalLap } from "./game-style-parts";
 import { EDGE, HAIR, LBL, PLATE, TAG, inkOn, useEnduranceWords, type EnduranceWords } from "./EnduranceWords";
@@ -129,10 +129,10 @@ const OrderRow: React.FC<{
 
 const Order: React.FC<{ t: CarTelemetry; gaps: "interval" | "leader"; w: EnduranceWords }> = ({ t, gaps, w }) => {
   const clock = useSessionClock();
+  const lap = useDisplayLap(t);
   const race = t.race;
   const head = "flex h-[38px] items-center justify-between gap-2.5 px-3.5 whitespace-nowrap";
   if (!race) {
-    const lap = Math.max(1, t.lapCount);
     return (
       <section aria-label={w.session} className={`border-t-[3px] border-lc-chalk ${PLATE}`}>
         <div className={head}>

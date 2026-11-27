@@ -113,6 +113,17 @@ export function formatLapClock(t: Pick<CarTelemetry, "currentLapTimeMs" | "outLa
 }
 
 /**
+ * Authoritative lap number shown on HUD counters (always >= 1):
+ * - During any race (AI or multiplayer), uses `race.lap` so the lap-timer box, timing tower, dash, and pause menu
+ *   always agree and never inherit stale practice laps or drift by 1 across the start line.
+ * - Outside a race (practice / qualifying / time trial), uses `lapCount` relative to the current session baseline.
+ */
+export function displayLapNumber(t: Pick<CarTelemetry, "lapCount" | "race">, lapBase = 0): number {
+  if (t.race) return Math.max(1, t.race.lap);
+  return Math.max(1, t.lapCount - lapBase);
+}
+
+/**
  * A sector of the running lap that is done and has a time: before the current sector, timed above zero, and never on
  * the out-lap (the car starts on the grid in the last sector, and a restart keeps the last run's times). A sector that
  * is not done is drawn as one to come: neutral, without a time or a mark.

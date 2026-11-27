@@ -34,6 +34,7 @@ import { PositionBadge } from "@/components/ui/badges/PositionBadge";
 import { InvalidTag, LapMarkGlyph } from "./styles/hud-style-parts";
 import { usePitGap } from "./pit-clock";
 import { skinCss, SkinPanel, useHudSkin } from "./styles/third-party-skin";
+import { useDisplayLap } from "./styles/third-party-parts";
 import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-target";
 import { finalLapState } from "@/lib/broadcast/final-lap";
 
@@ -202,14 +203,15 @@ export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?
   const region = useMemo(() => tx("region"), [tx]);
   // The player's own last lap (a lap down, the one after the leader's) says so in place of the count
   const final = finalLapState(race).player;
+  const raceLap = Math.max(1, race.lap);
   const lapText = useMemo(
     () =>
       final
         ? tx("finalLap")
         : race.totalLaps
-          ? tx.rich("lapOf", { lap: race.lap, total: race.totalLaps, dim: (chunks) => <span className="opacity-40">{chunks}</span> })
-          : tx("lap", { lap: race.lap }),
-    [tx, final, race.lap, race.totalLaps]
+          ? tx.rich("lapOf", { lap: raceLap, total: race.totalLaps, dim: (chunks) => <span className="opacity-40">{chunks}</span> })
+          : tx("lap", { lap: raceLap }),
+    [tx, final, raceLap, race.totalLaps]
   );
   return (
     <section aria-label={region} className={`w-[264px] overflow-hidden rounded-lc-tile ${HUD_GLASS}`}>
@@ -279,12 +281,12 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
     [tx]
   );
   const sectors = sectorCells(telemetry);
-  const lap = Math.max(1, telemetry.lapCount);
+  const lap = useDisplayLap(telemetry);
   // A point-to-point course counts runs, a circuit laps
   const lapKind = getActivePointToPoint() ? "run" : "lap";
   const lapCounter = useMemo(() => tx("counter", { kind: lapKind, lap }), [tx, lapKind, lap]);
-  // On the out-lap no lap is timed yet: the clock holds at zero and the counter says so
-  const lapWord = telemetry.outLap ? L.outLap : lapCounter;
+  // On a solo out-lap no lap is timed yet; during a race the counter always matches the race lap
+  const lapWord = telemetry.outLap && !telemetry.race ? L.outLap : lapCounter;
   // A cut lap is invalid: the clock shows it in the loss colour, with the word, until the next lap starts
   const timeColor = lapInvalid ? HUD_LOSS : "var(--color-lc-chalk)";
 

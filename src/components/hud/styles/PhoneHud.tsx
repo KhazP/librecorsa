@@ -10,6 +10,7 @@ import { useUnits } from "@/lib/settings/ui-prefs";
 import { atShiftPoint, deltaDigits, formatLapClock, formatLapTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_GREEN, HUD_RED, HUD_SHIFT, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { anchor, formatOnce, gearLabel, HUD_LBL, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
+import { useDisplayLap } from "./third-party-parts";
 
 /** A phone in either orientation: narrow, or a landscape screen this short */
 const PHONE_QUERY = "(max-width: 639px), (max-height: 479px)";
@@ -77,6 +78,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
   const aero = aeroReadout(t);
   const w = usePhoneWords();
 
+  const lap = useDisplayLap(t);
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
       {/* Top-left: map, under the touch pause / camera buttons when they are up, on the same glass as the other
@@ -142,7 +144,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
               </span>
             ) : (
               <span className="lc-disp text-[22px] leading-none text-lc-chalk phone:text-[18px]">
-                {t.outLap ? w.outLap : w.lapOrRun(getActivePointToPoint() ? "run" : "lap", Math.max(1, t.lapCount))}
+                {t.outLap ? w.outLap : w.lapOrRun(getActivePointToPoint() ? "run" : "lap", lap)}
               </span>
             )}
             {race ? (
@@ -153,7 +155,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
                   {w.raceLaps(race.totalLaps)}
                 </span>
               ) : (
-                <span className={HUD_LBL}>{w.raceLap(race.lap, race.totalLaps ?? 0)}</span>
+                <span className={HUD_LBL}>{w.raceLap(lap, race.totalLaps ?? 0)}</span>
               )
             ) : null}
           </div>

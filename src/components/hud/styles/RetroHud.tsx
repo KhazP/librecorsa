@@ -66,7 +66,7 @@ import {
   SURFACE_WORD,
   trackSurfaceState,
 } from "../third-party-data";
-import { revLights, useLapHistory } from "./third-party-parts";
+import { revLights, useDisplayLap, useLapHistory } from "./third-party-parts";
 import css from "./retro.module.css";
 import { usePitGap } from "../pit-clock";
 
@@ -336,7 +336,7 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
   // Lost time to the left of the centre line, gained time to the right
   const at = d === null ? 50 : 50 - (d / DELTA_RANGE_S) * 50;
   const tone = deltaColor(deltaS);
-  const lap = t.race ? t.race.lap : Math.max(1, t.lapCount);
+  const lap = useDisplayLap(t);
   const sessionBest = sessionBestLapMs(t);
   const w = useRetroWords();
   return (
@@ -494,6 +494,7 @@ const LAP_PROGRESS_STEPS = 16;
 /** The laps instrument: the running lap's timer, its number and progress round the lap, and the laps completed */
 const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInvalid }) => {
   const laps = useLapHistory(6);
+  const lap = useDisplayLap(t);
   const bestMs = t.bestLapTimeMs;
   const done = Math.floor(Math.max(0, Math.min(1, t.trackProgress)) * LAP_PROGRESS_STEPS);
   const box = "flex h-full w-10 items-center justify-center text-[15px]";
@@ -512,7 +513,7 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
       </Frame>
       <div className="flex h-8 gap-1.5">
         <Frame edge="soft" face="void" size="small" faceClassName={box}>
-          {String(Math.max(1, t.lapCount)).padStart(2, "0")}
+          {String(lap).padStart(2, "0")}
         </Frame>
         <Frame edge="dim" face="void" size="small" className="flex-1" faceClassName="flex h-full items-stretch gap-0.5 p-1">
           {Array.from({ length: LAP_PROGRESS_STEPS }, (_, i) => (

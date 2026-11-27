@@ -24,7 +24,7 @@ import {
 import { aeroReadout } from "../aero-label";
 import { pedalLayers } from "../PedalBars";
 import { driverLabel, evaluateRadar, formatClock, idealLapMs, relativeCars, sessionBestLapMs } from "../third-party-data";
-import { revLights, useSessionClock } from "./third-party-parts";
+import { revLights, useDisplayLap, useSessionClock } from "./third-party-parts";
 import { anchor, gearLabel, raceNeighbours, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
 import { onFinalLap } from "./game-style-parts";
 import { PitWallDetail } from "./PitWallPages";
@@ -132,7 +132,7 @@ const LapTiming: React.FC<{ t: CarTelemetry; lapInvalid: boolean; fit: PitWallFi
   const splits = racing ? race?.splits : undefined;
   const limits = t.trackLimits;
   const struck = limits ? (limits.ladder ? limits.ladder.points > 0 : limits.warnings > 0) : false;
-  const lapNo = Math.max(1, race ? race.lap : t.lapCount);
+  const lapNo = useDisplayLap(t);
 
   return (
     <section aria-label={w.region.lapTiming} className={`w-[344px] ${BOX}`}>

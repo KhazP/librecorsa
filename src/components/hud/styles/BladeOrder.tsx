@@ -13,6 +13,7 @@ import { useUnits } from "@/lib/settings/ui-prefs";
 import { HUD_VOLT, formatDeltaFit, formatGap, formatLapTime, formatTemp, raceState, sessionWord } from "../hud-format";
 import { SURFACE_WORD, dayClock, driverLabel, leaderboardWindow, referenceLapS, trackSurfaceState } from "../third-party-data";
 import { mapPoint, raceNeighbours, type HudMap } from "./hud-style-parts";
+import { useDisplayLap } from "./third-party-parts";
 import { onFinalLap } from "./game-style-parts";
 import { DEEP, HARD, LBL, LBL_TYPE, PLATE, type Words } from "./BladeParts";
 
@@ -55,15 +56,16 @@ const ROW_GRID = "grid grid-cols-[30px_5px_minmax(0,1fr)_22px_78px_94px] items-c
 const OrderHeader: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t, w, lapInvalid }) => {
   const race = t.race;
   const flag = flagState(t, w);
+  const displayLap = useDisplayLap(t);
   const counter = race
     ? race.phase === "lights"
       ? race.totalLaps
         ? w.raceLaps(race.totalLaps)
         : null
-      : w.lap(Math.max(1, race.lap))
+      : w.lap(displayLap)
     : t.outLap
       ? w.outLap
-      : (getActivePointToPoint() ? w.run : w.lap)(Math.max(1, t.lapCount));
+      : (getActivePointToPoint() ? w.run : w.lap)(displayLap);
   return (
     <div className={`flex h-9 items-stretch ${PLATE}`}>
       <div className="flex shrink-0 items-center border-r border-white/12 px-3.5">

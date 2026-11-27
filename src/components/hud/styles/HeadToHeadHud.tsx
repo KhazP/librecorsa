@@ -37,7 +37,7 @@ import {
   trackSurfaceState,
 } from "../third-party-data";
 import { anchor, formatOnce, gearLabel, type HudDesignProps } from "./hud-style-parts";
-import { revLights, useFuelPerLap } from "./third-party-parts";
+import { revLights, useDisplayLap, useFuelPerLap } from "./third-party-parts";
 import palette from "./h2h.module.css";
 
 /** The Head to Head layout's words in the current language, resolved once per language */
@@ -271,9 +271,10 @@ const RaceStack: React.FC<{ t: CarTelemetry; w: H2hWords }> = ({ t, w }) => {
 const PracticeBand: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: boolean; w: H2hWords }> = ({ t, deltaS, lapInvalid, w }) => {
   // Not held at ±99.99: "+123.40s" fits the column a lap time ("--:--.---") fits
   const deltaShown = deltaS !== null && Number.isFinite(deltaS) ? deltaS : null;
+  const lap = useDisplayLap(t);
   return (
     <div className="grid h-22 grid-rows-[2fr_1fr] xl:h-26 border-y border-(--tp-border-player) bg-(--tp-player-a) py-1">
-      <DriverInfo name={w.you} place={w.lapPlace(Math.max(1, t.lapCount))} bestMs={t.bestLapTimeMs} lastMs={t.lastLapTimeMs} w={w} />
+      <DriverInfo name={w.you} place={w.lapPlace(lap)} bestMs={t.bestLapTimeMs} lastMs={t.lastLapTimeMs} w={w} />
       <div className={`grid h-full ${COLS}`}>
         <span />
         <Stat

@@ -48,7 +48,7 @@ import {
   sessionBestLapMs,
   trackSurfaceState,
 } from "../third-party-data";
-import { revLights, useFuelPerLap, useSessionClock } from "./third-party-parts";
+import { revLights, useDisplayLap, useFuelPerLap, useSessionClock } from "./third-party-parts";
 import {
   LapMarkGlyph,
   MiniMap,
@@ -144,7 +144,7 @@ function flagOf(t: CarTelemetry, w: Words): Flag | null {
 const RaceHead: React.FC<{ t: CarTelemetry; w: Words }> = ({ t, w }) => {
   const race = t.race;
   const flag = flagOf(t, w);
-  const lapNo = Math.max(1, t.lapCount);
+  const lapNo = useDisplayLap(t);
   return (
     <div className="mb-[3px] flex h-[46px]">
       {race ? (

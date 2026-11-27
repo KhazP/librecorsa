@@ -397,6 +397,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [mpCarNotice]);
   /** The results card was closed for this race */
   const [resultsClosed, setResultsClosed] = useState(false);
+  /** Incremented whenever a fresh session or race begins so HUD lap counters reset cleanly to Lap 1 */
+  const [sessionSeq, setSessionSeq] = useState(0);
 
   // ---- Laps, ghosts, leaderboards
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
@@ -546,6 +548,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // and restarts reset it again, as the field always has)
       getTrackEnv().reset();
       clearSessionState();
+      setSessionSeq((n) => n + 1);
       setPhase("driving");
     },
     [session, getTrackEnv, clearSessionState, setPhase]
@@ -790,6 +793,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // Not in a multiplayer race: the AI field would run alongside it. Not on a hill climb: one car at a time
     if (!session || session.race.kind === "mp" || getActivePointToPoint()) return;
     session.resetRun("race");
+    setSessionSeq((n) => n + 1);
     if (session.race.kind === "ai") {
       session.setRace({ kind: "practice" });
       return;
@@ -2753,6 +2757,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                 }
               : null
           }
+          sessionSeq={sessionSeq}
           resultsClosed={resultsClosed}
           onCloseResults={() => setResultsClosed(true)}
           onRestartRace={

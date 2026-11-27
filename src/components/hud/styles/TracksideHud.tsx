@@ -53,7 +53,7 @@ import {
   sessionBestLapMs,
   trackSurfaceState,
 } from "../third-party-data";
-import { useFuelPerLap, useSessionClock } from "./third-party-parts";
+import { useDisplayLap, useFuelPerLap, useSessionClock } from "./third-party-parts";
 import { arcPath, onFinalLap, useErsState, type ErsState } from "./game-style-parts";
 import { TracksideRadar } from "./TracksideRadar";
 import { LapMarkGlyph, MiniMap, anchor, formatOnce, gearLabel, type HudDesignProps, type HudStyleOptions } from "./hud-style-parts";
@@ -393,7 +393,7 @@ const SessionStrip: React.FC<{ t: CarTelemetry; w: Words }> = ({ t, w }) => {
   } else {
     rule = "bg-lc-slate";
   }
-  const lapNo = Math.max(1, t.lapCount);
+  const lapNo = useDisplayLap(t);
   const lap = race
     ? race.totalLaps
       ? w.lapOf(race.lap, race.totalLaps)

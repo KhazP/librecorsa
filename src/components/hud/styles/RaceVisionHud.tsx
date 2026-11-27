@@ -47,7 +47,7 @@ import {
   SURFACE_WORD,
   trackSurfaceState,
 } from "../third-party-data";
-import { revLights, useFuelPerLap, useLapHistory, useSessionClock } from "./third-party-parts";
+import { revLights, useDisplayLap, useFuelPerLap, useLapHistory, useSessionClock } from "./third-party-parts";
 import { anchor, formatOnce, gearLabel, type HudDesignProps } from "./hud-style-parts";
 import palette from "./racevision.module.css";
 import { usePitGap } from "../pit-clock";
@@ -216,12 +216,13 @@ const Standings: React.FC<{
   const field = race ? race.standings.length : 1 + (t.peers?.length ?? 0);
   const rows = race ? leaderboardWindow(race.standings, short ? 7 : 12) : [];
   const bestMs = t.bestLapTimeMs;
+  const lap = useDisplayLap(t);
   return (
     <section aria-label={race ? w.standings : w.laps} className={`${PANEL} flex flex-col gap-1.5 p-2`}>
       <div className="flex items-center justify-between gap-3 px-0.5 font-black">
         <span className="truncate">
           {race ? w.race : upper(sessionWord(t))}
-          <span className="ps-2">{race ? (race.totalLaps ? w.lapShortOfTotal(race.lap, race.totalLaps) : w.lapShort(race.lap)) : w.lapShort(Math.max(1, t.lapCount))}</span>
+          <span className="ps-2">{race?.totalLaps ? w.lapShortOfTotal(lap, race.totalLaps) : w.lapShort(lap)}</span>
         </span>
         {/* The session's running time, where the source shows its clock */}
         <span className="inline-flex shrink-0 items-center gap-1" aria-label={w.sessionTime(formatClock(clock))}>
@@ -246,7 +247,7 @@ const Standings: React.FC<{
         <div className="flex flex-col gap-0.5">
           {/* The running lap: gold, the live delta beside it */}
           <div className="flex h-6 items-stretch">
-            <PosBox user>{Math.max(1, t.lapCount)}</PosBox>
+            <PosBox user>{lap}</PosBox>
             <span aria-hidden className="w-1.5 shrink-0 bg-(--tp-user)" />
             <span className="flex-1 self-center px-2 text-center" style={{ color: lapInvalid ? HUD_LOSS : "var(--tp-user)" }}>
               {/* Held at zero on the out-lap, where no lap is timed yet */}

@@ -37,7 +37,7 @@ import {
 import { aeroReadout } from "../aero-label";
 import { pedalLayers } from "../PedalBars";
 import { driverLabel, formatClock, fuelLapsLeft, sessionBestLapMs } from "../third-party-data";
-import { revLights, useFuelPerLap, useLapHistory, useSessionClock, useStartFuel } from "./third-party-parts";
+import { revLights, useDisplayLap, useFuelPerLap, useLapHistory, useSessionClock, useStartFuel } from "./third-party-parts";
 import {
   AeroBadge,
   anchor,
@@ -161,6 +161,7 @@ function usePositionGainFlash(pos: number | undefined): boolean {
 const PositionPlate: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t, w, lapInvalid }) => {
   const race = t.race;
   const final = onFinalLap(t);
+  const lap = useDisplayLap(t);
   const gained = usePositionGainFlash(race?.phase === "racing" ? race.position : undefined);
 
   if (!race) {
@@ -168,7 +169,7 @@ const PositionPlate: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }
     return (
       <section aria-label={w.lapTimer} className={`flex h-11 items-center gap-2.5 rounded-lc-tile px-3.5 ${HUD_GLASS}`}>
         <span className="lc-disp truncate text-[17px] leading-none text-lc-chalk">
-          {t.outLap ? w.outLap : w.sessionLap(sessionWord(t), kind, Math.max(1, t.lapCount))}
+          {t.outLap ? w.outLap : w.sessionLap(sessionWord(t), kind, lap)}
         </span>
         {lapInvalid ? <InvalidTag /> : null}
       </section>
@@ -200,7 +201,7 @@ const PositionPlate: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }
           {/* On the last lap the tag says which lap it is */}
           {final ? null : <span className={HUD_LBL}>{w.lap}</span>}
           <span className="lc-data text-[17px] leading-none text-lc-chalk">
-            {race.lap}
+            {lap}
             {race.totalLaps ? <span className="text-lc-slate">/{race.totalLaps}</span> : null}
           </span>
         </span>

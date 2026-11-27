@@ -25,6 +25,7 @@ import {
   MiniMap,
   type HudDesignProps,
 } from "./hud-style-parts";
+import { useDisplayLap } from "./third-party-parts";
 import { TowerHeader, TowerRows } from "../TimingPanels";
 import { FlagIcon } from "@/components/ui/badges/FlagIcon";
 import { onFinalLap } from "./game-style-parts";
@@ -68,6 +69,7 @@ export const BroadcastTower: React.FC<{
 }> = ({ t, trackCode = "LC", className = "", lapInvalid, gaps }) => {
   const race = t.race;
   const w = useBroadcastWords();
+  const lap = useDisplayLap(t);
   return (
     <section aria-label={race ? w.timingTower : w.session} className={`w-full overflow-hidden rounded-lc-tile ${HUD_GLASS} ${className}`}>
       <div className="flex h-11 items-center gap-2.5 rounded-[20px_20px_14px_14px] bg-lc-chalk pr-3 pl-2 text-lc-void">
@@ -81,7 +83,7 @@ export const BroadcastTower: React.FC<{
                 <span className="truncate">{w.finalLap}</span>
               </span>
             ) : (
-              w.raceLap(race.lap, race.totalLaps ?? 0)
+              w.raceLap(lap, race.totalLaps ?? 0)
             )
           ) : (
             <>
@@ -89,7 +91,7 @@ export const BroadcastTower: React.FC<{
                   beside it), as the clock holds at zero */}
               {t.outLap
                 ? w.outLap
-                : w.sessionLap(sessionWord(t), getActivePointToPoint() ? "run" : "lap", Math.max(1, t.lapCount))}
+                : w.sessionLap(sessionWord(t), getActivePointToPoint() ? "run" : "lap", lap)}
             </>
           )}
         </div>

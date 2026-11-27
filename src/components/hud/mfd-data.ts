@@ -126,23 +126,26 @@ const meanWear = (t: CarTelemetry) => (t.tireWearPct[0] + t.tireWearPct[1] + t.t
  */
 export function useLapHistory(t: CarTelemetry): LapRecord[] {
   const [laps, setLaps] = useState<LapRecord[]>([]);
-  const prev = useRef<{ lapCount: number; runId: number } | null>(null);
+  const prev = useRef<{ lapCount: number; runId: number; completed: number } | null>(null);
   const start = useRef<{ fuel: number; ers: number; wear: number } | null>(null);
 
   useEffect(() => {
     const p = prev.current;
     const runId = t.runId ?? 0;
     const now = { fuel: t.fuelKg, ers: t.ersBatteryPercent, wear: meanWear(t) };
+    let completed = p?.completed ?? 0;
     if (p && runId !== p.runId) {
       // The shell restarted the run (restart, new session, teleport, car change): a new history
       setLaps([]);
+      completed = 0;
       start.current = now;
     } else if (p && t.lapCount === p.lapCount + 1 && t.lastLapTimeMs !== null) {
+      completed += 1;
       const s0 = start.current;
       const s1 = Math.max(0, t.sectorTimesMs[0]);
       const s2 = Math.max(0, t.sectorTimesMs[1]);
       const rec: LapRecord = {
-        lap: t.lapCount,
+        lap: completed,
         timeMs: t.lastLapTimeMs,
         sectorsMs: [s1, s2, s1 > 0 && s2 > 0 ? Math.max(0, t.lastLapTimeMs - s1 - s2) : 0],
         valid: t.lastLapValid !== false,
@@ -160,7 +163,7 @@ export function useLapHistory(t: CarTelemetry): LapRecord[] {
       // Mounted on the line: the first lap counts in full (mounted mid-lap, it only counts for its time)
       start.current = now;
     }
-    prev.current = { lapCount: t.lapCount, runId };
+    prev.current = { lapCount: t.lapCount, runId, completed };
   }, [t]);
 
   return laps;

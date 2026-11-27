@@ -51,7 +51,7 @@ import { pedalLayers } from "../PedalBars";
 import { cornerData } from "../TyreBrakeWidget";
 import { type WeatherHudState } from "../WeatherBadge";
 import { anchor, formatOnce, gearLabel, liveMessage, type HudDesignProps } from "./hud-style-parts";
-import { REV_BAND_COLOR, revLights, useFuelPerLap, useLapHistory, useSessionClock, useStartFuel } from "./third-party-parts";
+import { REV_BAND_COLOR, revLights, useDisplayLap, useFuelPerLap, useLapHistory, useSessionClock, useStartFuel } from "./third-party-parts";
 import {
   dayClock,
   driverLabel,
@@ -357,6 +357,7 @@ const SessionBlock: React.FC<{ label: string; className?: string; children: Reac
 
 const SessionBlocks: React.FC<{ t: CarTelemetry }> = ({ t }) => {
   const race = t.race;
+  const lap = useDisplayLap(t);
   const clock = useSessionClock();
   const w = useBlocksWords();
   return (
@@ -368,7 +369,7 @@ const SessionBlocks: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         </SessionBlock>
       ) : null}
       <SessionBlock label={w.laps} className="hidden min-w-[60px] md:flex">
-        {pad2(race ? race.lap : Math.max(1, t.lapCount))}
+        {pad2(lap)}
         {race?.totalLaps ? <span className="text-[18px]">/{pad2(race.totalLaps)}</span> : null}
       </SessionBlock>
       <SessionBlock label={race ? w.race : sessionWord(t)} className="hidden min-w-[164px] xl:flex">

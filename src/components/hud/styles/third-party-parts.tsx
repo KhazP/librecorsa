@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { CarTelemetry } from "@/types/f1";
 import { revLedBand, revLeds, type RevLedBand } from "@/lib/sim/rev-range";
-import { HUD_GREEN, HUD_RED, HUD_SHIFT, HUD_YELLOW } from "../hud-format";
+import { displayLapNumber, HUD_GREEN, HUD_RED, HUD_SHIFT, HUD_YELLOW } from "../hud-format";
 import { completedLap, type LapRecord } from "../third-party-data";
 import { useHudModeRef } from "../hud-mode";
 
@@ -46,21 +46,21 @@ const LAPS_KEPT = 12;
 function useLapRecords(t: CarTelemetry): LapRecord[] {
   const runId = t.runId ?? 0;
   const [laps, setLaps] = useState<LapRecord[]>([]);
-  const prev = useRef({ runId, lapCount: t.lapCount, sectors: [...t.sectorTimesMs] as [number, number, number] });
+  const prev = useRef({ runId, lapCount: t.lapCount, completed: 0, sectors: [...t.sectorTimesMs] as [number, number, number] });
   useEffect(() => {
     const p = prev.current;
     if (p.runId !== runId) {
-      prev.current = { runId, lapCount: t.lapCount, sectors: [...t.sectorTimesMs] as [number, number, number] };
+      prev.current = { runId, lapCount: t.lapCount, completed: 0, sectors: [...t.sectorTimesMs] as [number, number, number] };
       setLaps([]);
       return;
     }
+    let completed = p.completed;
     if (t.lapCount > p.lapCount && t.lastLapTimeMs && t.lastLapTimeMs > 0) {
-      // The counter names the lap being driven: the one just finished is the count before it stepped up (a count that
-      // starts at 0 behind the line still lists the first lap as 1)
-      const rec = completedLap(Math.max(1, p.lapCount), t.lastLapTimeMs, p.sectors, t.lastLapValid !== false);
+      completed += 1;
+      const rec = completedLap(completed, t.lastLapTimeMs, p.sectors, t.lastLapValid !== false);
       setLaps((l) => [rec, ...l].slice(0, LAPS_KEPT));
     }
-    prev.current = { runId, lapCount: t.lapCount, sectors: [...t.sectorTimesMs] as [number, number, number] };
+    prev.current = { runId, lapCount: t.lapCount, completed, sectors: [...t.sectorTimesMs] as [number, number, number] };
   }, [runId, t.lapCount, t.lastLapTimeMs, t.lastLapValid, t.sectorTimesMs]);
   return laps;
 }
@@ -136,24 +136,42 @@ interface HudRun {
   fuelPerLapKg: number | null;
   startFuelKg: number;
   sessionS: number;
+  lapBase: number;
 }
 
-const HudRunContext = createContext<HudRun>({ laps: [], fuelPerLapKg: null, startFuelKg: 0, sessionS: 0 });
+const HudRunContext = createContext<HudRun>({ laps: [], fuelPerLapKg: null, startFuelKg: 0, sessionS: 0, lapBase: 0 });
+
+/** Tracks the sim `lapCount` offset at the start of each session so solo sessions start at Lap 1 */
+function useSessionLapBase(t: CarTelemetry, sessionSeq: number): number {
+  const ref = useRef({ seq: sessionSeq, base: 0 });
+  if (ref.current.seq !== sessionSeq) {
+    ref.current = { seq: sessionSeq, base: Math.max(0, t.lapCount - 1) };
+  } else if (t.lapCount - 1 < ref.current.base) {
+    ref.current.base = Math.max(0, t.lapCount - 1);
+  }
+  return ref.current.base;
+}
 
 /**
- * Keeps the run's laps, fuel use and clock for the layouts that show them. Mounted by the HUD above every style and
- * kept while the HUD is hidden, so neither the HUD button nor a layout switch from the pause menu starts them again.
+ * Keeps the run's laps, fuel use, clock, and session lap baseline for every HUD layout and panel. Mounted by the HUD
+ * above every style and kept while the HUD is hidden, so neither the HUD button nor a layout switch resets them.
  */
-export function HudRunProvider({ t, children }: { t: CarTelemetry; children: React.ReactNode }) {
+export function HudRunProvider({ t, sessionSeq = 0, children }: { t: CarTelemetry; sessionSeq?: number; children: React.ReactNode }) {
   const laps = useLapRecords(t);
   const fuelPerLapKg = useFuelUse(t);
   const startFuelKg = useRunStartFuel(t);
   const sessionS = useRunClock(t);
+  const lapBase = useSessionLapBase(t, sessionSeq);
   const value = useMemo(
-    () => ({ laps, fuelPerLapKg, startFuelKg, sessionS }),
-    [laps, fuelPerLapKg, startFuelKg, sessionS],
+    () => ({ laps, fuelPerLapKg, startFuelKg, sessionS, lapBase }),
+    [laps, fuelPerLapKg, startFuelKg, sessionS, lapBase],
   );
   return <HudRunContext.Provider value={value}>{children}</HudRunContext.Provider>;
+}
+
+/** Authoritative display lap number for any HUD widget (uses `race.lap` during races, session-anchored `lapCount` otherwise) */
+export function useDisplayLap(t: Pick<CarTelemetry, "lapCount" | "race">): number {
+  return displayLapNumber(t, useContext(HudRunContext).lapBase);
 }
 
 /** The laps completed this run, newest first, at most `max` */

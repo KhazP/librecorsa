@@ -41,6 +41,7 @@ import { ProximityRadar } from "../ProximityRadar";
 import { anchor, formatOnce, gearLabel, MiniMap, type HudDesignProps } from "./hud-style-parts";
 import palette from "./grand-prix.module.css";
 import { HaloCluster } from "./grand-prix-halo";
+import { useDisplayLap } from "./third-party-parts";
 import { usePitGap } from "../pit-clock";
 
 const EDGE = "clamp(14px,2.2cqw,24px)";
@@ -485,7 +486,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   const isFormulaCar = carClassOf(channels?.carId) === "openWheel";
   const isHaloMode = cameraMode === "tv_pod" && isFormulaCar;
 
-  const lap = Math.max(1, t.lapCount);
+  const lap = useDisplayLap(t);
   const totalLaps = race?.totalLaps;
   const me = race?.standings.find((e) => e.isPlayer);
   const myPos = race?.position ?? 1;

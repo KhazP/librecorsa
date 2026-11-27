@@ -254,6 +254,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   ffbMeter?: React.ComponentProps<typeof FfbMeter> | null;
   /** Card after a completed lap */
   lapSummary?: React.ComponentProps<typeof LapSummary> | null;
+  /** Incremented whenever a new session or race starts, resetting solo HUD lap counters to Lap 1 */
+  sessionSeq?: number;
   /** The results card was closed for this race */
   resultsClosed?: boolean;
   onCloseResults?: () => void;
@@ -661,6 +663,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   return (
     <HudModeContext.Provider value={hudMode}>
     <HudSkinProvider skin={thirdPartySkin}>
+    <HudRunProvider t={telemetry} sessionSeq={props.sessionSeq}>
     {/* The corner groups keep clear of a notch and the home indicator, and past 2.4:1 (a 32:9 screen) they keep to
         a centred frame instead of the far edges. What belongs to the whole window is fixed to it instead. */}
     <div
@@ -688,7 +691,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       ) : null}
       {/* A full-screen style (Broadcast, Telemetry, GT-like, F1-like, a third-party layout): one layer. The run's laps, fuel
           use and clock live above it, so hiding the HUD or switching layout keeps them */}
-      <HudRunProvider t={telemetry}>
       {hudHidden ? null : style ? (
         <style.component
           t={telemetry}
@@ -724,7 +726,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           {weatherNode}
         </div>
       )}
-      </HudRunProvider>
 
       {/* The race's broadcast: driver cards and the battle strip, in an offline AI race (a career round's named by its
           context); kept mounted through a pause so it loses nothing, shown on the live HUD only. Not on a phone's
@@ -1137,6 +1138,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         covered={props.pauseMenuCovered}
       />
     ) : null}
+    </HudRunProvider>
     </HudSkinProvider>
     </HudModeContext.Provider>
   );

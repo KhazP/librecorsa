@@ -37,7 +37,7 @@ import { aeroReadout } from "../aero-label";
 import { ersButtons } from "../ers-buttons";
 import { pedalLayers } from "../PedalBars";
 import { driverLabel, fuelLapsLeft, sessionBestLapMs } from "../third-party-data";
-import { revLights, useFuelPerLap, useStartFuel } from "./third-party-parts";
+import { revLights, useDisplayLap, useFuelPerLap, useStartFuel } from "./third-party-parts";
 import { AeroBadge, anchor, formatOnce, gearLabel, HUD_GLASS, HUD_LBL, InvalidTag, MiniMap, raceNeighbours, type HudDesignProps } from "./hud-style-parts";
 import { TopDownCar, arcPath, carClassCode, fastestLap, onFinalLap, polar, useErsState, useGearHint, type ErsState } from "./game-style-parts";
 import { usePitGap } from "../pit-clock";
@@ -185,13 +185,14 @@ const RaceState: React.FC<{ t: CarTelemetry; w: Words }> = ({ t, w }) => {
 
 const Tower: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t, w, lapInvalid }) => {
   const race = t.race;
+  const lap = useDisplayLap(t);
   const pitGap = usePitGap();
   if (!race) {
     const kind = getActivePointToPoint() ? "run" : "lap";
     return (
       <section aria-label={w.timing} className={`flex h-10 items-center gap-2.5 overflow-hidden rounded-lc-tile px-3.5 ${HUD_GLASS}`}>
         <span className="lc-disp truncate text-[16px] leading-none text-lc-chalk">
-          {t.outLap ? w.outLap : w.sessionLap(sessionWord(t), kind, Math.max(1, t.lapCount))}
+          {t.outLap ? w.outLap : w.sessionLap(sessionWord(t), kind, lap)}
         </span>
         {lapInvalid ? <InvalidTag /> : null}
       </section>
@@ -200,7 +201,7 @@ const Tower: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t
 
   const me = race.standings.find((e) => e.isPlayer);
   const fastest = fastestLap(t);
-  const progress = race.totalLaps ? Math.min(1, Math.max(0, (race.lap - 1 + t.trackProgress) / race.totalLaps)) : null;
+  const progress = race.totalLaps ? Math.min(1, Math.max(0, (lap - 1 + t.trackProgress) / race.totalLaps)) : null;
   const caution = Boolean(race.vsc || race.yellow);
 
   return (
@@ -211,7 +212,7 @@ const Tower: React.FC<{ t: CarTelemetry; w: Words; lapInvalid: boolean }> = ({ t
       {/* Centred lap header + race progress hairline */}
       <div className="relative flex h-9.5 items-center justify-center px-3">
         <span className="lc-disp text-[17px] leading-none tracking-[0.04em] text-lc-chalk">
-          {race.totalLaps ? w.lapOf(race.lap, race.totalLaps) : w.lap(race.lap)}
+          {race.totalLaps ? w.lapOf(lap, race.totalLaps) : w.lap(lap)}
         </span>
         {progress !== null ? (
           <span aria-hidden className="absolute inset-x-0 bottom-0 h-[2px] bg-white/8">

@@ -28,6 +28,7 @@ import type { RaceSetup } from "@/lib/sim/race-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
 import type { LibraryProps } from "@/components/menu/ContentBrowser";
 import { ConditionsPanel, type ConditionsPanelProps } from "@/components/menu/ConditionsPanel";
+import { useDisplayLap } from "./styles/third-party-parts";
 import { RaceRules } from "@/components/menu/RaceRules";
 import type { SettingsCategory } from "@/components/settings/SettingsScreen";
 import { carById, type CarId } from "@/lib/cars/car-registry";
@@ -435,6 +436,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   usePanelReadingOrder(rootRef);
 
   const race = telemetry.race;
+  const displayLap = useDisplayLap(telemetry);
   const place = trackInfo.city && trackInfo.city !== trackInfo.country ? `${trackInfo.city}, ${trackInfo.country}` : trackInfo.country;
   // The shoulder prompts show from `sm` up, as before
   const shoulder = (button: "lb" | "rb", key: string) => (
@@ -476,10 +478,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                 {place}
                 <span aria-hidden className="mx-2 text-lc-dim">·</span>
                 {race?.totalLaps
-                  ? tx("header.lapOf", { lap: Math.max(1, race.lap), total: race.totalLaps })
+                  ? tx("header.lapOf", { lap: displayLap, total: race.totalLaps })
                   : !race && getActivePointToPoint()
-                    ? tx("header.run", { lap: Math.max(1, telemetry.lapCount) })
-                    : tx("header.lap", { lap: Math.max(1, race?.lap ?? telemetry.lapCount) })}
+                    ? tx("header.run", { lap: displayLap })
+                    : tx("header.lap", { lap: displayLap })}
                 {race ? (
                   <>
                     <span aria-hidden className="mx-2 text-lc-dim">·</span>
