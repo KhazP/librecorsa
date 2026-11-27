@@ -6,8 +6,8 @@
 import type { DnfReason, RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import { dedupeDriverCodes, normalizeDriverCode } from "@/lib/net/wire";
-import { ROLLING_SLOT_SPACING_M, ROLLING_START_PACE_MS, type SimulatorCar } from "@/lib/sim/simulator-car";
-import { rollingFormationStep } from "@/lib/sim/race-start";
+import { ROLLING_SLOT_SPACING_M, type SimulatorCar } from "@/lib/sim/simulator-car";
+import { rollingFormationStep, rollingStartLimitMs } from "@/lib/sim/race-start";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
 import { CarDamage } from "@/lib/sim/car-damage";
 import { damageStatusOf, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
@@ -575,9 +575,10 @@ export class MultiplayerRace {
     return slot >= 0 ? slot : this.start.grid.length;
   }
 
-  /** Arms the rolling-start formation limiter and 3-2-1 countdown after placing the car on its rolling slot */
-  startRollingFormation(paceMs: number): void {
-    const clamped = Math.min(ROLLING_START_PACE_MS, Math.max(0, paceMs));
+  /** Arms the rolling-start formation target speed and 3-2-1 countdown after placing the car on its rolling slot */
+  startRollingFormation(paceMs: number, pitLimitKmh?: number | null): void {
+    const capMs = pitLimitKmh !== undefined && pitLimitKmh !== null ? rollingStartLimitMs(pitLimitKmh) : 120 / 3.6;
+    const clamped = Math.min(capMs, Math.max(0, paceMs));
     if (this.start.startType !== "rolling" || clamped <= 5) {
       this.rollingFormation = false;
       this.rollingPaceMs = 0;
@@ -601,9 +602,14 @@ export class MultiplayerRace {
     this.rollingMaxWaitS = Math.max(12, this.rollingDistanceToLineM / Math.max(5, clamped) + 8);
   }
 
-  /** Active formation speed limit (m/s) for the local car while rolling to Start/Finish; undefined once green */
-  get rollingLimiterMs(): number | undefined {
+  /** Target formation pace (m/s) while rolling to Start/Finish; undefined once green */
+  get rollingTargetPaceMs(): number | undefined {
     return this.rollingFormation && this.latestFrame?.phase === "racing" ? this.rollingPaceMs : undefined;
+  }
+
+  /** Forced speed limiter (m/s): always undefined so the driver controls speed manually or via the pit speed limiter */
+  get rollingLimiterMs(): number | undefined {
+    return undefined;
   }
 
   /** Someone has taken the chequered flag: every car still running finishes on its next line crossing */
@@ -982,7 +988,7 @@ export class MultiplayerRace {
           paceMs: this.rollingPaceMs,
           stage: step.stage,
           countdown: step.countdown,
-          limiterActive: true,
+          limiterActive: false,
           distanceToLineM: Math.round(this.rollingDistanceToLineM),
         };
       }

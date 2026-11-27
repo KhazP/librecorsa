@@ -673,16 +673,19 @@ export function clearLapTimes(t: Pick<CarTelemetry, 'lastLapTimeMs' | 'lastLapVa
   t.bestSectorTimesMs = [null, null, null];
 }
 
+import { PIT_LIMIT_KMH_DEFAULT } from './pit/pit-lane';
+import { rollingStartLimitMs } from './race-start';
+
 /** Gap between grid slots in a flying start's queue (m); the slots alternate sides */
 export const FLYING_SLOT_SPACING_M = 28;
 
 /** Tighter staggered spacing between slots in a rolling-start formation (m) */
 export const ROLLING_SLOT_SPACING_M = 14;
 
-/** Target formation speed for a rolling start (m/s): 65 km/h */
-export const ROLLING_START_PACE_MS = 65 / 3.6;
+/** Default target formation speed for a rolling start (m/s), matching the default pit lane speed limit */
+export const ROLLING_START_PACE_MS = PIT_LIMIT_KMH_DEFAULT / 3.6;
 
-/** Maximum lead distance before Start/Finish for pole in a rolling start (m): ~9 s formation approach at 65 km/h */
+/** Maximum lead distance before Start/Finish for pole in a rolling start (m): ~9 s formation approach */
 export const ROLLING_START_MAX_LEAD_M = 165;
 /** No rolling-start slot where the road within 10 m curves tighter than this (1/m: a 33 m radius, a hairpin) */
 const ROLLING_SLOT_MAX_CURVATURE = 0.03;
@@ -691,6 +694,7 @@ const ROLLING_START_LAT_G = 1;
 
 interface RollingStartTrack {
   totalLengthM: number;
+  pitLane?: { limitKmh: number } | null;
   getSampleAtDistance(s: number): { optimalSpeedKmh: number; curvature: number };
 }
 
@@ -739,7 +743,7 @@ export function rollingStartSpeedMs(
   cornerExitMs: number
 ): number {
   const L = track.totalLengthM;
-  let speed = ROLLING_START_PACE_MS;
+  let speed = rollingStartLimitMs(track.pitLane?.limitKmh);
   for (const s of rollingStartSlots(track, start, fieldSize)) {
     const sample = track.getSampleAtDistance(s);
     speed = Math.min(speed, spotSpeedMs(s), (0.9 * sample.optimalSpeedKmh) / 3.6);

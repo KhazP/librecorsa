@@ -76,7 +76,7 @@ import { opponentLiveryOf, SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar, type AiDriverDef } from "@/lib/sim/ai-opponents";
 import { resolveRaceRules } from "@/lib/sim/race-rules";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
-import { JumpStartWatch, ReactionWatch } from "@/lib/sim/race-start";
+import { JumpStartWatch, ReactionWatch, RollingStartSpeedWatch } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -821,6 +821,8 @@ export class DriveSession {
     const kbInput = { throttle: 0, brake: 0, clutch: 0, padClutch: 0 };
     /** A manual start: the clutch watched through the lights, and Gear up held as the clutch when none is bound */
     const jumpWatch = new JumpStartWatch();
+    const rollingSpeedWatch = new RollingStartSpeedWatch();
+    let wasRollingFormation = false;
     /** The reaction to the lights going out, for the HUD */
     const reactionWatch = new ReactionWatch();
     const startClutch = { active: false };
@@ -3013,6 +3015,8 @@ export class DriveSession {
       if (reason === "race") localContactSafety.clearSpawnProtection();
       else localContactSafety.armSpawnProtection(performance.now());
       jumpWatch.reset();
+      rollingSpeedWatch.reset();
+      wasRollingFormation = false;
       reactionWatch.reset();
       startClutch.active = false;
       gridHeldLastFrame = false;
@@ -3912,11 +3916,6 @@ export class DriveSession {
             (mpFrame?.phase === "lights" && mpManualStart);
         if (!raceInWorker) {
           physics.gridHold = gridHeld;
-          if (mpRace) {
-            physics.speedLimiterMs = mpFrame?.phase === "racing" ? mpRace.rollingLimiterMs : undefined;
-          } else if (!aiField) {
-            physics.speedLimiterMs = undefined;
-          }
         }
         // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
         // ledger and feed; an online race serves it with the player's own penalties below
@@ -3935,7 +3934,8 @@ export class DriveSession {
         }
         gridHeldLastFrame = gridHeld;
         startClutchIn = inputs.clutch ?? 0;
-        // The pit lane: limiter, speeding calls and the crew. Not online (no other client knows of stops yet)
+        // The pit lane: limiter, speeding calls and the crew. Not online (no other client knows of stops yet).
+        // The manual pit speed limiter works on track everywhere (including rolling-start formation and pitless tracks).
         if (pitStop.lane) {
           pitStop.enabled = !mpRace;
           pitStop.stopsRequired = aiField?.pitStopsRequired ?? 0;
@@ -3955,7 +3955,6 @@ export class DriveSession {
             aiField?.penalisePlayer(5, "pit_speeding", tx("game.pit.speeding", { limit: pitStop.limitKmh }));
           }
           if (step.serviced) servicePitStop(step.serviced.compound, step.serviced.repair);
-          if (!coolDown.active) pitStop.filterInputs(inputs, Math.abs(physics.vxMs));
           physics.telemetry.pit = pitStop.enabled ? step.telemetry : undefined;
           // At the flag: a required stop not made is time added (30 s each)
           const status = physics.telemetry.race;
@@ -3965,6 +3964,8 @@ export class DriveSession {
             aiField.penalisePlayer(30 * missing, "pit_stop_missed", tx("game.pit.stopMissed", { count: missing }));
           }
         }
+        if (!coolDown.active) pitStop.filterInputs(inputs, Math.abs(physics.vxMs));
+        physics.speedLimiterMs = !coolDown.active && pitStop.limiterOn ? pitStop.limitKmh / 3.6 : undefined;
         if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
@@ -4023,6 +4024,33 @@ export class DriveSession {
       );
       // An AI race's standing, with the player's own pit stops on their line (the crew is the page's)
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : withPlayerPit(aiField?.status(), physics.telemetry.pit);
+      {
+        const status = physics.telemetry.race;
+        const rfNow = status?.phase === "racing" ? status.rollingFormation : undefined;
+        if (rfNow && status) {
+          // Reflect the driver's actual pit speed limiter on the rolling-start HUD gauge (never forced artificially)
+          physics.telemetry.race = {
+            ...status,
+            rollingFormation: { ...rfNow, limiterActive: !physics.aiAutopilot && pitStop.limiterOn },
+          };
+        }
+        // Automatically release a manually engaged pit limiter when green flag drops on track (not in the pit lane)
+        if (wasRollingFormation && !rfNow && !physics.telemetry.pitLane && pitStop.limiterOn) {
+          pitStop.releaseManualLimiter();
+          physics.speedLimiterMs = undefined;
+        }
+        wasRollingFormation = Boolean(rfNow);
+        const rollingCall = rollingSpeedWatch.update(
+          driving ? dtSeconds : 0,
+          Boolean(rfNow && driving && !physics.aiAutopilot),
+          physics.telemetry.speedKmh,
+          rfNow?.paceMs ?? 0
+        );
+        if (rollingCall === "penalty") {
+          console.info(`[race] rolling start speeding: +${rollingSpeedWatch.penaltyS} s at the flag`);
+          aiField?.penalisePlayer(rollingSpeedWatch.penaltyS, "jump_start", tx("game.session.jumpStart"));
+        }
+      }
       // The reaction to the lights: from the frame they go out, as this frame's status has it (a rolling start has none)
       {
         const status = physics.telemetry.race;
@@ -4180,7 +4208,7 @@ export class DriveSession {
         physics.trackLimitsHold = trackLimits.judging;
         // The player's own calls, served at the flag: track limits, and online a jump start too (in an AI race race
         // control's calls, a jump start and a pass under yellow among them, are in the field's ledger)
-        const startPenaltyS = jumpWatch.penaltyS;
+        const startPenaltyS = jumpWatch.penaltyS + rollingSpeedWatch.penaltyS;
         if (aiField) {
           aiField.lockAidsInYellow = aidsLockInYellow;
           aiField.playerPenaltyS = trackLimits.penaltyTotalS;

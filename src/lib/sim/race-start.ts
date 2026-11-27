@@ -6,6 +6,7 @@
  */
 import type { RollingFormationStage, VehicleModelId } from '@/types/f1';
 import { text as t } from '@/lib/text';
+import { PIT_LIMIT_KMH_DEFAULT } from './pit/pit-lane';
 
 export type RaceStartMode = 'assisted' | 'manual';
 export const RACE_START_MODES: readonly RaceStartMode[] = ['assisted', 'manual'];
@@ -239,12 +240,81 @@ export class ReactionWatch {
 export const ROLLING_READY_WINDOW_S = 4.2;
 /** Seconds before P1 reaches Start/Finish when the 3-2-1 countdown begins */
 export const ROLLING_COUNTDOWN_S = 3;
+/** Grace above target formation speed before rolling-start speeding timer accumulates (km/h) */
+export const ROLLING_OVERSPEED_TOLERANCE_KMH = 5;
+/** Sustained overspeed duration above `ROLLING_OVERSPEED_TOLERANCE_KMH` before a speeding penalty (s) */
+export const ROLLING_OVERSPEED_PENALTY_HOLD_S = 1.5;
+/** Gross overspeed / jump threshold above target formation speed (km/h) */
+export const ROLLING_JUMP_SPEED_KMH = 15;
+/** Duration above `ROLLING_JUMP_SPEED_KMH` before an immediate speeding penalty (s) */
+export const ROLLING_JUMP_SPEED_HOLD_S = 0.5;
+/** Time penalty added at the flag for speeding during a rolling-start formation (s) */
+export const ROLLING_SPEED_PENALTY_S = 5;
 
 /**
- * Rolling-start formation speed limiter: lets the driver hold throttle and steer cleanly at formation
- * pace (~65 km/h) without jumping the start or surging, while preserving full driver braking. Smoothly tapers throttle
- * into the speed ceiling, cuts ignition/throttle slightly past it, and applies light proportional braking on downhill
- * overspeed so every car class (100 hp road car to 1000 hp F1) holds steady right at `limitMs`.
+ * Target rolling-start speed limit (m/s) for a circuit: matches the circuit's pit lane speed limit (typically
+ * 60 or 80 km/h, defaulting to `PIT_LIMIT_KMH_DEFAULT`) so drivers can engage the pit speed limiter on track to hold
+ * formation pace just like real GT3/F1 rolling starts.
+ */
+export function rollingStartLimitMs(pitLimitKmh?: number | null): number {
+  const kmh =
+    typeof pitLimitKmh === 'number' && Number.isFinite(pitLimitKmh) && pitLimitKmh >= 30 && pitLimitKmh <= 120
+      ? pitLimitKmh
+      : PIT_LIMIT_KMH_DEFAULT;
+  return kmh / 3.6;
+}
+
+/**
+ * Watches the player's speed during a rolling-start formation now that the car is not artificially speed-capped:
+ * drivers hold the pit-lane target speed manually or with the pit limiter. Brief throttle ripples stay penalty-free
+ * (the gauge turns red past +3 km/h), while sustained speeding (> +5 km/h for 1.5 s) or jumping the pack (> +15 km/h
+ * for 0.5 s) triggers one +5 s penalty per start.
+ */
+export class RollingStartSpeedWatch {
+  private overS = 0;
+  private bigOverS = 0;
+  private penalisedNow = false;
+
+  get penalised(): boolean {
+    return this.penalisedNow;
+  }
+
+  get penaltyS(): number {
+    return this.penalisedNow ? ROLLING_SPEED_PENALTY_S : 0;
+  }
+
+  reset(): void {
+    this.overS = 0;
+    this.bigOverS = 0;
+    this.penalisedNow = false;
+  }
+
+  update(dtS: number, active: boolean, speedKmh: number, paceMs: number): 'penalty' | null {
+    if (!active || !(dtS > 0)) {
+      this.overS = 0;
+      this.bigOverS = 0;
+      return null;
+    }
+    if (this.penalisedNow) return null;
+    const paceKmh = Number.isFinite(paceMs) && paceMs > 0 ? paceMs * 3.6 : PIT_LIMIT_KMH_DEFAULT;
+    const v = Number.isFinite(speedKmh) ? speedKmh : 0;
+    const overKmh = v - paceKmh;
+    if (overKmh > ROLLING_OVERSPEED_TOLERANCE_KMH) this.overS += dtS;
+    else this.overS = Math.max(0, this.overS - dtS * 2);
+    if (overKmh > ROLLING_JUMP_SPEED_KMH) this.bigOverS += dtS;
+    else this.bigOverS = Math.max(0, this.bigOverS - dtS * 2);
+    if (this.overS >= ROLLING_OVERSPEED_PENALTY_HOLD_S || this.bigOverS >= ROLLING_JUMP_SPEED_HOLD_S) {
+      this.penalisedNow = true;
+      return 'penalty';
+    }
+    return null;
+  }
+}
+
+/**
+ * Pit / rolling-start speed limiter: smoothly tapers throttle into `limitMs`, cuts ignition/throttle slightly past it,
+ * and applies light proportional braking on downhill overspeed while always preserving full driver braking, so every
+ * car class (100 hp road car to 1000 hp F1) holds steady right at the limit when the driver engages the limiter.
  */
 export function applySpeedLimiter(
   speedMs: number,
@@ -289,7 +359,7 @@ export function rollingFormationStep(
   prevStageOrder = 0
 ): { stageOrder: number; stage: RollingFormationStage; countdown?: 3 | 2 | 1 } {
   const distM = Math.max(0, Number.isFinite(distanceToLineM) ? distanceToLineM : 0);
-  const nominalPace = Math.max(6, Number.isFinite(paceMs) && paceMs > 0 ? paceMs : 65 / 3.6);
+  const nominalPace = Math.max(6, Number.isFinite(paceMs) && paceMs > 0 ? paceMs : PIT_LIMIT_KMH_DEFAULT / 3.6);
   const effSpeed = Math.max(nominalPace * 0.85, Math.min(nominalPace * 1.08, Number.isFinite(leaderSpeedMs) && leaderSpeedMs > 1 ? leaderSpeedMs : nominalPace));
   const etaS = distM / effSpeed;
   let desired = 0;
@@ -319,15 +389,15 @@ export interface RollingSpeedGauge {
 }
 
 /** Headroom above target formation pace represented by the full right edge of the rolling-start speed bar */
-export const ROLLING_GAUGE_HEADROOM = 1.06;
+export const ROLLING_GAUGE_HEADROOM = 1.15;
 
 /**
  * Evaluates the player's current speed against the rolling-start formation pace for the fixed speed bar shown across
- * all HUDs. The green "hold" band comfortably covers the formation speed limiter's steady-state range across every car
- * class (road cars through F1) while highlighting clear underspeed ("speed up") or downhill overspeed ("slow down").
+ * all HUDs. The green "hold" band comfortably covers manual throttle holding and the pit speed limiter's steady-state
+ * range across every car class while clearly warning on underspeed ("speed up") or overspeed ("slow down").
  */
 export function rollingSpeedGauge(speedKmh: number, paceMs: number): RollingSpeedGauge {
-  const paceKmh = Math.max(1, Number.isFinite(paceMs) && paceMs > 0 ? paceMs * 3.6 : 65);
+  const paceKmh = Math.max(1, Number.isFinite(paceMs) && paceMs > 0 ? paceMs * 3.6 : PIT_LIMIT_KMH_DEFAULT);
   const v = Math.max(0, Number.isFinite(speedKmh) ? speedKmh : 0);
   const diffKmh = v - paceKmh;
   const lowTolKmh = Math.max(4.5, paceKmh * 0.1);

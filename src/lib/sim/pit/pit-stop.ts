@@ -15,7 +15,8 @@
  * Fuel is not part of a stop: fuel use is off at every realism level (sim-realism.ts).
  */
 import { TIRE_COMPOUNDS, type ControlInputs, type PitPhase, type PitStrategyState, type PitTelemetry, type TireCompound } from "@/types/f1";
-import type { PitLaneModel } from "./pit-lane";
+import { PIT_LIMIT_KMH_DEFAULT, type PitLaneModel } from "./pit-lane";
+import { applySpeedLimiter } from "../race-start";
 
 /** Over the limit by more than this (km/h) ... */
 const SPEEDING_MARGIN_KMH = 3;
@@ -102,7 +103,7 @@ export class PitStopManager {
   }
 
   get limitKmh(): number {
-    return this.lane?.limitKmh ?? 60;
+    return this.lane?.limitKmh ?? PIT_LIMIT_KMH_DEFAULT;
   }
 
   get box() {
@@ -127,6 +128,11 @@ export class PitStopManager {
   /** The Pit limiter key: no effect in the zone, where it is on by itself */
   toggleLimiter(): void {
     if (!this.autoLimiter) this.manualLimiter = !this.manualLimiter;
+  }
+
+  /** Releases a manually engaged pit limiter (e.g. automatically at rolling-start green flag), leaving an active in-lane auto limiter intact */
+  releaseManualLimiter(): void {
+    this.manualLimiter = false;
   }
 
   /** A new run (restart, new race): the stops, calls and limiter start again; the crew's plan is kept */
@@ -224,15 +230,10 @@ export class PitStopManager {
     }
     if (!this.limiterOn) return;
     const limitMs = this.limitKmh / 3.6;
-    const over = speedMs - limitMs;
-    if (over > 0.05) {
-      inputs.throttle = 0;
-      inputs.brake = Math.max(inputs.brake, Math.min(1, 0.25 + over * 0.2));
-      inputs.manualOverride = false;
-    } else if (over > -1) {
-      inputs.throttle = Math.min(inputs.throttle, 0.35 * Math.min(1, -over / 1.05));
-      inputs.manualOverride = false;
-    }
+    const lim = applySpeedLimiter(speedMs, limitMs, inputs.throttle, inputs.brake);
+    inputs.throttle = lim.throttle;
+    inputs.brake = lim.brake;
+    if (speedMs >= limitMs - 1.35) inputs.manualOverride = false;
   }
 
   private telemetry(
