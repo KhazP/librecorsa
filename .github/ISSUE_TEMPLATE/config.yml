@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Questions, setups and ideas
+  - name: Feature ideas & suggestions
+    url: https://github.com/librecorsa/librecorsa/discussions/new?category=ideas
+    about: Suggest a new feature, mode, or improvement (please don't open Issues for ideas or car/track wishlists).
+  - name: Questions, setups and general discussion
     url: https://github.com/librecorsa/librecorsa/discussions
-    about: Ask how something works, share setups and lap times, or float an idea.
+    about: Ask how something works, share setups and lap times, or chat with other drivers.
   - name: Report a security problem
     url: https://github.com/librecorsa/librecorsa/security/advisories/new
     about: Report vulnerabilities privately, not in a public issue.

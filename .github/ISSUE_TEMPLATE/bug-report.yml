@@ -9,19 +9,21 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! The more exact the steps, the faster it gets fixed. For handling that feels off
-        (rather than broken), [Discussions](https://github.com/librecorsa/librecorsa/discussions) is a good place too.
+        Thanks for reporting! The more exact the steps, the faster it gets fixed.
+        - **Ideas & feature requests** belong in [Discussions → Ideas](https://github.com/librecorsa/librecorsa/discussions/new?category=ideas), not bug reports.
+        - **Check open issues first** so we don't end up with duplicates. Reports without clear reproduction steps will be flagged for more info and auto-closed if unanswered.
   - type: textarea
     id: what
     attributes:
       label: What happened?
-      description: And what did you expect instead?
+      description: Describe clearly what broke and what you expected instead (at least a full sentence).
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
+      description: Exact steps we can follow to see the bug ourselves. Please don't write "idk" or copy the title.
       placeholder: |
         1. Drive at Suzuka in the FA-26 Prototype
         2. Brake hard into turn 1
@@ -77,3 +79,12 @@ body:
     attributes:
       label: Screenshots or video
       description: Paste the screenshot the game copied (Ctrl+V or Cmd+V), or drag files in here.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing open issues to make sure this isn't already reported.
+          required: true
+        - label: This is a bug report (not a feature idea or car/track request) and includes reproduction steps.
+          required: true

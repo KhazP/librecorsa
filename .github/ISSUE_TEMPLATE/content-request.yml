@@ -2,21 +2,24 @@
 # query parameters src/components/menu/RequestPanel.tsx fills in. GitHub only pre-fills text fields from the URL,
 # so the choices the panel offers as dropdowns are plain inputs here.
 name: Car or track request
-description: Ask for a car or circuit to be added to LibreCorsa
+description: Ask for a car or circuit to be added to LibreCorsa (requires an eligible model + license or modder permission)
 title: "[Request] "
 labels: ["content-request"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea! LibreCorsa can only ship models it is allowed to redistribute: an open license
-        (CC BY, CC BY-SA, CC0, or non-commercial CC BY-NC / CC BY-NC-SA) or written permission from the creator. Models ripped from other games
-        (Assetto Corsa, ACC, iRacing, F1 games…) can't be used unless the original creator agrees.
+        Thanks for the idea! LibreCorsa can only ship models it is legally allowed to redistribute:
+        an open license (**CC BY**, **CC BY-SA**, **CC0**, **CC BY-NC**, **CC BY-NC-SA**) or **explicit written permission from the original creator**.
 
-        - **Sketchfab:** models tagged "Ripped" or "Assetto Corsa" (asseto-corsa, assetto-corsa…) aren't accepted.
-        - **OverTake mods:** ask the modder for permission first, and only request it once they've said yes.
+        **Requests will be automatically closed if:**
+        - The link is from a **mod reupload / piracy site** (such as `assettoworld.com`, `assettolab.ru`, `assettocorsa.club`, `modland.net`, etc.), a direct file host (`mega.nz`, `drive.google.com`, `sharemods.com`…), or a paid 3D store.
+        - The model is ripped from another game (Assetto Corsa, ACC, iRacing, Forza, Gran Turismo, F1 games…) without the original creator's permission.
+        - You haven't asked the creator yet or there is no open license / written permission attached.
+        - **Sketchfab:** models tagged "Ripped" or "Assetto Corsa" aren't accepted.
+        - **OverTake mods:** ask the modder for permission first, and only open a request once they've said yes.
 
-        **Please ask the creator for permission before you request a model, and link their answer.**
+        *(Tip: if you just want to drive an unencrypted Assetto Corsa mod privately, the LibreCorsa desktop app lets you import it locally for offline hotlapping.)*
   - type: input
     id: kind
     attributes:
@@ -35,32 +38,47 @@ body:
     id: link
     attributes:
       label: Model link
-      description: "Where the 3D model can be found (Sketchfab, a mod page, a scan…). Requests without a model can't be built. **Heads-up:** models from Sketchfab and similar 3D sites are usually low quality (lower FPS, no real kerbs, tarmac or run-off). A sim mod (e.g. Assetto Corsa) is far better, but only with its creator's permission: ask them first."
+      description: "URL to the **original creator's** page (OverTake, Sketchfab, creator's site, GitHub…). Do NOT link reupload/piracy sites or direct file hosts."
+      placeholder: https://
     validations:
       required: true
   - type: input
     id: modders
     attributes:
       label: Asked the modders?
-      description: "Sketchfab links: did you ask the modders who made it for other sim racing games (Assetto Corsa, rFactor 2, AMS2…) for permission, and did they say no? OverTake mods: did the modder say yes?"
+      description: "OverTake mods: did the modder say yes? Sketchfab links: did you ask sim modders for permission first, and did they say no?"
   - type: input
     id: creator
     attributes:
       label: Creator / modder
+      description: Name or handle of the original creator (not a commercial game or studio like ACC, Kunos, or iRacing).
+    validations:
+      required: true
   - type: input
     id: license
     attributes:
       label: License
-      description: "For example CC BY / CC BY-SA, CC0 / public domain, CC BY-NC / CC BY-NC-SA, another license, or don't know."
+      description: "Exact license stated on the creator's page (CC BY / CC BY-SA, CC0 / public domain, CC BY-NC / CC BY-NC-SA, or Other license with written permission)."
+    validations:
+      required: true
   - type: input
     id: permission
     attributes:
       label: Permission to use it
-      description: "The license allows it, or the creator gave written permission (link it below). Without either it can't be added."
+      description: '"The license allows it" (only for open Creative Commons / CC0 licenses) or "The creator gave written permission" (attach proof below).'
     validations:
       required: true
   - type: textarea
     id: notes
     attributes:
       label: Anything else?
-      description: Why it would be fun, links to the creator's permission, reference photos…
+      description: Link or screenshot of the creator's written permission (required if not an open CC license), why it would be fun, reference photos…
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: The link above is the original creator's page (not a reupload/piracy site or direct download host).
+          required: true
+        - label: This model either has an open Creative Commons / CC0 license OR I have written permission from the creator attached above.
+          required: true
