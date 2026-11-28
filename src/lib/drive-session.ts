@@ -1219,8 +1219,8 @@ export class DriveSession {
      */
     /**
      * The simulation worker (`sim-mode.ts`): it drives the player's car in practice and runs AI races, through a
-     * stand-in the rest of the session uses as the car (`sim-host.ts`, `worker-ai-field.ts`). Online races and a
-     * steering wheel's races run on the page, and so does everything where a worker cannot be started.
+     * stand-in the rest of the session uses as the car (`sim-host.ts`, `worker-ai-field.ts`), on every device. Online
+     * races run on the page, and so does everything where a worker cannot be started.
      */
     let simWorker: ReturnType<typeof startSimWorker> | null = null;
     if (simMode() === "worker") {
@@ -1360,10 +1360,10 @@ export class DriveSession {
     /** One build of the spare field at a time (each call while it runs would start another) */
     let aiPrepQueued = false;
     /**
-     * The worker can run the next race: it has the car ready, and the player is not on a wheel (whose force feedback
-     * still goes from the page a frame at a time)
+     * The worker can run the next race: it has the car ready. A wheel's force feedback comes with it, as the 500 Hz
+     * steering-torque samples of each state (`remote-car.ts`), played on the page's own clock (`wheel-ffb.ts`)
      */
-    const workerRaceLink = () => (simHost && settings.device !== "wheel" ? simHost.raceLink() : null);
+    const workerRaceLink = () => (simHost ? simHost.raceLink() : null);
     /** The car and field size the worker was last asked to build a spare field for */
     let workerPrepared: { physics: SimulatorCar; opponents: number } | null = null;
     this.prepareAiField = () => {
@@ -3998,9 +3998,8 @@ export class DriveSession {
       // around it
       if (simHost) {
         const was = simHost.remote;
-        // Not with a steering wheel yet: its force feedback is still sent from the page, a frame at a time (a race
-        // that started in the worker stays there)
-        simHost.endFrame(raceInWorker || (raceNow().kind === "practice" && settingsNow.device !== "wheel"));
+        // On any device, a steering wheel included: its force feedback plays the worker's torque samples
+        simHost.endFrame(raceInWorker || raceNow().kind === "practice");
         if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !frozen) {

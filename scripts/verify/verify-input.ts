@@ -1867,6 +1867,26 @@ async function asyncChecks() {
     console.log(`  ok  WebHID plays the 500 Hz samples out over the frame (${played.length} writes in 30 ms)`);
   }
 
+  // A burst of samples (a long frame, or the sim worker's states arriving on its own clock) plays its newest frame's
+  // worth: the wheel catches up at once instead of spending the next frame on torque that is already old
+  {
+    const c = new WheelFfbClient();
+    const out: number[] = [];
+    c.hidSink = (f) => out.push(f);
+    const w = { ...wheel, ffbGain: 1, ffbDamping: 0 };
+    const steady = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
+    for (let i = 0; i < 4; i++) c.update({ speedKmh: 50, ffbTorqueNorm: 0.1, ffbSubframeSamples: steady } as never, w, [], 1000 + i * 16, true);
+    const burst = Array.from({ length: 60 }, (_, i) => i / 100);
+    out.length = 0;
+    c.update({ speedKmh: 50, ffbTorqueNorm: 0.59, ffbSubframeSamples: burst } as never, w, [], 1000 + 3 * 16 + 120, true);
+    c.stop();
+    // A 16 ms frame is 8 samples, plus 2 of slack (the long frame stretches the smoothed frame a little): about the
+    // last 10 of the burst, the first of them at once, and nowhere near its start
+    assert.ok(out[0] >= 0.45 && out[0] <= 0.5, `burst playout starts near its end (${out[0]})`);
+    passed++;
+    console.log('  ok  a burst of torque samples plays its newest frame\'s worth, not the oldest');
+  }
+
   // The kerb buzz is made on the playback clock: 40 Hz on the wheel, not aliased by the 60 Hz frame rate
   {
     const c = new WheelFfbClient();
