@@ -151,6 +151,16 @@ export const HID_WATCHDOG_MS = 150;
 const HID_TICK_MS = 2;
 const PHYSICS_SAMPLE_MS = 2;
 /**
+ * The samples played per frame are what spans the usual frame (a smoothed frame time, s, held within these) plus a
+ * little slack: after a long frame, or a burst from the sim worker, the wheel plays the newest torque at once instead of
+ * spending the next frame on torque that is already old. The filter and collision guard still run over every sample
+ */
+const PLAYOUT_FRAME_MIN_S = 1 / 240;
+const PLAYOUT_FRAME_MAX_S = 1 / 20;
+const PLAYOUT_SLACK_SAMPLES = 2;
+/** Time constant of the smoothed frame time (s): a single long frame barely moves it */
+const PLAYOUT_FRAME_TAU_S = 0.5;
+/**
  * Vibrations mixed into the WebHID force (no separate channel): kerb buzz, ABS pulse, tyre slide, grass rumble and
  * the shift warning, Hz and share of full force
  */
@@ -214,6 +224,8 @@ export class WheelFfbClient {
   private meterDownforceComp = 0;
   private lastRimDeg: number | null = null;
   private lastUpdateMs = 0;
+  /** Smoothed frame time (s) that sets how many of a frame's torque samples are played; 0 until the first frame */
+  private frameS = 0;
   private filtered = 0;
   private history = new Float32Array(METER_WINDOW);
   private meterBins = new Uint32Array(METER_BINS);
@@ -353,7 +365,9 @@ export class WheelFfbClient {
       const rawSub = telemetry.ffbSubframeSamples;
       let shaped: number;
       if (rawSub && rawSub.length > 0) {
-        const h = dtS / rawSub.length;
+        // The samples are the physics' 500 Hz steps, however many a frame brings (the page's own steps, or the sim
+        // worker's states, which arrive on its clock rather than the frame's)
+        const h = PHYSICS_SAMPLE_MS / 1000;
         let last = 0;
         subframes = rawSub.map((sample) => {
           const sampleTorque = (Number.isFinite(sample) ? sample : 0) * downforceMult;
@@ -362,6 +376,8 @@ export class WheelFfbClient {
           if (wheel.ffbInvert) sf = -sf;
           return Math.round(sf * 1e4) / 1e4;
         });
+        const playable = this.playableSamples(dtS);
+        if (subframes.length > playable) subframes = subframes.slice(subframes.length - playable);
         // The held value once the subframes run out: the (filtered, protected) end of this frame
         shaped = last;
       } else {
@@ -529,6 +545,15 @@ export class WheelFfbClient {
     }
     this.hidQueue = [];
     this.hidActiveDriving = false;
+  }
+
+  /** How many of this frame's torque samples to play: the newest that span the usual frame (`PLAYOUT_*`) */
+  private playableSamples(dtS: number): number {
+    // No frame time yet (the first frame, or two in the same millisecond): everything, or the usual frame's worth
+    if (!(dtS > 0)) return this.frameS > 0 ? Math.ceil((this.frameS * 1000) / PHYSICS_SAMPLE_MS) + PLAYOUT_SLACK_SAMPLES : Infinity;
+    const frame = Math.min(PLAYOUT_FRAME_MAX_S, Math.max(PLAYOUT_FRAME_MIN_S, dtS));
+    this.frameS = this.frameS > 0 ? this.frameS + (frame - this.frameS) * (1 - Math.exp(-frame / PLAYOUT_FRAME_TAU_S)) : frame;
+    return Math.ceil((this.frameS * 1000) / PHYSICS_SAMPLE_MS) + PLAYOUT_SLACK_SAMPLES;
   }
 
   /**

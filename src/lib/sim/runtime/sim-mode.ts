@@ -1,8 +1,8 @@
 /**
  * Where the simulation runs: in a Web Worker (what ships), where a frame that takes long to draw no longer stalls the
  * car, or on the page's own thread. The worker drives the player's own car in practice and runs AI races, the whole
- * field with it, on a keyboard, a gamepad or touch; online races and a steering wheel's car still run on the page, as
- * does everything when the worker cannot start. `?sim=main` in the address keeps the whole simulation on the page and `?sim=worker` undoes that; the
+ * field with it, on every device (a wheel's force feedback plays the worker's torque samples); online races still run
+ * on the page, as does everything when the worker cannot start. `?sim=main` in the address keeps the whole simulation on the page and `?sim=worker` undoes that; the
  * choice is kept for the browser.
  */
 export type SimMode = "main" | "worker";

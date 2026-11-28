@@ -41,7 +41,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 
 ## Threads and the frame loop
 
-- **Which path runs** is decided in `src/lib/sim/runtime/sim-mode.ts`. The worker drives the player's car in practice and runs AI races on keyboard, controller or touch. Online races and a wheel's car run on the page, and so does everything when the worker can't start. `?sim=main` or `?sim=worker` forces one.
+- **Which path runs** is decided in `src/lib/sim/runtime/sim-mode.ts`. The worker drives the player's car in practice and runs AI races on every device, a force-feedback wheel included (it plays the worker's 500 Hz torque samples). Online races run on the page, and so does everything when the worker can't start. `?sim=main` or `?sim=worker` forces one.
 - **The worker** (`runtime/sim-worker.ts`) wakes every 4 ms (`SIM_TICK_S`), catches up by the clock and stops when the page has gone quiet for 250 ms. `runtime/sim-runtime.ts` is the thread-free core it runs, which `scripts/verify/verify-sim-runtime.ts` drives directly.
 - **Messages** are plain data, listed in `runtime/sim-protocol.ts`. The page sends inputs, settings and race commands. The worker sends the car's state (with the steering-torque samples for force feedback) and the AI field's poses (`field-frame.ts`).
 - **The page keeps a twin of the car** (`runtime/sim-host.ts`, `remote-car.ts`). Settings changed on it are mirrored to the worker's car, and the page can take the car back at any time.
