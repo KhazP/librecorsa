@@ -116,6 +116,27 @@ const CIRCUIT_NIGHT_SPECS: Readonly<Record<string, CircuitNightSpec>> = {
   },
   sachsenring: SACHSENRING,
   sachsenring_short: SACHSENRING,
+  las_vegas: {
+    mode: "floodlit",
+    lamps: [
+      // Trackside floodlight heads lining the entire Strip circuit
+      { materials: ["vegas_light_lens"], color: WARM_WHITE, glowMaterial: true, glow: 7, pool: 1.0, glowSizeM: 3.4 },
+      { materials: ["lightlens"], color: COOL_WHITE, glowMaterial: true, glow: 6, pool: 0.9, glowSizeM: 3.0 },
+      // Tall stadium light towers
+      { materials: ["large_light_lens"], color: COOL_WHITE, glowMaterial: true, glow: 8, pool: 0.8, glowSizeM: 5.0 },
+      // Pit lane canopy lights
+      { materials: ["lpl_lights_lights"], color: WARM_WHITE, glowMaterial: true, glow: 6, pool: 0.8, glowSizeM: 2.4 },
+    ],
+  },
+  jeddah: {
+    mode: "floodlit",
+    lamps: [
+      // Continuous stadium floodlight fixtures lining the Corniche circuit
+      { materials: ["lightlens"], color: COOL_WHITE, glowMaterial: true, glow: 9, pool: 1.0, glowSizeM: 1.1 },
+      // Tall floodlight tower lenses (lightin.dds)
+      { materials: ["mat51"], color: COOL_WHITE, glowMaterial: true, glow: 9, pool: 1.0, glowSizeM: 4.5 },
+    ],
+  },
 };
 
 /** The night lighting of a circuit's own lamps, or null for a circuit without any */

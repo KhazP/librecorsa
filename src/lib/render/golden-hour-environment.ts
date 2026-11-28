@@ -930,19 +930,22 @@ class RcasEffect extends Effect {
       /* glsl */ `
 uniform float uSharpness;
 float lcRcasLuma(const in vec3 c) {
-  float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 0.0);
+  vec3 safe = (any(isnan(c)) || any(isinf(c))) ? vec3(0.0) : max(c, vec3(0.0));
+  float y = max(dot(safe, vec3(0.2126, 0.7152, 0.0722)), 0.0);
   return sqrt(y / (1.0 + y));
 }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  vec3 curSafe = (any(isnan(inputColor.rgb)) || any(isinf(inputColor.rgb))) ? vec3(0.0) : max(inputColor.rgb, vec3(0.0));
   if (uSharpness <= 0.001) {
-    outputColor = inputColor;
+    outputColor = vec4(curSafe, inputColor.a);
     return;
   }
-  vec3 rawE = max(texture2D(inputBuffer, uv).rgb, vec3(0.0));
-  vec3 curE = max(inputColor.rgb, vec3(0.0));
+  vec3 rawSample = texture2D(inputBuffer, uv).rgb;
+  vec3 rawE = (any(isnan(rawSample)) || any(isinf(rawSample))) ? vec3(0.0) : max(rawSample, vec3(0.0));
+  vec3 curE = curSafe;
   float rawY = dot(rawE, vec3(0.2126, 0.7152, 0.0722));
   if (rawY <= 1e-4) {
-    outputColor = inputColor;
+    outputColor = vec4(curSafe, inputColor.a);
     return;
   }
   // Fade sharpening where preceding clouds/bloom significantly altered this pixel vs inputBuffer
@@ -994,8 +997,10 @@ uniform float uSaturation;
 uniform float uEdgeGlow;
 uniform vec3 uEdgeColor;
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  // Reject non-finite HDR samples before gamma/grade (clamp(NaN) is undefined in GLSL and draws black blocks)
+  vec3 safeIn = (any(isnan(inputColor.rgb)) || any(isinf(inputColor.rgb))) ? vec3(0.0) : clamp(inputColor.rgb, 0.0, 1.0);
   // grade in a perceptual (gamma 2.2) space so the contrast pivots on mid-grey as seen, then back to linear
-  vec3 c = pow(clamp(inputColor.rgb, 0.0, 1.0), vec3(1.0 / 2.2));
+  vec3 c = pow(safeIn, vec3(1.0 / 2.2));
   c = (c - 0.5) * (1.0 + uContrast) + 0.5;
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = mix(vec3(l), c, 1.0 + uSaturation);
@@ -1175,6 +1180,17 @@ export function createPostFx(
       radius: 0.7,
       levels: 5,
     });
+    // Sanitize NaN/Inf/overflow texels before bloom's 5-level mipmap blur so a single bad pixel can never expand into
+    // a flashing black square over the car or track.
+    bloom.luminanceMaterial.fragmentShader = patchShader(
+      bloom.luminanceMaterial.fragmentShader,
+      [[
+        "vec4 texel=texture2D(inputBuffer,vUv);",
+        "vec4 texel=texture2D(inputBuffer,vUv);texel.rgb=(any(isnan(texel.rgb))||any(isinf(texel.rgb)))?vec3(0.0):clamp(texel.rgb,vec3(0.0),vec3(64.0));",
+      ]],
+      "bloom luminance NaN guard"
+    );
+    bloom.luminanceMaterial.needsUpdate = true;
     const bloomPass = new EffectPass(cam, bloom, ...toneMapAndGrade(parts));
     // Low and cloudless Medium have no bloom and no clouds: the same pass without either.
     const plainPass = new EffectPass(cam, ...toneMapAndGrade(parts));

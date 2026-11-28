@@ -68,6 +68,20 @@ export class CarReflectionProbe {
     // at 300-350 m drops distant trackside clutter and far opponents while the full sky dome still films cleanly.
     this.cubeCamera = new THREE.CubeCamera(0.3, this.farDistanceM, this.cubeTarget);
     this.pmrem = new THREE.PMREMGenerator(renderer);
+    // Sanitize NaN/Inf/overflow texels from the cube map before PMREM blurs them across the car's reflection map
+    // (one bad texel from a trackside mesh otherwise poisons the whole car for a full 7-frame probe turn and blooms
+    // into a transient black square right on the car).
+    this.pmrem.compileCubemapShader();
+    const cm = (this.pmrem as unknown as { _cubemapMaterial?: THREE.ShaderMaterial | null })._cubemapMaterial;
+    if (cm && typeof cm.fragmentShader === "string" && cm.fragmentShader.includes("textureCube( envMap,")) {
+      cm.fragmentShader = cm.fragmentShader.replace(
+        "gl_FragColor = vec4( textureCube( envMap, vec3( flipEnvMap * vWorldDirection.x, vWorldDirection.yz ) ).rgb, 1.0 );",
+        /* glsl */ `vec3 pmremRaw = textureCube( envMap, vec3( flipEnvMap * vWorldDirection.x, vWorldDirection.yz ) ).rgb;
+			pmremRaw = ( any( isnan( pmremRaw ) ) || any( isinf( pmremRaw ) ) ) ? vec3( 0.0 ) : clamp( pmremRaw, vec3( 0.0 ), vec3( 64.0 ) );
+			gl_FragColor = vec4( pmremRaw, 1.0 );`
+      );
+      cm.needsUpdate = true;
+    }
   }
 
   /**

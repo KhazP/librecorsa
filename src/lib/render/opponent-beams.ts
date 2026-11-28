@@ -57,7 +57,8 @@ varying vec3 vLcBeamWorld;`,
 	#if defined( RE_IndirectDiffuse )
 	{
 		// the surface's normal in world space (normal is in view space here)
-		vec3 lcBeamN = normalize( ( vec4( normal, 0.0 ) * viewMatrix ).xyz );
+		vec3 lcBeamRaw = ( vec4( normal, 0.0 ) * viewMatrix ).xyz;
+		vec3 lcBeamN = dot( lcBeamRaw, lcBeamRaw ) > 1e-8 ? normalize( lcBeamRaw ) : vec3( 0.0, 1.0, 0.0 );
 		for ( int i = 0; i < LC_BEAMS; i ++ ) {
 			float lcI = uLcBeamPos[ i ].w;
 			if ( lcI <= 0.0 ) continue;

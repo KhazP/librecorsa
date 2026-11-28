@@ -69,6 +69,8 @@ MERGE_AT = {'monaco': 225.0, 'sachsenring': 532.0}
 MERGE_TOL_M = 40.0
 # ... as long as the lane stays on its side and no deeper than this inside the road edge in between (m)
 MERGE_MAX_INSIDE_M = 4.0
+# Circuits where the visual pit speed-limit line/board sits further down the pit entry than leaveM + LIMIT_INSET_M
+LIMIT_START_M = {'las_vegas': 370.3}
 
 OFF_ROAD_M = 2.0          # past the road edge: off the road
 MARGIN_M = 150.0          # lane kept before the leave point and after the rejoin point
@@ -665,7 +667,9 @@ def build_ac(tid, cfg, base, td, road):
     if note:
         rep['notes'].append(note)
     rep['leaveS'], rep['rejoinS'] = pv.s_at(leave), pv.s_at(rejoin)
-    limit_start = leave + LIMIT_INSET_M
+    limit_start = LIMIT_START_M.get(tid, leave + LIMIT_INSET_M)
+    if tid in LIMIT_START_M:
+        rep['notes'].append(f'speed-limit zone starts at lane {limit_start:.1f} m (visual pit entry line/board)')
     limit_end = (first_end if first_end is not None else rejoin) - LIMIT_INSET_M
     if first_end is not None:
         # pit-lane.ts keeps a car in the lane only off the road: the zone ends before the lane meets the road edge

@@ -148,4 +148,29 @@ export const VENUE_HERO_CAMERAS: Partial<Record<string, VenueHeroCameraOverride>
     fovDeg: 38,
     cloud: 0.28,
   },
+  // Las Vegas: floodlit Las Vegas Blvd straight past the footbridge, framing Eiffel Tower, Paris, Bellagio & Cosmo
+  las_vegas: {
+    uFrac: 0.745,
+    side: 1,
+    offsetM: 3.5,
+    heightM: 4.5,
+    lookAheadM: 180,
+    lookHeightM: 18,
+    lookSideM: -10,
+    fovDeg: 42,
+    cloud: 0.16,
+  },
+  // Jeddah: floodlit start/finish straight framing stadium gantries, glowing pit building, start gantry & Corniche skyline
+  jeddah: {
+    uFrac: 0.965,
+    side: 1,
+    offsetM: 4.5,
+    heightM: 5.0,
+    lookAheadM: 140,
+    lookHeightM: 4.0,
+    lookSideM: -8,
+    fovDeg: 40,
+    sunAzimuthDeg: 110,
+    cloud: 0.16,
+  },
 };

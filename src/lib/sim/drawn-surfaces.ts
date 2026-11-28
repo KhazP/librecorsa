@@ -227,6 +227,42 @@ export const DRAWN_SURFACE_RULES: Readonly<Record<string, readonly DrawnSurfaceR
     "the lane between the cones",
     "past the cones: the old band round the lap, the open pads, the other lanes and the grass islands",
   ),
+  // Las Vegas Strip Circuit: fast_lane.ai ran narrower than the concrete walls on four walled straights (T12 Treasure
+  // Island, the Strip, and Harmon Ave before pit entry); keep the asphalt between the walls legal without touching
+  // corner kerbs, escape roads, or pit entry (s = 5788). Behind the T5 and T14 (HUD T10) apex kerbs, the wide
+  // intersection apron past the kerbs is off-track runoff so cars cannot cut inside the apex kerbs.
+  las_vegas: [
+    {
+      materials: "roadMaterials",
+      surface: "road",
+      from: OFF_ROAD,
+      within: {
+        bands: [
+          [2940, 3140, -1, 4.0, 7.3],
+          [2940, 3140, 1, 4.0, 7.6],
+          [3420, 3700, 1, 3.5, 7.6],
+          [4200, 5020, -1, 3.5, 8.7],
+          [4200, 5020, 1, 3.5, 8.7],
+          [5400, 5775, -1, 3.5, 8.5],
+          [5400, 5950, 1, 3.5, 8.5],
+        ],
+      },
+      note: "the walled Strip and Harmon Avenue straights out to the white lines and concrete barriers",
+    },
+    {
+      materials: null,
+      surface: "runoff",
+      from: ON_TRACK,
+      overRoadCollider: true,
+      within: {
+        bands: [
+          [5075, 5120, -1, 3.6, 14.0],
+          [1495, 1525, 1, 3.6, 8.0],
+        ],
+      },
+      note: "the intersection apron past the inside apex kerbs at Turn 5 and Turn 14 (City Center)",
+    },
+  ],
 };
 
 /** The physics nodes a rule may rename, by the surface each holds */

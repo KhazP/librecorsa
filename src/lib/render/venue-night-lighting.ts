@@ -36,10 +36,10 @@ import { patchShader } from "./shader-patch";
 /** The key light, sky fill and exposure of this floodlit night (the environment blends to them with the night share) */
 export const VENUE_NIGHT_LOOK: Readonly<FloodlitNightLook> = {
   keyColor: 0xf3f1ff,
-  keyIntensity: 3.0,
+  keyIntensity: 2.65,
   keyElevationDeg: 62,
-  fillIntensity: 0.06,
-  environmentIntensity: 0.3,
+  fillIntensity: 0.14,
+  environmentIntensity: 0.36,
   exposure: 1.28,
   fogColor: 0x0b1020,
 };
@@ -176,6 +176,9 @@ ${venueLightsBegin()}`,
       /* glsl */ `
 	#if defined( RE_IndirectDiffuse )
 		irradiance += lcVenue.rgb * ( lcVenueIn * uLcVenueAccent * uLcVenueNight );
+		// Stadium floodlights shine from masts on both sides of the circuit: keep the floodlit road corridor evenly
+		// lit even where a tall building or grandstand roof blocks the single directional key light.
+		irradiance += vec3( 0.55, 0.58, 0.66 ) * ( lcVenue.a * lcVenueIn * uLcVenueNight * uLcVenueFlood );
 	#endif
 #include <lights_fragment_end>`,
     ],
@@ -462,12 +465,12 @@ function buildVenueMap(
   });
   lap.closePath();
 
-  // The floodlit band: the road and its run-off at 0.7, fading out over the reach; each mast adds its pool on top.
+  // The floodlit band: the road and its run-off at 0.85, fading out over the reach; each mast adds its pool on top.
   // A moonlit circuit has no band: its light is its lamps' pools alone
   if (mode === "floodlit") {
-    const inner = 2 * (halfWidth + 9) * m;
+    const inner = 2 * (halfWidth + 10) * m;
     const outer = 2 * (halfWidth + FLOOD_REACH_M) * m;
-    strokeFalloff(key.ctx, lap, inner, outer, 0.7);
+    strokeFalloff(key.ctx, lap, inner, outer, 0.85);
   }
   const lamps = def.lamps ?? [];
   key.ctx.globalCompositeOperation = "lighter";

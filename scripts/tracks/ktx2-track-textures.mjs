@@ -151,7 +151,8 @@ inputs.forEach((input, file) => {
   const surfaces = surfaceMaterials(json);
   (json.materials ?? []).forEach((m, mi) => {
     if (m.extensions?.[VENUE]) return; // a stub: the shared file defines it
-    const closeUp = roadMaterials.has(m.name ?? "") || GROUND.test(m.name ?? "") || surfaces.has(mi);
+    const heroLandmark = Boolean(m.extras?.nightEmissive) && /^(material1|rgb)$/i.test(m.name ?? "");
+    const closeUp = roadMaterials.has(m.name ?? "") || GROUND.test(m.name ?? "") || surfaces.has(mi) || heroLandmark;
     const pbr = m.pbrMetallicRoughness ?? {};
     const slots = [
       [pbr.baseColorTexture, "base"],
