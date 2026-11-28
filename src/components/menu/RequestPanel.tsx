@@ -18,6 +18,14 @@ import {
   type ReportRow,
 } from "@/lib/diagnostics/report-details";
 import { gpuReportLine, liveSessionRenderer, probeRenderer } from "@/lib/render/gpu-health";
+import {
+  blockedCreatorMatch,
+  classifyModelLink,
+  evaluateContentPermission,
+  isLowEffortText,
+  PERMISSION_WRITTEN,
+  REQUEST_LIMITS,
+} from "@/lib/feedback/request-rules";
 
 /**
  * Feedback goes to GitHub as a pre-filled issue form (.github/ISSUE_TEMPLATE): bug-report.yml, wheel-report.yml,
@@ -292,12 +300,15 @@ export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefin
       set("system", added ? fieldText(added.rows, "system") : system);
       set("notes", f.notes);
       break;
-    case "Idea":
-      q.set("title", `[Idea] ${firstLine(f.main)}`);
-      set("idea", f.main);
-      set("why", f.second);
-      set("area", f.third);
-      break;
+    case "Idea": {
+      const dq = new URLSearchParams({ category: "ideas", title: firstLine(f.main, 100) });
+      const parts: string[] = [];
+      if (f.third.trim()) parts.push(`**Area:** ${f.third.trim()}`);
+      if (f.main.trim()) parts.push(`### Your idea\n\n${f.main.trim()}`);
+      if (f.second.trim()) parts.push(`### Why it matters\n\n${f.second.trim()}`);
+      if (parts.length) dq.set("body", parts.join("\n\n"));
+      return `${REPO_URL}/discussions/new?${dq.toString()}`;
+    }
     default:
       q.set("title", `[${f.kind} request] ${firstLine(f.main, 100)}`);
       q.set("kind", f.kind);
@@ -312,8 +323,6 @@ export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefin
   }
   return `${REPO_URL}/issues/new?${q.toString()}`;
 }
-
-const isUrl = (s: string) => /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(s.trim());
 
 /** A Sketchfab page or short link: only requested once the sim modders have said no */
 function isSketchfab(s: string): boolean {
@@ -517,14 +526,33 @@ export const RequestPanel: React.FC<{
   }, []);
 
   const content = kind === "Car" || kind === "Track";
-  const mainOk = main.trim().length >= (content ? 2 : 6);
-  const secondOk = kind === "Bug" ? second.trim().length >= 3 : content ? isUrl(second) : true;
-  // A model can only be added under a known license that allows it, or with its creator's written permission
-  const openLicense = license === LICENSES[0] || license === LICENSES[1] || license === LICENSES[2];
-  const writtenPermission = permission === PERMISSIONS[1];
-  const permitted =
-    !content || writtenPermission || (license !== "Don't know" && (openLicense || permission === PERMISSIONS[0]));
-  const ripped = content && !permitted && (permission !== "" || license === "Don't know");
+  const mainOk =
+    kind === "Bug"
+      ? !isLowEffortText(main, REQUEST_LIMITS.bugWhatMin)
+      : kind === "Idea"
+        ? !isLowEffortText(main, REQUEST_LIMITS.ideaMin)
+        : kind === "Wheel"
+          ? main.trim().length >= 4
+          : main.trim().length >= 2;
+  const linkVerdict = content ? classifyModelLink(second) : { kind: "ok" as const, host: "" };
+  const blockedLink =
+    content && (linkVerdict.kind === "piracy" || linkVerdict.kind === "file-host" || linkVerdict.kind === "commercial-store")
+      ? linkVerdict
+      : null;
+  const secondOk =
+    kind === "Bug"
+      ? !isLowEffortText(second, REQUEST_LIMITS.bugStepsMin, main)
+      : content
+        ? linkVerdict.kind === "ok"
+        : true;
+  const blockedCreator = content ? blockedCreatorMatch(third) : null;
+  const creatorOk = !content || (third.trim().length >= REQUEST_LIMITS.creatorMin && !blockedCreator);
+  // A model can only be added under an explicit open license (when "The license allows it" is selected) or with
+  // written permission from the creator backed by a link/note in Anything else.
+  const permCheck = content ? evaluateContentPermission(license, permission, notes) : ({ ok: true } as const);
+  const permitted = permCheck.ok;
+  const needsProof = content && permission === PERMISSION_WRITTEN;
+  const showPermCaution = content && !permitted && (permission !== "" || license === "Don't know" || license === "Other license");
   // Sketchfab models are a last resort (no physics, tarmac grip, kerbs or racing line): the sim modders come first
   const sketchfab = content && isSketchfab(second);
   // A Sketchfab model tagged as ripped, or as taken from Assetto Corsa, can't be used at all. Its tags are read from
@@ -537,7 +565,7 @@ export const RequestPanel: React.FC<{
   // An OverTake mod is only requested once its modder has said yes
   const overtake = content && isOvertake(second);
   const moddersOk = (!sketchfab || askedModders) && (!overtake || modderSaidYes);
-  const ready = mainOk && secondOk && sketchfabLinkOk && !tagsChecking && !rippedModel && permitted && moddersOk;
+  const ready = mainOk && secondOk && creatorOk && sketchfabLinkOk && !tagsChecking && !rippedModel && permitted && moddersOk;
   const copy = copyOf(tx, kind);
 
   const clearFields = () => {
@@ -647,15 +675,26 @@ export const RequestPanel: React.FC<{
           : null;
   const pictureCopyable = typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && Boolean(navigator.clipboard?.write);
 
-  const lockedReason = rippedModel
-    ? tx("lockedRipped")
-    : !permitted
-      ? tx("lockedLicense")
-      : !moddersOk
-        ? overtake
-          ? tx("lockedModder")
-          : tx("lockedSketchfab")
-        : undefined;
+  const lockedReason =
+    blockedLink?.kind === "piracy"
+      ? tx("lockedPiracy")
+      : blockedLink?.kind === "file-host"
+        ? tx("lockedFileHost")
+        : blockedLink?.kind === "commercial-store"
+          ? tx("lockedCommercialStore")
+          : blockedCreator
+            ? tx("lockedBlockedCreator")
+            : rippedModel
+              ? tx("lockedRipped")
+              : !permCheck.ok && permCheck.problem === "proof"
+                ? tx("lockedProof")
+                : !permitted
+                  ? tx("lockedLicense")
+                  : !moddersOk
+                    ? overtake
+                      ? tx("lockedModder")
+                      : tx("lockedSketchfab")
+                    : undefined;
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-lc-chalk">
@@ -694,7 +733,7 @@ export const RequestPanel: React.FC<{
         ) : null}
         <p className="lc-hint m-0 mt-auto flex items-start gap-2">
           <Icon name="externalLink" className="mt-px text-lc-info" />
-          {tx("opensIssue")}
+          {kind === "Idea" ? tx("opensDiscussion") : tx("opensIssue")}
         </p>
       </div>
 
@@ -867,20 +906,26 @@ export const RequestPanel: React.FC<{
               value={second}
               onChange={setSecond}
               error={
-                (tried || second.trim() !== "") && !secondOk
+                (tried || second.trim() !== "") && linkVerdict.kind === "invalid"
                   ? tx("modelLinkError")
                   : sketchfab && !sketchfabId
                     ? tx("modelLinkShort")
                     : undefined
               }
             />
-            {/* The tag check runs while the player waits: what it finds is read out */}
+            {/* Blocked link / Sketchfab tag check runs live: what it finds is read out */}
             <div
               aria-live="polite"
               // Empty, it takes back the form's gap
-              className={rippedModel || tagsChecking || (sketchfab && tagCheck?.state === "unknown") ? undefined : "-mt-4"}
+              className={blockedLink || rippedModel || tagsChecking || (sketchfab && tagCheck?.state === "unknown") ? undefined : "-mt-4"}
             >
-              {rippedModel ? (
+              {blockedLink?.kind === "piracy" ? (
+                <Problem>{tx("blockedPiracy", { host: blockedLink.host })}</Problem>
+              ) : blockedLink?.kind === "file-host" ? (
+                <Problem>{tx("blockedFileHost", { host: blockedLink.host })}</Problem>
+              ) : blockedLink?.kind === "commercial-store" ? (
+                <Problem>{tx("blockedCommercialStore", { host: blockedLink.host })}</Problem>
+              ) : rippedModel ? (
                 <Problem>{tx("rippedTags", { tags: rippedModel.map((t) => `“${t}”`).join(", ") })}</Problem>
               ) : tagsChecking ? (
                 <p className="lc-hint m-0">{tx("checkingTags")}</p>
@@ -905,7 +950,21 @@ export const RequestPanel: React.FC<{
               </SettingRow>
             ) : null}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <TextField label={tx("creator")} maxLength={80} autoComplete="off" value={third} onChange={setThird} />
+              <TextField
+                label={tx("creatorRequired")}
+                required
+                maxLength={80}
+                autoComplete="off"
+                value={third}
+                onChange={setThird}
+                error={
+                  blockedCreator
+                    ? tx("creatorBlockedError")
+                    : tried && !creatorOk
+                      ? tx("creatorError")
+                      : undefined
+                }
+              />
               <FieldSelect
                 label={tx("license")}
                 value={license}
@@ -919,20 +978,28 @@ export const RequestPanel: React.FC<{
               onChange={setPermission}
               options={permissionOptions(tx)}
             />
-            {ripped ? (
+            {showPermCaution && !permCheck.ok ? (
               <p className="m-0 flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
                 <Icon name="warning" size="xs" className="mt-0.5" />
-                {license === "Don't know" && !writtenPermission ? tx("rippedUnknownLicense") : tx("rippedAskCreator")}
+                {permCheck.problem === "proof"
+                  ? tx("rippedNeedProof")
+                  : permCheck.problem === "license"
+                    ? tx("rippedNeedOpenLicense")
+                    : license === "Don't know"
+                      ? tx("rippedUnknownLicense")
+                      : tx("rippedAskCreator")}
               </p>
             ) : null}
             <TextField
-              label={tx("notes")}
+              label={needsProof ? tx("notesProof") : tx("notes")}
+              required={needsProof}
               multiline
               rows={2}
               maxLength={1500}
-              placeholder={tx("notesPlaceholder")}
+              placeholder={needsProof ? tx("notesProofPlaceholder") : tx("notesPlaceholder")}
               value={notes}
               onChange={setNotes}
+              error={tried && needsProof && !permCheck.ok && permCheck.problem === "proof" ? tx("notesProofError") : undefined}
             />
           </>
         ) : null}
